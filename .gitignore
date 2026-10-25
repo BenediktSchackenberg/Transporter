@@ -6,3 +6,4 @@ user_data/
 .vscode/
 Thumbs.db
 desktop.ini
+local-ai/.env

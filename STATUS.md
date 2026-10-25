@@ -1,8 +1,9 @@
 # Umsetzungsstand
 
 Stand: 25.10.2026. „Geprüft“ heißt: durch automatische Tests (`tests/run_tests.gd`) und/oder Autotest-Partien belegt.
-**Mit einer echten Sprachmodell-API wurde bisher nichts getestet** (kein Key vorhanden). Getestet wurde mit dem
-DEMO-Adapter (regelbasiert, keine KI) und dem echten HTTP-Adapter gegen einen lokalen Mock-Server.
+Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit gültigem Aktions-JSON getestet (Godot 4.7.2). Der aktuelle vollständige Headless-Lauf bestand 4359 Prüfungen ohne Testfehler.
+Externe Sprachmodell-APIs wurden mangels Key nicht live getestet. Die übrigen Adaptertests nutzen den
+DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen lokalen Mock-Server.
 
 ## Auftrag „Stadtleben, Wetter, Kunden, Grafik“ (25.10.2026)
 
@@ -25,7 +26,7 @@ DEMO-Adapter (regelbasiert, keine KI) und dem echten HTTP-Adapter gegen einen lo
 - Gebäude-Zustandsvarianten und Renovierung (Teil des Auftrags „Stadtviertel“) sowie Winterkleidung der Figuren fehlen.
 - Ein- und Aussteigen der Fahrer wird nicht animiert; die Nahaufnahme „arbeitender Betriebshof“ wurde mit einem Testszenario (`--scenario=yard`) geprüft, in dem Bau und Reparatur laufen, aber nur wenige Arbeiter sichtbar sind.
 - Die Aufträge „Wirtschaftskreislauf“ (Banken, Kredite, Insolvenz, Großhändler, Produktion), „Kraftstoffpreise, Löhne, Haushalte, Stadtviertel“ und „Öffentliche Hand, Steuern, Geldschöpfung“ sind **noch nicht umgesetzt**. Vorhanden sind nur der Entwurf (`docs/ECONOMY.md`), die Kalenderklasse `GameCalendar` (Spieltag/Monat/Jahr, im HUD angezeigt) und die Partiedauern 4 h/12 h/24 h/Endlos.
-- Mit einer echten Sprachmodell-API wurde weiterhin nichts getestet.
+- Externe Sprachmodell-APIs wurden weiterhin nicht live getestet; das lokale Ollama-Modell wurde geprüft.
 
 ## Fertig
 
@@ -38,6 +39,7 @@ Handel, Sabotage (Ruf/Depot), Spielende nach aktiver Echtzeit (max. 240 min), Sp
 |---|---|
 | Pixel-Porträts der Unternehmer (Firmenkarten) | Screenshot |
 | IONOS-Qwen-Profil (Herstellerparameter, kein response_format, `<think>`-Filter) | Unit-Test |
+| Anbieterwahl pro Spieler: Ollama lokal ohne Key oder externe API mit eigener URL, Modell und Key | Unit-Test + lokaler Ollama-Smoke-Test |
 | 12 konkrete Lieferketten (Brauerei → Restaurant: Bierfässer …), Klinik, Baustellen, Werft | Unit-Test |
 | Jobbörse: nur gesammelte Aufträge sind sichtbar/annehmbar | Unit-Test |
 | Büros (Zentrale + Filialen), Ausbaustufen, Internet 1/2, Auftragskapazität | Unit-Test |

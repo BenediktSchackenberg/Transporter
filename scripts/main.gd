@@ -113,7 +113,7 @@ func _load() -> void:
 		return
 	var cfg: Dictionary = d.cfg
 	for p in cfg.players:
-		p["api_key"] = CredentialStore.read_key("slot%d" % int(p.slot)) if p.provider != "demo" and p.get("save_key", false) else ""
+		p["api_key"] = CredentialStore.read_key("slot%d" % int(p.slot)) if p.provider in ["openai", "ionos"] and p.get("save_key", false) else ""
 	_start(cfg, d)
 
 

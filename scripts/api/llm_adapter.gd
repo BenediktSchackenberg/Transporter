@@ -24,6 +24,8 @@ func display_name() -> String:
 
 static func create(provider: String) -> LLMAdapter:
 	match provider:
+		"ollama":
+			return OllamaAdapter.new()
 		"openai", "ionos":
 			return OpenAIAdapter.new()
 		"demo":

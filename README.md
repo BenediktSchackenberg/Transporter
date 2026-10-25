@@ -2,7 +2,7 @@
 
 > **Eine Stadt, die von allein lebt. Vier Unternehmer, die nie schlafen. Und du auf dem besten Platz: dem Zuschauerrang.**
 
-Pixel Transport Rivals ist eine **autonome Wirtschaftssimulation in isometrischer Voxel-Pixeloptik**. Du steuerst nichts. Stattdessen übernehmen **2 bis 4 KI-Unternehmer** (Sprachmodelle über jede OpenAI-kompatible API, oder regelbasierte Demo-Spieler) je eine kleine Spedition in einer lebendigen Stadt. Sie kaufen Fahrzeuge, heuern Fahrer an, handeln, verhandeln, funken sich an, bauen ihren Betriebshof aus, nehmen Kredite auf, gehen pleite und werden ersetzt. Du schaust zu, warum sie das tun.
+Pixel Transport Rivals ist eine **autonome Wirtschaftssimulation in isometrischer Voxel-Pixeloptik**. Du steuerst nichts. Stattdessen übernehmen **2 bis 4 KI-Unternehmer** (pro Spieler ein lokales Ollama-Modell, eine externe Modell-API oder ein regelbasierter Demo-Spieler) je eine kleine Spedition in einer lebendigen Stadt. Sie kaufen Fahrzeuge, heuern Fahrer an, handeln, verhandeln, funken sich an, bauen ihren Betriebshof aus, nehmen Kredite auf, gehen pleite und werden ersetzt. Du schaust zu, warum sie das tun.
 
 **Godot 4.4.1 · typisiertes GDScript · Windows · Deutsch**
 
@@ -42,7 +42,7 @@ Kein Geld entsteht aus dem Nichts. Jede Zahlung bewegt Geld zwischen echten Kont
 | Stufe | Inhalt | Stand |
 |---|---|---|
 | 1 | Stadtleben: Wetter, Ereignisse, Kunden, isometrische Voxelgrafik, transparente KI | ✅ fertig |
-| 2 | Wirtschaftskreislauf: Konten, Banken, Rechtsformen, Insolvenz, Bauhof, Material, Ranglisten | ✅ weitgehend fertig (Spielerkredite fehlen, API-Konfiguration wird separat angepasst) |
+| 2 | Wirtschaftskreislauf: Konten, Banken, Rechtsformen, Insolvenz, Bauhof, Material, Ranglisten | ✅ weitgehend fertig (Spielerkredite fehlen) |
 | 3 | Kraftstoffpreise (real), Tankstellen, Haushalte, Löhne, Gebäudezustand | ⏳ geplant |
 | 4 | Öffentliche Hand: Steuern, Behörden, Geldschöpfung der Banken | ⏳ geplant |
 | 5 | Versorgungsnetz: Stadtlager, Verkehr mit Kapazität, Restaurants, Läden, Müll und Mehrweg | ⏳ geplant |
@@ -78,7 +78,7 @@ Die fertige Windows-EXE wird nicht im Repository abgelegt (Dateigröße); sie en
 | `scripts/core` | Simulation, Kalender, Ereignisse, Kunden, Immobilien, Personal |
 | `scripts/economy` | Konten, Banken, Rechtsformen, Insolvenz, Bauhof, Warenbuch, Verträge |
 | `scripts/ai` | Beobachtung, Aktionen, Regelspieler, Planung, Gedächtnis, API-Steuerung |
-| `scripts/api` | OpenAI-kompatibler Adapter, Demo-Adapter, Wetterdienst, sicherer Schlüsselspeicher |
+| `scripts/api` | Ollama-Adapter, OpenAI-kompatibler Adapter, Demo-Adapter, Wetterdienst, sicherer Schlüsselspeicher |
 | `scripts/world`, `scripts/ui` | Isometrische Stadt, Rendering, HUD, Menüs |
 | `tools/vox` | Voxel-Renderer und Modelle (Python), erzeugt `assets/iso` |
 | `tests` | Testsuite und Wirtschaftscheck |
@@ -112,19 +112,37 @@ Retro-Pixel-Wirtschaftssimulation für Windows: Zwei bis vier **autonome KI-Spie
 ### Eine Partie einrichten
 Im Startmenü legst du pro Spieler (2–4) fest:
 - Name, Firma, Farbe, Avatar und Persönlichkeit
-- **Anbieter**, **Basis-URL**, **Modell** und **API-Key**
+- **Anbieter**, **Basis-URL** und **Modell**; bei externen Anbietern zusätzlich den **API-Key**
 - Entscheidungsintervall, Anfrage- und Tokenbudget, Ersatzmodus und einen optionalen Strategie-Zusatz
 
 Global wählst du außerdem Seed, Partiedauer (5/15/30/60/120/240 Minuten, 12 h, 24 h aktive Echtzeit oder **Endlos**), Startgeschwindigkeit und das **Wetter** (Live Mainz, simuliertes Ersatzwetter oder Wiederholung des Wetters der letzten Partie).
 
 | Anbieter | Bedeutung |
 |---|---|
-| **OpenAI-kompatibel** | Echte Modell-API über `POST {Basis-URL}/chat/completions`. Beispiele: `https://api.openai.com/v1`, `https://openrouter.ai/api/v1`, `http://localhost:11434/v1` (Ollama), LM Studio |
+| **Ollama lokal** | Lokales Modell über `POST {Basis-URL}/api/chat`, ohne API-Key. Vorbelegt: `http://127.0.0.1:11435` und `qwen3.5:9b-q4_K_M`. Der Denkmodus ist für schnelle Aktionsantworten aus. |
+| **Externe API** | OpenAI-kompatibler Aufruf über `POST {Basis-URL}/chat/completions`. HTTPS-Adresse, Modell und API-Key pro Spieler, etwa für OpenAI oder OpenRouter. Lokale kompatible Server können auch über `localhost` angesprochen werden. |
+| **IONOS · Qwen** | Vorbelegtes externes Profil mit IONOS-Adresse und Qwen-Modell; benötigt einen IONOS-Token als API-Key. |
 | **DEMO (simuliert)** | **Keine KI.** Regelbasierte Testantworten laufen durch denselben Parser. In der UI überall als „DEMO“ gekennzeichnet. Mit einstellbarer Fehlerquote (ungültiges JSON, Rate Limit, Timeout) |
 
-`config/example_config.json` enthält eine Beispielkonfiguration **ohne** Zugangsdaten (Button „Beispielkonfiguration laden“).
+`config/example_config.json` zeigt eine gemischte Partie mit externen APIs, lokalem Ollama und Demo **ohne** Zugangsdaten (Button „Beispielkonfiguration laden“).
 
-**API-Keys** liegen nur im Arbeitsspeicher. Sie werden nie in Spielständen, Logs, `setup.json` oder Dialogen gespeichert. Nur wenn du „Key im Win-Tresor“ ankreuzt, landet der Key in der **Windows-Anmeldeinformationsverwaltung** (Generisch, Ziel `PixelTransportRivals/slotN`). Entfernst du den Haken, wird der Eintrag beim nächsten Start gelöscht.
+### Ollama und WebUI lokal starten
+
+Der Docker-Stack in `local-ai/compose.yaml` stellt Ollama mit NVIDIA-GPU und Open WebUI bereit. Die WebUI ist unter <http://127.0.0.1:3000> erreichbar, die Ollama-API unter <http://127.0.0.1:11435>. Beide Ports sind nur an den lokalen Rechner gebunden. Wenn dieser Stack bereits läuft, kannst du im Startmenü sofort „Ollama lokal“ wählen.
+
+Für eine neue Installation zuerst einen eigenen `WEBUI_SECRET_KEY` in `local-ai/.env` erzeugen. Diese Datei wird nicht in Git aufgenommen:
+
+```powershell
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+Set-Content local-ai/.env ("WEBUI_SECRET_KEY=" + [Convert]::ToHexString($bytes).ToLowerInvariant())
+docker compose -f local-ai/compose.yaml up -d
+docker compose -f local-ai/compose.yaml exec ollama ollama pull qwen3.5:9b-q4_K_M
+```
+
+Beim ersten WebUI-Aufruf ein lokales Admin-Konto anlegen. Im Spiel wählst du den Anbieter **für jeden Spieler einzeln**. Ollama braucht keinen Key; bei externen Anbietern bleiben URL, Modell und Key ebenfalls je Spieler getrennt.
+
+**Externe API-Keys** liegen nur im Arbeitsspeicher. Sie werden nie in Spielständen, Logs, `setup.json` oder Dialogen gespeichert. Nur wenn du „Key im Win-Tresor“ ankreuzt, landet der Key in der **Windows-Anmeldeinformationsverwaltung** (Generisch, Ziel `PixelTransportRivals/slotN`). Ollama sendet keinen Key. Entfernst du bei einem externen Anbieter den Haken, wird der Eintrag beim nächsten Start gelöscht.
 
 ### Bedienung (Zuschauer)
 | Eingabe | Wirkung |
@@ -256,7 +274,7 @@ scripts/core/ (weitere)     world_events.gd (Ereignismanager), residents.gd (Kun
 scripts/social/             social.gd (Nachrichten, Angebote, Pakte, Vertrauen), rivalry.gd (Abwerben, Sabotage)
 scripts/ai/                 action_executor.gd (Schema + Prüfung + Ausführung), observation_builder.gd,
                             agent_controller.gd (Planung, Budgets, Fehler, Idempotenz), rule_brain.gd (Demo/Ersatz)
-scripts/api/                llm_adapter.gd, openai_adapter.gd, demo_adapter.gd, credential_store.gd, api_log.gd, weather_service.gd
+scripts/api/                llm_adapter.gd, ollama_adapter.gd, openai_adapter.gd, demo_adapter.gd, credential_store.gd, api_log.gd, weather_service.gd
 scripts/ui/                 setup_menu.gd, hud.gd, live_text.gd, minimap.gd, profit_chart.gd, end_screen.gd, ui_theme.gd
 assets/iso                  isometrische Voxelgrafik (tools/build_iso.py), assets/shaders (Boden, Wind, Nebel, Hitze)
 assets/gfx, assets/sfx      Symbole, Lichtflecken, Sounds (tools/gen_assets.py), assets/fonts (Pixelify Sans, OFL)
@@ -275,6 +293,8 @@ Die Simulation ist vom Rendering getrennt. Deshalb laufen Wirtschaft, Fahrzeuge 
 set GODOT=C:\Pfad\Godot_v4.4.1-stable_win64_console.exe
 :: Unit-/Integrationstests (headless)
 %GODOT% --headless --path . -s res://tests/run_tests.gd
+:: Optional: echtes lokales Modell prüfen (Ollama-Stack und Qwen müssen laufen)
+%GODOT% --headless --path . -s res://tests/ollama_smoke.gd
 :: Verkürzte Partie, 4 Demo-Spieler, endet automatisch und prüft den Gewinner (Exit-Code 0 = OK)
 %GODOT% --headless --path . -- --autotest --players=4 --seconds=60 --speed=16
 :: Echter HTTP-Adapter gegen lokalen Mock-Server
@@ -293,7 +313,7 @@ set PTR_TEST_KEY=sk-irgendwas
 
 ## Testbericht
 
-Stand 25.10.2026, Windows 11, Godot 4.4.1. **Mit einer echten Modell-API (echtes Sprachmodell) wurde nichts getestet**, weil kein API-Key vorlag. Der Wetterdienst wurde dagegen gegen das echte Open-Meteo getestet. Die Spalte „Adapter“ zeigt, womit jede Prüfung lief.
+Der aktuelle vollständige Headless-Lauf unter Godot 4.7.2 bestand 4359 Prüfungen ohne Testfehler, einschließlich Ranglisten-, Wirtschaftskreislauf-, Mehrjahres- und Anbieterwahltest. Der folgende Bericht hält zusätzlich frühere Prüfungen unter Godot 4.4.1 fest. Externe Modell-APIs wurden mangels Key nicht live getestet. Neu hinzugekommen ist ein erfolgreicher Aufruf des lokalen Qwen-3.5-Modells über Ollamas native API mit Godot 4.7.2; der Antwortparser akzeptierte dessen Aktions-JSON. Der Wetterdienst wurde gegen das echte Open-Meteo getestet. Die Spalte „Adapter“ zeigt, womit jede Prüfung lief.
 
 | Prüfung | Adapter | Ergebnis |
 |---|---|---|
@@ -301,6 +321,8 @@ Stand 25.10.2026, Windows 11, Godot 4.4.1. **Mit einer echten Modell-API (echtes
 | 4-Spieler-Partie, automatisches Ende, korrekter Gewinner, Identitätsfehler 0, keine Frames > 100 ms | DEMO (simuliert, 10 % Fehlerquote) | OK |
 | Echter OpenAI-HTTP-Adapter: Bearer-Key kommt an, `response_format`-Ablehnung wird erkannt, 429/500/Timeout/ungültiges JSON abgefangen, absichtlich ungültige Aktion abgelehnt | **Mock-Server** (lokal, keine KI) | OK |
 | API-Key in keiner Datei unter `app_userdata` (Logs, Ergebnis) | Mock-Server | 0 Treffer |
+| Anbieterwahl pro Spieler, getrennte URL/Modell/Key, Ollama ohne Key und mit nativem JSON | Ollama- und Menütests | OK |
+| Echtes Aktions-JSON von `qwen3.5:9b-q4_K_M` auf der lokalen GPU | Ollama native API | OK |
 | API nicht erreichbar → ERSATZMODUS, Spiel läuft weiter (max. Frame 40 ms) | OpenAI-Adapter gegen geschlossenen Port | OK |
 | Windows-Tresor: Speichern, Lesen, Löschen eines Dummy-Keys | – | OK |
 | Speichern in laufender Partie, Laden, Weiterspielen bis zum Ende | DEMO | OK |

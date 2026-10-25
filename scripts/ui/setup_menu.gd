@@ -10,7 +10,7 @@ signal load_requested(path: String)
 const SETUP_PATH := "user://setup.json"
 const EXAMPLE_PATH := "res://config/example_config.json"
 const DURATIONS := [5, 15, 30, 60, 120, 240, 720, 1440, 0]   # aktive Echtzeitminuten, 0 = Endlosmodus
-const PROVIDERS := ["demo", "openai", "ionos"]
+const PROVIDERS := ["demo", "ollama", "openai", "ionos"]
 const DEFAULT_NAMES := [["Greta", "Greta Logistik"], ["Viktor", "Vitesse Transporte"], ["Amira", "Amira Express"],
 	["Bodo", "Bodo & Söhne"]]
 
@@ -93,8 +93,8 @@ func _ready() -> void:
 	root.add_child(grid)
 	for i in 4:
 		grid.add_child(_player_panel(i))
-	var hint := UITheme.label("Anbieter „OpenAI-kompatibel“: echte Modell-API (z. B. https://api.openai.com/v1, https://openrouter.ai/api/v1, http://localhost:11434/v1 für Ollama). " +
-		"„IONOS · Qwen“: IONOS AI Model Hub mit Herstellerparametern (Token im Feld API-Key). „DEMO (simuliert)“: keine KI, regelbasierte Testantworten – deutlich gekennzeichnet.", 12, UITheme.MUTED)
+	var hint := UITheme.label("Jeder Spieler wählt seinen Anbieter selbst: „Ollama lokal“ nutzt den laufenden Docker-Container ohne API-Key. " +
+		"„Externe API“ nutzt eine OpenAI-kompatible HTTPS-Adresse, Modell und Key; „IONOS · Qwen“ ist ein vorbelegtes externes Profil. „DEMO“ ist regelbasiert.", 12, UITheme.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(hint)
 	var buttons := HBoxContainer.new()
@@ -159,21 +159,19 @@ func _player_panel(i: int) -> Control:
 	var pnames: Array = Catalog.PERSONALITIES.values().map(func(p): return p.name)
 	r.personality = _option(form, "Persönlichkeit", pnames, i % pnames.size())
 	r.form = _option(form, "Rechtsform", CompanyForms.FORMS.values().map(func(f): return f.name), 0)
-	r.provider = _option(form, "Anbieter", ["DEMO (simuliert)", "OpenAI-kompatibel", "IONOS · Qwen"], 0)
+	r.provider = _option(form, "Anbieter", ["DEMO (simuliert)", "Ollama lokal", "Externe API", "IONOS · Qwen"], 0)
 	r.base_url = _field(form, "API-Basis-URL", "https://api.openai.com/v1")
 	r.model = _field(form, "Modell", "gpt-4o-mini")
-	r.provider.item_selected.connect(func(idx):
-		if idx == 2:   # IONOS-Profil: Adresse und Modell vorbelegen
-			r.base_url.text = OpenAIAdapter.IONOS_BASE_URL
-			r.model.text = OpenAIAdapter.IONOS_MODEL)
 	r.api_key = _field(form, "API-Key", "")
 	r.api_key.secret = true
-	r.api_key.placeholder_text = "wird nie gespeichert"
+	r.api_key.placeholder_text = "nur für externe Anbieter"
 	r.save_key = CheckBox.new()
 	r.save_key.text = "Key im Win-Tresor"
 	r.save_key.tooltip_text = "API-Key in der Windows-Anmeldeinformationsverwaltung speichern (sonst nur für diese Sitzung im Speicher)."
 	form.add_child(UITheme.label(""))
 	form.add_child(r.save_key)
+	r.provider.item_selected.connect(func(idx): _configure_provider(r, PROVIDERS[idx], true))
+	_configure_provider(r, "demo", false)
 	r.interval = _spin(form, "Entscheidung alle (s)", 5, 300, 20)
 	r.max_requests = _spin(form, "Max. Anfragen", 1, 5000, 300)
 	r.max_tokens = _spin(form, "Tokenbudget", 1000, 10000000, 400000)
@@ -189,6 +187,29 @@ func _player_panel(i: int) -> Control:
 	r.strategy.placeholder_text = "optional, z. B. „Fokus auf Kühltransporte“"
 	rows.append(r)
 	return panel
+
+
+func _configure_provider(r: Dictionary, provider: String, set_defaults: bool) -> void:
+	if set_defaults:
+		match provider:
+			"ollama":
+				r.base_url.text = OllamaAdapter.DEFAULT_BASE_URL
+				r.model.text = OllamaAdapter.DEFAULT_MODEL
+			"ionos":
+				r.base_url.text = OpenAIAdapter.IONOS_BASE_URL
+				r.model.text = OpenAIAdapter.IONOS_MODEL
+			"openai":
+				if r.base_url.text in [OllamaAdapter.DEFAULT_BASE_URL, OpenAIAdapter.IONOS_BASE_URL]:
+					r.base_url.text = "https://api.openai.com/v1"
+					r.model.text = "gpt-4o-mini"
+	var external := provider in ["openai", "ionos"]
+	r.base_url.editable = provider != "demo"
+	r.model.editable = provider != "demo"
+	r.api_key.editable = external
+	r.save_key.disabled = not external
+	if not external:
+		r.api_key.text = ""
+		r.save_key.button_pressed = false
 
 
 func _field(form: GridContainer, label: String, value: String) -> LineEdit:
@@ -232,14 +253,17 @@ func collect() -> Dictionary:
 		var r: Dictionary = rows[i]
 		if not r.enabled.button_pressed:
 			continue
+		var provider: String = PROVIDERS[r.provider.selected]
 		players.append({"slot": i, "player_name": r.name.text.strip_edges(), "company_name": r.company.text.strip_edges(),
 			"color_idx": r.color.selected, "avatar_style": r.avatar.selected,
 			"personality": Catalog.PERSONALITIES.keys()[r.personality.selected], "form": CompanyForms.FORMS.keys()[r.form.selected],
-			"provider": PROVIDERS[r.provider.selected], "base_url": r.base_url.text.strip_edges(),
-			"model": r.model.text.strip_edges(), "api_key": r.api_key.text.strip_edges(),
-			"save_key": r.save_key.button_pressed, "interval": r.interval.value, "max_requests": int(r.max_requests.value),
+			"provider": provider, "base_url": r.base_url.text.strip_edges(),
+			"model": r.model.text.strip_edges(), "api_key": r.api_key.text.strip_edges() if provider in ["openai", "ionos"] else "",
+			"save_key": r.save_key.button_pressed if provider in ["openai", "ionos"] else false,
+			"interval": r.interval.value, "max_requests": int(r.max_requests.value),
 			"max_tokens": int(r.max_tokens.value), "max_tokens_per_request": int(r.tokens_per_request.value),
-			"fallback": r.fallback.button_pressed, "strategy": r.strategy.text.strip_edges(), "timeout": 45.0})
+			"fallback": r.fallback.button_pressed, "strategy": r.strategy.text.strip_edges(),
+			"timeout": 90.0 if provider == "ollama" else 45.0})
 	return {"seed": seed_edit.text.to_int(), "duration_min": DURATIONS[duration_opt.selected],
 		"speed_idx": speed_opt.selected, "demo_fault_rate": fault_spin.value, "carry_memory": carry_check.button_pressed,
 		"weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
@@ -278,6 +302,7 @@ func _apply_config(cfg: Dictionary) -> void:
 		r.tokens_per_request.value = float(p.get("max_tokens_per_request", 900))
 		r.fallback.button_pressed = p.get("fallback", true)
 		r.strategy.text = p.get("strategy", "")
+		_configure_provider(r, str(p.get("provider", "demo")), false)
 	status_label.text = "Konfiguration geladen."
 
 
@@ -287,14 +312,21 @@ func _on_start() -> void:
 	if err != "":
 		status_label.text = err
 		return
-	# Keys: aus dem Tresor holen bzw. auf Wunsch dort speichern
+	# Erst alle externen Zugänge prüfen; bei einem Fehler keine Tresoreinträge ändern.
 	for p in cfg.players:
-		if p.provider == "demo":
+		if p.provider in ["demo", "ollama"]:
 			continue
 		var slot := "slot%d" % p.slot
 		if p.api_key == "" and p.save_key:
 			p.api_key = CredentialStore.read_key(slot)
-		elif p.api_key != "" and p.save_key:
+		if p.api_key == "" and not _is_loopback_url(str(p.base_url)):
+			status_label.text = "%s: Für die externe API fehlt der API-Key." % p.player_name
+			return
+	for p in cfg.players:
+		if p.provider in ["demo", "ollama"]:
+			continue
+		var slot := "slot%d" % p.slot
+		if p.api_key != "" and p.save_key:
 			if not CredentialStore.save_key(slot, p.api_key):
 				status_label.text = "Hinweis: Key für %s konnte nicht im Windows-Tresor gespeichert werden." % p.player_name
 		elif not p.save_key:
@@ -310,6 +342,8 @@ static func validate(cfg: Dictionary) -> String:
 		return "Höchstens vier Spieler."
 	var colors := {}
 	for p in cfg.players:
+		if p.provider not in PROVIDERS:
+			return "%s: Unbekannter Anbieter." % p.player_name
 		if p.player_name == "" or p.company_name == "":
 			return "Jeder Spieler braucht einen Namen und einen Firmennamen."
 		if colors.has(p.color_idx):
@@ -317,9 +351,20 @@ static func validate(cfg: Dictionary) -> String:
 		colors[p.color_idx] = true
 		if p.provider != "demo" and (p.base_url == "" or p.model == ""):
 			return "%s: Für die echte API sind Basis-URL und Modell nötig." % p.player_name
+		if p.provider == "ollama" and (not _is_loopback_url(str(p.base_url)) or str(p.base_url).ends_with("/v1")):
+			return "%s: Ollama lokal braucht eine Adresse wie http://127.0.0.1:11435 (ohne /v1)." % p.player_name
+		if p.provider in ["openai", "ionos"] and not str(p.base_url).begins_with("https://") and not _is_loopback_url(str(p.base_url)):
+			return "%s: Externe API nur über HTTPS verbinden." % p.player_name
 	if int(cfg.duration_min) not in DURATIONS:
 		return "Ungültige Partiedauer."
 	return ""
+
+
+static func _is_loopback_url(url: String) -> bool:
+	var re := RegEx.new()
+	if re.compile("^http://(127\\.0\\.0\\.1|localhost):[0-9]{1,5}(/|$)") != OK:
+		return false
+	return re.search(url) != null
 
 
 func _save_setup(cfg: Dictionary) -> void:

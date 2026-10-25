@@ -9,9 +9,18 @@ var checks := 0
 
 func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
-	for name in ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
+	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency"]:
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency"]
+	var args := OS.get_cmdline_user_args()
+	if args.size() == 1 and str(args[0]).begins_with("--only="):
+		var requested := str(args[0]).trim_prefix("--only=")
+		if requested not in test_names:
+			printerr("Unbekannter Test: ", requested)
+			quit(1)
+			return
+		test_names = [requested]
+	for name in test_names:
 		var before := checks
 		var fails := failures
 		call(name)
@@ -2085,3 +2094,55 @@ func test_multi_year_consistency() -> void:
 	ok(s.standings.stage_winners.size() >= months - 2, "Etappensieger jedes Monats erfasst (%d)" % s.standings.stage_winners.size())
 	ok(s.stock.balance_error() == 0, "Warenbilanz nach über einem Jahr")
 	ok(s.trader.cash() >= 0.0, "Bauhof bleibt zahlungsfähig (%.0f)" % s.trader.cash())
+
+
+func test_provider_choice() -> void:
+	var menu := SetupMenu.new()
+	menu._ready()
+	for i in [2, 3]:
+		menu.rows[i].enabled.button_pressed = false
+	var local: Dictionary = menu.rows[0]
+	local.provider.select(1)
+	menu._configure_provider(local, "ollama", true)
+	local.api_key.text = "TEST_KEY_MUST_NOT_LEAVE"
+	local.save_key.button_pressed = true
+	var remote: Dictionary = menu.rows[1]
+	remote.provider.select(2)
+	menu._configure_provider(remote, "openai", true)
+	remote.base_url.text = "https://api.example.com/v1"
+	remote.model.text = "external-model"
+	remote.api_key.text = "TEST_KEY_REMOTE"
+	var cfg := menu.collect()
+	ok(cfg.players.size() == 2 and cfg.players[0].provider == "ollama" and cfg.players[1].provider == "openai",
+		"Anbieter pro Spieler getrennt")
+	ok(cfg.players[0].base_url == OllamaAdapter.DEFAULT_BASE_URL and cfg.players[0].model == OllamaAdapter.DEFAULT_MODEL
+		and cfg.players[0].api_key == "" and not cfg.players[0].save_key and cfg.players[0].timeout == 90.0,
+		"Ollama-Preset ohne Key und mit Start-Timeout")
+	ok(cfg.players[1].base_url == "https://api.example.com/v1" and cfg.players[1].model == "external-model"
+		and cfg.players[1].api_key == "TEST_KEY_REMOTE", "Externe API behält eigene URL, Modell und Key")
+	ok(SetupMenu.validate(cfg) == "", "gemischte Anbieter-Konfiguration gültig")
+	cfg.players[1].base_url = "http://api.example.com/v1"
+	ok(SetupMenu.validate(cfg).contains("HTTPS"), "externer Key nicht über unverschlüsseltes HTTP")
+	cfg.players[1].base_url = "http://localhost:11435@api.example.com/v1"
+	ok(SetupMenu.validate(cfg).contains("HTTPS"), "Loopback-URL mit fremdem Host abgewiesen")
+	cfg.players[1].base_url = "https://api.example.com/v1"
+	cfg.players[0].base_url = "http://127.0.0.1:11435/v1"
+	ok(SetupMenu.validate(cfg).contains("ohne /v1"), "Ollama nutzt die native API")
+	menu.free()
+
+	var created := LLMAdapter.create("ollama")
+	ok(created is OllamaAdapter, "Ollama erhält eigenen Adapter")
+	var adapter := created as OllamaAdapter
+	adapter.config = {"model": OllamaAdapter.DEFAULT_MODEL, "max_tokens_per_request": 900}
+	var body: Dictionary = adapter.build_body([{"role": "user", "content": "Test"}])
+	ok(body.think == false and body.format == "json" and body.stream == false
+		and body.options.num_predict == 900 and not body.has("api_key"), "Ollama-Anfrage ohne Denkmodus und Key")
+	var replies: Array = []
+	adapter.completed.connect(func(id: int, response: Dictionary): replies.append([id, response]))
+	adapter._req_id = 7
+	var json := JSON.stringify({"message": {"content": "{\"summary\":\"warte\",\"actions\":[]}"}, "prompt_eval_count": 25, "eval_count": 12})
+	adapter._on_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), json.to_utf8_buffer())
+	ok(replies.size() == 1 and replies[0][0] == 7 and replies[0][1].ok
+		and replies[0][1].usage.total_tokens == 37
+		and AgentController.parse_response(replies[0][1].content).ok, "Ollama-Antwort erreicht Aktionsparser")
+	adapter.free()
