@@ -10,6 +10,7 @@ signal decided(cid: int, summary: String, source: String)
 const MAX_ACTIONS := 6
 const MIN_EVENT_GAP := 6.0        # Echtzeit-Sekunden zwischen ereignisgetriebenen Anfragen
 const STALE_GAME_MIN := 90.0      # aeltere Antworten werden verworfen
+const STALE_GAME_MIN_OLLAMA := 1440.0  # lokales Modell braucht fuer grosse Prompts laenger; Aktionen werden erneut validiert
 const FAIL_LIMIT := 3             # aufeinanderfolgende Fehler bis zum Ersatzmodus
 const API_RETRY_IN_FALLBACK := 60.0
 
@@ -163,10 +164,13 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 		_consecutive_fail += 1
 		_check_fallback()
 		return
-	if sim.game_min - _inflight_obs_min > STALE_GAME_MIN:
+	var stale_limit := STALE_GAME_MIN_OLLAMA if config.get("provider", "") == "ollama" else STALE_GAME_MIN
+	if sim.game_min - _inflight_obs_min > stale_limit:
 		last_error = "Antwort veraltet – verworfen"
+		status = last_error
 		sim.record_result(cid, "Deine letzte Antwort kam zu spät und wurde verworfen.")
-		api_log.write({"type": "stale_discarded", "player": cid, "req": req_id})
+		api_log.write({"type": "stale_discarded", "player": cid, "req": req_id,
+			"age_game_min": sim.game_min - _inflight_obs_min, "limit_game_min": stale_limit})
 		return
 	stats.ok += 1
 	_consecutive_fail = 0

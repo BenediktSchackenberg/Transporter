@@ -377,6 +377,15 @@ func test_controller_idempotency() -> void:
 	var bad := ctl.begin_request_for_test()
 	ctl.handle_result(bad, {"ok": true, "content": "Ich denke nach...", "usage": {}})
 	ok(ctl.last_error.contains("JSON"), "ungültiges JSON wird gemeldet: " + ctl.last_error)
+	ctl.config.provider = "ollama"
+	var local := ctl.begin_request_for_test()
+	s.game_min += 500.0
+	ctl.handle_result(local, {"ok": true, "content": '{"goal":"Lieferungen planen","summary":"Ich plane.","actions":[{"action":"wait"}]}', "usage": {}})
+	ok(ctl.goal == "Lieferungen planen", "langsame lokale Modellantwort wird innerhalb eines Spieltags übernommen")
+	var too_old := ctl.begin_request_for_test()
+	s.game_min += AgentController.STALE_GAME_MIN_OLLAMA + 1.0
+	ctl.handle_result(too_old, {"ok": true, "content": content, "usage": {}})
+	ok(ctl.last_error.contains("veraltet"), "Antwort auf mehr als einen Spieltag alten Zustand bleibt gesperrt")
 	ctl.free()
 
 
