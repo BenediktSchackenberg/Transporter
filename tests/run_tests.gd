@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2450,3 +2450,123 @@ func test_building_care() -> void:
 	ok("STADTVIERTEL" in LiveText.situation(s, 10.0), "Lage-Reiter zeigt Viertelzustand")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.care.condition.size() == C.condition.size() and absf(s2.care.get_condition(C.condition.keys()[0]) - C.get_condition(C.condition.keys()[0])) < 0.2, "Zustand nach Laden")
+
+
+func test_workforce() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var c := s.companies[0]
+	var staff: Array = s.personnel.employed(0)
+	var idle: Worker = staff.filter(func(w): return w.vehicle_id < 0)[0]
+	var task: WorkerTask = s.personnel.tasks.get(idle.task_id)
+	if task != null and not task.is_final():
+		s.personnel.cancel_task(task, "Test")
+	# Gesundheit sinkt bei Dauererschoepfung und erholt sich in Ruhe
+	idle.fatigue = 95.0
+	idle.health = 80.0
+	for i in 40:
+		s.workforce.minute_tick()
+	ok(idle.health < 80.0, "Erschöpfung zehrt die Gesundheit auf (%.1f)" % idle.health)
+	idle.fatigue = 10.0
+	var h0 := idle.health
+	for i in 40:
+		s.workforce.minute_tick()
+	ok(idle.health > h0, "ausgeruht erholt sich die Gesundheit")
+	# Krankheit
+	idle.health = 20.0
+	idle.rest_until = 0.0
+	s.workforce.minute_tick()
+	ok(idle.rest_until > s.game_min and idle.health > 30.0, "unter 30 wird der Mitarbeiter krank und fällt aus")
+	ok(s.personnel.can_take(idle, "gehen") != "", "kranker Mitarbeiter bekommt keine Aufgaben")
+	# Pause einplanen
+	idle.rest_until = 0.0
+	idle.fatigue = 60.0
+	var r := s.executor.execute(0, {"action": "schedule_rest", "worker_id": idle.id, "hours": 2})
+	ok(r.ok and idle.rest_until > s.game_min + 100.0, "Pause eingeplant: " + r.msg)
+	for i in 10:
+		s.workforce.minute_tick()
+	ok(idle.fatigue < 60.0, "in der Pause sinkt die Erschöpfung")
+	var driver: Worker = staff.filter(func(w): return w.vehicle_id >= 0)[0]
+	ok(not s.executor.execute(0, {"action": "schedule_rest", "worker_id": driver.id, "hours": 2}).ok, "Fahrer im Fahrzeug bekommt keine Pause")
+	ok(not s.executor.execute(1, {"action": "schedule_rest", "worker_id": idle.id, "hours": 2}).ok, "fremder Mitarbeiter nicht verplanbar")
+	# Weiterbildung
+	idle.rest_until = 0.0
+	var skill := "verladen"
+	idle.skills[skill] = 0
+	var cash0 := c.ledger.cash
+	var t := s.executor.execute(0, {"action": "offer_training", "worker_id": idle.id, "skill": skill})
+	ok(t.ok and int(idle.skills[skill]) == 1 and is_equal_approx(cash0 - c.ledger.cash, Workforce.TRAIN_COST), "Weiterbildung: Fähigkeit +1 gegen Gebühr: " + t.msg)
+	idle.skills[skill] = Workforce.TRAIN_MAX_SKILL
+	ok(not s.executor.execute(0, {"action": "offer_training", "worker_id": idle.id, "skill": skill}).ok, "über Stufe 2 nur mit Schulungsraum")
+	ok(not s.executor.execute(0, {"action": "offer_training", "worker_id": idle.id, "skill": "fliegen"}).ok, "unbekannte Fähigkeit abgelehnt")
+	# Ersatzpersonal
+	var n0 := s.personnel.employed(0).size()
+	var cash1 := c.ledger.cash
+	var q := s.executor.execute(0, {"action": "request_replacement_worker", "kind": "mechanic"})
+	ok(q.ok and c.ledger.cash < cash1 and s.workforce.pending.size() == 1, "Vermittlung beauftragt: " + q.msg)
+	ok(s.executor.execute(0, {"action": "request_replacement_worker", "kind": "driver"}).ok and not s.executor.execute(0, {"action": "request_replacement_worker", "kind": "guard"}).ok, "höchstens zwei Vermittlungen gleichzeitig")
+	ok(not s.executor.execute(0, {"action": "request_replacement_worker", "kind": "pilot"}).ok, "unbekannte Rolle abgelehnt")
+	run(s, 60.0 * 1.6)
+	ok(s.personnel.employed(0).size() == n0 + 2 and s.workforce.pending.is_empty(), "nach einem Spieltag sind beide Ersatzkräfte angestellt")
+	ok(identity_ok(s), "Geld und Bilanz stimmen")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.personnel.workers[idle.id].health == idle.health and s2.workforce.pending.size() == s.workforce.pending.size(), "Gesundheit und Vermittlungen nach Laden")
+	# Gesundheit schlaegt auf die Motivation durch
+	var w2: Worker = s.personnel.employed(0)[0]
+	var hh: Dictionary = s.households.household_of(w2)
+	hh.balance = 10000.0
+	w2.health = 100.0
+	w2.motivation = 60.0
+	s.households._update_motivation(w2, hh)
+	var healthy := w2.motivation
+	w2.health = 20.0
+	w2.motivation = 60.0
+	s.households._update_motivation(w2, hh)
+	ok(w2.motivation < healthy, "schlechte Gesundheit senkt die Motivation")
+
+
+func test_news_feed() -> void:
+	GameCalendar.configure(60.0)
+	var sample := {"articles": [
+		{"title": "Spritpreise steigen in Mainz auf Rekord", "description": "Diesel wird teurer, Tankstellen melden Anstieg.", "source": {"name": "Beispielzeitung"}, "publishedAt": "2026-10-25T08:00:00Z", "url": "https://example.org/a"},
+		{"title": "Spritpreise steigen in Mainz auf Rekord!", "description": "doppelt", "source": {"name": "Anderer"}, "publishedAt": "2026-10-25T09:00:00Z"},
+		{"title": "Warnstreik der Fahrer im Mainzer Raum", "description": "Streik im Verkehr, Fahrermangel erwartet", "source": {"name": "Radio"}, "publishedAt": "2026-10-25T07:00:00Z"},
+		{"title": "Neues Café eröffnet", "description": "Kaffee und Kuchen", "source": {"name": "Blatt"}, "publishedAt": "2026-10-25T06:00:00Z"},
+		{"title": "", "description": "ohne Titel"}]}
+	var p := NewsFeed.parse(sample)
+	ok(p.size() == 4, "Meldungen ohne Titel werden verworfen (%d)" % p.size())
+	ok(NewsFeed.parse("kein array").is_empty() and NewsFeed.parse({"x": 1}).is_empty(), "ungültiges Format ergibt nichts")
+	ok(NewsFeed.normalize("Spritpreise steigen!") == NewsFeed.normalize("spritpreise  steigen"), "Titel werden normalisiert")
+	var a := NewsFeed.assess(p[0])
+	ok(a.cat == "Treibstoff" and a.direction == 1 and a.relevance >= NewsFeed.EVENT_MIN_RELEVANCE, "Treibstoffmeldung: Kategorie, Richtung und Relevanz")
+	ok(NewsFeed.assess(p[3]).cat == "" and NewsFeed.assess(p[3]).relevance == 0.0, "irrelevante Meldung bleibt ohne Einschätzung")
+	var s := new_sim(2)
+	var added := s.news.ingest(p)
+	ok(added.size() == 3 and s.news.items.size() == 3, "Duplikat wird nur einmal aufgenommen (%d)" % added.size())
+	ok(s.news.ingest(p).is_empty(), "wiederholter Abruf liefert nichts Neues")
+	# Ebene 3: begrenztes Ereignis mit Abklingzeit
+	for it in s.news.items:
+		if it.cat == "Arbeit":
+			it.used = true   # hier nur den Treibstoffpfad pruefen
+	var f0: float = s.resources.fuel_price_factor
+	var ev := s.news.maybe_event(s)
+	ok(not ev.is_empty() and s.resources.fuel_price_factor > f0 and s.resources.fuel_price_factor <= 1.15, "Treibstoffmeldung löst ein begrenztes Preisereignis aus (×%.2f)" % s.resources.fuel_price_factor)
+	ok(s.news.maybe_event(s).is_empty(), "Abklingzeit verhindert das nächste Ereignis")
+	var used: Array = s.news.items.filter(func(i): return i.used and i.cat == "Treibstoff")
+	ok(used.size() == 1 and "Nachricht" in s.events.get_event(ev.id).ursache, "Ereignis nennt die Nachricht als Ursache")
+	run(s, 60.0 * 8.0)
+	ok(is_equal_approx(s.resources.fuel_price_factor, 1.0), "Preisereignis endet nach einigen Tagen")
+	# Dienst: Schluessel erscheint nirgends
+	var svc := NewsService.new()
+	svc.setup(s, "GEHEIM-ABCDEFG")
+	svc.enabled = false
+	ok(svc.build_url().contains("apiKey=GEHEIM") and svc.has_key(), "Schlüssel nur in der Anfrage")
+	ok(not svc.handle_body("kein json") and s.news.last_error != "", "kaputte Antwort wird gemeldet")
+	svc._fail("Fehler bei GEHEIM-ABCDEFG")
+	ok(not s.news.last_error.contains("GEHEIM") and not JSON.stringify(s.to_dict()).contains("GEHEIM"), "Schlüssel nicht in Fehlern oder Spielstand")
+	svc.free()
+	ok(JSON.stringify(ObservationBuilder.build(s, 0, [], 0.0, 30.0)).contains("meldungen_nur_daten"), "KI sieht Meldungen ausdrücklich als Daten")
+	ok("NACHRICHTEN" in LiveText.situation(s, 10.0) and "gemeldet" in LiveText.news_block(s), "Lage-Reiter zeigt die drei Ebenen")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.news.items.size() == s.news.items.size() and s2.news.ingest(p).is_empty(), "Meldungen und Duplikatschutz nach Laden")
+	ok("HAUSHALTE" in LiveText.households(s), "Ansicht Haushalte")

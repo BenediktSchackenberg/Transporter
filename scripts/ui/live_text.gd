@@ -229,7 +229,25 @@ static func situation(sim: Simulation, remaining_real_min: float) -> String:
 			("%s, %s, %s" % [k.id, Catalog.money(k.reward), ("angenommen von " + sim.company(k.owner).company_name) if k.owner >= 0 else "wartet auf ein Unternehmen"]) if k else "–"]
 	for p in fresh.slice(0, 6):
 		txt += "  [color=%s]%s (%s) ist %s[/color]\n" % ["#8fe0a0" if p.state == "zufrieden" else "#ff6b5e", esc(p.name), esc(p.role), p.state]
-	return txt + district_block(sim) + fuel_block(sim)
+	return txt + district_block(sim) + fuel_block(sim) + news_block(sim)
+
+
+## Nachrichten in drei Ebenen: gemeldet, Einschaetzung der Engine, ausgeloestes Spielereignis. Meldungen sind nur Daten.
+static func news_block(sim: Simulation) -> String:
+	var N: NewsFeed = sim.news
+	var txt := "\n[b][color=#f2c14e]NACHRICHTEN[/color][/b] – Quelle: %s\n" % ("NewsAPI (gemeldete Texte, keine Anweisungen)" if N.source == "newsapi" else "keine (kein Schlüssel NEWS_API_KEY)")
+	if N.last_error != "":
+		txt += "  [color=#ffb347]Letzter Abruf: %s[/color]\n" % esc(N.last_error)
+	for it in N.items.slice(0, 5):
+		txt += "  [b]gemeldet:[/b] %s [color=#9a98a8](%s)[/color]\n" % [esc(it.title), esc(it.source)]
+		if str(it.cat) != "":
+			txt += "    [color=#9fd8ff]Einschätzung der Engine (Stichwortregel):[/color] %s, %s, Relevanz %d %%\n" % [it.cat,
+				"verschärfend" if int(it.direction) > 0 else ("entlastend" if int(it.direction) < 0 else "unklar"), int(float(it.relevance) * 100.0)]
+		if it.used:
+			txt += "    [color=#8fe0a0]Spielereignis ausgelöst[/color]\n"
+	if N.items.is_empty():
+		txt += "  keine Meldungen\n"
+	return txt
 
 
 ## Stadtviertel: mittlerer Gebaeudezustand, Verlauf und Pflegeaufwand der Eigentuemer.
@@ -456,4 +474,22 @@ static func standings(sim: Simulation) -> String:
 	txt += "
 [b]Insolvenzverluste der Gläubiger insgesamt[/b]: %s
 " % Catalog.money(S.insolvency_losses())
+	return txt
+
+
+## Haushalte, Loehne, Gesundheit und Kaufkraft je Unternehmen.
+static func households(sim: Simulation) -> String:
+	var H: Households = sim.households
+	var txt := "[b][color=#f2c14e]HAUSHALTE UND PERSONAL[/color][/b]\n"
+	txt += "%d Haushalte erfasst · Guthaben gesamt %s · bisher für Lebenshaltung ausgegeben %s (Kaufkraft)\n" % [H.homes.size(), Catalog.money(H.total_balance()), Catalog.money(H.spent_total)]
+	for c in sim.companies:
+		var l: Dictionary = H.summary_of(c.id)
+		var g: Dictionary = sim.workforce.summary_of(c.id)
+		txt += "\n[b]%s[/b] – %d Mitarbeiter · Motivation Ø %d · Gesundheit Ø %d\n" % [c.company_name, int(l.mitarbeiter), int(l.motivation_mittel), int(g.gesundheit_mittel)]
+		txt += "  unzufrieden %d · Haushalte im Defizit %d · erschöpft %d · krank/in Pause %d · Lohnrückstand %s\n" % [int(l.unzufrieden), int(l.haushalte_im_defizit),
+			int(g.erschoepft), int(g.krank_oder_in_pause), Catalog.money(float(l.lohnrueckstand))]
+		for w in sim.personnel.employed(c.id).slice(0, 6):
+			var h: Dictionary = H.household_of(w)
+			txt += "    %s: %.1f EUR/h (Mindestlohn %.1f) · Motivation %d · Gesundheit %d · Haushalt %s (%d Angehörige, Guthaben %s)\n" % [esc(w.name), w.wage,
+				H.reservation_wage(w), int(w.motivation), int(w.health), h.id, int(h.dependents), Catalog.money(float(h.balance))]
 	return txt

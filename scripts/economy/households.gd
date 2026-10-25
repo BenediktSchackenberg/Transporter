@@ -163,6 +163,7 @@ func _update_motivation(w: Worker, h: Dictionary) -> void:
 	elif float(h.balance) > 2.0 * costs(h):
 		target += 6.0
 	target -= 0.15 * w.fatigue
+	target -= 0.12 * (100.0 - w.health)
 	target -= 8.0 if sim.company(w.employer).ledger.payables > 1.0 else 0.0
 	w.motivation = clampf(w.motivation + 0.35 * (target - w.motivation), 0.0, 100.0)
 	if w.motivation < LOW_MOTIVATION:

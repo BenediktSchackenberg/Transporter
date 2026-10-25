@@ -23,6 +23,7 @@ var end_screen: EndScreen
 var api_log := ApiLog.new()
 var weather_service: WeatherService
 var fuel_service: FuelService
+var news_service: NewsService
 var paused := false
 var speed_idx := 1
 var active_seconds := 0.0
@@ -88,6 +89,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	sim.insolvency.company_refounded.connect(_on_refounded)
 	_setup_weather()
 	_setup_fuel()
+	_setup_news()
 	var ui := CanvasLayer.new()
 	ui.layer = 10
 	add_child(ui)
@@ -112,6 +114,19 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 
 
 ## Wetter: Live-Abruf (Standard), Wiederholung einer aufgezeichneten Partie oder nur simuliertes Ersatzwetter ("sim").
+## Nachrichten (optional): nur mit Schluessel (NEWS_API_KEY oder Windows-Tresor), sonst bleibt die Quelle "keine".
+func _setup_news() -> void:
+	if str(cfg.get("news", "live")) != "live":
+		return
+	news_service = NewsService.new()
+	add_child(news_service)
+	news_service.setup(sim)
+	if not news_service.has_key():
+		return
+	news_service.updated.connect(func(n): api_log.write({"type": "news", "minute": sim.minute_index, "neu": n}))
+	news_service.failed.connect(func(msg): api_log.write({"type": "news_error", "minute": sim.minute_index, "error": msg}))
+
+
 ## Kraftstoff-Referenzpreise: live nur mit Schluessel (Umgebungsvariable oder Windows-Tresor), sonst gekennzeichneter Ersatzpreis.
 func _setup_fuel() -> void:
 	if str(cfg.get("fuel", "live")) != "live":

@@ -27,6 +27,12 @@ const SCHEMA := {
 		"desc": "Arbeiter bewacht ein eigenes Depot oder Fahrzeug (erhöht Entdeckungschance bei Sabotage)."},
 	"attempt_vehicle_sabotage": {"params": {"worker_id": "string", "vehicle_id": "int"},
 		"desc": "Regelwidrig! Eigener Arbeiter legt ein gesichtetes, stehendes Fremdfahrzeug lahm. 800 EUR, Abklingzeit. Wird er erwischt, ist er für die Partie verloren."},
+	"schedule_rest": {"params": {"worker_id": "string", "hours": "number"},
+		"desc": "Pause für einen eigenen Mitarbeiter einplanen (0,5–12 Stunden): keine neuen Aufgaben, schnellere Erholung. Nur wenn er gerade nichts tut."},
+	"offer_training": {"params": {"worker_id": "string", "skill": "string"},
+		"desc": "Externe Weiterbildung (1200 EUR, 4 Stunden Ausfall): Fähigkeit +1 bis Stufe 2 (fahren, verladen, reparieren, bewachen), steigert Motivation und Marktlohn."},
+	"request_replacement_worker": {"params": {"kind": "string"},
+		"desc": "Personalvermittlung beauftragen (600 EUR, 1200 für Vorarbeiter): nach einem Spieltag wird ein passender driver|loader|mechanic|guard|foreman angestellt."},
 	"fund_maintenance": {"params": {"einrichtung_id": "string", "betrag": "number"},
 		"desc": "Eigene Einrichtung (B..) instandhalten: der Betrag wird in Zustandspunkte umgesetzt. Verwahrloste Einrichtungen verursachen höhere Betriebskosten."},
 	"commission_renovation": {"params": {"einrichtung_id": "string"},
@@ -60,6 +66,12 @@ func run(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 	match name:
 		"inspect_resource":
 			return sim.resources.inspect(cid, str(a.resource_id))
+		"schedule_rest":
+			return sim.workforce.schedule_rest(cid, str(a.worker_id), ActionExecutor._f(a.hours))
+		"offer_training":
+			return sim.workforce.offer_training(cid, str(a.worker_id), str(a.skill))
+		"request_replacement_worker":
+			return sim.workforce.request_replacement(cid, str(a.kind))
 		"fund_maintenance":
 			return sim.care.fund_maintenance(cid, str(a.einrichtung_id), ActionExecutor._f(a.betrag))
 		"commission_renovation":
