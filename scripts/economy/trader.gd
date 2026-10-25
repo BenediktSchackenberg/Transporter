@@ -16,7 +16,7 @@ const MATERIALS := {
 	"verbindung": {"name": "Verbindungsmaterial", "base": 6.0, "target": 300, "min": 100, "max": 600, "lead": 2},
 	"rohmaterial": {"name": "Rohmaterial", "base": 9.0, "target": 600, "min": 200, "max": 1000, "lead": 2},
 	"altmaterial": {"name": "Altmaterial", "base": 4.0, "target": 0, "min": 0, "max": 400, "lead": 0},
-	"sekundaer": {"name": "Sekundärrohstoff", "base": 11.0, "target": 0, "min": 0, "max": 400, "lead": 0},
+	"sekundaer": {"name": "Sekundärrohstoff", "base": 11.0, "target": 60, "min": 0, "max": 400, "lead": 0},
 }
 ## Bestellbar im Ausland (Import). Beton, Module, Paletten und Sekundaerrohstoff stammen aus eigener Produktion.
 const IMPORTED := ["holz", "stahl", "ziegel", "glas", "installation", "werkzeug", "verbindung", "rohmaterial"]
@@ -65,7 +65,7 @@ func setup(s: Simulation) -> void:
 		s.city.buildings[bauhof].name = "Bauhof (Großhandel)"
 		for it in MATERIALS:
 			var t: int = MATERIALS[it].target
-			if t > 0 and it not in ["beton", "module", "paletten"]:
+			if t > 0 and it not in ["beton", "module", "paletten", "sekundaer", "altmaterial"]:
 				s.stock.add(it, t, "T0", bauhof, "Anfangsbestand")
 		for it in ["beton", "paletten"]:
 			s.stock.add(it, int(MATERIALS[it].target * 0.6), "T0", bauhof, "Anfangsbestand")
@@ -292,9 +292,9 @@ func _produce(pid: String) -> void:
 		for it in p["in"]:
 			if stock_of(it) < int(p["in"][it]):
 				ok = false
-		# nicht ueber das Lagermaximum des Ausgangs hinaus produzieren
+		# nur produzieren, solange der Zielbestand des Ausgangs nicht erreicht ist (keine Ueberproduktion auf Vorrat)
 		for it in p.out:
-			if stock_of(it) >= int(MATERIALS[it].max):
+			if stock_of(it) >= int(MATERIALS[it].target):
 				ok = false
 		if not ok or cash() < PLANT_ENERGY:
 			break
@@ -312,6 +312,9 @@ func on_month(_month: int) -> void:
 	var wages := minf(WAGE_PER_MONTH * STAFF, maxf(0.0, cash()))
 	sim.economy.transfer("T0", "H0", wages)
 	stats.wages += wages
+	var excess: float = cash() - 150000.0   # Gewinne ueber der Reserve gehen zur Haelfte an die Eigentuemer (Haushalte)
+	if excess > 0.0:
+		sim.economy.transfer("T0", "H0", excess * 0.5)
 
 
 # ------------------------------------------------------------------ Anzeige

@@ -113,7 +113,24 @@ func negotiate(cid: int, wid: String, offer: float) -> Dictionary:
 
 
 # ------------------------------------------------------------------ Monatsabschluss
+## Kreislauf der uebrigen Stadtbevoelkerung: Die Haushalte erhalten aus der Aussenwirtschaft (Pendlerloehne, Exporterloese) fast so viel,
+## wie sie im Monat ausgegeben haben. Das ist die einzige Stelle, an der der Haushaltssektor Geld von aussen bekommt.
+const EXTERNAL_INCOME_SHARE := 0.95
+
+
 func on_month(_month: int) -> void:
+	var spent_prev: float = sim.economy.take_outflow("H0")
+	sim.economy.transfer("X0", "H0", spent_prev * EXTERNAL_INCOME_SHARE)
+	sim.economy.outflow["X0"] = 0.0
+	# Rest der Stadtwirtschaft: Haushalte geben ueberschuessiges Geld aus (an S0), S0 zahlt ueberschuessige Mittel als Loehne zurueck.
+	# Beide Konten laufen so auf ihre Ausgangswerte zu, statt davonzudriften.
+	var h_excess: float = float(sim.economy.accounts.H0) - float(Economy.SEED.H0)
+	if h_excess > 0.0:
+		sim.economy.transfer("H0", "S0", 0.4 * h_excess)
+	var s_excess: float = float(sim.economy.accounts.S0) - float(Economy.SEED.S0)
+	if s_excess > 0.0:
+		sim.economy.transfer("S0", "H0", 0.6 * s_excess)
+	sim.economy.outflow["H0"] = 0.0
 	for h in homes.values():
 		var members: Array = []
 		for wid in h.members:

@@ -13,6 +13,7 @@ const TANKER_ORDER_BELOW := 0.35        # Bestellung unter diesem Fuellstand
 const WHOLESALE_FACTOR := 0.86          # Einkaufspreis des Betreibers (Anteil Referenzpreis)
 const BACKGROUND_L_PER_DAY := 5000.0    # Verkauf an Haushalte (Privatfahrzeuge) in der ganzen Stadt je Spieltag, verteilt auf alle Tankstellen
 const STATION_WAGE_PER_MONTH := 400.0   # Personal je Tankstelle
+const OPERATOR_RESERVE := 80000.0       # darueber hinaus gehende Gewinne werden zur Haelfte ausgeschuettet
 
 var sim
 var offers := {}       # "F<n>" -> {id, dealer, model, price, condition, status}
@@ -176,6 +177,10 @@ func _monthly_stations() -> void:
 	var gas := supplies.values().filter(func(s): return s.kind == "fuel").size()
 	var wages := minf(STATION_WAGE_PER_MONTH * gas, maxf(0.0, sim.economy.accounts.G0))
 	sim.economy.transfer("G0", "H0", wages)
+	# Ausschuettung an die Betreiber (Haushalte), soweit das Konto die Reserve ueberschreitet
+	var excess: float = float(sim.economy.accounts.G0) - OPERATOR_RESERVE
+	if excess > 0.0:
+		sim.economy.transfer("G0", "H0", excess * 0.5)
 
 
 func minute_tick(now: float) -> void:

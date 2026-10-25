@@ -211,6 +211,14 @@ func _autotest_finished(s: GameSession) -> void:
 	print("  Stadt: %d Kundenfiguren, %d mit Anliegen, %d Anliegen erfüllt, %d gescheitert · automatische Ereignisse: %s · Wetter: %s (%s)" % [
 		ppl.size(), asked, ppl.map(func(p): return p.done).reduce(func(a, b): return a + b, 0),
 		ppl.map(func(p): return p.failed).reduce(func(a, b): return a + b, 0), str(by_type), s.sim.wx.headline(), s.sim.wx.cur.source])
+	var sim: Simulation = s.sim
+	var accounts := ""
+	for k in sim.economy.accounts:
+		accounts += " %s %d" % [k, int(sim.economy.accounts[k])]
+	print("  Wirtschaft: Geld erhalten (Abweichung %.2f) · Waren (Abweichung %d) ·%s" % [sim.economy.conservation_error(), sim.stock.balance_error(), accounts])
+	print("  Firmenstatus: %s · Insolvenzen %d · Etappensieger %d · Referenzzins %.2f %% · Kredite %d · Haushalte %d (Ausgaben %d)" % [
+		", ".join(sim.companies.map(func(c): return "%s %s/%s" % [c.company_name, c.status, c.form])), sim.insolvency.archive.size(),
+		sim.standings.stage_winners.size(), sim.banking.ref_rate * 100.0, sim.banking.loans.size(), sim.households.homes.size(), int(sim.households.spent_total)])
 	var fs: Dictionary = s.frame_stats
 	var nf := maxf(1.0, float(fs.frames))
 	print("  Zeit je Bild: Simulation %.2f ms · Stadtansicht %.2f ms · Entitäten %.2f ms · Oberfläche %.2f ms · gesamt %.2f ms" % [
