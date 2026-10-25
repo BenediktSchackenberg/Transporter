@@ -45,10 +45,9 @@ var follow_btn: Button
 var toast: Label
 var left_box: VBoxContainer
 var left_scroll: ScrollContainer
-var banks_rt: RichTextLabel
-var firms_rt: RichTextLabel
-var trader_rt: RichTextLabel
-var standings_rt: RichTextLabel
+var economy_rt: RichTextLabel
+var economy_view := 0
+const ECONOMY_VIEWS := ["Rangliste", "Banken", "Unternehmen", "Bauhof"]
 var decision_company := -1
 var decision_company_opt: OptionButton
 var sel_panel: PanelContainer
@@ -268,14 +267,7 @@ func _build_right() -> void:
 	add_child(tabs)
 	activity_rt = _rt("Aktivitäten")
 	situation_rt = _rt("Lage")
-	banks_rt = _rt("Banken")
-	banks_rt.scroll_following = false
-	firms_rt = _rt("Unternehmen")
-	standings_rt = _rt("Rangliste")
-	standings_rt.scroll_following = false
-	trader_rt = _rt("Bauhof")
-	trader_rt.scroll_following = false
-	firms_rt.scroll_following = false
+	_build_economy_tab()
 	activity_rt.scroll_following = false
 	situation_rt.scroll_following = false
 	events_rt = _rt("Ereignisse")
@@ -324,6 +316,56 @@ func _build_right() -> void:
 	decisions_rt.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	decisions_rt.add_theme_font_size_override("normal_font_size", 12)
 	dec.add_child(decisions_rt)
+
+
+## Ein Reiter "Wirtschaft" mit Umschalter (Rangliste, Banken, Unternehmen, Bauhof) statt vieler einzelner Reiter.
+func _build_economy_tab() -> void:
+	var box := VBoxContainer.new()
+	box.name = "Wirtschaft"
+	tabs.add_child(box)
+	var row := HBoxContainer.new()
+	box.add_child(row)
+	for i in ECONOMY_VIEWS.size():
+		var bt := Button.new()
+		bt.text = ECONOMY_VIEWS[i]
+		bt.toggle_mode = true
+		bt.button_pressed = i == 0
+		bt.focus_mode = Control.FOCUS_NONE
+		bt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		bt.pressed.connect(func():
+			economy_view = i
+			for j in row.get_child_count():
+				(row.get_child(j) as Button).button_pressed = j == i
+			_refresh = 0.0)
+		row.add_child(bt)
+	economy_rt = RichTextLabel.new()
+	economy_rt.bbcode_enabled = true
+	economy_rt.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	economy_rt.scroll_following = false
+	economy_rt.add_theme_font_size_override("normal_font_size", 12)
+	box.add_child(economy_rt)
+
+
+## Reiter nach Name oeffnen (Sichtpruefung per Kommandozeile: --tab=Wirtschaft --econ=2).
+func show_tab(tab_name: String, view: int = 0) -> void:
+	_close_entrepreneur()
+	for i in tabs.get_tab_count():
+		if tabs.get_tab_control(i).name == tab_name:
+			tabs.current_tab = i
+	economy_view = view
+	_refresh = 0.0
+	if economy_rt != null:
+		var row := economy_rt.get_parent().get_child(0)
+		for j in row.get_child_count():
+			(row.get_child(j) as Button).button_pressed = j == view
+
+
+func _economy_text() -> String:
+	match economy_view:
+		1: return LiveText.banks(sim)
+		2: return LiveText.firms(sim)
+		3: return LiveText.trader(sim)
+	return LiveText.standings(sim)
 
 
 func _rt(title: String) -> RichTextLabel:
@@ -617,10 +659,7 @@ func update_hud(delta: float) -> void:
 	_update_selection()
 	match tabs.get_current_tab_control().name:
 		"Aktivitäten": _update_scroll(activity_rt, LiveText.activities(sim, session.controllers))
-		"Banken": _update_scroll(banks_rt, LiveText.banks(sim))
-		"Unternehmen": _update_scroll(firms_rt, LiveText.firms(sim))
-		"Bauhof": _update_scroll(trader_rt, LiveText.trader(sim))
-		"Rangliste": _update_scroll(standings_rt, LiveText.standings(sim))
+		"Wirtschaft": _update_scroll(economy_rt, _economy_text())
 		"Lage": _update_scroll(situation_rt, LiveText.situation(sim, session.remaining_seconds() / 60.0))
 		"Aufträge": _update_contracts()
 		"Fahrzeuge": _update_vehicles()

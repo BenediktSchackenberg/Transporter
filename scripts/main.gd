@@ -168,6 +168,7 @@ func _process(_delta: float) -> void:
 				session.city_view.set_camera_world(Vector2((p.x + p.w * 0.5) * 32, (p.y + p.h * 0.5) * 32))
 			else:
 				session.follow({"kind": "worker", "id": f} if f.begins_with("W") else ({"kind": "person", "id": f} if f.begins_with("P") else {"kind": "avatar", "id": int(f)}))
+		session.hud.show_tab(str(args.get("tab", "Aktivitäten")), int(args.get("econ", "0")))   # schliesst auch versehentlich geoeffnete Fenster
 		for i in 90:   # Kamera schwenken lassen
 			await get_tree().process_frame
 		var img := get_viewport().get_texture().get_image()

@@ -11,8 +11,8 @@ const OFFERS_PER_DEALER := 5
 const PUMP_LITERS_PER_MIN := 30.0       # Zapfgeschwindigkeit je Saeule
 const TANKER_ORDER_BELOW := 0.35        # Bestellung unter diesem Fuellstand
 const WHOLESALE_FACTOR := 0.86          # Einkaufspreis des Betreibers (Anteil Referenzpreis)
-const BACKGROUND_L_PER_DAY := 600.0     # Verkauf an Haushalte (Privatfahrzeuge) je Station und Spieltag
-const STATION_WAGE_PER_MONTH := 900.0   # Personal je Tankstelle
+const BACKGROUND_L_PER_DAY := 5000.0    # Verkauf an Haushalte (Privatfahrzeuge) in der ganzen Stadt je Spieltag, verteilt auf alle Tankstellen
+const STATION_WAGE_PER_MONTH := 400.0   # Personal je Tankstelle
 
 var sim
 var offers := {}       # "F<n>" -> {id, dealer, model, price, condition, status}
@@ -138,12 +138,13 @@ func pumps_busy(s: Dictionary) -> int:
 func _daily_stations() -> void:
 	var now: float = sim.game_min
 	var gas := 0
+	var stations := supplies.values().filter(func(x): return x.kind == "fuel").size()
 	for sid in supplies:
 		var s: Dictionary = supplies[sid]
 		if s.kind != "fuel":
 			continue
 		gas += 1
-		var sold := minf(BACKGROUND_L_PER_DAY, float(s.stock))
+		var sold := minf(BACKGROUND_L_PER_DAY / maxf(float(stations), 1.0), float(s.stock))
 		if sold > 0.0:
 			var pay := sold * fuel_price(s)
 			s.stock = float(s.stock) - sold
