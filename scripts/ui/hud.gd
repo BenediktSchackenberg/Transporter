@@ -10,10 +10,18 @@ var lbl_remaining: Label
 var lbl_clock: Label
 var lbl_speed: Label
 var wx_icon: TextureRect
-var wx_lines: Array = []         # Wetterfeld: 3 Zeilen
+var wx_summary: Label
+var wx_field: PanelContainer
 var pause_btn: Button
 var speed_btns: Array = []
-var cards: Array = []            # [{panel, labels...}]
+var cards: Array = []            # Portraet-Schaltflaechen der Unternehmer
+var entrepreneur_window: ColorRect
+var entrepreneur_title: Label
+var entrepreneur_subtitle: Label
+var entrepreneur_portrait: TextureRect
+var entrepreneur_business: RichTextLabel
+var entrepreneur_ai: RichTextLabel
+var entrepreneur_company := -1
 var tabs: TabContainer
 var activity_rt: RichTextLabel
 var situation_rt: RichTextLabel
@@ -74,6 +82,7 @@ func build(s: GameSession) -> void:
 	toast.add_theme_color_override("font_outline_color", Color.BLACK)
 	toast.add_theme_constant_override("outline_size", 5)
 	add_child(toast)
+	_build_entrepreneur_window()
 
 
 func _build_top() -> void:
@@ -94,6 +103,8 @@ func _build_top() -> void:
 	lbl_clock.tooltip_text = "Spielzeit (Tag/Uhrzeit in der Stadt)"
 	lbl_clock.mouse_filter = Control.MOUSE_FILTER_PASS
 	h.add_child(lbl_clock)
+	h.add_child(VSeparator.new())
+	h.add_child(_build_weather_field())
 	h.add_child(VSeparator.new())
 	pause_btn = Button.new()
 	pause_btn.text = "Pause"
@@ -147,6 +158,9 @@ func _icon(name: String) -> TextureRect:
 
 ## Stadtansicht [Tab]: blendet alle Panels ausser der Kopfleiste aus.
 func toggle_panels() -> void:
+	if entrepreneur_window.visible:
+		_close_entrepreneur()
+		return
 	for n in [left_scroll, tabs, minimap, sel_panel]:
 		n.visible = not n.visible
 
@@ -156,75 +170,39 @@ func _build_left() -> void:
 	left_scroll.anchor_bottom = 1.0
 	left_scroll.offset_left = 6
 	left_scroll.offset_top = 46
-	left_scroll.offset_right = 350
+	left_scroll.offset_right = 92
 	left_scroll.offset_bottom = -234   # ueber der Minimap
 	left_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	left_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(left_scroll)
 	var box := VBoxContainer.new()
 	left_box = box
-	box.custom_minimum_size = Vector2(326, 0)
-	box.add_theme_constant_override("separation", 6)
+	box.custom_minimum_size = Vector2(78, 0)
+	box.add_theme_constant_override("separation", 8)
 	left_scroll.add_child(box)
-	box.add_child(_build_weather_field())
 	for c in sim.companies:
 		var p := PanelContainer.new()
-		var sb := UITheme.box(UITheme.PANEL, c.color.darkened(0.2), 2, 4)
-		sb.border_width_left = 6
+		var sb := UITheme.box(UITheme.PANEL, c.color, 3, 3)
 		p.add_theme_stylebox_override("panel", sb)
-		p.mouse_filter = Control.MOUSE_FILTER_PASS
+		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var cid := c.id
-		var row := HBoxContainer.new()
-		p.add_child(row)
-		var pic := TextureRect.new()
-		pic.texture = UITheme.portrait(c.avatar_style)
-		pic.custom_minimum_size = Vector2(56, 56)
-		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		pic.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(pic)
-		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 1)
-		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(v)
-		var card := {"panel": p}
-		card.title = UITheme.label("%s – %s" % [c.player_name, c.company_name], 16, c.color.lightened(0.35))
-		card.mode = UITheme.label("", 12, UITheme.MUTED)
-		card.profit = UITheme.label("", 20)
-		card.money = UITheme.label("", 12, UITheme.MUTED)
-		card.ops = UITheme.label("", 12, UITheme.MUTED)
-		card.state = UITheme.label("", 14)
-		card.person = UITheme.label("", 12, Color("#9fd8ff"))
-		card.firm = UITheme.label("", 12, Color("#9fd8ff"))
-		card.contracts = UITheme.label("", 12, UITheme.MUTED)
-		card.staff = UITheme.label("", 12, UITheme.MUTED)
-		card.goal = UITheme.label("", 12, UITheme.ACCENT)
-		card.last = UITheme.label("", 12, Color("#c9c4b4"))
-		card.next = UITheme.label("", 12, Color("#b48cff"))
-		card.api = UITheme.label("", 12)
-		for k in ["title", "mode", "money", "ops", "person", "firm", "contracts", "staff", "goal", "last", "next", "state", "api"]:
-			card[k].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			card[k].custom_minimum_size.x = 240
-		card.last.max_lines_visible = 4
-		for k in ["title", "mode", "profit", "money", "ops", "state", "person", "firm", "contracts", "staff", "goal", "last", "next", "api"]:
-			v.add_child(card[k])
-		var btns := HBoxContainer.new()
-		for spec in [["Folgen", "Kamera folgt der Figur"], ["Betriebshof", "Kamera zum Betriebshof"], ["Verlauf", "Entscheidungsverlauf dieses Unternehmens"]]:
-			var bt := Button.new()
-			bt.text = spec[0]
-			bt.tooltip_text = spec[1]
-			bt.focus_mode = Control.FOCUS_NONE
-			bt.custom_minimum_size.y = 24
-			bt.add_theme_font_size_override("font_size", 12)
-			bt.pressed.connect(func(): _card_action(spec[0], cid))
-			btns.add_child(bt)
-		v.add_child(btns)
+		var bt := TextureButton.new()
+		bt.texture_normal = UITheme.portrait(c.avatar_style)
+		bt.texture_hover = bt.texture_normal
+		bt.texture_pressed = bt.texture_normal
+		bt.ignore_texture_size = true
+		bt.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+		bt.custom_minimum_size = Vector2(70, 70)
+		bt.focus_mode = Control.FOCUS_NONE
+		bt.tooltip_text = "%s · %s\nDetails öffnen" % [c.player_name, c.company_name]
+		bt.pressed.connect(func(): _open_entrepreneur(cid))
+		p.add_child(bt)
 		box.add_child(p)
-		cards.append(card)
+		cards.append({"panel": p, "button": bt})
 
 
 func _card_action(kind: String, cid: int) -> void:
+	_close_entrepreneur()
 	match kind:
 		"Folgen":
 			session.follow({"kind": "avatar", "id": cid})
@@ -241,31 +219,23 @@ func _card_action(kind: String, cid: int) -> void:
 					tabs.current_tab = i
 
 
-## Dauerhaftes Wetterfeld: Ort, Zustand, Temperatur, Niederschlag, Wind, Zeitpunkt der Daten, letzter Abruf, Status.
+## Kompakter Wetterindikator in der Kopfleiste; Details stehen im Tooltip.
 func _build_weather_field() -> PanelContainer:
 	var p := PanelContainer.new()
+	wx_field = p
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
-	p.tooltip_text = "Wetter für Mainz aus Modelldaten (Open-Meteo), keine Messung einer lokalen Wetterstation.
-Alle Unternehmen sehen denselben Stand. Folgen im Spiel (Sperrungen, Schäden, Zusatzaufträge) sind simulierte Spielereignisse."
 	var row := HBoxContainer.new()
 	p.add_child(row)
 	wx_icon = TextureRect.new()
-	wx_icon.custom_minimum_size = Vector2(44, 44)
+	wx_icon.custom_minimum_size = Vector2(24, 24)
 	wx_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	wx_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	wx_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	wx_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(wx_icon)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 0)
-	row.add_child(v)
-	for i in 3:
-		var l := UITheme.label("", 16 if i == 0 else 12, UITheme.TEXT if i == 0 else UITheme.MUTED)
-		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l.custom_minimum_size.x = 250
-		v.add_child(l)
-		wx_lines.append(l)
+	wx_summary = UITheme.label("", 14)
+	wx_summary.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(wx_summary)
 	return p
 
 
@@ -275,17 +245,15 @@ func _update_weather() -> void:
 	var now := Time.get_unix_time_from_system()
 	var st := w.status(now)
 	wx_icon.texture = load("res://assets/gfx/i_w_%s.png" % Weather.icon_of(c))
-	wx_lines[0].text = "Mainz · %.0f °C · %s" % [float(c.temp), c.text]
-	wx_lines[1].text = "Regen %.1f mm/h · Wind %.0f km/h (Böen %.0f)" % [float(c.precip_mm_h), float(c.wind), float(c.gust)]
+	wx_summary.text = "Mainz %.0f° · %s" % [float(c.temp), str(c.text).left(18)]
 	var data_t: String = str(c.obs_time).right(5) if str(c.obs_time) != "" else "–"
 	var fetched := "–"
 	if w.fetched_unix > 0.0:
 		fetched = Time.get_time_string_from_unix_time(int(w.fetched_unix + Time.get_time_zone_from_system().bias * 60.0)).left(5)
-	wx_lines[2].text = ("Daten %s · Abruf %s · %s" % [data_t, fetched, st.to_upper() if st != "aktuell" else st]) if c.source == "open-meteo" else ("Ersatzwetter ohne Live-Daten" if c.source == "simuliert" else "Wiederholung (aufgezeichnet)")
+	var source := ("Daten %s · Abruf %s · %s" % [data_t, fetched, st.to_upper() if st != "aktuell" else st]) if c.source == "open-meteo" else ("Ersatzwetter ohne Live-Daten" if c.source == "simuliert" else "Wiederholung (aufgezeichnet)")
+	wx_field.tooltip_text = "Wetter für Mainz (Open-Meteo-Modelldaten)\nRegen %.1f mm/h · Wind %.0f km/h (Böen %.0f)\n%s%s" % [float(c.precip_mm_h), float(c.wind), float(c.gust), source, ("\n" + w.last_error) if w.last_error != "" and st != "aktuell" else ""]
 	var col := UITheme.GOOD if st == "aktuell" else (UITheme.WARN if st in ["veraltet", "wiederholung", "simuliert"] else UITheme.BAD)
-	wx_lines[2].add_theme_color_override("font_color", col)
-	if w.last_error != "" and st != "aktuell":
-		wx_lines[2].tooltip_text = w.last_error
+	wx_summary.add_theme_color_override("font_color", col)
 
 
 func _build_right() -> void:
@@ -431,6 +399,197 @@ func show_toast(text: String) -> void:
 	_toast_time = 3.0
 
 
+## Ein zentrales, live aktualisiertes Fenster fuer die angeklickte Person.
+func _build_entrepreneur_window() -> void:
+	entrepreneur_window = ColorRect.new()
+	entrepreneur_window.color = Color(0.04, 0.05, 0.08, 0.88)
+	entrepreneur_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	entrepreneur_window.mouse_filter = Control.MOUSE_FILTER_STOP
+	entrepreneur_window.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed:
+			_close_entrepreneur())
+	add_child(entrepreneur_window)
+	var dialog := PanelContainer.new()
+	dialog.anchor_left = 0.10
+	dialog.anchor_right = 0.90
+	dialog.anchor_top = 0.07
+	dialog.anchor_bottom = 0.93
+	dialog.offset_left = 0
+	dialog.offset_right = 0
+	dialog.offset_top = 0
+	dialog.offset_bottom = 0
+	dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	dialog.add_theme_stylebox_override("panel", UITheme.box(UITheme.BG, UITheme.ACCENT, 3, 14))
+	entrepreneur_window.add_child(dialog)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 12)
+	dialog.add_child(layout)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 14)
+	layout.add_child(head)
+	entrepreneur_portrait = TextureRect.new()
+	entrepreneur_portrait.custom_minimum_size = Vector2(76, 76)
+	entrepreneur_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	entrepreneur_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	head.add_child(entrepreneur_portrait)
+	var heading := VBoxContainer.new()
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(heading)
+	entrepreneur_title = UITheme.label("", 26, UITheme.ACCENT)
+	heading.add_child(entrepreneur_title)
+	entrepreneur_subtitle = UITheme.label("", 16, UITheme.MUTED)
+	entrepreneur_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	heading.add_child(entrepreneur_subtitle)
+	var close_btn := Button.new()
+	close_btn.text = "Schließen  ×"
+	close_btn.focus_mode = Control.FOCUS_NONE
+	close_btn.pressed.connect(_close_entrepreneur)
+	head.add_child(close_btn)
+	var columns := HBoxContainer.new()
+	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	columns.add_theme_constant_override("separation", 12)
+	layout.add_child(columns)
+	entrepreneur_business = _entrepreneur_column(columns)
+	entrepreneur_ai = _entrepreneur_column(columns)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	layout.add_child(actions)
+	for kind in ["Folgen", "Betriebshof", "Verlauf"]:
+		var b := Button.new()
+		b.text = kind
+		b.focus_mode = Control.FOCUS_NONE
+		b.custom_minimum_size = Vector2(140, 38)
+		b.pressed.connect(func(): _card_action(kind, entrepreneur_company))
+		actions.add_child(b)
+	entrepreneur_window.visible = false
+
+
+func _entrepreneur_column(parent: HBoxContainer) -> RichTextLabel:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_stretch_ratio = 1.0
+	panel.add_theme_stylebox_override("panel", UITheme.box(UITheme.PANEL, UITheme.BORDER, 1, 12))
+	parent.add_child(panel)
+	var rt := RichTextLabel.new()
+	rt.bbcode_enabled = true
+	rt.scroll_following = false
+	rt.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rt.add_theme_font_size_override("normal_font_size", 17)
+	panel.add_child(rt)
+	return rt
+
+
+func _open_entrepreneur(cid: int) -> void:
+	entrepreneur_company = cid
+	entrepreneur_window.visible = true
+	entrepreneur_business.get_v_scroll_bar().value = 0
+	entrepreneur_ai.get_v_scroll_bar().value = 0
+	_update_entrepreneur()
+
+
+func _close_entrepreneur() -> void:
+	entrepreneur_window.visible = false
+	entrepreneur_company = -1
+
+
+func _input(event: InputEvent) -> void:
+	if entrepreneur_window != null and entrepreneur_window.visible and event is InputEventKey and event.pressed:
+		if event.keycode == KEY_ESCAPE:
+			_close_entrepreneur()
+		get_viewport().set_input_as_handled()
+
+
+func _set_entrepreneur_text(rt: RichTextLabel, value: String) -> void:
+	if rt.text == value:
+		return
+	var scroll := rt.get_v_scroll_bar().value
+	rt.text = value
+	rt.get_v_scroll_bar().value = scroll
+
+
+func _update_entrepreneur() -> void:
+	if entrepreneur_company < 0 or entrepreneur_company >= sim.companies.size():
+		return
+	var c: Company = sim.company(entrepreneur_company)
+	var ctl: AgentController = session.controllers[c.id]
+	var L: Ledger = c.ledger
+	var plan: Dictionary = sim.plans.summary(c.id)
+	var dec: Dictionary = LiveText.last_decision(sim, c)
+	var state: Dictionary = LiveText.company_state(sim, ctl, c)
+	var rank := sim.ranking().find(c) + 1
+	var mode := "Demo · simulierte Antworten" if ctl.is_demo() else "%s · %s" % [str(ctl.config.get("provider", "KI")), str(ctl.config.get("model", ""))]
+	if ctl.fallback_active:
+		mode += " · regelbasierter Ersatzmodus"
+	entrepreneur_title.text = "%s · %s" % [c.player_name, c.company_name]
+	entrepreneur_title.add_theme_color_override("font_color", c.color.lightened(0.35))
+	entrepreneur_subtitle.text = "Rang %d  ·  %s  ·  %s" % [rank, Catalog.PERSONALITIES[c.personality].name, mode]
+	entrepreneur_portrait.texture = UITheme.portrait(c.avatar_style)
+	var left := "[color=#f2c14e][b]UNTERNEHMEN[/b][/color]\n"
+	left += "Gewinn [b]%s[/b]  ·  Bargeld %s\nSchulden %s  ·  Vermögen %s\n" % [Catalog.money(L.profit()), Catalog.money(L.cash), Catalog.money(L.debt), Catalog.money(sim.net_worth(c.id))]
+	left += "Ruf %d  ·  Fahrzeuge %d/%d  ·  Personal %d\n" % [int(c.reputation), c.vehicle_ids.size(), c.fleet_limit(), sim.personnel.employed(c.id).size()]
+	left += "Aufträge erledigt %d  ·  gescheitert %d\nBüro %d  ·  Netz %d  ·  Auftragskapazität %d/%d\n" % [c.stats.completed, c.stats.failed, maxi(c.office_level, c.plot_office_level), c.internet_level, sim.executor.active_contracts(c.id), c.contract_capacity()]
+	left += "Sicherheit %d  ·  %s\n\n" % [c.security_level, "versichert" if c.insurance else "nicht versichert"]
+	left += "[color=#f2c14e][b]AKTUELLER ZUSTAND[/b][/color]\n"
+	left += "[color=#%s][b]%s[/b][/color]%s\n" % [state.farbe.to_html(false), _esc(state.zustand), (" · " + _esc(state.grund)) if state.grund != "" else ""]
+	var av: Avatar = sim.avatars[c.id]
+	var area: String = Catalog.DISTRICTS[sim.city.district_of(av.tile())]
+	left += "Figur in %s: %s\n" % [_esc(area), _esc(LiveText.figure_text(sim, c.id))]
+	left += "Betrieb: %s\n" % _esc(LiveText.company_activity(sim, c))
+	var staff: Array = sim.personnel.employed(c.id)
+	var busy := 0
+	for w in staff:
+		var task: WorkerTask = sim.personnel.tasks.get(w.task_id)
+		if (task != null and not task.is_final() and task.kind != "gehen") or w.vehicle_id >= 0:
+			busy += 1
+	left += "Personal im Einsatz %d  ·  verfügbar %d\n\n" % [busy, staff.size() - busy]
+	left += "[color=#f2c14e][b]LAUFENDE AUFTRÄGE[/b][/color]\n"
+	var contracts: Array = sim.contracts.values().filter(func(k): return k.owner == c.id and k.status in ["accepted", "assigned", "loading", "in_transit"])
+	contracts.sort_custom(func(x, y): return x.reward > y.reward)
+	if contracts.is_empty():
+		left += "Keine laufenden Aufträge.\n"
+	else:
+		for k in contracts.slice(0, 4):
+			left += "• %s  ·  %s  ·  %s\n" % [_esc(k.id), _esc(k.cargo_name()), Catalog.money(k.reward)]
+		if contracts.size() > 4:
+			left += "… und %d weitere\n" % (contracts.size() - 4)
+	_set_entrepreneur_text(entrepreneur_business, left)
+	var right := "[color=#f2c14e][b]KI-ZIEL UND ANLASS[/b][/color]\n"
+	right += "[b]Selbst formuliertes Ziel:[/b] %s\n" % (_esc(ctl.goal) if ctl.goal != "" else "Noch keines formuliert.")
+	if not dec.is_empty():
+		if not dec.wahrgenommen.is_empty():
+			right += "[b]Zuletzt berücksichtigte Ereignisse:[/b] %s\n" % _esc("; ".join(dec.wahrgenommen))
+		if dec.ziel != "" and dec.ziel != ctl.goal:
+			right += "[b]Ziel bei letzter Entscheidung:[/b] %s\n" % _esc(dec.ziel)
+		right += "[b]Letzte dokumentierte Begründung:[/b] %s\n" % (_esc(dec.begruendung) if dec.begruendung != "" else "Keine angegeben.")
+	else:
+		right += "Noch keine Entscheidung dokumentiert.\n"
+	right += "\n[color=#f2c14e][b]WORAN DIE KI ARBEITET[/b][/color]\n"
+	if plan.has("ziel"):
+		var done: int = plan.schritte.filter(func(step): return step.status in ["erledigt", "uebersprungen"]).size()
+		right += "[b]Plan %s:[/b] %s\nStatus %s  ·  %d/%d Schritte erledigt\n" % [_esc(plan.id), _esc(plan.ziel), _esc(plan.status), done, plan.schritte.size()]
+		if plan.nutzen != "":
+			right += "Erwarteter Nutzen: %s\n" % _esc(plan.nutzen)
+		if plan.risiken != "":
+			right += "Risiken: %s\n" % _esc(plan.risiken)
+		if plan.hinweis != "":
+			right += "[color=#ffb347]Hinweis: %s[/color]\n" % _esc(plan.hinweis)
+		for step in plan.schritte:
+			var mark := "✓" if step.status in ["erledigt", "uebersprungen"] else ("→" if step.id in plan.jetzt_ausfuehrbar else "·")
+			right += "%s [b]%s[/b] %s [color=#9a98a8](%s)[/color]%s\n" % [mark, _esc(step.id), _esc(step.text), _esc(step.status), (" – " + _esc(step.ergebnis)) if step.ergebnis != "" else ""]
+	else:
+		right += "Noch kein Plan angelegt.\n"
+	right += "[b]Nächster Schritt:[/b] %s\n\n" % _esc(LiveText.next_step(sim, c))
+	right += "[color=#f2c14e][b]LETZTE AKTION UND KI-STATUS[/b][/color]\n"
+	if not dec.is_empty():
+		right += "%s · %s\n%s → %s\n" % [_esc(dec.id), Catalog.game_time_short(dec.t), _esc(dec.aktion), _esc(dec.ergebnis)]
+	else:
+		right += "Noch keine Aktion.\n"
+	right += "Status: %s\nAnfragen %d  ·  OK %d  ·  Fehler %d  ·  Token %s\n" % [_esc(ctl.status), ctl.stats.requests, ctl.stats.ok, ctl.stats.errors, _k(ctl.stats.tokens, false)]
+	if ctl.last_error != "":
+		right += "[color=#ff6b5e]Letzter Fehler: %s[/color]\n" % _esc(ctl.last_error)
+	_set_entrepreneur_text(entrepreneur_ai, right)
+
+
 func update_hud(delta: float) -> void:
 	_toast_time -= delta
 	toast.visible = _toast_time > 0.0
@@ -472,65 +631,8 @@ func update_hud(delta: float) -> void:
 
 
 func _update_cards() -> void:
-	var rank := sim.ranking()
-	for c in sim.companies:
-		var card: Dictionary = cards[c.id]
-		var L := c.ledger
-		var ctl: AgentController = session.controllers[c.id]
-		var pos := rank.find(c) + 1
-		card.title.text = "%d. %s – %s" % [pos, c.player_name, c.company_name]
-		var mode := "DEMO (simuliert)" if ctl.is_demo() else "KI: " + str(ctl.config.get("model", ""))
-		if ctl.fallback_active:
-			mode = "ERSATZMODUS (regelbasiert)"
-		card.mode.text = "%s · %s" % [Catalog.PERSONALITIES[c.personality].name, mode]
-		card.mode.add_theme_color_override("font_color", UITheme.WARN if ctl.fallback_active else UITheme.MUTED)
-		card.profit.text = "Gewinn " + Catalog.money(L.profit())
-		card.profit.add_theme_color_override("font_color", UITheme.GOOD if L.profit() >= 0.0 else UITheme.BAD)
-		card.money.text = "Bargeld %s · Schulden %s · Vermögen %s" % [_k(L.cash), _k(L.debt), _k(sim.net_worth(c.id))]
-		var flags := ""
-		if c.is_disrupted(sim.game_min):
-			flags += " · STÖRUNG"
-		if c.security_level > 0:
-			flags += " · Sicherheit %d" % c.security_level
-		if c.insurance:
-			flags += " · versichert"
-		card.ops.text = "Ruf %d · Fzg %d/%d · Personal %d · Aufträge %d (%d gesch.) · Büro %d/Netz %d · Kap. %d/%d%s" % [
-			int(c.reputation), c.vehicle_ids.size(), c.fleet_limit(), sim.personnel.employed(c.id).size(), c.stats.completed, c.stats.failed,
-			maxi(c.office_level, c.plot_office_level), c.internet_level, sim.executor.active_contracts(c.id), c.contract_capacity(), flags]
-		card.goal.text = ("Ziel: " + ctl.goal) if ctl.goal != "" else "Ziel: noch keines formuliert"
-		var st: Dictionary = LiveText.company_state(sim, ctl, c)
-		card.state.text = "● %s%s" % [st.zustand, (" – " + st.grund) if st.grund != "" else ""]
-		card.state.add_theme_color_override("font_color", st.farbe)
-		var av: Avatar = sim.avatars[c.id]
-		var area: String = Catalog.DISTRICTS[sim.city.district_of(av.tile())]
-		card.person.text = "Unternehmer: %s (%s)" % [LiveText.figure_text(sim, c.id), area]
-		card.firm.text = "Unternehmen: " + LiveText.company_activity(sim, c)
-		var main: Array = sim.contracts.values().filter(func(k): return k.owner == c.id and k.status in ["accepted", "assigned", "loading", "in_transit"])
-		main.sort_custom(func(x, y): return x.reward > y.reward)
-		card.contracts.text = "Hauptaufträge: " + (", ".join(main.slice(0, 2).map(func(k): return "%s %s (%s)" % [k.id, k.cargo_name(), _k(k.reward)])) if not main.is_empty() else "keine")
-		var staff: Array = sim.personnel.employed(c.id)
-		var busy := 0
-		for w in staff:
-			var t: WorkerTask = sim.personnel.tasks.get(w.task_id)
-			if (t != null and not t.is_final() and t.kind != "gehen") or w.vehicle_id >= 0:
-				busy += 1
-		card.staff.text = "Personal: %d beschäftigt · %d verfügbar (von %d)" % [busy, staff.size() - busy, staff.size()]
-		var dec: Dictionary = LiveText.last_decision(sim, c)
-		if dec.is_empty():
-			card.last.text = "Letzte Entscheidung: noch keine"
-		else:
-			card.last.text = "Letzte Entscheidung (%s, %s): %s → %s%s" % [dec.id, Catalog.game_time_short(dec.t), dec.aktion.left(60), dec.ergebnis.left(60),
-				("\nBegründung: „%s“" % dec.begruendung.left(120)) if dec.begruendung != "" else ""]
-		card.next.text = "Nächster Schritt: " + LiveText.next_step(sim, c)
-		var dot := "●"
-		var col := UITheme.GOOD
-		if ctl.status.begins_with("wartet"):
-			col = UITheme.ACCENT
-		elif ctl.fallback_active or ctl.status.begins_with("Fehler") or ctl.status.begins_with("ungültig") or ctl.status.begins_with("Budget"):
-			col = UITheme.BAD
-		var last_t: String = Catalog.game_time_short(float(ctl.summaries[-1].t)) if not ctl.summaries.is_empty() else "–"
-		card.api.text = "API: %s %s · %d Anfr. · %s Token · letzte Entscheidung %s" % [dot, ctl.status.left(36), ctl.stats.requests, _k(ctl.stats.tokens, false), last_t]
-		card.api.add_theme_color_override("font_color", col)
+	if entrepreneur_window.visible:
+		_update_entrepreneur()
 
 
 static func _k(v: float, eur := true) -> String:

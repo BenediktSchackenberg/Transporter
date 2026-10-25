@@ -132,7 +132,8 @@ static func last_decision(sim: Simulation, c: Company) -> Dictionary:
 	for i in range(sim.decisions.entries.size() - 1, -1, -1):
 		var e: Dictionary = sim.decisions.entries[i]
 		if e.company == c.id and e.herkunft in ["api", "plan", "fallback"] and str(e.aktion) not in ["wait()", ""]:
-			return {"id": e.id, "t": e.t, "aktion": str(e.aktion), "ergebnis": str(e.ergebnis), "begruendung": str(e.begruendung), "ok": e.pruefung == "ok"}
+			return {"id": e.id, "t": e.t, "aktion": str(e.aktion), "ergebnis": str(e.ergebnis), "begruendung": str(e.begruendung),
+				"wahrgenommen": e.wahrgenommen, "ziel": str(e.ziel), "herkunft": str(e.herkunft), "ok": e.pruefung == "ok"}
 	return {}
 
 

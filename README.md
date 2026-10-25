@@ -20,7 +20,7 @@ Pixel Transport Rivals ist eine **autonome Wirtschaftssimulation in isometrische
 Die gesamte Stadt (Gebäude, Fahrzeuge, Figuren, Straßen) wird aus **Voxeln gerendert und zu isometrischen Pixelbildern** gebacken (Dimetrie 2:1). Schule, Kita, Frachtterminal, Villen, Hochhäuser, Betriebshöfe mit Werkstatt, Rampen und Lager. Baustellen, Regenpfützen, Schnee auf den Dächern, Lichter bei Nacht.
 
 ### 🧠 Transparente KI statt Blackbox
-- Jede Firma hat eine **Karte**: Was tut der Unternehmer gerade? Wo steht er? Warum? Was ist der nächste Schritt?
+- Jede Firma hat ein **anklickbares Unternehmerporträt** mit Detailfenster: Was tut der Unternehmer gerade? Wo steht er? Was ist sein dokumentiertes Ziel und der nächste Schritt?
 - Das **Entscheidungsprotokoll** verknüpft Ursache → Entscheidung → Aktion → Folge.
 - **Demo, Ersatzmodus und echte API** sind überall klar gekennzeichnet. API-Schlüssel landen nie in Spielständen oder Logs.
 
@@ -150,12 +150,14 @@ Beim ersten WebUI-Aufruf ein lokales Admin-Konto anlegen. Im Spiel wählst du de
 | WASD / Pfeiltasten, rechte oder mittlere Maustaste ziehen | Kamera bewegen |
 | Mausrad | Zoom (0,25×–4×) |
 | Linksklick | Figur, Kundenfigur, Fahrzeug oder Gebäude auswählen (Info unten; bei Gebäuden zählt das sichtbare Pixel) |
-| F / Button „Folgen“, Klick auf Firmenkarte | Kamera folgt der Auswahl bzw. der Spielfigur |
+| F / Button „Folgen“ | Kamera folgt der Auswahl bzw. der Spielfigur |
+| Klick auf ein Unternehmerporträt | Detailfenster für diese Person und ihre Firma öffnen; dort „Folgen“, „Betriebshof“ oder „Verlauf“ wählen |
+| Escape / „Schließen“ / Klick außerhalb des Detailfensters | Unternehmerdetails schließen |
 | Leertaste / 1–5 | Pause / Simulationsgeschwindigkeit 1×–16× |
 | F5 / „Speichern“, „Laden“ | Schnellspeichern / Laden (ohne Keys) |
 | Minimap | Klicken oder ziehen springt mit der Kamera |
 
-Links stehen oben das **Wetterfeld** (Mainz, Zustand, Niederschlag, Wind, Datenzeit, letzter Abruf, Status aktuell/veraltet/offline/simuliert) und darunter die **Unternehmenskarten** (Zustand mit Ursache, Unternehmer- und Unternehmenstätigkeit, Hauptaufträge, Personal, Ziel, letzte Entscheidung mit Begründung, nächster Schritt, API-Status; Schaltflächen *Folgen*, *Betriebshof*, *Verlauf*). Rechts gibt es die Reiter **Aktivitäten** (was jede KI gerade tut und warum), **Lage** (Wetter, Zeitachsen, aktive Ereignisse mit Ursache → Wirkung → Aufträge → Entscheidungen, wartende Kunden), **Ereignisse**, **Dialoge**, **Aufträge**, **Fahrzeuge**, **Finanzen**, **KI-Spieler**, **Personal** und **Entscheidungen** (filterbar nach Herkunft und Unternehmen, mit Folgen).
+Links stehen zunächst nur die **Porträts der Unternehmer**. Ein Klick öffnet ein live aktualisiertes Detailfenster: Unternehmenszahlen, aktueller Zustand, Personal und Aufträge stehen neben dem selbst formulierten KI-Ziel, zuletzt berücksichtigten Ereignissen, dokumentierter Begründung, Planfortschritt, nächstem Schritt und KI-Status. Die Schaltflächen *Folgen*, *Betriebshof* und *Verlauf* stehen im Fenster. Das **Wetter** ist kompakt in der Kopfleiste; Niederschlag, Wind, Datenzeit und Abrufstatus zeigt der Tooltip. Rechts gibt es die Reiter **Aktivitäten** (was jede KI gerade tut und warum), **Lage** (Wetter, Zeitachsen, aktive Ereignisse mit Ursache → Wirkung → Aufträge → Entscheidungen, wartende Kunden), **Ereignisse**, **Dialoge**, **Aufträge**, **Fahrzeuge**, **Finanzen**, **KI-Spieler**, **Personal** und **Entscheidungen** (filterbar nach Herkunft und Unternehmen, mit Folgen).
 
 ---
 
