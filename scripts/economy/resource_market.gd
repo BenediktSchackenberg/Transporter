@@ -25,7 +25,7 @@ func setup(simulation) -> void:
 				_new_offer(b.id)
 		elif b.type == "gas_station":
 			supplies["S%d" % n] = {"id": "S%d" % n, "kind": "fuel", "building": b.id, "stock": 3000.0, "max": 3000.0,
-				"price": snappedf(sim.rng.randf_range(1.2, 1.45), 0.01), "regen": 6.0}
+				"price": 0.0, "markup": snappedf(sim.rng.randf_range(-0.04, 0.06), 0.001), "regen": 6.0}
 			n += 1
 		elif b.role == "workshop":
 			supplies["S%d" % n] = {"id": "S%d" % n, "kind": "parts", "building": b.id, "stock": 20.0, "max": 20.0,
@@ -58,12 +58,14 @@ func cheapest_offer(model: String) -> Dictionary:
 	return best
 
 
+## Spielpreis je Liter Diesel: reale Referenz x Aufschlag der Tankstelle x Ereignisfaktor (alles getrennt sichtbar, siehe FuelPrices).
 func fuel_price(s: Dictionary) -> float:
-	return snappedf(float(s.price) * fuel_price_factor, 0.01)
+	var markup: float = float(s.get("markup", float(s.price) / 1.7 - 1.0))
+	return snappedf(sim.fuel.station_price("diesel", markup) * fuel_price_factor, 0.01)
 
 
 func emergency_fuel_price() -> float:
-	return FUEL_EMERGENCY_PRICE * fuel_price_factor
+	return maxf(FUEL_EMERGENCY_PRICE, float(sim.fuel.ref.diesel) * 1.2) * fuel_price_factor
 
 
 ## Kauf von Treibstoff (Liter) oder Ersatzteilen (Stueck); Bestand am Ort sinkt sofort.

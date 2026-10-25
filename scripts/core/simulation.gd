@@ -23,6 +23,7 @@ var plans := PlanBook.new()
 var memory := MemoryBook.new()
 var decisions := DecisionLog.new()
 var events := EventDirector.new()
+var fuel := FuelPrices.new()
 var standings := Standings.new()
 var stock := StockBook.new()
 var trader := Trader.new()
@@ -796,6 +797,8 @@ func step(dt: float) -> void:
 
 func _minute_tick() -> void:
 	minute_index += 1
+	if minute_index % 60 == 0:
+		fuel.simulate_step()
 	var now := game_min
 	var day := GameCalendar.day_of(now)
 	if day != _last_day:
@@ -962,7 +965,7 @@ func to_dict() -> Dictionary:
 	return {"seed": city.seed_value, "map_size": city.size, "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
 
@@ -993,6 +996,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.insolvency.from_dict(d.get("insolvency", {}))
 	s.stock.from_dict(d.get("stock", {}))
 	s.standings.from_dict(d.get("standings", {}))
+	s.fuel.from_dict(d.get("fuel", {}))
 	s.trader.from_dict(d.get("trader", {}))
 	s.vehicles.clear()
 	for vd in d.vehicles:

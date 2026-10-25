@@ -22,6 +22,7 @@ var hud: HUD
 var end_screen: EndScreen
 var api_log := ApiLog.new()
 var weather_service: WeatherService
+var fuel_service: FuelService
 var paused := false
 var speed_idx := 1
 var active_seconds := 0.0
@@ -86,6 +87,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 		controllers.append(ctl)
 	sim.insolvency.company_refounded.connect(_on_refounded)
 	_setup_weather()
+	_setup_fuel()
 	var ui := CanvasLayer.new()
 	ui.layer = 10
 	add_child(ui)
@@ -110,6 +112,19 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 
 
 ## Wetter: Live-Abruf (Standard), Wiederholung einer aufgezeichneten Partie oder nur simuliertes Ersatzwetter ("sim").
+## Kraftstoff-Referenzpreise: live nur mit Schluessel (Umgebungsvariable oder Windows-Tresor), sonst gekennzeichneter Ersatzpreis.
+func _setup_fuel() -> void:
+	if str(cfg.get("fuel", "live")) != "live":
+		return
+	fuel_service = FuelService.new()
+	add_child(fuel_service)
+	fuel_service.setup(sim)
+	if not fuel_service.has_key():
+		sim.log_event("Kraftstoffpreise: kein Tankerkönig-Schlüssel gefunden, simulierter Referenzpreis (gekennzeichnet).", "system")
+	fuel_service.updated.connect(func(): api_log.write({"type": "fuel", "minute": sim.minute_index, "ref": sim.fuel.ref}))
+	fuel_service.failed.connect(func(msg): api_log.write({"type": "fuel_error", "minute": sim.minute_index, "error": msg}))
+
+
 func _setup_weather() -> void:
 	var replay_path := str(cfg.get("weather_replay", ""))
 	if replay_path != "" and FileAccess.file_exists(replay_path):

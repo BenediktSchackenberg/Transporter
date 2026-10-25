@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2146,3 +2146,42 @@ func test_provider_choice() -> void:
 		and replies[0][1].usage.total_tokens == 37
 		and AgentController.parse_response(replies[0][1].content).ok, "Ollama-Antwort erreicht Aktionsparser")
 	adapter.free()
+
+
+func test_fuel_prices() -> void:
+	var sample := {"ok": true, "stations": [
+		{"id": "a", "diesel": 1.60, "e5": 1.80, "e10": 1.74, "isOpen": true},
+		{"id": "b", "diesel": 1.70, "e5": 1.84, "e10": 1.78, "isOpen": true},
+		{"id": "c", "diesel": 1.66, "e5": 1.82, "e10": 1.76, "isOpen": true},
+		{"id": "d", "diesel": null, "e5": null, "e10": null, "isOpen": false},
+		{"id": "e", "diesel": 9.99, "e5": 1.83, "e10": 1.77, "isOpen": true}]}
+	var st := FuelPrices.parse_list(sample)
+	ok(st.n == 4 and is_equal_approx(st.diesel, 1.66), "Median ignoriert geschlossene und unplausible Preise (%s)" % str(st.get("diesel")))
+	ok(FuelPrices.parse_list({"ok": false}).is_empty() and FuelPrices.parse_list("text").is_empty(), "ungültige Antworten werden abgelehnt")
+	var s := new_sim(2)
+	var sp: Dictionary = s.resources.supplies.values().filter(func(x): return x.kind == "fuel")[0]
+	s.fuel.apply(st, 1000.0)
+	var base := s.resources.fuel_price(sp)
+	ok(absf(base - 1.66 * (1.0 + float(sp.markup))) < 0.011, "Spielpreis = Referenz × Aufschlag (%.2f)" % base)
+	s.resources.fuel_price_factor = 1.5
+	ok(absf(s.resources.fuel_price(sp) - base * 1.5) < 0.02, "Ereignisfaktor wirkt getrennt vom realen Preis")
+	s.resources.fuel_price_factor = 1.0
+	s.fuel.apply({"diesel": 1.90, "e5": 2.0, "e10": 1.95, "n": 5}, 2000.0)
+	ok(s.resources.fuel_price(sp) > base, "höhere reale Referenz erhöht den Spielpreis")
+	ok(s.fuel.status(2000.0 + 60.0) == "aktuell" and s.fuel.status(2000.0 + 3000.0) == "veraltet" and s.fuel.status(2000.0 + 8000.0) == "offline", "Status nach Alter")
+	var sim_fuel := FuelPrices.new()
+	ok(sim_fuel.status(0.0) == "simuliert", "ohne Daten gekennzeichnet simuliert")
+	# Dienst: Antwort verarbeiten, Schluessel erscheint nirgends
+	var svc := FuelService.new()
+	svc.setup(s, "GEHEIM-1234567890")
+	ok(svc.build_url().contains("apikey=GEHEIM") and svc.has_key(), "Schlüssel nur in der Anfrage")
+	svc.enabled = false
+	ok(svc.handle_body(JSON.stringify(sample)) and s.fuel.source == "tankerkoenig" and s.fuel.stations_n == 4, "Dienst übernimmt Antwort")
+	ok(not svc.handle_body("kein json") and s.fuel.last_error != "", "kaputte Antwort wird gemeldet")
+	svc._fail("Fehler bei GEHEIM-1234567890 aufgetreten")
+	ok(not s.fuel.last_error.contains("GEHEIM"), "Schlüssel wird aus Fehlertexten entfernt")
+	ok(not JSON.stringify(s.to_dict()).contains("GEHEIM"), "Spielstand enthält keinen Schlüssel")
+	svc.free()
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(is_equal_approx(s2.fuel.ref.diesel, s.fuel.ref.diesel) and s2.fuel.source == "tankerkoenig", "Preisstand nach Laden")
+	ok("KRAFTSTOFF" in LiveText.situation(s, 10.0), "Lage-Reiter zeigt Kraftstoffpreise")

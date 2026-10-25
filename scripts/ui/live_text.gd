@@ -228,6 +228,21 @@ static func situation(sim: Simulation, remaining_real_min: float) -> String:
 			("%s, %s, %s" % [k.id, Catalog.money(k.reward), ("angenommen von " + sim.company(k.owner).company_name) if k.owner >= 0 else "wartet auf ein Unternehmen"]) if k else "–"]
 	for p in fresh.slice(0, 6):
 		txt += "  [color=%s]%s (%s) ist %s[/color]\n" % ["#8fe0a0" if p.state == "zufrieden" else "#ff6b5e", esc(p.name), esc(p.role), p.state]
+	return txt + fuel_block(sim)
+
+
+## Kraftstoff: reale Referenz, Status, Ereignisfaktor und daraus der Spielpreis (jeweils getrennt ausgewiesen).
+static func fuel_block(sim: Simulation) -> String:
+	var F: FuelPrices = sim.fuel
+	var st := F.status(Time.get_unix_time_from_system())
+	var quelle := "Tankerkönig, Median von %d Tankstellen im Umkreis %.0f km um Mainz" % [F.stations_n, FuelPrices.LOCATION.radius_km] if F.source == "tankerkoenig" \
+		else "simulierter Ersatzpreis (kein Schlüssel oder keine Daten)"
+	var txt := "\n[b][color=#f2c14e]KRAFTSTOFF[/color][/b] – %s\n" % st.to_upper()
+	txt += "  Referenz: Diesel %.3f · E5 %.3f · E10 %.3f EUR/l [color=#9a98a8](%s)[/color]\n" % [F.ref.diesel, F.ref.e5, F.ref.e10, quelle]
+	txt += "  Ereignisfaktor ×%.2f → Spielpreis Diesel an der Durchschnittstankstelle %.2f EUR/l\n" % [sim.resources.fuel_price_factor,
+		F.ref.diesel * sim.resources.fuel_price_factor]
+	if F.last_error != "":
+		txt += "  [color=#ffb347]Letzter Abruf: %s[/color]\n" % esc(F.last_error)
 	return txt
 
 
