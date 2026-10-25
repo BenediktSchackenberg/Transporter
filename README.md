@@ -42,7 +42,7 @@ Kein Geld entsteht aus dem Nichts. Jede Zahlung bewegt Geld zwischen echten Kont
 | Stufe | Inhalt | Stand |
 |---|---|---|
 | 1 | Stadtleben: Wetter, Ereignisse, Kunden, isometrische Voxelgrafik, transparente KI | ✅ fertig |
-| 2 | Wirtschaftskreislauf: Konten, Banken, Rechtsformen, Insolvenz, Bauhof, Material | 🔨 in Arbeit (Statistik, API-Konfiguration, Gesamttest fehlen) |
+| 2 | Wirtschaftskreislauf: Konten, Banken, Rechtsformen, Insolvenz, Bauhof, Material, Ranglisten | ✅ weitgehend fertig (Spielerkredite fehlen, API-Konfiguration wird separat angepasst) |
 | 3 | Kraftstoffpreise (real), Tankstellen, Haushalte, Löhne, Gebäudezustand | ⏳ geplant |
 | 4 | Öffentliche Hand: Steuern, Behörden, Geldschöpfung der Banken | ⏳ geplant |
 | 5 | Versorgungsnetz: Stadtlager, Verkehr mit Kapazität, Restaurants, Läden, Müll und Mehrweg | ⏳ geplant |

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	for name in ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings"]:
+			"test_response_parsing", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency"]:
 		var before := checks
 		var fails := failures
 		call(name)
@@ -2011,3 +2011,77 @@ func test_standings() -> void:
 	ok("Monat 1" in LiveText.standings(s) and w.name != "", "Rangliste zeigt Etappensieger")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.standings.stage_winners.size() == 1 and s2.standings.stage_winners[0].name == w.name, "Etappensieger bleiben nach Laden erhalten")
+
+
+## Gesamtablauf des Wirtschaftskreislaufs in zwölf Schritten (Auftrag 2).
+func test_economy_cycle() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(4)
+	var A := s.companies[0]
+	var Bc := s.companies[1]
+	# 1) Start: vier Unternehmen, Geld und Waren stimmen
+	ok(s.companies.size() == 4 and identity_ok(s), "1) Start: vier Unternehmen, Geld und Waren erhalten")
+	# 2) Kredit gegen Fahrzeugpfand
+	var coll := s.banking.best_collateral(0)
+	var loan := s.executor.execute(0, {"action": "request_loan", "bank": "B2", "amount": 12000, "monate": 12, "fahrzeug_id": coll})
+	ok(loan.ok and A.ledger.debt == 12000.0 and s.banking.pledged_to(coll) != "", "2) Kredit mit Pfand: " + loan.msg)
+	# 3) Material vom Bauhof für einen Bau, 4) Bau fertig, Material verbraucht
+	A.ledger.inject(30000.0)
+	var ziegel := s.trader.stock_of("ziegel")
+	var placed := place_suggested(s, 0, "stellplatz", "extern")
+	ok(placed.ok and s.trader.stock_of("ziegel") < ziegel, "3) Baumaterial vom Bauhof gekauft: " + placed.msg)
+	var fac: Dictionary = s.estate.facilities[placed.building_id]
+	until_done(s, func(): return fac.status == "fertig", 3000.0)
+	ok(fac.status == "fertig" and int(s.stock.consumed.get("ziegel", 0)) >= 6, "4) Bau fertig, Material verbraucht")
+	# 5) Geld anlegen
+	var dep := s.executor.execute(0, {"action": "deposit_money", "amount": 5000, "art": "fest", "monate": 6, "bank": "B3"})
+	ok(dep.ok and A.ledger.deposits == 5000.0, "5) Festgeld angelegt")
+	# 6) Ein Monat: Raten, Zinsen, Löhne, Verwaltungskosten
+	var h0: float = s.economy.accounts.H0
+	var b2: float = s.banking.equity(1)
+	run(s, 60.0 * 31.0)
+	ok(A.ledger.totals.get("interest", 0.0) < 0.0 and A.ledger.totals.get("interest_income", 0.0) > 0.0, "6) Zinsen gezahlt und erhalten")
+	ok(s.banking.equity(1) > b2 and s.economy.accounts.H0 != h0, "6) Bank verdient, Haushalte erhalten Löhne")
+	ok(identity_ok(s), "6) Geld, Waren und Bilanzen stimmen nach einem Monat")
+	# 7) Zahlungsverzug, 8) Insolvenz mit Auktionen
+	Bc.ledger.inject(-Bc.ledger.cash - 4000.0)
+	run(s, 60.0 * 3.0)
+	ok(Bc.status == "verzug", "7) Zahlungsverzug bei negativem Bargeld")
+	run(s, 60.0 * 14.0)
+	ok(Bc.status in ["insolvenz", "verwertung"], "8) Insolvenzverfahren eröffnet (%s)" % Bc.status)
+	run(s, 60.0 * 4.0)
+	var auction: Dictionary = s.insolvency.open_auctions().filter(func(a): return a.kind == "vehicle")[0]
+	var bid := s.executor.execute(0, {"action": "bid_auction", "auction_id": auction.id, "amount": ceili(float(auction.value) * 0.8)})
+	ok(bid.ok, "8) Konkurrent bietet in der Auktion: " + bid.msg)
+	# 9) Verteilung und Schließung
+	run(s, 60.0 * 8.0)
+	ok(Bc.status == "geschlossen" and s.insolvency.archive.size() == 1, "9) Verteilung an Gläubiger, Firma geschlossen")
+	ok(identity_ok(s), "9) Geld, Waren und Bilanzen nach der Insolvenz")
+	# 10) Neugründung
+	run(s, 60.0 * 11.0)
+	ok(s.companies[1].generation == 2 and s.companies[1].is_active(), "10) Neugründung mit neuer Identität")
+	# 11) Etappensieger und Rangliste
+	ok(s.standings.stage_winners.size() >= 1 and s.standings.winner() != null, "11) Etappensieger und zahlungsfähiger Führender")
+	# 12) Speichern, Laden, Weiterspielen
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(identity_ok(s2) and s2.insolvency.archive.size() == 1 and s2.banking.loans.size() == s.banking.loans.size(), "12) Spielstand geladen")
+	run(s2, 60.0 * 31.0)
+	ok(identity_ok(s2), "12) Geld und Waren erhalten nach dem Laden")
+
+
+## Mehrere Spieljahre am Stück: Konservierung jeden Monat, Speichern/Laden in der Mitte ergibt denselben Verlauf.
+func test_multi_year_consistency() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var months := 14
+	var bad := 0
+	for m in months:
+		for i in int(1800.0 / 0.5):
+			s.step(0.5)
+		if not identity_ok(s):
+			bad += 1
+	ok(bad == 0, "Geld, Waren und Bilanzen stimmen in allen %d Monaten (%d Verstöße)" % [months, bad])
+	ok(GameCalendar.parts(s.game_min).jahr == 2, "Spieljahr 2 erreicht")
+	ok(s.standings.stage_winners.size() >= months - 2, "Etappensieger jedes Monats erfasst (%d)" % s.standings.stage_winners.size())
+	ok(s.stock.balance_error() == 0, "Warenbilanz nach über einem Jahr")
+	ok(s.trader.cash() >= 0.0, "Bauhof bleibt zahlungsfähig (%.0f)" % s.trader.cash())
