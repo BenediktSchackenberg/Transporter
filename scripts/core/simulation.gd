@@ -24,6 +24,7 @@ var memory := MemoryBook.new()
 var decisions := DecisionLog.new()
 var events := EventDirector.new()
 var fuel := FuelPrices.new()
+var households := Households.new()
 var standings := Standings.new()
 var stock := StockBook.new()
 var trader := Trader.new()
@@ -82,6 +83,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	insolvency.setup(self)
 	trader.setup(self)
 	standings.setup(self)
+	households.setup(self)
 	experiments.setup(self)
 	var order := [0, 2] if players.size() == 2 else [0, 1, 2, 3]
 	for i in players.size():
@@ -192,9 +194,9 @@ func fleet_book_value(cid: int) -> float:
 	return s
 
 
-## Buchwert aller Anlagen (Fahrzeuge + Bueros).
+## Buchwert aller Anlagen (Fahrzeuge, Bueros, Land) plus Einlagen minus aufgelaufene Lohnrueckstaende.
 func book_assets(cid: int) -> float:
-	return fleet_book_value(cid) + companies[cid].property_book + companies[cid].land_book + companies[cid].ledger.deposits
+	return fleet_book_value(cid) + companies[cid].property_book + companies[cid].land_book + companies[cid].ledger.deposits - companies[cid].ledger.payables
 
 
 func net_worth(cid: int) -> float:
@@ -811,7 +813,7 @@ func _minute_tick() -> void:
 		if c.status in ["insolvenz", "verwertung", "geschlossen"]:
 			continue   # eingefroren: Verwalter fuehrt den Betrieb nicht weiter
 		var L := c.ledger
-		L.book("wages", -personnel.wages_per_hour(c.id) / 60.0, true, "Löhne", now)
+		households.credit_company(c.id, L.accrue_wages(personnel.wages_per_hour(c.id) / 60.0, now))
 		var rent := Catalog.EXTRA_DEPOT_RENT * c.depots.filter(func(site): return not estate.is_plot(site)).size()   # Startgrundstueck ist frei
 		L.book("rent", -rent / 1440.0, true, "Miete", now)
 		L.book("security", -Catalog.SECURITY_PER_DAY[c.security_level] / 1440.0, true, "Sicherheitsdienst", now)
@@ -965,7 +967,7 @@ func to_dict() -> Dictionary:
 	return {"seed": city.seed_value, "map_size": city.size, "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
 
@@ -997,6 +999,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.stock.from_dict(d.get("stock", {}))
 	s.standings.from_dict(d.get("standings", {}))
 	s.fuel.from_dict(d.get("fuel", {}))
+	s.households.from_dict(d.get("households", {}))
 	s.trader.from_dict(d.get("trader", {}))
 	s.vehicles.clear()
 	for vd in d.vehicles:

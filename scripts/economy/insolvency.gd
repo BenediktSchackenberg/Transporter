@@ -29,6 +29,7 @@ var sim: Simulation
 var enabled := true
 var auctions := {}        # Auktions-ID -> Dictionary
 var archive: Array = []   # geschlossene Unternehmen (Historie, Ranglisten)
+var staff_at_open := {}    # Firma -> Mitarbeiter-IDs bei Eroeffnung (Lohnforderungen)
 var liquidation := {}     # Firma -> {proceeds, secured: {Kredit: Betrag}, clear_cost, sold, claims}
 var _next_auction := 1
 
@@ -67,7 +68,7 @@ func has_arrears(c: Company) -> bool:
 	for l in sim.banking.loans.values():
 		if l.owner == c.id and l.status in ["rueckstand", "ausgefallen"] and float(l.outstanding) > 0.005 and l.purpose != "Überziehung":
 			return true
-	return false
+	return c.ledger.payables > 0.5 * sim.personnel.wages_per_hour(c.id) + 1.0 and sim.personnel.wages_per_hour(c.id) > 0.0
 
 
 func _set_status(c: Company, status: String, reason: String) -> void:
@@ -132,13 +133,9 @@ func _open(c: Company) -> void:
 	for t in sim.personnel.tasks.values():
 		if t.company == c.id and not t.is_final():
 			sim.personnel.cancel_task(t, "Insolvenz")
+	staff_at_open[c.id] = sim.personnel.employed(c.id).map(func(w): return w.id)
 	for w in sim.personnel.employed(c.id):
-		w.employer = -1
-		w.vehicle_id = -1
-		w.task_id = ""
-		w.foreman = ""
-		w.supervised.clear()
-		w.leaving = false
+		sim.personnel.release(w)
 	for k in sim.customers:
 		if sim.customers[k].get("loyal", -1) == c.id:
 			sim.customers[k].loyal = -1
@@ -398,6 +395,11 @@ func _settle(c: Company) -> void:
 	var cost := minf(maxf(float(L.proceeds) * COST_SHARE, COST_MIN) + float(L.clear_cost), maxf(c.ledger.cash, 0.0))
 	if cost > 0.0:
 		c.ledger.book("property_costs", -cost, true, "Verwertungskosten (Verwalter %s)" % c.administrator, sim.game_min, "S0")
+	# Lohnforderungen der Mitarbeiter sind vorrangig (Insolvenzgeld-Regel des Spiels), Rest wird erlassen
+	var wage_claims: float = c.ledger.payables
+	var wage_paid: float = c.ledger.pay_payables(wage_claims)
+	_credit_former_staff(c.id, wage_paid)
+	var wage_lost: float = c.ledger.forgive_payables()
 	# 2. Gesicherte Forderungen aus ihrer Sicherheit
 	var recovered := 0.0
 	for lid in L.secured:
@@ -422,11 +424,24 @@ func _settle(c: Company) -> void:
 	var quota := 0.0 if total_claims <= 0.0 else 1.0 - recovered / total_claims
 	var entry := {"cid": c.id, "name": c.company_name, "owner": c.player_name, "form": c.form, "generation": c.generation, "founded": c.founded_min,
 		"closed": sim.game_min, "reason": c.status_reason, "profit": c.ledger.profit(), "claims": total_claims, "recovered": recovered, "lost": lost,
-		"quota": quota, "private": private, "proceeds": L.proceeds, "completed": c.stats.completed, "reputation": c.reputation}
+		"quota": quota, "private": private, "proceeds": L.proceeds, "wage_claims": wage_claims, "wage_paid": wage_paid, "wage_lost": wage_lost, "completed": c.stats.completed, "reputation": c.reputation}
 	archive.append(entry)
 	liquidation.erase(c.id)
 	_set_status(c, "geschlossen", "Ausfallquote der Gläubiger %d %% (Forderungen %s, erlöst %s, abgeschrieben %s)" % [int(quota * 100.0),
 		Catalog.money(total_claims), Catalog.money(recovered), Catalog.money(lost)])
+
+
+func _credit_former_staff(cid: int, amount: float) -> void:
+	if amount <= 0.0:
+		return
+	var ids: Array = staff_at_open.get(cid, [])
+	var total := 0.0
+	for id in ids:
+		total += sim.personnel.workers[id].wage
+	for id in ids:
+		var w: Worker = sim.personnel.workers[id]
+		var h := sim.households.household_of(w)
+		h.balance = float(h.balance) + amount * w.wage / maxf(total, 0.01)
 
 
 # ------------------------------------------------------------------ Neugruendung
@@ -522,7 +537,7 @@ func auction_list(limit: int = 6) -> Array:
 
 
 func to_dict() -> Dictionary:
-	return {"enabled": enabled, "auctions": auctions, "archive": archive, "liquidation": liquidation, "next_auction": _next_auction}
+	return {"enabled": enabled, "auctions": auctions, "archive": archive, "liquidation": liquidation, "next_auction": _next_auction, "staff_at_open": staff_at_open}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -541,3 +556,6 @@ func from_dict(d: Dictionary) -> void:
 	for k in d.get("liquidation", {}):
 		liquidation[int(k)] = d.liquidation[k]
 	_next_auction = int(d.get("next_auction", 1))
+	staff_at_open = {}
+	for k in d.get("staff_at_open", {}):
+		staff_at_open[int(k)] = d.staff_at_open[k]

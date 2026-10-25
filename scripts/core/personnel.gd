@@ -144,6 +144,27 @@ func hire(cid: int, w: Worker) -> void:
 	create_task(cid, "gehen", {"site": c.depots[0]}, w.id, "", 2, "auto")
 
 
+## Mitarbeiter verlaesst den Arbeitgeber und steht wieder am Arbeitsmarkt zur Verfuegung (Kuendigung, Insolvenz).
+func release(w: Worker) -> void:
+	for t in tasks.values():
+		if t.worker_id == w.id and not t.is_final():
+			cancel_task(t, "Mitarbeiter ausgeschieden")
+	if w.vehicle_id >= 0 and sim.vehicles.has(w.vehicle_id):
+		w.pos = sim.vehicles[w.vehicle_id].pos
+	for f in workers.values():
+		f.supervised.erase(w.id)
+	for s in w.supervised:
+		if workers.has(s):
+			workers[s].foreman = ""
+	w.supervised.clear()
+	w.employer = -1
+	w.vehicle_id = -1
+	w.task_id = ""
+	w.foreman = ""
+	w.leaving = false
+	w.path.clear()
+
+
 func lose_worker(w: Worker, reason: String) -> void:
 	var cid := w.employer
 	w.lost = true

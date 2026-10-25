@@ -153,7 +153,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"fahrzeugmodelle": models, "personal": _staff(sim, cid), "aufgaben": _tasks(sim, cid),
 		"ressourcen": _resources(sim, cid), "gesichtete_fremdfahrzeuge": sim.personnel.seen[cid].values(),
 		"freie_depotstandorte": free_sites.slice(0, 6), "verkehr": sim.traffic_events.map(func(e): return e.text),
-		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid),
+		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid), "personal_lage": sim.households.summary_of(cid),
 		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "fremde_stammkunden": foreign_loyal.slice(0, 8),
 		"nachrichten": msgs, "angebote_an_dich": offers_in, "deine_angebote": offers_out,
 		"ergebnisse_deiner_aktionen": results.slice(-10), "ereignisse": events.slice(-10),

@@ -25,6 +25,9 @@ var leaving := false              # abgeworben, wechselt nach der aktuellen Fahr
 var transfer_to := -1             # neuer Arbeitgeber nach dem Wechsel
 var idle_timer := 0.0
 var rest_until := 0.0             # Pause (Fahrerengpass): bis dahin keine neuen Aufgaben
+var household := ""               # Haushalt (siehe Households)
+var motivation := 60.0            # 0..100, haengt an Lohn, Haushaltslage, Erschoepfung und verlaesslicher Bezahlung
+var health := 100.0
 # Vorarbeiter
 var supervised: Array = []        # Arbeiter-IDs
 var station := Vector2i(-1, -1)   # Standort (Mittelpunkt des Zustaendigkeitsbereichs)
@@ -86,7 +89,8 @@ func to_dict() -> Dictionary:
 		"hire_fee": hire_fee, "experience": experience, "reliability": reliability, "loyalty": loyalty,
 		"fatigue": fatigue, "task_id": task_id, "vehicle_id": vehicle_id, "foreman": foreman,
 		"home": [home.x, home.y], "lost": lost, "leaving": leaving, "transfer_to": transfer_to, "supervised": supervised,
-		"station": [station.x, station.y], "orders": orders, "report_due": report_due, "spent": spent, "x": pos.x, "y": pos.y}
+		"station": [station.x, station.y], "orders": orders, "report_due": report_due, "spent": spent, "x": pos.x, "y": pos.y,
+		"household": household, "motivation": motivation, "health": health}
 
 
 static func from_dict(d: Dictionary) -> Worker:
@@ -98,6 +102,9 @@ static func from_dict(d: Dictionary) -> Worker:
 	w.vehicle_id = int(d.vehicle_id)
 	w.transfer_to = int(d.get("transfer_to", -1))
 	w.spent = float(d.get("spent", 0.0))
+	w.household = str(d.get("household", ""))
+	w.motivation = float(d.get("motivation", 60.0))
+	w.health = float(d.get("health", 100.0))
 	for k in d.skills:
 		w.skills[k] = int(d.skills[k])
 	w.home = Vector2i(int(d.home[0]), int(d.home[1]))

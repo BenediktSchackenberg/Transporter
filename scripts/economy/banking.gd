@@ -312,7 +312,7 @@ func record_overdraft(cid: int) -> void:
 	var c := sim.company(cid)
 	if c.ledger.cash >= 0.0:
 		return
-	var amount := snappedf(-c.ledger.cash, 0.01)
+	var amount := -c.ledger.cash   # ungerundet, damit das Bargeld exakt 0 wird
 	c.ledger.borrow(amount, BANKS[0].id)
 	var l := {"id": "K%d" % _next_loan, "bank": 0, "owner": cid, "principal": amount, "outstanding": amount, "rate": 0.0, "months": 0,
 		"plan": [], "collateral": -1, "status": "ausgefallen", "arrears": 0, "since": sim.game_min, "purpose": "Überziehung", "fees_due": 0.0}

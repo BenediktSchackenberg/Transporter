@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2231,3 +2231,73 @@ func test_gas_stations() -> void:
 	ok(identity_ok(s), "Geld nach einem Monat Tankstellenbetrieb")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.resources.tanker_orders.size() == s.resources.tanker_orders.size() and identity_ok(s2), "Tankstellen nach Laden")
+
+
+func test_households_wages() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var c := s.companies[0]
+	var staff: Array = s.personnel.employed(0)
+	ok(staff.size() >= 2, "Startpersonal vorhanden")
+	run(s, 60.0 * 2.0)
+	ok(s.households.homes.size() >= staff.size(), "jeder Mitarbeiter hat einen Haushalt (%d)" % s.households.homes.size())
+	var w: Worker = staff[0]
+	ok(w.household != "" and s.households.homes[w.household].address >= 0, "fester Haushalt mit Wohnadresse")
+	var h0: String = w.household
+	run(s, 60.0 * 40.0)
+	ok(w.household == h0, "Haushalt bleibt dauerhaft zugeordnet")
+	ok(identity_ok(s), "Geld und Waren erhalten mit Haushalten")
+	ok(s.households.spent_total > 0.0, "Haushalte geben Geld aus (Kaufkraft: %.0f)" % s.households.spent_total)
+	# Lohnverhandlung
+	var ask := s.households.reservation_wage(w)
+	var low := s.executor.execute(0, {"action": "negotiate_wage", "worker_id": w.id, "wage": w.wage + 0.1})
+	if ask > w.wage + 0.15:
+		ok(not low.ok and "verlangt" in low.msg, "zu niedriges Angebot wird abgelehnt: " + low.msg)
+	var raise := s.executor.execute(0, {"action": "negotiate_wage", "worker_id": w.id, "wage": ceilf(ask + 1.0)})
+	ok(raise.ok and w.wage >= ask, "angemessenes Angebot wird angenommen: " + raise.msg)
+	ok(not s.executor.execute(0, {"action": "negotiate_wage", "worker_id": w.id, "wage": 5.0}).ok, "Lohnkürzung wird abgelehnt")
+	ok(not s.executor.execute(1, {"action": "negotiate_wage", "worker_id": w.id, "wage": 90.0}).ok, "fremder Mitarbeiter nicht verhandelbar")
+	# Lohnrueckstand: ohne Bargeld laeuft der Lohn auf und wird spaeter zuerst bezahlt
+	var cash_before := c.ledger.cash
+	c.ledger.inject(-cash_before)   # Kasse leer
+	var paid_before: float = s.households.total_balance()
+	run(s, 60.0 * 2.0)
+	ok(c.ledger.payables > 0.0 and c.ledger.cash >= 0.0, "Lohn läuft als Rückstand auf (%.0f)" % c.ledger.payables)
+	ok(s.households.summary_of(0).lohnrueckstand > 0, "Beobachtung zeigt Lohnrückstand")
+	ok(identity_ok(s), "Bilanz mit Lohnverbindlichkeit stimmt")
+	var arrears := c.ledger.payables
+	c.ledger.inject(arrears + 5000.0)
+	run(s, 1.0)
+	ok(c.ledger.payables < 1.0, "Rückstand wird bei Zahlungsfähigkeit zuerst beglichen")
+	ok(identity_ok(s), "Bilanz nach Begleichung")
+	# Motivation sinkt bei Armut
+	var poor: Worker = staff[1]
+	var ph: Dictionary = s.households.household_of(poor)
+	ph.dependents = 2
+	ph.balance = 0.0
+	poor.wage = 8.0
+	var m0 := poor.motivation
+	for i in 3:
+		s.households.on_month(i)
+	ok(poor.motivation < m0, "Defizit und niedriger Lohn senken die Motivation (%d → %d)" % [int(m0), int(poor.motivation)])
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.households.homes.size() == s.households.homes.size() and s2.personnel.workers[w.id].household == w.household, "Haushalte nach Laden")
+	ok(identity_ok(s2), "Geld nach Laden")
+
+
+func test_wage_arrears_in_insolvency() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(3)
+	var c := s.companies[1]
+	var staff_ids: Array = s.personnel.employed(1).map(func(w): return w.id)
+	c.ledger.inject(-c.ledger.cash)   # keine Mittel: Löhne laufen auf
+	run(s, 60.0 * 4.0)
+	ok(c.ledger.payables > 0.0, "Rückstände entstehen")
+	ok(c.status in ["verzug", "insolvenz"], "Lohnrückstand löst Zahlungsverzug aus (%s)" % c.status)
+	run(s, 60.0 * 40.0)
+	ok(c.status == "geschlossen", "Verfahren abgeschlossen (%s)" % c.status)
+	var entry: Dictionary = s.insolvency.archive[0]
+	ok(float(entry.wage_claims) > 0.0 and float(entry.wage_paid) + float(entry.wage_lost) >= float(entry.wage_claims) - 0.01, "Lohnforderungen werden ausgewiesen und bedient oder erlassen")
+	ok(c.ledger.payables == 0.0, "keine Lohnverbindlichkeiten nach Schließung")
+	ok(staff_ids.all(func(id): return s.personnel.workers[id].employer != 1 or s.companies[1].generation > 1), "Mitarbeiter sind nicht mehr beim Insolventen angestellt")
+	ok(identity_ok(s), "Geld, Waren und Bilanzen stimmen")

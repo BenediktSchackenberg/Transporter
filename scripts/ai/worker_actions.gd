@@ -27,6 +27,8 @@ const SCHEMA := {
 		"desc": "Arbeiter bewacht ein eigenes Depot oder Fahrzeug (erhöht Entdeckungschance bei Sabotage)."},
 	"attempt_vehicle_sabotage": {"params": {"worker_id": "string", "vehicle_id": "int"},
 		"desc": "Regelwidrig! Eigener Arbeiter legt ein gesichtetes, stehendes Fremdfahrzeug lahm. 800 EUR, Abklingzeit. Wird er erwischt, ist er für die Partie verloren."},
+	"negotiate_wage": {"params": {"worker_id": "string", "wage": "number"},
+		"desc": "Lohn (EUR je Spielstunde) mit einem eigenen Mitarbeiter verhandeln. Er lehnt unter seinem Mindestlohn ab und nennt ihn; Kürzungen lehnt er ab. Unzufriedene Mitarbeiter (obs.personal_lage) kündigen irgendwann."},
 	"poach_worker": {"params": {"target": "int", "wage": "number"}, "desc": "Arbeiter eines Konkurrenten mit höherem Lohn abwerben (legal, 600 EUR)."},
 }
 
@@ -50,6 +52,8 @@ func run(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 	match name:
 		"inspect_resource":
 			return sim.resources.inspect(cid, str(a.resource_id))
+		"negotiate_wage":
+			return sim.households.negotiate(cid, str(a.worker_id), float(a.wage))
 		"recruit_worker", "recruit_foreman":
 			var w: Worker = P.workers.get(str(a.worker_id))
 			if w == null:

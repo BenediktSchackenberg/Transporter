@@ -23,6 +23,7 @@ var start_capital: float
 var cash: float
 var debt := 0.0
 var deposits := 0.0       # Einlagen bei Banken (Vermoegen)
+var payables := 0.0       # aufgelaufene, noch nicht gezahlte Loehne (Verbindlichkeit)
 var totals := {}          # Kategorie -> Summe (vorzeichenbehaftet)
 var entries: Array = []   # letzte Buchungen fuer die Anzeige
 var history: Array = []   # [Spielminute, Gewinn, Bargeld]
@@ -98,6 +99,35 @@ func inject(amount: float) -> void:
 	start_capital += amount
 
 
+## Lohn laeuft auf (Aufwand sofort) und wird bezahlt, soweit Bargeld da ist. Der Rest bleibt als Lohnrueckstand stehen und wird bei
+## naechster Gelegenheit zuerst beglichen. Gibt den tatsaechlich gezahlten Betrag zurueck (laufender Lohn plus beglichene Rueckstaende).
+func accrue_wages(amount: float, time: float) -> float:
+	if amount > 0.0:
+		totals["wages"] = totals.get("wages", 0.0) - amount
+		payables += amount
+	var pay := minf(payables, maxf(cash, 0.0))
+	if pay > 0.0:
+		_move(-pay, "H0")
+		payables -= pay
+	return pay
+
+
+## Rueckstaende gezielt zahlen (Insolvenzmasse) bzw. nach Verteilung erlassen (keine Gewinnwirkung).
+func pay_payables(limit: float) -> float:
+	var pay := minf(minf(payables, limit), maxf(cash, 0.0))
+	if pay > 0.0:
+		_move(-pay, "H0")
+		payables -= pay
+	return pay
+
+
+func forgive_payables() -> float:
+	var x := payables
+	payables = 0.0
+	start_capital += x
+	return x
+
+
 ## Zahlung an ein anderes Firmenbuch (Auktion, Handel): beide Seiten bewegen sich gegenlaeufig, es entsteht kein Geld.
 func pay_to(other: Ledger, amount: float) -> void:
 	_move(-amount, "")
@@ -153,7 +183,7 @@ func sample(time: float) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"start_capital": start_capital, "cash": cash, "debt": debt, "deposits": deposits, "totals": totals,
+	return {"start_capital": start_capital, "cash": cash, "debt": debt, "deposits": deposits, "payables": payables, "totals": totals,
 		"entries": entries, "history": history}
 
 
@@ -162,6 +192,7 @@ func from_dict(d: Dictionary) -> void:
 	cash = d.cash
 	debt = d.debt
 	deposits = float(d.get("deposits", 0.0))
+	payables = float(d.get("payables", 0.0))
 	totals = d.totals
 	entries = d.entries
 	history = d.history
