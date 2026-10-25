@@ -5,6 +5,24 @@ extends LLMAdapter
 
 const DEFAULT_BASE_URL := "http://127.0.0.1:11435"
 const DEFAULT_MODEL := "qwen3.5:9b-q4_K_M"
+## Ein echter Spiel-Prompt umfasst rund 18.000 Token. Das Ollama-Standardfenster
+## schneidet sonst die Systemregeln ab und das Modell liefert unbrauchbare Antworten.
+const CONTEXT_TOKENS := 24576
+const RESPONSE_SCHEMA := {
+	"type": "object",
+	"properties": {
+		"summary": {"type": "string", "maxLength": 240},
+		"actions": {"type": "array", "minItems": 1, "maxItems": 6,
+			"items": {"type": "object", "properties": {"action": {"type": "string"}},
+				"required": ["action"], "additionalProperties": true}},
+		"goal": {"type": "string", "maxLength": 120},
+		"memory": {"type": "string", "maxLength": 400},
+		"plan": {"type": "object"},
+		"erfahrungen": {"type": "array", "items": {"type": "object"}, "maxItems": 3}
+	},
+	"required": ["summary", "actions"],
+	"additionalProperties": false
+}
 
 var http: HTTPRequest
 var _req_id := -1
@@ -39,8 +57,9 @@ func cancel() -> void:
 
 func build_body(messages: Array) -> Dictionary:
 	return {"model": str(config.get("model", DEFAULT_MODEL)), "messages": messages,
-		"stream": false, "think": false, "format": "json",
-		"options": {"temperature": float(config.get("temperature", 0.7)),
+		"stream": false, "think": false, "format": RESPONSE_SCHEMA,
+		"options": {"temperature": float(config.get("temperature", 0.2)),
+			"num_ctx": maxi(int(config.get("num_ctx", CONTEXT_TOKENS)), CONTEXT_TOKENS),
 			"num_predict": int(config.get("max_tokens_per_request", 900))}}
 
 

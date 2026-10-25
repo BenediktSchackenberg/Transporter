@@ -119,7 +119,7 @@ Global wählst du außerdem Seed, Partiedauer (5/15/30/60/120/240 Minuten, 12 h,
 
 | Anbieter | Bedeutung |
 |---|---|
-| **Ollama lokal** | Lokales Modell über `POST {Basis-URL}/api/chat`, ohne API-Key. Vorbelegt: `http://127.0.0.1:11435` und `qwen3.5:9b-q4_K_M`. Der Denkmodus ist für schnelle Aktionsantworten aus. |
+| **Ollama lokal** | Lokales Modell über `POST {Basis-URL}/api/chat`, ohne API-Key. Vorbelegt: `http://127.0.0.1:11435` und `qwen3.5:9b-q4_K_M`. Der Denkmodus ist aus; ein 24k-Kontextfenster und ein JSON-Schema halten auch die langen Spiel-Prompts und Aktionsantworten vollständig. |
 | **Externe API** | OpenAI-kompatibler Aufruf über `POST {Basis-URL}/chat/completions`. HTTPS-Adresse, Modell und API-Key pro Spieler, etwa für OpenAI oder OpenRouter. Lokale kompatible Server können auch über `localhost` angesprochen werden. |
 | **IONOS · Qwen** | Vorbelegtes externes Profil mit IONOS-Adresse und Qwen-Modell; benötigt einen IONOS-Token als API-Key. |
 | **DEMO (simuliert)** | **Keine KI.** Regelbasierte Testantworten laufen durch denselben Parser. In der UI überall als „DEMO“ gekennzeichnet. Mit einstellbarer Fehlerquote (ungültiges JSON, Rate Limit, Timeout) |
@@ -313,7 +313,7 @@ set PTR_TEST_KEY=sk-irgendwas
 
 ## Testbericht
 
-Der aktuelle vollständige Headless-Lauf unter Godot 4.7.2 bestand 4359 Prüfungen ohne Testfehler, einschließlich Ranglisten-, Wirtschaftskreislauf-, Mehrjahres- und Anbieterwahltest. Der folgende Bericht hält zusätzlich frühere Prüfungen unter Godot 4.4.1 fest. Externe Modell-APIs wurden mangels Key nicht live getestet. Neu hinzugekommen ist ein erfolgreicher Aufruf des lokalen Qwen-3.5-Modells über Ollamas native API mit Godot 4.7.2; der Antwortparser akzeptierte dessen Aktions-JSON. Der Wetterdienst wurde gegen das echte Open-Meteo getestet. Die Spalte „Adapter“ zeigt, womit jede Prüfung lief.
+Der aktuelle vollständige Headless-Lauf unter Godot 4.7.2 bestand 4374 Prüfungen ohne Testfehler, einschließlich Ranglisten-, Wirtschaftskreislauf-, Mehrjahres-, Kraftstoff- und Anbieterwahltest. Der folgende Bericht hält zusätzlich frühere Prüfungen unter Godot 4.4.1 fest. Externe Modell-APIs wurden mangels Key nicht live getestet. Neu hinzugekommen ist ein erfolgreicher Aufruf des lokalen Qwen-3.5-Modells über Ollamas native API mit Godot 4.7.2; der Antwortparser akzeptierte dessen Aktions-JSON. Der Wetterdienst wurde gegen das echte Open-Meteo getestet. Die Spalte „Adapter“ zeigt, womit jede Prüfung lief.
 
 | Prüfung | Adapter | Ergebnis |
 |---|---|---|

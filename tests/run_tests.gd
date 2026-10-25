@@ -2135,8 +2135,11 @@ func test_provider_choice() -> void:
 	var adapter := created as OllamaAdapter
 	adapter.config = {"model": OllamaAdapter.DEFAULT_MODEL, "max_tokens_per_request": 900}
 	var body: Dictionary = adapter.build_body([{"role": "user", "content": "Test"}])
-	ok(body.think == false and body.format == "json" and body.stream == false
+	ok(body.think == false and body.format is Dictionary and body.stream == false
 		and body.options.num_predict == 900 and not body.has("api_key"), "Ollama-Anfrage ohne Denkmodus und Key")
+	ok(body.options.num_ctx >= OllamaAdapter.CONTEXT_TOKENS
+		and body.format.required.has("actions") and body.format.properties.actions.minItems == 1,
+		"Ollama erhält vollständigen Spielkontext und ein verbindliches Aktions-JSON-Schema")
 	var replies: Array = []
 	adapter.completed.connect(func(id: int, response: Dictionary): replies.append([id, response]))
 	adapter._req_id = 7
