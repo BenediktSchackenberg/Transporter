@@ -40,6 +40,7 @@ var left_scroll: ScrollContainer
 var banks_rt: RichTextLabel
 var firms_rt: RichTextLabel
 var trader_rt: RichTextLabel
+var standings_rt: RichTextLabel
 var decision_company := -1
 var decision_company_opt: OptionButton
 var sel_panel: PanelContainer
@@ -302,6 +303,8 @@ func _build_right() -> void:
 	banks_rt = _rt("Banken")
 	banks_rt.scroll_following = false
 	firms_rt = _rt("Unternehmen")
+	standings_rt = _rt("Rangliste")
+	standings_rt.scroll_following = false
 	trader_rt = _rt("Bauhof")
 	trader_rt.scroll_following = false
 	firms_rt.scroll_following = false
@@ -458,6 +461,7 @@ func update_hud(delta: float) -> void:
 		"Banken": _update_scroll(banks_rt, LiveText.banks(sim))
 		"Unternehmen": _update_scroll(firms_rt, LiveText.firms(sim))
 		"Bauhof": _update_scroll(trader_rt, LiveText.trader(sim))
+		"Rangliste": _update_scroll(standings_rt, LiveText.standings(sim))
 		"Lage": _update_scroll(situation_rt, LiveText.situation(sim, session.remaining_seconds() / 60.0))
 		"Aufträge": _update_contracts()
 		"Fahrzeuge": _update_vehicles()

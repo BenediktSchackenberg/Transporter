@@ -23,8 +23,9 @@ func show_results(sim: Simulation, reason: String, controllers: Array) -> void:
 	panel.add_child(v)
 	var rank := sim.ranking()
 	v.add_child(UITheme.label("ENDAUSWERTUNG", 32, UITheme.ACCENT))
-	v.add_child(UITheme.label("%s · %s · Sieger: %s (%s)" % [reason, Catalog.game_minutes_to_text(sim.game_min),
-		rank[0].company_name, rank[0].player_name], 16))
+	var champ: Company = sim.standings.winner()
+	v.add_child(UITheme.label("%s · %s · %s" % [reason, GameCalendar.long_text(sim.game_min),
+		("Sieger: %s (%s)" % [champ.company_name, champ.player_name]) if champ != null else "kein zahlungsfähiger Sieger"], 16))
 	var grid := GridContainer.new()
 	var heads := ["Platz", "Firma", "Gewinn", "Umsatz", "Kosten", "Aufträge (pünktl./versp./gesch.)", "Ruf", "Bargeld",
 		"Schulden", "Geschäfte", "Sabotage (ok/erwischt)", "Steuerung"]
@@ -60,6 +61,23 @@ func show_results(sim: Simulation, reason: String, controllers: Array) -> void:
 			txt += "  • %s\n" % e.replace("[", "[lb]")
 		if c.key_events.is_empty():
 			txt += "  • (keine besonderen Ereignisse)\n"
+	txt += "
+[b]Etappensieger[/b]
+"
+	for w in sim.standings.stage_winners.slice(-12):
+		txt += "  Monat %d: %s (%s), Gewinn %s
+" % [int(w.month) + 1, w.name, w.owner, Catalog.money(w.profit)]
+	if sim.standings.stage_winners.is_empty():
+		txt += "  (noch kein Monat abgeschlossen)
+"
+	if not sim.insolvency.archive.is_empty():
+		txt += "
+[b]Insolvenzen dieser Partie[/b]
+"
+		for e in sim.insolvency.archive:
+			txt += "  %s (%s): Ausfallquote %d %%, Forderungen %s, abgeschrieben %s
+" % [e.name, CompanyForms.name_of(e.form), int(float(e.quota) * 100.0),
+				Catalog.money(e.claims), Catalog.money(e.lost)]
 	rt.text = txt
 	v.add_child(rt)
 	var buttons := HBoxContainer.new()

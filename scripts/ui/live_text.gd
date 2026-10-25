@@ -384,3 +384,38 @@ static func trader(sim: Simulation) -> String:
 		txt += "  %s: %d × %s, %s → %s (%s)
 " % [GameCalendar.short_text(e.t), int(e.qty), Trader.MATERIALS[e.item].name, e.von, e.nach, e.grund]
 	return txt
+
+
+## Reiter "Rangliste": aktueller Stand, Etappensieger, Verpflichtungen und Insolvenzverluste.
+static func standings(sim: Simulation) -> String:
+	var S: Standings = sim.standings
+	var txt := "[b][color=#f2c14e]RANGLISTE[/color][/b] – Wertung: kumulierter Nettogewinn, Sieger muss zahlungsfähig sein
+"
+	var rank := sim.ranking()
+	for i in rank.size():
+		var c: Company = rank[i]
+		txt += "
+%d. [b]%s[/b] (%s%s) – %s
+" % [i + 1, c.company_name, CompanyForms.name_of(c.form), ", Gründer %d" % c.generation if c.generation > 1 else "", c.status]
+		txt += "  Gewinn %s · Vermögen %s · Bargeld %s · Schulden %s
+" % [Catalog.money(c.ledger.profit()), Catalog.money(sim.net_worth(c.id)),
+			Catalog.money(c.ledger.cash), Catalog.money(c.ledger.debt)]
+		txt += "  Pflichten der nächsten 30 Tage %s · Ruf %d · Aufträge %d
+" % [Catalog.money(S.obligations(c)) if c.is_active() else "–", int(c.reputation), c.stats.completed]
+	var lead: Company = S.winner()
+	txt += "
+[b]Aktuell führt:[/b] %s
+" % (lead.company_name if lead != null else "niemand zahlungsfähig")
+	txt += "
+[b]Etappensieger (je Spielmonat)[/b]
+"
+	for w in S.stage_winners.slice(-10):
+		txt += "  Monat %d: %s (Gewinn %s)
+" % [int(w.month) + 1, w.name, Catalog.money(w.profit)]
+	if S.stage_winners.is_empty():
+		txt += "  noch keiner
+"
+	txt += "
+[b]Insolvenzverluste der Gläubiger insgesamt[/b]: %s
+" % Catalog.money(S.insolvency_losses())
+	return txt

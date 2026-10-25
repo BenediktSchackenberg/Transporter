@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	for name in ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials"]:
+			"test_response_parsing", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings"]:
 		var before := checks
 		var fails := failures
 		call(name)
@@ -1991,3 +1991,23 @@ func test_build_materials() -> void:
 	ok(is_equal_approx(T.cash(), t1), "Bauhof erhält nichts für bereits vorhandenes Material")
 	ok(cash1 - c.ledger.cash < 2000.0 * 1.4 - 1.0, "Eigenes Material mindert die Bezahlung")
 	ok(identity_ok(s), "Bilanz mit eigenem Material")
+
+
+func test_standings() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(3)
+	var best := s.companies[2]
+	best.ledger.book("transport", 5000.0, true, "Test", s.game_min)
+	run(s, 60.0 * 31.0)
+	ok(s.standings.stage_winners.size() == 1, "Ein Etappensieger nach dem ersten Monat (%d)" % s.standings.stage_winners.size())
+	ok(s.standings.series.size() == 1 and s.standings.values(2, "profit").size() == 1, "Zeitreihe je Monat")
+	ok(s.standings.leader() == s.standings.winner(), "Führender ist zahlungsfähig")
+	# Zahlungsunfaehiger Spitzenreiter kann nicht gewinnen
+	var top := s.standings.winner()
+	top.status = "verzug"
+	ok(s.standings.winner() != top and s.ranking()[0] != top, "Firma im Zahlungsverzug ist nicht Sieger")
+	top.status = "aktiv"
+	var w: Dictionary = s.standings.stage_winners[0]
+	ok("Monat 1" in LiveText.standings(s) and w.name != "", "Rangliste zeigt Etappensieger")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.standings.stage_winners.size() == 1 and s2.standings.stage_winners[0].name == w.name, "Etappensieger bleiben nach Laden erhalten")

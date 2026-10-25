@@ -23,6 +23,7 @@ var plans := PlanBook.new()
 var memory := MemoryBook.new()
 var decisions := DecisionLog.new()
 var events := EventDirector.new()
+var standings := Standings.new()
 var stock := StockBook.new()
 var trader := Trader.new()
 var banking := Banking.new()
@@ -79,6 +80,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	banking.setup(self)
 	insolvency.setup(self)
 	trader.setup(self)
+	standings.setup(self)
 	experiments.setup(self)
 	var order := [0, 2] if players.size() == 2 else [0, 1, 2, 3]
 	for i in players.size():
@@ -927,8 +929,8 @@ func finalize() -> void:
 func ranking() -> Array:
 	var r := companies.duplicate()
 	r.sort_custom(func(a: Company, b: Company):
-		if a.is_active() != b.is_active():
-			return a.is_active()
+		if Standings.solvent(a) != Standings.solvent(b):
+			return Standings.solvent(a)
 		var pa := snappedf(a.ledger.profit(), 0.01)
 		var pb := snappedf(b.ledger.profit(), 0.01)
 		if pa != pb:
@@ -960,7 +962,7 @@ func to_dict() -> Dictionary:
 	return {"seed": city.seed_value, "map_size": city.size, "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
 
@@ -990,6 +992,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.banking.from_dict(d.get("banking", {}))
 	s.insolvency.from_dict(d.get("insolvency", {}))
 	s.stock.from_dict(d.get("stock", {}))
+	s.standings.from_dict(d.get("standings", {}))
 	s.trader.from_dict(d.get("trader", {}))
 	s.vehicles.clear()
 	for vd in d.vehicles:
