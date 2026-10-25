@@ -9,12 +9,12 @@ const G := CityData.G
 
 ## typ -> [Sprites, Breite, Hoehe, eingehende Waren, ausgehende Waren]
 const TYPES := {
-	"house": [["house0", "house1", "house2", "house3"], 2, 2, ["pakete", "moebel"], []],
-	"apartment": [["apartment0", "apartment1"], 3, 3, ["pakete", "moebel", "getraenke"], ["pakete"]],
-	"shop": [["shop0", "shop1", "shop2"], 2, 2, ["pakete", "getraenke", "elektronik", "lebensmittel"], ["pakete"]],
+	"house": [["house0", "house1", "house2", "house3", "house0s1", "house1s1", "house2s1", "house3s1", "house0s2", "house1s2", "house2s2", "house3s2", "house0s3", "house1s3", "house2s3", "house3s3", "house0s4", "house1s4", "house2s4", "house3s4", "house0s5", "house1s5", "house2s5", "house3s5"], 2, 2, ["pakete", "moebel"], []],
+	"apartment": [["apartment0", "apartment1", "apartment0s1", "apartment1s1", "apartment0s2", "apartment1s2", "apartment0s3", "apartment1s3"], 3, 3, ["pakete", "moebel", "getraenke"], ["pakete"]],
+	"shop": [["shop0", "shop1", "shop2", "shop0s1", "shop1s1", "shop2s1", "shop0s2", "shop1s2", "shop2s2", "shop0s3", "shop1s3", "shop2s3"], 2, 2, ["pakete", "getraenke", "elektronik", "lebensmittel"], ["pakete"]],
 	"pharmacy": [["pharmacy"], 2, 2, ["medikamente", "pakete"], []],
 	"restaurant": [["restaurant"], 2, 2, ["lebensmittel", "getraenke"], []],
-	"office": [["office0", "office1"], 3, 3, ["pakete", "elektronik", "moebel"], ["pakete", "elektronik"]],
+	"office": [["office0", "office1", "office0s1", "office1s1", "office0s2", "office1s2"], 3, 3, ["pakete", "elektronik", "moebel"], ["pakete", "elektronik"]],
 	"bank": [["bank"], 3, 3, ["pakete"], []],
 	"factory": [["factory"], 4, 4, ["baustoffe", "maschinenteile"], ["maschinenteile", "baustoffe", "elektronik", "moebel"]],
 	"warehouse": [["warehouse"], 4, 3, ["pakete", "getraenke", "lebensmittel", "moebel", "elektronik", "container"],
@@ -32,8 +32,8 @@ const TYPES := {
 	"clinic": [["clinic"], 3, 3, ["medikamente", "elektronik", "pakete"], []],
 	"construction": [["construction"], 3, 3, ["baustoffe", "maschinenteile"], []],
 	"shipyard": [["freight_shed"], 5, 3, ["maschinenteile"], ["maschinenteile"]],
-	"semi": [["semi"], 4, 2, ["pakete", "moebel"], []],
-	"villa": [["villa", "villa1"], 4, 4, ["moebel", "pakete", "getraenke"], []],
+	"semi": [["semi", "semis1", "semis2", "semis3"], 4, 2, ["pakete", "moebel"], []],
+	"villa": [["villa", "villa1", "villa3", "villa4", "villa5", "villa6"], 4, 4, ["moebel", "pakete", "getraenke"], []],
 	"highrise": [["highrise0", "highrise1"], 3, 3, ["pakete", "elektronik", "moebel"], ["pakete", "elektronik"]],
 	"school": [["school"], 6, 4, ["moebel", "pakete", "lebensmittel"], []],
 	"kindergarten": [["kindergarten"], 4, 3, ["lebensmittel", "getraenke"], []],

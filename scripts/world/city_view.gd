@@ -233,9 +233,13 @@ func add_iso_object(parent: Node2D, key: String, info: Dictionary, origin: Vecto
 
 
 func _apply_wear(id: int) -> void:
-	if not _building_parts.has(id) or not sim.care.condition.has(id):
+	if not _building_parts.has(id):
 		return
-	var tint := BuildingCare.tint(sim.care.get_condition(id))
+	var tint := BuildingCare.tint(sim.care.get_condition(id)) if sim.care.condition.has(id) else Color.WHITE
+	# kleine, feste Farbabweichung je Gebaeude: keine zwei Haeuser sehen exakt gleich aus
+	var h := absi(hash("tint_%d" % id))
+	var jitter := Color(0.94 + float(h % 11) * 0.01, 0.94 + float((h / 11) % 11) * 0.01, 0.94 + float((h / 121) % 11) * 0.01, 1.0)
+	tint = Color(tint.r * jitter.r, tint.g * jitter.g, tint.b * jitter.b, 1.0)
 	for s in _building_parts[id]:
 		s.self_modulate = tint
 

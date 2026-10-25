@@ -18,8 +18,10 @@ def house(variant=0, seed=1):
     rng = random.Random(seed * 17 + variant)
     W = H = 2 * T
     m = Model(W, H, 90)
-    walls = ["plaster_cream", "plaster_white", "plaster_rose", "plaster_sage", "plaster_ochre"]
-    wall = walls[(seed + variant) % len(walls)]
+    walls = ["plaster_cream", "plaster_white", "plaster_rose", "plaster_sage", "plaster_ochre", "plaster_grey", "brick", "sandstone"]
+    wall = walls[(seed * 3 + variant) % len(walls)]
+    roofs = [("slate", "slate2"), ("tile_red", "tile_red2"), ("tile_terra", "tile_terra2")]
+    rt = roofs[(seed + variant * 2 + seed // 4) % len(roofs)]
     _front_garden(m, 0, 0, W, H, rng)
     if variant == 0:      # Satteldach (First y), Gaube, Garage rechts
         slab(m, 20, 44, 27, H, paving_fn(3))
@@ -30,7 +32,7 @@ def house(variant=0, seed=1):
         window(m, "s", 27, 32, 44, Win(5, 9, lit=0.4), rng)
         window(m, "e", 16, 6, 40, Win(5, 10, lit=0.5), rng)
         window(m, "e", 28, 6, 40, Win(5, 10, lit=0.5), rng)
-        top = gable_roof(m, 6, 10, 40, 44, 49, ridge="y", tile="slate", tile2="slate2", pitch=1.1)
+        top = gable_roof(m, 6, 10, 40, 44, 49, ridge="y", tile=rt[0], tile2=rt[1], pitch=1.1)
         chimney(m, 14, 20, 58, h=12)
         block(m, 42, 18, 1, 62, 44, 22, "plaster_grey", base_h=2)
         flat_roof(m, 41, 17, 63, 45, 22, parapet="zinc", tech=False)
@@ -52,7 +54,7 @@ def house(variant=0, seed=1):
             window(m, "s", u, 6, 48, Win(7, 12, frame="frame_dark", lit=0.6), rng)
         door(m, "e", 30, 2, 40, w=5, h=13, mat_door="frame_dark")
         window(m, "e", 14, 6, 40, Win(6, 12, frame="frame_dark", lit=0.5), rng)
-        top = hip_roof(m, 4, 8, 40, 48, 27, tile="tile_red", tile2="tile_red2", pitch=0.7)
+        top = hip_roof(m, 4, 8, 40, 48, 27, tile=rt[0], tile2=rt[1], pitch=0.7)
         for (px, py) in ((44, 14), (60, 14), (44, 46), (60, 46)):
             m.box(px, py, 1, px + 2, py + 2, 22, M("frame_wood"))
         m.box(43, 12, 22, 63, 50, 24, M("frame_wood"))
@@ -105,7 +107,7 @@ def house(variant=0, seed=1):
         door(m, "s", 26, 2, 46, w=6, h=13, mat_door="brick2")
         window(m, "e", 20, 6, 52, Win(5, 10, lit=0.5), rng)
         window(m, "e", 30, 30, 52, Win(4, 7, lit=0.5), rng)
-        top = gable_roof(m, 6, 12, 52, 46, 53, ridge="x", tile="tile_red", tile2="tile_red2", pitch=1.2)
+        top = gable_roof(m, 6, 12, 52, 46, 53, ridge="x", tile=rt[0], tile2=rt[1], pitch=1.2)
         dormer(m, 26, 46, 58)
         chimney(m, 40, 22, 62, h=12)
         for x in range(2, 24, 6):
@@ -124,7 +126,8 @@ def semi(seed=1):
     m = Model(W, H, 90)
     _front_garden(m, 0, 0, W, H, rng)
     wall_l, wall_r = rng.choice([("plaster_cream", "plaster_rose"), ("plaster_white", "plaster_sage"),
-                                 ("plaster_ochre", "plaster_cream")])
+                                 ("plaster_ochre", "plaster_cream"), ("plaster_grey", "brick"), ("sandstone", "plaster_white"),
+                                 ("plaster_sage", "plaster_rose")])
     block(m, 10, 8, 1, 64, 40, 53, wall_l, base_h=3)
     block(m, 64, 8, 1, 118, 40, 53, wall_r, base_h=3)
     m.box(63, 8, 1, 65, 41, 54, M("stone_base"))
@@ -171,8 +174,9 @@ def apartment(variant=0, seed=1):
     slab(m, 0, 70, W, 80, paving_fn(4))
     x0, y0, x1, y1 = 6, 8, 90, 70
     zt = 1 + floors * fh
-    walls = [("plaster_ochre", "plaster_cream"), ("plaster_rose", "plaster_white"), ("plaster_sage", "plaster_grey")]
-    wa, wb = walls[(seed + variant) % 3]
+    walls = [("plaster_ochre", "plaster_cream"), ("plaster_rose", "plaster_white"), ("plaster_sage", "plaster_grey"),
+             ("brick", "plaster_cream"), ("plaster_grey", "plaster_white"), ("sandstone", "plaster_rose")]
+    wa, wb = walls[(seed + variant) % len(walls)]
     block(m, x0, y0, 1, x1, y1, zt, wa, base="sandstone2", base_h=6)
     block(m, 46, y0, 1, x1, y1, zt, wb, base="sandstone2", base_h=6)
     m.box(44, y1, 1, 48, y1 + 1, zt, M("stone_base"))

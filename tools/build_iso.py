@@ -102,15 +102,29 @@ def build_ground():
 
 
 # ------------------------------------------------------------------ Gebaeude
+# Anzahl Ausfuehrungen je Bauart (Seed-Varianten): mehr Individualitaet in der Stadt
+VARIANTS = {"house": 6, "apartment": 4, "office": 3, "semi": 4, "villa": 4, "shop": 4}
+
+
 def building_specs():
     """Spritename -> Funktion. Namen entsprechen CityGenerator.TYPES."""
     s = {}
     for v in range(4):
         s["house%d" % v] = (lambda v=v: R.house(v, 1 + v))
+        for k in range(1, VARIANTS["house"]):   # weitere Haeuser derselben Bauart: andere Farben, Dachfarben, Gaerten
+            s["house%ds%d" % (v, k)] = (lambda v=v, k=k: R.house(v, 1 + v + 7 * k))
     for v in range(2):
         s["apartment%d" % v] = (lambda v=v: R.apartment(v, 1 + v))
         s["office%d" % v] = (lambda v=v: R.office(v, 1 + v))
+        for k in range(1, VARIANTS["apartment"]):
+            s["apartment%ds%d" % (v, k)] = (lambda v=v, k=k: R.apartment(v, 1 + v + 5 * k))
+        for k in range(1, VARIANTS["office"]):
+            s["office%ds%d" % (v, k)] = (lambda v=v, k=k: R.office(v, 1 + v + 5 * k))
     s["semi"] = lambda: R.semi(1)
+    for k in range(1, VARIANTS["semi"]):
+        s["semis%d" % k] = (lambda k=k: R.semi(1 + 3 * k))
+    for k in range(3, 3 + VARIANTS["villa"]):
+        s["villa%d" % k] = (lambda k=k: B.villa(k))
     s["highrise0"] = lambda: R.highrise(0)
     s["highrise1"] = lambda: R.highrise(1)
     s["school"] = lambda: R.school(1)
@@ -119,6 +133,8 @@ def building_specs():
     s["villa1"] = lambda: B.villa(2)
     for v in range(3):
         s["shop%d" % v] = (lambda v=v: C.shop(v, 1 + v))
+        for k in range(1, VARIANTS["shop"]):
+            s["shop%ds%d" % (v, k)] = (lambda v=v, k=k: C.shop(v, 1 + v + 4 * k))
     s["pharmacy"] = lambda: C.pharmacy(1)
     s["restaurant"] = lambda: C.restaurant(1)
     s["bank"] = lambda: C.bank(1)
