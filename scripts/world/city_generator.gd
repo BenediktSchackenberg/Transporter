@@ -9,7 +9,7 @@ const G := CityData.G
 
 ## typ -> [Sprites, Breite, Hoehe, eingehende Waren, ausgehende Waren]
 const TYPES := {
-	"house": [["house0", "house1", "house2", "house3", "house0s1", "house1s1", "house2s1", "house3s1", "house0s2", "house1s2", "house2s2", "house3s2", "house0s3", "house1s3", "house2s3", "house3s3", "house0s4", "house1s4", "house2s4", "house3s4", "house0s5", "house1s5", "house2s5", "house3s5"], 2, 2, ["pakete", "moebel"], []],
+	"house": [["house0", "house1", "house2", "house3", "house4", "house5", "house6", "house7", "house0s1", "house1s1", "house2s1", "house3s1", "house4s1", "house5s1", "house6s1", "house7s1", "house0s2", "house1s2", "house2s2", "house3s2", "house4s2", "house5s2", "house6s2", "house7s2", "house0s3", "house1s3", "house2s3", "house3s3", "house4s3", "house5s3", "house6s3", "house7s3", "house0s4", "house1s4", "house2s4", "house3s4", "house4s4", "house5s4", "house6s4", "house7s4", "house0s5", "house1s5", "house2s5", "house3s5", "house4s5", "house5s5", "house6s5", "house7s5"], 2, 2, ["pakete", "moebel"], []],
 	"apartment": [["apartment0", "apartment1", "apartment0s1", "apartment1s1", "apartment0s2", "apartment1s2", "apartment0s3", "apartment1s3"], 3, 3, ["pakete", "moebel", "getraenke"], ["pakete"]],
 	"shop": [["shop0", "shop1", "shop2", "shop0s1", "shop1s1", "shop2s1", "shop0s2", "shop1s2", "shop2s2", "shop0s3", "shop1s3", "shop2s3"], 2, 2, ["pakete", "getraenke", "elektronik", "lebensmittel"], ["pakete"]],
 	"pharmacy": [["pharmacy"], 2, 2, ["medikamente", "pakete"], []],

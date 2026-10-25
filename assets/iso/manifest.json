@@ -1421,6 +1421,366 @@
    "w": 2,
    "h": 2,
    "height": 60
+  },
+  "house4": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 41
+  },
+  "house4s1": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 41
+  },
+  "house4s2": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 41
+  },
+  "house4s3": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 41
+  },
+  "house4s4": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 41
+  },
+  "house4s5": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 41
+  },
+  "house5": {
+   "anchor": [
+    130,
+    82
+   ],
+   "size": [
+    260,
+    212
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 53
+  },
+  "house5s1": {
+   "anchor": [
+    130,
+    82
+   ],
+   "size": [
+    260,
+    212
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 53
+  },
+  "house5s2": {
+   "anchor": [
+    130,
+    82
+   ],
+   "size": [
+    260,
+    212
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 53
+  },
+  "house5s3": {
+   "anchor": [
+    130,
+    82
+   ],
+   "size": [
+    260,
+    212
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 53
+  },
+  "house5s4": {
+   "anchor": [
+    130,
+    82
+   ],
+   "size": [
+    260,
+    212
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 53
+  },
+  "house5s5": {
+   "anchor": [
+    130,
+    82
+   ],
+   "size": [
+    260,
+    212
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 53
+  },
+  "house6": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house6s1": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house6s2": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house6s3": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house6s4": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house6s5": {
+   "anchor": [
+    130,
+    58
+   ],
+   "size": [
+    260,
+    188
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house7": {
+   "anchor": [
+    130,
+    34
+   ],
+   "size": [
+    260,
+    164
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house7s1": {
+   "anchor": [
+    130,
+    34
+   ],
+   "size": [
+    260,
+    164
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house7s2": {
+   "anchor": [
+    130,
+    34
+   ],
+   "size": [
+    260,
+    164
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house7s3": {
+   "anchor": [
+    130,
+    34
+   ],
+   "size": [
+    260,
+    164
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house7s4": {
+   "anchor": [
+    130,
+    34
+   ],
+   "size": [
+    260,
+    164
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
+  },
+  "house7s5": {
+   "anchor": [
+    130,
+    34
+   ],
+   "size": [
+    260,
+    164
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 40
   }
  },
  "facilities": {

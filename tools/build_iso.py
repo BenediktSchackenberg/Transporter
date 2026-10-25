@@ -109,7 +109,7 @@ VARIANTS = {"house": 6, "apartment": 4, "office": 3, "semi": 4, "villa": 4, "sho
 def building_specs():
     """Spritename -> Funktion. Namen entsprechen CityGenerator.TYPES."""
     s = {}
-    for v in range(4):
+    for v in range(8):
         s["house%d" % v] = (lambda v=v: R.house(v, 1 + v))
         for k in range(1, VARIANTS["house"]):   # weitere Haeuser derselben Bauart: andere Farben, Dachfarben, Gaerten
             s["house%ds%d" % (v, k)] = (lambda v=v, k=k: R.house(v, 1 + v + 7 * k))

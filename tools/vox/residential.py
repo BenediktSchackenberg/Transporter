@@ -13,8 +13,90 @@ def _front_garden(m, x0, y0, x1, y1, rng):
     slab(m, x0, y0, x1, y1, grass_fn(rng.randint(0, 999)))
 
 
+def house_extra(variant, seed):
+    """Weitere Haustypen (variant 4-7): L-Haus, Stadthaus, Bauernhaus mit Scheune, Cottage mit Erker."""
+    rng = random.Random(seed * 23 + variant)
+    W = H = 2 * T
+    m = Model(W, H, 90)
+    walls = ["plaster_cream", "plaster_white", "plaster_rose", "plaster_sage", "plaster_ochre", "plaster_grey", "brick", "sandstone"]
+    wall = walls[(seed * 3 + variant) % len(walls)]
+    wall2 = walls[(seed * 5 + variant + 2) % len(walls)]
+    roofs = [("slate", "slate2"), ("tile_red", "tile_red2"), ("tile_terra", "tile_terra2")]
+    rt = roofs[(seed + variant + seed // 3) % len(roofs)]
+    _front_garden(m, 0, 0, W, H, rng)
+    if variant == 4:      # L-foermiges Haus: zwei Giebel, Eingang im Winkel
+        slab(m, 44, 46, 52, H, paving_fn(3))
+        block(m, 6, 26, 1, 40, 50, 28, wall, base_h=2)
+        block(m, 28, 8, 1, 58, 36, 28, wall2, base_h=2)
+        window(m, "s", 9, 6, 50, Win(5, 10, shutters="frame_wood", lit=0.5), rng)
+        window(m, "s", 26, 6, 50, Win(5, 10, lit=0.5), rng)
+        door(m, "e", 38, 2, 58, w=5, h=12)
+        window(m, "e", 12, 8, 58, Win(5, 10, lit=0.5), rng)
+        window(m, "w", 34, 6, 6, Win(5, 10, lit=0.4), rng)
+        top = gable_roof(m, 6, 26, 40, 50, 28, ridge="x", tile=rt[0], tile2=rt[1], pitch=1.0)
+        gable_roof(m, 28, 8, 58, 36, 28, ridge="y", tile=rt[0], tile2=rt[1], pitch=1.0)
+        chimney(m, 14, 34, 40, h=10)
+        for x in range(8, 28, 6):
+            flowerbed(m, x, 54, x + 4, 62, 1, rng=rng)
+        bin_(m, 56, 50, 1, "green_acc")
+        tree(m, 4, 4, 1, kind="round", size=0.9, rng=rng)
+        bush(m, 48, 54, 1, r=3, flowers="flower_r", rng=rng)
+    elif variant == 5:    # schmales Stadthaus, drei Geschosse, Flachdach mit Solar
+        slab(m, 22, 48, 36, H, paving_fn(3))
+        block(m, 12, 14, 1, 52, 48, 50, wall, base_h=3)
+        for z in (8, 29):
+            window(m, "s", 8, z, 48, Win(5, 10, lit=0.5), rng)
+            window(m, "s", 28, z, 48, Win(5, 10, lit=0.5), rng)
+        door(m, "s", 19, 2, 48, w=6, h=13, mat_door="frame_dark")
+        balcony(m, "s", 6, 16, 29, 48, depth=4, rng=rng)
+        for z in (10, 30):
+            window(m, "e", 24, z, 52, Win(5, 10, lit=0.4), rng)
+        top = flat_roof(m, 12, 14, 52, 48, 50, parapet="plaster_white", tech=False, solar=True)
+        hedge(m, 0, 52, 20, 58, 1, h=5)
+        hedge(m, 38, 52, 64, 58, 1, h=5)
+        bike(m, 40, 54, 1, color="red", face="y")
+        tree(m, 56, 8, 1, kind="round", size=0.8, rng=rng)
+    elif variant == 6:    # Bauernhaus mit Scheune und Veranda
+        slab(m, 20, 46, 30, H, paving_fn(3))
+        block(m, 4, 22, 1, 34, 48, 26, wall, base_h=2)
+        block(m, 34, 12, 1, 62, 48, 36, "brick2", base=None)
+        window(m, "s", 7, 6, 48, Win(5, 9, shutters="frame_wood", lit=0.5), rng)
+        window(m, "s", 22, 6, 48, Win(5, 9, shutters="frame_wood", lit=0.5), rng)
+        door(m, "s", 15, 2, 48, w=5, h=12)
+        door(m, "s", 40, 2, 48, w=14, h=22, mat_door="frame_wood", canopy=False, lamp=False)
+        top = gable_roof(m, 4, 22, 34, 48, 26, ridge="x", tile=rt[0], tile2=rt[1], pitch=1.0)
+        gable_roof(m, 34, 12, 62, 48, 36, ridge="y", tile="slate", tile2="slate2", pitch=0.9)
+        for px in (6, 14, 26, 32):
+            m.box(px, 52, 1, px + 2, 54, 12, M("frame_wood"))
+        m.box(4, 50, 12, 34, 56, 14, M("frame_wood"))
+        chimney(m, 10, 30, 36, h=10)
+        fence(m, 0, H - 2, 20, H, 1, h=4)
+        fence(m, 30, H - 2, W, H, 1, h=4)
+        tree(m, 52, 4, 1, kind="round", size=1.0, rng=rng)
+        bin_(m, 2, 54, 1, "black")
+    else:                 # Cottage mit Walmdach und Erker
+        slab(m, 14, 52, 22, H, paving_fn(3))
+        block(m, 8, 14, 1, 52, 46, 24, wall, base_h=2)
+        block(m, 24, 46, 1, 40, 52, 20, wall2, base_h=2)
+        window(m, "s", 10, 6, 46, Win(5, 10, shutters="frame_wood", lit=0.5), rng)
+        window(m, "s", 44, 6, 46, Win(5, 10, shutters="frame_wood", lit=0.5), rng)
+        window(m, "s", 28, 5, 52, Win(8, 10, lit=0.6), rng)
+        door(m, "s", 14, 2, 46, w=5, h=12)
+        window(m, "e", 24, 6, 52, Win(5, 10, lit=0.5), rng)
+        top = hip_roof(m, 8, 14, 52, 46, 24, tile=rt[0], tile2=rt[1], pitch=0.9)
+        hip_roof(m, 24, 46, 40, 52, 20, tile=rt[0], tile2=rt[1], pitch=0.8)
+        chimney(m, 44, 20, 30, h=9)
+        hedge(m, 0, H - 6, 12, H - 2, 1, h=5)
+        hedge(m, 24, H - 6, W, H - 2, 1, h=5)
+        bush(m, 4, 40, 1, r=3, flowers="flower_r", rng=rng)
+        tree(m, 56, 54, 1, kind="round", size=0.8, rng=rng)
+    return m, {"w": 2, "h": 2, "entrance": [29, H], "delivery": [29, H], "height": top}
+
+
 def house(variant=0, seed=1):
     """Einfamilienhaus 2x2 Felder; Varianten unterscheiden Baukoerper, Dach und Grundstueck."""
+    if variant >= 4:
+        return house_extra(variant, seed)
     rng = random.Random(seed * 17 + variant)
     W = H = 2 * T
     m = Model(W, H, 90)
