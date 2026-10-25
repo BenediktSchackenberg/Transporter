@@ -27,6 +27,10 @@ const SCHEMA := {
 		"desc": "Arbeiter bewacht ein eigenes Depot oder Fahrzeug (erhöht Entdeckungschance bei Sabotage)."},
 	"attempt_vehicle_sabotage": {"params": {"worker_id": "string", "vehicle_id": "int"},
 		"desc": "Regelwidrig! Eigener Arbeiter legt ein gesichtetes, stehendes Fremdfahrzeug lahm. 800 EUR, Abklingzeit. Wird er erwischt, ist er für die Partie verloren."},
+	"fund_maintenance": {"params": {"einrichtung_id": "string", "betrag": "number"},
+		"desc": "Eigene Einrichtung (B..) instandhalten: der Betrag wird in Zustandspunkte umgesetzt. Verwahrloste Einrichtungen verursachen höhere Betriebskosten."},
+	"commission_renovation": {"params": {"einrichtung_id": "string"},
+		"desc": "Eigene Einrichtung vollständig renovieren (Zustand 100) durch eine Baufirma; Kosten nach Bedarf, +20 % Aufschlag."},
 	"compare_fuel_options": {"params": {"liters": "number?"},
 		"desc": "Tankstellen vergleichen: Preis, Entfernung zum Hauptdepot, Wartezeit an den Zapfsäulen, Gesamtkosten (Annahmen ausgewiesen) und Ersparnis gegenüber dem Notpreis."},
 	"schedule_refueling": {"params": {"below_l": "number", "buy_l": "number", "station": "string?"},
@@ -56,6 +60,10 @@ func run(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 	match name:
 		"inspect_resource":
 			return sim.resources.inspect(cid, str(a.resource_id))
+		"fund_maintenance":
+			return sim.care.fund_maintenance(cid, str(a.einrichtung_id), ActionExecutor._f(a.betrag))
+		"commission_renovation":
+			return sim.care.renovate(cid, str(a.einrichtung_id))
 		"compare_fuel_options":
 			return FuelPlanner.compare_text(sim, cid, ActionExecutor._f(a.get("liters", 500)) if a.get("liters") != null else 500.0)
 		"schedule_refueling":

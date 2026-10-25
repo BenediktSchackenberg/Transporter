@@ -36,6 +36,7 @@ var _traffic_lights: Array = []            # [Sprite2D, Vector2i, bool erste Amp
 var _depot_marks := {}                     # Standort -> {masks: [Sprite2D], label: Label}
 var _roadwork_nodes := {}                  # Vector2i -> Sprite2D
 var _office_marks := {}                    # Buerostandort -> [Node2D, Signatur der Mieter]
+var _building_parts := {}                  # Gebaeude-ID -> Sprites (Zustandsfarbe)
 var _roofs: Array = []                     # Dachmasken (Sprite2D) fuer Schnee und Naesse
 var _roof_key := ""
 var _puddles: Array = []
@@ -181,6 +182,7 @@ func _build_buildings() -> void:
 	sim.events.buildings_added.connect(func(ids):
 		for id in ids:
 			add_building_sprite(sim.city.building(id)))
+	sim.month_changed.connect(func(_m): refresh_wear())
 	_build_cranes()
 
 
@@ -230,6 +232,20 @@ func add_iso_object(parent: Node2D, key: String, info: Dictionary, origin: Vecto
 	return out
 
 
+func _apply_wear(id: int) -> void:
+	if not _building_parts.has(id) or not sim.care.condition.has(id):
+		return
+	var tint := BuildingCare.tint(sim.care.get_condition(id))
+	for s in _building_parts[id]:
+		s.self_modulate = tint
+
+
+## Nach jedem Spielmonat die Zustandsfarben aller Gebaeude aktualisieren.
+func refresh_wear() -> void:
+	for id in _building_parts:
+		_apply_wear(id)
+
+
 func add_building_sprite(b: Dictionary) -> void:
 	if b.type == "plot":
 		return   # Firmengrundstuecke zeichnet EstateView
@@ -239,6 +255,8 @@ func add_building_sprite(b: Dictionary) -> void:
 	var origin := Iso.tile_origin(Vector2i(b.x, b.y))
 	var key: String = "b_" + b.sprite
 	var parts := add_iso_object(buildings_node, key, info, origin, int(b.w), int(b.h), true, key + "_mask" if b.sprite == "depot" else "")
+	_building_parts[int(b.id)] = parts
+	_apply_wear(int(b.id))
 	var anchor := Vector2(info.anchor[0], info.anchor[1])
 	if info.lit:
 		var lit := Sprite2D.new()

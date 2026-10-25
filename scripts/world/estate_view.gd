@@ -185,8 +185,9 @@ func _update_fac(f: Dictionary, blink_on: bool) -> void:
 	var building: bool = f.status == "im_bau"
 	var waiting_material := building and int(f.mat) < int(f.mat_needed)
 	var a := (0.4 + 0.5 * float(f.progress)) if building else 1.0
+	var wear := BuildingCare.tint(float(f.get("condition", 100.0)))
 	for s in e.sprites:
-		s.modulate = Color(1, 1, 1, a)
+		s.modulate = Color(wear.r, wear.g, wear.b, a)
 	e.site.visible = building
 	e.bar_bg.visible = f.status in ["im_bau", "ausbau"]
 	e.bar.size.x = (e.bar_bg.size.x - 2) * float(f.progress)

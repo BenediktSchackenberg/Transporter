@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2391,3 +2391,62 @@ func test_fuel_planner() -> void:
 	# Wetter erhoeht den Verbrauch
 	var w := Weather.new()
 	ok(is_equal_approx(w.fuel_factor(), 1.0) or w.fuel_factor() >= 1.0, "Verbrauchsfaktor ohne Wetter nicht unter 1")
+
+
+func test_building_care() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var C := s.care
+	ok(C.condition.size() > 50, "Stadtgebäude haben einen Zustand (%d)" % C.condition.size())
+	var vals: Array = C.condition.values()
+	ok(vals.all(func(v): return v >= BuildingCare.START_MIN - 0.01 and v <= BuildingCare.START_MAX + 0.01), "Startzustand im erwarteten Bereich")
+	ok(BuildingCare.tint(100.0) == Color(1, 1, 1, 1) and BuildingCare.tint(10.0).r < 0.8, "gepflegt unverändert, verwahrlost dunkler")
+	ok(C.state_of(80.0) == "gepflegt" and C.state_of(50.0) == "genutzt" and C.state_of(30.0) == "vernachlässigt" and C.state_of(5.0) == "baufällig", "Zustandsstufen")
+	# Verfall ohne Pflege: H0 arm -> kein Unterhalt
+	s.economy.accounts.H0 = 0.0
+	s.economy.initial_total -= 300000.0   # Testeingriff, Konservierung bleibt gewahrt
+	var before := 0.0
+	for v in vals:
+		before += v
+	for i in 6:
+		C.on_month(i)
+	var after := 0.0
+	for v in C.condition.values():
+		after += v
+	ok(after < before, "ohne zahlungskräftige Eigentümer verwahrlosen die Gebäude (%.0f → %.0f)" % [before / vals.size(), after / vals.size()])
+	var spent0 := C.spent_city
+	s.economy.accounts.H0 = 300000.0
+	s.economy.initial_total += 300000.0
+	var t0: float = s.economy.accounts.S0
+	for i in 6:
+		C.on_month(10 + i)
+	ok(C.spent_city > spent0 and s.economy.accounts.S0 > t0, "zahlungskräftige Eigentümer zahlen Instandhaltung (Geld fließt an die Bauwirtschaft)")
+	ok(identity_ok(s), "Geld erhalten mit Instandhaltung")
+	ok(C.district_means().size() == Catalog.DISTRICTS.size() and not C.district_log.is_empty(), "Viertelmittel und Verlauf")
+	# Firmeneinrichtung
+	var c := s.companies[0]
+	c.ledger.inject(40000.0)
+	var placed := place_suggested(s, 0, "stellplatz", "extern")
+	var f: Dictionary = s.estate.facilities[placed.building_id]
+	until_done(s, func(): return f.status == "fertig", 3000.0)
+	ok(float(f.condition) == 100.0, "neue Einrichtung im Bestzustand")
+	var up0 := BuildingCare.upkeep_factor(f)
+	f["condition"] = 20.0
+	ok(BuildingCare.upkeep_factor(f) > up0 + 0.2, "schlechter Zustand erhöht die Betriebskosten")
+	var cash0 := c.ledger.cash
+	var m := s.executor.execute(0, {"action": "fund_maintenance", "einrichtung_id": f.id, "betrag": 100})
+	ok(m.ok and float(f.condition) > 20.0 and c.ledger.cash < cash0, "Instandhaltung hebt den Zustand: " + m.msg)
+	var cond1 := float(f.condition)
+	var cash1 := c.ledger.cash
+	var r := s.executor.execute(0, {"action": "commission_renovation", "einrichtung_id": f.id})
+	ok(r.ok and float(f.condition) == 100.0 and c.ledger.cash < cash1, "Renovierung stellt den Zustand her: " + r.msg)
+	ok(not s.executor.execute(0, {"action": "commission_renovation", "einrichtung_id": f.id}).ok, "gute Einrichtung wird nicht erneut renoviert")
+	ok(not s.executor.execute(1, {"action": "fund_maintenance", "einrichtung_id": f.id, "betrag": 100}).ok, "fremde Einrichtung nicht instandhaltbar")
+	f["condition"] = 70.0
+	for i in 8:
+		C.on_month(30 + i)
+	ok(float(f.condition) < 70.0, "Einrichtung verschleißt mit der Zeit (%d)" % int(f.condition))
+	ok(cond1 > 20.0 and identity_ok(s), "Geld und Bilanz stimmen")
+	ok("STADTVIERTEL" in LiveText.situation(s, 10.0), "Lage-Reiter zeigt Viertelzustand")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.care.condition.size() == C.condition.size() and absf(s2.care.get_condition(C.condition.keys()[0]) - C.get_condition(C.condition.keys()[0])) < 0.2, "Zustand nach Laden")

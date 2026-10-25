@@ -311,7 +311,7 @@ func place(cid: int, plot_id: int, typ: String, x: int, y: int, rot: int, mode: 
 		"w": spec.w if rot == 0 else spec.h, "h": spec.h if rot == 0 else spec.w, "rot": rot, "level": 1,
 		"status": "im_bau", "progress": 0.0, "work": float(spec.build), "mat_needed": int(spec.mat),
 		"mat": int(spec.mat) if ext else 0, "mode": "extern" if ext else "eigen", "invest": cost, "target_level": 1,
-		"mat_contract": "", "busy": [], "material_due": sim.game_min + 60.0 if ext else 0.0}
+		"mat_contract": "", "busy": [], "material_due": sim.game_min + 60.0 if ext else 0.0, "condition": 100.0}
 	next_id += 1
 	f["mats"] = need
 	f["ship"] = ship
@@ -565,7 +565,7 @@ func minute_tick(now: float) -> void:
 		var upkeep := 0.0
 		for f in facilities.values():
 			if f.owner == c.id and f.status == "fertig":
-				upkeep += float(FACILITIES[f.typ].upkeep) * (0.6 + 0.4 * int(f.level))
+				upkeep += float(FACILITIES[f.typ].upkeep) * (0.6 + 0.4 * int(f.level)) * BuildingCare.upkeep_factor(f)
 		for p in plot_of(c.id):
 			upkeep += float(p.rent)
 		for l in leases.values():

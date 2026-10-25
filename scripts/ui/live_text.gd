@@ -229,7 +229,20 @@ static func situation(sim: Simulation, remaining_real_min: float) -> String:
 			("%s, %s, %s" % [k.id, Catalog.money(k.reward), ("angenommen von " + sim.company(k.owner).company_name) if k.owner >= 0 else "wartet auf ein Unternehmen"]) if k else "–"]
 	for p in fresh.slice(0, 6):
 		txt += "  [color=%s]%s (%s) ist %s[/color]\n" % ["#8fe0a0" if p.state == "zufrieden" else "#ff6b5e", esc(p.name), esc(p.role), p.state]
-	return txt + fuel_block(sim)
+	return txt + district_block(sim) + fuel_block(sim)
+
+
+## Stadtviertel: mittlerer Gebaeudezustand, Verlauf und Pflegeaufwand der Eigentuemer.
+static func district_block(sim: Simulation) -> String:
+	var means: Array = sim.care.district_means()
+	var txt := "\n[b][color=#f2c14e]STADTVIERTEL[/color][/b] – Gebäudezustand (0–100)\n"
+	var prev: Array = sim.care.district_log[-2][1] if sim.care.district_log.size() >= 2 else means
+	for i in means.size():
+		var d := float(means[i]) - float(prev[i])
+		var col := "#8fe0a0" if d > 0.05 else ("#ff6b5e" if d < -0.05 else "#9a98a8")
+		txt += "  %s: %.0f %s[color=%s](%+.1f)[/color]\n" % [Catalog.DISTRICTS[i], means[i], sim.care.state_of(float(means[i])), col, d]
+	txt += "  Eigentümer haben bisher %s in Instandhaltung gesteckt.\n" % Catalog.money(sim.care.spent_city)
+	return txt
 
 
 ## Kraftstoff: reale Referenz, Status, Ereignisfaktor und daraus der Spielpreis (jeweils getrennt ausgewiesen).
