@@ -10,16 +10,16 @@ extends RefCounted
 ## B1 Geschaeftsbank, B2 Investitionsbank, B3 Handelsbank (Bargeld der Banken, siehe Banking), C0 Verrechnung zwischen Firmen (muss sich auf 0 ausgleichen),
 ## I0 Kapitalgeber (negativ = hat Kapital eingezahlt).
 
-const SEED := {"H0": 300000.0, "P0": 200000.0, "X0": 200000.0, "S0": 100000.0, "B1": 400000.0, "B2": 600000.0, "B3": 300000.0, "T0": 120000.0, "C0": 0.0, "I0": 150000.0}
+const SEED := {"H0": 300000.0, "P0": 200000.0, "X0": 200000.0, "S0": 100000.0, "B1": 400000.0, "B2": 600000.0, "B3": 300000.0, "T0": 120000.0, "G0": 80000.0, "C0": 0.0, "I0": 150000.0}
 const NAMES := {
 	"H0": "Haushalte", "P0": "Öffentliche Hand", "X0": "Ausland", "S0": "Dienstleister",
-	"B1": "Geschäftsbank", "B2": "Investitionsbank", "B3": "Handelsbank", "T0": "Bauhof (Großhandel)", "C0": "Verrechnung zwischen Firmen", "I0": "Kapitalgeber",
+	"B1": "Geschäftsbank", "B2": "Investitionsbank", "B3": "Handelsbank", "T0": "Bauhof (Großhandel)", "G0": "Tankstellenbetreiber", "C0": "Verrechnung zwischen Firmen", "I0": "Kapitalgeber",
 }
 ## Standardgegenkonto je Buchungskategorie (siehe Ledger.LABELS)
 const COUNTER := {
 	"transport": "H0", "trade_income": "C0", "trade_expense": "C0", "insurance_payout": "S0", "insurance": "S0",
 	"compensation": "H0", "penalties": "H0", "fines": "P0", "wages": "H0", "hire_fees": "H0", "repairs": "S0",
-	"rent": "H0", "rent_income": "H0", "interest": "B1", "interest_income": "B1", "fuel": "X0", "supplies": "X0", "security": "S0",
+	"rent": "H0", "rent_income": "H0", "interest": "B1", "interest_income": "B1", "fuel": "X0", "supplies": "S0", "security": "S0",
 	"sabotage": "S0", "marketing": "S0", "office": "S0", "property_costs": "P0", "training": "S0",
 	"admin": "P0", "depreciation": "", "asset_result": "",
 }

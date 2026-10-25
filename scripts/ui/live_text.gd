@@ -243,6 +243,15 @@ static func fuel_block(sim: Simulation) -> String:
 		F.ref.diesel * sim.resources.fuel_price_factor]
 	if F.last_error != "":
 		txt += "  [color=#ffb347]Letzter Abruf: %s[/color]\n" % esc(F.last_error)
+	txt += "  Betreiberkonto %s · Tankwagen unterwegs: %d\n" % [Catalog.money(sim.economy.accounts.G0), sim.resources.tanker_orders.size()]
+	for sid in sim.resources.supplies:
+		var sp: Dictionary = sim.resources.supplies[sid]
+		if sp.kind != "fuel":
+			continue
+		txt += "  %s: %d / %d l · %.2f EUR/l (Aufschlag %+.1f %%) · Säulen %d/%d belegt · abgesetzt %d l · Wartezeit gesamt %d min%s\n" % [
+			esc(sim.city.building(sp.building).name), int(sp.stock), int(sp.max), sim.resources.fuel_price(sp), float(sp.markup) * 100.0,
+			sim.resources.pumps_busy(sp), int(sp.pumps), int(sp.sales_l), int(sp.wait_min),
+			"  [color=#ff6b5e]LEER[/color]" if float(sp.stock) < 1.0 else ""]
 	return txt
 
 

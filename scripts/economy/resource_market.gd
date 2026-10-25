@@ -8,11 +8,17 @@ extends RefCounted
 const FUEL_BASE_PRICE := 1.5           # EUR/Liter, Grundlage des Verbrauchs je Tile
 const FUEL_EMERGENCY_PRICE := 2.0      # Nachtanken ohne eigenen Vorrat
 const OFFERS_PER_DEALER := 5
+const PUMP_LITERS_PER_MIN := 30.0       # Zapfgeschwindigkeit je Saeule
+const TANKER_ORDER_BELOW := 0.35        # Bestellung unter diesem Fuellstand
+const WHOLESALE_FACTOR := 0.86          # Einkaufspreis des Betreibers (Anteil Referenzpreis)
+const BACKGROUND_L_PER_DAY := 600.0     # Verkauf an Haushalte (Privatfahrzeuge) je Station und Spieltag
+const STATION_WAGE_PER_MONTH := 900.0   # Personal je Tankstelle
 
 var sim
 var offers := {}       # "F<n>" -> {id, dealer, model, price, condition, status}
 var supplies := {}     # "S<n>" -> {id, kind (fuel|parts), building, stock, max, price, regen}
 var next_offer := 1
+var tanker_orders: Array = []          # {station, qty, due, cost}
 var fuel_price_factor := 1.0           # Ereignisregler: Treibstoffpreise
 
 
@@ -25,7 +31,8 @@ func setup(simulation) -> void:
 				_new_offer(b.id)
 		elif b.type == "gas_station":
 			supplies["S%d" % n] = {"id": "S%d" % n, "kind": "fuel", "building": b.id, "stock": 3000.0, "max": 3000.0,
-				"price": 0.0, "markup": snappedf(sim.rng.randf_range(-0.04, 0.06), 0.001), "regen": 6.0}
+				"price": 0.0, "markup": snappedf(sim.rng.randf_range(-0.04, 0.06), 0.001), "regen": 0.0,
+				"pumps": 2 + n % 3, "busy": [], "sales_l": 0.0, "revenue": 0.0, "wait_min": 0.0, "customers": 0, "deliveries": 0, "dry_days": 0}
 			n += 1
 		elif b.role == "workshop":
 			supplies["S%d" % n] = {"id": "S%d" % n, "kind": "parts", "building": b.id, "stock": 20.0, "max": 20.0,
@@ -87,18 +94,98 @@ func buy_supplies(cid: int, sid: String, amount: float) -> Dictionary:
 		return {"ok": false, "msg": "Tank fasst nur %d l (Vorrat %d l)." % [int(c.fuel_cap), int(c.fuel)]}
 	s.stock = float(s.stock) - amount
 	c.ledger.book("supplies", -cost, true, "%s %d × %s" % ["Treibstoff" if s.kind == "fuel" else "Ersatzteile", int(amount),
-		sim.city.building(s.building).name], sim.game_min)
+		sim.city.building(s.building).name], sim.game_min, "G0" if s.kind == "fuel" else "S0")
+	var wait_txt := ""
 	if s.kind == "fuel":
 		c.fuel += amount
+		var wait: float = _use_pump(s, amount)
+		s.sales_l = float(s.sales_l) + amount
+		s.revenue = float(s.revenue) + cost
+		s.customers = int(s.customers) + 1
+		if wait > 0.5:
+			wait_txt = " Wartezeit an der Zapfsäule: %d min." % int(ceil(wait))
 	else:
 		c.parts += int(amount)
-	return {"ok": true, "msg": "%d %s gekauft für %s (Vorrat: %d l Treibstoff, %d Ersatzteile)." % [int(amount),
-		"Liter" if s.kind == "fuel" else "Ersatzteile", Catalog.money(cost), int(c.fuel), c.parts]}
+	return {"ok": true, "msg": "%d %s gekauft für %s (Vorrat: %d l Treibstoff, %d Ersatzteile).%s" % [int(amount),
+		"Liter" if s.kind == "fuel" else "Ersatzteile", Catalog.money(cost), int(c.fuel), c.parts, wait_txt]}
+
+
+## Belegt die frueheste freie Zapfsaeule; gibt die Wartezeit (Spielminuten) zurueck. Besetzte Saeulen sind ein echter Engpass.
+func _use_pump(s: Dictionary, liters: float) -> float:
+	var busy: Array = s.busy
+	while busy.size() < int(s.pumps):
+		busy.append(0.0)
+	var best := 0
+	for i in busy.size():
+		if float(busy[i]) < float(busy[best]):
+			best = i
+	var start := maxf(sim.game_min, float(busy[best]))
+	busy[best] = start + liters / PUMP_LITERS_PER_MIN
+	var wait: float = start - sim.game_min
+	s.wait_min = float(s.wait_min) + wait
+	return wait
+
+
+func pumps_busy(s: Dictionary) -> int:
+	var n := 0
+	for b in s.busy:
+		if float(b) > sim.game_min:
+			n += 1
+	return n
+
+
+## Taeglich: Verkauf an Haushalte (H0 zahlt), Tankwagen bestellen (Betreiber G0 zahlt an das Ausland X0), Anlieferungen eintragen.
+func _daily_stations() -> void:
+	var now: float = sim.game_min
+	var gas := 0
+	for sid in supplies:
+		var s: Dictionary = supplies[sid]
+		if s.kind != "fuel":
+			continue
+		gas += 1
+		var sold := minf(BACKGROUND_L_PER_DAY, float(s.stock))
+		if sold > 0.0:
+			var pay := sold * fuel_price(s)
+			s.stock = float(s.stock) - sold
+			s.sales_l = float(s.sales_l) + sold
+			s.revenue = float(s.revenue) + pay
+			sim.economy.transfer("H0", "G0", pay)
+		s.dry_days = int(s.dry_days) + (1 if float(s.stock) < 1.0 else 0)
+		var pending := 0.0
+		for o in tanker_orders:
+			if o.station == sid:
+				pending += float(o.qty)
+		if float(s.stock) + pending < TANKER_ORDER_BELOW * float(s.max):
+			var wholesale: float = float(sim.fuel.ref.diesel) * WHOLESALE_FACTOR * fuel_price_factor
+			var qty := minf(float(s.max) - float(s.stock) - pending, floorf(maxf(0.0, sim.economy.accounts.G0) / wholesale))
+			qty = floorf(qty / 100.0) * 100.0
+			if qty >= 100.0:
+				var cost := qty * wholesale
+				sim.economy.transfer("G0", "X0", cost)
+				tanker_orders.append({"station": sid, "qty": qty, "due": now + GameCalendar.day_game_min, "cost": cost})
+	for o in tanker_orders.duplicate():
+		if now >= float(o.due):
+			var st: Dictionary = supplies[o.station]
+			st.stock = minf(float(st.max), float(st.stock) + float(o.qty))
+			st.deliveries = int(st.deliveries) + 1
+			tanker_orders.erase(o)
+
+
+func _monthly_stations() -> void:
+	var gas := supplies.values().filter(func(s): return s.kind == "fuel").size()
+	var wages := minf(STATION_WAGE_PER_MONTH * gas, maxf(0.0, sim.economy.accounts.G0))
+	sim.economy.transfer("G0", "H0", wages)
 
 
 func minute_tick(now: float) -> void:
 	for s in supplies.values():
-		s.stock = minf(float(s.max), float(s.stock) + float(s.regen))
+		if float(s.regen) > 0.0:
+			s.stock = minf(float(s.max), float(s.stock) + float(s.regen))
+	var day := int(GameCalendar.day_game_min)
+	if sim.minute_index % day == 0:
+		_daily_stations()
+	if sim.minute_index % (day * GameCalendar.DAYS_PER_MONTH) == 0:
+		_monthly_stations()
 	if sim.minute_index % 120 == 0:
 		for b in sim.city.buildings:
 			if b.role == "dealer" and available_offers().filter(func(o): return o.dealer == b.id).size() < OFFERS_PER_DEALER:
@@ -146,7 +233,7 @@ func inspect(cid: int, rid: String) -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"offers": offers, "supplies": supplies, "next_offer": next_offer, "fuel_price_factor": fuel_price_factor}
+	return {"offers": offers, "supplies": supplies, "next_offer": next_offer, "fuel_price_factor": fuel_price_factor, "tanker_orders": tanker_orders}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -158,3 +245,4 @@ func from_dict(d: Dictionary) -> void:
 		s.building = int(s.building)
 	next_offer = int(d.next_offer)
 	fuel_price_factor = float(d.get("fuel_price_factor", 1.0))
+	tanker_orders = d.get("tanker_orders", [])

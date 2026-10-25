@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2188,3 +2188,46 @@ func test_fuel_prices() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(is_equal_approx(s2.fuel.ref.diesel, s.fuel.ref.diesel) and s2.fuel.source == "tankerkoenig", "Preisstand nach Laden")
 	ok("KRAFTSTOFF" in LiveText.situation(s, 10.0), "Lage-Reiter zeigt Kraftstoffpreise")
+
+
+func test_gas_stations() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var R := s.resources
+	var st: Dictionary = R.supplies.values().filter(func(x): return x.kind == "fuel")[0]
+	ok(int(st.pumps) >= 2, "Tankstelle hat Zapfsäulen (%d)" % int(st.pumps))
+	var h0: float = s.economy.accounts.H0
+	var g0: float = s.economy.accounts.G0
+	var stock0 := float(st.stock)
+	run(s, 60.0 * 1.2)
+	ok(float(st.stock) < stock0 and s.economy.accounts.G0 != g0, "Haushalte tanken: Bestand sinkt, Betreiber nimmt Geld ein")
+	ok(float(st.revenue) > 0.0 and float(st.sales_l) > 0.0, "Umsatz und Absatz der Tankstelle erfasst")
+	# Engpass an den Zapfsäulen
+	st.stock = float(st.max)
+	st.busy = []
+	var c := s.companies[0]
+	c.fuel = 0.0
+	c.fuel_cap = 20000.0
+	c.ledger.inject(20000.0)
+	var waits := 0
+	for i in 8:
+		var r := R.buy_supplies(0, st.id, 300.0)
+		if "Wartezeit" in r.msg:
+			waits += 1
+	ok(waits > 0 and float(st.wait_min) > 0.0, "Alle Säulen belegt → Wartezeit entsteht (%d Käufe warteten)" % waits)
+	ok(R.pumps_busy(st) == int(st.pumps), "belegte Säulen werden gezählt")
+	# Tankwagen: leere Station wird nachbestellt und beliefert
+	st.stock = 100.0
+	st.busy = []
+	run(s, 60.0 * 1.1)
+	ok(R.tanker_orders.any(func(o): return o.station == st.id) or float(st.stock) > 1000.0, "Betreiber bestellt einen Tankwagen")
+	var order: Array = R.tanker_orders.filter(func(o): return o.station == st.id)
+	ok(not order.is_empty() and float(order[0].cost) > 0.0, "Betreiber bezahlt die Lieferung an das Ausland")
+	run(s, 60.0 * 2.0)
+	ok(float(st.stock) > 1000.0 and int(st.deliveries) >= 1, "Tankwagen hat geliefert (Bestand %d l)" % int(st.stock))
+	ok(identity_ok(s), "Geld und Waren erhalten mit Tankstellenbetrieb")
+	run(s, 60.0 * 31.0)
+	ok(s.economy.accounts.G0 > 0.0, "Tankstellenbetreiber bleibt zahlungsfähig (%.0f)" % s.economy.accounts.G0)
+	ok(identity_ok(s), "Geld nach einem Monat Tankstellenbetrieb")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.resources.tanker_orders.size() == s.resources.tanker_orders.size() and identity_ok(s2), "Tankstellen nach Laden")
