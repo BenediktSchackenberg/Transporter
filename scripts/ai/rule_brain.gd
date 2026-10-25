@@ -132,11 +132,19 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		planned.append("collect_contracts")
 		reasons.append("hole neue Aufträge an der Jobbörse")
 	# 6) Treibstoff guenstig auf Vorrat statt teuer nachtanken
-	if int(me.vorraete.treibstoff_l) < 150 * obs.fahrzeuge.size() and cash > 4000.0:
+	# Treibstoff kommt erst nach Zapfen und Lieferung im Depot an: Vorrat plus unterwegs zaehlen, frueh bestellen,
+	# und eine feste Nachtank-Regel der Engine nutzen (Routine, spart KI-Anfragen).
+	var fuel_have := int(me.vorraete.treibstoff_l) + int(me.vorraete.get("treibstoff_unterwegs_l", 0))
+	var fuel_vehicles := maxi(1, obs.fahrzeuge.size())
+	if not bool(me.vorraete.get("nachtank_regel", false)) and "schedule_refueling" not in planned and cash > 3000.0:
+		actions.append({"action": "schedule_refueling", "below_l": 250 * fuel_vehicles, "buy_l": 500 * mini(2, fuel_vehicles)})
+		planned.append("schedule_refueling")
+		reasons.append("lege eine feste Nachtank-Regel an")
+	if fuel_have < 300 * fuel_vehicles and cash > 3000.0:
 		var fuel := _supply(res, "Treibstoff", 400)
 		if not fuel.is_empty() and float(fuel.preis) < float(res.nachtanken_ohne_vorrat_preis_l):
-			actions.append({"action": "buy_supplies", "resource_id": fuel.id, "amount": 400 * mini(3, obs.fahrzeuge.size())})
-			reasons.append("kaufe Treibstoff auf Vorrat (%.2f statt %.2f EUR/l)" % [fuel.preis, res.nachtanken_ohne_vorrat_preis_l])
+			actions.append({"action": "buy_supplies", "resource_id": fuel.id, "amount": 400 * mini(2, fuel_vehicles)})
+			reasons.append("bestelle Treibstoff früh (%.2f EUR/l, Lieferung dauert)" % fuel.preis)
 	var growth: Array = []   # Investitionen laufen als Plan mit einzeln ausgefuehrten Schritten
 	var yard: Dictionary = obs.get("betriebshof", {})
 	var yard_sug: Dictionary = yard.get("bauvorschlaege_xy_rot", {})

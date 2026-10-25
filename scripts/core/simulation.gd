@@ -366,7 +366,15 @@ func _update_vehicle(v: FleetVehicle, dt: float) -> void:
 			elif not at_depot(v) and v.stops.is_empty() and game_min - v.idle_since > 20.0:
 				route(v, nearest_depot_road(v.owner, v.tile()), "returning")
 		"broken":
-			if v.held_by == "":   # ohne Reparatur vor Ort laeuft die Abschlepp-Frist
+			if v.no_fuel:
+				var pc := companies[v.operator if v.operator >= 0 else v.owner]
+				v.timer -= dt * Catalog.GAME_MIN_PER_SIM_SEC
+				if pc.fuel >= 30.0:
+					v.no_fuel = false
+					resume_vehicle(v)
+				elif v.timer <= 30.0:
+					_emergency_refuel(v, pc)
+			elif v.held_by == "":   # ohne Reparatur vor Ort laeuft die Abschlepp-Frist
 				v.timer -= dt * Catalog.GAME_MIN_PER_SIM_SEC
 				if v.timer <= 0.0:
 					tow_to_workshop(v)
@@ -406,11 +414,14 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 		var c := companies[payer]
 		var own := minf(liters, c.fuel)
 		c.fuel -= own
-		var extra := (liters - own) * resources.emergency_fuel_price()
-		_fuel[payer] += extra
+		if own < liters and v.state != "broken":
+			# Tank leer: das Fahrzeug bleibt liegen (kein stiller Notkauf). Es geht weiter, sobald das Depot wieder Treibstoff hat
+			# oder nach 90 Minuten die kostenpflichtige Notbetankung kommt.
+			v.no_fuel = true
+			break_vehicle(v, "Tank leer")
 		var kc: Contract = contracts.get(v.contract_id)
 		if kc:
-			kc.fuel_cost += own * ResourceMarket.FUEL_BASE_PRICE + extra   # Vorrat zum Grundpreis bewertet
+			kc.fuel_cost += own * ResourceMarket.FUEL_BASE_PRICE   # Vorrat zum Grundpreis bewertet
 		v.condition = maxf(0.0, v.condition - moved * float(spec.wear))
 		var tired := 2.0 if driver_of(v) != null and driver_of(v).fatigue >= 95.0 else 1.0
 		if v.condition < Catalog.BREAKDOWN_THRESHOLD and rng.randf() < 0.004 * moved * tired * wx.breakdown_factor(v.condition >= 60.0):
@@ -431,8 +442,22 @@ func break_vehicle(v: FleetVehicle, reason: String) -> void:
 	decisions.note(v.owner, "auto", "%s ausgefallen (%s)" % [v.display_name(), reason], {"vehicle_id": v.id})
 	world_events.note_breakdown(v, reason)
 	log_event("%s: %s ist ausgefallen (%s)." % [companies[v.owner].company_name, v.display_name(), reason], "warn", v.owner)
-	notify(v.owner, "%s ausgefallen (%s): Mechaniker schicken (repair_vehicle mit worker_id) oder es wird in 120 min abgeschleppt." % [v.display_name(), reason])
+	if v.no_fuel:
+		notify(v.owner, "%s liegt mit leerem Tank fest. Treibstoff im Depot bestellen (buy_supplies); sonst kommt in 90 min die teure Notbetankung." % v.display_name())
+	else:
+		notify(v.owner, "%s ausgefallen (%s): Mechaniker schicken (repair_vehicle mit worker_id) oder es wird in 120 min abgeschleppt." % [v.display_name(), reason])
 	sfx.emit("alert")
+
+
+## Notbetankung am Straßenrand nach 90 Minuten: teuer (Notpreis plus Pauschale), aber das Fahrzeug faehrt weiter.
+func _emergency_refuel(v: FleetVehicle, payer: Company) -> void:
+	var liters := 60.0
+	var cost := liters * resources.emergency_fuel_price() + 80.0
+	payer.ledger.book("fuel", -cost, true, "Notbetankung " + v.display_name(), game_min)
+	payer.fuel = minf(payer.fuel_cap, payer.fuel + liters)
+	v.no_fuel = false
+	notify(payer.id, "Notbetankung für %s: %s (Tank war leer). Besser rechtzeitig Treibstoff bestellen (schedule_refueling)." % [v.display_name(), Catalog.money(cost)])
+	resume_vehicle(v)
 
 
 ## Nach Reparatur vor Ort: unterbrochene Taetigkeit fortsetzen.

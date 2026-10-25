@@ -21,7 +21,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"reputation": snappedf(c.reputation, 0.1), "sicherheitsstufe": c.security_level, "versicherung": c.insurance,
 		"stellplaetze": "%d/%d" % [c.vehicle_ids.size(), c.fleet_limit()],
 		"depots": c.depots.map(func(s): return {"id": s, "viertel": Catalog.DISTRICTS[sim.city.building(s).district]}),
-		"vorraete": {"treibstoff_l": int(c.fuel), "ersatzteile": c.parts},
+		"vorraete": {"treibstoff_l": int(c.fuel), "treibstoff_unterwegs_l": int(sim.resources.pending_fuel(cid)), "nachtank_regel": not c.fuel_rule.is_empty(), "ersatzteile": c.parts},
 		"stammkunden": _loyal(sim, cid),
 		"buero": {"zentrale_stufe": maxi(c.office_level, c.plot_office_level), "internet": c.internet_level,
 			"bueros": sim.executor.office_sites(cid).map(func(s): return {"id": s, "name": sim.city.building(s).name}),

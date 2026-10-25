@@ -27,6 +27,7 @@ var load := {}               # Ladung: Auftrags-ID -> Menge
 var parking := ""            # zugeordneter Stellplatz/Halle (Einrichtungs-ID)
 var bay_pref := ""           # bevorzugte Laderampe
 var clean_until := 0.0       # gepflegt (Waschplatz) bis Spielminute
+var no_fuel := false             # Tank leer: Fahrzeug steht, bis Treibstoff da ist oder die Notbetankung kommt
 var operator := -1           # Mieter (Kapazitaetsvermietung); -1 = Halter betreibt selbst
 var held_by := ""            # Aufgaben-ID, die das Fahrzeug festhaelt (Reparatur vor Ort)
 var resume_state := ""       # Zustand vor einer Panne/Sabotage (wird nach Reparatur fortgesetzt)
@@ -56,7 +57,7 @@ func to_dict() -> Dictionary:
 		"condition": condition, "state": state, "contract_id": contract_id, "queue": queue, "timer": timer,
 		"odometer": odometer, "idle_since": idle_since, "cargo": cargo, "x": pos.x, "y": pos.y,
 		"goal": [goal.x, goal.y], "held_by": held_by, "stops": stops, "load": load, "operator": operator, "parking": parking, "bay_pref": bay_pref,
-		"clean_until": clean_until, "resume_state": resume_state, "resume_timer": resume_timer}
+		"clean_until": clean_until, "resume_state": resume_state, "resume_timer": resume_timer, "no_fuel": no_fuel}
 
 
 static func from_dict(d: Dictionary) -> FleetVehicle:
@@ -78,6 +79,7 @@ static func from_dict(d: Dictionary) -> FleetVehicle:
 	v.parking = d.get("parking", "")
 	v.bay_pref = d.get("bay_pref", "")
 	v.clean_until = float(d.get("clean_until", 0.0))
+	v.no_fuel = bool(d.get("no_fuel", false))
 	for st in v.stops:
 		st.menge = int(st.menge)
 	for kid in d.get("load", {}):

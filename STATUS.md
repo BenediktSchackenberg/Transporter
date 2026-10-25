@@ -115,3 +115,10 @@ Handel, Sabotage (Ruf/Depot), Spielende nach aktiver Echtzeit (max. 240 min), Sp
 - **Zusätzlich fertig:** Treibstoffplanung (`compare_fuel_options`, `schedule_refueling`, Wetter erhöht Verbrauch), Gebäudezustand (Stadtgebäude und Firmeneinrichtungen, Verfall, Pflege durch Eigentümer, `fund_maintenance`, `commission_renovation`, sichtbare Abnutzung, Viertelmittel im Lage-Reiter).
 - **Ebenfalls fertig:** Nachrichten-Adapter in drei Ebenen (gemeldet, Einschätzung der Engine, begrenztes Spielereignis; Duplikatschutz, Schlüssel `NEWS_API_KEY`), Gesundheit und Erholung (`schedule_rest`, Krankheit), `offer_training`, `request_replacement_worker`, Ansicht Haushalte im Reiter Wirtschaft, 24 weitere Gebäudevarianten und vier neue Haustypen.
 - **Offen:** Stadtviertel-Entwicklung mit Wirkung auf die Kundennachfrage, öffentliche Haushalte und Straßen (kommen mit Auftrag 4). Steuern und Sozialabgaben folgen mit Auftrag 4 (bis dahin Lohn = Nettolohn).
+
+## Fehlerbehebung nach externer Prüfung (25.10.2026)
+1. `repay_loan` mit fremder Kredit-ID wird abgelehnt (Eigentumsprüfung vor jeder Buchung).
+2. Die Veraltet-Grenze für KI-Antworten wächst mit der Simulationsgeschwindigkeit; bei 16× gelten dieselben realen Sekunden wie bei 1×.
+3. Vorzeitige Ablösung zieht überfällige Raten samt Zinsen und Verzugszuschlag zuerst ein; kein Kredit gilt als getilgt, solange Forderungen offen sind.
+4. Treibstoff wird gezapft (belegte Zapfsäulen = Wartezeit) und erst bei Ankunft im Depot gutgeschrieben (Tankwagen gegen Gebühr oder eigener Transportauftrag Tankstelle → Depot). Ein leerer Tank lässt das Fahrzeug liegen (kein stiller Notkauf); es fährt weiter, sobald Treibstoff im Depot ist, sonst kommt nach 90 Minuten die teure Notbetankung. Die Demo-KI bestellt früh und nutzt eine feste Nachtank-Regel.
+5. Wetter-Speichertest vergleicht den Zeitstempel mit Toleranz.

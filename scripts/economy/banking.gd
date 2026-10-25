@@ -214,19 +214,46 @@ func next_due(l: Dictionary) -> Dictionary:
 
 
 ## Vorzeitige (Teil-)Rueckzahlung; neuer Plan ueber die Restlaufzeit, 1 % Gebuehr auf den getilgten Betrag.
-func early_repay(loan_id: String, amount: float) -> Dictionary:
+func early_repay(loan_id: String, amount: float, caller: int = -1) -> Dictionary:
 	var l: Dictionary = loans.get(loan_id, {})
 	if l.is_empty() or l.status not in ["laufend", "rueckstand"]:
 		return {"ok": false, "msg": "Kredit %s ist nicht offen." % loan_id}
+	if caller >= 0 and int(l.owner) != caller:
+		return {"ok": false, "msg": "Kredit %s gehört dir nicht." % loan_id}
 	var c := sim.company(l.owner)
-	amount = minf(amount, float(l.outstanding))
+	# Ueberfaellige Raten samt Verzugszuschlag werden zuerst eingezogen; sonst gingen sie bei der Ablösung verloren.
+	var arrears := 0.0
+	for r in l.plan:
+		if r.status == "rueckstand":
+			arrears += float(r.pay)
+	var overdue := arrears + float(l.fees_due)
+	var principal_overdue := 0.0
+	for r in l.plan:
+		if r.status == "rueckstand":
+			principal_overdue += float(r.principal)
+	amount = minf(amount, maxf(0.0, float(l.outstanding) - principal_overdue))
 	var fee := snappedf(amount * EARLY_FEE, 0.01)
-	if c.ledger.cash < amount + fee:
-		return {"ok": false, "msg": "Nicht genug Bargeld (%s inkl. %s Gebühr)." % [Catalog.money(amount + fee), Catalog.money(fee)]}
+	if c.ledger.cash < overdue + amount + fee:
+		return {"ok": false, "msg": "Nicht genug Bargeld: %s (überfällig %s inkl. Zuschlag, Tilgung %s, Gebühr %s)." % [
+			Catalog.money(overdue + amount + fee), Catalog.money(overdue), Catalog.money(amount), Catalog.money(fee)]}
 	var B: Dictionary = BANKS[l.bank]
-	c.ledger.repay(amount, B.id)
-	c.ledger.book("interest", -fee, true, "Vorfälligkeitsentschädigung " + l.id, sim.game_min, B.id)
+	for r in l.plan:
+		if r.status == "rueckstand":
+			c.ledger.book("interest", -float(r.interest), true, "Kreditzins %s Rate %d (überfällig)" % [l.id, r.n], sim.game_min, B.id)
+			c.ledger.repay(float(r.principal), B.id)
+			l.outstanding = snappedf(float(l.outstanding) - float(r.principal), 0.01)
+			r.status = "bezahlt"
+			if l.arrears > 0:
+				l.arrears -= 1
+	if float(l.fees_due) > 0.0:
+		c.ledger.book("interest", -float(l.fees_due), true, "Verzugszuschlag " + l.id, sim.game_min, B.id)
+		l.fees_due = 0.0
+	if amount > 0.0:
+		c.ledger.repay(amount, B.id)
+		c.ledger.book("interest", -fee, true, "Vorfälligkeitsentschädigung " + l.id, sim.game_min, B.id)
 	l.outstanding = snappedf(float(l.outstanding) - amount, 0.01)
+	if l.status == "rueckstand" and l.arrears == 0:
+		l.status = "laufend"
 	var open: Array = l.plan.filter(func(r): return r.status != "bezahlt")
 	if l.outstanding <= 0.005:
 		for r in open:

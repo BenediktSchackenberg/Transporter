@@ -367,6 +367,8 @@ func _material_contract(cid: int, f: Dictionary) -> String:
 
 ## Lieferung eines internen Materialauftrags (vom Simulationskern aufgerufen, kein Umsatz).
 func material_delivered(k: Contract) -> void:
+	if sim.resources.fuel_delivered(k.internal):
+		return
 	sim.trader.shipment_delivered(k.internal)   # Ware vom Bauhof an den Zielort (nichts zu tun bei reinen Baustellenauftraegen ohne Handel)
 	if k.internal.begins_with("S"):   # reiner Handelstransport ohne Baustelle
 		return

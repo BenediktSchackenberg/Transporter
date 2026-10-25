@@ -21,8 +21,8 @@ const SCHEMA := {
 		"auto_repair": "bool?", "reassign_blocked": "bool?", "darf_teile_kaufen": "bool?", "repair_budget": "number?"},
 		"desc": "Ziel und Befugnisse: prioritaet fristgerecht|kosten|auslastung; Fahrer einteilen, Reparaturen veranlassen, Aufgaben umverteilen, Ersatzteile kaufen; repair_budget = Geld für Routine. Investitionen/Sabotage nie."},
 	"request_progress_report": {"params": {"foreman_id": "string"}, "desc": "Sofortigen Bericht des Vorarbeiters anfordern."},
-	"buy_supplies": {"params": {"resource_id": "string", "amount": "number"},
-		"desc": "Treibstoff (Liter) an einer Tankstelle oder Ersatzteile in einer Werkstatt kaufen (Bestellung, Bestand dort sinkt)."},
+	"buy_supplies": {"params": {"resource_id": "string", "amount": "number", "lieferung": "string?"},
+		"desc": "Treibstoff (Liter) an einer Tankstelle oder Ersatzteile in einer Werkstatt kaufen. Diesel wird gezapft (belegte Zapfsäulen = Wartezeit) und kommt erst später im Depot an: lieferung=liefern (Tankwagen, Gebühr, Standard) oder abholen (eigener Transportauftrag Tankstelle→Depot, ein Fahrzeug muss fahren). Ersatzteile sofort."},
 	"guard_target": {"params": {"worker_id": "string", "site_id": "int?", "vehicle_id": "int?"},
 		"desc": "Arbeiter bewacht ein eigenes Depot oder Fahrzeug (erhöht Entdeckungschance bei Sabotage)."},
 	"attempt_vehicle_sabotage": {"params": {"worker_id": "string", "vehicle_id": "int"},
@@ -187,7 +187,7 @@ func run(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			P.send_report(f)
 			return {"ok": true, "msg": "Bericht von %s angefordert (siehe Ergebnisse)." % f.name}
 		"buy_supplies":
-			return sim.resources.buy_supplies(cid, str(a.resource_id), ActionExecutor._f(a.amount))
+			return sim.resources.buy_supplies(cid, str(a.resource_id), ActionExecutor._f(a.amount), "abholen" if str(a.get("lieferung", "liefern")) == "abholen" else "liefern")
 		"attempt_vehicle_sabotage":
 			return _sabotage(cid, a)
 		"poach_worker":

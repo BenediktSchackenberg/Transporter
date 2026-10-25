@@ -436,6 +436,11 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			var loan: Dictionary = sim.banking.grant(q, cid, coll, _s(a.get("zweck", "")))
 			return {"ok": true, "msg": "Kredit %s: %s erhalten. %s Schulden: %s." % [loan.id, Catalog.money(amount), q.msg, Catalog.money(L.debt)]}
 		"repay_loan":
+			var asked := _s(a.get("kredit_id", ""))
+			if asked != "":
+				var target: Dictionary = sim.banking.loans.get(asked, {})
+				if target.is_empty() or int(target.owner) != cid:
+					return {"ok": false, "msg": "Kredit %s gehört dir nicht oder existiert nicht." % asked}
 			var amount := minf(_f(a.amount), L.debt)
 			if amount <= 0.0:
 				return {"ok": false, "msg": "Keine Schulden oder Betrag ungültig."}
@@ -445,7 +450,7 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 				if open.is_empty():
 					return {"ok": false, "msg": "Kein offener Kredit."}
 				lid = open[0].id
-			return sim.banking.early_repay(lid, amount)
+			return sim.banking.early_repay(lid, amount, cid)
 		"bid_auction":
 			return sim.insolvency.bid(cid, _s(a.auction_id), _f(a.amount))
 		"buy_material":

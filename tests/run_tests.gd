@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1360,7 +1360,7 @@ func test_weather_model() -> void:
 	run(s, 400.0)
 	ok(s.wx.cur.source == "open-meteo" and int(s.wx.cur.temp) == 9 and s.game_min > 700.0, "800 Spielminuten ändern echte Wetterdaten nicht (Spielzeit %.0f)" % s.game_min)
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
-	ok(s2.wx.cur.source == "open-meteo" and int(s2.wx.cur.temp) == 9 and s2.wx.fetched_unix == s.wx.fetched_unix, "Wetter übersteht Speichern/Laden")
+	ok(s2.wx.cur.source == "open-meteo" and int(s2.wx.cur.temp) == 9 and absf(s2.wx.fetched_unix - s.wx.fetched_unix) < 0.01, "Wetter übersteht Speichern/Laden")
 	var s3 := new_sim(2)
 	run(s3, 300.0)
 	ok(s3.wx.cur.source == "simuliert", "Ersatzwetter ist als simuliert markiert")
@@ -2379,11 +2379,16 @@ func test_fuel_planner() -> void:
 	ok(rule.ok and c.fuel_rule.below == 200.0, "Regel gespeichert")
 	c.fuel = 150.0
 	var cash0 := c.ledger.cash
-	run(s, 60.0)
-	ok(c.fuel > 600.0 and c.ledger.cash < cash0, "Engine tankt automatisch, wenn der Vorrat unter die Grenze fällt (%d l)" % int(c.fuel))
+	run(s, 35.0)   # eine halbe Stunde: bestellt und bezahlt, der Tankwagen ist noch unterwegs
+	ok(c.ledger.cash < cash0 and s.resources.pending_fuel(0) > 0.0 and c.fuel < 300.0, "Engine bestellt automatisch; der Treibstoff ist noch unterwegs (%d l im Depot, %d l unterwegs)" % [int(c.fuel), int(s.resources.pending_fuel(0))])
+	var pending_before: float = s.resources.pending_fuel(0)
+	run(s, 10.0)
+	ok(s.resources.pending_fuel(0) <= pending_before + 0.01, "keine doppelte Bestellung, solange Treibstoff unterwegs ist")
+	run(s, 120.0)
+	ok(c.fuel > 600.0 and s.resources.pending_fuel(0) == 0.0, "nach der Lieferung steigt der Vorrat im Depot (%d l)" % int(c.fuel))
 	var fuel_after := c.fuel
 	run(s, 10.0)
-	ok(c.fuel <= fuel_after + 0.01, "keine doppelte Bestellung bei ausreichendem Vorrat")
+	ok(c.fuel <= fuel_after + 0.01, "keine weitere Bestellung bei ausreichendem Vorrat")
 	ok(identity_ok(s), "Geld erhalten mit Nachtank-Regel")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.companies[0].fuel_rule.below == 200.0, "Regel nach Laden")
@@ -2570,3 +2575,124 @@ func test_news_feed() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.news.items.size() == s.news.items.size() and s2.news.ingest(p).is_empty(), "Meldungen und Duplikatschutz nach Laden")
 	ok("HAUSHALTE" in LiveText.households(s), "Ansicht Haushalte")
+
+
+func test_review_fixes() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var a := s.companies[0]
+	var b := s.companies[1]
+	# 1) Kredit eines anderen Unternehmens kann nicht zurueckgezahlt werden
+	var coll := s.banking.best_collateral(1)
+	var loan := s.executor.execute(1, {"action": "request_loan", "bank": "B2", "amount": 8000, "monate": 6, "fahrzeug_id": coll})
+	ok(loan.ok, "Kredit des anderen Unternehmens: " + loan.msg)
+	var lid: String = s.banking.loans.keys()[0]
+	var cash_b := b.ledger.cash
+	var cash_a := a.ledger.cash
+	var foreign := s.executor.execute(0, {"action": "repay_loan", "amount": 500, "kredit_id": lid})
+	ok(not foreign.ok and "gehört dir nicht" in foreign.msg, "fremde Kredit-ID wird abgelehnt: " + foreign.msg)
+	ok(is_equal_approx(b.ledger.cash, cash_b) and is_equal_approx(a.ledger.cash, cash_a) and is_equal_approx(s.banking.loans[lid].outstanding, 8000.0), "fremdes Geld und Kredit bleiben unberührt")
+	# 3) Vorzeitige Abloesung zieht ueberfaellige Raten samt Zuschlag ein
+	var l: Dictionary = s.banking.loans[lid]
+	l.plan[0].status = "rueckstand"
+	l.arrears = 1
+	l.fees_due = 7.5
+	l.status = "rueckstand"
+	var overdue: float = float(l.plan[0].pay) + 7.5
+	var cash_before := b.ledger.cash
+	var interest_before: float = b.ledger.totals.get("interest", 0.0)
+	var payoff := s.executor.execute(1, {"action": "repay_loan", "amount": 99999, "kredit_id": lid})
+	ok(payoff.ok and l.status == "getilgt" and l.outstanding == 0.0, "vollständige Ablösung: " + payoff.msg)
+	ok(b.ledger.totals.get("interest", 0.0) < interest_before - float(l.plan[0].interest) - 7.0, "überfällige Zinsen und Verzugszuschlag wurden eingezogen")
+	ok(cash_before - b.ledger.cash >= 8000.0 + overdue - float(l.plan[0].principal) - 1.0 and b.ledger.debt < 0.01, "gezahlt wurden Restschuld, Überfälliges und Gebühr")
+	ok(identity_ok(s), "Geld und Bilanz stimmen nach der Ablösung")
+	var all_paid := true
+	for r in l.plan:
+		all_paid = all_paid and r.status == "bezahlt"
+	ok(all_paid, "keine offene Rate bleibt zurück")
+	# 2) Veraltet-Grenze waechst mit der Geschwindigkeit
+	var ctl := AgentController.new()
+	ctl.setup_for_test(s, 0)
+	ctl.speed = 16.0
+	var content := '{"summary":"Warte.","actions":[{"action":"wait"}],"memory":""}'
+	var req := ctl.begin_request_for_test()
+	s.game_min += 90.0 * 16.0 * 0.5   # entspricht etwa 22 echten Sekunden bei 16x
+	ctl.handle_result(req, {"ok": true, "content": content, "usage": {}})
+	ok(not ctl.last_error.contains("veraltet"), "bei 16× ist eine Antwort nach wenigen echten Sekunden nicht veraltet")
+	var req2 := ctl.begin_request_for_test()
+	s.game_min += 90.0 * 16.0 + 10.0
+	ctl.handle_result(req2, {"ok": true, "content": content, "usage": {}})
+	ok(ctl.last_error.contains("veraltet"), "sehr späte Antworten bleiben gesperrt")
+	ctl.speed = 1.0
+	var req3 := ctl.begin_request_for_test()
+	s.game_min += 95.0
+	ctl.handle_result(req3, {"ok": true, "content": content, "usage": {}})
+	ok(ctl.last_error.contains("veraltet"), "bei 1× gilt weiter die alte Grenze")
+	ctl.free()
+
+
+func test_physical_fueling() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var c := s.companies[0]
+	var st: Dictionary = s.resources.supplies.values().filter(func(x): return x.kind == "fuel")[0]
+	st.stock = 3000.0
+	st.busy = []
+	c.fuel = 0.0
+	c.fuel_cap = 5000.0
+	var cash0 := c.ledger.cash
+	var r := s.resources.buy_supplies(0, st.id, 400.0)
+	ok(r.ok and "Tankwagen" in r.msg, "Diesel wird gezapft und per Tankwagen geliefert: " + r.msg.left(90))
+	ok(c.fuel == 0.0 and s.resources.pending_fuel(0) == 400.0, "der Vorrat steigt nicht sofort, 400 l sind unterwegs")
+	ok(cash0 - c.ledger.cash > 400.0 * 1.4, "Kraftstoff und Lieferung sind bezahlt")
+	ok(s.resources.buy_supplies(0, st.id, 5000.0).ok == false, "Tankgröße zählt auch unterwegs befindliche Liter")
+	run(s, 8.0)
+	ok(c.fuel == 0.0, "nach wenigen Minuten ist noch nichts angekommen")
+	run(s, 120.0)
+	ok(c.fuel == 400.0 and s.resources.pending_fuel(0) == 0.0, "nach der Fahrt des Tankwagens steht der Treibstoff im Depot (%d l)" % int(c.fuel))
+	# belegte Saeulen verzoegern die Lieferung
+	st.busy = [s.game_min + 500.0, s.game_min + 500.0, s.game_min + 500.0, s.game_min + 500.0]
+	c.fuel = 0.0
+	var due0: float = s.game_min
+	var r2 := s.resources.buy_supplies(0, st.id, 100.0)
+	ok(r2.ok and "Wartezeit" in r2.msg and float(s.resources.fuel_deliveries[-1].due) > due0 + 480.0, "belegte Zapfsäulen verzögern die Lieferung")
+	# Abholen: eigener Transportauftrag Tankstelle -> Depot
+	st.busy = []
+	var fuel_before := c.fuel
+	var r3 := s.resources.buy_supplies(0, st.id, 200.0, "abholen")
+	ok(r3.ok and s.resources.fuel_shipments.size() == 1 and c.fuel == fuel_before, "Abholung: Transportauftrag statt sofortigem Vorrat: " + r3.msg.left(80))
+	var k: Contract = s.contracts.values().filter(func(x): return x.internal.begins_with("F"))[0]
+	ok(k.owner == 0 and k.reward == 0.0 and k.pickup == int(st.building) and k.dropoff == c.depots[0], "interner Auftrag von der Tankstelle zum Depot")
+	s.deliver_contract(s.company_vehicles(0)[0], k)
+	ok(c.fuel == fuel_before + 200.0 and s.resources.fuel_shipments.is_empty(), "nach Abliefern steigt der Vorrat")
+	ok(identity_ok(s), "Geld erhalten beim physischen Tanken")
+	# leerer Tank: Fahrzeug bleibt liegen, keine stille Notberechnung
+	var v: FleetVehicle = s.company_vehicles(0)[0]
+	c.fuel = 0.0
+	var fuel_cost0: float = c.ledger.totals.get("fuel", 0.0)
+	v.state = "idle"
+	s.route(v, s.nearest_building_of("dealer", v.tile()).road, "returning")
+	var guard := 0
+	while v.state != "broken" and guard < 4000:
+		s.step(0.1)
+		guard += 1
+	ok(v.state == "broken" and v.no_fuel, "Tank leer: Fahrzeug bleibt liegen")
+	ok(c.ledger.totals.get("fuel", 0.0) >= fuel_cost0 - 0.001, "kein automatischer Notkauf während der Fahrt")
+	c.fuel = 100.0
+	for i in 5:
+		s.step(0.2)
+	ok(v.state != "broken" and not v.no_fuel, "mit Treibstoff im Depot fährt das Fahrzeug weiter")
+	# Notbetankung nach 90 Minuten
+	c.fuel = 0.0
+	v.state = "idle"
+	s.route(v, s.nearest_building_of("dealer", v.tile()).road, "returning")
+	guard = 0
+	while v.state != "broken" and guard < 4000:
+		s.step(0.1)
+		guard += 1
+	var cash_e := c.ledger.cash
+	run(s, 60.0)   # mehr als 90 Spielminuten
+	ok(not v.no_fuel and c.ledger.cash < cash_e - 80.0, "nach 90 Minuten kommt die teure Notbetankung")
+	ok(identity_ok(s), "Geld erhalten nach Notbetankung")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.resources.fuel_deliveries.size() == s.resources.fuel_deliveries.size() and identity_ok(s2), "Lieferungen nach Laden")

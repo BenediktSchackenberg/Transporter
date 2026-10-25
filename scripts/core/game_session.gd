@@ -228,6 +228,7 @@ func _process(delta: float) -> void:
 	sim.remaining_real_min = remaining_seconds() / 60.0
 	for ctl in controllers:
 		ctl.active = running and sim.company(ctl.cid).is_active()
+		ctl.speed = float(speed())
 		ctl.remaining_real_min = sim.remaining_real_min
 	if running:
 		active_seconds += dt

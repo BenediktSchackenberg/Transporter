@@ -60,9 +60,9 @@ static func set_rule(sim: Simulation, cid: int, below_l: float, buy_l: float, st
 ## Alle 30 Spielminuten: Regeln ausfuehren (Routine, keine KI-Anfrage noetig).
 static func run_rules(sim: Simulation) -> void:
 	for c in sim.companies:
-		if c.fuel_rule.is_empty() or not c.is_active() or c.fuel >= float(c.fuel_rule.below):
+		if c.fuel_rule.is_empty() or not c.is_active() or c.fuel + sim.resources.pending_fuel(c.id) >= float(c.fuel_rule.below):
 			continue
-		var want := minf(float(c.fuel_rule.buy), c.fuel_cap - c.fuel)
+		var want := minf(float(c.fuel_rule.buy), c.fuel_cap - c.fuel - sim.resources.pending_fuel(c.id))
 		if want < 50.0:
 			continue
 		var sid: String = str(c.fuel_rule.station)

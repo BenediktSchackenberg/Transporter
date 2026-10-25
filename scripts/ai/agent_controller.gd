@@ -30,6 +30,7 @@ var status := "bereit"
 var last_error := ""
 var fallback_active := false
 var real_time := 0.0
+var speed := 1.0                  # aktuelle Simulationsgeschwindigkeit (die Veraltet-Grenze waechst mit ihr)
 
 var _inflight := -1
 var _inflight_obs_min := 0.0
@@ -169,7 +170,7 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 		_consecutive_fail += 1
 		_check_fallback()
 		return
-	var stale_limit := STALE_GAME_MIN_OLLAMA if config.get("provider", "") == "ollama" else STALE_GAME_MIN
+	var stale_limit := (STALE_GAME_MIN_OLLAMA if config.get("provider", "") == "ollama" else STALE_GAME_MIN) * maxf(speed, 1.0)
 	if sim.game_min - _inflight_obs_min > stale_limit:
 		last_error = "Antwort veraltet – verworfen"
 		status = last_error
