@@ -192,6 +192,22 @@ func is_icy() -> bool:
 
 
 ## Fahrgeschwindigkeit (Faktor), Verladedauer im Freien (Faktor >= 1), Bautempo (Faktor <= 1), Pannenrisiko (Faktor).
+## Mehrverbrauch an Treibstoff durch Wetter: Regen, Schnee und Kaelte erhoehen den Verbrauch, Hitze (Klimaanlage) leicht.
+func fuel_factor() -> float:
+	var f := 1.0
+	if is_snow():
+		f += 0.15
+	elif is_rain():
+		f += 0.06
+	if is_cold():
+		f += 0.08
+	if is_hot():
+		f += 0.05
+	if is_strong_wind():
+		f += 0.04
+	return f
+
+
 func drive_factor() -> float:
 	var f := 1.0
 	if is_heavy_rain():

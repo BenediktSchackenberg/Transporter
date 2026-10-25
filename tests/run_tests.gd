@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2354,3 +2354,40 @@ func test_wage_arrears_in_insolvency() -> void:
 	ok(c.ledger.payables == 0.0, "keine Lohnverbindlichkeiten nach Schließung")
 	ok(staff_ids.all(func(id): return s.personnel.workers[id].employer != 1 or s.companies[1].generation > 1), "Mitarbeiter sind nicht mehr beim Insolventen angestellt")
 	ok(identity_ok(s), "Geld, Waren und Bilanzen stimmen")
+
+
+func test_fuel_planner() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var c := s.companies[0]
+	var opts := FuelPlanner.compare(s, 0, 500.0)
+	ok(opts.size() > 3, "Tankstellen werden verglichen (%d)" % opts.size())
+	ok(opts[0].gesamt <= opts[1].gesamt and opts[0].gesamt <= opts[-1].gesamt, "günstigste Gesamtkosten zuerst")
+	var r := s.executor.execute(0, {"action": "compare_fuel_options", "liters": 400})
+	ok(r.ok and "Annahmen" in r.msg and "Notpreis" in r.msg, "Vergleich nennt Annahmen und Ersparnis: " + r.msg.left(80))
+	# keine Tankstelle mit so viel Bestand
+	for sid in s.resources.supplies:
+		if s.resources.supplies[sid].kind == "fuel":
+			s.resources.supplies[sid].stock = 10.0
+	ok(not FuelPlanner.compare_text(s, 0, 500.0).ok, "ohne Bestand kein Vorschlag")
+	for sid in s.resources.supplies:
+		if s.resources.supplies[sid].kind == "fuel":
+			s.resources.supplies[sid].stock = 3000.0
+	# feste Regel
+	ok(not s.executor.execute(0, {"action": "schedule_refueling", "below_l": 100, "buy_l": 99999}).ok, "Regel über Tankgröße abgelehnt")
+	var rule := s.executor.execute(0, {"action": "schedule_refueling", "below_l": 200, "buy_l": 600})
+	ok(rule.ok and c.fuel_rule.below == 200.0, "Regel gespeichert")
+	c.fuel = 150.0
+	var cash0 := c.ledger.cash
+	run(s, 60.0)
+	ok(c.fuel > 600.0 and c.ledger.cash < cash0, "Engine tankt automatisch, wenn der Vorrat unter die Grenze fällt (%d l)" % int(c.fuel))
+	var fuel_after := c.fuel
+	run(s, 10.0)
+	ok(c.fuel <= fuel_after + 0.01, "keine doppelte Bestellung bei ausreichendem Vorrat")
+	ok(identity_ok(s), "Geld erhalten mit Nachtank-Regel")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.companies[0].fuel_rule.below == 200.0, "Regel nach Laden")
+	ok(s.executor.execute(0, {"action": "schedule_refueling", "below_l": 0, "buy_l": 0}).ok and c.fuel_rule.is_empty(), "Regel löschen")
+	# Wetter erhoeht den Verbrauch
+	var w := Weather.new()
+	ok(is_equal_approx(w.fuel_factor(), 1.0) or w.fuel_factor() >= 1.0, "Verbrauchsfaktor ohne Wetter nicht unter 1")

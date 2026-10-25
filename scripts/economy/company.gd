@@ -42,6 +42,7 @@ var grace_until := -1.0         # Ende der Nachfrist bei Zahlungsverzug
 var administrator := ""         # Insolvenzverwalter
 var pending_form := ""
 var pending_form_due := 0.0
+var fuel_rule := {}             # feste Nachtank-Regel {below, buy, station} (FuelPlanner)
 var fuel_cap := 1000.0          # Tankgroesse in Litern (offenes Fasslager; Betriebstankstelle +3000)
 
 
@@ -81,7 +82,7 @@ func to_dict() -> Dictionary:
 		"key_events": key_events, "offices": offices, "office_level": office_level, "internet_level": internet_level,
 		"form": form, "founded_min": founded_min, "generation": generation, "status": status, "status_since": status_since,
 		"status_reason": status_reason, "grace_until": grace_until, "administrator": administrator, "pending_form": pending_form,
-		"pending_form_due": pending_form_due, "known": known.keys(), "property_cost": property_cost, "property_book": property_book, "land_book": land_book}
+		"pending_form_due": pending_form_due, "fuel_rule": fuel_rule, "known": known.keys(), "property_cost": property_cost, "property_book": property_book, "land_book": land_book}
 
 
 static func from_dict(d: Dictionary) -> Company:
@@ -111,6 +112,7 @@ static func from_dict(d: Dictionary) -> Company:
 	for k in d.get("known", []):
 		c.known[str(k)] = true
 	c.form = str(d.get("form", "einzel"))
+	c.fuel_rule = d.get("fuel_rule", {})
 	c.founded_min = float(d.get("founded_min", 0.0))
 	c.generation = int(d.get("generation", 1))
 	c.status = str(d.get("status", "aktiv"))

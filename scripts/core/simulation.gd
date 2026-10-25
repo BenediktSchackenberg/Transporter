@@ -396,7 +396,7 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 		var spec := v.spec()
 		v.odometer += moved
 		# Treibstoff zuerst aus dem eigenen Vorrat (beim Einkauf bezahlt), sonst Nachtanken zum Notpreis
-		var liters := moved * float(spec.cost_per_tile) * (1.0 + 0.15 * logistics.load_total(v) / float(spec.capacity)) / ResourceMarket.FUEL_BASE_PRICE
+		var liters := moved * float(spec.cost_per_tile) * (1.0 + 0.15 * logistics.load_total(v) / float(spec.capacity)) * wx.fuel_factor() / ResourceMarket.FUEL_BASE_PRICE
 		var payer: int = v.operator if v.operator >= 0 else v.owner   # bei Vermietung zahlt der Mieter den Treibstoff
 		var c := companies[payer]
 		var own := minf(liters, c.fuel)
@@ -801,6 +801,8 @@ func _minute_tick() -> void:
 	minute_index += 1
 	if minute_index % 60 == 0:
 		fuel.simulate_step()
+	if minute_index % 30 == 0:
+		FuelPlanner.run_rules(self)
 	var now := game_min
 	var day := GameCalendar.day_of(now)
 	if day != _last_day:

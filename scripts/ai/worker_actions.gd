@@ -27,6 +27,10 @@ const SCHEMA := {
 		"desc": "Arbeiter bewacht ein eigenes Depot oder Fahrzeug (erhöht Entdeckungschance bei Sabotage)."},
 	"attempt_vehicle_sabotage": {"params": {"worker_id": "string", "vehicle_id": "int"},
 		"desc": "Regelwidrig! Eigener Arbeiter legt ein gesichtetes, stehendes Fremdfahrzeug lahm. 800 EUR, Abklingzeit. Wird er erwischt, ist er für die Partie verloren."},
+	"compare_fuel_options": {"params": {"liters": "number?"},
+		"desc": "Tankstellen vergleichen: Preis, Entfernung zum Hauptdepot, Wartezeit an den Zapfsäulen, Gesamtkosten (Annahmen ausgewiesen) und Ersparnis gegenüber dem Notpreis."},
+	"schedule_refueling": {"params": {"below_l": "number", "buy_l": "number", "station": "string?"},
+		"desc": "Feste Nachtank-Regel: fällt dein Treibstoffvorrat unter below_l, kauft die Engine buy_l Liter (an station oder der günstigsten Tankstelle). below_l=0 löscht die Regel."},
 	"negotiate_wage": {"params": {"worker_id": "string", "wage": "number"},
 		"desc": "Lohn (EUR je Spielstunde) mit einem eigenen Mitarbeiter verhandeln. Er lehnt unter seinem Mindestlohn ab und nennt ihn; Kürzungen lehnt er ab. Unzufriedene Mitarbeiter (obs.personal_lage) kündigen irgendwann."},
 	"poach_worker": {"params": {"target": "int", "wage": "number"}, "desc": "Arbeiter eines Konkurrenten mit höherem Lohn abwerben (legal, 600 EUR)."},
@@ -52,6 +56,10 @@ func run(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 	match name:
 		"inspect_resource":
 			return sim.resources.inspect(cid, str(a.resource_id))
+		"compare_fuel_options":
+			return FuelPlanner.compare_text(sim, cid, ActionExecutor._f(a.get("liters", 500)) if a.get("liters") != null else 500.0)
+		"schedule_refueling":
+			return FuelPlanner.set_rule(sim, cid, ActionExecutor._f(a.below_l), ActionExecutor._f(a.buy_l), str(a.get("station", "")) if a.get("station") != null else "")
 		"negotiate_wage":
 			return sim.households.negotiate(cid, str(a.worker_id), float(a.wage))
 		"recruit_worker", "recruit_foreman":
