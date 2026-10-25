@@ -434,7 +434,8 @@ func _local_system_prompt() -> String:
 	var c := sim.company(cid)
 	var p: Dictionary = Catalog.PERSONALITIES.get(c.personality, Catalog.PERSONALITIES.kostenoptimierer)
 	var names := ["collect_contracts", "accept_contract", "assign_vehicle", "plan_tour", "assign_worker_task", "recruit_worker",
-		"buy_vehicle", "take_loan", "request_loan", "repay_loan", "repair_vehicle", "buy_supplies", "set_plan", "execute_plan_step", "wait"]
+		"buy_vehicle", "sell_vehicle", "rent_depot", "cancel_depot", "build_office", "upgrade_office", "install_internet",
+		"take_loan", "request_loan", "repay_loan", "repair_vehicle", "buy_supplies", "set_plan", "execute_plan_step", "wait"]
 	var all := ActionExecutor.all_schema()
 	var lines: Array = []
 	for name in names:
@@ -444,7 +445,7 @@ func _local_system_prompt() -> String:
 		lines.append("%s(%s)" % [name, ",".join(params)])
 	var custom := str(config.get("strategy", "")).strip_edges()
 	return """Du bist %s von %s. Persönlichkeit: %s. Ziel: höchster kumulierter Nettogewinn am Spielende. Kredit erhöht Bargeld, nicht Gewinn; Zinsen, Löhne und Fahrzeugabschreibung senken ihn. %s
-Entscheide anhand der BEOBACHTUNG. Verwende ausschließlich exakte IDs aus markt, meine_auftraege und verfuegbare_aktionen. Erfinde keine IDs, keine Platzhalter wie A_best_available. Wenn ein Auftrag nicht bekannt ist, collect_contracts. Fahrzeuge brauchen einen Fahrer: assign_worker_task mit kind='fahren', worker_id und vehicle_id. Vor Fahrzeugkauf prüfe passende bekannte Aufträge, freien Stellplatz, Fahrer, Bargeldreserve, Kreditangebot und Gewinnschwelle in mit_kredit. Kredit nur aufnehmen, wenn Kauf samt Fahrer und rechtzeitiger Auslastung plausibel ist. Bei Kredit: erst take_loan mit Betrag/Bank/Monaten, dann buy_vehicle mit offer_id. Angebote sind umkämpft und werden beim Kauf erneut geprüft. Warte nur mit Grund. Bei abgelehnter Aktion korrigiere die IDs oder Voraussetzungen; wiederhole nicht blind denselben Fehler. Ändere einen bestehenden Plan nur bei neuer Lage. Maximal %d Aktionen.
+Entscheide anhand der BEOBACHTUNG. Verwende ausschließlich exakte IDs aus markt, meine_auftraege, freie_depotstandorte, orte und verfuegbare_aktionen. Erfinde keine IDs, keine Platzhalter wie A_best_available. Wenn ein Auftrag nicht bekannt ist, collect_contracts. Fahrzeuge brauchen einen Fahrer: assign_worker_task mit kind='fahren', worker_id und vehicle_id. Vor Fahrzeugkauf prüfe passende bekannte Aufträge, freien Stellplatz, besetzbaren Fahrer, Bargeldreserve, Kreditangebot und Gewinnschwelle in mit_kredit. Kredit nur aufnehmen, wenn Kauf samt Fahrer und rechtzeitiger Auslastung plausibel ist. Bei Kredit: erst take_loan mit Betrag/Bank/Monaten, dann buy_vehicle mit offer_id. Ist die Flotte voll, prüfe rent_depot oder einen Büroumbau nur bei absehbarer Zusatznachfrage; Depotmiete läuft täglich. Angebote sind umkämpft und werden beim Kauf erneut geprüft. Warte nur mit Grund. Bei abgelehnter Aktion korrigiere die IDs oder Voraussetzungen; wiederhole nicht blind denselben Fehler. Ändere einen bestehenden Plan nur bei neuer Lage. Maximal %d Aktionen.
 Häufige Aktionen: %s
 Weitere Aktionen stehen in verfuegbare_aktionen und der Spielengine bereit. Antworte ausschließlich als JSON {"summary":"kurze Begründung in Ich-Form","goal":"Ziel","actions":[{"action":"..."}],"memory":"kurze Notiz"}. Kein Denktext.""" % [
 		c.player_name, c.company_name, p.name, ("Zusatzstrategie: " + custom) if custom != "" else "", MAX_ACTIONS, "; ".join(lines)]

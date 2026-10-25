@@ -269,10 +269,12 @@ static func _financed_vehicles(sim: Simulation, cid: int, known_open: Array) -> 
 		var free_driver: bool = sim.personnel.employed(cid).any(func(w): return w.role == "worker" and w.vehicle_id < 0 and sim.personnel.can_take(w, "gehen") == "")
 		var new_wage := 0.0
 		var hiring := 0.0
+		var driver_possible := free_driver
 		if not free_driver:
 			var candidates: Array = sim.personnel.available().filter(func(w): return w.role == "worker")
 			candidates.sort_custom(func(a, b): return a.wage < b.wage)
 			if not candidates.is_empty():
+				driver_possible = true
 				new_wage = float(candidates[0].wage)
 				hiring = float(candidates[0].hire_fee)
 		var day_cost := float(o.price) * Catalog.DEPRECIATION_PER_DAY + new_wage * 24.0 + float(best.zinsen_gesamt) / float(best.monate * GameCalendar.DAYS_PER_MONTH)
@@ -281,7 +283,7 @@ static func _financed_vehicles(sim: Simulation, cid: int, known_open: Array) -> 
 			"jahreszins_prozent": snappedf(float(best.rate) * 100.0, 0.1), "rate_monat": int(best.rate_monat),
 			"pfand_fahrzeug_id": best.pfand_fahrzeug_id, "passende_bekannte_auftraege": matching.size(),
 			"beispielauftrag_id": example, "beispiel_deckungsbeitrag_vor_fixkosten": int(contribution),
-			"zusaetzlicher_fahrer_lohn_h": new_wage, "anwerbung": int(hiring), "fixkosten_pro_spieltag_ca": int(day_cost),
+			"fahrer_besetzbar": driver_possible, "zusaetzlicher_fahrer_lohn_h": new_wage, "anwerbung": int(hiring), "fixkosten_pro_spieltag_ca": int(day_cost),
 			"auftraege_pro_spieltag_fuer_fixkosten_ca": ceili(day_cost / contribution) if contribution > 0.0 else -1})
 		if out.size() >= 6:
 			break
@@ -293,7 +295,7 @@ static func _financed_vehicles(sim: Simulation, cid: int, known_open: Array) -> 
 static func compact_for_local(obs: Dictionary) -> Dictionary:
 	var keys := ["zeit", "dein_ziel", "ich", "figur", "fahrzeuge", "meine_auftraege", "markt",
 		"unbekannte_offene_auftraege", "fahrzeugmodelle", "personal", "aufgaben", "ressourcen", "bank",
-		"verfuegbare_aktionen", "plan", "hinweis", "ereignisse", "lage", "angebote_an_dich"]
+		"verfuegbare_aktionen", "freie_depotstandorte", "orte", "plan", "hinweis", "ereignisse", "lage", "angebote_an_dich"]
 	var out := {}
 	for key in keys:
 		if obs.has(key):

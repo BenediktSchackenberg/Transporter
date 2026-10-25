@@ -681,6 +681,7 @@ func test_local_agent_choices() -> void:
 	ctl.config["provider"] = "ollama"
 	var full := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
 	var local_prompt := ctl.system_prompt() + ctl.user_prompt(full)
+	ok(ctl.system_prompt().contains("rent_depot") and ctl.user_prompt(full).contains("freie_depotstandorte"), "lokaler Agent kennt Stellplatz-Ausbau mit gültigen Depot-IDs")
 	ctl.config["provider"] = "demo"
 	var full_prompt := ctl.system_prompt() + ctl.user_prompt(full)
 	ok(local_prompt.length() < full_prompt.length() * 0.65, "lokaler Prompt deutlich kürzer (%d statt %d Zeichen)" % [local_prompt.length(), full_prompt.length()])
