@@ -216,13 +216,89 @@ static func _available(sim: Simulation, cid: int) -> Dictionary:
 		out["repair_vehicle"] = {"fahrzeuge": broken.map(func(v): return v.id)}
 	out["recruit_worker"] = {"ziele": P.available().filter(func(w): return w.role == "worker" and w.hire_fee <= c.ledger.cash).map(func(w): return w.id).slice(0, 8)}
 	out["recruit_foreman"] = {"ziele": P.available().filter(func(w): return w.role == "foreman" and w.hire_fee <= c.ledger.cash).map(func(w): return w.id)}
-	out["buy_vehicle"] = {"angebote": sim.resources.available_offers().filter(func(o): return o.price <= c.ledger.cash).map(func(o): return o.id).slice(0, 8)} \
+	out["buy_vehicle"] = {"angebote": sim.resources.available_offers().filter(func(o): return o.price <= c.ledger.cash).map(func(o): return o.id).slice(0, 8),
+		"mit_kredit": _financed_vehicles(sim, cid, known_open)} \
 		if c.vehicle_ids.size() < c.fleet_limit() else {"nicht_moeglich": "alle Stellplätze belegt (rent_depot)"}
 	out["collect_contracts"] = {"ort": "überall" if c.internet_level >= 2 else ("eigenes Büro" if c.internet_level == 1 else "Jobbörse")}
 	var targets: Array = P.seen[cid].values().filter(func(e): return e.state in ["idle", "loading", "unloading"]).map(func(e): return e.id)
 	var sab_cd := float(P.cooldowns.get("sab:%d" % cid, 0.0)) - sim.game_min
 	out["attempt_vehicle_sabotage"] = {"gesichtete_ziele": targets} if sab_cd <= 0.0 else {"nicht_moeglich": "Abklingzeit %d min" % int(sab_cd)}
 	out["offen_fuer_angebote"] = sim.social.offers.values().filter(func(o): return o.to == cid and o.status == "open").map(func(o): return o.id)
+	return out
+
+
+## Kreditoptionen sind konkrete Bankangebote. Die Gewinnschwelle ist eine grobe
+## Tagesrechnung auf Basis bereits bekannter Auftraege, kein Kaufautomatismus.
+static func _financed_vehicles(sim: Simulation, cid: int, known_open: Array) -> Array:
+	var c := sim.company(cid)
+	if c.vehicle_ids.size() >= c.fleet_limit():
+		return []
+	var offers: Array = sim.resources.available_offers()
+	offers.sort_custom(func(a, b): return a.price < b.price)
+	var out: Array = []
+	var seen_models := {}
+	for o in offers:
+		if seen_models.has(str(o.model)):
+			continue
+		var reserve := maxf(3000.0, float(o.price) * 0.1)
+		var gap := maxf(0.0, float(o.price) + reserve - c.ledger.cash)
+		if gap < 500.0 or gap > sim.max_loan(cid) - c.ledger.debt:
+			continue
+		var best := {}
+		for bank in Banking.BANKS.size():
+			var B: Dictionary = Banking.BANKS[bank]
+			var months := clampi(12, int(B.min_m), int(B.max_m))
+			var collateral := sim.banking.best_collateral(cid) if gap > float(B.free_limit) else -1
+			var q: Dictionary = sim.banking.quote(bank, cid, gap, months, collateral)
+			if q.ok and (best.is_empty() or float(q.rate) < float(best.rate)):
+				best = {"bank": B.id, "monate": months, "rate": q.rate, "rate_monat": q.monthly,
+					"zinsen_gesamt": q.total_interest, "pfand_fahrzeug_id": collateral}
+		if best.is_empty():
+			continue
+		seen_models[str(o.model)] = true
+		var model: Dictionary = Catalog.model(str(o.model))
+		var matching: Array = known_open.filter(func(k): return k.vehicle_ok(str(o.model)))
+		var contribution := 0.0
+		var example := ""
+		for k in matching:
+			var trip_cost := float(k.distance) * float(model.cost_per_tile) * 1.3
+			var margin := float(k.reward) - trip_cost
+			if margin > contribution:
+				contribution = margin
+				example = str(k.id)
+		var free_driver: bool = sim.personnel.employed(cid).any(func(w): return w.role == "worker" and w.vehicle_id < 0 and sim.personnel.can_take(w, "gehen") == "")
+		var new_wage := 0.0
+		var hiring := 0.0
+		if not free_driver:
+			var candidates: Array = sim.personnel.available().filter(func(w): return w.role == "worker")
+			candidates.sort_custom(func(a, b): return a.wage < b.wage)
+			if not candidates.is_empty():
+				new_wage = float(candidates[0].wage)
+				hiring = float(candidates[0].hire_fee)
+		var day_cost := float(o.price) * Catalog.DEPRECIATION_PER_DAY + new_wage * 24.0 + float(best.zinsen_gesamt) / float(best.monate * GameCalendar.DAYS_PER_MONTH)
+		out.append({"offer_id": o.id, "modell": o.model, "preis": int(o.price), "kreditbetrag": ceili(gap),
+			"barreserve_nach_kauf": int(reserve), "bank": best.bank, "monate": best.monate,
+			"jahreszins_prozent": snappedf(float(best.rate) * 100.0, 0.1), "rate_monat": int(best.rate_monat),
+			"pfand_fahrzeug_id": best.pfand_fahrzeug_id, "passende_bekannte_auftraege": matching.size(),
+			"beispielauftrag_id": example, "beispiel_deckungsbeitrag_vor_fixkosten": int(contribution),
+			"zusaetzlicher_fahrer_lohn_h": new_wage, "anwerbung": int(hiring), "fixkosten_pro_spieltag_ca": int(day_cost),
+			"auftraege_pro_spieltag_fuer_fixkosten_ca": ceili(day_cost / contribution) if contribution > 0.0 else -1})
+		if out.size() >= 6:
+			break
+	return out
+
+
+## Lokales Modell bekommt die fuer Transportentscheidungen relevanten Fakten und
+## exakte IDs. Der vollstaendige Zustand bleibt fuer andere Provider erhalten.
+static func compact_for_local(obs: Dictionary) -> Dictionary:
+	var keys := ["zeit", "dein_ziel", "ich", "figur", "fahrzeuge", "meine_auftraege", "markt",
+		"unbekannte_offene_auftraege", "fahrzeugmodelle", "personal", "aufgaben", "ressourcen", "bank",
+		"verfuegbare_aktionen", "plan", "hinweis", "ereignisse", "lage", "angebote_an_dich"]
+	var out := {}
+	for key in keys:
+		if obs.has(key):
+			out[key] = obs[key]
+	out["letzte_aktionsergebnisse"] = obs.get("ergebnisse_deiner_aktionen", []).slice(-5)
 	return out
 
 

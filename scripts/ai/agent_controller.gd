@@ -46,12 +46,15 @@ var _api_retry_at := 0.0
 var _deferred: Array = []
 var _fallback_rng := RandomNumberGenerator.new()
 var _perceived: Array = []        # Anlaesse der laufenden Entscheidung (fuer das Protokoll)
+var _startup_at := 0.0
+var _rapid_retry_count := 0
 
 
 func setup(simulation: Simulation, company_id: int, cfg: Dictionary, logger: ApiLog) -> void:
 	sim = simulation
 	cid = company_id
 	config = cfg
+	_startup_at = float(company_id) * 3.0 if cfg.get("provider", "") == "ollama" else 0.0
 	api_log = logger
 	_fallback_rng.seed = hash(company_id * 7919 + sim.city.seed_value)
 	adapter = LLMAdapter.create(cfg.get("provider", "demo"))
@@ -99,6 +102,8 @@ func _process(delta: float) -> void:
 			_on_failure(id, {"error": "Zeitüberschreitung (keine Antwort)"})
 		return
 	if real_time < _backoff_until:
+		return
+	if real_time < _startup_at:
 		return
 	var interval := float(config.get("interval", 20.0))
 	var due := _since >= interval or (not _events.is_empty() and _since >= MIN_EVENT_GAP)
@@ -247,28 +252,94 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 	if parsed.get("plan") is Dictionary and not parsed.plan.is_empty():
 		var pa: Dictionary = parsed.plan.duplicate()
 		pa["action"] = "set_plan"
-		actions = [pa] + actions   # Plan aus dem Antwortfeld "plan" zuerst festlegen
+		if not _same_plan(pa):
+			actions = [pa] + actions   # Nur einen geaenderten Plan erneut festlegen
 	var origin := "api" if source == "KI" else "fallback"
 	sim.decisions.set_context(cid, _perceived, parsed.goal if parsed.get("goal", "") != "" else goal, summary)
 	for a in actions:
-		var res := sim.executor.execute(cid, a, "p%d:%s:a%d" % [cid, key_prefix, i], origin)
+		if not a is Dictionary:
+			continue
+		var actual: Dictionary = _ground_action(a)
+		if str(actual.get("action", "")) == "set_plan" and _same_plan(actual):
+			continue
+		var res := sim.executor.execute(cid, actual, "p%d:%s:a%d" % [cid, key_prefix, i], origin)
 		i += 1
 		if res.ok:
 			stats.actions_ok += 1
-			if str(a.get("action", "")) not in PASSIVE:
+			if str(actual.get("action", "")) not in PASSIVE:
 				effective += 1
 		else:
 			stats.actions_rejected += 1
+			if config.get("provider", "") == "ollama":
+				_events.append("Abgelehnte Aktion %s: %s. Prüfe die gültigen IDs in verfuegbare_aktionen und ändere den nächsten Versuch." % [str(actual.get("action", "")), str(res.msg)])
 		api_log.write({"type": "action", "player": cid, "key": "%s:a%d" % [key_prefix, i - 1], "source": source,
-			"action": a, "ok": res.ok, "msg": res.msg})
+			"action": actual, "original_action": a if actual != a else {}, "ok": res.ok, "msg": res.msg})
 	sim.decisions.clear_context(cid)
 	passive_streak = 0 if effective > 0 else passive_streak + 1
+	if effective > 0 or _events.is_empty():
+		_rapid_retry_count = 0
+	elif config.get("provider", "") == "ollama" and _rapid_retry_count < 2:
+		_rapid_retry_count += 1
+		_since = maxf(_since, float(config.get("interval", 20.0)) - MIN_EVENT_GAP)
 	for e in parsed.get("erfahrungen", []):
 		if e is Dictionary:
 			sim.memory.upsert(cid, e, "modell" if source == "KI" else "ersatzmodus")
 	if summary != "":
 		sim.memory.add_event(cid, "entscheidung", summary)
 	sim.memory.add_event(cid, "ausfuehrung", "%d Aktionen ausgeführt, %d abgelehnt" % [effective, actions.size() - effective])
+
+
+func _ground_action(a: Dictionary) -> Dictionary:
+	var id := str(a.get("contract_id", ""))
+	if id not in ["A_best_available", "best_available"]:
+		return a
+	var name := str(a.get("action", ""))
+	var candidates: Array = []
+	if name == "accept_contract":
+		var c := sim.company(cid)
+		if sim.executor.active_contracts(cid) >= c.contract_capacity():
+			return a
+		for k in sim.market.open_contracts():
+			if not c.known.has(k.id) or c.reputation < k.min_rep or (k.exclusive_for >= 0 and k.exclusive_for != cid and k.exclusive_until > sim.game_min):
+				continue
+			if a.has("vehicle_id"):
+				var v: FleetVehicle = sim.vehicles.get(int(a.vehicle_id))
+				if v == null or v.owner != cid or not k.vehicle_ok(v.model):
+					continue
+			elif not sim.company_vehicles(cid).any(func(v): return k.vehicle_ok(v.model)):
+				continue
+			candidates.append(k)
+	elif name in ["assign_vehicle", "assign_transport"]:
+		var v: FleetVehicle = sim.vehicles.get(int(a.get("vehicle_id", -1)))
+		if v == null or v.owner != cid:
+			return a
+		for k in sim.contracts.values():
+			if k.owner == cid and k.status == "accepted" and k.vehicle_ok(v.model):
+				candidates.append(k)
+	if candidates.is_empty():
+		return a
+	candidates.sort_custom(func(x, y): return float(x.reward) / maxf(1.0, float(x.distance)) > float(y.reward) / maxf(1.0, float(y.distance)))
+	var grounded := a.duplicate()
+	grounded["contract_id"] = candidates[0].id
+	return grounded
+
+
+func _same_plan(a: Dictionary) -> bool:
+	var p: Dictionary = sim.plans.current(cid)
+	if p.is_empty() or p.get("status", "") != "aktiv" or str(p.get("ziel", "")) != str(a.get("ziel", "")):
+		return false
+	if str(p.get("nutzen", "")) != str(a.get("nutzen", "")) or str(p.get("risiken", "")) != str(a.get("risiken", "")):
+		return false
+	var steps: Array = a.get("schritte", []) if a.get("schritte", []) is Array else []
+	if steps.size() != p.schritte.size():
+		return false
+	for i in steps.size():
+		if not steps[i] is Dictionary or str(steps[i].get("id", "S%d" % (i + 1))) != str(p.schritte[i].id) \
+				or str(steps[i].get("text", "")) != str(p.schritte[i].text) \
+				or steps[i].get("aktion", {}) != p.schritte[i].get("aktion", {}) \
+				or steps[i].get("abhaengig_von", []) != p.schritte[i].get("abhaengig_von", []):
+			return false
+	return true
 
 
 ## Extrahiert und prueft die JSON-Antwort. Toleriert Codebloecke und Begleittext.
@@ -296,6 +367,8 @@ static func parse_response(text: String) -> Dictionary:
 
 
 func system_prompt() -> String:
+	if config.get("provider", "") == "ollama":
+		return _local_system_prompt()
 	var c := sim.company(cid)
 	var p: Dictionary = Catalog.PERSONALITIES.get(c.personality, Catalog.PERSONALITIES.kostenoptimierer)
 	var schema := ""
@@ -347,11 +420,34 @@ Höchstens %d Aktionen. Verwende nur IDs aus der Beobachtung. Gib keine internen
 
 
 func user_prompt(obs: Dictionary) -> String:
+	if config.get("provider", "") == "ollama":
+		var recent: Array = summaries.slice(-2).map(func(s): return str(s.text))
+		return "NOTIZ: %s\nLETZTE ENTSCHEIDUNGEN: %s\nBEOBACHTUNG:\n%s" % [memory_note.left(300), JSON.stringify(recent), JSON.stringify(ObservationBuilder.compact_for_local(obs))]
 	var mem := ""
 	for s in summaries.slice(-5):
 		mem += "- %s: %s\n" % [Catalog.game_minutes_to_text(s.t), s.text]
 	return "DEINE NOTIZ: %s\nDEINE LETZTEN ENTSCHEIDUNGEN:\n%s\nBEOBACHTUNG:\n%s" % [
 		memory_note if memory_note != "" else "(leer)", mem if mem != "" else "(keine)\n", JSON.stringify(obs)]
+
+
+func _local_system_prompt() -> String:
+	var c := sim.company(cid)
+	var p: Dictionary = Catalog.PERSONALITIES.get(c.personality, Catalog.PERSONALITIES.kostenoptimierer)
+	var names := ["collect_contracts", "accept_contract", "assign_vehicle", "plan_tour", "assign_worker_task", "recruit_worker",
+		"buy_vehicle", "take_loan", "request_loan", "repay_loan", "repair_vehicle", "buy_supplies", "set_plan", "execute_plan_step", "wait"]
+	var all := ActionExecutor.all_schema()
+	var lines: Array = []
+	for name in names:
+		var params: Array = []
+		for key in all[name].params:
+			params.append("%s:%s" % [key, all[name].params[key]])
+		lines.append("%s(%s)" % [name, ",".join(params)])
+	var custom := str(config.get("strategy", "")).strip_edges()
+	return """Du bist %s von %s. Persönlichkeit: %s. Ziel: höchster kumulierter Nettogewinn am Spielende. Kredit erhöht Bargeld, nicht Gewinn; Zinsen, Löhne und Fahrzeugabschreibung senken ihn. %s
+Entscheide anhand der BEOBACHTUNG. Verwende ausschließlich exakte IDs aus markt, meine_auftraege und verfuegbare_aktionen. Erfinde keine IDs, keine Platzhalter wie A_best_available. Wenn ein Auftrag nicht bekannt ist, collect_contracts. Fahrzeuge brauchen einen Fahrer: assign_worker_task mit kind='fahren', worker_id und vehicle_id. Vor Fahrzeugkauf prüfe passende bekannte Aufträge, freien Stellplatz, Fahrer, Bargeldreserve, Kreditangebot und Gewinnschwelle in mit_kredit. Kredit nur aufnehmen, wenn Kauf samt Fahrer und rechtzeitiger Auslastung plausibel ist. Bei Kredit: erst take_loan mit Betrag/Bank/Monaten, dann buy_vehicle mit offer_id. Angebote sind umkämpft und werden beim Kauf erneut geprüft. Warte nur mit Grund. Bei abgelehnter Aktion korrigiere die IDs oder Voraussetzungen; wiederhole nicht blind denselben Fehler. Ändere einen bestehenden Plan nur bei neuer Lage. Maximal %d Aktionen.
+Häufige Aktionen: %s
+Weitere Aktionen stehen in verfuegbare_aktionen und der Spielengine bereit. Antworte ausschließlich als JSON {"summary":"kurze Begründung in Ich-Form","goal":"Ziel","actions":[{"action":"..."}],"memory":"kurze Notiz"}. Kein Denktext.""" % [
+		c.player_name, c.company_name, p.name, ("Zusatzstrategie: " + custom) if custom != "" else "", MAX_ACTIONS, "; ".join(lines)]
 
 
 func to_dict() -> Dictionary:

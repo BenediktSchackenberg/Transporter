@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -671,6 +671,49 @@ func test_prompt_builds() -> void:
 	ok(sp.contains("willst diese Partie gewinnen") and sp.contains("attempt_vehicle_sabotage"), "Systemprompt vollständig gebaut")
 	ok(not sp.contains("%s") and not sp.contains("%d"), "keine offenen Platzhalter")
 	ok(up.length() / 4 < 4500, "Beobachtung kompakt (~%d Token)" % (up.length() / 4))
+	ctl.free()
+
+
+func test_local_agent_choices() -> void:
+	var s := new_sim(2)
+	var ctl := AgentController.new()
+	ctl.setup_for_test(s, 0)
+	ctl.config["provider"] = "ollama"
+	var full := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	var local_prompt := ctl.system_prompt() + ctl.user_prompt(full)
+	ctl.config["provider"] = "demo"
+	var full_prompt := ctl.system_prompt() + ctl.user_prompt(full)
+	ok(local_prompt.length() < full_prompt.length() * 0.65, "lokaler Prompt deutlich kürzer (%d statt %d Zeichen)" % [local_prompt.length(), full_prompt.length()])
+	print("Lokaler Prompt: %d Zeichen; vollständiger Prompt: %d Zeichen" % [local_prompt.length(), full_prompt.length()])
+	ctl.config["provider"] = "ollama"
+	var offer: Dictionary = s.resources.available_offers()[0]
+	offer["model"] = "van"
+	offer["price"] = 12000.0
+	s.company(0).ledger.cash = 1000.0
+	var financed := ObservationBuilder._financed_vehicles(s, 0, [])
+	ok(financed.any(func(f): return f.modell == "van" and f.bank in ["B1", "B2", "B3"] and f.kreditbetrag > 1000), "gültiges Bankangebot für Fahrzeug trotz fehlendem Bargeld sichtbar")
+	s.company(0).ledger.cash = 30000.0
+	var contracts: Array = s.market.open_contracts()
+	for k in contracts:
+		s.company(0).known[k.id] = true
+	var suitable: Array = contracts.filter(func(k): return s.company_vehicles(0).any(func(v): return k.vehicle_ok(v.model)))
+	if not suitable.is_empty():
+		var grounded: Dictionary = ctl._ground_action({"action": "accept_contract", "contract_id": "A_best_available"})
+		ok(grounded.contract_id in suitable.map(func(k): return k.id), "Platzhalter wird auf bekannten, passenden Auftrag abgebildet")
+	else:
+		ok(true, "keine passenden Startaufträge im Testszenario")
+	var concrete: Dictionary = ctl._ground_action({"action": "accept_contract", "contract_id": "A999999"})
+	ok(concrete.contract_id == "A999999", "konkrete falsche ID wird nicht stillschweigend umgedeutet")
+	var plan := {"ziel": "Aufträge fahren", "schritte": [{"id": "S1", "text": "Auftrag sammeln"}]}
+	ok(s.plans.set_plan(0, plan).ok and ctl._same_plan(plan), "identischer Plan wird erkannt")
+	ctl._since = 0.0
+	var bad := AgentController.parse_response('{"summary":"Ich prüfe einen Auftrag.","actions":[{"action":"accept_contract","contract_id":"A999999"}]}')
+	ctl._apply(bad, "bad1", "KI")
+	ok(ctl._rapid_retry_count == 1 and ctl._since >= float(ctl.config.get("interval", 20.0)) - AgentController.MIN_EVENT_GAP
+		and not ctl._events.is_empty(), "Ablehnung liefert schnelle Korrektur mit Fehlerhinweis")
+	ctl._apply(bad, "bad2", "KI")
+	ctl._apply(bad, "bad3", "KI")
+	ok(ctl._rapid_retry_count == 2, "schnelle Wiederholungen bleiben begrenzt")
 	ctl.free()
 
 

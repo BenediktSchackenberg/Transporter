@@ -5,9 +5,9 @@ extends LLMAdapter
 
 const DEFAULT_BASE_URL := "http://127.0.0.1:11435"
 const DEFAULT_MODEL := "qwen3.5:9b-q4_K_M"
-## Ein echter Spiel-Prompt umfasst rund 18.000 Token. Das Ollama-Standardfenster
-## schneidet sonst die Systemregeln ab und das Modell liefert unbrauchbare Antworten.
-const CONTEXT_TOKENS := 24576
+## Der lokale Spiel-Prompt ist auf die Transportentscheidung verdichtet. Dieses
+## Fenster deckt auch spätere Partien ab und spart KV-Speicher gegenüber 24k.
+const CONTEXT_TOKENS := 12288
 const RESPONSE_SCHEMA := {
 	"type": "object",
 	"properties": {
