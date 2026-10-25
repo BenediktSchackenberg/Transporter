@@ -1,0 +1,2331 @@
+{
+ "ground": {
+  "cell": [
+   128,
+   72
+  ],
+  "origin": [
+   64,
+   6
+  ],
+  "tiles": {
+   "grass0": [
+    0,
+    0
+   ],
+   "grass1": [
+    1,
+    0
+   ],
+   "grass2": [
+    2,
+    0
+   ],
+   "park0": [
+    3,
+    0
+   ],
+   "park1": [
+    4,
+    0
+   ],
+   "gravel": [
+    5,
+    0
+   ],
+   "sidewalk": [
+    6,
+    0
+   ],
+   "plaza": [
+    7,
+    0
+   ],
+   "concrete": [
+    8,
+    0
+   ],
+   "quay": [
+    9,
+    0
+   ],
+   "sand": [
+    10,
+    0
+   ],
+   "field": [
+    11,
+    0
+   ],
+   "crop": [
+    0,
+    1
+   ],
+   "water0": [
+    1,
+    1
+   ],
+   "water1": [
+    2,
+    1
+   ],
+   "water2": [
+    3,
+    1
+   ],
+   "water3": [
+    4,
+    1
+   ],
+   "rail_h": [
+    5,
+    1
+   ],
+   "rail_v": [
+    6,
+    1
+   ],
+   "parking": [
+    7,
+    1
+   ],
+   "road0": [
+    8,
+    1
+   ],
+   "road1": [
+    9,
+    1
+   ],
+   "road2": [
+    10,
+    1
+   ],
+   "road3": [
+    11,
+    1
+   ],
+   "road4": [
+    0,
+    2
+   ],
+   "road5": [
+    1,
+    2
+   ],
+   "road6": [
+    2,
+    2
+   ],
+   "road7": [
+    3,
+    2
+   ],
+   "road8": [
+    4,
+    2
+   ],
+   "road9": [
+    5,
+    2
+   ],
+   "road10": [
+    6,
+    2
+   ],
+   "road11": [
+    7,
+    2
+   ],
+   "road12": [
+    8,
+    2
+   ],
+   "road13": [
+    9,
+    2
+   ],
+   "road14": [
+    10,
+    2
+   ],
+   "road15": [
+    11,
+    2
+   ]
+  },
+  "cols": 12
+ },
+ "buildings": {
+  "house0": {
+   "anchor": [
+    130,
+    112
+   ],
+   "size": [
+    260,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 69
+  },
+  "house1": {
+   "anchor": [
+    130,
+    50
+   ],
+   "size": [
+    260,
+    180
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 41
+  },
+  "house2": {
+   "anchor": [
+    130,
+    104
+   ],
+   "size": [
+    260,
+    234
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 60
+  },
+  "house3": {
+   "anchor": [
+    130,
+    122
+   ],
+   "size": [
+    260,
+    252
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 75
+  },
+  "apartment0": {
+   "anchor": [
+    194,
+    222
+   ],
+   "size": [
+    388,
+    416
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 130
+  },
+  "office0": {
+   "anchor": [
+    194,
+    270
+   ],
+   "size": [
+    388,
+    464
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 155
+  },
+  "apartment1": {
+   "anchor": [
+    194,
+    266
+   ],
+   "size": [
+    388,
+    460
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 152
+  },
+  "office1": {
+   "anchor": [
+    194,
+    270
+   ],
+   "size": [
+    388,
+    464
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 155
+  },
+  "semi": {
+   "anchor": [
+    130,
+    113
+   ],
+   "size": [
+    388,
+    307
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 2,
+   "height": 70
+  },
+  "highrise0": {
+   "anchor": [
+    194,
+    654
+   ],
+   "size": [
+    388,
+    848
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 366
+  },
+  "highrise1": {
+   "anchor": [
+    194,
+    510
+   ],
+   "size": [
+    388,
+    704
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 294
+  },
+  "school": {
+   "anchor": [
+    258,
+    159
+   ],
+   "size": [
+    644,
+    481
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 93
+  },
+  "kindergarten": {
+   "anchor": [
+    194,
+    44
+   ],
+   "size": [
+    452,
+    270
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 30
+  },
+  "villa": {
+   "anchor": [
+    258,
+    106
+   ],
+   "size": [
+    516,
+    364
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 72
+  },
+  "villa1": {
+   "anchor": [
+    258,
+    106
+   ],
+   "size": [
+    516,
+    364
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 72
+  },
+  "shop0": {
+   "anchor": [
+    130,
+    72
+   ],
+   "size": [
+    260,
+    202
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 60
+  },
+  "shop1": {
+   "anchor": [
+    130,
+    48
+   ],
+   "size": [
+    260,
+    178
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 60
+  },
+  "shop2": {
+   "anchor": [
+    130,
+    50
+   ],
+   "size": [
+    260,
+    180
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 60
+  },
+  "pharmacy": {
+   "anchor": [
+    130,
+    48
+   ],
+   "size": [
+    260,
+    178
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 60
+  },
+  "restaurant": {
+   "anchor": [
+    130,
+    48
+   ],
+   "size": [
+    260,
+    178
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 52
+  },
+  "bank": {
+   "anchor": [
+    194,
+    96
+   ],
+   "size": [
+    388,
+    290
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 70
+  },
+  "clinic": {
+   "anchor": [
+    194,
+    112
+   ],
+   "size": [
+    388,
+    306
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 74
+  },
+  "job_board": {
+   "anchor": [
+    130,
+    40
+   ],
+   "size": [
+    324,
+    202
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 34
+  },
+  "staffing": {
+   "anchor": [
+    130,
+    54
+   ],
+   "size": [
+    260,
+    184
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 46
+  },
+  "gas_station": {
+   "anchor": [
+    130,
+    20
+   ],
+   "size": [
+    324,
+    182
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 40
+  },
+  "dealer": {
+   "anchor": [
+    194,
+    40
+   ],
+   "size": [
+    452,
+    266
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "factory": {
+   "anchor": [
+    258,
+    78
+   ],
+   "size": [
+    516,
+    336
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 100,
+   "smoke": [
+    180,
+    -22
+   ]
+  },
+  "warehouse": {
+   "anchor": [
+    194,
+    54
+   ],
+   "size": [
+    452,
+    280
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "farm": {
+   "anchor": [
+    194,
+    54
+   ],
+   "size": [
+    388,
+    248
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 44
+  },
+  "port_office": {
+   "anchor": [
+    130,
+    63
+   ],
+   "size": [
+    324,
+    225
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 58
+  },
+  "freight_shed": {
+   "anchor": [
+    194,
+    48
+   ],
+   "size": [
+    516,
+    306
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 44
+  },
+  "depot": {
+   "anchor": [
+    194,
+    56
+   ],
+   "size": [
+    388,
+    250
+   ],
+   "lit": true,
+   "mask": true,
+   "w": 3,
+   "h": 3,
+   "height": 42
+  },
+  "containers": {
+   "anchor": [
+    130,
+    39
+   ],
+   "size": [
+    260,
+    169
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 56
+  },
+  "crane": {
+   "anchor": [
+    194,
+    156
+   ],
+   "size": [
+    324,
+    318
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 3,
+   "height": 104,
+   "blink": true
+  },
+  "fountain": {
+   "anchor": [
+    130,
+    28
+   ],
+   "size": [
+    260,
+    158
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 24
+  },
+  "construction": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    388,
+    236
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 42
+  },
+  "airport_cargo": {
+   "anchor": [
+    258,
+    52
+   ],
+   "size": [
+    644,
+    374
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "workshop": {
+   "anchor": [
+    130,
+    54
+   ],
+   "size": [
+    324,
+    216
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 80
+  }
+ },
+ "facilities": {
+  "fac_buero": {
+   "anchor": [
+    130,
+    66
+   ],
+   "size": [
+    260,
+    196
+   ],
+   "lit": true,
+   "mask": true,
+   "w": 2,
+   "h": 2
+  },
+  "fac_disposition": {
+   "anchor": [
+    130,
+    66
+   ],
+   "size": [
+    260,
+    196
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2
+  },
+  "fac_stellplatz": {
+   "anchor": [
+    130,
+    4
+   ],
+   "size": [
+    260,
+    134
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 2,
+   "h": 2
+  },
+  "fac_garage": {
+   "anchor": [
+    130,
+    50
+   ],
+   "size": [
+    260,
+    180
+   ],
+   "lit": true,
+   "mask": true,
+   "w": 2,
+   "h": 2
+  },
+  "fac_werkstatt": {
+   "anchor": [
+    130,
+    54
+   ],
+   "size": [
+    324,
+    216
+   ],
+   "lit": true,
+   "mask": true,
+   "w": 3,
+   "h": 2
+  },
+  "fac_werkstatt_r": {
+   "anchor": [
+    194,
+    38
+   ],
+   "size": [
+    324,
+    200
+   ],
+   "lit": false,
+   "mask": true,
+   "w": 2,
+   "h": 3
+  },
+  "fac_laderampe": {
+   "anchor": [
+    66,
+    44
+   ],
+   "size": [
+    196,
+    142
+   ],
+   "lit": false,
+   "mask": true,
+   "w": 2,
+   "h": 1
+  },
+  "fac_laderampe_r": {
+   "anchor": [
+    130,
+    46
+   ],
+   "size": [
+    196,
+    144
+   ],
+   "lit": false,
+   "mask": true,
+   "w": 1,
+   "h": 2
+  },
+  "fac_lager": {
+   "anchor": [
+    194,
+    62
+   ],
+   "size": [
+    388,
+    256
+   ],
+   "lit": true,
+   "mask": true,
+   "w": 3,
+   "h": 3
+  },
+  "fac_kuehllager": {
+   "anchor": [
+    130,
+    60
+   ],
+   "size": [
+    324,
+    222
+   ],
+   "lit": true,
+   "mask": true,
+   "w": 3,
+   "h": 2
+  },
+  "fac_kuehllager_r": {
+   "anchor": [
+    194,
+    46
+   ],
+   "size": [
+    324,
+    208
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 2,
+   "h": 3
+  },
+  "fac_tankstelle": {
+   "anchor": [
+    130,
+    32
+   ],
+   "size": [
+    260,
+    162
+   ],
+   "lit": false,
+   "mask": true,
+   "w": 2,
+   "h": 2
+  },
+  "fac_ladepunkt": {
+   "anchor": [
+    130,
+    18
+   ],
+   "size": [
+    196,
+    116
+   ],
+   "lit": true,
+   "mask": true,
+   "w": 1,
+   "h": 2
+  },
+  "fac_ladepunkt_r": {
+   "anchor": [
+    66,
+    18
+   ],
+   "size": [
+    196,
+    116
+   ],
+   "lit": false,
+   "mask": true,
+   "w": 2,
+   "h": 1
+  },
+  "fac_pausenraum": {
+   "anchor": [
+    130,
+    38
+   ],
+   "size": [
+    260,
+    168
+   ],
+   "lit": true,
+   "mask": true,
+   "w": 2,
+   "h": 2
+  },
+  "fac_schulung": {
+   "anchor": [
+    130,
+    51
+   ],
+   "size": [
+    260,
+    181
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2
+  },
+  "fac_sicherheit": {
+   "anchor": [
+    66,
+    32
+   ],
+   "size": [
+    132,
+    98
+   ],
+   "lit": true,
+   "mask": true,
+   "w": 1,
+   "h": 1
+  },
+  "fac_waschplatz": {
+   "anchor": [
+    130,
+    50
+   ],
+   "size": [
+    260,
+    180
+   ],
+   "lit": false,
+   "mask": true,
+   "w": 2,
+   "h": 2
+  },
+  "fac_mietbuero": {
+   "anchor": [
+    130,
+    86
+   ],
+   "size": [
+    324,
+    248
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2
+  },
+  "fac_mietbuero_r": {
+   "anchor": [
+    194,
+    70
+   ],
+   "size": [
+    324,
+    232
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 3
+  }
+ },
+ "vehicles": {
+  "cargobike_0": {
+   "anchor": [
+    32,
+    17
+   ],
+   "size": [
+    56,
+    52
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    32,
+    43
+   ]
+  },
+  "cargobike_1": {
+   "anchor": [
+    24,
+    17
+   ],
+   "size": [
+    56,
+    52
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    24,
+    43
+   ]
+  },
+  "cargobike_2": {
+   "anchor": [
+    24,
+    13
+   ],
+   "size": [
+    56,
+    48
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    24,
+    39
+   ]
+  },
+  "cargobike_3": {
+   "anchor": [
+    32,
+    13
+   ],
+   "size": [
+    56,
+    48
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    32,
+    39
+   ]
+  },
+  "van_0": {
+   "anchor": [
+    70,
+    28
+   ],
+   "size": [
+    140,
+    114
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    70,
+    84
+   ]
+  },
+  "van_1": {
+   "anchor": [
+    70,
+    28
+   ],
+   "size": [
+    140,
+    114
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    70,
+    84
+   ]
+  },
+  "van_2": {
+   "anchor": [
+    70,
+    14
+   ],
+   "size": [
+    140,
+    100
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    70,
+    70
+   ]
+  },
+  "van_3": {
+   "anchor": [
+    70,
+    14
+   ],
+   "size": [
+    140,
+    100
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    70,
+    70
+   ]
+  },
+  "transporter_0": {
+   "anchor": [
+    84,
+    39
+   ],
+   "size": [
+    168,
+    142
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    84,
+    105
+   ]
+  },
+  "transporter_1": {
+   "anchor": [
+    84,
+    39
+   ],
+   "size": [
+    168,
+    142
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    84,
+    105
+   ]
+  },
+  "transporter_2": {
+   "anchor": [
+    84,
+    21
+   ],
+   "size": [
+    168,
+    123
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    84,
+    87
+   ]
+  },
+  "transporter_3": {
+   "anchor": [
+    84,
+    21
+   ],
+   "size": [
+    168,
+    123
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    84,
+    87
+   ]
+  },
+  "reefer_0": {
+   "anchor": [
+    84,
+    39
+   ],
+   "size": [
+    168,
+    142
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    84,
+    105
+   ]
+  },
+  "reefer_1": {
+   "anchor": [
+    84,
+    39
+   ],
+   "size": [
+    168,
+    142
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    84,
+    105
+   ]
+  },
+  "reefer_2": {
+   "anchor": [
+    84,
+    26
+   ],
+   "size": [
+    168,
+    128
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    84,
+    92
+   ]
+  },
+  "reefer_3": {
+   "anchor": [
+    84,
+    26
+   ],
+   "size": [
+    168,
+    128
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    84,
+    92
+   ]
+  },
+  "truck_0": {
+   "anchor": [
+    106,
+    44
+   ],
+   "size": [
+    212,
+    178
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    106,
+    130
+   ]
+  },
+  "truck_1": {
+   "anchor": [
+    106,
+    44
+   ],
+   "size": [
+    212,
+    178
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    106,
+    130
+   ]
+  },
+  "truck_2": {
+   "anchor": [
+    106,
+    24
+   ],
+   "size": [
+    212,
+    156
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    106,
+    110
+   ]
+  },
+  "truck_3": {
+   "anchor": [
+    106,
+    24
+   ],
+   "size": [
+    212,
+    156
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    106,
+    110
+   ]
+  },
+  "semi_0": {
+   "anchor": [
+    146,
+    28
+   ],
+   "size": [
+    290,
+    218
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    146,
+    154
+   ]
+  },
+  "semi_1": {
+   "anchor": [
+    144,
+    28
+   ],
+   "size": [
+    290,
+    218
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    144,
+    154
+   ]
+  },
+  "semi_2": {
+   "anchor": [
+    144,
+    10
+   ],
+   "size": [
+    290,
+    206
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    144,
+    136
+   ]
+  },
+  "semi_3": {
+   "anchor": [
+    146,
+    10
+   ],
+   "size": [
+    290,
+    206
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    146,
+    136
+   ]
+  },
+  "car_silver_0": {
+   "anchor": [
+    42,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    40
+   ]
+  },
+  "car_silver_1": {
+   "anchor": [
+    42,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    39
+   ]
+  },
+  "car_silver_2": {
+   "anchor": [
+    44,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    39
+   ]
+  },
+  "car_silver_3": {
+   "anchor": [
+    44,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    40
+   ]
+  },
+  "car_black_0": {
+   "anchor": [
+    42,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    40
+   ]
+  },
+  "car_black_1": {
+   "anchor": [
+    42,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    39
+   ]
+  },
+  "car_black_2": {
+   "anchor": [
+    44,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    39
+   ]
+  },
+  "car_black_3": {
+   "anchor": [
+    44,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    40
+   ]
+  },
+  "car_red_0": {
+   "anchor": [
+    42,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    40
+   ]
+  },
+  "car_red_1": {
+   "anchor": [
+    42,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    39
+   ]
+  },
+  "car_red_2": {
+   "anchor": [
+    44,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    39
+   ]
+  },
+  "car_red_3": {
+   "anchor": [
+    44,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    40
+   ]
+  },
+  "car_blue_0": {
+   "anchor": [
+    42,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    40
+   ]
+  },
+  "car_blue_1": {
+   "anchor": [
+    42,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    39
+   ]
+  },
+  "car_blue_2": {
+   "anchor": [
+    44,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    39
+   ]
+  },
+  "car_blue_3": {
+   "anchor": [
+    44,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    40
+   ]
+  },
+  "car_gold_0": {
+   "anchor": [
+    42,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    40
+   ]
+  },
+  "car_gold_1": {
+   "anchor": [
+    42,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    39
+   ]
+  },
+  "car_gold_2": {
+   "anchor": [
+    44,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    39
+   ]
+  },
+  "car_gold_3": {
+   "anchor": [
+    44,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    40
+   ]
+  },
+  "car_white_0": {
+   "anchor": [
+    42,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    40
+   ]
+  },
+  "car_white_1": {
+   "anchor": [
+    42,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    39
+   ]
+  },
+  "car_white_2": {
+   "anchor": [
+    44,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    39
+   ]
+  },
+  "car_white_3": {
+   "anchor": [
+    44,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    40
+   ]
+  },
+  "car_green_0": {
+   "anchor": [
+    42,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    40
+   ]
+  },
+  "car_green_1": {
+   "anchor": [
+    42,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    39
+   ]
+  },
+  "car_green_2": {
+   "anchor": [
+    44,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    39
+   ]
+  },
+  "car_green_3": {
+   "anchor": [
+    44,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    40
+   ]
+  },
+  "car_violet_0": {
+   "anchor": [
+    42,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    40
+   ]
+  },
+  "car_violet_1": {
+   "anchor": [
+    42,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    42,
+    39
+   ]
+  },
+  "car_violet_2": {
+   "anchor": [
+    44,
+    3
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    39
+   ]
+  },
+  "car_violet_3": {
+   "anchor": [
+    44,
+    4
+   ],
+   "size": [
+    86,
+    58
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    44,
+    40
+   ]
+  }
+ },
+ "figures": {
+  "fig_0": {
+   "cell": [
+    48,
+    59
+   ],
+   "pivot": [
+    24,
+    54
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_1": {
+   "cell": [
+    48,
+    59
+   ],
+   "pivot": [
+    24,
+    54
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_2": {
+   "cell": [
+    48,
+    59
+   ],
+   "pivot": [
+    24,
+    54
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_3": {
+   "cell": [
+    48,
+    59
+   ],
+   "pivot": [
+    24,
+    54
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_4": {
+   "cell": [
+    48,
+    59
+   ],
+   "pivot": [
+    24,
+    54
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_5": {
+   "cell": [
+    48,
+    60
+   ],
+   "pivot": [
+    24,
+    55
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_umbrella": {
+   "cell": [
+    60,
+    52
+   ],
+   "pivot": [
+    30,
+    70
+   ],
+   "hframes": 1,
+   "vframes": 4
+  }
+ },
+ "props": {
+  "d_tree0": {
+   "anchor": [
+    28,
+    30
+   ],
+   "size": [
+    68,
+    64
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    28,
+    62
+   ]
+  },
+  "d_tree1": {
+   "anchor": [
+    32,
+    43
+   ],
+   "size": [
+    64,
+    79
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    32,
+    75
+   ]
+  },
+  "d_tree2": {
+   "anchor": [
+    36,
+    31
+   ],
+   "size": [
+    70,
+    65
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    36,
+    63
+   ]
+  },
+  "d_lamp": {
+   "anchor": [
+    12,
+    36
+   ],
+   "size": [
+    24,
+    70
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    12,
+    68
+   ]
+  },
+  "d_bench": {
+   "anchor": [
+    12,
+    -14
+   ],
+   "size": [
+    26,
+    24
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    12,
+    18
+   ]
+  },
+  "d_bush": {
+   "anchor": [
+    22,
+    -3
+   ],
+   "size": [
+    42,
+    34
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    22,
+    29
+   ]
+  },
+  "d_light_red": {
+   "anchor": [
+    14,
+    50
+   ],
+   "size": [
+    28,
+    82
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    14,
+    82
+   ]
+  },
+  "d_light_green": {
+   "anchor": [
+    14,
+    50
+   ],
+   "size": [
+    28,
+    82
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    14,
+    82
+   ]
+  },
+  "roadwork": {
+   "anchor": [
+    44,
+    2
+   ],
+   "size": [
+    88,
+    50
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    44,
+    34
+   ]
+  },
+  "flag": {
+   "anchor": [
+    10,
+    74
+   ],
+   "size": [
+    28,
+    92
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    10,
+    90
+   ]
+  },
+  "fac_site": {
+   "anchor": [
+    4,
+    18
+   ],
+   "size": [
+    68,
+    50
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    4,
+    50
+   ]
+  },
+  "c_pakete": {
+   "anchor": [
+    22,
+    12
+   ],
+   "size": [
+    46,
+    35
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    22,
+    26
+   ]
+  },
+  "c_lebensmittel": {
+   "anchor": [
+    26,
+    12
+   ],
+   "size": [
+    52,
+    38
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    26,
+    26
+   ]
+  },
+  "c_medikamente": {
+   "anchor": [
+    24,
+    17
+   ],
+   "size": [
+    48,
+    42
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    24,
+    31
+   ]
+  },
+  "c_getraenke": {
+   "anchor": [
+    26,
+    18
+   ],
+   "size": [
+    52,
+    44
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    26,
+    32
+   ]
+  },
+  "c_elektronik": {
+   "anchor": [
+    24,
+    19
+   ],
+   "size": [
+    48,
+    44
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    24,
+    33
+   ]
+  },
+  "c_moebel": {
+   "anchor": [
+    22,
+    20
+   ],
+   "size": [
+    44,
+    44
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    22,
+    34
+   ]
+  },
+  "c_baustoffe": {
+   "anchor": [
+    24,
+    10
+   ],
+   "size": [
+    50,
+    35
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    24,
+    24
+   ]
+  },
+  "c_maschinenteile": {
+   "anchor": [
+    26,
+    18
+   ],
+   "size": [
+    52,
+    44
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    26,
+    32
+   ]
+  },
+  "c_container": {
+   "anchor": [
+    24,
+    19
+   ],
+   "size": [
+    48,
+    44
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    24,
+    33
+   ]
+  }
+ },
+ "projection": {
+  "tile_px": [
+   128,
+   64
+  ],
+  "voxels_per_tile": 32
+ }
+}

@@ -1,0 +1,24 @@
+{
+  "seed": 20261024,
+  "duration_min": 30,
+  "speed_idx": 1,
+  "demo_fault_rate": 0.1,
+  "players": [
+    {"slot": 0, "player_name": "Greta", "company_name": "Greta Logistik", "color_idx": 0, "avatar_style": 0,
+     "personality": "kostenoptimierer", "provider": "openai", "base_url": "https://api.openai.com/v1",
+     "model": "gpt-4o-mini", "save_key": false, "interval": 20, "max_requests": 300, "max_tokens": 400000,
+     "max_tokens_per_request": 900, "fallback": true, "strategy": ""},
+    {"slot": 1, "player_name": "Viktor", "company_name": "Vitesse Transporte", "color_idx": 1, "avatar_style": 1,
+     "personality": "wachstum", "provider": "openai", "base_url": "https://openrouter.ai/api/v1",
+     "model": "anthropic/claude-sonnet-4.5", "save_key": false, "interval": 20, "max_requests": 300, "max_tokens": 400000,
+     "max_tokens_per_request": 900, "fallback": true, "strategy": ""},
+    {"slot": 2, "player_name": "Amira", "company_name": "Amira Express", "color_idx": 2, "avatar_style": 3,
+     "personality": "netzwerker", "provider": "openai", "base_url": "http://localhost:11434/v1",
+     "model": "qwen2.5:14b", "save_key": false, "interval": 30, "max_requests": 300, "max_tokens": 600000,
+     "max_tokens_per_request": 900, "fallback": true, "strategy": "Setze auf Kooperationen und Kühltransporte."},
+    {"slot": 3, "player_name": "Bodo", "company_name": "Bodo & Söhne", "color_idx": 3, "avatar_style": 5,
+     "personality": "risikospieler", "provider": "demo", "base_url": "", "model": "", "save_key": false,
+     "interval": 20, "max_requests": 300, "max_tokens": 400000, "max_tokens_per_request": 900, "fallback": true,
+     "strategy": ""}
+  ]
+}

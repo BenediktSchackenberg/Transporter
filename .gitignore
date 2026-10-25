@@ -1,0 +1,8 @@
+.godot/
+build/
+*.tmp
+*.log
+user_data/
+.vscode/
+Thumbs.db
+desktop.ini

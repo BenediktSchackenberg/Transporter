@@ -1,0 +1,11 @@
+{
+	"name": "Mainz",
+	"admin1": "Rheinland-Pfalz",
+	"country_code": "DE",
+	"geonames_id": 2874225,
+	"latitude": 49.98185,
+	"longitude": 8.28008,
+	"elevation_m": 125.0,
+	"timezone": "Europe/Berlin",
+	"source": "Open-Meteo Geocoding API (https://geocoding-api.open-meteo.com/v1/search?name=Mainz), einmalig ermittelt am 2026-10-24; gewählt: Eintrag Rheinland-Pfalz (nicht Mainz/Bayern)"
+}
