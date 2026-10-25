@@ -1,7 +1,7 @@
 # Umsetzungsstand
 
 Stand: 25.10.2026. „Geprüft“ heißt: durch automatische Tests (`tests/run_tests.gd`) und/oder Autotest-Partien belegt.
-Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Spiel-Prompt und gültigem Aktions-JSON getestet (Godot 4.7.2). Der aktuelle vollständige Headless-Lauf bestand 4374 Prüfungen ohne Testfehler.
+Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Spiel-Prompt und gültigem Aktions-JSON getestet (Godot 4.7.2). Der vollständige Korrekturlauf mit Godot 4.4.1 unter Linux bestand 4563 Prüfungen ohne Testfehler oder Speicherwarnungen. Nach Ergänzung der lokalen Tankbefehle bestanden außerdem alle 29 gezielten Prompt- und Tankprüfungen.
 Externe Sprachmodell-APIs wurden mangels Key nicht live getestet. Die übrigen Adaptertests nutzen den
 DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen lokalen Mock-Server.
 
@@ -23,9 +23,9 @@ DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen l
 | Windows-Export | `build/PixelTransportRivals.exe` | Autotest mit der exportierten EXE |
 
 **Bewusst nicht umgesetzt / Grenzen dieses Stands**
-- Gebäude-Zustandsvarianten und Renovierung (Teil des Auftrags „Stadtviertel“) sowie Winterkleidung der Figuren fehlen.
+- Winterkleidung der Figuren fehlt. Gebäudezustand, Renovierung und sichtbare Zustandsvarianten sind inzwischen umgesetzt (siehe Auftrag 3).
 - Ein- und Aussteigen der Fahrer wird nicht animiert; die Nahaufnahme „arbeitender Betriebshof“ wurde mit einem Testszenario (`--scenario=yard`) geprüft, in dem Bau und Reparatur laufen, aber nur wenige Arbeiter sichtbar sind.
-- Die Aufträge „Wirtschaftskreislauf“ (Banken, Kredite, Insolvenz, Großhändler, Produktion), „Kraftstoffpreise, Löhne, Haushalte, Stadtviertel“ und „Öffentliche Hand, Steuern, Geldschöpfung“ sind **noch nicht umgesetzt**. Vorhanden sind nur der Entwurf (`docs/ECONOMY.md`), die Kalenderklasse `GameCalendar` (Spieltag/Monat/Jahr, im HUD angezeigt) und die Partiedauern 4 h/12 h/24 h/Endlos.
+- Banken, Kredite, Insolvenz, Großhändler, Produktion, Kraftstoffpreise, Löhne und Haushalte sind inzwischen teilweise bzw. vollständig implementiert; die Einzelstände stehen unten. Öffentliche Hand, Steuern und Geldschöpfung bleiben weitere Ausbaustufen. Das aktuelle Bankmodell verteilt vorhandenes Geld; Zinsen allein erzeugen kein neues Geld.
 - Externe Sprachmodell-APIs wurden weiterhin nicht live getestet; das lokale Ollama-Modell wurde geprüft.
 
 ## Fertig
@@ -107,8 +107,8 @@ Handel, Sabotage (Ruf/Depot), Spielende nach aktiver Echtzeit (max. 240 min), Sp
 
 ## Offen
 - Strategische Steuerung Stufe 6: Vergleichsmodus (Metrik-Export, rotierende Startpositionen, gleiche Budgets) und exakte Wiederholung ohne API-Aufrufe; Abnahmeszenario mit Straßensperrung.
-- Auftrag „Grundstücke und Stadt“, Teil 2: Villen, Schulen, Kitas, Frachtterminal, gebäudetypabhängige Kundenaufträge und die Animationen Tragen/Reparieren/Sprechen sind umgesetzt; offen sind Ein-/Aussteigen und Zustandsvarianten der Gebäude.
-- Nicht automatisch getestet: Kühllager-Pflicht für Kühlware am Hof, Tankstelle, Waschplatz, Schulung, Garage/Sicherheit-Bonus (Code vorhanden, kein eigener Test).
+- Auftrag „Grundstücke und Stadt“, Teil 2: Villen, Schulen, Kitas, Frachtterminal, gebäudetypabhängige Kundenaufträge und die Animationen Tragen/Reparieren/Sprechen sind umgesetzt; offen ist die Animation des Ein-/Aussteigens.
+- Nicht automatisch getestet: Kühllager-Pflicht für Kühlware am Hof, Waschplatz, Schulung, Garage/Sicherheit-Bonus (Code vorhanden, kein eigener Test).
 
 ## Auftrag 3 (Zwischenstand)
 - **Fertig:** reale Kraftstoffpreise (Tankerkönig-Adapter, Referenz/Aufschlag/Ereignisfaktor getrennt, Status, Ersatzpreis), Tankstellen als Betriebe (Zapfsäulen, Wartezeit, Tankwagen, Betreiberkonto), Haushalte je Mitarbeiter (feste Adresse, Lebenshaltung, Defizit), verhandelte Löhne (`negotiate_wage`, Mindestlohn aus Markt und Haushaltsbedarf), aufgelaufene Löhne mit Rückstand und Vorrang in der Insolvenz, Motivation mit Kündigung.
@@ -118,7 +118,19 @@ Handel, Sabotage (Ruf/Depot), Spielende nach aktiver Echtzeit (max. 240 min), Sp
 
 ## Fehlerbehebung nach externer Prüfung (25.10.2026)
 1. `repay_loan` mit fremder Kredit-ID wird abgelehnt (Eigentumsprüfung vor jeder Buchung).
-2. Die Veraltet-Grenze für KI-Antworten wächst mit der Simulationsgeschwindigkeit; bei 16× gelten dieselben realen Sekunden wie bei 1×.
+2. KI-Antworten haben eine Grenze in aktiver Echtzeit; die Simulationsgeschwindigkeit ändert die zulässige Antwortdauer nicht. Jede Aktion wird am aktuellen Zustand geprüft.
 3. Vorzeitige Ablösung zieht überfällige Raten samt Zinsen und Verzugszuschlag zuerst ein; kein Kredit gilt als getilgt, solange Forderungen offen sind.
-4. Treibstoff wird gezapft (belegte Zapfsäulen = Wartezeit) und erst bei Ankunft im Depot gutgeschrieben (Tankwagen gegen Gebühr oder eigener Transportauftrag Tankstelle → Depot). Ein leerer Tank lässt das Fahrzeug liegen (kein stiller Notkauf); es fährt weiter, sobald Treibstoff im Depot ist, sonst kommt nach 90 Minuten die teure Notbetankung. Die Demo-KI bestellt früh und nutzt eine feste Nachtank-Regel.
+4. Betriebsvorrat wird erst bei Ankunft im Depot gutgeschrieben (Tankwagen gegen Gebühr oder eigener Transportauftrag Tankstelle → Depot). Fahrzeuge haben eigene begrenzte Tanks und fahren zum Tanken. Ein leerer Fahrzeugtank hält die Fahrt an; die KI kann kostenpflichtige Pannenhilfe mit Lieferzeit anfordern. Die Demo-KI bestellt Vorrat früh und nutzt eine feste Nachtank-Regel.
 5. Wetter-Speichertest vergleicht den Zeitstempel mit Toleranz.
+
+
+## Korrekturen nach Codeprüfung
+
+- Bankzugriff prüft den Kreditnehmer auch in der Domänenfunktion; Tilgungsbeträge sind positiv und endlich. Fällige Zinsen und Gebühren gehen bei Teil- oder Volltilgung nicht verloren. Einlagenzinsen bleiben bei Liquiditätsmangel geschuldet; ungültige Anlagearten werden abgelehnt.
+- KI-Anfragen verwenden aktive Echtzeit statt einer von der Spielgeschwindigkeit abhängigen Veraltet-Grenze. Abgelaufene Antworten zählen als Fehler für den Ersatzmodus. Partieende und neue Firmengeneration sperren alte Antworten.
+- Begrenzte Fahrzeugtanks, tatsächliche Tank-Anfahrt, Warteschlange nach Ankunft, Tankdauer, Wiederaufnahme der Tour, kostenpflichtiger Pannendienst. Öffentliche Tankstellen und Betriebsvorrat sind getrennt. Alte Spielstände werden migriert, Lieferungen bleiben an die bestellende Firmengeneration gebunden.
+- Fahrzeugansicht und KI-Beobachtung zeigen Tankfüllung und Tankauftrag. Der Demospieler kann Pannenhilfe anfordern.
+- Wetter-Zeitstempel werden nach JSON-Rundung mit Millisekundentoleranz geprüft. Ungültiges JSON von Preis- und Nachrichtendiensten wird ohne Engine-Parserfehler gemeldet.
+- Aktive Partiedauer zählt volle Echtzeit auch bei langsamen Frames. Beim Verlassen werden Simulationszyklen aufgelöst; UI-Tests lassen vorgemerkte Löschungen vor dem Engine-Ende ablaufen. Auch ohne Initialisierung vorbereitete Grafikknoten der Stadtansicht werden freigegeben.
+
+Validierung: vollständiger Headless-Lauf mit Godot 4.4.1 (4563 Prüfungen, 0 Fehler, keine Speicherwarnungen), danach 29 gezielte Prompt-/Tankprüfungen. Vier Demo-Spieler spielten 60 Sekunden bei 16× bis zum regulären Ende; Geld- und Warenabweichung jeweils 0. Der echte HTTP-Adapter übernahm im lokalen Mock-Test bei 16× insgesamt 17 um drei Sekunden verzögerte Antworten ohne API-Fehler. Der Test-Key erschien in keiner erzeugten Datei unmaskiert. Externe bezahlte Modell-APIs und ein nativer Windows-Lauf wurden für diese Korrekturen nicht ausgeführt.

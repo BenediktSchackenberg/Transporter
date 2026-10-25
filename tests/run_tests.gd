@@ -5,13 +5,14 @@ extends SceneTree
 
 var failures := 0
 var checks := 0
+var _test_simulations: Array[Simulation] = []
 
 
 func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_banking_regressions", "test_vehicle_refueling", "test_simulation_disposal", "test_refueling_queue_and_migration"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -24,8 +25,14 @@ func _initialize() -> void:
 		var before := checks
 		var fails := failures
 		call(name)
+		for simulation in _test_simulations:
+			simulation.dispose()
+		_test_simulations.clear()
 		print("== %s: %d Prüfungen, %d Fehler" % [name, checks - before, failures - fails])
 	print("\n%d Prüfungen, %d Fehler (%.1f s)" % [checks, failures, (Time.get_ticks_msec() - t0) / 1000.0])
+	# queue_free aus UI-Tests braucht einen vollstaendigen Leerlauf vor dem Engine-Ende.
+	await process_frame
+	await process_frame
 	quit(1 if failures > 0 else 0)
 
 
@@ -47,6 +54,13 @@ func players(n: int) -> Array:
 func new_sim(n: int = 4, size: int = 128) -> Simulation:
 	var s := Simulation.new()
 	s.setup(4242, players(n), size, 0.5)
+	_test_simulations.append(s)
+	return s
+
+
+func load_sim(data: Dictionary) -> Simulation:
+	var s := Simulation.from_dict(data)
+	_test_simulations.append(s)
 	return s
 
 
@@ -336,7 +350,7 @@ func test_save_load() -> void:
 	var d := s.to_dict()
 	var txt := JSON.stringify(d)
 	ok(not txt.to_lower().contains("api_key") and not txt.contains("sk-"), "Spielstand enthält keine Schlüssel")
-	var s2 := Simulation.from_dict(JSON.parse_string(txt))
+	var s2 := load_sim(JSON.parse_string(txt))
 	ok(is_equal_approx(s2.game_min, s.game_min), "Spielzeit geladen")
 	ok(s2.companies.size() == 2 and is_equal_approx(s2.companies[0].ledger.cash, s.companies[0].ledger.cash), "Finanzen geladen")
 	ok(s2.vehicles.size() == s.vehicles.size(), "Fahrzeuge geladen")
@@ -372,6 +386,7 @@ func test_controller_idempotency() -> void:
 	ok(is_equal_approx(s.companies[0].ledger.debt, 1000.0), "verspätete Antwort auf abgebrochene Anfrage ignoriert")
 	var old := ctl.begin_request_for_test()
 	s.game_min += 500.0
+	ctl.real_time += 51.0
 	ctl.handle_result(old, {"ok": true, "content": content, "usage": {}})
 	ok(is_equal_approx(s.companies[0].ledger.debt, 1000.0), "Antwort auf veralteten Zustand verworfen")
 	var bad := ctl.begin_request_for_test()
@@ -383,9 +398,32 @@ func test_controller_idempotency() -> void:
 	ctl.handle_result(local, {"ok": true, "content": '{"goal":"Lieferungen planen","summary":"Ich plane.","actions":[{"action":"wait"}]}', "usage": {}})
 	ok(ctl.goal == "Lieferungen planen", "langsame lokale Modellantwort wird innerhalb eines Spieltags übernommen")
 	var too_old := ctl.begin_request_for_test()
-	s.game_min += AgentController.STALE_GAME_MIN_OLLAMA + 1.0
+	ctl.real_time += 51.0
 	ctl.handle_result(too_old, {"ok": true, "content": content, "usage": {}})
-	ok(ctl.last_error.contains("veraltet"), "Antwort auf mehr als einen Spieltag alten Zustand bleibt gesperrt")
+	ok(ctl.last_error.contains("veraltet"), "Antwort jenseits des Echtzeitlimits bleibt gesperrt")
+	ctl.config.provider = "openai"
+	var fast := ctl.begin_request_for_test()
+	s.game_min += 96.0   # 3 Sekunden bei 16x
+	ctl.real_time += 3.0
+	var old_ok: int = ctl.stats.ok
+	ctl.handle_result(fast, {"ok": true, "content": '{"summary":"Schnelles Spiel","actions":[{"action":"wait"}]}', "usage": {}})
+	ok(ctl.stats.ok == old_ok + 1, "normale API-Latenz bei 16x verwirft keine Antwort")
+	ctl.config.fallback = true
+	for i in 3:
+		var expired := ctl.begin_request_for_test()
+		ctl.real_time += 51.0
+		ctl.handle_result(expired, {"ok": true, "content": content, "usage": {}})
+	ok(ctl.fallback_active and ctl.stats.errors >= 3, "veraltete Antworten zaehlen als Fehler und aktivieren Ersatzmodus")
+	var finished := ctl.begin_request_for_test()
+	s.finished = true
+	var debt := s.companies[0].ledger.debt
+	ctl.handle_result(finished, {"ok": true, "content": content})
+	ok(s.companies[0].ledger.debt == debt, "nach Partieende wird keine Antwort ausgefuehrt")
+	s.finished = false
+	var previous_company := ctl.begin_request_for_test()
+	s.companies[0].generation += 1
+	ctl.handle_result(previous_company, {"ok": true, "content": content})
+	ok(s.companies[0].ledger.debt == debt, "Antwort einer aufgeloesten Firmengeneration wird ignoriert")
 	ctl.free()
 
 
@@ -658,7 +696,7 @@ func test_workers_acceptance() -> void:
 	ok(obs_sab.ergebnisse_deiner_aktionen.any(func(r): return str(r).contains("verloren") or str(r).contains("erwischt")), "Saboteur sieht den Personalverlust")
 	ok(not obs_sab.personal.any(func(x): return x.id == sab.id), "verlorener Arbeiter fehlt in der eigenen Planung")
 	ok(identity_ok(s), "Identität nach Sabotage")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.personnel.workers[sab.id].lost and s2.personnel.tasks.size() == P.tasks.size(), "Personal und Aufgaben werden gespeichert")
 
 
@@ -681,6 +719,7 @@ func test_local_agent_choices() -> void:
 	ctl.config["provider"] = "ollama"
 	var full := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
 	var local_prompt := ctl.system_prompt() + ctl.user_prompt(full)
+	ok(ctl.system_prompt().contains("refuel_vehicle") and ctl.system_prompt().contains("request_fuel_rescue") and full.verfuegbare_aktionen.has("refuel_vehicle"), "auch lokale Modelle kennen Tankstopp und Pannendienst mit gueltigen Ziel-IDs")
 	ok(ctl.system_prompt().contains("rent_depot") and ctl.user_prompt(full).contains("freie_depotstandorte"), "lokaler Agent kennt Stellplatz-Ausbau mit gültigen Depot-IDs")
 	ctl.config["provider"] = "demo"
 	var full_prompt := ctl.system_prompt() + ctl.user_prompt(full)
@@ -941,7 +980,7 @@ func test_stage2_memory() -> void:
 	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
 	ok(obs.has("gedaechtnis") and JSON.stringify(obs).length() / 4 < 5000, "Gedächtnis in der Beobachtung, Größe begrenzt")
 	# Speichern/Laden und Uebernahme in neue Partie
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.memory.books[0].experiences.size() == M.books[0].experiences.size(), "Gedächtnis im Spielstand")
 	var exported := M.export_experiences(0)
 	var s3 := new_sim(2)
@@ -1016,7 +1055,7 @@ func test_stage3_events_and_log() -> void:
 	ok(s.decisions.consequences(acc).contains("geliefert"), "gemessene Folge am Eintrag: " + s.decisions.consequences(acc))
 	ok(s.decisions.entries.any(func(e): return e.herkunft == "auto" and e.refs.get("contract_id", "") == k.id), "Simulationsvorgang (Lieferung) als 'auto' protokolliert")
 	ok(s.decisions.entries.any(func(e): return e.herkunft == "spectator"), "Zuschauer-Ereignisse protokolliert")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.decisions.entries.size() > 0 and s2.events.events.size() == E.events.size(), "Protokoll und Ereignisse im Spielstand")
 	ok(identity_ok(s), "Identität nach Ereignissen")
 
@@ -1137,7 +1176,7 @@ func test_stage4_contracts() -> void:
 	s.social.tick(s.game_min)
 	ok(gX.status == "gebrochen" and B.ledger.totals.get("penalties", 0.0) - penB == -250.0, "Vertragsstrafe bei Nichterfüllung")
 	ok(identity_ok(s), "Identität nach Verträgen")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.social.agreements.size() == s.social.agreements.size(), "Verträge im Spielstand")
 
 
@@ -1279,7 +1318,7 @@ func test_estate_acceptance() -> void:
 	var pb0 := c0.property_book
 	ok(s.executor.execute(0, {"action": "remove_building", "building_id": ws.building_id}).ok, "Werkstatt zurückgebaut")
 	ok(c0.property_book < pb0 and identity_ok(s), "Rückbau schreibt Buchwert ab, Identität ok")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.estate.facilities.size() == E.facilities.size() and s2.companies[0].fleet_limit() == c0.fleet_limit() \
 		and s2.estate.storage_cap(site) == E.storage_cap(site), "Betriebshof gespeichert und geladen")
 	ok(identity_ok(s2), "Identität nach Laden")
@@ -1359,8 +1398,8 @@ func test_weather_model() -> void:
 	set_wx(s, 9.0, 3)
 	run(s, 400.0)
 	ok(s.wx.cur.source == "open-meteo" and int(s.wx.cur.temp) == 9 and s.game_min > 700.0, "800 Spielminuten ändern echte Wetterdaten nicht (Spielzeit %.0f)" % s.game_min)
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
-	ok(s2.wx.cur.source == "open-meteo" and int(s2.wx.cur.temp) == 9 and absf(s2.wx.fetched_unix - s.wx.fetched_unix) < 0.01, "Wetter übersteht Speichern/Laden")
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.wx.cur.source == "open-meteo" and int(s2.wx.cur.temp) == 9 and absf(s2.wx.fetched_unix - s.wx.fetched_unix) < 0.001, "Wetter übersteht Speichern/Laden")
 	var s3 := new_sim(2)
 	run(s3, 300.0)
 	ok(s3.wx.cur.source == "simuliert", "Ersatzwetter ist als simuliert markiert")
@@ -1613,8 +1652,10 @@ func test_iso_strips() -> void:
 	ok(small.size() == 1 and is_equal_approx(small[0].position.y, 128.0), "2x2-Haus: ein Sprite, sortiert an der vorderen Ecke")
 	var deep := cv.add_iso_object(parent, "b_depot", cv.man.buildings["depot"], Vector2.ZERO, 3, 3, true, "b_depot_mask")
 	ok(deep.all(func(sp): return sp.get_children().any(func(ch): return ch.has_meta("mask"))), "Depot-Streifen tragen die Firmenmaske")
+	var layer_reference: WeakRef = weakref(cv.lights_layer)
 	parent.free()
 	cv.free()
+	ok(layer_reference.get_ref() == null, "nicht initialisierte Stadtansicht gibt vorbereitete Layer frei")
 
 
 func test_weather_service() -> void:
@@ -1683,7 +1724,7 @@ func test_residents_save_load() -> void:
 			break
 	var k: Contract = s.residents.request(rest, s.game_min, 0)
 	ok(k != null and s.residents._active.has(rest.id), "offene Anfrage ist in der aktiven Liste")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	var r2: Dictionary = s2.residents.people[rest.id]
 	ok(r2.state == "wartet" and r2.contract == k.id and s2.residents._active.has(rest.id), "Kundenfigur und Anfrage überstehen Speichern/Laden")
 	ok(s2.contracts[k.id].requester == rest.id and s2.contracts[k.id].concern == k.concern, "Auftrag behält Kunde und Anliegen")
@@ -1718,7 +1759,7 @@ func test_calendar() -> void:
 	run(s, 60.0 * 31.5)   # 31,5 Spieltage
 	ok(days.size() == 31 and days[0] == 1 and days[-1] == 31, "Tageswechsel einmal je Tag (%d)" % days.size())
 	ok(months == [1], "Monatswechsel genau einmal")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(GameCalendar.parts(s2.game_min) == GameCalendar.parts(s.game_min), "Kalender nach Laden gleich")
 
 
@@ -1735,7 +1776,7 @@ func test_money_conservation() -> void:
 	s.companies[0].ledger.inject(5000.0)
 	ok(identity_ok(s), "Kapitaleinlage hat Gegenkonto")
 	ok(is_equal_approx(s.economy.accounts.I0, Economy.SEED.I0 - 5000.0), "Kapitalgeber-Konto zeigt Einlage")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(absf(s2.economy.conservation_error()) < 0.01, "Geld erhalten nach Laden")
 	run(s2, 120.0)
 	ok(identity_ok(s2), "Geld erhalten nach Laden und Weiterspielen")
@@ -1801,7 +1842,7 @@ func test_banking() -> void:
 	ok(B.summary_of(0).kredite.size() == 1, "Beobachtung listet den Kredit")
 	ok("Referenzzins" in LiveText.banks(s) and "Geschäftsbank" in LiveText.banks(s), "Reiter Banken erzeugt Text")
 	ok(JSON.stringify(ObservationBuilder.build(s, 0, [], 0.0, 30.0)).contains("referenzzins_pa"), "Beobachtung enthält Bankdaten")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.banking.loans.size() == 1 and is_equal_approx(s2.banking.ref_rate, B.ref_rate), "Banken nach Laden")
 	ok(identity_ok(s2), "Identität nach Laden")
 	run(s2, 1850.0)
@@ -1850,7 +1891,7 @@ func test_company_forms() -> void:
 	run(s, 60.0 * 31.0)
 	ok(c.ledger.totals.get("admin", 0.0) < fee, "monatliche Verwaltungskosten der neuen Form")
 	ok(identity_ok(s), "Geld erhalten")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.companies[0].form == c.form and s2.companies[0].founded_min == c.founded_min, "Rechtsform nach Laden")
 
 
@@ -1920,7 +1961,7 @@ func test_insolvency() -> void:
 	ok(JSON.stringify(ObservationBuilder.build(s, 0, [], 0.0, 30.0)).contains("rechtsform"), "Beobachtung enthält Rechtsform")
 	run(s, 60.0 * 5.0)
 	ok(identity_ok(s) and n.is_active(), "Neugründung läuft stabil")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.insolvency.archive.size() == 1 and s2.companies[1].generation == 2, "Historie und Nachfolger nach Laden")
 	ok(identity_ok(s2), "Geld erhalten nach Laden")
 	run(s2, 60.0 * 3.0)
@@ -1966,7 +2007,7 @@ func test_trader() -> void:
 	var sell := s.executor.execute(0, {"action": "sell_material", "item": "altmaterial", "menge": 50})
 	ok(sell.ok and is_equal_approx(c.ledger.cash - cash2, 30.0 * 4.0), "Altmaterial verkauft, nur vorhandene Menge: " + sell.msg)
 	ok(identity_ok(s), "Geld und Waren nach Ankauf")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.stock.total("ziegel") == s.stock.total("ziegel") and s2.trader.shipments.size() == 1, "Bestand und Transporte nach Laden")
 	ok(identity_ok(s2), "Geld und Waren nach Laden")
 	# Ausland: Nachbestellung, wenn der Bestand unter den Meldebestand faellt
@@ -2071,7 +2112,7 @@ func test_standings() -> void:
 	top.status = "aktiv"
 	var w: Dictionary = s.standings.stage_winners[0]
 	ok("Monat 1" in LiveText.standings(s) and w.name != "", "Rangliste zeigt Etappensieger")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.standings.stage_winners.size() == 1 and s2.standings.stage_winners[0].name == w.name, "Etappensieger bleiben nach Laden erhalten")
 
 
@@ -2125,7 +2166,7 @@ func test_economy_cycle() -> void:
 	# 11) Etappensieger und Rangliste
 	ok(s.standings.stage_winners.size() >= 1 and s.standings.winner() != null, "11) Etappensieger und zahlungsfähiger Führender")
 	# 12) Speichern, Laden, Weiterspielen
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(identity_ok(s2) and s2.insolvency.archive.size() == 1 and s2.banking.loans.size() == s.banking.loans.size(), "12) Spielstand geladen")
 	run(s2, 60.0 * 31.0)
 	ok(identity_ok(s2), "12) Geld und Waren erhalten nach dem Laden")
@@ -2238,7 +2279,7 @@ func test_fuel_prices() -> void:
 	ok(not s.fuel.last_error.contains("GEHEIM"), "Schlüssel wird aus Fehlertexten entfernt")
 	ok(not JSON.stringify(s.to_dict()).contains("GEHEIM"), "Spielstand enthält keinen Schlüssel")
 	svc.free()
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(is_equal_approx(s2.fuel.ref.diesel, s.fuel.ref.diesel) and s2.fuel.source == "tankerkoenig", "Preisstand nach Laden")
 	ok("KRAFTSTOFF" in LiveText.situation(s, 10.0), "Lage-Reiter zeigt Kraftstoffpreise")
 
@@ -2255,20 +2296,19 @@ func test_gas_stations() -> void:
 	run(s, 60.0 * 1.2)
 	ok(float(st.stock) < stock0 and s.economy.accounts.G0 != g0, "Haushalte tanken: Bestand sinkt, Betreiber nimmt Geld ein")
 	ok(float(st.revenue) > 0.0 and float(st.sales_l) > 0.0, "Umsatz und Absatz der Tankstelle erfasst")
-	# Engpass an den Zapfsäulen
+	# Eine bezahlte Vorratslieferung ist vor ihrer Ankunft nicht nutzbar.
 	st.stock = float(st.max)
 	st.busy = []
 	var c := s.companies[0]
 	c.fuel = 0.0
-	c.fuel_cap = 20000.0
 	c.ledger.inject(20000.0)
-	var waits := 0
-	for i in 8:
-		var r := R.buy_supplies(0, st.id, 300.0)
-		if "Wartezeit" in r.msg:
-			waits += 1
-	ok(waits > 0 and float(st.wait_min) > 0.0, "Alle Säulen belegt → Wartezeit entsteht (%d Käufe warteten)" % waits)
-	ok(R.pumps_busy(st) == int(st.pumps), "belegte Säulen werden gezählt")
+	var r := R.buy_supplies(0, st.id, 300.0)
+	ok(r.ok and c.fuel == 0.0 and R.pending_fuel(0) == 300.0, "Tankwagenbestellung wird nicht sofort zum Vorrat")
+	ok(R.pumps_busy(st) == 1, "Beladung belegt eine Saeule")
+	var delivery: Dictionary = R.fuel_deliveries[0]
+	s.game_min = float(delivery.due)
+	R.minute_tick(s.game_min)
+	ok(c.fuel == 300.0 and R.pending_fuel(0) == 0.0, "erst die Anlieferung fuellt den Betriebsvorrat")
 	# Tankwagen: leere Station wird nachbestellt und beliefert
 	st.stock = 100.0
 	st.busy = []
@@ -2282,7 +2322,7 @@ func test_gas_stations() -> void:
 	run(s, 60.0 * 31.0)
 	ok(s.economy.accounts.G0 > 0.0, "Tankstellenbetreiber bleibt zahlungsfähig (%.0f)" % s.economy.accounts.G0)
 	ok(identity_ok(s), "Geld nach einem Monat Tankstellenbetrieb")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.resources.tanker_orders.size() == s.resources.tanker_orders.size() and identity_ok(s2), "Tankstellen nach Laden")
 
 
@@ -2333,7 +2373,7 @@ func test_households_wages() -> void:
 	for i in 3:
 		s.households.on_month(i)
 	ok(poor.motivation < m0, "Defizit und niedriger Lohn senken die Motivation (%d → %d)" % [int(m0), int(poor.motivation)])
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.households.homes.size() == s.households.homes.size() and s2.personnel.workers[w.id].household == w.household, "Haushalte nach Laden")
 	ok(identity_ok(s2), "Geld nach Laden")
 
@@ -2390,7 +2430,7 @@ func test_fuel_planner() -> void:
 	run(s, 10.0)
 	ok(c.fuel <= fuel_after + 0.01, "keine weitere Bestellung bei ausreichendem Vorrat")
 	ok(identity_ok(s), "Geld erhalten mit Nachtank-Regel")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.companies[0].fuel_rule.below == 200.0, "Regel nach Laden")
 	ok(s.executor.execute(0, {"action": "schedule_refueling", "below_l": 0, "buy_l": 0}).ok and c.fuel_rule.is_empty(), "Regel löschen")
 	# Wetter erhoeht den Verbrauch
@@ -2453,7 +2493,7 @@ func test_building_care() -> void:
 	ok(float(f.condition) < 70.0, "Einrichtung verschleißt mit der Zeit (%d)" % int(f.condition))
 	ok(cond1 > 20.0 and identity_ok(s), "Geld und Bilanz stimmen")
 	ok("STADTVIERTEL" in LiveText.situation(s, 10.0), "Lage-Reiter zeigt Viertelzustand")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.care.condition.size() == C.condition.size() and absf(s2.care.get_condition(C.condition.keys()[0]) - C.get_condition(C.condition.keys()[0])) < 0.2, "Zustand nach Laden")
 
 
@@ -2514,7 +2554,7 @@ func test_workforce() -> void:
 	run(s, 60.0 * 1.6)
 	ok(s.personnel.employed(0).size() == n0 + 2 and s.workforce.pending.is_empty(), "nach einem Spieltag sind beide Ersatzkräfte angestellt")
 	ok(identity_ok(s), "Geld und Bilanz stimmen")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.personnel.workers[idle.id].health == idle.health and s2.workforce.pending.size() == s.workforce.pending.size(), "Gesundheit und Vermittlungen nach Laden")
 	# Gesundheit schlaegt auf die Motivation durch
 	var w2: Worker = s.personnel.employed(0)[0]
@@ -2572,7 +2612,7 @@ func test_news_feed() -> void:
 	svc.free()
 	ok(JSON.stringify(ObservationBuilder.build(s, 0, [], 0.0, 30.0)).contains("meldungen_nur_daten"), "KI sieht Meldungen ausdrücklich als Daten")
 	ok("NACHRICHTEN" in LiveText.situation(s, 10.0) and "gemeldet" in LiveText.news_block(s), "Lage-Reiter zeigt die drei Ebenen")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.news.items.size() == s.news.items.size() and s2.news.ingest(p).is_empty(), "Meldungen und Duplikatschutz nach Laden")
 	ok("HAUSHALTE" in LiveText.households(s), "Ansicht Haushalte")
 
@@ -2621,13 +2661,15 @@ func test_review_fixes() -> void:
 	ok(not ctl.last_error.contains("veraltet"), "bei 16× ist eine Antwort nach wenigen echten Sekunden nicht veraltet")
 	var req2 := ctl.begin_request_for_test()
 	s.game_min += 90.0 * 16.0 + 10.0
+	ctl.real_time += 51.0
 	ctl.handle_result(req2, {"ok": true, "content": content, "usage": {}})
 	ok(ctl.last_error.contains("veraltet"), "sehr späte Antworten bleiben gesperrt")
 	ctl.speed = 1.0
 	var req3 := ctl.begin_request_for_test()
 	s.game_min += 95.0
+	ctl.real_time += 51.0
 	ctl.handle_result(req3, {"ok": true, "content": content, "usage": {}})
-	ok(ctl.last_error.contains("veraltet"), "bei 1× gilt weiter die alte Grenze")
+	ok(ctl.last_error.contains("veraltet"), "auch bei 1× gilt das Echtzeitlimit")
 	ctl.free()
 
 
@@ -2666,33 +2708,198 @@ func test_physical_fueling() -> void:
 	s.deliver_contract(s.company_vehicles(0)[0], k)
 	ok(c.fuel == fuel_before + 200.0 and s.resources.fuel_shipments.is_empty(), "nach Abliefern steigt der Vorrat")
 	ok(identity_ok(s), "Geld erhalten beim physischen Tanken")
-	# leerer Tank: Fahrzeug bleibt liegen, keine stille Notberechnung
+	# Leerer Fahrzeugtank bleibt auch dann leer, wenn im entfernten Depot Diesel liegt.
 	var v: FleetVehicle = s.company_vehicles(0)[0]
-	c.fuel = 0.0
-	var fuel_cost0: float = c.ledger.totals.get("fuel", 0.0)
 	v.state = "idle"
-	s.route(v, s.nearest_building_of("dealer", v.tile()).road, "returning")
-	var guard := 0
-	while v.state != "broken" and guard < 4000:
-		s.step(0.1)
-		guard += 1
-	ok(v.state == "broken" and v.no_fuel, "Tank leer: Fahrzeug bleibt liegen")
-	ok(c.ledger.totals.get("fuel", 0.0) >= fuel_cost0 - 0.001, "kein automatischer Notkauf während der Fahrt")
+	v.refueling = {}
+	v.fuel_l = 0.0
 	c.fuel = 100.0
-	for i in 5:
-		s.step(0.2)
-	ok(v.state != "broken" and not v.no_fuel, "mit Treibstoff im Depot fährt das Fahrzeug weiter")
-	# Notbetankung nach 90 Minuten
-	c.fuel = 0.0
-	v.state = "idle"
 	s.route(v, s.nearest_building_of("dealer", v.tile()).road, "returning")
-	guard = 0
-	while v.state != "broken" and guard < 4000:
-		s.step(0.1)
-		guard += 1
+	s._drive(v, 0.2)
+	ok(v.state == "out_of_fuel", "Tank leer: Fahrzeug bleibt liegen")
 	var cash_e := c.ledger.cash
-	run(s, 60.0)   # mehr als 90 Spielminuten
-	ok(not v.no_fuel and c.ledger.cash < cash_e - 80.0, "nach 90 Minuten kommt die teure Notbetankung")
+	VehicleFuel.update(s, v, 60.0)
+	ok(v.state == "out_of_fuel" and v.fuel_l == 0.0 and c.ledger.cash == cash_e, "Depotbestand wird nicht an den Strassenrand teleportiert")
+	var rescue := VehicleFuel.rescue(s, 0, v.id)
+	ok(rescue.ok and c.ledger.cash < cash_e and v.fuel_l == 0.0, "kostenpflichtiger Pannendienst braucht Zeit")
+	VehicleFuel.update(s, v, 31.0)
+	ok(v.fuel_l == 30.0 and v.state == "idle", "Pannendienst liefert begrenzte Menge")
 	ok(identity_ok(s), "Geld erhalten nach Notbetankung")
-	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var s2 := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.resources.fuel_deliveries.size() == s.resources.fuel_deliveries.size() and identity_ok(s2), "Lieferungen nach Laden")
+
+
+func test_banking_regressions() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	for cid in 2:
+		ok(s.executor.execute(cid, {"action": "take_loan", "amount": 1000}).ok, "Testkredit erteilt")
+	var B := s.banking
+	var l: Dictionary = B.loans["K2"]
+	var cash0 := s.companies[0].ledger.cash
+	var cash1 := s.companies[1].ledger.cash
+	var bank_cash := B.bank_cash(0)
+	var r := s.executor.execute(0, {"action": "repay_loan", "kredit_id": "K2", "amount": 500})
+	ok(not r.ok and s.companies[0].ledger.cash == cash0 and s.companies[1].ledger.cash == cash1 and B.bank_cash(0) == bank_cash, "fremde Tilgung aendert weder Firma noch Bank")
+	ok(not B.early_repay(0, "K2", 500).ok, "Eigentumspruefung gilt auch direkt in der Bank")
+	var c := s.companies[1]
+	c.ledger.inject(-c.ledger.cash)
+	s.game_min = GameCalendar.day_game_min * GameCalendar.DAYS_PER_MONTH
+	B._collect(l, 1)
+	var interest := float(l.plan[0].interest)
+	var fees := float(l.fees_due)
+	ok(interest > 0.0 and fees > 0.0 and l.arrears == 1, "faellige Zinsen und Verzug vorhanden")
+	c.ledger.inject(5000.0)
+	var snapshot := JSON.stringify(l)
+	var before := c.ledger.cash
+	r = B.early_repay(1, l.id, 1.0)
+	ok(not r.ok and JSON.stringify(l) == snapshot and c.ledger.cash == before, "zu kleine Sondertilgung veraendert Rueckstaende nicht")
+	var principal_due := float(l.plan[0].principal)
+	var early_fee := snappedf((float(l.outstanding) - principal_due) * Banking.EARLY_FEE, 0.01)
+	r = B.early_repay(1, l.id, 1000.0)
+	ok(r.ok and l.status == "getilgt", "Volltilgung mit Rueckstaenden: " + r.msg)
+	ok(absf(before - c.ledger.cash - (1000.0 + interest + fees + early_fee)) < 0.01, "Volltilgung bezahlt Kapital, faellige Zinsen, Verzug und Vorfaelligkeit")
+	ok(l.fees_due == 0.0 and l.arrears == 0 and c.ledger.debt == 0.0, "keine unbezahlt als getilgt markierten Rueckstaende")
+	ok(identity_ok(s), "Bilanz und Geld nach Volltilgung erhalten")
+	var own: Dictionary = B.loans["K1"]
+	var due := float(own.plan[0].principal)
+	r = B.early_repay(0, own.id, due + 100.0)
+	ok(r.ok and own.plan[0].status == "bezahlt" and own.plan[1].month == 2 and own.arrears == 0, "Teiltilgung bezahlt faellige Rate und behaelt kuenftige Laufzeit")
+	ok(absf(float(own.outstanding) - (1000.0 - due - 100.0)) < 0.01, "Teiltilgung mindert Restkapital exakt")
+	B._collect(own, 2)
+	ok(identity_ok(s), "keine Doppelbuchung bei naechster Rate")
+	ok(not B.deposit(0, 0, 100.0, "unbekannt", 0).ok, "ungueltige Anlageart wird abgefangen")
+	ok(not B.early_repay(0, own.id, -10.0).ok, "negative Tilgung wird abgelehnt")
+	var dep := B.deposit(0, 0, 100.0, "tages", 0)
+	var d: Dictionary = B.deposits[dep.id]
+	d.owed = 5.0
+	var bank_before := B.bank_cash(0)
+	s.economy.transfer("B1", "X0", bank_before - 100.0)
+	r = B.withdraw(0, dep.id)
+	ok(not r.ok and B.deposits.has(dep.id) and d.owed == 5.0, "Liquiditaetsmangel loescht keine geschuldeten Einlagenzinsen")
+
+
+func test_vehicle_refueling() -> void:
+	GameCalendar.configure(600.0)
+	var s := new_sim(2)
+	s.traffic.clear()
+	var v: FleetVehicle = s.company_vehicles(0)[0]
+	var c := s.companies[0]
+	var R := s.resources
+	var st: Dictionary = R.supplies.values().filter(func(x): return x.kind == "fuel")[0]
+	var road: Vector2i = s.city.building(st.building).road
+	# Fahrzeug steht an einer Tankstelle, alle Pumpen sind noch besetzt.
+	v.pos = s.city.tile_center(road)
+	v.path.clear()
+	v.fuel_l = 10.0
+	st.busy = []
+	for i in int(st.pumps):
+		st.busy.append(s.game_min + 20.0)
+	var stock := float(st.stock)
+	var cash := c.ledger.cash
+	var r := s.executor.execute(0, {"action": "refuel_vehicle", "vehicle_id": v.id, "station": st.id, "liters": 40})
+	ok(r.ok and v.state == "to_fuel" and v.fuel_l == 10.0, "Tankbefehl fuellt nicht sofort")
+	s._on_arrival(v)
+	VehicleFuel.update(s, v, 1.0)
+	ok(v.state == "waiting_fuel" and v.fuel_l == 10.0 and st.stock == stock and c.ledger.cash == cash, "belegte Zapfsaeulen erzwingen echte Wartezeit ohne vorzeitige Abbuchung")
+	var saved := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var restored: FleetVehicle = saved.vehicles[v.id]
+	ok(restored.state == "waiting_fuel" and restored.refueling.station == st.id and restored.fuel_l == 10.0, "Warteschlange und Tankauftrag ueberstehen Laden")
+	s.game_min += 21.0
+	VehicleFuel.update(s, v, 0.0)
+	ok(v.state == "refueling" and v.fuel_l == 10.0 and float(st.stock) == stock - 40.0 and c.ledger.cash < cash, "erst freie Pumpe reserviert und bezahlt Kraftstoff")
+	var pumping := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var pumping_v: FleetVehicle = pumping.vehicles[v.id]
+	VehicleFuel.update(pumping, pumping_v, 2.0)
+	ok(pumping_v.fuel_l == 50.0 and pumping_v.state == "idle", "bezahlter Tankvorgang wird nach Laden genau einmal beendet")
+	VehicleFuel.update(s, v, 2.0)
+	ok(v.fuel_l == 50.0 and v.state == "idle", "Kraftstoff erst nach Tankdauer nutzbar")
+	VehicleFuel.update(s, v, 2.0)
+	ok(v.fuel_l == 50.0, "Tankabschluss ist idempotent")
+	ok(not s.executor.execute(1, {"action": "refuel_vehicle", "vehicle_id": v.id, "station": st.id}).ok, "fremdes Fahrzeug darf nicht betankt werden")
+	ok(not s.executor.execute(0, {"action": "schedule_refueling", "below_l": 100, "buy_l": 200, "station": R.supplies.values().filter(func(x): return x.kind == "parts")[0].id}).ok, "Werkstatt ist keine Tankstelle fuer die feste Regel")
+	# Echte Anfahrt vom Hof, bei Tageslicht und ohne KI-Steuerung.
+	v.pos = s.city.tile_center(s.depot_road(0))
+	v.path.clear()
+	v.fuel_l = v.tank_capacity()
+	v.fuel_l -= 10.0
+	var start_pos := v.pos
+	r = VehicleFuel.begin(s, 0, v.id, st.id)
+	ok(r.ok and v.state == "to_fuel" and v.pos == start_pos, "Tankstelle wird angefahren, Fahrzeug teleportiert nicht")
+	var fuel_before := v.fuel_l
+	s._drive(v, 0.1)
+	ok(v.pos != start_pos and v.fuel_l < fuel_before, "Anfahrt bewegt Fahrzeug und verbraucht dessen Tank")
+	var enroute := load_sim(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(enroute.vehicles[v.id].state == "to_fuel" and not enroute.vehicles[v.id].path.is_empty(), "Tank-Anfahrt wird nach Laden neu geroutet")
+	# Kein unsichtbares Dauernachtanken. Leer bedeutet Stillstand.
+	v.refueling = {}
+	v.state = "returning"
+	v.fuel_l = 0.0
+	start_pos = v.pos
+	s._drive(v, 100.0)
+	ok(v.state == "out_of_fuel" and v.pos == start_pos, "leerer Fahrzeugtank verhindert Weiterfahrt auch bei grossem Zeitschritt")
+	r = s.executor.execute(0, {"action": "request_fuel_rescue", "vehicle_id": v.id})
+	ok(r.ok and v.state == "fuel_rescue" and v.fuel_l == 0.0, "Pannendienst kostet Geld und braucht Zeit")
+	ok(not VehicleFuel.rescue(s, 0, v.id).ok, "Pannendienst kann nicht doppelt bestellt werden")
+	VehicleFuel.update(s, v, 31.0)
+	ok(v.fuel_l == 30.0 and v.state == "idle", "begrenzt gelieferter Notkraftstoff nach Wartezeit")
+	ok(v.fuel_l <= v.tank_capacity() and identity_ok(s), "Tankgrenzen, Bilanz und Geld erhalten")
+
+
+func test_simulation_disposal() -> void:
+	var s := Simulation.new()
+	s.setup(4242, players(2), 128, 0.0)
+	var reference: WeakRef = weakref(s)
+	var ledger_reference: WeakRef = weakref(s.companies[0].ledger)
+	s.dispose()
+	s.dispose()   # auch beim mehrfachen Verlassen sicher
+	s = null
+	ok(reference.get_ref() == null, "verlassene Simulation wird tatsaechlich freigegeben")
+	ok(ledger_reference.get_ref() == null, "Ledger und Economy halten keine Speicherzyklen zurueck")
+
+
+func test_refueling_queue_and_migration() -> void:
+	var s := new_sim(2)
+	var st: Dictionary = s.resources.supplies.values().filter(func(x): return x.kind == "fuel")[0]
+	st.pumps = 1
+	st.busy = [10.0]
+	var low: FleetVehicle = s.company_vehicles(0)[0]
+	var high: FleetVehicle = s.company_vehicles(1)[0]
+	for v in [low, high]:
+		v.pos = s.city.tile_center(s.city.building(st.building).road)
+		v.path.clear()
+		v.fuel_l = 10.0
+	VehicleFuel.begin(s, 1, high.id, st.id, 20.0)
+	VehicleFuel.arrived(s, high)
+	s.game_min = 1.0
+	VehicleFuel.begin(s, 0, low.id, st.id, 20.0)
+	VehicleFuel.arrived(s, low)
+	s.game_min = 11.0
+	VehicleFuel.update(s, low, 0.0)
+	ok(low.state == "waiting_fuel", "juengerer Tankkunde draengelt nicht vor")
+	VehicleFuel.update(s, high, 0.0)
+	ok(high.state == "refueling", "aeltere Ankunft bekommt die naechste freie Pumpe")
+	ok(float(st.wait_min) >= 11.0, "tatsaechliche Wartezeit wird erfasst")
+	var old := s.to_dict().duplicate(true)
+	var available := 0.0
+	for c in s.companies:
+		available += c.fuel
+	for vd in old.vehicles:
+		vd.erase("fuel_l")
+		vd.erase("refueling")
+		vd.state = "idle"
+	var restored := load_sim(JSON.parse_string(JSON.stringify(old)))
+	var migrated := 0.0
+	for c in restored.companies:
+		migrated += c.fuel
+	for v in restored.vehicles.values():
+		migrated += v.fuel_l
+	ok(absf(migrated - available) < 0.001, "Migration alter Spielstaende erzeugt keinen zusaetzlichen Kraftstoff")
+	# Neue Firmengeneration darf keine bezahlte Lieferung des Vorgaengers erben.
+	var r := s.resources.buy_supplies(0, st.id, 100.0)
+	ok(r.ok, "Lieferung fuer alte Generation bestellt")
+	var c := s.companies[0]
+	c.generation += 1
+	var before := c.fuel
+	s.resources.minute_tick(10000.0)
+	ok(c.fuel == before and s.resources.pending_fuel(0) == 0.0, "Lieferungen landen nicht bei einer nach Insolvenz neu gegruendeten Firma")

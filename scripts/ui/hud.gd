@@ -762,7 +762,7 @@ func _update_vehicles() -> void:
 			var st: String = FleetVehicle.STATE_TEXT.get(v.state, v.state)
 			if sim.driver_of(v) == null:
 				st += " (ohne Fahrer)"
-			it.set_text(3, st)
+			it.set_text(3, st + (" · %d/%d l" % [int(v.fuel_l), int(v.tank_capacity())] if v.tank_capacity() > 0.0 else ""))
 			it.set_text(4, "%d%%" % int(v.condition))
 			it.set_text(5, v.contract_id)
 			it.set_metadata(0, {"kind": "vehicle", "id": v.id})
@@ -906,6 +906,7 @@ func _update_selection() -> void:
 			sel_text.text = "Status: %s · Zustand %d%% · Fahrer: %s · Kilometer: %d Tiles · Buchwert %s\n" % [
 				FleetVehicle.STATE_TEXT.get(v.state, v.state), int(v.condition), d.name if d else "keiner",
 				v.odometer, Catalog.money(v.book_value)]
+			sel_text.text += "Tank: %.1f / %.0f l · Tankvorgang: %s\n" % [v.fuel_l, v.tank_capacity(), str(v.refueling.get("station", "keiner"))]
 			if k:
 				sel_text.text += "Auftrag %s: %d× %s von %s nach %s · %s · Frist %s\n" % [k.id, k.qty, Catalog.CARGO[k.cargo].name,
 					sim.city.building(k.pickup).name, sim.city.building(k.dropoff).name, Catalog.money(k.reward),

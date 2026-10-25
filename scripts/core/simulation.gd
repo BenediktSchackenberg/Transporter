@@ -268,6 +268,13 @@ func _create_vehicle(cid: int, model_id: String, price: float, cell: Vector2i) -
 	var v := FleetVehicle.new()
 	v.setup(next_vehicle_id, cid, model_id, price, city.tile_center(cell))
 	v.idle_since = game_min
+	v.fuel_payer = cid
+	# Startfuellung stammt aus dem Betriebsvorrat; beim Haendler ist die erste Tankfuellung im Kaufpreis enthalten.
+	if cell == nearest_depot_road(cid, cell):
+		v.fuel_l = minf(companies[cid].fuel, v.tank_capacity())
+		companies[cid].fuel -= v.fuel_l
+	else:
+		v.fuel_l = v.tank_capacity()
 	next_vehicle_id += 1
 	vehicles[v.id] = v
 	companies[cid].vehicle_ids.append(v.id)
@@ -352,10 +359,13 @@ func _speed_factor(v: FleetVehicle) -> float:
 
 
 func _update_vehicle(v: FleetVehicle, dt: float) -> void:
+	VehicleFuel.auto_plan(self, v)
 	var c := companies[v.owner]
 	if v.state == "returning" and not v.stops.is_empty() and driver_of(v) != null 			and not c.is_disrupted(game_min):
 		start_next_job(v)   # Rueckfahrt abbrechen, neuer Auftrag hat Vorrang
 	match v.state:
+		"waiting_fuel", "refueling", "fuel_rescue", "out_of_fuel":
+			VehicleFuel.update(self, v, dt)
 		"idle":
 			if v.held_by != "":
 				return   # wird gerade vor Ort repariert
@@ -366,18 +376,15 @@ func _update_vehicle(v: FleetVehicle, dt: float) -> void:
 			elif not at_depot(v) and v.stops.is_empty() and game_min - v.idle_since > 20.0:
 				route(v, nearest_depot_road(v.owner, v.tile()), "returning")
 		"broken":
-			if v.no_fuel:
-				var pc := companies[v.operator if v.operator >= 0 else v.owner]
-				v.timer -= dt * Catalog.GAME_MIN_PER_SIM_SEC
-				if pc.fuel >= 30.0:
-					v.no_fuel = false
-					resume_vehicle(v)
-				elif v.timer <= 30.0:
-					_emergency_refuel(v, pc)
-			elif v.held_by == "":   # ohne Reparatur vor Ort laeuft die Abschlepp-Frist
+			if v.held_by == "":   # ohne Reparatur vor Ort laeuft die Abschlepp-Frist
 				v.timer -= dt * Catalog.GAME_MIN_PER_SIM_SEC
 				if v.timer <= 0.0:
 					tow_to_workshop(v)
+		"waiting_fuel_cargo":
+			v.timer -= dt * Catalog.GAME_MIN_PER_SIM_SEC
+			if v.timer <= 0.0:
+				v.state = "to_pickup"
+				_on_arrival(v)
 		"waiting_bay":
 			if _bay_free(v):
 				v.state = "to_pickup" if v.stops[0].art == "laden" else "to_dropoff"
@@ -402,26 +409,33 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 			return   # vorerst kein Weg: warten
 	if _is_blocked(v):
 		return
+	var per_tile := VehicleFuel.liters_per_tile(self, v)
+	if per_tile > 0.0 and v.fuel_l <= 0.00001 and not v.arrived() and v.state != "to_workshop":
+		v.state = "out_of_fuel"
+		v.refueling = {}
+		notify(VehicleFuel.payer(v), "%s steht ohne Treibstoff. refuel_vehicle oder request_fuel_rescue verwenden." % v.display_name())
+		return
 	var before := v.tiles_moved
-	v.advance(dt, _speed_factor(v))
+	# Begrenze den Bewegungsschritt auf die vorhandene Reichweite, auch bei sehr grossem dt.
+	var drive_dt := dt
+	if per_tile > 0.0 and v.state != "to_workshop":
+		drive_dt = minf(dt, v.fuel_l / per_tile / maxf(v.speed * _speed_factor(v), 0.001))
+	v.advance(drive_dt, _speed_factor(v))
 	var moved := v.tiles_moved - before
+	var distance := v.distance_moved / 32.0
+	var liters := minf(v.fuel_l, distance * per_tile) if v.state != "to_workshop" else 0.0
+	v.fuel_l = maxf(0.0, v.fuel_l - liters)
+	var payer := VehicleFuel.payer(v)
+	if liters > 0.0 and v.fuel_payer >= 0 and v.fuel_payer != payer:
+		var reimbursement := liters * ResourceMarket.FUEL_BASE_PRICE
+		companies[payer].ledger.book("fuel", -reimbursement, true, "Treibstoff des Vermieters", game_min, "G0")
+		companies[v.fuel_payer].ledger.book("trade_income", reimbursement, true, "Treibstoff an Mieter", game_min, "G0")
+	var kc: Contract = contracts.get(v.contract_id)
+	if kc:
+		kc.fuel_cost += liters * ResourceMarket.FUEL_BASE_PRICE
 	if moved > 0:
 		var spec := v.spec()
 		v.odometer += moved
-		# Treibstoff zuerst aus dem eigenen Vorrat (beim Einkauf bezahlt), sonst Nachtanken zum Notpreis
-		var liters := moved * float(spec.cost_per_tile) * (1.0 + 0.15 * logistics.load_total(v) / float(spec.capacity)) * wx.fuel_factor() / ResourceMarket.FUEL_BASE_PRICE
-		var payer: int = v.operator if v.operator >= 0 else v.owner   # bei Vermietung zahlt der Mieter den Treibstoff
-		var c := companies[payer]
-		var own := minf(liters, c.fuel)
-		c.fuel -= own
-		if own < liters and v.state != "broken":
-			# Tank leer: das Fahrzeug bleibt liegen (kein stiller Notkauf). Es geht weiter, sobald das Depot wieder Treibstoff hat
-			# oder nach 90 Minuten die kostenpflichtige Notbetankung kommt.
-			v.no_fuel = true
-			break_vehicle(v, "Tank leer")
-		var kc: Contract = contracts.get(v.contract_id)
-		if kc:
-			kc.fuel_cost += own * ResourceMarket.FUEL_BASE_PRICE   # Vorrat zum Grundpreis bewertet
 		v.condition = maxf(0.0, v.condition - moved * float(spec.wear))
 		var tired := 2.0 if driver_of(v) != null and driver_of(v).fatigue >= 95.0 else 1.0
 		if v.condition < Catalog.BREAKDOWN_THRESHOLD and rng.randf() < 0.004 * moved * tired * wx.breakdown_factor(v.condition >= 60.0):
@@ -442,22 +456,8 @@ func break_vehicle(v: FleetVehicle, reason: String) -> void:
 	decisions.note(v.owner, "auto", "%s ausgefallen (%s)" % [v.display_name(), reason], {"vehicle_id": v.id})
 	world_events.note_breakdown(v, reason)
 	log_event("%s: %s ist ausgefallen (%s)." % [companies[v.owner].company_name, v.display_name(), reason], "warn", v.owner)
-	if v.no_fuel:
-		notify(v.owner, "%s liegt mit leerem Tank fest. Treibstoff im Depot bestellen (buy_supplies); sonst kommt in 90 min die teure Notbetankung." % v.display_name())
-	else:
-		notify(v.owner, "%s ausgefallen (%s): Mechaniker schicken (repair_vehicle mit worker_id) oder es wird in 120 min abgeschleppt." % [v.display_name(), reason])
+	notify(v.owner, "%s ausgefallen (%s): Mechaniker schicken (repair_vehicle mit worker_id) oder es wird in 120 min abgeschleppt." % [v.display_name(), reason])
 	sfx.emit("alert")
-
-
-## Notbetankung am Straßenrand nach 90 Minuten: teuer (Notpreis plus Pauschale), aber das Fahrzeug faehrt weiter.
-func _emergency_refuel(v: FleetVehicle, payer: Company) -> void:
-	var liters := 60.0
-	var cost := liters * resources.emergency_fuel_price() + 80.0
-	payer.ledger.book("fuel", -cost, true, "Notbetankung " + v.display_name(), game_min)
-	payer.fuel = minf(payer.fuel_cap, payer.fuel + liters)
-	v.no_fuel = false
-	notify(payer.id, "Notbetankung für %s: %s (Tank war leer). Besser rechtzeitig Treibstoff bestellen (schedule_refueling)." % [v.display_name(), Catalog.money(cost)])
-	resume_vehicle(v)
 
 
 ## Nach Reparatur vor Ort: unterbrochene Taetigkeit fortsetzen.
@@ -466,7 +466,7 @@ func resume_vehicle(v: FleetVehicle) -> void:
 		return
 	v.state = v.resume_state if v.resume_state != "" else "idle"
 	v.timer = v.resume_timer
-	if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop"] and v.arrived():
+	if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "to_fuel"] and v.arrived():
 		_on_arrival(v)
 	if v.state == "idle":
 		v.idle_since = game_min
@@ -484,12 +484,20 @@ func tow_to_workshop(v: FleetVehicle) -> void:
 
 func _on_arrival(v: FleetVehicle) -> void:
 	match v.state:
+		"to_fuel":
+			VehicleFuel.arrived(self, v)
 		"to_pickup", "to_dropoff":
 			if v.stops.is_empty():
 				_after_job(v)
 				return
 			var st: Dictionary = v.stops[0]
 			var k: Contract = contracts.get(st.contract_id)
+			if v.state == "to_pickup" and k and resources.fuel_shipments.has(k.internal):
+				var ready := float(resources.fuel_shipments[k.internal].get("ready", 0.0))
+				if game_min < ready:
+					v.state = "waiting_fuel_cargo"
+					v.timer = ready - game_min
+					return
 			if not _bay_free(v):
 				v.state = "waiting_bay"   # alle Laderampen des Hofes belegt
 				return
@@ -686,7 +694,7 @@ func _rebuild_hash() -> void:
 	for m in traffic:
 		_hash_add(m)
 	for v in vehicles.values():
-		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "loading", "unloading", "broken"]:
+		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "loading", "unloading", "broken", "to_fuel", "out_of_fuel", "fuel_rescue"]:
 			_hash_add(v)
 
 
@@ -1041,6 +1049,11 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.vehicles.clear()
 	for vd in d.vehicles:
 		var v := FleetVehicle.from_dict(vd)
+		if not vd.has("fuel_l"):
+			var c: Company = s.companies[VehicleFuel.payer(v)]
+			v.fuel_l = minf(c.fuel, v.tank_capacity())
+			c.fuel -= v.fuel_l
+			v.fuel_payer = c.id
 		s.vehicles[v.id] = v
 	s.contracts.clear()
 	for kd in d.contracts:
@@ -1094,7 +1107,26 @@ static func from_dict(d: Dictionary) -> Simulation:
 	# Fahrzeuge auf ihr gespeichertes Ziel neu routen
 	for v in s.vehicles.values():
 		s.logistics.sync_view(v)
-		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop"]:
+		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "to_fuel"]:
 			if not s.route(v, v.goal):
 				v.state = "idle"
+				v.refueling = {}
 	return s
+
+
+## Eine verlassene Partie darf nicht durch Simulations-/Modul- und Ledger-Zyklen im Speicher bleiben.
+## Erst beim Verlassen aufrufen: die Endauswertung braucht den Zustand weiterhin.
+func dispose() -> void:
+	finished = true
+	for sig in [logged, agent_event, sfx, day_changed, month_changed]:
+		for connection in sig.get_connections():
+			sig.disconnect(connection.callable)
+	for module in [market, social, rivalry, executor, personnel, resources, logistics, plans, memory, decisions,
+			events, households, care, workforce, standings, trader, banking, insolvency, world_events, residents, experiments, estate]:
+		module.sim = null
+	for actions in [executor.worker_actions, executor.estate_actions]:
+		actions.sim = null
+		actions.ex = null
+	for c in companies:
+		c.ledger.economy = null
+	economy.detach_all()
