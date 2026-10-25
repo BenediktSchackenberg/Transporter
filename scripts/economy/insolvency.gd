@@ -126,6 +126,7 @@ func _open(c: Company) -> void:
 		v.stops.clear()
 		v.queue.clear()
 		v.contract_id = ""
+		v.refueling = {}   # keine Tankauftraege auf versteigerte Fahrzeuge uebertragen
 		if v.state not in ["broken", "repairing"]:
 			v.state = "idle"
 		sim.logistics.sync_view(v)

@@ -171,7 +171,7 @@ Links stehen zunächst nur die **Porträts der Unternehmer**. Ein Klick öffnet 
 - Jede Buchung erfolgt genau einmal. Geprüfte Identität: **Bargeld + Buchwert − Schulden = Startkapital + Gewinn**.
 - Bei Spielende gilt: Überfällige Aufträge erhalten eine Vertragsstrafe; laufende, noch fristgerechte Aufträge werden **ohne Vergütung** storniert.
 - Gleichstand: zuerst Reputation, dann erledigte Aufträge.
-- Gewinn, Bargeld, Schulden und Vermögen werden getrennt angezeigt. Kredite erhöhen den Punktestand nicht, kosten aber Zinsen (1,2 %/Tag; Dispo 3 %/Tag).
+- Gewinn, Bargeld, Schulden und Vermögen werden getrennt angezeigt. Kredite erhöhen den Punktestand nicht. Bankkredite haben einen individuellen Jahreszins mit monatlichen Raten; der Dispozins beträgt 3 % je Spieltag.
 
 **Fahrzeuge**
 
@@ -248,6 +248,21 @@ Aktionen: `wait, move_to, accept_contract, assign_vehicle, repair_vehicle, buy_v
 - **Protokoll:** `%APPDATA%\Godot\app_userdata\Pixel Transport Rivals\logs\match_*.jsonl` enthält Anfragen, Antworten, Fehler und ausgeführte Aktionen ohne Header und Keys. Bekannte Keys werden zusätzlich geschwärzt.
 
 **Weitere Anbieter:** Von `LLMAdapter` (`scripts/api/llm_adapter.gd`) erben, `send()` und `cancel()` implementieren, `completed` emittieren und in `LLMAdapter.create()` registrieren.
+
+---
+
+## Fahrzeugtanks und Treibstoffversorgung
+
+Validiert mit Godot 4.4.1: 4563 Prüfungen im vollständigen Headless-Lauf sowie anschließend 29 gezielte Prompt-/Tankprüfungen, jeweils ohne Fehler.
+
+Jedes Motorfahrzeug hat einen begrenzten Tank; Lastenräder benötigen keinen Diesel. Im Fahrzeugreiter und in der Auswahl stehen Tankfüllung und Tankstatus. Die KI sieht diese Daten ebenfalls.
+
+- `refuel_vehicle(vehicle_id, station, liters?)`: zur Tankstelle `S..` oder zum eigenen `depot` fahren, an einer belegten Zapfsäule warten, tanken und die unterbrochene Tour fortsetzen. Erst nach der Tankdauer wird der Kraftstoff nutzbar. An der öffentlichen Station gelten aktueller Preis, Bestand und Bargeld.
+- Unter 25 % Tankfüllung sucht der Fahrer selbstständig einen erreichbaren Tankstopp. Ist der Tank leer, hält das Fahrzeug. `request_fuel_rescue(vehicle_id)` bestellt einmalig 30 Liter aus dem Stationsbestand: 60 Spielminuten Wartezeit, 150 EUR Service plus Kraftstoff zum Notpreis. Der Auftrag benötigt ausreichend Bargeld.
+- `buy_supplies` und `purchase_fuel_stock` beschaffen den **Betriebsvorrat**. Tankwagenlieferung oder eigener Abholauftrag bleiben getrennt vom Fahrzeugtank. Offene Lieferungen zählen zur Vorratsgrenze; die Ware wird erst bei Ankunft gutgeschrieben. `schedule_refueling` bestellt solchen Nachschub automatisch.
+- Anfahrt, Warteschlange, bezahlter Tankvorgang und offene Lieferungen werden gespeichert. Die Migration älterer Spielstände verteilt vorhandenen Betriebsvorrat auf Fahrzeugtanks, ohne zusätzlichen Diesel zu erzeugen.
+
+KI-Antworten werden nach aktiver Echtzeit begrenzt. Auch bei 16-facher Geschwindigkeit bleibt eine normale API-Antwort gültig; jede einzelne Aktion wird gegen den aktuellen Spielzustand geprüft. Antworten nach Partieende oder aus einer früheren Firmengeneration werden ignoriert.
 
 ---
 

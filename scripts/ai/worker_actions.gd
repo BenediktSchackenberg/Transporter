@@ -22,7 +22,11 @@ const SCHEMA := {
 		"desc": "Ziel und Befugnisse: prioritaet fristgerecht|kosten|auslastung; Fahrer einteilen, Reparaturen veranlassen, Aufgaben umverteilen, Ersatzteile kaufen; repair_budget = Geld für Routine. Investitionen/Sabotage nie."},
 	"request_progress_report": {"params": {"foreman_id": "string"}, "desc": "Sofortigen Bericht des Vorarbeiters anfordern."},
 	"buy_supplies": {"params": {"resource_id": "string", "amount": "number", "lieferung": "string?"},
-		"desc": "Treibstoff (Liter) an einer Tankstelle oder Ersatzteile in einer Werkstatt kaufen. Diesel wird gezapft (belegte Zapfsäulen = Wartezeit) und kommt erst später im Depot an: lieferung=liefern (Tankwagen, Gebühr, Standard) oder abholen (eigener Transportauftrag Tankstelle→Depot, ein Fahrzeug muss fahren). Ersatzteile sofort."},
+		"desc": "Treibstoff (Liter) zum Betriebshof bestellen: lieferung=liefern (Tankwagen mit Gebuehr und Lieferzeit) oder abholen (eigener Transportauftrag). Vorratsgrenze inkl. offener Bestellungen; Ersatzteile sofort kaufen. Fahrzeugtanks separat mit refuel_vehicle fuellen."},
+	"refuel_vehicle": {"params": {"vehicle_id": "int", "station": "string", "liters": "number?"},
+		"desc": "Eigenes/gemietetes Fahrzeug zur Tankstelle S.. oder zum depot schicken. Fahrer, Anfahrt, Zapfsaeule, Tankdauer und Tankgroesse gelten; laufende Tour wird danach fortgesetzt. Ohne liters: volltanken."},
+	"request_fuel_rescue": {"params": {"vehicle_id": "int"},
+		"desc": "Bei leerem Fahrzeugtank kostenpflichtigen Pannendienst mit 30 l bestellen; 60 Spielminuten Lieferzeit, begrenzter Stationsbestand."},
 	"guard_target": {"params": {"worker_id": "string", "site_id": "int?", "vehicle_id": "int?"},
 		"desc": "Arbeiter bewacht ein eigenes Depot oder Fahrzeug (erhöht Entdeckungschance bei Sabotage)."},
 	"attempt_vehicle_sabotage": {"params": {"worker_id": "string", "vehicle_id": "int"},
@@ -40,7 +44,7 @@ const SCHEMA := {
 	"compare_fuel_options": {"params": {"liters": "number?"},
 		"desc": "Tankstellen vergleichen: Preis, Entfernung zum Hauptdepot, Wartezeit an den Zapfsäulen, Gesamtkosten (Annahmen ausgewiesen) und Ersparnis gegenüber dem Notpreis."},
 	"schedule_refueling": {"params": {"below_l": "number", "buy_l": "number", "station": "string?"},
-		"desc": "Feste Nachtank-Regel: fällt dein Treibstoffvorrat unter below_l, kauft die Engine buy_l Liter (an station oder der günstigsten Tankstelle). below_l=0 löscht die Regel."},
+		"desc": "Feste Nachtank-Regel: fällt dein Treibstoffvorrat unter below_l, bestellt die Engine buy_l Liter per Tankwagen mit Lieferzeit (an station oder der günstigsten Tankstelle). below_l=0 löscht die Regel."},
 	"negotiate_wage": {"params": {"worker_id": "string", "wage": "number"},
 		"desc": "Lohn (EUR je Spielstunde) mit einem eigenen Mitarbeiter verhandeln. Er lehnt unter seinem Mindestlohn ab und nennt ihn; Kürzungen lehnt er ab. Unzufriedene Mitarbeiter (obs.personal_lage) kündigen irgendwann."},
 	"poach_worker": {"params": {"target": "int", "wage": "number"}, "desc": "Arbeiter eines Konkurrenten mit höherem Lohn abwerben (legal, 600 EUR)."},
@@ -186,6 +190,10 @@ func run(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 				return {"ok": false, "msg": "%s ist kein eigener Vorarbeiter." % a.foreman_id}
 			P.send_report(f)
 			return {"ok": true, "msg": "Bericht von %s angefordert (siehe Ergebnisse)." % f.name}
+		"refuel_vehicle":
+			return VehicleFuel.begin(sim, cid, ActionExecutor._i(a.vehicle_id), str(a.station), ActionExecutor._f(a.get("liters", 0)))
+		"request_fuel_rescue":
+			return VehicleFuel.rescue(sim, cid, ActionExecutor._i(a.vehicle_id))
 		"buy_supplies":
 			return sim.resources.buy_supplies(cid, str(a.resource_id), ActionExecutor._f(a.amount), "abholen" if str(a.get("lieferung", "liefern")) == "abholen" else "liefern")
 		"attempt_vehicle_sabotage":

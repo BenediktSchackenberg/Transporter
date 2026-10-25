@@ -131,6 +131,10 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		actions.append({"action": "collect_contracts"})
 		planned.append("collect_contracts")
 		reasons.append("hole neue Aufträge an der Jobbörse")
+	for vehicle in obs.fahrzeuge:
+		if vehicle.status == FleetVehicle.STATE_TEXT.out_of_fuel:
+			actions.push_front({"action": "request_fuel_rescue", "vehicle_id": vehicle.id})
+			reasons.append("hole Kraftstoff-Pannendienst fuer #%d" % int(vehicle.id))
 	# 6) Treibstoff guenstig auf Vorrat statt teuer nachtanken
 	# Treibstoff kommt erst nach Zapfen und Lieferung im Depot an: Vorrat plus unterwegs zaehlen, frueh bestellen,
 	# und eine feste Nachtank-Regel der Engine nutzen (Routine, spart KI-Anfragen).

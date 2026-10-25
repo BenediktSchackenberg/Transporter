@@ -231,7 +231,7 @@ func _process(delta: float) -> void:
 		ctl.speed = float(speed())
 		ctl.remaining_real_min = sim.remaining_real_min
 	if running:
-		active_seconds += dt
+		active_seconds += delta
 		_sim_acc += dt * speed()
 		var t0 := Time.get_ticks_usec()
 		while _sim_acc >= SUBSTEP:
@@ -383,3 +383,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_ESCAPE: entity_view.selected = {}
 			KEY_F5: save_game()
 			KEY_TAB: hud.toggle_panels()
+
+
+func _exit_tree() -> void:
+	for ctl in controllers:
+		ctl.active = false
+		if is_instance_valid(ctl.adapter):
+			ctl.adapter.cancel()
+	if sim != null:
+		sim.dispose()
+		sim = null

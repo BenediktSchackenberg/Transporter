@@ -85,7 +85,11 @@ func _on_completed(result: int, code: int, _headers: PackedStringArray, body: Pa
 
 ## Antwort verarbeiten (auch fuer Tests mit aufgezeichneten Antworten).
 func handle_body(text: String) -> bool:
-	var state := FuelPrices.parse_list(JSON.parse_string(text))
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		_fail("Ungueltiges JSON des Preisdienstes")
+		return false
+	var state := FuelPrices.parse_list(json.data)
 	if state.is_empty():
 		_fail("Unerwartetes Antwortformat des Preisdienstes")
 		return false

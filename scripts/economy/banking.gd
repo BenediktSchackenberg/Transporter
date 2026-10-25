@@ -213,47 +213,45 @@ func next_due(l: Dictionary) -> Dictionary:
 	return {}
 
 
-## Vorzeitige (Teil-)Rueckzahlung; neuer Plan ueber die Restlaufzeit, 1 % Gebuehr auf den getilgten Betrag.
-func early_repay(loan_id: String, amount: float, caller: int = -1) -> Dictionary:
+## Sondertilgung: faellige Raten und Zuschlaege zuerst, 1 % nur auf vorzeitig getilgtes Kapital.
+## Alle Pruefungen erfolgen vor der ersten Buchung; ein fremder Kredit darf nie belastet werden.
+func early_repay(cid: int, loan_id: String, amount: float) -> Dictionary:
 	var l: Dictionary = loans.get(loan_id, {})
-	if l.is_empty() or l.status not in ["laufend", "rueckstand"]:
-		return {"ok": false, "msg": "Kredit %s ist nicht offen." % loan_id}
-	if caller >= 0 and int(l.owner) != caller:
-		return {"ok": false, "msg": "Kredit %s gehört dir nicht." % loan_id}
-	var c := sim.company(l.owner)
-	# Ueberfaellige Raten samt Verzugszuschlag werden zuerst eingezogen; sonst gingen sie bei der Ablösung verloren.
-	var arrears := 0.0
-	for r in l.plan:
-		if r.status == "rueckstand":
-			arrears += float(r.pay)
-	var overdue := arrears + float(l.fees_due)
-	var principal_overdue := 0.0
-	for r in l.plan:
-		if r.status == "rueckstand":
-			principal_overdue += float(r.principal)
-	amount = minf(amount, maxf(0.0, float(l.outstanding) - principal_overdue))
-	var fee := snappedf(amount * EARLY_FEE, 0.01)
-	if c.ledger.cash < overdue + amount + fee:
-		return {"ok": false, "msg": "Nicht genug Bargeld: %s (überfällig %s inkl. Zuschlag, Tilgung %s, Gebühr %s)." % [
-			Catalog.money(overdue + amount + fee), Catalog.money(overdue), Catalog.money(amount), Catalog.money(fee)]}
+	if l.is_empty() or l.owner != cid or l.status not in ["laufend", "rueckstand"]:
+		return {"ok": false, "msg": "Kein eigener offener Kredit %s." % loan_id}
+	if not is_finite(amount) or amount <= 0.0:
+		return {"ok": false, "msg": "Tilgung muss positiv und endlich sein."}
+	var c := sim.company(cid)
+	amount = minf(snappedf(amount, 0.01), float(l.outstanding))
+	if amount <= 0.0:
+		return {"ok": false, "msg": "Tilgung ist kleiner als ein Cent."}
+	var month := GameCalendar.month_of(sim.game_min)
+	var due: Array = l.plan.filter(func(r): return r.status != "bezahlt" and (int(r.month) <= month or r.status == "rueckstand"))
+	var due_principal := 0.0
+	var due_interest := 0.0
+	for r in due:
+		due_principal += float(r.principal)
+		due_interest += float(r.interest)
+	due_principal = snappedf(due_principal, 0.01)
+	due_interest = snappedf(due_interest, 0.01)
+	if amount + 0.005 < due_principal:
+		return {"ok": false, "msg": "Zuerst faellige Tilgung von %s begleichen (zusaetzlich Zinsen und Zuschlaege)." % Catalog.money(due_principal)}
+	var late_fee := float(l.fees_due)
+	var fee := snappedf(maxf(0.0, amount - due_principal) * EARLY_FEE, 0.01)
+	var total := snappedf(amount + due_interest + late_fee + fee, 0.01)
+	if c.ledger.cash + 0.005 < total:
+		return {"ok": false, "msg": "Nicht genug Bargeld (%s inkl. faelliger Zinsen %s, Verzugszuschlaege %s und Vorfaelligkeit %s)." % [
+			Catalog.money(total), Catalog.money(due_interest), Catalog.money(late_fee), Catalog.money(fee)]}
 	var B: Dictionary = BANKS[l.bank]
-	for r in l.plan:
-		if r.status == "rueckstand":
-			c.ledger.book("interest", -float(r.interest), true, "Kreditzins %s Rate %d (überfällig)" % [l.id, r.n], sim.game_min, B.id)
-			c.ledger.repay(float(r.principal), B.id)
-			l.outstanding = snappedf(float(l.outstanding) - float(r.principal), 0.01)
-			r.status = "bezahlt"
-			if l.arrears > 0:
-				l.arrears -= 1
-	if float(l.fees_due) > 0.0:
-		c.ledger.book("interest", -float(l.fees_due), true, "Verzugszuschlag " + l.id, sim.game_min, B.id)
-		l.fees_due = 0.0
-	if amount > 0.0:
-		c.ledger.repay(amount, B.id)
-		c.ledger.book("interest", -fee, true, "Vorfälligkeitsentschädigung " + l.id, sim.game_min, B.id)
+	c.ledger.repay(amount, B.id)
+	c.ledger.book("interest", -due_interest, true, "Faellige Kreditzinsen " + l.id, sim.game_min, B.id)
+	c.ledger.book("interest", -late_fee, true, "Verzugszuschlaege " + l.id, sim.game_min, B.id)
+	c.ledger.book("interest", -fee, true, "Vorfaelligkeitsentschaedigung " + l.id, sim.game_min, B.id)
 	l.outstanding = snappedf(float(l.outstanding) - amount, 0.01)
-	if l.status == "rueckstand" and l.arrears == 0:
-		l.status = "laufend"
+	l.fees_due = 0.0
+	l.arrears = 0
+	for r in due:
+		r.status = "bezahlt"
 	var open: Array = l.plan.filter(func(r): return r.status != "bezahlt")
 	if l.outstanding <= 0.005:
 		for r in open:
@@ -265,7 +263,9 @@ func early_repay(loan_id: String, amount: float, caller: int = -1) -> Dictionary
 		for r in np:
 			r.n = done.size() + int(r.n)
 		l.plan = done + np
-	return {"ok": true, "msg": "%s getilgt (Gebühr %s). Restschuld %s." % [Catalog.money(amount), Catalog.money(fee), Catalog.money(l.outstanding)]}
+		l.status = "laufend"
+	return {"ok": true, "msg": "%s getilgt; Zinsen %s, Zuschlaege %s, Vorfaelligkeit %s. Restschuld %s." % [Catalog.money(amount),
+		Catalog.money(due_interest), Catalog.money(late_fee), Catalog.money(fee), Catalog.money(l.outstanding)]}
 
 
 func _close(l: Dictionary) -> void:
@@ -281,6 +281,8 @@ func deposit_rates(months: int) -> Dictionary:
 
 
 func deposit(cid: int, bank: int, amount: float, kind: String, months: int) -> Dictionary:
+	if bank < 0 or bank >= BANKS.size() or kind not in ["tages", "fest"] or not is_finite(amount):
+		return {"ok": false, "msg": "Ungueltige Bank, Anlageart (tages|fest) oder Betrag."}
 	var c := sim.company(cid)
 	if amount < 100.0:
 		return {"ok": false, "msg": "Mindestanlage 100."}
@@ -305,7 +307,9 @@ func withdraw(cid: int, dep_id: String, forced: bool = false) -> Dictionary:
 		return {"ok": false, "msg": "Einlage %s nicht gefunden." % dep_id}
 	var c := sim.company(cid)
 	var B: Dictionary = BANKS[d.bank]
-	if bank_cash(d.bank) < d.amount:
+	var forfeits_interest: bool = not forced and d.kind == "fest" and GameCalendar.month_of(sim.game_min) < int(d.due_month)
+	var payable: float = float(d.amount) + (0.0 if forfeits_interest else float(d.owed))
+	if bank_cash(d.bank) + 0.005 < payable:
 		return {"ok": false, "msg": "%s hat gerade nicht genug Bargeld für die Auszahlung." % B.name}
 	var fee := 0.0
 	if not forced and d.kind == "fest" and GameCalendar.month_of(sim.game_min) < int(d.due_month):

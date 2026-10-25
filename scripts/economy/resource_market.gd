@@ -87,8 +87,12 @@ func emergency_fuel_price() -> float:
 ## Vorrat im Depot. Ersatzteile werden sofort uebernommen.
 func buy_supplies(cid: int, sid: String, amount: float, mode: String = "liefern") -> Dictionary:
 	var s: Dictionary = supplies.get(sid, {})
+	if mode not in ["liefern", "abholen"]:
+		return {"ok": false, "msg": "Lieferart muss liefern oder abholen sein."}
 	if s.is_empty():
 		return {"ok": false, "msg": "Unbekannte Bezugsquelle %s." % sid}
+	if not is_finite(amount):
+		return {"ok": false, "msg": "Menge muss endlich sein."}
 	amount = floorf(amount)
 	if amount <= 0.0:
 		return {"ok": false, "msg": "Menge muss positiv sein."}
@@ -118,14 +122,14 @@ func buy_supplies(cid: int, sid: String, amount: float, mode: String = "liefern"
 		if mode == "abholen":
 			var fid := "F%d" % _next_fuel_ship
 			_next_fuel_ship += 1
-			fuel_shipments[fid] = {"cid": cid, "liters": amount}
+			fuel_shipments[fid] = {"cid": cid, "generation": c.generation, "liters": amount, "ready": ready}
 			var k := _fuel_contract(c, s, fid, amount, dist)
 			return {"ok": true, "msg": "%d l Diesel gezapft und bezahlt (%s).%s Transportauftrag %s (Tankstelle → Depot) angelegt: ein Fahrzeug muss den Treibstoff holen, erst dann steigt dein Vorrat (jetzt %d l, unterwegs %d l)." % [
 				int(amount), Catalog.money(cost), wait_txt, k.id, int(c.fuel), int(pending_fuel(cid))]}
 		var fee := TANKER_FEE + TANKER_PER_LITER * amount
 		c.ledger.book("supplies", -fee, true, "Tankwagen-Lieferung", sim.game_min, "S0")
 		var due: float = ready + 45.0 + 0.5 * dist
-		fuel_deliveries.append({"cid": cid, "liters": amount, "due": due})
+		fuel_deliveries.append({"cid": cid, "generation": c.generation, "liters": amount, "due": due})
 		return {"ok": true, "msg": "%d l Diesel gezapft und bezahlt (%s + Tankwagen %s).%s Ankunft am Depot in etwa %d min; Vorrat jetzt %d l, unterwegs %d l." % [
 			int(amount), Catalog.money(cost), Catalog.money(fee), wait_txt, int(due - sim.game_min), int(c.fuel), int(pending_fuel(cid))]}
 	c.parts += int(amount)
@@ -136,10 +140,10 @@ func buy_supplies(cid: int, sid: String, amount: float, mode: String = "liefern"
 func pending_fuel(cid: int) -> float:
 	var t := 0.0
 	for d in fuel_deliveries:
-		if d.cid == cid:
+		if d.cid == cid and int(d.get("generation", sim.company(cid).generation)) == sim.company(cid).generation:
 			t += float(d.liters)
 	for f in fuel_shipments.values():
-		if f.cid == cid:
+		if f.cid == cid and int(f.get("generation", sim.company(cid).generation)) == sim.company(cid).generation:
 			t += float(f.liters)
 	return t
 
@@ -174,7 +178,8 @@ func fuel_delivered(fid: String) -> bool:
 	if f.is_empty():
 		return false
 	var c: Company = sim.company(int(f.cid))
-	c.fuel = minf(c.fuel_cap, c.fuel + float(f.liters))
+	if int(f.get("generation", c.generation)) == c.generation and c.is_active():
+		c.fuel = minf(c.fuel_cap, c.fuel + float(f.liters))
 	fuel_shipments.erase(fid)
 	sim.notify(c.id, "%d l Diesel sind im Depot angekommen (Vorrat %d l)." % [int(f.liters), int(c.fuel)])
 	return true
@@ -257,6 +262,8 @@ func minute_tick(now: float) -> void:
 		if now >= float(d.due):
 			fuel_deliveries.erase(d)
 			var fc: Company = sim.company(int(d.cid))
+			if int(d.get("generation", fc.generation)) != fc.generation or not fc.is_active():
+				continue
 			fc.fuel = minf(fc.fuel_cap, fc.fuel + float(d.liters))
 			sim.notify(fc.id, "Der Tankwagen hat %d l Diesel am Depot geliefert (Vorrat %d l)." % [int(d.liters), int(fc.fuel)])
 	for s in supplies.values():

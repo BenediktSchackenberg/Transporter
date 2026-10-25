@@ -9,8 +9,6 @@ signal decided(cid: int, summary: String, source: String)
 
 const MAX_ACTIONS := 6
 const MIN_EVENT_GAP := 6.0        # Echtzeit-Sekunden zwischen ereignisgetriebenen Anfragen
-const STALE_GAME_MIN := 90.0      # aeltere Antworten werden verworfen
-const STALE_GAME_MIN_OLLAMA := 1440.0  # lokales Modell braucht fuer grosse Prompts laenger; Aktionen werden erneut validiert
 const FAIL_LIMIT := 3             # aufeinanderfolgende Fehler bis zum Ersatzmodus
 const API_RETRY_IN_FALLBACK := 60.0
 
@@ -30,11 +28,12 @@ var status := "bereit"
 var last_error := ""
 var fallback_active := false
 var real_time := 0.0
-var speed := 1.0                  # aktuelle Simulationsgeschwindigkeit (die Veraltet-Grenze waechst mit ihr)
+var speed := 1.0                  # aktuelle Simulationsgeschwindigkeit fuer Status/Diagnose
 
 var _inflight := -1
 var _inflight_obs_min := 0.0
 var _inflight_sent := 0.0
+var _inflight_generation := 0
 var _abandoned := {}
 var _applied := {}
 var _next_req := 1
@@ -132,6 +131,7 @@ func _start_request() -> void:
 	_next_req += 1
 	_inflight_obs_min = sim.game_min
 	_inflight_sent = real_time
+	_inflight_generation = sim.company(cid).generation
 	stats.requests += 1
 	status = "wartet auf Antwort"
 	adapter.observation = obs
@@ -170,13 +170,16 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 		_consecutive_fail += 1
 		_check_fallback()
 		return
-	var stale_limit := (STALE_GAME_MIN_OLLAMA if config.get("provider", "") == "ollama" else STALE_GAME_MIN) * maxf(speed, 1.0)
-	if sim.game_min - _inflight_obs_min > stale_limit:
-		last_error = "Antwort veraltet – verworfen"
-		status = last_error
-		sim.record_result(cid, "Deine letzte Antwort kam zu spät und wurde verworfen.")
-		api_log.write({"type": "stale_discarded", "player": cid, "req": req_id,
-			"age_game_min": sim.game_min - _inflight_obs_min, "limit_game_min": stale_limit})
+	# Spielzeit kann bei 16x waehrend einer normalen API-Antwort um Stunden vorlaufen.
+	# Die aktive Echtzeit begrenzt die Anfrage; jede Aktion wird am aktuellen Zustand geprueft.
+	var real_age := real_time - _inflight_sent
+	if sim.finished or sim.company(cid).generation != _inflight_generation:
+		api_log.write({"type": "session_ended_ignored", "player": cid, "req": req_id})
+		return
+	if real_age > float(config.get("timeout", 45.0)) + 5.0:
+		api_log.write({"type": "stale_discarded", "player": cid, "req": req_id, "age_real_s": real_age,
+			"age_game_min": sim.game_min - _inflight_obs_min})
+		_on_failure(req_id, {"error": "Antwort veraltet – Echtzeitlimit ueberschritten"})
 		return
 	stats.ok += 1
 	_consecutive_fail = 0
@@ -398,7 +401,7 @@ REGELN (Kurzfassung):
 - Gleichzeitig laufende Aufträge sind begrenzt: 3 ohne Büro, +3 je Zentralenstufe, +2 je Filiale. Büros sind Investitionen (Abschreibung 1 %%/Tag) mit laufenden Kosten.
 - Einen Spieler öffentlich ansprechen geht nur bei Begegnung; per Funk (private=true) oder Rundruf ("all") immer.
 - PERSONAL: Fahrzeuge fahren nur mit einem eigenen Arbeiter am Steuer (assign_worker_task kind=fahren). Jeder Arbeiter tut immer nur eine Sache (fahren ODER reparieren ODER bewachen …) und braucht Zeit und Wege. Erschöpfte Arbeiter (≥90 %%) nehmen keine Aufgaben an. Arbeiter anwerben: recruit_worker – deine Figur geht hin, wer zuerst kommt, bekommt ihn. Vorarbeiter verteilen Aufgaben in ihrem Bereich, melden Störungen und dürfen im Rahmen ihrer Befugnisse Ersatz einteilen.
-- RESSOURCEN sind knapp und für alle gleich sichtbar (ressourcen): Arbeitskräfte, Fahrzeugangebote beim Händler, Treibstoff an Tankstellen, Ersatzteile in Werkstätten. Ohne eigenen Treibstoffvorrat wird teuer nachgetankt. Reparatur vor Ort braucht Mechaniker + Ersatzteile, sonst Werkstatt/Abschleppen.
+- RESSOURCEN sind knapp und für alle gleich sichtbar (ressourcen): Arbeitskräfte, Fahrzeugangebote beim Händler, Treibstoff an Tankstellen, Ersatzteile in Werkstätten. Fahrzeugtanks sind begrenzt: refuel_vehicle fährt zu station=S.. oder depot und braucht Tankzeit. Leere Tanks halten das Fahrzeug an; request_fuel_rescue bestellt kostenpflichtig 30 l mit Wartezeit. buy_supplies und schedule_refueling beschaffen nur den Betriebsvorrat. Reparatur vor Ort braucht Mechaniker + Ersatzteile, sonst Werkstatt/Abschleppen.
 - PLANUNG: Halte einen eigenen strukturierten Plan (Feld "plan" oder set_plan): Ziel, Schritte mit optional hinterlegter Aktion, Abhängigkeiten, benötigte Mittel, erwarteter Nutzen, Risiken und Abbruchbedingungen. Führe Schritte mit execute_plan_step aus oder handle direkt. Meldet die Engine "neu_planen" (Abbruchbedingung, entfallene Voraussetzung, gescheiterter Schritt), überprüfe und ersetze den Plan. Bereits entstandene Kosten bleiben.
 - GEDÄCHTNIS (erfahrungsbasierte Anpassung durch gespeicherten Kontext): "gedaechtnis" zeigt eine Auswahl deiner Erfahrungen (mit Belegen und Vertrauen) und letzter Ereignisse. Halte Erfahrungen aktuell (Antwortfeld "erfahrungen" oder remember/forget); unterscheide Tatsache und Vermutung, wenige Belege = geringes Vertrauen.
 - EXPERIMENTE: Mit start_experiment kannst du begrenzte Vergleiche in der echten Simulation anlegen (z. B. Einzel- vs. Sammeltouren). Sie kosten echtes Geld und Zeit; entscheide selbst, ob sich der Erkenntnisgewinn lohnt. Wenige Beobachtungen = unsicheres Ergebnis.
@@ -436,7 +439,7 @@ func _local_system_prompt() -> String:
 	var p: Dictionary = Catalog.PERSONALITIES.get(c.personality, Catalog.PERSONALITIES.kostenoptimierer)
 	var names := ["collect_contracts", "accept_contract", "assign_vehicle", "plan_tour", "assign_worker_task", "recruit_worker",
 		"buy_vehicle", "sell_vehicle", "rent_depot", "cancel_depot", "build_office", "upgrade_office", "install_internet",
-		"take_loan", "request_loan", "repay_loan", "repair_vehicle", "buy_supplies", "set_plan", "execute_plan_step", "wait"]
+		"take_loan", "request_loan", "repay_loan", "repair_vehicle", "buy_supplies", "refuel_vehicle", "request_fuel_rescue", "schedule_refueling", "set_plan", "execute_plan_step", "wait"]
 	var all := ActionExecutor.all_schema()
 	var lines: Array = []
 	for name in names:
@@ -447,6 +450,7 @@ func _local_system_prompt() -> String:
 	var custom := str(config.get("strategy", "")).strip_edges()
 	return """Du bist %s von %s. Persönlichkeit: %s. Ziel: höchster kumulierter Nettogewinn am Spielende. Kredit erhöht Bargeld, nicht Gewinn; Zinsen, Löhne und Fahrzeugabschreibung senken ihn. %s
 Entscheide anhand der BEOBACHTUNG. Verwende ausschließlich exakte IDs aus markt, meine_auftraege, freie_depotstandorte, orte und verfuegbare_aktionen. Erfinde keine IDs, keine Platzhalter wie A_best_available. Wenn ein Auftrag nicht bekannt ist, collect_contracts. Fahrzeuge brauchen einen Fahrer: assign_worker_task mit kind='fahren', worker_id und vehicle_id. Vor Fahrzeugkauf prüfe passende bekannte Aufträge, freien Stellplatz, besetzbaren Fahrer, Bargeldreserve, Kreditangebot und Gewinnschwelle in mit_kredit. Kredit nur aufnehmen, wenn Kauf samt Fahrer und rechtzeitiger Auslastung plausibel ist. Bei Kredit: erst take_loan mit Betrag/Bank/Monaten, dann buy_vehicle mit offer_id. Ist die Flotte voll, prüfe rent_depot oder einen Büroumbau nur bei absehbarer Zusatznachfrage; Depotmiete läuft täglich. Angebote sind umkämpft und werden beim Kauf erneut geprüft. Warte nur mit Grund. Bei abgelehnter Aktion korrigiere die IDs oder Voraussetzungen; wiederhole nicht blind denselben Fehler. Ändere einen bestehenden Plan nur bei neuer Lage. Maximal %d Aktionen.
+Fahrzeugtanks sind begrenzt. refuel_vehicle mit station=S.. oder depot fährt zum Tanken; bei leerem Tank liefert request_fuel_rescue kostenpflichtig 30 l nach Wartezeit. buy_supplies und schedule_refueling beschaffen nur Betriebsvorrat.
 Häufige Aktionen: %s
 Weitere Aktionen stehen in verfuegbare_aktionen und der Spielengine bereit. Antworte ausschließlich als JSON {"summary":"kurze Begründung in Ich-Form","goal":"Ziel","actions":[{"action":"..."}],"memory":"kurze Notiz"}. Kein Denktext.""" % [
 		c.player_name, c.company_name, p.name, ("Zusatzstrategie: " + custom) if custom != "" else "", MAX_ACTIONS, "; ".join(lines)]
@@ -480,6 +484,8 @@ func begin_request_for_test() -> int:
 	_inflight = _next_req
 	_next_req += 1
 	_inflight_obs_min = sim.game_min
+	_inflight_sent = real_time
+	_inflight_generation = sim.company(cid).generation
 	return _inflight
 
 

@@ -36,7 +36,8 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	for v in sim.company_vehicles(cid):
 		var t: Vector2i = v.tile()
 		fleet.append({"id": v.id, "modell": v.model, "status": FleetVehicle.STATE_TEXT.get(v.state, v.state),
-			"zustand": int(v.condition), "fahrer": sim.driver_of(v).id if sim.driver_of(v) else null, "auftrag": v.contract_id,
+			"zustand": int(v.condition), "tank_l": snappedf(v.fuel_l, 0.1), "tank_max_l": v.tank_capacity(),
+			"tankauftrag": v.refueling, "tankdauer_rest_min": maxf(0.0, v.timer) if v.state in VehicleFuel.STATES else 0.0, "fahrer": sim.driver_of(v).id if sim.driver_of(v) else null, "auftrag": v.contract_id,
 			"warteschlange": v.queue, "stopps": v.stops.slice(0, 6), "ladung": v.load,
 			"kapazitaet_frei": int(v.spec().capacity) - sim.logistics.load_total(v),
 			"vermietet_an": v.operator, "viertel": Catalog.DISTRICTS[sim.city.district_of(t)],
@@ -200,6 +201,10 @@ static func _available(sim: Simulation, cid: int) -> Dictionary:
 	var P := sim.personnel
 	var out := {}
 	var driven: Array = sim.company_vehicles(cid).filter(func(v): return sim.driver_of(v) != null and v.state not in ["broken", "repairing", "to_workshop"])
+	var fuel_vehicles: Array = sim.vehicles.values().filter(func(v): return VehicleFuel.payer(v) == cid and v.tank_capacity() > 0.0)
+	out["refuel_vehicle"] = {"fahrzeuge": fuel_vehicles.filter(func(v): return sim.driver_of(v) != null and v.state in ["idle", "returning", "to_pickup", "to_dropoff", "out_of_fuel"] and v.refueling.is_empty()).map(func(v): return v.id),
+		"stationen": ["depot"] + sim.resources.supplies.values().filter(func(s): return s.kind == "fuel" and float(s.stock) > 0.0).map(func(s): return s.id)}
+	out["request_fuel_rescue"] = {"fahrzeuge": fuel_vehicles.filter(func(v): return v.state == "out_of_fuel" and v.refueling.is_empty()).map(func(v): return v.id)}
 	var known_open: Array = sim.market.open_contracts().filter(func(k): return c.known.has(k.id) and (k.exclusive_for < 0 or k.exclusive_for == cid or k.exclusive_until <= sim.game_min) and c.reputation >= k.min_rep)
 	var active := sim.executor.active_contracts(cid)
 	out["accept_contract"] = {"ziele": known_open.map(func(k): return k.id).slice(0, 12)} if active < c.contract_capacity() \

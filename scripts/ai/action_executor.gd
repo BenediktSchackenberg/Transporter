@@ -450,7 +450,7 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 				if open.is_empty():
 					return {"ok": false, "msg": "Kein offener Kredit."}
 				lid = open[0].id
-			return sim.banking.early_repay(lid, amount, cid)
+			return sim.banking.early_repay(cid, lid, amount)
 		"bid_auction":
 			return sim.insolvency.bid(cid, _s(a.auction_id), _f(a.amount))
 		"buy_material":

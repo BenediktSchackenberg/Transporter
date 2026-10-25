@@ -91,9 +91,12 @@ static func company_state(sim: Simulation, ctl: AgentController, c: Company) -> 
 static func company_activity(sim: Simulation, c: Company) -> String:
 	var deliveries := 0
 	var repairs := 0
+	var fueling := 0
 	for v in sim.company_vehicles(c.id):
 		if v.state in ["to_pickup", "loading", "to_dropoff", "unloading"]:
 			deliveries += 1
+		elif v.state in VehicleFuel.STATES:
+			fueling += 1
 		elif v.state in ["repairing", "to_workshop", "broken"]:
 			repairs += 1
 	for t in sim.personnel.tasks.values():
@@ -105,6 +108,8 @@ static func company_activity(sim: Simulation, c: Company) -> String:
 		parts.append("%d Lieferung%s" % [deliveries, "en" if deliveries != 1 else ""])
 	if repairs > 0:
 		parts.append("%d Reparatur%s" % [repairs, "en" if repairs != 1 else ""])
+	if fueling > 0:
+		parts.append("%d Tankstopp%s" % [fueling, "s" if fueling != 1 else ""])
 	if builds > 0:
 		parts.append("%d Bau%s" % [builds, "ten" if builds != 1 else ""])
 	return (", ".join(parts) + " aktiv") if not parts.is_empty() else "keine laufenden Vorgänge"
@@ -275,7 +280,7 @@ static func fuel_block(sim: Simulation) -> String:
 		F.ref.diesel * sim.resources.fuel_price_factor]
 	if F.last_error != "":
 		txt += "  [color=#ffb347]Letzter Abruf: %s[/color]\n" % esc(F.last_error)
-	txt += "  Betreiberkonto %s · Tankwagen unterwegs: %d\n" % [Catalog.money(sim.economy.accounts.G0), sim.resources.tanker_orders.size()]
+	txt += "  Betreiberkonto %s · Tankwagen unterwegs: %d\n" % [Catalog.money(sim.economy.accounts.G0), sim.resources.tanker_orders.size() + sim.resources.fuel_deliveries.size()]
 	for sid in sim.resources.supplies:
 		var sp: Dictionary = sim.resources.supplies[sid]
 		if sp.kind != "fuel":

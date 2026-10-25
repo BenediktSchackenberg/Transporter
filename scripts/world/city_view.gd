@@ -609,3 +609,13 @@ func _update_filter() -> void:
 		return
 	_filter_zoom = camera.zoom.x
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if camera.zoom.x >= 1.0 else CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		# Diese Knoten entstehen bereits im Konstruktor. Bei abgebrochener Initialisierung
+		# (oder einem Geometrietest ohne setup) gehoeren sie noch nicht zum Szenenbaum.
+		for node in [buildings_node, decor_node, fx_node, lights_layer, night_layer, weather_layer,
+				night_rect, fog_rect, heat_rect, camera, estate_view]:
+			if is_instance_valid(node) and node.get_parent() == null:
+				node.free()

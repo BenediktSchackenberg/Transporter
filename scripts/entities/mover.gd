@@ -10,6 +10,7 @@ var speed := 2.5            # Tiles pro Sim-Sekunde
 var lane := 7.0             # Spurversatz in Pixel (0 fuer Fussgaenger)
 var goal := Vector2i(-1, -1)
 var wait_time := 0.0        # wie lange schon blockiert
+var distance_moved := 0.0   # tatsaechliche Pixelstrecke des letzten advance-Aufrufs
 var tiles_moved := 0        # Zaehler fuer Treibstoff/Verschleiss (vom Besitzer abgeholt)
 
 
@@ -44,6 +45,7 @@ func point_for(i: int) -> Vector2:
 
 ## Bewegt um dt Sim-Sekunden. factor skaliert die Geschwindigkeit (Wetter, Stau, Stoerung).
 func advance(dt: float, factor: float) -> void:
+	distance_moved = 0.0
 	var budget := speed * 32.0 * dt * factor
 	while budget > 0.0 and path_i < path.size():
 		var tgt := point_for(path_i)
@@ -51,6 +53,7 @@ func advance(dt: float, factor: float) -> void:
 		var dist := to.length()
 		if dist > 0.01:
 			heading = to / dist
+		distance_moved += minf(budget, dist)
 		if budget >= dist:
 			pos = tgt
 			budget -= dist
