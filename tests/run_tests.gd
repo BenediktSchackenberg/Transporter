@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2696,3 +2696,25 @@ func test_physical_fueling() -> void:
 	ok(identity_ok(s), "Geld erhalten nach Notbetankung")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.resources.fuel_deliveries.size() == s.resources.fuel_deliveries.size() and identity_ok(s2), "Lieferungen nach Laden")
+
+
+func test_public_sector() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var ps := s.public_sector
+	var p0 := float(s.economy.accounts.P0)
+	var net := ps.withhold(1000.0)
+	ok(absf(net - 780.0) < 0.001, "Nettolohn nach Steuer und Sozialabgaben: %.2f" % net)
+	ok(absf(float(s.economy.accounts.P0) - p0 - 220.0) < 0.001, "Abgaben landen auf P0")
+	ok(identity_ok(s), "Geld erhalten nach Abzug")
+	run(s, 60.0 * 40.0)
+	ok(ps.tax_total > 0.0 and ps.social_total > 0.0, "Lohnsteuer und Sozialabgaben fließen (%.0f / %.0f)" % [ps.tax_total, ps.social_total])
+	ok(ps.spending_total > 0.0, "Öffentliche Hand gibt Mittel als Aufträge weiter (%.0f)" % ps.spending_total)
+	var h: Dictionary = s.households.homes.values()[0]
+	h.shortfall = 100.0
+	var b0 := ps.benefits_total
+	ps.on_month(0)
+	ok(ps.benefits_total > b0, "Sozialleistung gleicht Defizit teilweise aus")
+	ok(identity_ok(s), "Geld erhalten mit Sozialleistungen")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(absf(s2.public_sector.tax_total - ps.tax_total) < 0.01, "Steuerstände nach Laden")

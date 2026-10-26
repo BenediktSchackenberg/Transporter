@@ -116,6 +116,10 @@ Handel, Sabotage (Ruf/Depot), Spielende nach aktiver Echtzeit (max. 240 min), Sp
 - **Ebenfalls fertig:** Nachrichten-Adapter in drei Ebenen (gemeldet, Einschätzung der Engine, begrenztes Spielereignis; Duplikatschutz, Schlüssel `NEWS_API_KEY`), Gesundheit und Erholung (`schedule_rest`, Krankheit), `offer_training`, `request_replacement_worker`, Ansicht Haushalte im Reiter Wirtschaft, 24 weitere Gebäudevarianten und vier neue Haustypen.
 - **Offen:** Stadtviertel-Entwicklung mit Wirkung auf die Kundennachfrage, öffentliche Haushalte und Straßen (kommen mit Auftrag 4). Steuern und Sozialabgaben folgen mit Auftrag 4 (bis dahin Lohn = Nettolohn).
 
+## Auftrag 4 (Zwischenstand)
+- **Fertig:** `PublicSector` (`public_sector.gd`): Lohnsteuer 12 % und Sozialabgaben 10 % vom Bruttolohn auf P0, Sozialleistung deckt 60 % des Haushaltsdefizits, die Hälfte der Mittel über dem Ausgangsstand geht als öffentliche Aufträge an S0. Test `test_public_sector`; 4524 Prüfungen grün.
+- **Offen:** Ressorts, Prüfungen, Einsätze, Unternehmenssteuern, Zentralbank und Geldschöpfungsmodell, Stadtviertel-Entwicklung.
+
 ## Fehlerbehebung nach externer Prüfung (25.10.2026)
 1. `repay_loan` mit fremder Kredit-ID wird abgelehnt (Eigentumsprüfung vor jeder Buchung).
 2. Die Veraltet-Grenze für KI-Antworten wächst mit der Simulationsgeschwindigkeit; bei 16× gelten dieselben realen Sekunden wie bei 1×.

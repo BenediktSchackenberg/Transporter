@@ -5,7 +5,7 @@ extends RefCounted
 ## Jeder angestellte Mitarbeiter gehoert zu einem festen Haushalt mit Wohnadresse und 0-2 Angehoerigen. Der Nettolohn fliesst vom
 ## Firmenkonto ueber H0 auf das Haushaltskonto (Teilbuch von H0). Monatlich zahlt der Haushalt Lebenshaltung (an S0 und Importanteil
 ## an X0). Reicht das Geld nicht, entsteht ein Defizit; das senkt Motivation und kann zur Kuendigung fuehren.
-## Steuern und Sozialabgaben kommen mit der oeffentlichen Hand (Auftrag 4); bis dahin ist Lohn = Nettolohn.
+## Vom Bruttolohn behaelt PublicSector Lohnsteuer und Sozialabgaben ein; der Haushalt erhaelt den Nettobetrag.
 
 const COST_BASE := 600.0          # EUR je Haushalt und Spielmonat (ein Monat = 60 Spielstunden Lohn)
 const COST_PER_DEPENDENT := 150.0
@@ -65,7 +65,7 @@ func credit_company(cid: int, amount: float) -> void:
 	if total <= 0.0:
 		return
 	for w in staff:
-		var part: float = amount * w.wage / total
+		var part: float = sim.public_sector.withhold(amount * w.wage / total)
 		var h := household_of(w)
 		h.balance = float(h.balance) + part
 		h.income = float(h.income) + part
