@@ -524,3 +524,20 @@ static func citizens(sim: Simulation) -> String:
 	txt += "\n[b]Letzter Monat[/b]\n  Stellenwechsel %d · Entlassungen %d · Einstellungen %d · Kündigungen %d\n" % [int(l.wechsel), int(l.entlassungen), int(l.einstellungen), int(l.kuendigungen)]
 	txt += "  Lohnsumme %s · Lohnsteuer und Sozialabgaben %s · Arbeitslosengeld %s\n" % [Catalog.money(float(l.lohnsumme)), Catalog.money(float(l.abgaben)), Catalog.money(float(l.arbeitslosengeld))]
 	return txt
+
+
+static func parcels(sim: Simulation) -> String:
+	var P: Parcels = sim.parcels
+	var sm: Dictionary = P.summary()
+	var txt := "[b][color=#f2c14e]GRUNDSTÜCKE[/color][/b]\n"
+	txt += "%d Grundstücke · unbebaute Reserve %.1f %% der bebaubaren Fläche\n" % [int(sm.anzahl), float(sm.reserveanteil) * 100.0]
+	txt += "\n[b]Nach Status[/b]\n"
+	for st in Parcels.STATES:
+		txt += "  %s: %d\n" % [st, int(sm.nach_status.get(st, 0))]
+	txt += "\n[b]Nach Zone[/b]\n"
+	for z in sm.nach_zone:
+		txt += "  %s: %d\n" % [Parcels.ZONES[z].label, int(sm.nach_zone[z])]
+	txt += "\n[b]Günstigste freie Baugrundstücke[/b]\n"
+	for p in P.search({"limit": 8}):
+		txt += "  %s · %s · %d Felder · %s · Erschließung %s · %s\n" % [p.id, Parcels.ZONES[p.zone].label, int(p.area), Catalog.money(float(p.price)), P.utility_level(p), "Kauf"]
+	return txt

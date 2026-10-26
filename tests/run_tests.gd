@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2795,3 +2795,70 @@ func test_citizens() -> void:
 	ok("BÜRGER UND ARBEITSMARKT" in LiveText.citizens(s), "Ansicht Bürger")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.citizens.people.size() == cz.people.size() and s2.citizens.employed_total() == cz.employed_total(), "Bürger nach Laden")
+
+
+func test_parcels() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	run(s, 60.0 * 2.0)   # Haushalte der Mitarbeiter entstehen im Lauf
+	var P := s.parcels
+	var sm: Dictionary = P.summary()
+	ok(sm.anzahl > 1000, "Grundstücke angelegt (%d)" % sm.anzahl)
+	ok(P.reserve_share() >= 0.25 and P.reserve_share() <= 0.40, "unbebaute Reserve 25–40 %% (%.1f %%)" % (P.reserve_share() * 100.0))
+	var missing := 0
+	for b in s.city.buildings:
+		if P.of_building(int(b.id)).is_empty():
+			missing += 1
+	ok(missing == 0, "jedes Gebäude steht auf einem Grundstück (%d ohne)" % missing)
+	ok(sm.nach_zone.has("korridor") and sm.nach_zone.has("wohnen") and sm.nach_zone.has("gewerbe") and sm.nach_zone.has("industrie"), "Zonen: Wohnen, Gewerbe, Industrie, Korridore")
+	var states_ok := true
+	for p in P.items.values():
+		if p.state not in Parcels.STATES:
+			states_ok = false
+	ok(states_ok, "alle Grundstücke haben einen gültigen Zustand")
+	# Suche, Reservierung und Kauf
+	var found: Array = P.search({"zone": "wohnen", "min_area": 20})
+	ok(not found.is_empty(), "Suche findet freie Wohngrundstücke (%d)" % found.size())
+	var pid: String = found[0].id
+	ok(s.households.homes.size() > 0, "Haushalte vorhanden")
+	var home: String = str(s.households.homes.keys()[0])
+	var r1 := P.reserve(pid, home)
+	ok(r1.ok and P.parcel(pid).state == "reserviert", "Reservierung: " + r1.msg)
+	var r2 := P.reserve(pid, "H999")
+	ok(not r2.ok, "kein zweiter Bewerber: " + r2.msg)
+	ok(not P.city_can_assign(pid), "reserviertes Grundstück kann die Stadt nicht anderweitig vergeben")
+	s.households.homes[home].balance = 0.0
+	var poor2 := P.buy_for_household(pid, home)
+	ok(not poor2.ok, "ohne Geld kein Kauf: " + poor2.msg)
+	s.households.homes[home].balance = float(P.parcel(pid).price) + 100.0
+	s.economy.transfer("X0", "H0", float(P.parcel(pid).price) + 100.0)
+	var p0_before: float = s.economy.accounts.P0
+	var buy := P.buy_for_household(pid, home)
+	ok(buy.ok and P.parcel(pid).owner == home, "Kauf: " + buy.msg)
+	ok(absf(float(s.economy.accounts.P0) - p0_before - float(P.parcel(pid).price)) < 0.01, "Kaufpreis geht an die Stadt")
+	ok(not P.city_can_assign(pid) and not P.reserve(pid, "H998").ok, "privates Eigentum kann die Stadt nicht vergeben")
+	ok(identity_ok(s), "Geld erhalten nach Grundstückskauf")
+	# Ablauf der Reservierung
+	var pid2: String = found[1].id
+	P.reserve(pid2, home, 2)
+	P.on_day(GameCalendar.day_of(s.game_min) + 3)
+	ok(P.parcel(pid2).state == "frei", "Reservierung läuft ab")
+	# Speichern und Laden; alter Spielstand ohne Grundstuecke
+	P.reserve(pid2, home, 10)
+	var d := s.to_dict()
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(d)))
+	ok(s2.parcels.parcel(pid).owner == home and s2.parcels.parcel(pid2).state == "reserviert", "Eigentum und Reservierung nach Laden")
+	ok(s2.parcels.items.size() == P.items.size(), "gleiche Grundstücke nach Laden")
+	var legacy: Dictionary = JSON.parse_string(JSON.stringify(d))
+	legacy.erase("parcels")
+	legacy.erase("reserve")
+	var s3 := Simulation.from_dict(legacy)
+	ok(s3.parcels.items.size() > 1000 and s3.parcels.of_building(0).building == 0, "alter Spielstand bekommt Grundstücke aus der Karte")
+	# neu gebautes Gebaeude bekommt sein Grundstueck
+	var free_p: Dictionary = P.search({"min_area": 12})[2]
+	var rect := Rect2i(free_p.rect[0], free_p.rect[1], 3, 3)
+	var bid := s.city.buildings.size()
+	s.city.buildings.append({"id": bid, "type": "shop", "x": rect.position.x, "y": rect.position.y, "w": 3, "h": 3, "district": 1})
+	P.sync_buildings()
+	ok("GRUNDSTÜCKE" in LiveText.parcels(s), "Ansicht Grundstücke")
+	ok(P.of_building(bid).id == free_p.id and P.of_building(bid).state == "bebaut", "Neubau wird dem Grundstück zugeordnet")

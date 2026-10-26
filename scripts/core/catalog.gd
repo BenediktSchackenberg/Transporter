@@ -6,7 +6,8 @@ const GAME_MIN_PER_SIM_SEC := 2.0
 const START_HOUR := 6
 ## Partiedauer in aktiven Echtzeitminuten (0 = Endlosmodus). Eine Partie zaehlt nur aktive (nicht pausierte) Echtzeit.
 const DURATION_OPTIONS := [240, 720, 1440, 0]
-const MAP_SIZE := 256
+const MAP_SIZE := 512             # vierfache Flaeche gegenueber dem frueheren Standard 256
+const RESERVE_TARGET := 0.19      # Wahrscheinlichkeit, dass ein Block frei bleibt; ergibt bei 512 etwa 30 % unbebaute Reserve (0.15-0.30 = 25-40 %)
 
 const START_CAPITAL := 150000.0   # traegt die Startbelegschaft von 10 Mitarbeitern
 const VEHICLES_PER_DEPOT := 4

@@ -24,6 +24,8 @@ var cv: CityView
 var vehicle_nodes := {}
 var traffic_nodes: Array = []
 var avatar_nodes := {}
+var _people_timer := 0.0
+var _people_cache: Array = []
 var peds: Array = []                    # [Mover, Node2D, Wartezeit]
 var bubble_nodes := {}
 var headlights: Array = []              # [Sprite2D Licht, Node2D Fahrzeug]
@@ -343,9 +345,12 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			bubble.scale = Vector2(inv, inv)
 			bubble.position = Iso.to_screen(a.pos) + Vector2(-bubble.size.x * 0.5 * inv, -100.0 * inv - bubble.size.y * inv)
 	# Fussgaenger (rein dekorativ)
+	var view := _view_rect(300.0)
 	for p in peds:
 		var m: Mover = p[0]
 		var n: Node2D = p[1]
+		if not view.has_point(n.position):
+			continue   # rein dekorativ: ausserhalb des Bildes ruhen sie
 		if m.arrived():
 			p[2] -= delta * sim_speed
 			if p[2] <= 0.0:
@@ -443,7 +448,11 @@ func _update_workers(inv: float, rainy: bool) -> void:
 ## Kundenfiguren: stehen am Eingang, solange sie ein Anliegen haben oder gerade ein Ergebnis zeigen.
 func _update_people(inv: float, rainy: bool) -> void:
 	var vis := {}
-	for p in sim.residents.visible_people():
+	_people_timer -= get_process_delta_time()
+	if _people_timer <= 0.0:
+		_people_timer = 0.3
+		_people_cache = sim.residents.visible_people()
+	for p in _people_cache:
 		vis[p.id] = true
 		var n: Node2D = person_nodes.get(p.id)
 		if n == null:
@@ -459,6 +468,12 @@ func _update_people(inv: float, rainy: bool) -> void:
 		if not vis.has(id):
 			person_nodes[id].queue_free()
 			person_nodes.erase(id)
+
+
+## Sichtbarer Ausschnitt in Bildschirmkoordinaten der Welt (Iso-Raum), mit Rand.
+func _view_rect(margin: float) -> Rect2:
+	var size: Vector2 = get_viewport_rect().size / cv.camera.zoom
+	return Rect2(cv.camera.get_screen_center_position() - size * 0.5, size).grow(margin)
 
 
 ## Sichtbare Ressourcen: Fahrzeuge im Haendlerbestand, wartende Waren an Abholorten, Vorraete an Tankstellen/Werkstaetten.
@@ -495,8 +510,12 @@ func _update_markers() -> void:
 			crate.offset = -cv.pivot_of(cname)
 			crate.position = Iso.to_screen(sim.city.tile_center(b.walk) + Vector2(-6 + i * 9, -4 + i * 5))
 			marker_node.add_child(crate)
+	var view := _view_rect(200.0)
+	var readable: bool = cv.camera.zoom.x >= 0.45
 	for sp in sim.resources.supplies.values():
 		var b: Dictionary = sim.city.building(sp.building)
+		if not readable or not view.has_point(Iso.to_screen(Vector2((b.x + b.w * 0.5) * 32, (b.y + b.h * 0.5) * 32))):
+			continue
 		var lbl := Label.new()
 		lbl.text = ("Diesel %d l · %.2f €" % [int(sp.stock), sim.resources.fuel_price(sp)]) if sp.kind == "fuel" \
 			else ("Teile %d · %d €" % [int(sp.stock), int(sp.price)])

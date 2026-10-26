@@ -76,7 +76,12 @@ var xs: Array = []
 var ys: Array = []
 
 
-func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE) -> CityData:
+var reserve := 0.0
+var _seen := PackedByteArray()
+
+
+func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: float = 0.0) -> CityData:
+	reserve = reserve_share
 	rng.seed = seed_value
 	noise.seed = seed_value
 	noise.frequency = 0.035
@@ -172,30 +177,78 @@ func _roads() -> void:
 			continue
 		for k in seg[2]:
 			_set_ground(seg[0] + seg[1] * k, G.GRASS)
-		if not _roads_connected():
+		# Zusammenhang nur zwischen den beiden Enden des Abschnitts pruefen (Umweg meist kurz)
+		if not _road_path_exists(seg[0] - seg[1], seg[0] + seg[1] * seg[2]):
 			for k in seg[2]:
 				_set_ground(seg[0] + seg[1] * k, G.ROAD)
+	_roads_connected()
+
+
+## Breitensuche ueber Strassenzellen von a nach b (bricht beim Erreichen von b ab).
+func _road_path_exists(a: Vector2i, b: Vector2i) -> bool:
+	if not c.is_road(a) or not c.is_road(b):
+		return true   # Ende ist keine Strasse (z. B. Kuestenrand): nichts zu pruefen
+	if _seen.size() != n * n:
+		_seen.resize(n * n)
+	_seen.fill(0)
+	var target := c.idx(b)
+	var start := c.idx(a)
+	_seen[start] = 1
+	var stack: Array[int] = [start]
+	while not stack.is_empty():
+		var i: int = stack.pop_back()
+		if i == target:
+			return true
+		var x := i % n
+		if i >= n and _seen[i - n] == 0 and c.ground[i - n] == G.ROAD:
+			_seen[i - n] = 1
+			stack.append(i - n)
+		if i < n * (n - 1) and _seen[i + n] == 0 and c.ground[i + n] == G.ROAD:
+			_seen[i + n] = 1
+			stack.append(i + n)
+		if x > 0 and _seen[i - 1] == 0 and c.ground[i - 1] == G.ROAD:
+			_seen[i - 1] = 1
+			stack.append(i - 1)
+		if x < n - 1 and _seen[i + 1] == 0 and c.ground[i + 1] == G.ROAD:
+			_seen[i + 1] = 1
+			stack.append(i + 1)
+	return false
 
 
 func _roads_connected() -> bool:
 	var total := 0
-	var start := Vector2i(-1, -1)
+	var start := -1
 	for i in c.ground.size():
 		if c.ground[i] == G.ROAD:
 			total += 1
-			if start.x < 0:
-				start = Vector2i(i % n, i / n)
-	var seen := {start: true}
-	var stack: Array = [start]
-	while not stack.is_empty():
-		var p: Vector2i = stack.pop_back()
-		for d in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
-			var q: Vector2i = p + d
-			if c.is_road(q) and not seen.has(q):
-				seen[q] = true
-				stack.append(q)
+			if start < 0:
+				start = i
 	c.road_count = total
-	return seen.size() == total
+	if start < 0:
+		return true
+	var seen := PackedByteArray()
+	seen.resize(n * n)
+	seen[start] = 1
+	var count := 1
+	var stack: Array[int] = [start]
+	while not stack.is_empty():
+		var i: int = stack.pop_back()
+		var x := i % n
+		var nbs: Array[int] = []
+		if i >= n:
+			nbs.append(i - n)
+		if i < n * (n - 1):
+			nbs.append(i + n)
+		if x > 0:
+			nbs.append(i - 1)
+		if x < n - 1:
+			nbs.append(i + 1)
+		for q in nbs:
+			if seen[q] == 0 and c.ground[q] == G.ROAD:
+				seen[q] = 1
+				count += 1
+				stack.append(q)
+	return count == total
 
 
 func _set_ground(cell: Vector2i, ground_type: int) -> void:
@@ -460,6 +513,8 @@ func _fill_lots() -> void:
 			if blk.size.x < 2 or blk.size.y < 2:
 				continue
 			var dist := c.district_of(blk.position + blk.size / 2)
+			if reserve > 0.0 and dist != 0 and rng.randf() < reserve:
+				continue   # unbebaute Reserve: ganzer Block bleibt frei (wird spaeter in Grundstuecke zerlegt)
 			if dist in [0, 1] and rng.randf() < 0.1 and _make_park(blk):
 				continue
 			if dist == 5 and rng.randf() < 0.45:
@@ -539,7 +594,7 @@ func _finish() -> void:
 	for b in c.buildings:
 		var r := Rect2i(b.x, b.y, b.w, b.h)
 		b["road"] = _nearest(r, func(p): return c.is_road(p))
-		b["walk"] = _nearest(r, func(p): return main.has(p) and c.g(p) != G.ROAD)
+		b["walk"] = _nearest(r, func(p): return main[c.idx(p)] == 1 and c.g(p) != G.ROAD)
 		if b.type == "plot":
 			# Einfahrt: Grundstueckszelle, die der Strasse am naechsten liegt
 			var best := Vector2i(b.x, b.y)
@@ -551,7 +606,8 @@ func _finish() -> void:
 
 
 ## Groesste zusammenhaengende begehbare Flaeche (4er-Nachbarschaft); abgeschlossene Taschen zwischen Gebaeuden zaehlen nicht.
-func _main_walk_area() -> Dictionary:
+## Ergebnis: 1 je Zelle der Hauptflaeche.
+func _main_walk_area() -> PackedByteArray:
 	var label := PackedInt32Array()
 	label.resize(n * n)
 	label.fill(-1)
@@ -559,28 +615,36 @@ func _main_walk_area() -> Dictionary:
 	var best_size := 0
 	var comp := 0
 	for i in n * n:
-		var start := Vector2i(i % n, i / n)
-		if label[i] >= 0 or not c.walkable(start):
+		if label[i] >= 0 or c.blocked[i] != 0:
 			continue
-		var stack: Array[Vector2i] = [start]
+		var stack: Array[int] = [i]
 		label[i] = comp
 		var size := 0
 		while not stack.is_empty():
-			var q: Vector2i = stack.pop_back()
+			var q: int = stack.pop_back()
 			size += 1
-			for d in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
-				var nb: Vector2i = q + d
-				if c.inside(nb) and label[c.idx(nb)] < 0 and c.walkable(nb):
-					label[c.idx(nb)] = comp
-					stack.append(nb)
+			var x := q % n
+			if q >= n and label[q - n] < 0 and c.blocked[q - n] == 0:
+				label[q - n] = comp
+				stack.append(q - n)
+			if q < n * (n - 1) and label[q + n] < 0 and c.blocked[q + n] == 0:
+				label[q + n] = comp
+				stack.append(q + n)
+			if x > 0 and label[q - 1] < 0 and c.blocked[q - 1] == 0:
+				label[q - 1] = comp
+				stack.append(q - 1)
+			if x < n - 1 and label[q + 1] < 0 and c.blocked[q + 1] == 0:
+				label[q + 1] = comp
+				stack.append(q + 1)
 		if size > best_size:
 			best_size = size
 			best_id = comp
 		comp += 1
-	var out := {}
+	var out := PackedByteArray()
+	out.resize(n * n)
 	for i in n * n:
 		if label[i] == best_id:
-			out[Vector2i(i % n, i / n)] = true
+			out[i] = 1
 	return out
 
 

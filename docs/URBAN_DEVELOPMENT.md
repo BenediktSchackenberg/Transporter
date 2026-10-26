@@ -80,4 +80,12 @@ Kartenabschnitte und Detailstufen; nicht sichtbare Gebiete vereinfacht berechnen
 ## Stand der Umsetzung
 (wird laufend ergänzt)
 
-- Noch nichts umgesetzt. Vorhandene Grundlagen: Karte 256×256, Estate (Betriebshofgrundstücke), Insolvenz mit Auktion, Bauhof/Material (`Trader`, `StockBook`), Haushalte, Bürger/Arbeitsmarkt (`Citizens`), Öffentliche Hand (`PublicSector`).
+- **Etappe 1 (Karte und Grundstücke) – fertig, 4589 Tests grün:**
+  - Standardkarte 512×512 (`Catalog.MAP_SIZE`, vierfache Fläche). Kartenerzeugung von 14 s auf rund 3 s beschleunigt (Straßenzusammenhang nur zwischen den Enden eines entfernten Abschnitts prüfen, Fußnetz mit Feldern statt Dictionary).
+  - Unbebaute Reserve: Jeder Block außerhalb des Zentrums bleibt mit Wahrscheinlichkeit `Catalog.RESERVE_TARGET` (0,19) frei; ergibt auf 512 etwa 30 % unbebaute, bebaubare Fläche (konfigurierbar 25–40 %). Alte Spielstände ohne `reserve` werden mit ihrer ursprünglichen Karte (ohne Reserve) neu aufgebaut.
+  - `Parcels` (`scripts/world/parcels.gd`): Jedes Gebäude steht auf einem Grundstück (Identität bleibt); freie Flächen werden in Grundstücke unterschiedlicher Größe zerlegt, dazu Korridore für Straßen und Leitungen und Grünflächen. Zonen Wohnen, Mischgebiet, Gewerbe, Industrie, öffentlich, Grün, Korridor mit Regeln (Nutzungen, Geschosse, Anteil, Preis). Zustände: frei, reserviert, privat gehalten, zur Entwicklung, genehmigt, in Erschließung, im Bau, bebaut. Erschließungszustand (Straße, Strom, Wasser, Abwasser) aus der Nähe zur Bebauung.
+  - Eigentum getrennt von Rechten (`owner`, `rights`); Reservierung (ein Bewerber, läuft nach 14 Tagen ab), Kauf durch Haushalte (Preis an die Stadt, Geld bleibt erhalten); die Stadt kann nur über eigene, freie Flächen verfügen (`city_can_assign`). Gespeichert werden nur Änderungen (`touched`); ältere Spielstände bekommen die Grundstücke aus ihrer Karte. Neue Gebäude zur Laufzeit werden ihrem Grundstück zugeordnet.
+  - Oberfläche: Ansicht „Grundstücke“ im Reiter Wirtschaft.
+  - Leistung bei 512: Fußgänger ruhen außerhalb des Bildes, Beschriftungen nur im Bild und bei lesbarem Zoom, Kundenliste höchstens alle 0,3 s. Entitäten 25 → 4 ms je Bild. Bei vollständig herausgezoomter Karte bleiben die Draw-Calls hoch (siehe Abschnitt 17, Detailstufen noch offen).
+  - Noch offen in Etappe 1: Kartenebenen in der Oberfläche (Abschnitt 16), Unternehmen als Käufer (braucht Grundstückswert in der Bilanz), Quartiere mit eigenem Charakter jenseits von Zone und Größe.
+- Nächste Etappe: 2 Planungsregelwerk und Bauantrag.
