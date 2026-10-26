@@ -2575,6 +2575,7 @@ func test_news_feed() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.news.items.size() == s.news.items.size() and s2.news.ingest(p).is_empty(), "Meldungen und Duplikatschutz nach Laden")
 	ok("HAUSHALTE" in LiveText.households(s), "Ansicht Haushalte")
+	ok("ÖFFENTLICHE HAND" in LiveText.public_sector(s) and "Verkehr" in LiveText.public_sector(s), "Ansicht Staat")
 
 
 func test_review_fixes() -> void:

@@ -47,7 +47,7 @@ var left_box: VBoxContainer
 var left_scroll: ScrollContainer
 var economy_rt: RichTextLabel
 var economy_view := 0
-const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte"]
+const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat"]
 var decision_company := -1
 var decision_company_opt: OptionButton
 var sel_panel: PanelContainer
@@ -366,6 +366,7 @@ func _economy_text() -> String:
 		2: return LiveText.firms(sim)
 		3: return LiveText.trader(sim)
 		4: return LiveText.households(sim)
+		5: return LiveText.public_sector(sim)
 	return LiveText.standings(sim)
 
 

@@ -493,3 +493,26 @@ static func households(sim: Simulation) -> String:
 			txt += "    %s: %.1f EUR/h (Mindestlohn %.1f) · Motivation %d · Gesundheit %d · Haushalt %s (%d Angehörige, Guthaben %s)\n" % [esc(w.name), w.wage,
 				H.reservation_wage(w), int(w.motivation), int(w.health), h.id, int(h.dependents), Catalog.money(float(h.balance))]
 	return txt
+
+
+static func public_sector(sim: Simulation) -> String:
+	var P: PublicSector = sim.public_sector
+	var txt := "[b][color=#f2c14e]ÖFFENTLICHE HAND[/color][/b]
+"
+	txt += "Kasse %s · Lohnsteuer %s · Sozialabgaben %s · Ertragsteuer %s
+" % [Catalog.money(float(sim.economy.accounts.P0)), Catalog.money(P.tax_total), Catalog.money(P.social_total), Catalog.money(P.corporate_total)]
+	txt += "Sätze: Lohnsteuer %d %% · Sozialabgaben %d %% · Ertragsteuer %d %%
+" % [roundi(PublicSector.INCOME_TAX * 100.0), roundi(PublicSector.SOCIAL_RATE * 100.0), roundi(PublicSector.CORPORATE_TAX * 100.0)]
+	txt += "
+[b]Ausgaben je Ressort[/b]
+"
+	for d in P.departments:
+		txt += "  %s: %s
+" % [d, Catalog.money(float(P.departments[d]))]
+	txt += "
+[b]Ertragsteuer je Firma[/b]
+"
+	for c in sim.companies:
+		txt += "  %s: %s gezahlt
+" % [esc(c.company_name), Catalog.money(-float(c.ledger.totals.get("tax", 0.0)))]
+	return txt
