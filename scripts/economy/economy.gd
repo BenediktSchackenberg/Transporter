@@ -21,7 +21,7 @@ const COUNTER := {
 	"compensation": "H0", "penalties": "H0", "fines": "P0", "wages": "H0", "hire_fees": "H0", "repairs": "S0",
 	"rent": "H0", "rent_income": "H0", "interest": "B1", "interest_income": "B1", "fuel": "X0", "supplies": "S0", "security": "S0",
 	"sabotage": "S0", "marketing": "S0", "office": "S0", "property_costs": "P0", "training": "S0",
-	"admin": "P0", "depreciation": "", "asset_result": "",
+	"admin": "P0", "tax": "P0", "depreciation": "", "asset_result": "",
 }
 
 var accounts := {}

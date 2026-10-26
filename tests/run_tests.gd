@@ -2716,5 +2716,17 @@ func test_public_sector() -> void:
 	ps.on_month(0)
 	ok(ps.benefits_total > b0, "Sozialleistung gleicht Defizit teilweise aus")
 	ok(identity_ok(s), "Geld erhalten mit Sozialleistungen")
+	# Ertragsteuer mit Verlustvortrag
+	var c := s.companies[0]
+	var due0 := ps.collect_corporate_tax(c)
+	ok(c.ledger.profit() < 0.0 or due0 > 0.0, "Ertragsteuer nur bei Gewinn (gezahlt %.0f)" % due0)
+	c.ledger.book("transport", 10000.0, true, "Test", s.game_min)
+	var pretax: float = c.ledger.profit() - c.ledger.totals.get("tax", 0.0)
+	var t := ps.collect_corporate_tax(c)
+	ok(t > 0.0 or pretax <= 0.0, "Gewinn wird besteuert (%.0f)" % t)
+	ok(ps.collect_corporate_tax(c) < 0.01, "keine doppelte Besteuerung")
+	ok(ps.departments.Soziales > 0.0 and ps.departments.Verkehr > 0.0, "Ausgaben je Ressort erfasst")
+	ok(identity_ok(s), "Geld und Bilanz mit Ertragsteuer")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(absf(s2.public_sector.corporate_total - ps.corporate_total) < 0.01, "Ertragsteuer nach Laden")
 	ok(absf(s2.public_sector.tax_total - ps.tax_total) < 0.01, "Steuerstände nach Laden")

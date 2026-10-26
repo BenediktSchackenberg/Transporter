@@ -118,7 +118,8 @@ Handel, Sabotage (Ruf/Depot), Spielende nach aktiver Echtzeit (max. 240 min), Sp
 
 ## Auftrag 4 (Zwischenstand)
 - **Fertig:** `PublicSector` (`public_sector.gd`): Lohnsteuer 12 % und Sozialabgaben 10 % vom Bruttolohn auf P0, Sozialleistung deckt 60 % des Haushaltsdefizits, die Hälfte der Mittel über dem Ausgangsstand geht als öffentliche Aufträge an S0. Test `test_public_sector`; 4524 Prüfungen grün.
-- **Offen:** Ressorts, Prüfungen, Einsätze, Unternehmenssteuern, Zentralbank und Geldschöpfungsmodell, Stadtviertel-Entwicklung.
+- **Ebenfalls fertig:** Ertragsteuer 15 % auf den kumulierten Gewinn mit Verlustvortrag (monatlich, nur soweit Bargeld da ist, Kategorie `tax`), Ressortausgaben (Soziales, Verkehr, Bildung, Verwaltung, Gesundheit) in `PublicSector.departments`. 4530 Prüfungen grün.
+- **Offen:** Prüfungen, Einsätze, Zentralbank und Geldschöpfungsmodell, Stadtviertel-Entwicklung, Anzeige der Staatsfinanzen im HUD.
 
 ## Fehlerbehebung nach externer Prüfung (25.10.2026)
 1. `repay_loan` mit fremder Kredit-ID wird abgelehnt (Eigentumsprüfung vor jeder Buchung).

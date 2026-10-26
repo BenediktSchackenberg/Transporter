@@ -16,7 +16,7 @@ const LABELS := {
 	"sabotage": "Sabotagekosten", "fines": "Bußgelder & Schadensersatz", "security": "Sicherheitsdienst",
 	"insurance": "Versicherungsprämien", "trade_expense": "Zahlungen an Konkurrenten", "marketing": "Marketing",
 	"office": "Büros & Internet", "supplies": "Betriebsmittel (Treibstoff, Ersatzteile)",
-	"rent_income": "Mieteinnahmen", "interest_income": "Zinserträge", "admin": "Verwaltung & Berichtspflicht", "property_costs": "Gelände- und Gebäudekosten", "training": "Weiterbildung",
+	"rent_income": "Mieteinnahmen", "interest_income": "Zinserträge", "admin": "Verwaltung & Berichtspflicht", "property_costs": "Gelände- und Gebäudekosten", "training": "Weiterbildung", "tax": "Ertragsteuer",
 }
 
 var start_capital: float
