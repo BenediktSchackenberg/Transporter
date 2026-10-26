@@ -303,10 +303,10 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		n.position = Iso.to_screen(m.pos)
 		_set_vehicle_dir(n, m.heading)
 	for hl in headlights:
-		var veh: Node2D = hl[1]
-		if not is_instance_valid(veh):
+		if not is_instance_valid(hl[1]):
 			hl[0].queue_free()
 			continue
+		var veh: Node2D = hl[1]
 		var d := int(veh.get_meta("dir"))
 		var hv := Vector2([1, 0, -1, 0][maxi(d, 0)], [0, 1, 0, -1][maxi(d, 0)])
 		hl[0].position = veh.position + Iso.to_screen(hv * 18.0) + Vector2(0, -8)
