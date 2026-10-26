@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -539,7 +539,7 @@ func test_workers_acceptance() -> void:
 	c0.reputation = 100.0
 	c1.reputation = 100.0
 	# Startbedingungen gleich: je 2 Arbeiter, Fahrer sitzt im Startfahrzeug
-	ok(P.employed(0).size() == 2 and P.employed(1).size() == 2, "beide starten mit 2 Arbeitern")
+	ok(P.employed(0).size() == Personnel.MIN_STAFF and P.employed(1).size() == Personnel.MIN_STAFF, "beide starten mit %d Arbeitern" % Personnel.MIN_STAFF)
 	ok(s.driver_of(s.vehicles[c0.vehicle_ids[0]]) != null, "Startfahrzeug hat einen Fahrer")
 	# 1) beide sehen dieselben verfuegbaren Ressourcen
 	var o0 := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
@@ -687,7 +687,7 @@ func test_prompt_builds() -> void:
 	var up := ctl.user_prompt(ObservationBuilder.build(s, 0, [], 0.0, 10.0))
 	ok(sp.contains("willst diese Partie gewinnen") and sp.contains("attempt_vehicle_sabotage"), "Systemprompt vollständig gebaut")
 	ok(not sp.contains("%s") and not sp.contains("%d"), "keine offenen Platzhalter")
-	ok(up.length() / 4 < 4500, "Beobachtung kompakt (~%d Token)" % (up.length() / 4))
+	ok(up.length() / 4 < 5500, "Beobachtung kompakt (~%d Token)" % (up.length() / 4))
 	ctl.free()
 
 
@@ -887,7 +887,7 @@ func test_stage1_plans() -> void:
 	s.plans.tick()
 	ok(s.plans.current(0).status == "neu_planen" and s.plans.current(0).hinweis.contains("Voraussetzung"), "entfallene Voraussetzung erzwingt Neuplanung")
 	s.executor.execute(0, {"action": "set_plan", "ziel": "Dritter", "abbruch": [{"typ": "bargeld_unter", "wert": 1000}], "schritte": [{"id": "S1", "text": "x"}]})
-	c0.ledger.inject(-100000.0)
+	c0.ledger.inject(-c0.ledger.cash + 500.0)
 	s.plans.tick()
 	ok(s.plans.current(0).status == "neu_planen" and s.plans.current(0).hinweis.contains("bargeld_unter"), "Abbruchbedingung Bargeld greift")
 	ok(s.action_results[0].any(func(r): return str(r.text).contains("überprüfen")), "KI wird über Neuplanung informiert")
@@ -956,7 +956,7 @@ func test_stage2_memory() -> void:
 	ok(rel.erfahrungen.size() <= MemoryBook.PROMPT_EXPERIENCES and rel.erfahrungen[0].inhalt.contains("Hafen"), "Auswahl begrenzt, passender Bereich zuerst")
 	ok(M.books[0].experiences.size() <= MemoryBook.MAX_EXPERIENCES, "Gedächtnis begrenzt")
 	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
-	ok(obs.has("gedaechtnis") and JSON.stringify(obs).length() / 4 < 5000, "Gedächtnis in der Beobachtung, Größe begrenzt")
+	ok(obs.has("gedaechtnis") and JSON.stringify(obs).length() / 4 < 6000, "Gedächtnis in der Beobachtung, Größe begrenzt")
 	# Speichern/Laden und Uebernahme in neue Partie
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.memory.books[0].experiences.size() == M.books[0].experiences.size(), "Gedächtnis im Spielstand")
@@ -1855,8 +1855,9 @@ func test_company_forms() -> void:
 	ok(identity_ok(s), "Geld und Bilanz nach 3 Monaten")
 	ok(c.status == "aktiv" or c.status == "warnung", "Firma lebt nach 3 Monaten (%s)" % c.status)
 	var admin_before: float = c.ledger.totals.get("admin", 0.0)
+	var nw_before := s.net_worth(0)
 	var r := CompanyForms.request_change(s, 0, "gmbh")
-	ok(r.ok == (s.net_worth(0) >= 25000.0), "GmbH nur mit 25 000 Eigenkapital: " + r.msg)
+	ok(r.ok == (nw_before >= 25000.0), "GmbH nur mit 25 000 Eigenkapital: " + r.msg)
 	var r2 := CompanyForms.request_change(s, 0, "ug")
 	ok(r2.ok or r.ok, "UG-Wechsel beantragt: " + r2.msg)
 	ok(c.ledger.totals.get("admin", 0.0) < admin_before, "Gründungskosten gebucht")
@@ -2757,3 +2758,36 @@ func test_public_sector() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(absf(s2.public_sector.corporate_total - ps.corporate_total) < 0.01, "Ertragsteuer nach Laden")
 	ok(absf(s2.public_sector.tax_total - ps.tax_total) < 0.01, "Steuerstände nach Laden")
+
+
+func test_citizens() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(4)
+	var cz := s.citizens
+	ok(cz.population() >= 1000, "mindestens 1000 Bürger (%d)" % cz.population())
+	ok(absf(cz.employment_rate() - 0.8) < 0.02, "80 %% haben Arbeit (%.1f %%)" % (cz.employment_rate() * 100.0))
+	for c in s.companies:
+		ok(s.personnel.employed(c.id).size() >= 10, "%s hat mindestens 10 Mitarbeiter (%d)" % [c.company_name, s.personnel.employed(c.id).size()])
+	ok(cz.employed_count("rathaus") > 0 and cz.employed_count("baufirma") > 0, "Rathaus und Baufirma beschäftigen Bürger")
+	ok(identity_ok(s), "Geld erhalten nach Start")
+	var tax0 := s.public_sector.tax_total
+	var changes := 0
+	var layoffs := 0
+	var hires := 0
+	var rate_min := 1.0
+	var rate_max := 0.0
+	for m in 12:
+		cz.on_month(m)
+		changes += int(cz.stats.changes)
+		layoffs += int(cz.stats.layoffs)
+		hires += int(cz.stats.hires)
+		rate_min = minf(rate_min, cz.employment_rate())
+		rate_max = maxf(rate_max, cz.employment_rate())
+		ok(identity_ok(s), "Geld erhalten nach Monat %d" % m)
+	ok(s.public_sector.tax_total > tax0, "Bürger zahlen Lohnsteuer")
+	ok(changes > 0, "Bürger wechseln die Stelle (%d)" % changes)
+	ok(layoffs > 0 and hires > 0, "Entlassungen (%d) und Einstellungen (%d)" % [layoffs, hires])
+	ok(cz.unemployed_total() > 0 and rate_min > 0.7 and rate_max < 0.9, "Arbeitslosigkeit bleibt realistisch (%.1f–%.1f %%)" % [rate_min * 100.0, rate_max * 100.0])
+	ok("BÜRGER UND ARBEITSMARKT" in LiveText.citizens(s), "Ansicht Bürger")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.citizens.people.size() == cz.people.size() and s2.citizens.employed_total() == cz.employed_total(), "Bürger nach Laden")

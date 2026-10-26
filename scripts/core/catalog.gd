@@ -8,7 +8,7 @@ const START_HOUR := 6
 const DURATION_OPTIONS := [240, 720, 1440, 0]
 const MAP_SIZE := 256
 
-const START_CAPITAL := 50000.0
+const START_CAPITAL := 150000.0   # traegt die Startbelegschaft von 10 Mitarbeitern
 const VEHICLES_PER_DEPOT := 4
 const DEPOT_STORAGE := 60           # Lagerplaetze (Einheiten) je Depot fuer Zwischenlagerung
 const MAX_EXTRA_DEPOTS := 3

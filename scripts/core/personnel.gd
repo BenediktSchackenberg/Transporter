@@ -16,6 +16,7 @@ const SEEN_TTL := 90.0                 # Sichtungen gelten 90 Spielminuten
 const REPORT_EVERY := 120.0
 
 var sim
+const MIN_STAFF := 10                  # Startbelegschaft jeder Firma
 var workers := {}                      # ID -> Worker
 var tasks := {}                        # ID -> WorkerTask
 var next_worker := 1
@@ -114,6 +115,15 @@ func start_staff(cid: int, vehicle_id: int) -> void:
 	d.pos = sim.vehicles[vehicle_id].pos
 	var a := _new_employee(cid, {"fahren": 1, "verladen": 1, "reparieren": 1, "bewachen": 1}, 15.0)
 	a.pos = sim.city.tile_center(sim.city.building(sim.companies[cid].depots[0]).walk)
+	# Stammbelegschaft: insgesamt MIN_STAFF Mitarbeiter mit unterschiedlichen Faehigkeiten
+	var extra := [[{"fahren": 2, "verladen": 1}, 13.0], [{"fahren": 1, "verladen": 2}, 12.0], [{"verladen": 2, "bewachen": 1}, 11.0],
+		[{"verladen": 2}, 11.0], [{"reparieren": 2, "verladen": 1}, 15.0], [{"bewachen": 2, "verladen": 1}, 12.0],
+		[{"fahren": 1, "reparieren": 1}, 13.0], [{"verladen": 1, "bewachen": 1}, 11.0]]
+	for e in extra:
+		if employed(cid).size() >= MIN_STAFF:
+			break
+		var x := _new_employee(cid, e[0], e[1])
+		x.pos = a.pos
 
 
 func _new_employee(cid: int, skills: Dictionary, wage: float) -> Worker:

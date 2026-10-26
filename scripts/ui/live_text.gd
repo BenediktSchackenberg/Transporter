@@ -510,3 +510,17 @@ static func public_sector(sim: Simulation) -> String:
 	for a in P.audits.slice(-5):
 		txt += "  Monat %d · %s: Nachforderung %s, Zuschlag %s\n" % [int(a.month), esc(sim.company(int(a.cid)).company_name), Catalog.money(float(a.arrears)), Catalog.money(float(a.fine))]
 	return txt
+
+
+static func citizens(sim: Simulation) -> String:
+	var Z: Citizens = sim.citizens
+	var sm := Z.summary()
+	var txt := "[b][color=#f2c14e]BÜRGER UND ARBEITSMARKT[/color][/b]\n"
+	txt += "%d Einwohner · %d beschäftigt (%.1f %%) · %d arbeitslos\n" % [int(sm.einwohner), int(sm.beschaeftigt), float(sm.quote) * 100.0, int(sm.arbeitslos)]
+	txt += "\n[b]Arbeitgeber[/b]\n"
+	for k in sm.arbeitgeber:
+		txt += "  %s: %d Beschäftigte\n" % [esc(str(k)), int(sm.arbeitgeber[k])]
+	var l: Dictionary = Z.last if not Z.last.is_empty() else sm
+	txt += "\n[b]Letzter Monat[/b]\n  Stellenwechsel %d · Entlassungen %d · Einstellungen %d · Kündigungen %d\n" % [int(l.wechsel), int(l.entlassungen), int(l.einstellungen), int(l.kuendigungen)]
+	txt += "  Lohnsumme %s · Lohnsteuer und Sozialabgaben %s · Arbeitslosengeld %s\n" % [Catalog.money(float(l.lohnsumme)), Catalog.money(float(l.abgaben)), Catalog.money(float(l.arbeitslosengeld))]
+	return txt
