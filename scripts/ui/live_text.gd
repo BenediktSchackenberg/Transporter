@@ -497,22 +497,16 @@ static func households(sim: Simulation) -> String:
 
 static func public_sector(sim: Simulation) -> String:
 	var P: PublicSector = sim.public_sector
-	var txt := "[b][color=#f2c14e]ÖFFENTLICHE HAND[/color][/b]
-"
-	txt += "Kasse %s · Lohnsteuer %s · Sozialabgaben %s · Ertragsteuer %s
-" % [Catalog.money(float(sim.economy.accounts.P0)), Catalog.money(P.tax_total), Catalog.money(P.social_total), Catalog.money(P.corporate_total)]
-	txt += "Sätze: Lohnsteuer %d %% · Sozialabgaben %d %% · Ertragsteuer %d %%
-" % [roundi(PublicSector.INCOME_TAX * 100.0), roundi(PublicSector.SOCIAL_RATE * 100.0), roundi(PublicSector.CORPORATE_TAX * 100.0)]
-	txt += "
-[b]Ausgaben je Ressort[/b]
-"
+	var txt := "[b][color=#f2c14e]ÖFFENTLICHE HAND[/color][/b]\n"
+	txt += "Kasse %s · Lohnsteuer %s · Sozialabgaben %s · Ertragsteuer %s\n" % [Catalog.money(float(sim.economy.accounts.P0)), Catalog.money(P.tax_total), Catalog.money(P.social_total), Catalog.money(P.corporate_total)]
+	txt += "Sätze: Lohnsteuer %d %% · Sozialabgaben %d %% · Ertragsteuer %d %%\n" % [roundi(PublicSector.INCOME_TAX * 100.0), roundi(PublicSector.SOCIAL_RATE * 100.0), roundi(PublicSector.CORPORATE_TAX * 100.0)]
+	txt += "\n[b]Ausgaben je Ressort[/b]\n"
 	for d in P.departments:
-		txt += "  %s: %s
-" % [d, Catalog.money(float(P.departments[d]))]
-	txt += "
-[b]Ertragsteuer je Firma[/b]
-"
+		txt += "  %s: %s\n" % [d, Catalog.money(float(P.departments[d]))]
+	txt += "\n[b]Ertragsteuer je Firma[/b]\n"
 	for c in sim.companies:
-		txt += "  %s: %s gezahlt
-" % [esc(c.company_name), Catalog.money(-float(c.ledger.totals.get("tax", 0.0)))]
+		txt += "  %s: %s gezahlt\n" % [esc(c.company_name), Catalog.money(-float(c.ledger.totals.get("tax", 0.0)))]
+	txt += "\n[b]Letzte Steuerprüfungen[/b] (Chance %d %% je Firma und Monat)\n" % roundi(PublicSector.AUDIT_CHANCE * 100.0)
+	for a in P.audits.slice(-5):
+		txt += "  Monat %d · %s: Nachforderung %s, Zuschlag %s\n" % [int(a.month), esc(sim.company(int(a.cid)).company_name), Catalog.money(float(a.arrears)), Catalog.money(float(a.fine))]
 	return txt
