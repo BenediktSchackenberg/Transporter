@@ -541,3 +541,28 @@ static func parcels(sim: Simulation) -> String:
 	for p in P.search({"limit": 8}):
 		txt += "  %s · %s · %d Felder · %s · Erschließung %s · %s\n" % [p.id, Parcels.ZONES[p.zone].label, int(p.area), Catalog.money(float(p.price)), P.utility_level(p), "Kauf"]
 	return txt
+
+
+static func permits(sim: Simulation) -> String:
+	var PM: Permits = sim.permits
+	var sm: Dictionary = PM.summary()
+	var txt := "[b][color=#f2c14e]BAUANTRÄGE UND PLANUNGSREGELN[/color][/b]\n"
+	txt += "%d Anträge · %d in der Warteschlange · Verwaltungskapazität %.1f Punkte je Tag (Rathaus: %d Beschäftigte)\n" % [int(sm.anzahl), int(sm.warteschlange), float(sm.kapazitaet_je_tag), sim.citizens.employed_count("rathaus")]
+	txt += "\n[b]Warteschlange[/b]\n"
+	for a in PM.queue().slice(0, 8):
+		txt += "  %s · %s · %s auf %s · Stand %d/%d · Entscheidung voraussichtlich Tag %d\n" % [a.id, esc(str(a.applicant)), Planning.DEFS[a.def].label, a.parcel, int(a.progress), int(a.effort), PM.eta_day(a.id)]
+	txt += "\n[b]Offene Rückfragen[/b]\n"
+	for a in PM.apps.values():
+		if a.status == "rueckfrage":
+			txt += "  %s (%s): %s\n" % [a.id, esc(str(a.applicant)), esc(" ".join(a.questions))]
+	txt += "\n[b]Letzte Entscheidungen[/b]\n"
+	var done: Array = PM.apps.values().filter(func(a): return a.status == "entschieden")
+	for a in done.slice(-6):
+		txt += "  %s · %s · %s\n    %s\n" % [a.id, a.result, esc(str(a.decided_by)), esc(str(a.decision).left(200))]
+	txt += "\n[b]Planungsregeln je Zone[/b]\n"
+	for z in Planning.ZONE_RULES:
+		var r: Dictionary = Planning.rules(z)
+		txt += "  %s: bis %d Geschosse, Bebauung höchstens %d %%, Freifläche mind. %d %%, Gebühr %s + %s je Geschossfeld, Beitrag %s je Feld\n    %s\n" % [r.label, int(r.max_geschosse),
+			roundi(float(r.max_bebauung) * 100.0), roundi(float(r.min_freiflaeche) * 100.0), Catalog.money(float(r.gebuehr_basis)), Catalog.money(float(r.gebuehr_je_geschossfeld)),
+			Catalog.money(float(r.erschliessungsbeitrag_je_feld)), esc(str(r.hinweis))]
+	return txt

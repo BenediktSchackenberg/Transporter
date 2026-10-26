@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2862,3 +2862,120 @@ func test_parcels() -> void:
 	P.sync_buildings()
 	ok("GRUNDSTÜCKE" in LiveText.parcels(s), "Ansicht Grundstücke")
 	ok(P.of_building(bid).id == free_p.id and P.of_building(bid).state == "bebaut", "Neubau wird dem Grundstück zugeordnet")
+
+
+## Hilfen fuer die Bauantragstests: Tage vorspulen, Haushalt mit Geld ausstatten.
+func _permit_days(s: Simulation, n: int) -> void:
+	var d := GameCalendar.day_of(s.game_min)
+	for i in n:
+		d += 1
+		s.game_min = GameCalendar.day_start(d)
+		s.permits.on_day(d)
+
+
+func _fund_home(s: Simulation, home: String, amount: float) -> void:
+	s.households.homes[home].balance = float(s.households.homes[home].balance) + amount
+	s.economy.transfer("X0", "H0", amount)
+
+
+func test_permits() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	run(s, 60.0 * 2.0)
+	var P := s.parcels
+	var PM := s.permits
+	var homes: Array = s.households.homes.keys()
+	var home: String = str(homes[0])
+	var home2: String = str(homes[1])
+	_fund_home(s, home, 5000.0)
+	_fund_home(s, home2, 5000.0)
+	# Regelwerk ist fuer Oberflaeche und KI lesbar
+	var wr: Dictionary = Planning.rules("wohnen")
+	ok(wr.max_geschosse == 3 and wr.anschluesse.size() == 4 and "einfamilienhaus" in Planning.allowed_defs("wohnen"), "Planungsregeln je Zone abrufbar")
+	ok("industrie" in Planning.rules("industrie").zone and "mehrfamilienhaus" not in Planning.allowed_defs("industrie"), "Gebäudearten sind zonengebunden")
+	# Grundstuecke fuer die Szenarien
+	var big: Array = P.search({"zone": "wohnen", "min_area": 70, "limit": 300})
+	var full: Array = big.filter(func(p): return P.utility_level(p) == "voll")
+	var partial: Array = big.filter(func(p): return P.utility_level(p) != "voll")
+	ok(full.size() >= 2 and partial.size() >= 1, "geeignete Wohngrundstücke vorhanden (%d erschlossen, %d nicht)" % [full.size(), partial.size()])
+	# 1) Reservierung, Entwurf, Vorpruefung
+	var pid: String = full[0].id
+	ok(not PM.draft(home, pid, {"def": "einfamilienhaus"}).ok, "ohne Reservierung kein Entwurf")
+	P.reserve(pid, home)
+	var d1 := PM.draft(home, pid, {"def": "einfamilienhaus", "floors": 2, "parking": 1})
+	ok(d1.ok, "Entwurf: " + d1.msg)
+	var aid: String = d1.id
+	ok(not PM.draft(home, pid, {"def": "einfamilienhaus"}).ok, "nur ein offener Antrag je Grundstück")
+	var pre: Dictionary = PM.preview(aid)
+	ok(pre.ok and pre.costs.gesamt > 0.0 and pre.costs.bau > 0.0, "Vorpruefung: grundsätzlich geeignet, Kosten %s" % Catalog.money(float(pre.costs.gesamt)))
+	ok("Kosten gesamt" in Planning.explain(pre), "Vorpruefung ist lesbar erklärt")
+	# Finanzierung: unverbindliche Kreditanfrage reicht nicht
+	PM.apps[aid].financing = {"eigenmittel": 2000.0, "kredit": float(pre.costs.gesamt), "kredit_gesichert": false}
+	ok(PM.submit(aid).ok and PM.apps[aid].status == "beantragt", "Antrag eingereicht")
+	ok(PM.queue().size() == 1 and PM.eta_day(aid) > GameCalendar.day_of(s.game_min), "Warteschlange und voraussichtlicher Entscheidungstag")
+	_permit_days(s, 12)
+	var a1: Dictionary = PM.apps[aid]
+	ok(a1.status == "rueckfrage" and a1.result == "ueberarbeitung_erforderlich" and "nicht zugesagt" in " ".join(a1.questions), "Rückfrage: Kredit nicht zugesagt (%s)" % " ".join(a1.questions))
+	ok(P.parcel(pid).state == "reserviert", "Grundstück bleibt reserviert")
+	# Ueberarbeitung mit gesicherter Finanzierung
+	var rv := PM.revise(aid, {"financing": {"eigenmittel": 2000.0, "kredit": float(pre.costs.gesamt), "kredit_gesichert": true}}, "Kreditzusage liegt vor")
+	ok(rv.ok and PM.apps[aid].status == "beantragt", "Überarbeitung eingereicht")
+	var fee_before: float = s.economy.accounts.P0
+	var home_before: float = s.households.homes[home].balance
+	_permit_days(s, 8)
+	a1 = PM.apps[aid]
+	ok(a1.status == "entschieden" and a1.result == "genehmigt", "Genehmigung nach Überarbeitung (%s)" % a1.decision)
+	ok(a1.decision.length() > 30 and not a1.reasons.is_empty(), "Entscheidung ist begründet")
+	ok(P.parcel(pid).state == "genehmigt" and P.parcel(pid).application == aid, "Grundstück ist genehmigt und mit dem Antrag verknüpft")
+	ok(absf((home_before - float(s.households.homes[home].balance)) - float(a1.fees_paid)) < 0.01 and a1.fees_paid > 0.0, "Gebühr %s vom Haushalt bezahlt" % Catalog.money(float(a1.fees_paid)))
+	ok(absf(float(s.economy.accounts.P0) - fee_before - float(a1.fees_paid)) < 0.5, "Gebühr geht an die Stadt")
+	ok(identity_ok(s), "Geld erhalten nach Genehmigung")
+	ok(not PM.draft(home, pid, {"def": "einfamilienhaus"}).ok, "genehmigtes Grundstück: kein zweiter Antrag")
+	# 2) Ablehnung mit benannten Gruenden: Mehrfamilienhaus passt nicht in die Zone/aufs Grundstueck
+	var ind: Array = P.search({"zone": "industrie", "min_area": 40, "limit": 5})
+	P.reserve(ind[0].id, home2)
+	var d2 := PM.draft(home2, ind[0].id, {"def": "mehrfamilienhaus", "floors": 3})
+	PM.submit(d2.id)
+	_permit_days(s, 12)
+	var a2: Dictionary = PM.apps[d2.id]
+	ok(a2.status == "entschieden" and a2.result == "abgelehnt" and "nicht zulässig" in " ".join(a2.reasons), "Ablehnung mit Grund: " + " ".join(a2.reasons))
+	ok(P.parcel(ind[0].id).state == "reserviert", "abgelehnter Antrag verändert das Grundstück nicht")
+	# 3) Genehmigung mit Auflagen bei fehlender Erschliessung
+	var pid3: String = partial[0].id
+	_fund_home(s, home2, 3000.0)
+	P.reserve(pid3, home2)
+	var pre3_id: String = PM.draft(home2, pid3, {"def": "einfamilienhaus", "floors": 1, "parking": 1}).id
+	var pre3: Dictionary = PM.preview(pre3_id)
+	ok(not pre3.missing.is_empty() and pre3.costs.erschliessung > 0.0, "Vorprüfung nennt fehlende Anschlüsse: %s" % ",".join(pre3.missing))
+	PM.apps[pre3_id].financing = {"eigenmittel": float(pre3.costs.gesamt) + 10.0}
+	PM.submit(pre3_id)
+	_permit_days(s, 12)
+	var a3: Dictionary = PM.apps[pre3_id]
+	ok(a3.result == "genehmigt_mit_bedingungen" and a3.conditions.size() >= 2, "Genehmigung mit Auflagen (Erschließung, Baustellenzufahrt)")
+	# 4) Kleines Grundstueck: Rueckfrage zu Freiflaeche und Stellflaechen, keine Meinung
+	# 5) Grosse Vorhaben gehen zur Buergermeisterebene und werden dort regelbasiert vertreten
+	var pid5: String = full[1].id
+	_fund_home(s, home, 5000.0)
+	P.reserve(pid5, home)
+	var d5 := PM.draft(home, pid5, {"def": "mehrfamilienhaus", "floors": 3, "parking": 4})
+	var pre5: Dictionary = PM.preview(d5.id)
+	PM.apps[d5.id].financing = {"eigenmittel": float(pre5.costs.gesamt) + 10.0}
+	PM.submit(d5.id)
+	var days_to_review := 0
+	while PM.apps[d5.id].status in ["beantragt", "in_pruefung"] and days_to_review < 30:
+		_permit_days(s, 1)
+		days_to_review += 1
+	ok(PM.apps[d5.id].status == "zur_entscheidung" or PM.apps[d5.id].status == "entschieden", "Mehrfamilienhaus (%d Einheiten) braucht Bürgermeisterebene" % int(pre5.units))
+	_permit_days(s, 3)
+	ok(PM.apps[d5.id].status == "entschieden" and PM.apps[d5.id].result in ["genehmigt", "genehmigt_mit_bedingungen"] and "Vertretung" in PM.apps[d5.id].decided_by, "Vertretung entscheidet nach Frist: " + PM.apps[d5.id].decided_by)
+	# 6) Kapazitaet: mehr Antraege als Punkte pro Tag -> Wartezeit
+	ok(PM.capacity() >= 1.0, "Verwaltungskapazität %.1f Punkte je Tag" % PM.capacity())
+	# 7) Genehmigung laeuft ab
+	_permit_days(s, Permits.PERMIT_DAYS + 5)
+	ok(PM.apps[aid].expired and P.parcel(pid).state != "genehmigt", "abgelaufene Genehmigung gibt das Grundstück frei")
+	ok(identity_ok(s), "Geld erhalten am Ende")
+	# 8) Speichern und Laden
+	var d := s.to_dict()
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(d)))
+	ok(s2.permits.apps.size() == PM.apps.size() and s2.permits.apps[d5.id].result == PM.apps[d5.id].result, "Anträge nach Laden")
+	ok("BAUANTRÄGE" in LiveText.permits(s), "Ansicht Bauanträge")

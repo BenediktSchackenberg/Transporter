@@ -317,6 +317,16 @@ func release(pid: String, holder: String) -> Dictionary:
 	return {"ok": true, "msg": "Reservierung aufgehoben."}
 
 
+## Zustand und Antrag eines Grundstuecks setzen (Bauantragsprozess, Erschliessung, Bau).
+func mark(pid: String, state: String, application: String) -> void:
+	var p := parcel(pid)
+	if p.is_empty() or state not in STATES:
+		return
+	p.state = state
+	p.application = application
+	_touch(p)
+
+
 ## Kauf durch einen Haushalt. Nur reservierte Flaechen des Reservierers; der Kaufpreis geht an die Stadt (P0).
 func buy_for_household(pid: String, home_id: String) -> Dictionary:
 	var p := parcel(pid)
