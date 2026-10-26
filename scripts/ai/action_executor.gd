@@ -132,13 +132,20 @@ static func normalize(action: Dictionary) -> Dictionary:
 		if a.has(k) and not a.has(KEY_ALIASES[k]) and not a[k] is Dictionary and not a[k] is Array:
 			a[KEY_ALIASES[k]] = a[k]
 	var name := str(a.get("action", a.get("type", "")))
+	# "assign_transport/plan_tour": Modell nennt mehrere Aktionen in einem Namen -> erste bekannte nehmen
+	if not all_schema().has(name):
+		for part in name.replace("|", "/").replace(",", "/").split("/"):
+			if all_schema().has(part.strip_edges()):
+				name = part.strip_edges()
+				a["action"] = name
+				break
 	if name == "accept_contract" and not a.has("contract_id"):
 		for k in ["id", "target_id", "target"]:
 			if a.has(k):
 				a["contract_id"] = a[k]
 				break
 	elif name == "buy_vehicle" and not a.has("offer_id") and not a.has("model"):
-		for k in ["id", "target_id", "target"]:
+		for k in ["id", "target_id", "target", "vehicle_id"]:
 			if a.has(k):
 				a["offer_id"] = a[k]
 				break
