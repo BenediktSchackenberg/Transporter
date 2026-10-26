@@ -351,7 +351,10 @@ static func parse_response(text: String) -> Dictionary:
 	var end := s.rfind("}")
 	if start < 0 or end <= start:
 		return {"ok": false, "error": "kein JSON-Objekt gefunden"}
-	var data = JSON.parse_string(s.substr(start, end - start + 1))
+	var data = _parse_object(s.substr(start, end - start + 1))
+	if data == null:
+		# Abgeschnittene Antwort (Token-Limit): vollstaendige Aktionen vor dem Abbruch retten
+		data = _salvage_truncated(s.substr(start))
 	if not data is Dictionary:
 		return {"ok": false, "error": "ungültiges JSON"}
 	if not data.get("actions") is Array:
@@ -365,6 +368,27 @@ static func parse_response(text: String) -> Dictionary:
 		"goal": str(data.get("goal", "")).left(120) if data.get("goal") != null else "",
 		"plan": data.get("plan") if data.get("plan") is Dictionary else {},
 		"erfahrungen": data.get("erfahrungen") if data.get("erfahrungen") is Array else []}
+
+
+static func _parse_object(text: String):
+	var j := JSON.new()
+	if j.parse(text) != OK or not j.data is Dictionary:
+		return null
+	return j.data
+
+
+## Schneidet hinter der letzten vollstaendigen Aktion ab und schliesst Array und Objekt.
+static func _salvage_truncated(text: String):
+	var pos := text.length()
+	for _i in 30:
+		pos = text.rfind("}", pos - 1)
+		if pos < 0:
+			return null
+		for tail in ["]}", "}", "}]}"]:
+			var d = _parse_object(text.substr(0, pos + 1) + tail)
+			if d != null and d.get("actions") is Array:
+				return d
+	return null
 
 
 func system_prompt() -> String:

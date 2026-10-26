@@ -355,6 +355,23 @@ func test_response_parsing() -> void:
 	ok(not AgentController.parse_response('{"summary":"x","actions":"accept"}').ok, "actions kein Array")
 	var many := '{"summary":"x","actions":[' + ",".join(range(20).map(func(i): return '{"action":"wait"}')) + ']}'
 	ok(AgentController.parse_response(many).actions.size() == AgentController.MAX_ACTIONS, "Aktionszahl begrenzt")
+	# Abgeschnittene Antwort: vollstaendige Aktionen bleiben erhalten
+	var cut := '{"actions":[{"action":"collect_contracts"},{"action":"accept_contract","contract_id":"A1"},{"action":"assign_worker_task","kind":"fa'
+	var rescued := AgentController.parse_response(cut)
+	ok(rescued.ok and rescued.actions.size() == 2, "abgeschnittene Antwort: 2 vollständige Aktionen gerettet")
+	ok(not AgentController.parse_response('{"actions":[{"action":"acc').ok, "ohne vollständige Aktion bleibt es ein Fehler")
+	# Formfehler kleiner Modelle
+	var n1 := ActionExecutor.normalize({"action": "buy_vehicle", "parameters": {"offer_id": "F2"}})
+	ok(n1.offer_id == "F2", "verschachtelte parameters werden flach")
+	var n2 := ActionExecutor.normalize({"action": "buy_vehicle", "target_id": "F8"})
+	ok(n2.offer_id == "F8", "target_id wird offer_id")
+	var n3 := ActionExecutor.normalize({"action": "assign_worker_task", "worker_id": "W1", "vehicle_id": 3})
+	ok(n3.kind == "fahren", "fehlendes kind wird fahren, wenn Fahrzeug angegeben")
+	var n4 := ActionExecutor.normalize({"action": "accept_contract", "contract": "A5"})
+	ok(n4.contract_id == "A5", "contract wird contract_id")
+	var n5 := ActionExecutor.normalize({"action": "accept_contract", "contract_id": "A1", "parameters": {"contract_id": "ZZ"}})
+	ok(n5.contract_id == "A1", "vorhandene Schlüssel werden nicht überschrieben")
+	ok(ActionExecutor.validate_schema("assign_worker_task", ActionExecutor.normalize({"action": "assign_worker_task", "worker_id": "W1"})) != "", "ohne Fahrzeug bleibt fehlendes kind ein Fehler")
 
 
 func test_controller_idempotency() -> void:

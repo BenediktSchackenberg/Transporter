@@ -116,7 +116,44 @@ static func all_schema() -> Dictionary:
 
 ## Hauptzugang. key: eindeutiger Schluessel (z. B. "p1:r17:a2"); gleiche Schluessel werden nie zweimal ausgefuehrt.
 ## origin: "api" (Modellentscheidung), "plan" (Planschritt), "fallback" (Ersatzmodus), "foreman", "auto", "spectator"
+## Haeufige Formfehler kleiner Modelle glaetten: verschachtelte "parameters", abweichende Schluesselnamen, fehlendes "kind".
+## Vorhandene Schluessel werden nie ueberschrieben; inhaltliche Fehler bleiben Fehler.
+const KEY_ALIASES := {"contract": "contract_id", "vehicle": "vehicle_id", "driver": "worker_id", "driver_id": "worker_id", "worker": "worker_id", "offer": "offer_id"}
+
+
+static func normalize(action: Dictionary) -> Dictionary:
+	var a := action.duplicate()
+	for nest in ["parameters", "params", "args", "arguments"]:
+		if a.get(nest) is Dictionary:
+			for k in a[nest]:
+				if not a.has(k):
+					a[k] = a[nest][k]
+	for k in KEY_ALIASES:
+		if a.has(k) and not a.has(KEY_ALIASES[k]) and not a[k] is Dictionary and not a[k] is Array:
+			a[KEY_ALIASES[k]] = a[k]
+	var name := str(a.get("action", a.get("type", "")))
+	if name == "accept_contract" and not a.has("contract_id"):
+		for k in ["id", "target_id", "target"]:
+			if a.has(k):
+				a["contract_id"] = a[k]
+				break
+	elif name == "buy_vehicle" and not a.has("offer_id") and not a.has("model"):
+		for k in ["id", "target_id", "target"]:
+			if a.has(k):
+				a["offer_id"] = a[k]
+				break
+	elif name == "recruit_worker" and not a.has("worker_id"):
+		for k in ["id", "target_id", "target"]:
+			if a.has(k):
+				a["worker_id"] = a[k]
+				break
+	elif name == "assign_worker_task" and not a.has("kind") and a.has("vehicle_id"):
+		a["kind"] = "fahren"
+	return a
+
+
 func execute(cid: int, action: Dictionary, key: String = "", origin: String = "api", ctx: Dictionary = {}) -> Dictionary:
+	action = normalize(action)
 	if key != "" and executed.has(key):
 		return {"ok": false, "duplicate": true, "msg": "Aktion wurde bereits ausgeführt (Wiederholung ignoriert)."}
 	var name := str(action.get("action", action.get("type", "")))
