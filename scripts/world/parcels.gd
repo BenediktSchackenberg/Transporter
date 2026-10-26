@@ -294,6 +294,12 @@ func _touch(p: Dictionary) -> void:
 	touched[p.id] = true
 
 
+## Aenderung an einem Grundstueck zum Speichern vormerken (fuer Aenderungen von aussen).
+func touch(pid: String) -> void:
+	if items.has(pid):
+		touched[pid] = true
+
+
 ## Reservierung durch einen Bewerber (z. B. "H3" Haushalt, "C1" Unternehmen). Ein Grundstueck hat hoechstens einen Reservierer.
 func reserve(pid: String, holder: String, days: int = RESERVATION_DAYS) -> Dictionary:
 	var p := parcel(pid)

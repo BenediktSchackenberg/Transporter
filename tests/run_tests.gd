@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2979,3 +2979,125 @@ func test_permits() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(d)))
 	ok(s2.permits.apps.size() == PM.apps.size() and s2.permits.apps[d5.id].result == PM.apps[d5.id].result, "Anträge nach Laden")
 	ok("BAUANTRÄGE" in LiveText.permits(s), "Ansicht Bauanträge")
+
+
+func test_mayor() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	run(s, 60.0 * 2.0)
+	var M := s.mayor
+	var P := s.parcels
+	var PM := s.permits
+	ok(M.name != "" and M.party in Council.SEATS, "Bürgermeister mit Name und Partei (%s, %s)" % [M.name, M.party])
+	var ind: Dictionary = M.indicators()
+	for k in ["bevoelkerung", "wohnen", "arbeit", "gewerbe", "verkehr", "versorgung", "haushalt", "bauantraege", "entwicklungsvorschlaege", "planungsregeln"]:
+		ok(ind.has(k), "Kennzahl '%s' vorhanden" % k)
+	ok(JSON.stringify(ind).length() / 4 < 6000, "Beobachtung kompakt (~%d Token)" % (JSON.stringify(ind).length() / 4))
+	ok(ind.wohnen.leerstand > 0.0 and ind.wohnen.leerstand < 0.06, "Anfangs knapper Leerstand (%.1f %%)" % (ind.wohnen.leerstand * 100.0))
+	# Wohnungsmarkt: ohne neue Einheiten wachsen die Wartenden, mit Einheiten ziehen Haushalte ein
+	for m in 4:
+		M.on_month(m + 1)
+	ok(M.waiting > 0 and M.rent_index() > 100.0, "Wohnungssuchende steigen bei vollem Bestand (%d, Mietindex %.0f)" % [M.waiting, M.rent_index()])
+	var pop0: int = s.citizens.population()
+	M.stock_units += 40
+	M.on_month(6)
+	ok(s.citizens.population() > pop0, "neue Wohneinheiten: Haushalte ziehen ein (+%d Einwohner)" % (s.citizens.population() - pop0))
+	M.waiting = 30
+	ok(Council.needs_vote("quartier", 0.0) and not Council.needs_vote("erschliessung", 10000.0), "Ratsbeschluss nach Art und Kosten")
+	# Quartier: nur staedtische Flaechen; Ratsbeschluss mit Begruendung
+	var cands: Array = M.indicators().entwicklungsvorschlaege
+	ok(not cands.is_empty(), "Entwicklungsvorschläge vorhanden (%d)" % cands.size())
+	var c0: Dictionary = cands[0]
+	var privat := ""
+	for p in P.items.values():
+		if p.state == "privat_gehalten" and p.zone == "wohnen":
+			privat = p.id
+			break
+	var bad := M.execute({"action": "designate_quarter", "name": "Unzulässig", "parcel_ids": [privat], "zone": "wohnen", "reason": "test"})
+	ok(not bad.ok and "nicht der Stadt" in bad.msg, "private Grundstücke kann die Stadt nicht ausweisen: " + bad.msg)
+	var early := M.execute({"action": "offer_parcels", "parcel_ids": [c0.grundstuecke[0]], "reason": "zu früh"})
+	var q1 := M.execute({"action": "designate_quarter", "name": "Testquartier", "parcel_ids": c0.grundstuecke, "zone": c0.zone, "reason": "30 Haushalte suchen Wohnraum"})
+	ok(q1.ok and "Abstimmung" in q1.msg and M.plans.has(q1.ref), "Quartier beschlossen: " + q1.msg.left(160))
+	ok(P.parcel(c0.grundstuecke[0]).state in ["zur_entwicklung", "frei"], "Grundstücke zur Entwicklung vorgesehen")
+	var offer := M.execute({"action": "offer_parcels", "parcel_ids": c0.grundstuecke, "price_factor": 0.9, "reason": "Quartier beschlossen"})
+	ok(offer.ok and P.parcel(c0.grundstuecke[0]).state == "frei", "Grundstücke zur Vergabe freigegeben: " + offer.msg)
+	ok(not M.execute({"action": "offer_parcels", "parcel_ids": ["G999999"], "reason": "x"}).ok, "unbekanntes Grundstück abgelehnt")
+	# Haushalt: ohne Mittel keine Erschliessung
+	var pool: Array = P.search({"limit": 400}).filter(func(p): return P.utility_level(p) != "voll")
+	var unserved: Array = [pool[0].id, pool[1].id, pool[2].id]
+	var saved_p0: float = s.economy.accounts.P0
+	s.economy.transfer("P0", "X0", saved_p0 - Mayor.RESERVE_CASH + 100.0)
+	var broke := M.execute({"action": "plan_infrastructure", "parcel_ids": unserved, "reason": "ohne Geld"})
+	ok(not broke.ok and M.commitments == 0.0, "ohne verfügbare Mittel keine Erschließung: " + broke.msg.left(120))
+	s.economy.transfer("X0", "P0", saved_p0 - Mayor.RESERVE_CASH + 100.0)
+	s.economy.transfer("X0", "P0", 300000.0)
+	var infra := M.execute({"action": "plan_infrastructure", "parcel_ids": unserved, "reason": "Quartier erschließen"})
+	ok(infra.ok and M.commitments > 0.0 and M.projects.has(infra.ref), "Erschließungsprojekt beschlossen, Mittel reserviert (%s)" % Catalog.money(M.commitments))
+	var tender := M.execute({"action": "tender", "project_id": infra.ref, "reason": "Ausschreibung"})
+	ok(tender.ok and M.projects[infra.ref].status == "ausgeschrieben", "Projekt ausgeschrieben")
+	ok(not M.execute({"action": "tender", "project_id": infra.ref, "reason": "doppelt"}).ok, "nur beschlossene Projekte werden ausgeschrieben")
+	var corridor := ""
+	for p in P.items.values():
+		if p.zone == "korridor":
+			corridor = p.id
+			break
+	var road := M.execute({"action": "prioritize_road", "corridor_id": corridor, "priority": 2, "reason": "Anbindung"})
+	ok(road.ok and M.projects[road.ref].kind == "strasse", "Straßenprojekt auf Korridor: " + road.msg.left(100))
+	ok(not M.execute({"action": "prioritize_road", "corridor_id": c0.grundstuecke[0], "priority": 1, "reason": "x"}).ok, "Straßenprojekt nur auf Korridoren")
+	ok(M.execute({"action": "assess_financing", "project_id": infra.ref}).ok, "Finanzierungsbewertung")
+	ok(not M.execute({"action": "wipe_city"}).ok and not M.execute({"action": "tender"}).ok, "unbekannte Aktionen und fehlende Parameter werden abgelehnt")
+	# Bauantrag der Buergermeisterebene
+	var homes: Array = s.households.homes.keys()
+	var home := str(homes[0])
+	_fund_home(s, home, 6000.0)
+	var full: Array = P.search({"zone": "wohnen", "min_area": 70, "limit": 300}).filter(func(p): return P.utility_level(p) == "voll")
+	var pid: String = full[0].id
+	P.reserve(pid, home)
+	var d := PM.draft(home, pid, {"def": "mehrfamilienhaus", "floors": 3, "parking": 4})
+	var pre: Dictionary = PM.preview(d.id)
+	PM.apps[d.id].financing = {"eigenmittel": float(pre.costs.gesamt) + 10.0}
+	PM.submit(d.id)
+	var guard := 0
+	while PM.apps[d.id].status in ["beantragt", "in_pruefung"] and guard < 30:
+		_permit_days(s, 1)
+		guard += 1
+	ok(PM.apps[d.id].status == "zur_entscheidung", "Mehrfamilienhaus liegt der Bürgermeisterebene vor")
+	var det: Array = M.indicators().bauantraege.zur_entscheidung_details
+	ok(det.size() == 1 and det[0].vorpruefung_ok, "Beobachtung enthält die Vorprüfung des Antrags")
+	var no_reason := M.execute({"action": "decide_application", "application_id": d.id, "decision": "ablehnen", "reason": "gefällt mir nicht"})
+	ok(not no_reason.ok and "keine fehlende Voraussetzung" in no_reason.msg, "Ablehnung ohne benannte Mängel verweigert die Engine: " + no_reason.msg.left(90))
+	var q := M.execute({"action": "decide_application", "application_id": d.id, "decision": "rueckfrage", "reason": "Bitte Schallschutz erläutern"})
+	ok(q.ok and PM.apps[d.id].status == "rueckfrage", "Rückfrage der Bürgermeisterebene")
+	PM.revise(d.id, {}, "Schallschutz nach DIN erläutert")
+	var guard2 := 0
+	while PM.apps[d.id].status in ["beantragt", "in_pruefung"] and guard2 < 30:
+		_permit_days(s, 1)
+		guard2 += 1
+	# die Regeln entscheiden wie das Modell: ueber dieselbe Beobachtung und dieselben Aktionen
+	var brain: Dictionary = MayorBrain.decide(M.indicators())
+	var executed := 0
+	for a in brain.actions:
+		if M.execute(a).ok:
+			executed += 1
+	ok(PM.apps[d.id].status == "entschieden" and PM.apps[d.id].result == "genehmigt" and "Bürgermeister" in PM.apps[d.id].decided_by, "Bürgermeister-Regeln genehmigen mit Begründung: " + PM.apps[d.id].decision.left(100))
+	ok(executed >= 1 and brain.summary != "", "Regeln liefern Zusammenfassung und Aktionen (%d ausgeführt)" % executed)
+	# Wahl
+	M.approval = 80.0
+	var e1 := M.hold_election()
+	ok(e1.ergebnis == "wiedergewählt", "hohe Zustimmung: wiedergewählt")
+	M.approval = 20.0
+	var e2 := M.hold_election()
+	ok(e2.ergebnis == "abgewählt" and M.name != "" and e2.has("nachfolger"), "geringe Zustimmung: abgewählt, Nachfolger %s" % M.name)
+	ok(M.plans.size() > 0 and M.notes.size() > 0, "Pläne und Gedächtnis des Amtes bleiben")
+	# Agent: Prompt
+	var agent := MayorAgent.new()
+	var sp := agent.system_prompt()
+	ok("decide_application" in sp and "designate_quarter" in sp and "Ratsbeschluss" in sp and not sp.contains("%s"), "Systemprompt der Bürgermeister-KI vollständig")
+	ok(agent.user_prompt(ind).length() > 500, "Nutzerprompt enthält die Lage")
+	agent.free()
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.mayor.plans.size() == M.plans.size() and s2.mayor.decisions.size() == M.decisions.size() and s2.mayor.name == M.name, "Bürgermeister nach Laden")
+	ok(absf(s2.mayor.commitments - M.commitments) < 0.01 and s2.mayor.elections.size() == 2, "Reservierte Mittel und Wahlen nach Laden")
+	ok("BÜRGERMEISTER" in LiveText.mayor(s), "Ansicht Bürgermeister")
+	ok(identity_ok(s), "Geld erhalten")

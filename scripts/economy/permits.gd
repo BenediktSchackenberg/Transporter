@@ -12,6 +12,7 @@ const REVISION_EFFORT := 1            # Nachpruefung nach einer Rueckfrage
 const PERMIT_DAYS := 180              # Geltungsdauer einer Genehmigung
 const MAYOR_UNITS := 6                # ab so vielen Einheiten oder
 const MAYOR_COST := 400000.0          # ab diesen Gesamtkosten entscheidet die Buergermeisterebene
+const MAYOR_AGENT_WAIT_DAYS := 12    # ist eine Buergermeister-KI angebunden, wartet die Vertretung laenger
 const MAYOR_WAIT_DAYS := 2            # Frist, bis die regelbasierte Verwaltung entscheidet, wenn keine Buergermeister-KI angebunden ist
 
 var sim
@@ -95,6 +96,54 @@ func revise(app_id: String, changes: Dictionary, answer: String = "") -> Diction
 	return {"ok": true, "msg": "Überarbeitung zu %s eingereicht." % a.id}
 
 
+## Entscheidung der Buergermeisterebene. Die Engine laesst nur zu, was die Pruefung hergibt: Genehmigung nie gegen benannte Ablehnungsgruende,
+## Ablehnung nur wegen benannter fehlender Voraussetzungen, Rueckfragen hoechstens zweimal je Antrag.
+func mayor_decide(app_id: String, decision: String, reason: String, extra_conditions: Array, by: String) -> Dictionary:
+	var a: Dictionary = apps.get(app_id, {})
+	if a.is_empty() or a.status != "zur_entscheidung":
+		return {"ok": false, "msg": "Antrag %s liegt nicht zur Entscheidung vor." % app_id}
+	var p: Dictionary = sim.parcels.parcel(a.parcel)
+	var res := Planning.assess(p, a)
+	var day := _today()
+	match decision:
+		"genehmigen", "bedingungen":
+			if not res.ok:
+				return {"ok": false, "msg": "Genehmigung nicht möglich: " + " ".join(res.blocking)}
+			if not res.questions.is_empty():
+				return {"ok": false, "msg": "Genehmigung nicht möglich, offene Punkte: " + " ".join(res.questions) + " (Rückfrage stellen)."}
+			if decision == "bedingungen" and extra_conditions.is_empty() and res.conditions.is_empty():
+				return {"ok": false, "msg": "Für eine Genehmigung unter Bedingungen sind Bedingungen anzugeben."}
+			var extra: Array = []
+			for c in extra_conditions.slice(0, 3):
+				extra.append(str(c).left(160))
+			a["extra_conditions"] = extra
+			a["mayor_reason"] = reason
+			_decide(a, day, by)
+			return {"ok": a.status == "entschieden" and a.result.begins_with("genehmigt"), "msg": a.decision, "ref": app_id}
+		"ablehnen":
+			if res.blocking.is_empty() and res.questions.is_empty():
+				return {"ok": false, "msg": "Es ist keine fehlende Voraussetzung benannt: der Antrag erfüllt alle Regeln und ist zu genehmigen."}
+			a.decided_by = by
+			a.decided_day = day
+			var why: Array = res.blocking + res.questions
+			if reason != "":
+				why.append(reason)
+			_close(a, "abgelehnt", why)
+			return {"ok": true, "msg": a.decision, "ref": app_id}
+		"rueckfrage":
+			if int(a.get("mayor_queries", 0)) >= 2:
+				return {"ok": false, "msg": "Die Zahl der Rückfragen (2) ist ausgeschöpft; bitte entscheiden."}
+			a["mayor_queries"] = int(a.get("mayor_queries", 0)) + 1
+			a.status = "rueckfrage"
+			a.result = "ueberarbeitung_erforderlich"
+			a.questions = res.questions + ([reason] if reason != "" else [])
+			a.decided_by = by
+			a.decision = "Rückfrage der Bürgermeisterebene: " + " ".join(a.questions)
+			_log(a, a.decision)
+			return {"ok": true, "msg": a.decision, "ref": app_id}
+	return {"ok": false, "msg": "decision muss genehmigen, bedingungen, ablehnen oder rueckfrage sein."}
+
+
 func withdraw(app_id: String, applicant: String) -> Dictionary:
 	var a: Dictionary = apps.get(app_id, {})
 	if a.is_empty() or a.applicant != applicant or a.status == "entschieden":
@@ -144,7 +193,7 @@ func on_day(day: int) -> void:
 		if a.progress >= a.effort:
 			_review(a, day)
 	for a in apps.values():
-		if a.status == "zur_entscheidung" and not mayor_attached and day - int(a.decided_day) >= MAYOR_WAIT_DAYS:
+		if a.status == "zur_entscheidung" and day - int(a.decided_day) >= (MAYOR_AGENT_WAIT_DAYS if mayor_attached else MAYOR_WAIT_DAYS):
 			_decide(a, day, "Verwaltung (regelbasiert, Vertretung des Bürgermeisters)")
 		if a.status == "entschieden" and a.result in ["genehmigt", "genehmigt_mit_bedingungen"] and not a.expired and day > int(a.valid_until):
 			_expire(a)
@@ -168,7 +217,9 @@ func _decide(a: Dictionary, day: int, by: String) -> void:
 	a.decided_by = by
 	a.decided_day = day
 	a.reasons = []
-	a.conditions = res.conditions
+	a.conditions = res.conditions.duplicate()
+	for c in a.get("extra_conditions", []):
+		a.conditions.append({"typ": "auflage", "text": str(c)})
 	if not _has_rights(a.applicant, p):
 		_close(a, "abgelehnt", ["Die Rechte am Grundstück %s liegen nicht mehr beim Antragsteller." % a.parcel])
 		return
@@ -193,10 +244,12 @@ func _decide(a: Dictionary, day: int, by: String) -> void:
 	a.fees_paid = fee
 	a.valid_until = day + PERMIT_DAYS
 	var cond_text := ""
-	if not res.conditions.is_empty():
-		cond_text = " Auflagen: " + " ".join(res.conditions.map(func(c): return c.text))
+	if not a.conditions.is_empty():
+		cond_text = " Auflagen: " + " ".join(a.conditions.map(func(c): return c.text))
 	a.reasons = ["Alle Voraussetzungen im %s erfüllt: %s, %d Geschosse, Bebauung %d %%." % [Parcels.ZONES[p.zone].label, Planning.DEFS[a.def].label, a.floors, roundi(float(res.cover) * 100.0)]]
-	_close(a, "genehmigt_mit_bedingungen" if not res.conditions.is_empty() else "genehmigt", a.reasons, cond_text)
+	if str(a.get("mayor_reason", "")) != "":
+		a.reasons.append("Begründung der Bürgermeisterebene: " + str(a.mayor_reason))
+	_close(a, "genehmigt_mit_bedingungen" if not a.conditions.is_empty() else "genehmigt", a.reasons, cond_text)
 
 
 func _close(a: Dictionary, result: String, reasons: Array, extra: String = "") -> void:

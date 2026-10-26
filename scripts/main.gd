@@ -213,6 +213,10 @@ func _autotest_finished(s: GameSession) -> void:
 		ppl.map(func(p): return p.failed).reduce(func(a, b): return a + b, 0), str(by_type), s.sim.wx.headline(), s.sim.wx.cur.source])
 	var sim: Simulation = s.sim
 	var accounts := ""
+	var my: Mayor = sim.mayor
+	print("  Stadtentwicklung: Bürgermeister %s (%s, %s) · Zustimmung %.0f %% · Einwohner %d · Wohnungssuchende %d · Pläne %d · Projekte %d · Entscheidungen %d (ausgeführt %d) · Anträge %d, davon entschieden %d · Grundstücke frei %d" % [
+		my.name, my.party, "Modell" if s.mayor_agent.uses_model() else "Regeln", my.approval, sim.citizens.population(), my.waiting, my.plans.size(), my.projects.size(), my.decisions.size(),
+		my.decisions.filter(func(d): return d.ok).size(), sim.permits.apps.size(), sim.permits.apps.values().filter(func(x): return x.status == "entschieden").size(), sim.parcels.summary().nach_status.get("frei", 0)])
 	for k in sim.economy.accounts:
 		accounts += " %s %d" % [k, int(sim.economy.accounts[k])]
 	print("  Wirtschaft: Geld erhalten (Abweichung %.2f) · Waren (Abweichung %d) ·%s" % [sim.economy.conservation_error(), sim.stock.balance_error(), accounts])

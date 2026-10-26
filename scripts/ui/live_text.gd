@@ -566,3 +566,35 @@ static func permits(sim: Simulation) -> String:
 			roundi(float(r.max_bebauung) * 100.0), roundi(float(r.min_freiflaeche) * 100.0), Catalog.money(float(r.gebuehr_basis)), Catalog.money(float(r.gebuehr_je_geschossfeld)),
 			Catalog.money(float(r.erschliessungsbeitrag_je_feld)), esc(str(r.hinweis))]
 	return txt
+
+
+static func mayor(sim: Simulation, agent: MayorAgent = null) -> String:
+	var M: Mayor = sim.mayor
+	var ind: Dictionary = M.indicators()
+	var txt := "[b][color=#f2c14e]BÜRGERMEISTER[/color][/b]\n"
+	txt += "%s (%s) · Zustimmung %.0f %% · im Amt seit Tag %d\n" % [esc(M.name), Council.LABELS.get(M.party, M.party), M.approval, M.term_start_day]
+	if agent != null:
+		txt += "Steuerung: %s · Status: %s · Anfragen %d (ok %d, Fehler %d) · Aktionen ok %d, abgelehnt %d\n" % [
+			("Modell " + str(agent.config.get("model", "?"))) if agent.uses_model() else "regelbasiert", agent.status, int(agent.stats.requests), int(agent.stats.ok),
+			int(agent.stats.errors), int(agent.stats.actions_ok), int(agent.stats.actions_rejected)]
+	var w: Dictionary = ind.wohnen
+	var a: Dictionary = ind.arbeit
+	var h: Dictionary = ind.haushalt
+	txt += "\n[b]Lage[/b]\n  Einwohner %d (%+d) · Wohnungen %d, Leerstand %.1f %% · wohnungssuchende Haushalte %d · Mietindex %.0f\n" % [int(ind.bevoelkerung.einwohner),
+		int(ind.bevoelkerung.veraenderung_letzter_monat), int(w.bestand_einheiten), float(w.leerstand) * 100.0, int(w.wohnungssuchende_haushalte), float(w.mietindex)]
+	txt += "  Beschäftigung %.1f %% · arbeitslos %d · offene Stellen %d\n" % [float(a.quote) * 100.0, int(a.arbeitslos), int(a.offene_stellen)]
+	txt += "  Stadtkasse %s · reserviert %s · verfügbar %s%s\n" % [Catalog.money(float(h.kasse)), Catalog.money(float(h.reserviert)), Catalog.money(float(h.verfuegbar)), " · DEFIZIT" if h.defizit else ""]
+	txt += "\n[b]Entwicklungspläne[/b]\n"
+	for p in M.plans.values():
+		txt += "  %s %s · %s · %d Grundstücke · %s\n    %s\n" % [p.id, esc(str(p.name)), p.status, p.parcels.size(), Parcels.ZONES[p.zone].label, esc(str(p.vote).left(220))]
+	txt += "\n[b]Öffentliche Projekte[/b]\n"
+	for p in M.projects.values():
+		txt += "  %s %s · %s · %s · Priorität %d\n" % [p.id, p.kind, p.status, Catalog.money(float(p.cost)), int(p.get("priority", 0))]
+	txt += "\n[b]Antragswarteschlange bei der Bürgermeisterebene[/b]: %d\n" % ind.bauantraege.zur_entscheidung.size()
+	txt += "\n[b]Letzte Entscheidungen[/b]\n"
+	for d in M.decisions.slice(-8):
+		txt += "  Tag %d · %s · %s\n    Begründung: %s\n    Ergebnis: %s\n" % [int(d.day), d.action, "ausgeführt" if d.ok else "abgelehnt von der Engine", esc(str(d.reason)), esc(str(d.msg).left(200))]
+	txt += "\n[b]Wahlen[/b]\n"
+	for e in M.elections:
+		txt += "  Tag %d: %s (Zustimmung %.0f %%)%s\n" % [int(e.day), e.ergebnis, float(e.zustimmung), (", Nachfolger " + esc(str(e.nachfolger))) if e.has("nachfolger") else ""]
+	return txt

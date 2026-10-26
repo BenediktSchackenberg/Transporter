@@ -198,7 +198,11 @@ func _done(cid: int, key: String, name: String, r: Dictionary) -> Dictionary:
 
 ## Prueft Aktionsname, Pflichtparameter und Typen. Gibt "" oder eine Fehlermeldung zurueck.
 static func validate_schema(name: String, a: Dictionary) -> String:
-	var schema := all_schema()
+	return validate_against(all_schema(), name, a)
+
+
+## Wie validate_schema, gegen ein beliebiges Aktionsschema (z. B. Buergermeister).
+static func validate_against(schema: Dictionary, name: String, a: Dictionary) -> String:
 	if not schema.has(name):
 		return "Unbekannte Aktion '%s'." % name
 	var params: Dictionary = schema[name].params

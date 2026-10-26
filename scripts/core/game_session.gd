@@ -16,6 +16,7 @@ const MAX_FRAME_DT := 0.25
 var cfg := {}                     # Spielkonfiguration OHNE API-Keys
 var sim: Simulation
 var controllers: Array[AgentController] = []
+var mayor_agent: MayorAgent
 var city_view: CityView
 var entity_view: EntityView
 var hud: HUD
@@ -86,6 +87,11 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 		if not loaded.is_empty() and i < loaded.controllers.size():
 			ctl.from_dict(loaded.controllers[i])
 		controllers.append(ctl)
+	mayor_agent = MayorAgent.new()
+	add_child(mayor_agent)
+	mayor_agent.setup(sim, _mayor_config(keys), api_log)
+	if not loaded.is_empty() and loaded.has("mayor_agent"):
+		mayor_agent.from_dict(loaded.mayor_agent)
 	sim.insolvency.company_refounded.connect(_on_refounded)
 	_setup_weather()
 	_setup_fuel()
@@ -111,6 +117,22 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	if not loaded.is_empty():
 		hud.show_toast("Spielstand geladen")
 	api_log.write({"type": "match_start", "seed": sim.city.seed_value, "players": cfg.players, "duration_s": duration_seconds})
+
+
+## Zugang der Buergermeister-KI: eigener Eintrag `mayor` in der Konfiguration (provider, base_url, model, api_key, interval, max_requests, max_tokens),
+## "global" uebernimmt Anbieter, Adresse, Modell und Schluessel des ersten Spielers (getrennter Kontext), sonst regelbasiert.
+func _mayor_config(keys: Dictionary) -> Dictionary:
+	var m: Dictionary = cfg.get("mayor", {}).duplicate()
+	if str(m.get("provider", "demo")) == "global" and not cfg.players.is_empty():
+		var p: Dictionary = cfg.players[0]
+		for k in ["provider", "base_url", "model", "timeout", "max_tokens_per_request"]:
+			if p.has(k) and not m.has(k):
+				m[k] = p[k]
+		m["provider"] = p.get("provider", "demo")
+		if not m.has("api_key"):
+			m["api_key"] = keys.get(int(p.slot), "")
+	m["provider"] = str(m.get("provider", "demo"))
+	return m
 
 
 ## Wetter: Live-Abruf (Standard), Wiederholung einer aufgezeichneten Partie oder nur simuliertes Ersatzwetter ("sim").
@@ -226,6 +248,7 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, MAX_FRAME_DT)
 	var running := not paused and not ended
 	sim.remaining_real_min = remaining_seconds() / 60.0
+	mayor_agent.active = running
 	for ctl in controllers:
 		ctl.active = running and sim.company(ctl.cid).is_active()
 		ctl.speed = float(speed())
@@ -266,6 +289,9 @@ func end_match(reason: String) -> void:
 	for ctl in controllers:
 		ctl.active = false
 		ctl.adapter.cancel()
+	mayor_agent.active = false
+	if mayor_agent.adapter != null:
+		mayor_agent.adapter.cancel()
 	play_sound("end")
 	var rank := sim.ranking()
 	var result := {"reason": reason, "active_seconds": active_seconds, "game_time": Catalog.game_minutes_to_text(sim.game_min),
@@ -297,7 +323,7 @@ func end_match(reason: String) -> void:
 func save_game() -> void:
 	DirAccess.make_dir_recursive_absolute("user://saves")
 	var data := {"version": 1, "cfg": cfg, "active_seconds": active_seconds, "sim": sim.to_dict(),
-		"controllers": controllers.map(func(c): return c.to_dict()), "executed": sim.executor.executed}
+		"controllers": controllers.map(func(c): return c.to_dict()), "mayor_agent": mayor_agent.to_dict(), "executed": sim.executor.executed}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
 		hud.show_toast("Speichern fehlgeschlagen")

@@ -64,6 +64,17 @@ func generate() -> void:
 			assigned += 1
 
 
+## Zuzug: neue, zunaechst arbeitslose Buerger (Haushalte, die eine Wohnung gefunden haben).
+func immigrate(n: int, month: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(sim.city.seed_value) + 9100 + month
+	for i in n:
+		var first: Array = Residents.FEMALE if rng.randi() % 2 == 0 else Residents.MALE
+		people.append({"id": _next, "name": "%s %s" % [first[rng.randi() % first.size()],
+			CityGenerator.SURNAMES[rng.randi() % CityGenerator.SURNAMES.size()]], "employer": "", "wage": 0.0, "jobless_months": 0})
+		_next += 1
+
+
 func _employ(p: Dictionary, k: String, r: float) -> void:
 	p.employer = k
 	p.wage = snappedf(float(EMPLOYERS[k].wage) * (0.9 + 0.2 * r), 0.1)

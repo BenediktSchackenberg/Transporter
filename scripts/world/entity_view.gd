@@ -453,6 +453,8 @@ func _update_people(inv: float, rainy: bool) -> void:
 		_people_timer = 0.3
 		_people_cache = sim.residents.visible_people()
 	for p in _people_cache:
+		if p.state == "ruhig":
+			continue   # seit der letzten Aktualisierung der Liste wieder ruhig geworden
 		vis[p.id] = true
 		var n: Node2D = person_nodes.get(p.id)
 		if n == null:
