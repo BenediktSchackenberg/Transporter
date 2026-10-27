@@ -30,6 +30,7 @@ var wind := 0.0
 var _fog := 0.0
 var _heat := 0.0
 var estate_view := EstateView.new()
+var site_view := SiteView.new()
 var _lit_nodes: Array = []                 # Fensterlichter (Sprite2D)
 var _blink_nodes: Array = []
 var _traffic_lights: Array = []            # [Sprite2D, Vector2i, bool erste Ampel]
@@ -102,6 +103,8 @@ func build(simulation: Simulation) -> void:
 	_build_buildings()
 	buildings_node.add_child(estate_view)
 	estate_view.setup(sim, self)
+	buildings_node.add_child(site_view)
+	site_view.setup(sim)
 	_build_decor()
 	_build_weather_fx()
 	camera.position = Iso.to_screen(sim.city.tile_center(sim.city.building(sim.companies[0].depots[0]).road))
@@ -489,6 +492,7 @@ func update_view(delta: float) -> void:
 		var green_h := sim.light_green(tl[1], true)
 		tl[0].texture = tex("d_light_green" if green_h == tl[2] else "d_light_red")
 	estate_view.update_view(blink_on)
+	site_view.update_view(delta)
 	# Depots: Besitzerwechsel und Stoerungen
 	for site in _depot_marks:
 		var d: Dictionary = _depot_marks[site]

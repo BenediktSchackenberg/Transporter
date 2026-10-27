@@ -543,6 +543,27 @@ static func parcels(sim: Simulation) -> String:
 	return txt
 
 
+static func site(sim: Simulation, pr: Dictionary) -> String:
+	var C: Construction = sim.construction
+	var txt := "Bauherr: %s · Baufirma: %s · Genehmigung: %s · Status: %s
+" % [pr.client, C.builders[pr.builder].name if pr.builder != "" else "noch keine", pr.app, pr.status]
+	txt += "Preis %s · bezahlt %s · zurückgelegt %s · Phase: %s · Fortschritt %.0f %% · Fertigstellung ca. Tag %d
+" % [Catalog.money(float(pr.price)), Catalog.money(float(pr.paid)),
+		Catalog.money(float(pr.reserved)), C.phase_label(pr), C.progress_of(pr) * 100.0, C.forecast_day(pr)]
+	var m: Dictionary = pr.mats.get(Construction.PHASES[mini(int(pr.phase), Construction.PHASES.size() - 1)].id, {})
+	if not m.is_empty():
+		txt += "Material dieser Phase: benötigt %s · geliefert %s
+" % [JSON.stringify(m.need), JSON.stringify(m.delivered)]
+	for d in C.deliveries.values():
+		if d.project == pr.id and d.status == "offen":
+			txt += "Erwartete Lieferung %s: %s
+" % [d.id, JSON.stringify(d.need)]
+	for bl in pr.blockers:
+		txt += "Blockade: %s
+" % bl
+	return txt
+
+
 static func construction(sim: Simulation) -> String:
 	var C: Construction = sim.construction
 	var sm: Dictionary = C.summary()

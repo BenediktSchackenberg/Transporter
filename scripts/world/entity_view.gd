@@ -590,6 +590,9 @@ func pick(click: Vector2) -> Dictionary:
 				best_d = d
 	if not best.is_empty():
 		return best
+	var site_id: String = cv.site_view.pick(Iso.to_world(click))
+	if site_id != "":
+		return {"kind": "site", "id": site_id}
 	var found := -1
 	var found_depth := -INF
 	for b in sim.city.buildings:

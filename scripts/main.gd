@@ -62,6 +62,8 @@ func _start(cfg: Dictionary, loaded: Dictionary = {}) -> void:
 func _apply_test_overrides(sim: Simulation) -> void:
 	if str(args.get("scenario", "")) == "yard":
 		_scenario_yard(sim)
+	if str(args.get("scenario", "")) == "site":
+		_scenario_site(sim, int(args.get("site-phase", "3")))
 	if args.has("hour"):
 		sim.game_min = (float(args.hour) - Catalog.START_HOUR) * 60.0
 	if args.has("wx"):
@@ -174,6 +176,43 @@ func _process(_delta: float) -> void:
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(args["screenshot"])
 		print("AUTOTEST: Screenshot gespeichert: ", ProjectSettings.globalize_path(args["screenshot"]))
+
+
+## Sichtpruefung der Baustellengrafik: ein Haushalt baut ein Mehrfamilienhaus; die Zeit wird bis zur gewuenschten Bauphase vorgespult.
+func _scenario_site(sim: Simulation, phase: int) -> void:
+	var P := sim.parcels
+	var home := "H9000"
+	sim.households.homes[home] = {"id": home, "members": [], "dependents": 0, "address": 0, "balance": 0.0, "shortfall": 0.0, "income": 0.0, "spent": 0.0,
+		"deficit_months": 0, "low_months": 0, "asked": false}
+	sim.households.homes[home].balance = float(sim.households.homes[home].balance) + 400000.0
+	sim.economy.transfer("X0", "H0", 400000.0)
+	for it in ["ziegel", "beton", "holz", "glas", "installation", "stahl", "verbindung", "rohmaterial"]:
+		sim.stock.add(it, 2000, "T0", sim.trader.bauhof, "Szenario")
+	var full: Array = P.search({"zone": "wohnen", "min_area": 70, "limit": 300}).filter(func(q): return P.utility_level(q) == "voll")
+	var pid: String = full[0].id
+	P.reserve(pid, home)
+	var d: Dictionary = sim.permits.draft(home, pid, {"def": "mehrfamilienhaus", "floors": 3, "parking": 4})
+	sim.permits.apps[d.id].financing = {"eigenmittel": float(sim.permits.preview(d.id).costs.gesamt) + 10.0}
+	sim.permits.submit(d.id)
+	var day := GameCalendar.day_of(sim.game_min)
+	var guard := 0
+	var pr := {}
+	while guard < 400:
+		guard += 1
+		day += 1
+		sim.game_min = GameCalendar.day_start(day)
+		sim.parcels.on_day(day)
+		sim.permits.on_day(day)
+		sim.construction.on_day(day)
+		if pr.is_empty() and sim.permits.apps[d.id].status == "entschieden":
+			var r: Dictionary = sim.construction.start_project(d.id)
+			sim.construction.accept_best(r.id)
+			pr = sim.construction.projects[r.id]
+		if not pr.is_empty() and ((int(pr.phase) > phase or (int(pr.phase) == phase and float(pr.progress) >= 0.5)) or pr.status == "uebergeben"):
+			break
+	var pc: Dictionary = sim.parcels.parcel(pid)
+	args["shot-tile"] = "%d,%d" % [int(pc.rect[0]) + int(pc.rect[2]) / 2 + 2, int(pc.rect[1]) + int(pc.rect[3]) / 2 - 2]
+	print("SZENARIO site: Phase %s, Fortschritt %.2f, Status %s" % [pr.get("phase"), pr.get("progress", 0.0), pr.get("status")])
 
 
 func _autotest_finished(s: GameSession) -> void:

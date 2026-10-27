@@ -952,6 +952,13 @@ func _update_selection() -> void:
 				return
 			sel_title.text = "%s – %s" % [pr.name, pr.role]
 			sel_text.text = sim.residents.describe(pr)
+		"site":
+			var pr: Dictionary = sim.construction.projects.get(sel.id, {})
+			if pr.is_empty():
+				session.entity_view.selected = {}
+				return
+			sel_title.text = "Baustelle %s – %s auf %s" % [pr.id, Planning.DEFS[pr.def].label, pr.parcel]
+			sel_text.text = LiveText.site(sim, pr)
 		"building":
 			var b: Dictionary = sim.city.building(sel.id)
 			sel_title.text = "%s (%s)" % [b.name, Catalog.DISTRICTS[b.district]]
