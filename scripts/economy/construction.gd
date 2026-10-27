@@ -41,6 +41,7 @@ var projects := {}                    # "BP<n>" -> Bauvorhaben
 var deliveries := {}                  # "L<n>" -> Lieferauftrag
 var units := {}                       # "W<n>" -> Wohneinheit
 var public := {}                      # Mayor-Projekt-ID -> Ausfuehrung {builder, price, days_left, ...}
+var reserved_co := {}                 # Unternehmen-ID -> fuer Bauvertraege zurueckgelegt
 var reserved_dev := 0.0               # beim Bautraeger fuer Vertraege zurueckgelegt
 var _next := 1
 var _next_delivery := 1
@@ -111,6 +112,9 @@ func available_funds(client: String) -> float:
 		return float(sim.households.homes.get(client, {}).get("balance", 0.0))
 	if client == DEVELOPER:
 		return float(sim.economy.accounts[DEVELOPER]) - reserved_dev
+	if client.begins_with("C"):
+		var c: Company = sim.company(int(client.substr(1)))
+		return 0.0 if c == null else c.ledger.cash - float(reserved_co.get(client, 0.0))
 	return 0.0
 
 
@@ -485,6 +489,9 @@ func _collect_rent(u: Dictionary) -> void:
 		sim.economy.transfer("X0", "H0", rent)
 	elif u.owner == DEVELOPER:
 		sim.economy.transfer("X0", DEVELOPER, rent)
+	elif str(u.owner).begins_with("C") and sim.company(int(str(u.owner).substr(1))) != null:
+		sim.economy.transfer("X0", "H0", rent)
+		sim.company(int(str(u.owner).substr(1))).ledger.book("rent_income", rent, true, "Mieteinnahmen %s" % u.id, sim.game_min)
 
 
 # ------------------------------------------------------------------ Bautraeger (Immobilienunternehmen, baut selbststaendig)
@@ -613,6 +620,8 @@ func _reserve(client: String, amount: float) -> void:
 		sim.households.homes[client].balance = float(sim.households.homes[client].balance) - amount
 	elif client == DEVELOPER:
 		reserved_dev += amount
+	elif client.begins_with("C"):
+		reserved_co[client] = float(reserved_co.get(client, 0.0)) + amount
 
 
 func _release(client: String, amount: float) -> void:
@@ -622,6 +631,8 @@ func _release(client: String, amount: float) -> void:
 		sim.households.homes[client].balance = float(sim.households.homes[client].balance) + amount
 	elif client == DEVELOPER:
 		reserved_dev = maxf(0.0, reserved_dev - amount)
+	elif client.begins_with("C"):
+		reserved_co[client] = maxf(0.0, float(reserved_co.get(client, 0.0)) - amount)
 
 
 func _pay(pr: Dictionary, amount: float, _note: String) -> bool:
@@ -631,6 +642,13 @@ func _pay(pr: Dictionary, amount: float, _note: String) -> bool:
 		return false
 	pr.reserved = float(pr.reserved) - amount
 	pr.paid = float(pr.paid) + amount
+	if str(pr.client).begins_with("C"):
+		# Unternehmen: Bauaufwand zulasten der Firmenkasse (Gegenkonto S0), von dort an die Baufirmen
+		var c: Company = sim.company(int(str(pr.client).substr(1)))
+		reserved_co[pr.client] = maxf(0.0, float(reserved_co.get(pr.client, 0.0)) - amount)
+		c.ledger.book("supplies", -amount, true, "Bauvorhaben %s: %s" % [pr.id, _note], sim.game_min)
+		sim.economy.transfer("S0", "K0", amount)
+		return true
 	var from_acct := "H0" if str(pr.client).begins_with("H") else DEVELOPER
 	if from_acct == DEVELOPER:
 		reserved_dev = maxf(0.0, reserved_dev - amount)
@@ -692,7 +710,7 @@ func _log(pr: Dictionary, text: String) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"builders": builders, "projects": projects, "deliveries": deliveries, "units": units, "public": public, "reserved_dev": reserved_dev,
+	return {"builders": builders, "projects": projects, "deliveries": deliveries, "units": units, "public": public, "reserved_dev": reserved_dev, "reserved_co": reserved_co,
 		"next": [_next, _next_delivery, _next_unit]}
 
 
@@ -705,6 +723,9 @@ func from_dict(d: Dictionary) -> void:
 	units = d.get("units", {})
 	public = d.get("public", {})
 	reserved_dev = float(d.get("reserved_dev", 0.0))
+	reserved_co = d.get("reserved_co", {})
+	for k in reserved_co:
+		reserved_co[k] = float(reserved_co[k])
 	var nx: Array = d.get("next", [1, 1, 1])
 	_next = int(nx[0])
 	_next_delivery = int(nx[1])

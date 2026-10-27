@@ -409,3 +409,4 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_ESCAPE: entity_view.selected = {}
 			KEY_F5: save_game()
 			KEY_TAB: hud.toggle_panels()
+			KEY_L: sim.log_event(city_view.parcel_layer.cycle(), "info")

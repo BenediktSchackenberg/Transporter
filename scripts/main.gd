@@ -64,6 +64,9 @@ func _apply_test_overrides(sim: Simulation) -> void:
 		_scenario_yard(sim)
 	if str(args.get("scenario", "")) == "site":
 		_scenario_site(sim, int(args.get("site-phase", "3")))
+	if args.has("layer"):
+		for i in int(args.layer):
+			session.city_view.parcel_layer.cycle()
 	if args.has("hour"):
 		sim.game_min = (float(args.hour) - Catalog.START_HOUR) * 60.0
 	if args.has("wx"):

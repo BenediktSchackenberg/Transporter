@@ -3231,6 +3231,25 @@ func test_construction() -> void:
 			ok(pr3.status == "erschliessung" and P.parcel(q.id).state == "in_erschliessung", "Erschließung vor dem Bau")
 			_build_days(s, 150)
 			ok(pr3.status == "uebergeben" and P.utility_level(P.parcel(q.id)) == "voll", "Erschließung hergestellt, Haus übergeben (%s)" % pr3.status)
+	# Unternehmen als Bauherr
+	var gew: Array = P.search({"zone": "gewerbe", "min_area": 30, "limit": 300}).filter(func(p): return p.erschliessung.get("strasse", false))
+	if not gew.is_empty():
+		var cash_c: float = s.companies[0].ledger.cash
+		P.reserve(gew[0].id, "C0")
+		var dc: Dictionary = PM.draft("C0", gew[0].id, {"def": "lager_werkstatt", "floors": 1, "parking": 2})
+		if dc.ok:
+			PM.apps[dc.id].financing = {"eigenmittel": float(PM.preview(dc.id).costs.gesamt) + 10.0}
+			PM.submit(dc.id)
+			var g2 := 0
+			while PM.apps[dc.id].status != "entschieden" and g2 < 40:
+				_build_days(s, 1)
+				g2 += 1
+			if PM.apps[dc.id].result.begins_with("genehmigt"):
+				var rc := C.start_project(dc.id)
+				ok(C.accept_best(rc.id).ok, "Unternehmen beauftragt Baufirma")
+				_build_days(s, 150)
+				ok(C.projects[rc.id].status == "uebergeben" and s.companies[0].ledger.cash < cash_c, "Unternehmen zahlt den Bau aus der Firmenkasse und erhält das Lager")
+				ok(identity_ok(s), "Bilanzidentität und Geld erhalten (Unternehmen als Bauherr)")
 	# Oeffentliche Erschliessung ueber den Buergermeister
 	var M := s.mayor
 	s.economy.transfer("X0", "P0", 300000.0)
