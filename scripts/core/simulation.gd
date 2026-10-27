@@ -30,6 +30,7 @@ var citizens := Citizens.new()
 var parcels := Parcels.new()
 var permits := Permits.new()
 var mayor := Mayor.new()
+var construction := Construction.new()
 var reserve_share := 0.0
 var care := BuildingCare.new()
 var workforce := Workforce.new()
@@ -99,6 +100,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	citizens.setup(self)
 	permits.setup(self)
 	mayor.setup(self)
+	construction.setup(self)
 	households.setup(self)
 	care.setup(self)
 	workforce.setup(self)
@@ -1017,7 +1019,7 @@ func to_dict() -> Dictionary:
 	return {"seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
 
@@ -1054,6 +1056,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.citizens.from_dict(d.get("citizens", {}))
 	s.permits.from_dict(d.get("permits", {}))
 	s.mayor.from_dict(d.get("mayor", {}))
+	s.construction.from_dict(d.get("construction", {}))
 	s.care.from_dict(d.get("care", {}))
 	s.workforce.from_dict(d.get("workforce", {}))
 	s.news.from_dict(d.get("news", {}))

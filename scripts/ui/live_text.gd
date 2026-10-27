@@ -543,6 +543,47 @@ static func parcels(sim: Simulation) -> String:
 	return txt
 
 
+static func construction(sim: Simulation) -> String:
+	var C: Construction = sim.construction
+	var sm: Dictionary = C.summary()
+	var txt := "[b][color=#f2c14e]BAUVORHABEN UND BAUFIRMEN[/color][/b]
+"
+	txt += "%d Vorhaben · %d Wohneinheiten (%d vermietet) · %d offene Lieferaufträge · %d öffentliche Projekte
+" % [int(sm.vorhaben), int(sm.einheiten), int(sm.vermietet), int(sm.offene_lieferungen), int(sm.oeffentlich)]
+	txt += "
+[b]Baufirmen[/b]
+"
+	for id in C.builders:
+		var b: Dictionary = C.builders[id]
+		txt += "  %s · %s · Preisfaktor %.2f · Qualität %.0f %% · Zuverlässigkeit %.0f %% · Auslastung %d/%d · fertig %d, Mängel %d
+" % [id, esc(str(b.name)), float(b.price),
+			float(b.quality) * 100.0, float(b.reliability) * 100.0, C.load_of(id), int(b.capacity), int(b.history.fertig), int(b.history.maengel)]
+	txt += "
+[b]Baustellen[/b]
+"
+	for pr in C.projects.values():
+		var parcel: Dictionary = sim.parcels.parcel(pr.parcel)
+		txt += "  %s · %s · %s auf %s (%s)
+    Bauherr %s · Baufirma %s · Preis %s · bezahlt %s · Phase: %s · Fortschritt %.0f %% · Fertigstellung ca. Tag %d
+" % [pr.id,
+			pr.status, Planning.DEFS[pr.def].label, pr.parcel, Parcels.ZONES[parcel.zone].label, esc(str(pr.client)),
+			esc(str(C.builders[pr.builder].name)) if pr.builder != "" else "-", Catalog.money(float(pr.price)), Catalog.money(float(pr.paid)), C.phase_label(pr),
+			C.progress_of(pr) * 100.0, C.forecast_day(pr)]
+		for bl in pr.blockers:
+			txt += "    [color=#e07a5f]Blockade: %s[/color]
+" % esc(str(bl))
+		if not pr.lost_days.is_empty():
+			txt += "    Verlorene Tage: %s
+" % esc(JSON.stringify(pr.lost_days))
+	txt += "
+[b]Offene Lieferaufträge (Transportunternehmen)[/b]
+"
+	for d in C.open_deliveries().slice(0, 8):
+		txt += "  %s · %s · %s · Frachtlohn %s
+" % [d.id, d.project, esc(JSON.stringify(d.need)), Catalog.money(float(d.freight))]
+	return txt
+
+
 static func permits(sim: Simulation) -> String:
 	var PM: Permits = sim.permits
 	var sm: Dictionary = PM.summary()

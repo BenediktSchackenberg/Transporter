@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3101,3 +3101,174 @@ func test_mayor() -> void:
 	ok(absf(s2.mayor.commitments - M.commitments) < 0.01 and s2.mayor.elections.size() == 2, "Reservierte Mittel und Wahlen nach Laden")
 	ok("BÜRGERMEISTER" in LiveText.mayor(s), "Ansicht Bürgermeister")
 	ok(identity_ok(s), "Geld erhalten")
+
+
+func _build_days(s: Simulation, n: int) -> void:
+	var d := GameCalendar.day_of(s.game_min)
+	for i in n:
+		d += 1
+		s.game_min = GameCalendar.day_start(d)
+		s.parcels.on_day(d)
+		s.permits.on_day(d)
+		s.construction.on_day(d)
+
+
+func _approve(s: Simulation, home: String, pid: String, def: String, floors: int, parking: int) -> Dictionary:
+	_fund_home(s, home, 400000.0)
+	s.parcels.reserve(pid, home)
+	var d: Dictionary = s.permits.draft(home, pid, {"def": def, "floors": floors, "parking": parking})
+	if not d.ok:
+		return d
+	s.permits.apps[d.id].financing = {"eigenmittel": float(s.permits.preview(d.id).costs.gesamt) + 10.0}
+	s.permits.submit(d.id)
+	var g := 0
+	while s.permits.apps[d.id].status != "entschieden" and g < 40:
+		_build_days(s, 1)
+		g += 1
+	return d
+
+
+func test_construction() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	run(s, 60.0 * 2.0)
+	var C := s.construction
+	var P := s.parcels
+	var PM := s.permits
+	ok(C.builders.size() == 3, "drei Baufirmen mit unterschiedlichen Werten")
+	var total_pay := 0.0
+	var total_days := 0.0
+	var total_mat := 0.0
+	for ph in Construction.PHASES:
+		total_pay += float(ph.pay)
+		total_days += float(ph.days)
+		total_mat += float(ph.mat)
+	ok(absf(total_pay - 1.0) < 0.001 and absf(total_days - 1.0) < 0.001 and absf(total_mat - 1.0) < 0.001, "zehn Phasen: Zahlungsplan, Bauzeit und Material je 100 %")
+	var home := str(s.households.homes.keys()[0])
+	for it in ["ziegel", "beton", "holz", "glas", "installation", "stahl", "verbindung", "rohmaterial"]:
+		s.stock.add(it, 600, "T0", s.trader.bauhof, "Testbestand")
+	var full: Array = P.search({"zone": "wohnen", "min_area": 70, "limit": 300}).filter(func(p): return P.utility_level(p) == "voll")
+	var pid: String = full[0].id
+	var d := _approve(s, home, pid, "doppelhaus", 2, 2)
+	ok(PM.apps[d.id].result.begins_with("genehmigt"), "Bauantrag genehmigt: " + PM.apps[d.id].decision.left(80))
+	var r := C.start_project(d.id)
+	ok(r.ok and C.projects[r.id].offers.size() == 3, "drei Angebote eingeholt")
+	var pr: Dictionary = C.projects[r.id]
+	var prices: Array = pr.offers.map(func(o): return o.price)
+	ok(prices.min() < prices.max(), "Angebote unterscheiden sich im Preis")
+	var best := C.best_offer(pr.offers, float(pr.base))
+	ok(not best.is_empty(), "bestes Angebot nach Preis, Qualität, Zuverlässigkeit und Termin: " + str(best.get("name", "")))
+	var bal0: float = s.households.homes[home].balance
+	var acc := C.accept(pr.id, "BF1")
+	ok(acc.ok and float(pr.reserved) > 0.0 and float(s.households.homes[home].balance) < bal0, "Vertrag verbindlich, Mittel zurückgelegt")
+	ok(not C.accept(pr.id, "BF2").ok, "zweiter Vertrag für dasselbe Vorhaben nicht möglich")
+	ok(P.parcel(pid).state in ["im_bau", "in_erschliessung"], "Grundstück im Bau")
+	var days := 0
+	var seen_phase := {}
+	while pr.status not in ["uebergeben", "abgebrochen"] and days < 250:
+		_build_days(s, 1)
+		days += 1
+		seen_phase[C.phase_label(pr)] = true
+		if days % 20 == 0:
+			ok(identity_ok(s), "Geld erhalten während des Baus (Tag %d)" % days)
+	ok(pr.status == "uebergeben", "Bauvorhaben übergeben nach %d Tagen (%s)" % [days, str(pr.blockers)])
+	ok(seen_phase.size() >= 8, "Bauphasen nacheinander durchlaufen (%d verschiedene)" % seen_phase.size())
+	ok(not C.deliveries.is_empty() and C.deliveries.values().all(func(l): return l.status == "geliefert"), "Materiallieferungen beauftragt und geliefert")
+	ok(absf(float(pr.paid) - (float(pr.price) + float(pr.dev_cost) + (Planning.TEMP_ACCESS_COST if pr.temp_access else 0.0))) < 5.0, "Zahlungen nach Bauabschnitten verbucht (%s)" % Catalog.money(float(pr.paid)))
+	ok(float(s.economy.accounts.K0) > 0.0, "Baufirmen erhalten Geld")
+	ok(P.parcel(pid).state == "bebaut" and int(P.parcel(pid).building) == int(pr.building), "Grundstück bebaut, Gebäude %d" % int(pr.building))
+	ok(pr.units.size() == 4 and C.units[pr.units[0]].tenant == home, "Haushalt zieht in Einheit 1 ein (%d Einheiten)" % pr.units.size())
+	ok(int(s.households.homes[home].address) == int(pr.building), "Haushaltsadresse ist das neue Gebäude")
+	ok(identity_ok(s), "Geld nach Übergabe erhalten")
+	s.mayor.waiting = 10
+	for m in 3:
+		C.on_month(m)
+	var rented: int = C.units.values().filter(func(u): return u.tenant != "").size()
+	ok(rented == 4, "übrige Wohnungen werden vermietet (%d von 4)" % rented)
+	ok(identity_ok(s), "Mieteinnahmen: Geld erhalten")
+	# Material fehlt -> Phase blockiert; Ausfall und Ersatz
+	var home2 := str(s.households.homes.keys()[1])
+	var full2: Array = P.search({"zone": "wohnen", "min_area": 70, "limit": 300}).filter(func(p): return P.utility_level(p) == "voll" and p.state == "frei")
+	var d2 := _approve(s, home2, full2[0].id, "einfamilienhaus", 1, 1)
+	var r2 := C.start_project(d2.id)
+	var pr2: Dictionary = C.projects[r2.id]
+	ok(C.accept(pr2.id, "BF3").ok, "zweites Vorhaben beauftragt")
+	for it in ["beton", "ziegel", "holz", "verbindung"]:
+		s.stock.consume(it, s.stock.qty(it, "T0", s.trader.bauhof), "T0", s.trader.bauhof, "Test")
+	_build_days(s, 40)
+	ok(pr2.status == "im_bau" and "Material" in str(pr2.blockers), "ohne Material blockiert die Phase: " + str(pr2.blockers).left(80))
+	ok(float(pr2.lost_days.get("material", 0.0)) > 0.0, "Verzögerung wird dem Material zugeordnet")
+	var open_d: Array = C.open_deliveries()
+	ok(open_d.size() >= 1, "offener Lieferauftrag für Transportunternehmen")
+	s.stock.add("beton", 300, "T0", s.trader.bauhof, "Testbestand")
+	s.stock.add("verbindung", 300, "T0", s.trader.bauhof, "Testbestand")
+	s.stock.add("ziegel", 300, "T0", s.trader.bauhof, "Testbestand")
+	s.stock.add("holz", 300, "T0", s.trader.bauhof, "Testbestand")
+	s.economy.transfer("X0", "K0", 20000.0)
+	var cash0: float = s.companies[0].ledger.cash
+	var take := C.take_delivery(open_d[0].id, 0)
+	ok(take.ok and s.companies[0].ledger.cash > cash0, "Spieler übernimmt Lieferung und erhält Frachtlohn: " + str(take.msg))
+	ok(identity_ok(s), "Geld nach Lieferung erhalten")
+	C.fail_builder("BF3")
+	_build_days(s, 3)
+	ok("ausgefallen" in str(pr2.blockers) and pr2.status == "im_bau", "Baustelle bleibt bestehen, Blockade benannt")
+	var paid_before: float = pr2.paid
+	ok(C.retender(pr2.id, "BF1").ok and pr2.builder == "BF1", "Ersatzfirma übernimmt Restleistung")
+	_build_days(s, 150)
+	ok(pr2.status == "uebergeben", "Haus nach Ersatzvertrag übergeben (%s)" % str(pr2.blockers))
+	ok(float(pr2.paid) >= paid_before and float(pr2.paid) <= float(pr2.price) + float(pr2.dev_cost) + Planning.TEMP_ACCESS_COST + 5.0, "bezahlte Phasen nicht doppelt bezahlt")
+	ok(identity_ok(s), "Geld nach Ersatzvertrag erhalten")
+	# Erschliessung durch private Bauherren
+	var pool: Array = P.search({"zone": "wohnen", "limit": 400}).filter(func(p): return P.utility_level(p) != "voll" and p.state == "frei" and p.area >= 40)
+	if not pool.is_empty():
+		var home3 := str(s.households.homes.keys()[2])
+		var q: Dictionary = pool[0]
+		var d3 := _approve(s, home3, q.id, "einfamilienhaus", 1, 1)
+		if d3.ok and PM.apps[d3.id].result.begins_with("genehmigt"):
+			var r3 := C.start_project(d3.id)
+			ok(C.accept_best(r3.id).ok, "Vorhaben mit fehlenden Anschlüssen beauftragt")
+			var pr3: Dictionary = C.projects[r3.id]
+			ok(pr3.status == "erschliessung" and P.parcel(q.id).state == "in_erschliessung", "Erschließung vor dem Bau")
+			_build_days(s, 150)
+			ok(pr3.status == "uebergeben" and P.utility_level(P.parcel(q.id)) == "voll", "Erschließung hergestellt, Haus übergeben (%s)" % pr3.status)
+	# Oeffentliche Erschliessung ueber den Buergermeister
+	var M := s.mayor
+	s.economy.transfer("X0", "P0", 300000.0)
+	var unserved: Array = P.search({"limit": 400}).filter(func(p): return P.utility_level(p) != "voll" and p.state == "frei")
+	if unserved.size() >= 2:
+		var infra := M.execute({"action": "plan_infrastructure", "parcel_ids": [unserved[0].id, unserved[1].id], "reason": "Test"})
+		if infra.ok:
+			ok(M.execute({"action": "tender", "project_id": infra.ref, "reason": "Test"}).ok, "Erschließung ausgeschrieben")
+			var c0: float = M.commitments
+			_build_days(s, 90)
+			ok(M.projects[infra.ref].status == "fertig", "Baufirma stellt Erschließung her (%s)" % M.projects[infra.ref].status)
+			ok(M.commitments < c0, "reservierte Mittel gebucht")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.construction.projects.size() == C.projects.size() and s2.construction.units.size() == C.units.size(), "Bauvorhaben und Wohneinheiten nach Laden")
+	ok(s2.construction.projects[pr.id].status == "uebergeben" and int(s2.construction.projects[pr.id].building) == int(pr.building), "Projektstand nach Laden")
+	ok("BAUVORHABEN" in LiveText.construction(s), "Ansicht Bauvorhaben")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_developer_autopilot() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	run(s, 60.0 * 2.0)
+	var C := s.construction
+	for it in ["ziegel", "beton", "holz", "glas", "installation", "stahl", "verbindung", "rohmaterial"]:
+		s.stock.add(it, 2000, "T0", s.trader.bauhof, "Testbestand")
+	var stock0: int = s.mayor.stock_units
+	var done := 0
+	for day in 360:
+		_build_days(s, 1)
+		if day % 30 == 0:
+			s.mayor.waiting = maxi(s.mayor.waiting, 12)
+			C.on_month(day / 30)
+		done = C.projects.values().filter(func(p): return p.client == Construction.DEVELOPER and p.status == "uebergeben").size()
+		if done >= 1 and day > 200:
+			break
+	ok(done >= 1, "Bauträger baut selbstständig: %d Vorhaben übergeben, %d begonnen" % [done, C.projects.size()])
+	ok(s.mayor.stock_units > stock0, "Wohnungsbestand wächst (%d → %d)" % [stock0, s.mayor.stock_units])
+	var rented: int = C.units.values().filter(func(u): return u.owner == Construction.DEVELOPER and u.tenant != "").size()
+	ok(rented > 0, "Wohnungen des Bauträgers vermietet (%d)" % rented)
+	ok(identity_ok(s), "Geld erhalten (Bauträger)")

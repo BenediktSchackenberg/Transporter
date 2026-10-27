@@ -297,6 +297,11 @@ func _charge(applicant: String, amount: float, note: String) -> bool:
 			return false
 		c.ledger.book("admin", -amount, true, note, sim.game_min)
 		return true
+	if applicant == Construction.DEVELOPER:
+		if float(sim.economy.accounts[applicant]) - sim.construction.reserved_dev < amount:
+			return false
+		sim.economy.transfer(applicant, "P0", amount)
+		return true
 	return applicant == Planning.PUBLIC_APPLICANT
 
 

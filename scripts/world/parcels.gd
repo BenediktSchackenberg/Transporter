@@ -25,7 +25,7 @@ const ZONES := {
 }
 ## Stadtbezirk (CityData.district) -> Zone
 const ZONE_OF_DISTRICT := ["mischgebiet", "wohnen", "industrie", "industrie", "gewerbe", "wohnen"]
-const DYNAMIC := ["owner", "state", "rights", "reservation", "application", "project", "use", "building"]
+const DYNAMIC := ["owner", "state", "rights", "reservation", "application", "project", "use", "building", "erschliessung"]
 
 var city: CityData
 var sim
