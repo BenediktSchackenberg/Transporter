@@ -300,7 +300,7 @@ func _deliver(d: Dictionary, with_carrier: bool) -> Dictionary:
 	if pr.is_empty():
 		return {"ok": false, "msg": "Bauvorhaben fehlt."}
 	for it in d.need:
-		if sim.stock.qty(it, "T0", sim.trader.bauhof) < int(d.need[it]):
+		if sim.stock.available(it, "T0", sim.trader.bauhof) < int(d.need[it]):
 			return {"ok": false, "msg": "Der Bauhof hat nicht genug %s (%d benötigt)." % [Trader.MATERIALS[it].name, int(d.need[it])]}
 	var cost := float(d.value) + (float(d.freight) if with_carrier else 0.0)
 	if float(sim.economy.accounts.K0) < cost:
@@ -775,7 +775,12 @@ func _public_day(day: int) -> void:
 				prj.status = "beschlossen"      # kein tragfaehiges Angebot: neu planen oder ausschreiben
 				prj.tender["note"] = "kein Angebot innerhalb des Budgets"
 				continue
-			public[prj.id] = {"project": prj.id, "builder": o.builder, "price": float(o.price), "days_left": int(o.days), "days": int(o.days), "status": "laufend", "start": int(o.start), "paid": 0.0}
+			# Material kommt aus dem Stadtlager (Auftragsmaterial): wird reserviert und vom Angebotspreis abgezogen, nicht nochmals abgerechnet
+			var mats := CityDepot.material_need(prj.parts, prj.parcels.size())
+			sim.city_depot.reserve_for_project(str(prj.id), mats, "ueberlassen")
+			var mval := minf(sim.city_depot.value_of(mats), float(o.price) * 0.6)
+			public[prj.id] = {"project": prj.id, "builder": o.builder, "price": float(o.price) - mval, "days_left": int(o.days), "days": int(o.days), "status": "laufend", "start": int(o.start), "paid": 0.0,
+				"material_value": mval, "material_mode": "ueberlassen"}
 			prj.status = "beauftragt"
 			prj["builder"] = o.builder
 	for e in public.values():
@@ -783,6 +788,10 @@ func _public_day(day: int) -> void:
 			continue
 		if builders[e.builder].status != "aktiv":
 			continue
+		if not sim.city_depot.project_complete(str(e.project)):
+			e["waiting"] = "Material aus dem Stadtlager fehlt"
+			continue
+		e["waiting"] = ""
 		e.days_left = int(e.days_left) - (1 if sim.wx.build_factor() > 0.3 else 0)
 		if int(e.days_left) <= 0:
 			_finish_public(e)
@@ -794,6 +803,7 @@ func _finish_public(e: Dictionary) -> void:
 	var pay := minf(float(e.price), maxf(0.0, float(sim.economy.accounts.P0)))
 	sim.economy.transfer("P0", "K0", pay)
 	e.paid = pay
+	e["material_used"] = sim.city_depot.consume_project(str(e.project), builders[e.builder].name)
 	M.commitments = maxf(0.0, M.commitments - float(prj.cost))
 	for pid in prj.parcels:
 		var p: Dictionary = sim.parcels.parcel(pid)

@@ -16,6 +16,9 @@ const SCHEMA := {
 	"prioritize_road": {"params": {"corridor_id": "string", "priority": "int", "reason": "string"},
 		"desc": "Straßenprojekt auf einem Korridor (Grundstück der Zone korridor) mit Priorität 1 (hoch) bis 5 anlegen oder umpriorisieren."},
 	"tender": {"params": {"project_id": "string", "reason": "string"}, "desc": "Beschlossenes Projekt öffentlich ausschreiben (Baufirmen bieten)."},
+	"approve_procurement": {"params": {"order_id": "string", "reason": "string"},
+		"desc": "Beschaffungsvorschlag des Stadtlagers (obs.stadtlager.vorschlaege) genehmigen: Budget wird reserviert, bester Anbieter bestellt, Transportauftrag ausgeschrieben."},
+	"reject_procurement": {"params": {"order_id": "string", "reason": "string"}, "desc": "Beschaffungsvorschlag ablehnen (Begründung nötig, z. B. Budget oder kein Bedarf)."},
 	"assess_financing": {"params": {"project_id": "string"}, "desc": "Finanzierungsbedarf eines Projekts oder Plans bewerten (nur Auskunft)."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
 		"desc": "Bauantrag der Bürgermeisterebene entscheiden: decision genehmigen | bedingungen | ablehnen | rueckfrage. Ablehnung nur wegen benannter fehlender Voraussetzungen; ohne Mängel muss genehmigt werden."},
@@ -143,11 +146,25 @@ func indicators() -> Dictionary:
 		"plaene": plans.values().map(func(p): return {"id": p.id, "name": p.name, "status": p.status, "grundstuecke": p.parcels.size(), "zone": p.zone,
 			"ids_zur_entwicklung": p.parcels.filter(func(id): return sim.parcels.parcel(id).get("state", "") == "zur_entwicklung").slice(0, MAX_CLUSTER)}),
 		"projekte": projects.values().map(func(p): return {"id": p.id, "art": p.kind, "status": p.status, "kosten": p.cost, "prioritaet": p.get("priority", 0), "grundstuecke": p.parcels.slice(0, MAX_CLUSTER)}),
+		"stadtlager": stadtlager_indicators(),
 		"entwicklungsvorschlaege": quarter_candidates(3),
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 	}
+
+
+## Stadtlager: offene Beschaffungsvorschlaege (Entscheidung der Buergermeisterebene), kritische Bestaende, laufende Bestellungen.
+func stadtlager_indicators() -> Dictionary:
+	var D: CityDepot = sim.city_depot
+	var props: Array = []
+	for o in D.orders.values():
+		if o.status == "vorschlag":
+			var q := D.quote(o.item, int(o.qty), int(o.crit))
+			props.append({"id": o.id, "artikel": CityGoods.get_item(o.item).name, "menge": o.qty, "kritikalitaet": o.crit, "grund": o.reason, "geschaetzte_kosten": snappedf(float(q[0].total) if not q.is_empty() else 0.0, 1.0),
+				"anbieter": q[0].name if not q.is_empty() else "", "tage_offen": _today() - int(o.day), "entscheidung": o.get("decision", "")})
+	return {"vorschlaege": props.slice(0, 8), "kritisch": D.critical_items().slice(0, 6).map(func(i): return {"artikel": i.name, "bestand": i.bestand, "mindestbestand": i.mindestbestand}),
+		"bestellungen_offen": D.open_orders().size() - props.size(), "einkauf_bisher": snappedf(float(D.stats.purchases), 1.0)}
 
 
 ## Gruppen staedtischer, freier Grundstuecke (je 32x32 Felder) als Vorschlaege fuer neue Quartiere.
@@ -261,6 +278,10 @@ func execute(action: Dictionary) -> Dictionary:
 				res = _prioritize_road(a)
 			"tender":
 				res = _tender(a)
+			"approve_procurement":
+				res = sim.city_depot.approve(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
+			"reject_procurement":
+				res = sim.city_depot.reject(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
 			"assess_financing":
 				res = _assess_financing(a)
 			"decide_application":

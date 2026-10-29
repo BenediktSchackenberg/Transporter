@@ -611,6 +611,60 @@ static func construction(sim: Simulation) -> String:
 	return txt
 
 
+static func city_depot(sim: Simulation) -> String:
+	var D: CityDepot = sim.city_depot
+	var sm: Dictionary = D.summary()
+	var txt := "[b][color=#f2c14e]STADTLAGER (ZENTRALLAGER MIT BAUHOF)[/color][/b]
+"
+	txt += "Standort: %s · Eigentümer und Einkäufer: Stadtverwaltung (Konto P0)
+" % esc(sim.city.building(D.building).name)
+	txt += "Einkauf bisher %s · Fracht %s · Verkauf von Überbeständen %s · Stadtfuhrpark-Fahrten %d · Ausschuss %d
+" % [Catalog.money(float(sm.einkauf)), Catalog.money(float(sm.fracht)),
+		Catalog.money(float(sm.verkauft)), int(D.stats.fallback_trips), int(D.stats.scrapped)]
+	txt += "
+[b]Lagerbereiche[/b]
+"
+	for z in CityGoods.ZONES:
+		var zz: Dictionary = sm.zonen[z]
+		txt += "  %s: %d von %d belegt (%.0f %%)
+" % [CityGoods.ZONES[z].label, int(zz.belegt), int(zz.kapazitaet), 100.0 * float(zz.belegt) / float(zz.kapazitaet)]
+	txt += "
+[b]Beschaffung[/b] (Bedarf → Budget → Bestellung → Transport → Anlieferung → Prüfung → Einlagerung → Zahlung)
+"
+	var rows: Array = D.open_orders()
+	rows.sort_custom(func(a, b): return int(a.day) > int(b.day))
+	for o in rows.slice(0, 10):
+		txt += "  %s · %s · %d × %s · %s%s
+" % [o.id, str(o.status).capitalize(), int(o.qty), esc(CityGoods.get_item(o.item).name), esc(str(o.get("supplier", ""))),
+			(" · " + esc(str(o.history[-1].text))) if not o.history.is_empty() else ""]
+	if rows.is_empty():
+		txt += "  keine offenen Vorgänge
+"
+	txt += "
+[b]Kritische Bestände[/b]
+"
+	for i in D.critical_items().slice(0, 8):
+		txt += "  %s: %d %s (Mindestbestand %d, bestellt %d)
+" % [esc(str(i.name)), int(i.bestand), esc(str(i.einheit)), int(i.mindestbestand), int(i.unterwegs)]
+	if D.critical_items().is_empty():
+		txt += "  keine
+"
+	txt += "
+[b]Projektmaterial[/b]
+"
+	for pid in D.project_res:
+		var r: Dictionary = D.project_res[pid]
+		txt += "  %s · %s · Wert %s · %s
+" % [pid, r.mode, Catalog.money(float(r.value)), "vollständig reserviert" if D.project_complete(pid) else "Fehlmenge wird beschafft"]
+	txt += "
+[b]Letzte Ausgaben[/b]
+"
+	for i in D.issues.slice(-6):
+		txt += "  Tag %d · %d × %s → %s (%s)
+" % [int(i.day), int(i.qty), esc(CityGoods.get_item(i.item).name), esc(str(i.to)), str(i.mode)]
+	return txt
+
+
 static func permits(sim: Simulation) -> String:
 	var PM: Permits = sim.permits
 	var sm: Dictionary = PM.summary()

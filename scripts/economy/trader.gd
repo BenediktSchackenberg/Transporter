@@ -77,7 +77,7 @@ func cash() -> float:
 
 
 func stock_of(item: String) -> int:
-	return sim.stock.qty(item, "T0", bauhof)
+	return sim.stock.available(item, "T0", bauhof)
 
 
 ## Verkaufspreis je Einheit: Basis x (1 + Marge) x Bestandsfaktor, Mengenrabatt ab 50 (-5 %) und 200 (-10 %).

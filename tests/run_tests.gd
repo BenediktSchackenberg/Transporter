@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3114,6 +3114,7 @@ func _build_days(s: Simulation, n: int) -> void:
 		s.parcels.on_day(d)
 		s.permits.on_day(d)
 		s.construction.on_day(d)
+		s.city_depot.on_day(d)
 
 
 func _approve(s: Simulation, home: String, pid: String, def: String, floors: int, parking: int) -> Dictionary:
@@ -3270,10 +3271,12 @@ func test_construction() -> void:
 		var infra := M.execute({"action": "plan_infrastructure", "parcel_ids": [unserved[0].id, unserved[1].id], "reason": "Test"})
 		if infra.ok:
 			ok(M.execute({"action": "tender", "project_id": infra.ref, "reason": "Test"}).ok, "Erschließung ausgeschrieben")
-			var c0: float = M.commitments
+			var c0: float = M.commitments - s.city_depot.orders.values().reduce(func(a, o): return a + float(o.committed), 0.0)
 			_build_days(s, 90)
 			ok(M.projects[infra.ref].status == "fertig", "Baufirma stellt Erschließung her (%s)" % M.projects[infra.ref].status)
-			ok(M.commitments < c0, "reservierte Mittel gebucht")
+			var c1: float = M.commitments - s.city_depot.orders.values().reduce(func(a, o): return a + float(o.committed), 0.0)
+			ok(c1 < c0, "reservierte Mittel gebucht (ohne Stadtlager-Bestellungen)")
+			ok(M.projects[infra.ref].status == "fertig" and s.city_depot.issues.any(func(i): return i.ref == infra.ref and i.mode == "ueberlassen"), "Stadtlager überließ das Projektmaterial der Baufirma")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.construction.projects.size() == C.projects.size() and s2.construction.units.size() == C.units.size(), "Bauvorhaben und Wohneinheiten nach Laden")
 	ok(s2.construction.projects[pr.id].status == "uebergeben" and int(s2.construction.projects[pr.id].building) == int(pr.building), "Projektstand nach Laden")
@@ -3429,3 +3432,93 @@ func test_acceptance_flow() -> void:
 	var rented: int = C.units.values().filter(func(u): return u.owner == Construction.DEVELOPER and u.tenant != "").size()
 	ok(rented >= 1, "Wohnungen tatsächlich vermietet (%d)" % rented)
 	ok(identity_ok(s), "Geld nach Vermietung erhalten")
+
+
+func test_city_depot() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	run(s, 60.0 * 2.0)
+	var D := s.city_depot
+	var ST := s.stock
+	ok(D.building >= 0 and D.building != s.trader.bauhof, "Zentrallager ist ein eigenes Gebäude neben dem Bauhof des Großhändlers")
+	ok(CityGoods.GROUPS.size() == 15 and CityGoods.items().size() >= 70, "Katalog: 15 Warengruppen, %d Artikel" % CityGoods.items().size())
+	var complete := true
+	for id in CityGoods.items():
+		var it: Dictionary = CityGoods.get_item(id)
+		complete = complete and it.min <= it.reorder and it.reorder <= it.target and it.target <= it.cap and it.crit >= 1 and it.unit != "" and CityGoods.ZONES.has(it.zone)
+	ok(complete, "Mindest-, Melde-, Ziel- und Kapazitätsbestand je Artikel stimmig")
+	ok(D.stock_of("schotter") == int(CityGoods.get_item("schotter").target * 0.7) and ST.of_owner("P0").size() > 60, "Anfangsbestand im Eigentum der Stadt")
+	ok(identity_ok(s), "Geld und Waren erhalten (Start)")
+	# Reservierung verhindert doppelte Verkaeufe
+	var free0: int = ST.available("holz", "T0", s.trader.bauhof)
+	ok(ST.reserve("test:1", "holz", free0 - 5, "T0", s.trader.bauhof) and s.trader.stock_of("holz") == 5, "Reservierung sperrt Bestand beim Großhändler")
+	ok(not s.trader.sell(0, {"holz": 10}, "abholen", s.companies[0].depots[0]).ok, "reservierte Ware wird nicht zweimal verkauft")
+	ST.release("test:1")
+	# Verbrauch ohne Ware ist nicht moeglich
+	var have: int = ST.qty("sand", "P0", D.building)
+	ok(ST.consume("sand", have + 50, "P0", D.building, "Test") == have and ST.qty("sand", "P0", D.building) == 0, "Verbrauch höchstens in Höhe des Bestands")
+	ST.add("sand", have, "P0", D.building, "Test-Rückbuchung")
+	# Beschaffungskette: Bestand unter Meldebestand -> Vorschlag -> Freigabe -> Bestellung -> Transport -> Anlieferung -> Pruefung -> Einlagerung -> Zahlung
+	var it_dec := CityGoods.get_item("leitkegel")
+	ST.consume("leitkegel", D.on_hand("leitkegel") - int(it_dec.min), "P0", D.building, "Test")
+	var p0_0: float = s.economy.accounts.P0
+	var t0_0: float = s.economy.accounts.T0
+	_build_days(s, 1)
+	var ord: Dictionary = D.orders.values().filter(func(o): return o.item == "leitkegel")[0] if not D.orders.values().filter(func(o): return o.item == "leitkegel").is_empty() else {}
+	ok(not ord.is_empty(), "Unterschreiten des Meldebestands erzeugt einen Beschaffungsvorschlag")
+	_build_days(s, 2)
+	ord = D.orders.values().filter(func(o): return o.item == "leitkegel")[0]
+	ok(ord.status in ["bestellt", "transport"] and ord.supplier != "" and float(ord.committed) > 0.0, "Budgetfreigabe und Bestellung (%s bei %s)" % [ord.status, ord.supplier])
+	ok(D.on_hand("leitkegel") == int(it_dec.min), "Bestellung erzeugt noch keinen Bestand am Zielort")
+	var again: int = D.orders.values().filter(func(o): return o.item == "leitkegel").size()
+	_build_days(s, 1)
+	ok(D.orders.values().filter(func(o): return o.item == "leitkegel").size() == again, "bereits bestellte Menge wird nicht erneut bestellt")
+	# ein Transportunternehmen uebernimmt den Auftrag und liefert (hier: Auslieferung des Contracts direkt ueber den Spielkern)
+	var guard_k := 0
+	while ord.contract == "" and guard_k < 14:
+		_build_days(s, 1)
+		guard_k += 1
+	var k: Contract = s.contracts.get(ord.contract)
+	ok(k != null and k.status == "open" and k.payer == "P0" and k.order_ref == ord.id and k.reward > 0.0, "echter Transportauftrag mit Zahler P0 und Vergütung %s" % (Catalog.money(k.reward) if k else "-"))
+	var cash0: float = s.companies[0].ledger.cash
+	k.owner = 0
+	k.status = "in_transit"
+	var veh: FleetVehicle = s.vehicles.values()[0]
+	s.deliver_contract(veh, k)
+	ok(s.companies[0].ledger.cash > cash0 and absf(s.companies[0].ledger.cash - cash0 - k.paid) < 0.01, "Transporteur erhält die Vergütung von der Stadt (%s)" % Catalog.money(k.paid))
+	ok(ord.status == "angeliefert" and ST.qty_state("leitkegel", "P0", D.building, "pruefung") == int(ord.qty), "Anlieferung: Ware im Wareneingang, noch nicht verfügbar")
+	ok(D.stock_of("leitkegel") == int(it_dec.min), "geprüfte Ware ist erst nach der Einlagerung verfügbar")
+	_build_days(s, 2)
+	ok(ord.status == "bezahlt" and D.on_hand("leitkegel") >= int(it_dec.target) - 5, "geprüft, eingelagert und bezahlt (%d im Lager)" % D.on_hand("leitkegel"))
+	ok(float(s.economy.accounts.P0) < p0_0 and float(ord.paid) > 0.0, "Warenpreis von der Stadt gezahlt (%s)" % Catalog.money(float(ord.paid)))
+	ok(identity_ok(s), "Geld und Waren erhalten (Beschaffung)")
+	# Unternehmen als Lieferant, Stadtfuhrpark als Fallback
+	ST.add("sekundaer", 1, "C0", s.companies[0].depots[0], "Test")
+	var of := D.offer_supply(0, "pflanzen", 50, 1.0)
+	ok(not of.ok, "Lieferangebot nur für vorhandene Ware")
+	ST.add("pflanzen", 400, "C0", s.companies[0].depots[0], "Eigenproduktion")
+	var of2 := D.offer_supply(0, "pflanzen", 400, 2.0, 0)
+	ok(of2.ok, "Unternehmen bietet Ware an: " + str(of2.msg))
+	var qs := D.quote("pflanzen", 300, 1)
+	ok(qs.size() >= 2 and qs[0].supplier == "C0", "Angebotsvergleich berücksichtigt Unternehmen (%s zuerst)" % qs[0].supplier)
+	ST.consume("pflanzen", D.on_hand("pflanzen") - 150, "P0", D.building, "Test")
+	_build_days(s, 4)
+	var po: Array = D.orders.values().filter(func(o): return o.item == "pflanzen")
+	ok(not po.is_empty() and po[0].supplier == "C0", "Stadt bestellt beim Unternehmen")
+	_build_days(s, 12)
+	po = D.orders.values().filter(func(o): return o.item == "pflanzen")
+	ok(po[0].status == "bezahlt" and D.stats.fallback_trips >= 1, "ohne Transportunternehmen fährt der Stadtfuhrpark (%s)" % po[0].status)
+	ok(ST.qty("pflanzen", "C0", s.companies[0].depots[0]) == 0 + 400 - int(po[0].qty), "Ware verlässt das Unternehmensdepot nur einmal")
+	ok(identity_ok(s), "Geld und Waren erhalten (Unternehmenslieferung)")
+	# Projektmaterial: reserviert, nicht doppelt abgerechnet
+	var need := CityDepot.material_need(["strasse", "strom"], 2)
+	var miss := D.reserve_for_project("P9", need)
+	ok(miss.is_empty() and D.project_complete("P9"), "Material für Projekt reserviert")
+	var free_before: int = D.stock_of("schotter")
+	ok(ST.reserved("schotter", "P0", D.building) == 40, "reservierte Menge Schotter (40)")
+	var used := D.consume_project("P9", "Baufirma K0")
+	ok(int(used.get("schotter", 0)) == 40 and D.issues.size() >= 1 and D.issues[-1].mode == "ueberlassen", "Auftragsmaterial verbraucht und als überlassen protokolliert")
+	ok(ST.reserved("schotter", "P0", D.building) == 0 and D.on_hand("schotter") == int(CityGoods.get_item("schotter").target * 0.7) - 40, "Bestand um die verwendete Menge gesunken")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.city_depot.orders.size() == D.orders.size() and s2.city_depot.on_hand("leitkegel") == D.on_hand("leitkegel"), "Lager und Bestellungen nach Laden")
+	ok(identity_ok(s2), "Geld und Waren nach Laden erhalten")

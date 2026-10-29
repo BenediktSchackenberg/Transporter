@@ -29,6 +29,16 @@ static func decide(ind: Dictionary) -> Dictionary:
 			actions.append({"action": "decide_application", "application_id": d.id, "decision": "rueckfrage", "reason": "Offene Punkte: " + " ".join(d.offene_punkte)})
 		else:
 			actions.append({"action": "decide_application", "application_id": d.id, "decision": "ablehnen", "reason": "Offene Punkte trotz Rückfragen nicht behoben: " + " ".join(d.offene_punkte)})
+	# 1b) Beschaffungsvorschlaege des Stadtlagers: kritische Ware und bezahlbare Vorschlaege genehmigen, zu teure ablehnen
+	for pv in ind.stadtlager.vorschlaege:
+		if actions.size() >= MAX_ACTIONS:
+			break
+		var afford := float(pv.geschaetzte_kosten) <= float(ind.haushalt.verfuegbar)
+		if afford and (int(pv.kritikalitaet) >= 2 or str(party) != "haushalt"):
+			actions.append({"action": "approve_procurement", "order_id": pv.id, "reason": "%s: %s; Kosten %s im Budget (verfügbar %s)." % [pv.artikel, pv.grund, Catalog.money(float(pv.geschaetzte_kosten)), Catalog.money(float(ind.haushalt.verfuegbar))]})
+			notes.append("Beschaffung %s genehmigt" % pv.id)
+		elif not afford:
+			actions.append({"action": "reject_procurement", "order_id": pv.id, "reason": "Budget reicht nicht (%s nötig, %s verfügbar); später erneut prüfen." % [Catalog.money(float(pv.geschaetzte_kosten)), Catalog.money(float(ind.haushalt.verfuegbar))]})
 	# 2) Bedarf bestimmen (Schwellen je Partei)
 	var need := waiting > 0
 	match party:
