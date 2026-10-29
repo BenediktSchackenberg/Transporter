@@ -26,6 +26,7 @@ const COUNTER := {
 
 var accounts := {}
 var outflow := {}       # Konto -> Abfluesse im laufenden Spielmonat (fuer den Kreislauf der Haushalte)
+var flows := {}         # Diagnose: "von>nach" -> Summe seit Beginn (nicht gespeichert); Firmenbuchungen laufen ueber "Firmen"
 var initial_total := 0.0
 var _ledgers: Array = []
 
@@ -55,6 +56,8 @@ func detach_all() -> void:
 func post(counter: String, delta: float) -> void:
 	assert(accounts.has(counter), "Unbekanntes Konto: " + counter)
 	accounts[counter] -= delta
+	var fk := (counter + ">Firmen") if delta > 0.0 else ("Firmen>" + counter)
+	flows[fk] = float(flows.get(fk, 0.0)) + absf(delta)
 	if delta > 0.0:
 		outflow[counter] = float(outflow.get(counter, 0.0)) + delta
 
@@ -63,6 +66,8 @@ func post(counter: String, delta: float) -> void:
 func transfer(from_acct: String, to_acct: String, amount: float) -> void:
 	accounts[from_acct] -= amount
 	accounts[to_acct] += amount
+	var fk := from_acct + ">" + to_acct
+	flows[fk] = float(flows.get(fk, 0.0)) + amount
 	outflow[from_acct] = float(outflow.get(from_acct, 0.0)) + amount
 
 

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3522,3 +3522,65 @@ func test_city_depot() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.city_depot.orders.size() == D.orders.size() and s2.city_depot.on_hand("leitkegel") == D.on_hand("leitkegel"), "Lager und Bestellungen nach Laden")
 	ok(identity_ok(s2), "Geld und Waren nach Laden erhalten")
+
+
+## Auftrag 5, Etappe 2: Lagerpersonal, Rampen, Geraete.
+func test_depot_operations() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	run(s, 60.0 * 2.0)
+	var D := s.city_depot
+	var staff := D.roster()
+	ok(staff.size() >= 3, "Lagerpersonal aus den Bürgern der Stadt (%d Personen)" % staff.size())
+	ok(staff.any(func(w): return w.role == "vorarbeiter") and staff.any(func(w): return w.role == "stapler") and staff.any(func(w): return w.role == "lager"), "Rollen Vorarbeiter, Staplerfahrer, Lagerarbeiter")
+	ok(s.citizens.people.any(func(p): return p.employer == "stadtlager" and float(p.wage) > 0.0), "gleiche Arbeitsverträge und Löhne wie die übrigen Bürger")
+	var cap_all := D.dock_capacity()
+	ok(cap_all > 500, "Wareneingang schafft %d Einheiten je Tag" % cap_all)
+	var f_all := D.unload_factor()
+	# Krankheit und Erschoepfung mindern die Leistung
+	for w in staff:
+		D.crew[w.id] = {"fatigue": 0.0, "sick_until": 9999, "rest_until": -1}
+	ok(D.dock_capacity() == 0 and D.available_staff() == 0, "ohne verfügbares Personal keine Abfertigung")
+	ok(D.current_tasks().blockers.any(func(b): return "krank" in b), "Blockade benennt die Ursache (krank)")
+	D.crew[staff[0].id] = {"fatigue": 0.0, "sick_until": -1, "rest_until": -1}
+	D.crew[staff[1].id] = {"fatigue": 0.0, "sick_until": -1, "rest_until": -1}
+	ok(D.dock_capacity() > 0 and D.dock_capacity() < cap_all and D.unload_factor() > f_all, "weniger Personal: weniger Leistung, längere Entladung")
+	# Stau am Wareneingang: Lieferung wartet, wenn die Kapazitaet nicht reicht
+	D.crew.clear()
+	var it := CityGoods.get_item("kies")
+	s.stock.add("kies", 100, "P0", D.building, "Test", 0.0, "pruefung")
+	# Rampen: ein zweiter Lkw muss warten, wenn alle Rampen belegt sind
+	var vs: Array = s.vehicles.values()
+	var kk := Contract.new()
+	kk.id = "AX1"
+	kk.dropoff = D.building
+	kk.pickup = s.trader.bauhof
+	kk.order_ref = "B999"
+	kk.payer = "P0"
+	kk.status = "in_transit"
+	s.contracts[kk.id] = kk
+	for v in vs.slice(0, 2):
+		v.stops = [{"contract_id": kk.id, "art": "abladen", "ort": "ziel", "menge": 1}]
+	vs[0].state = "unloading"
+	D.ramps = 1
+	ok(D.ramps_free() == 0 and not s._bay_free(vs[1]), "alle Rampen belegt: der Lkw wartet")
+	D.ramps = 2
+	ok(D.ramps_free() == 1 and s._bay_free(vs[1]), "zusätzliche Rampe entspannt den Engpass")
+	D.truck_waits(vs[1])
+	ok(D.waits == 1 and D.recent_waits() == 1, "Wartezeit wird festgehalten")
+	vs[0].state = "idle"
+	vs[0].stops = []
+	vs[1].stops = []
+	# Ausbau kostet Geld aus der Stadtkasse und wirkt
+	s.economy.transfer("X0", "P0", 100000.0)
+	var p0 := float(s.economy.accounts.P0)
+	var r0 := D.ramps
+	ok(D.expand("ramp").ok and D.ramps == r0 + 1 and float(s.economy.accounts.P0) == p0 - CityDepot.RAMP_COST, "Rampe gebaut, Kosten aus der Stadtkasse")
+	var fk := D.forklifts()
+	ok(D.expand("forklift").ok and D.forklifts() == fk + 1, "Gabelstapler gekauft")
+	var n0 := D.roster().size()
+	ok(D.expand("staff").ok and D.roster().size() == n0 + 1, "Lagerkraft eingestellt")
+	ok(D.running_costs().loehne > 0.0, "laufende Kosten enthalten Löhne (%s)" % Catalog.money(float(D.running_costs().summe)))
+	ok(identity_ok(s), "Geld und Waren erhalten")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.city_depot.ramps == D.ramps and s2.city_depot.roster().size() == D.roster().size(), "Ausbau nach Laden erhalten")

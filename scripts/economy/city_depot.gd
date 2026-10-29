@@ -14,7 +14,20 @@ const AUTO_APPROVE_DAYS := 2        # ohne Entscheidung genehmigt die Verwaltung
 const FALLBACK_DAYS := 3            # so lange wartet ein Transportauftrag auf ein Unternehmen
 const MAX_REISSUE := 2
 const INSPECTION_DAYS := 1
-const DOCK_PER_DAY := 4000          # Einheiten, die der Wareneingang je Tag pruefen und einlagern kann
+const RAMPS_START := 2              # Entladerampen am Wareneingang
+const MAX_RAMPS := 6
+const RAMP_COST := 18000.0
+const STAFF_MAX := 14
+## Lagerrollen und ihre Tagesleistung (Einheiten) im Wareneingang bzw. in der Kommissionierung
+const ROLES := {
+	"vorarbeiter": {"label": "Vorarbeiter", "rate": 150},
+	"stapler": {"label": "Staplerfahrer", "rate": 700},
+	"lager": {"label": "Lagerarbeiter", "rate": 450},
+	"kommission": {"label": "Kommissionierer", "rate": 300},
+}
+const ROLE_CYCLE := ["vorarbeiter", "stapler", "lager", "lager", "kommission", "lager", "stapler", "lager", "kommission", "lager", "lager", "stapler", "lager", "kommission"]
+const REST_FATIGUE := 85.0
+const SICK_CHANCE := 0.015
 const BASE_USE_DIVISOR := 6.0       # Verbrauch je Tag = Katalogwert / dieser Wert
 const SURPLUS_FACTOR := 1.5         # Ueberschuss: Bestand ueber dem 1,5-fachen Zielbestand
 const SURPLUS_PRICE := 0.5          # Verkauf von Ueberschuessen zum halben Katalogpreis (an T0 oder Ausland)
@@ -39,6 +52,10 @@ var issues: Array = []                # Ausgaben und Ueberlassungen {day, item, 
 var shortages := {}                   # Artikel -> Tag der letzten Fehlmenge
 var carry := {}                       # Artikel -> Rest des Tagesverbrauchs
 var stats := {"purchases": 0.0, "freight": 0.0, "sold": 0.0, "scrapped": 0, "orders_done": 0, "fallback_trips": 0}
+var ramps := RAMPS_START
+var crew := {}                        # Buerger-ID -> {fatigue, sick_until, rest_until}
+var waits := 0                        # Lkw, die auf eine freie Rampe warten mussten
+var wait_days: Array = []             # Tage mit Wartezeiten (letzte 30)
 var _next_order := 1
 var _next_offer := 1
 
@@ -128,6 +145,7 @@ func _today() -> int:
 
 # ------------------------------------------------------------------ Tagesablauf
 func on_day(day: int) -> void:
+	_crew_day(day)
 	_consume(day)
 	_propose(day)
 	_decide(day)
@@ -434,15 +452,234 @@ func _receive(o: Dictionary, ref: String) -> void:
 	_log(o, "Wareneingang: %d × %s zur Prüfung" % [moved, CityGoods.get_item(o.item).name])
 
 
+# ------------------------------------------------------------------ Lagerpersonal, Rampen, Geraete (Abschnitt 7)
+## Lagerpersonal sind Buerger der Stadt mit Arbeitgeber "stadtlager": derselbe Arbeitsvertrag, Lohn (P0), Lohnsteuer und Sozialabgaben wie sonst.
+func roster() -> Array:
+	var out: Array = []
+	var i := 0
+	for p in sim.citizens.people:
+		if p.employer != "stadtlager":
+			continue
+		var st: Dictionary = crew.get(int(p.id), {"fatigue": 0.0, "sick_until": -1, "rest_until": -1})
+		var role: String = ROLE_CYCLE[i % ROLE_CYCLE.size()]
+		out.append({"id": int(p.id), "name": p.name, "role": role, "role_label": ROLES[role].label, "wage": float(p.wage), "fatigue": float(st.fatigue),
+			"state": _state_of(st), "available": _state_of(st) == "verfügbar"})
+		i += 1
+	return out
+
+
+func _state_of(st: Dictionary) -> String:
+	var day := _today()
+	if int(st.sick_until) >= day:
+		return "krank"
+	if int(st.rest_until) >= day:
+		return "erschöpft (Pause)"
+	return "verfügbar"
+
+
+func _crew_day(day: int) -> void:
+	for w in roster():
+		var st: Dictionary = crew.get(w.id, {"fatigue": 0.0, "sick_until": -1, "rest_until": -1})
+		if int(st.sick_until) < day and int(st.rest_until) < day:
+			st.fatigue = float(st.fatigue) + 7.0
+			if float(st.fatigue) >= REST_FATIGUE:
+				st.rest_until = day + 1
+				st.fatigue = 30.0
+			elif float(absi(hash([w.id, day, "krank"])) % 1000) / 1000.0 < SICK_CHANCE:
+				st.sick_until = day + 2 + absi(hash([w.id, day])) % 3
+		else:
+			st.fatigue = maxf(0.0, float(st.fatigue) - 10.0)
+		crew[w.id] = st
+
+
+func forklifts() -> int:
+	return sim.stock.qty("gabelstapler", OWNER, building)
+
+
+func hand_trucks() -> int:
+	return sim.stock.qty("hubwagen", OWNER, building)
+
+
+## Einheiten, die der Wareneingang heute pruefen und einlagern kann: Leistung des verfuegbaren Personals, Staplerfahrer nur mit freiem Stapler,
+## Hubwagen und ein Vorarbeiter (Organisation) erhoehen sie.
+func dock_capacity() -> int:
+	var total := 0.0
+	var free_forklifts := forklifts()
+	var foreman := false
+	for w in roster():
+		if not w.available:
+			continue
+		if w.role == "stapler":
+			if free_forklifts <= 0:
+				total += float(ROLES.lager.rate)     # ohne Stapler arbeitet er von Hand
+				continue
+			free_forklifts -= 1
+		if w.role == "vorarbeiter":
+			foreman = true
+		total += float(ROLES[w.role].rate)
+	total *= 1.0 + 0.05 * float(mini(hand_trucks(), 4))
+	if foreman:
+		total *= 1.15
+	return int(total)
+
+
+func available_staff() -> int:
+	return roster().filter(func(w): return w.available).size()
+
+
+## Faktor fuer die Entladedauer eines Lkw am Wareneingang: viel Personal und Geraete verkuerzen, wenig verlaengert (0,6 bis 3).
+func unload_factor() -> float:
+	var hands := 0.0
+	for w in roster():
+		if w.available and w.role in ["lager", "stapler", "vorarbeiter"]:
+			hands += 1.0
+	return clampf(3.0 / maxf(hands, 0.5), 0.6, 3.0) * (0.8 if forklifts() > 0 else 1.0)
+
+
+## Fahrzeuge am Wareneingang: entladend bzw. wartend (Fahrzeuge mit Stopp am Zentrallager).
+func trucks_here(states: Array) -> Array:
+	var out: Array = []
+	for v in sim.vehicles.values():
+		if v.state in states and not v.stops.is_empty():
+			var k: Contract = sim.contracts.get(v.stops[0].contract_id)
+			if k != null and k.order_ref != "" and k.dropoff == building:
+				out.append(v)
+	return out
+
+
+func ramps_free() -> int:
+	return maxi(0, ramps - trucks_here(["unloading"]).size())
+
+
+func truck_waits(v) -> void:
+	waits += 1
+	var day := _today()
+	if wait_days.is_empty() or int(wait_days[-1]) != day:
+		wait_days.append(day)
+		if wait_days.size() > 30:
+			wait_days.pop_front()
+		sim.log_event("Stadtlager: Lkw von %s wartet wegen belegter Entladerampe." % sim.company(v.owner).company_name, "warn")
+
+
+func recent_waits() -> int:
+	return wait_days.filter(func(d): return d >= _today() - 10).size()
+
+
+## Rueckstau am Wareneingang: Einheiten, die auf Pruefung und Einlagerung warten.
+func backlog_units() -> int:
+	var n := 0
+	for o in orders.values():
+		if o.status == "angeliefert":
+			n += int(o.get("qty_received", o.qty))
+	return n
+
+
+## Ausbau: "ramp" (zusaetzliche Entladerampe), "staff" (Lagerkraft einstellen), "forklift" (Gabelstapler kaufen). Kosten aus der Stadtkasse.
+func expand(kind: String, by: String = "Verwaltung") -> Dictionary:
+	var M: Mayor = sim.mayor
+	match kind:
+		"ramp":
+			if ramps >= MAX_RAMPS:
+				return {"ok": false, "msg": "Das Zentrallager hat bereits %d Rampen (Höchstzahl)." % MAX_RAMPS}
+			if M.available_budget() < RAMP_COST:
+				return {"ok": false, "msg": "Budget reicht nicht für eine Rampe (%s)." % Catalog.money(RAMP_COST)}
+			sim.economy.transfer(OWNER, "K0", RAMP_COST)      # Bauleistung der Baufirmen
+			ramps += 1
+			sim.log_event("Stadtlager: %s lässt eine %d. Entladerampe bauen (%s)." % [by, ramps, Catalog.money(RAMP_COST)], "info")
+			return {"ok": true, "msg": "Rampe %d gebaut (%s)." % [ramps, Catalog.money(RAMP_COST)]}
+		"forklift":
+			var price := float(CityGoods.get_item("gabelstapler").price)
+			if M.available_budget() < price:
+				return {"ok": false, "msg": "Budget reicht nicht für einen Gabelstapler (%s)." % Catalog.money(price)}
+			sim.economy.transfer(OWNER, "X0", price)
+			sim.stock.add("gabelstapler", 1, OWNER, building, "Kauf Gabelstapler")
+			return {"ok": true, "msg": "Gabelstapler gekauft (%s)." % Catalog.money(price)}
+		"staff":
+			if roster().size() >= STAFF_MAX:
+				return {"ok": false, "msg": "Das Lagerpersonal ist mit %d Stellen ausgelastet." % STAFF_MAX}
+			for p in sim.citizens.people:
+				if p.employer == "":
+					sim.citizens._employ(p, "stadtlager", 0.5)
+					sim.citizens.cap["stadtlager"] = int(sim.citizens.cap.get("stadtlager", 0)) + 1
+					sim.log_event("Stadtlager: %s stellt %s als Lagerkraft ein." % [by, p.name], "info")
+					return {"ok": true, "msg": "%s eingestellt." % p.name}
+			return {"ok": false, "msg": "Es gibt keine arbeitslosen Bewerber."}
+	return {"ok": false, "msg": "Unbekannte Maßnahme %s (ramp, staff, forklift)." % kind}
+
+
+## Laufende Kosten je Monat: Loehne des Lagerpersonals und Betrieb der Rampen.
+func running_costs() -> Dictionary:
+	var wages := 0.0
+	for w in roster():
+		wages += float(w.wage) * Citizens.HOURS_PER_MONTH
+	return {"loehne": wages, "betrieb": 400.0 * float(ramps), "summe": wages + 400.0 * float(ramps)}
+
+
+## Aktuelle Taetigkeiten am Zentrallager fuer Anzeige und Lageruebersicht. Jede Person und jeder Stapler hoechstens einmal.
+## Rueckgabe: {tasks: [{worker, name, role, task, item, ref}], waiting: [Beschreibung], blockers: [Ursachen]}
+func current_tasks() -> Dictionary:
+	var staff: Array = roster().filter(func(w): return w.available)
+	var used := {}
+	var forklift_free := forklifts()
+	var tasks: Array = []
+	var blockers: Array = []
+	var wanted: Array = []
+	for v in trucks_here(["unloading"]):
+		var k: Contract = sim.contracts.get(v.stops[0].contract_id)
+		wanted.append({"task": "entlädt", "roles": ["lager", "stapler"], "item": str(orders.get(k.order_ref, {}).get("item", "")), "ref": k.order_ref})
+	for o in orders.values():
+		if o.status == "angeliefert":
+			wanted.append({"task": "prüft Ware", "roles": ["kommission", "lager"], "item": o.item, "ref": o.id})
+			wanted.append({"task": "bringt Palette ins Lager", "roles": ["stapler", "lager"], "item": o.item, "ref": o.id, "forklift": true})
+	for i in issues.slice(-3):
+		if int(i.day) == _today():
+			wanted.append({"task": "stellt Lieferung zusammen", "roles": ["kommission", "lager"], "item": i.item, "ref": str(i.ref)})
+			wanted.append({"task": "verlädt Ware", "roles": ["stapler", "lager"], "item": i.item, "ref": str(i.ref), "forklift": true})
+	for want in wanted:
+		var done := false
+		for role in want.roles:
+			for w in staff:
+				if used.has(w.id) or w.role != role:
+					continue
+				if want.get("forklift", false) and role == "stapler":
+					if forklift_free <= 0:
+						continue
+					forklift_free -= 1
+				used[w.id] = true
+				tasks.append({"worker": w.id, "name": w.name, "role": w.role, "task": want.task, "item": want.item, "ref": want.ref})
+				done = true
+				break
+			if done:
+				break
+		if not done:
+			blockers.append("%s: kein freier %s" % [want.task, " oder ".join(want.roles.map(func(r): return ROLES[r].label))])
+	for w in staff:
+		if not used.has(w.id):
+			tasks.append({"worker": w.id, "name": w.name, "role": w.role, "task": "organisiert den Ablauf" if w.role == "vorarbeiter" else "bereit", "item": "", "ref": ""})
+	var waiting: Array = []
+	for v in trucks_here(["waiting_bay"]):
+		waiting.append("Lkw von %s wartet auf eine freie Rampe" % sim.company(v.owner).company_name)
+	if ramps_free() == 0 and not waiting.is_empty():
+		blockers.append("alle %d Rampen belegt" % ramps)
+	if forklifts() <= 0:
+		blockers.append("kein Gabelstapler vorhanden")
+	if available_staff() < roster().size():
+		blockers.append("%d Mitarbeiter krank oder in Pause" % (roster().size() - available_staff()))
+	return {"tasks": tasks, "waiting": waiting, "blockers": blockers}
+
+
 # ------------------------------------------------------------------ Warenpruefung, Einlagerung, Zahlung
 func _inspect(day: int) -> void:
-	var capacity := DOCK_PER_DAY
-	for o in orders.values():
-		if o.status != "angeliefert" or day - int(o.arrived) < INSPECTION_DAYS:
-			continue
+	var capacity := dock_capacity()
+	var full := capacity
+	var due: Array = orders.values().filter(func(o): return o.status == "angeliefert" and day - int(o.arrived) >= INSPECTION_DAYS)
+	due.sort_custom(func(a, b): return int(a.arrived) < int(b.arrived))
+	for o in due:
 		var qty := int(o.get("qty_received", o.qty))
-		if capacity < qty and capacity < DOCK_PER_DAY:
-			continue            # Wareneingang ausgelastet: wartet bis zum naechsten Tag
+		if capacity <= 0:
+			break
+		if capacity < qty and capacity < full:
+			continue            # Wareneingang ausgelastet (zu wenig Personal oder Geraete): wartet bis zum naechsten Tag
 		capacity -= qty
 		var kind := "C" if str(o.supplier).begins_with("C") else str(o.supplier)
 		var rate := float(DEFECT.get(kind, 0.01))
@@ -641,7 +878,7 @@ func summary() -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"building": building, "port": port, "orders": orders, "offers": offers, "project_res": project_res, "issues": issues.slice(-80), "shortages": shortages, "carry": carry,
+	return {"ramps": ramps, "crew": crew, "waits": waits, "wait_days": wait_days, "building": building, "port": port, "orders": orders, "offers": offers, "project_res": project_res, "issues": issues.slice(-80), "shortages": shortages, "carry": carry,
 		"stats": stats, "next": [_next_order, _next_offer]}
 
 
@@ -650,6 +887,13 @@ func from_dict(d: Dictionary) -> void:
 		if sim.stock.of_owner(OWNER).filter(func(l): return l.loc == building).is_empty():
 			_seed_stock()          # Spielstand aus der Zeit vor dem Stadtlager
 		return
+	ramps = int(d.get("ramps", RAMPS_START))
+	crew = {}
+	for k in d.get("crew", {}):
+		var c: Dictionary = d.crew[k]
+		crew[int(k)] = {"fatigue": float(c.fatigue), "sick_until": int(c.sick_until), "rest_until": int(c.rest_until)}
+	waits = int(d.get("waits", 0))
+	wait_days = d.get("wait_days", []).map(func(x): return int(x))
 	building = int(d.get("building", building))
 	port = int(d.get("port", port))
 	orders = d.get("orders", {})

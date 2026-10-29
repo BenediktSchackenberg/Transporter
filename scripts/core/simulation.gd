@@ -512,6 +512,8 @@ func _on_arrival(v: FleetVehicle) -> void:
 			var k: Contract = contracts.get(st.contract_id)
 			if not _bay_free(v):
 				v.state = "waiting_bay"   # alle Laderampen des Hofes belegt
+				if k != null and k.order_ref != "":
+					city_depot.truck_waits(v)
 				return
 			v.state = "loading" if v.state == "to_pickup" else "unloading"
 			# Dauer waechst mit der Menge; Helfer und Fahrer-Geschick verkuerzen sie
@@ -520,6 +522,8 @@ func _on_arrival(v: FleetVehicle) -> void:
 				v.timer *= 2.0
 			if k:
 				v.timer *= personnel.loading_factor(v.owner, logistics.place_building(k, st.ort), driver_of(v))
+			if k != null and k.order_ref != "" and v.state == "unloading":
+				v.timer *= city_depot.unload_factor()      # Lagerpersonal und Stapler bestimmen die Entladedauer
 			var site := Logistics.store_site(str(st.ort))
 			if site >= 0 and estate.is_plot(site) and estate.has_ramp(site):
 				v.timer *= 0.6   # Laderampe statt offener Ladeflaeche
@@ -624,6 +628,9 @@ func deliver_contract(v: FleetVehicle, k: Contract) -> void:
 func _bay_free(v: FleetVehicle) -> bool:
 	if v.stops.is_empty():
 		return true
+	var k0: Contract = contracts.get(v.stops[0].contract_id)
+	if k0 != null and k0.order_ref != "" and k0.dropoff == city_depot.building and v.stops[0].art != "laden":
+		return city_depot.ramps_free() > 0          # Entladerampen des Stadtlagers
 	var site := Logistics.store_site(str(v.stops[0].ort))
 	if site < 0 or not estate.is_plot(site):
 		return true

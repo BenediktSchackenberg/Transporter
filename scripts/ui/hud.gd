@@ -953,6 +953,13 @@ func _update_selection() -> void:
 				return
 			sel_title.text = "%s – %s" % [pr.name, pr.role]
 			sel_text.text = sim.residents.describe(pr)
+		"lot":
+			var lot: Dictionary = sim.stock.lots.get(sel.id, {})
+			if lot.is_empty():
+				session.entity_view.selected = {}
+				return
+			sel_title.text = "Warenposten %s – %d × %s" % [lot.id, int(lot.qty), CityGoods.get_item(lot.item).get("name", lot.item)]
+			sel_text.text = LiveText.lot(sim, lot)
 		"site":
 			var pr: Dictionary = sim.construction.projects.get(sel.id, {})
 			if pr.is_empty():
@@ -964,6 +971,9 @@ func _update_selection() -> void:
 			var b: Dictionary = sim.city.building(sel.id)
 			sel_title.text = "%s (%s)" % [b.name, Catalog.DISTRICTS[b.district]]
 			var txt := ""
+			if sel.id == sim.city_depot.building:
+				sel_text.text = LiveText.depot_panel(sim)
+				return
 			for pr in sim.residents.of_building(sel.id).slice(0, 1):
 				txt += "Kontakt: %s (%s)%s
 " % [pr.name, pr.role, (" – " + str(pr.last_concern)) if pr.state == "wartet" else ""]

@@ -549,6 +549,9 @@ func selected_position() -> Vector2:
 		"building":
 			var b: Dictionary = sim.city.building(selected.id)
 			return Vector2(b.x * 32 + b.w * 16, b.y * 32 + b.h * 16)
+		"lot":
+			var bd: Dictionary = sim.city.building(sim.city_depot.building)
+			return Vector2(bd.x * 32 + bd.w * 16, bd.y * 32 + bd.h * 16)
 	return Vector2(-9999, -9999)
 
 
@@ -590,6 +593,9 @@ func pick(click: Vector2) -> Dictionary:
 				best_d = d
 	if not best.is_empty():
 		return best
+	var lot_id: String = cv.depot_view.pick_lot(click)
+	if lot_id != "":
+		return {"kind": "lot", "id": lot_id}
 	var site_id: String = cv.site_view.pick(Iso.to_world(click))
 	if site_id != "":
 		return {"kind": "site", "id": site_id}

@@ -31,6 +31,7 @@ var _fog := 0.0
 var _heat := 0.0
 var estate_view := EstateView.new()
 var site_view := SiteView.new()
+var depot_view := DepotView.new()
 var parcel_layer := ParcelLayer.new()
 var _lit_nodes: Array = []                 # Fensterlichter (Sprite2D)
 var _blink_nodes: Array = []
@@ -108,6 +109,8 @@ func build(simulation: Simulation) -> void:
 	estate_view.setup(sim, self)
 	buildings_node.add_child(site_view)
 	site_view.setup(sim)
+	buildings_node.add_child(depot_view)
+	depot_view.setup(sim, self)
 	buildings_node.add_child(parcel_layer)
 	parcel_layer.setup(sim)
 	_build_decor()

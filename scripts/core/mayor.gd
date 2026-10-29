@@ -18,6 +18,8 @@ const SCHEMA := {
 	"tender": {"params": {"project_id": "string", "reason": "string"}, "desc": "Beschlossenes Projekt öffentlich ausschreiben (Baufirmen bieten)."},
 	"approve_procurement": {"params": {"order_id": "string", "reason": "string"},
 		"desc": "Beschaffungsvorschlag des Stadtlagers (obs.stadtlager.vorschlaege) genehmigen: Budget wird reserviert, bester Anbieter bestellt, Transportauftrag ausgeschrieben."},
+	"expand_depot": {"params": {"kind": "string", "reason": "string"},
+		"desc": "Zentrallager ausbauen: kind ramp (Entladerampe, 18 000 EUR), staff (Lagerkraft einstellen) oder forklift (Gabelstapler). Sinnvoll bei wartenden Lkw oder Rückstau im Wareneingang (obs.stadtlager)."},
 	"reject_procurement": {"params": {"order_id": "string", "reason": "string"}, "desc": "Beschaffungsvorschlag ablehnen (Begründung nötig, z. B. Budget oder kein Bedarf)."},
 	"assess_financing": {"params": {"project_id": "string"}, "desc": "Finanzierungsbedarf eines Projekts oder Plans bewerten (nur Auskunft)."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
@@ -163,7 +165,10 @@ func stadtlager_indicators() -> Dictionary:
 			var q := D.quote(o.item, int(o.qty), int(o.crit))
 			props.append({"id": o.id, "artikel": CityGoods.get_item(o.item).name, "menge": o.qty, "kritikalitaet": o.crit, "grund": o.reason, "geschaetzte_kosten": snappedf(float(q[0].total) if not q.is_empty() else 0.0, 1.0),
 				"anbieter": q[0].name if not q.is_empty() else "", "tage_offen": _today() - int(o.day), "entscheidung": o.get("decision", "")})
-	return {"vorschlaege": props.slice(0, 8), "kritisch": D.critical_items().slice(0, 6).map(func(i): return {"artikel": i.name, "bestand": i.bestand, "mindestbestand": i.mindestbestand}),
+	return {"rampen": D.ramps, "rampen_frei": D.ramps_free(), "lkw_wartezeiten_letzte_10_tage": D.recent_waits(), "rueckstau_wareneingang_einheiten": D.backlog_units(),
+		"personal_verfuegbar": D.available_staff(), "personal_gesamt": D.roster().size(), "kapazitaet_wareneingang_je_tag": D.dock_capacity(), "gabelstapler": D.forklifts(),
+		"laufende_kosten_monat": snappedf(float(D.running_costs().summe), 1.0), "blockaden": D.current_tasks().blockers.slice(0, 4),
+		"vorschlaege": props.slice(0, 8), "kritisch": D.critical_items().slice(0, 6).map(func(i): return {"artikel": i.name, "bestand": i.bestand, "mindestbestand": i.mindestbestand}),
 		"bestellungen_offen": D.open_orders().size() - props.size(), "einkauf_bisher": snappedf(float(D.stats.purchases), 1.0)}
 
 
@@ -280,6 +285,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = _tender(a)
 			"approve_procurement":
 				res = sim.city_depot.approve(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
+			"expand_depot":
+				res = sim.city_depot.expand(str(a.get("kind", "")), "Bürgermeister %s" % name)
 			"reject_procurement":
 				res = sim.city_depot.reject(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
 			"assess_financing":

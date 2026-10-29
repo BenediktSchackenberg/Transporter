@@ -91,7 +91,7 @@ Ziel: Eine Stadt, deren Versorgung man beobachten und nachvollziehen kann: Waren
 
 **Etappenplan**
 1. Warenmodell und Stadtlager (Abschnitte 1–4, Teil von 11 und 13) – **fertig**
-2. Lager als Arbeitsort: Rampen, Lagerpersonal aus dem Personalsystem, sichtbare Tätigkeiten, interaktive Lagerübersicht (7, 8)
+2. Lager als Arbeitsort: Rampen, Lagerpersonal, sichtbare Tätigkeiten, interaktive Lagerübersicht (7, 8) – **fertig**
 3. Verkehr mit Kapazität (5)
 4. Verkehrsmaßnahmen des Bürgermeisters, Ausbauprojekt mit Vorher/Nachher (6)
 5. Restaurants, Geschäfte, Haushaltsbedarf, Warenketten (9, 10, 11)
@@ -107,3 +107,14 @@ Ziel: Eine Stadt, deren Versorgung man beobachten und nachvollziehen kann: Waren
 - Oberfläche: Ansicht „Stadtlager“ im Reiter Wirtschaft (Bereiche, Beschaffung, kritische Bestände, Projektmaterial, Ausgaben).
 - Test `test_city_depot` (Katalog, Reservierung, kompletter Beschaffungsweg mit Geld- und Warenerhaltung, Unternehmen als Lieferant, Stadtfuhrpark, Projektmaterial, Speichern/Laden).
 - Offen in Etappe 1: KI-Aktion für Spieler zum Anbieten von Waren (`offer_supply` ist als Engine-Schnittstelle da), Transportauftrag erscheint noch ohne gesonderte Markierung in der Jobbörse.
+
+**Etappe 2 – Lager als Arbeitsort (29.10.2026)**
+- **Lagerpersonal** (`CityDepot.roster`): Bürger der Stadt mit Arbeitgeber „stadtlager“ (`Citizens.EMPLOYERS`, Konto P0): derselbe Arbeitsvertrag, Lohn, Lohnsteuer und Sozialabgaben wie sonst. Rollen Vorarbeiter, Staplerfahrer, Lagerarbeiter, Kommissionierer. Erschöpfung (Pause bei 85 %) und Krankheit (1,5 % je Tag, 2–4 Tage) nehmen Personal aus dem Dienst.
+- **Kapazität hat Folgen:** `dock_capacity` (Einheiten je Tag aus verfügbarem Personal, Staplern, Hubwagen, Vorarbeiter) begrenzt Prüfung und Einlagerung; was nicht geschafft wird, bleibt im Wareneingang und ist erst nach der Einlagerung verfügbar (Rückstau). Staplerfahrer arbeiten ohne Gabelstapler nur von Hand. `unload_factor` verlängert oder verkürzt die Entladedauer der Lkw.
+- **Rampen:** Das Zentrallager hat 2 Entladerampen (bis 6). Sind alle belegt, wartet der Lkw im Zustand `waiting_bay` (`Simulation._bay_free`), das Ereignis „Lkw von … wartet wegen belegter Entladerampe“ erscheint im Log (höchstens einmal je Tag).
+- **Ausbau** (`CityDepot.expand`): Rampe (18 000 EUR an die Baufirmen), Gabelstapler (aus dem Ausland), Lagerkraft einstellen (arbeitslosen Bürger). Der Bürgermeister kann das per Aktion `expand_depot` tun; `MayorBrain` baut bei wiederkehrenden Wartezeiten eine Rampe und bei Rückstau Stapler bzw. Personal. Beobachtung `stadtlager` enthält Rampen, Wartezeiten, Rückstau, Personal, Kapazität, laufende Kosten und Blockaden.
+- **Sichtbar** (`DepotView`): Lkw an den Rampen und in der Warteschlange, Arbeiter am Wareneingang. Bei Auswahl des Lagers (oder eines Warenpostens) wird das Dach ausgeblendet und die Innenansicht gezeichnet: Wareneingang mit Rampen, Prüfbereich, Regallager, Schüttgut, Kühllager, Tanklager, Geräte, Kommissionierung, Warenausgang, Büro. Paletten folgen dem tatsächlichen Bestand (Anzahl nach Füllstand, Zuordnung zu den Posten nach Menge); Mitarbeiter und Stapler zeigen ihre Aufgabe (entlädt, prüft Ware, bringt Palette ins Lager, stellt Lieferung zusammen, verlädt Ware, organisiert den Ablauf). Sichtprüfung: `-- --autotest --scenario=depot --screenshot=...`.
+- **Lagerübersicht** beim Anklicken (`LiveText.depot_panel`): Betreiber und Eigentümer, Mitarbeiter mit Aufgaben, Rampen und Geräte, Auslastung je Lagerbereich, reservierte Mengen, eingehende Lieferungen, ausgehende Aufträge, fehlende Artikel, laufende Kosten, Blockaden. Warenposten anklicken: Herkunft, Eigentümer, Menge, Standort, zugehörige Aufträge (`LiveText.lot`).
+- Test `test_depot_operations`.
+- Offen: Ein- und Aussteigen der Lagerarbeiter wird nicht als Weg über das Gelände animiert (Positionen folgen der Aufgabe), Kommissionierung/Verladung sind an die Ausgabe für Projekte gekoppelt (Etappe 4 erweitert sie).
+- **Beobachtung zur Stadtkasse:** Die Kasse P0 sinkt im Basisspiel schon ohne Stadtlager (ca. −60 000 EUR je Monat: Gehälter der städtischen Beschäftigten und Sozialleistungen übersteigen die Steuern). Ab etwa Tag 90 ist sie im Minus; das Stadtlager bestellt dann nichts mehr (Vorschläge bleiben offen, Bestände werden kritisch). `Economy.flows` (Diagnose, nicht gespeichert) zeigt die Geldflüsse je Kontenpaar. Das Gleichgewicht der Stadtfinanzen gehört in Auftrag 4.

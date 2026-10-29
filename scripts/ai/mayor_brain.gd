@@ -39,6 +39,14 @@ static func decide(ind: Dictionary) -> Dictionary:
 			notes.append("Beschaffung %s genehmigt" % pv.id)
 		elif not afford:
 			actions.append({"action": "reject_procurement", "order_id": pv.id, "reason": "Budget reicht nicht (%s nötig, %s verfügbar); später erneut prüfen." % [Catalog.money(float(pv.geschaetzte_kosten)), Catalog.money(float(ind.haushalt.verfuegbar))]})
+	# 1c) Zentrallager ausbauen: wiederkehrend wartende Lkw -> Rampe, Rueckstau im Wareneingang -> Personal bzw. Stapler
+	var sl: Dictionary = ind.stadtlager
+	if actions.size() < MAX_ACTIONS:
+		if int(sl.lkw_wartezeiten_letzte_10_tage) >= 3 and int(sl.rampen) < CityDepot.MAX_RAMPS and float(ind.haushalt.verfuegbar) > CityDepot.RAMP_COST * 2.0:
+			actions.append({"action": "expand_depot", "kind": "ramp", "reason": "Lkw mussten an %d der letzten 10 Tage auf eine freie Rampe warten (Rampen: %d)." % [int(sl.lkw_wartezeiten_letzte_10_tage), int(sl.rampen)]})
+		elif int(sl.rueckstau_wareneingang_einheiten) > 2 * maxi(int(sl.kapazitaet_wareneingang_je_tag), 1) and float(ind.haushalt.verfuegbar) > 30000.0:
+			var kind := "forklift" if int(sl.gabelstapler) < 2 else "staff"
+			actions.append({"action": "expand_depot", "kind": kind, "reason": "Rückstau im Wareneingang: %d Einheiten bei %d je Tag Kapazität." % [int(sl.rueckstau_wareneingang_einheiten), int(sl.kapazitaet_wareneingang_je_tag)]})
 	# 2) Bedarf bestimmen (Schwellen je Partei)
 	var need := waiting > 0
 	match party:

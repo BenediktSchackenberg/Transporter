@@ -272,6 +272,7 @@ func _process(delta: float) -> void:
 	city_view.update_view(delta)
 	var t2 := Time.get_ticks_usec()
 	entity_view.update_view(delta, 0.0 if not running else float(speed()), city_view.camera.zoom.x)
+	city_view.depot_view.update_view(delta, entity_view.selected)
 	var t3 := Time.get_ticks_usec()
 	hud.update_hud(delta)
 	var t4 := Time.get_ticks_usec()

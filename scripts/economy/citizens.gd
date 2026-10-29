@@ -21,6 +21,7 @@ const EMPLOYERS := {
 	"baufirma": {"label": "Baufirma", "share": 0.20, "wage": 15.0, "payer": "S0"},
 	"handel": {"label": "Handel und Gastronomie", "share": 0.32, "wage": 11.0, "payer": "S0"},
 	"industrie": {"label": "Industrie und Handwerk", "share": 0.32, "wage": 14.0, "payer": "S0"},
+	"stadtlager": {"label": "Stadtlager", "share": 0.008, "wage": 13.0, "payer": "P0"},
 }
 
 var sim: Simulation

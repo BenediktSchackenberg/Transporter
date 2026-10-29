@@ -611,6 +611,64 @@ static func construction(sim: Simulation) -> String:
 	return txt
 
 
+## Kurzuebersicht beim Anklicken des Zentrallagers (Abschnitt 8).
+static func depot_panel(sim: Simulation) -> String:
+	var D: CityDepot = sim.city_depot
+	var ct: Dictionary = D.current_tasks()
+	var txt := "Betreiber und Eigentümer: Stadtverwaltung (Konto P0) · Bauhof angeschlossen\n"
+	var staff: Array = D.roster()
+	txt += "[b]Mitarbeiter[/b] %d, davon %d verfügbar:\n" % [staff.size(), D.available_staff()]
+	var by_name := {}
+	for tk in ct.tasks:
+		by_name[tk.worker] = tk
+	for w in staff:
+		var tk: Dictionary = by_name.get(w.id, {})
+		txt += "  %s (%s) · %s · Erschöpfung %d %%%s\n" % [esc(str(w.name)), w.role_label, w.state, int(w.fatigue), (" · " + esc(str(tk.task)) + ((": " + esc(str(CityGoods.get_item(tk.item).get("name", "")))) if str(tk.item) != "" else "")) if not tk.is_empty() else ""]
+	txt += "[b]Rampen[/b] %d (frei %d) · [b]Geräte[/b] Gabelstapler %d, Hubwagen %d · Wareneingang schafft %d Einheiten/Tag, Rückstau %d\n" % [D.ramps, D.ramps_free(), D.forklifts(), D.hand_trucks(), D.dock_capacity(), D.backlog_units()]
+	var sm: Dictionary = D.summary()
+	var zs := []
+	for z in CityGoods.ZONES:
+		zs.append("%s %d %%" % [CityGoods.ZONES[z].label, int(100.0 * float(sm.zonen[z].belegt) / float(sm.zonen[z].kapazitaet))])
+	txt += "[b]Auslastung[/b] " + " · ".join(zs) + "\n"
+	var res_total := 0
+	for r in sim.stock.reservations.values():
+		if r.owner == CityDepot.OWNER:
+			res_total += int(r.qty)
+	txt += "[b]Reserviert[/b] %d Einheiten für %d Projekte\n" % [res_total, D.project_res.size()]
+	var inc: Array = D.open_orders().filter(func(o): return o.status != "vorschlag")
+	txt += "[b]Eingehende Lieferungen[/b] %d" % inc.size()
+	for o in inc.slice(0, 3):
+		txt += " · %d × %s (%s)" % [int(o.qty), esc(CityGoods.get_item(o.item).name), o.status]
+	txt += "\n[b]Ausgehende Aufträge[/b] " + (", ".join(D.project_res.keys()) if not D.project_res.is_empty() else "keine") + "\n"
+	var crit: Array = D.critical_items()
+	txt += "[b]Fehlende Artikel[/b] " + (", ".join(crit.slice(0, 5).map(func(i): return str(i.name))) if not crit.is_empty() else "keine") + "\n"
+	var rc: Dictionary = D.running_costs()
+	txt += "[b]Laufende Kosten[/b] %s im Monat (Löhne %s, Betrieb %s)\n" % [Catalog.money(float(rc.summe)), Catalog.money(float(rc.loehne)), Catalog.money(float(rc.betrieb))]
+	if not ct.blockers.is_empty() or not ct.waiting.is_empty():
+		txt += "[b]Blockaden[/b] " + "; ".join(ct.waiting + ct.blockers) + "\n"
+	txt += "Details: Reiter Wirtschaft → Stadtlager. Paletten in der Innenansicht anklicken für Herkunft und Auftrag."
+	return txt
+
+
+## Warenposten: Herkunft, Eigentuemer, Menge, Standort, zugehoeriger Auftrag.
+static func lot(sim: Simulation, l: Dictionary) -> String:
+	var it: Dictionary = CityGoods.get_item(l.item)
+	var owner_name: String = {"P0": "Stadtverwaltung", "T0": "Großhändler (Bauhof)", "X0": "Ausland"}.get(str(l.owner), "Unternehmen %s" % l.owner)
+	var txt := "Artikel: %s (%s, %s) · Menge %d %s · Zustand: %s\n" % [esc(str(it.get("name", l.item))), str(it.get("group_label", "")), str(it.get("class", "")), int(l.qty), str(it.get("unit", "")), str(l.get("state", "ok"))]
+	txt += "Eigentümer: %s · Standort: %s (%s)\n" % [owner_name, esc(sim.city.building(int(l.loc)).name), CityGoods.ZONES.get(str(it.get("zone", "")), {}).get("label", "")]
+	txt += "Herkunft: %s\n" % esc(str(l.source))
+	var refs: Array = []
+	for o in sim.city_depot.orders.values():
+		if o.item == l.item and o.status in ["angeliefert", "eingelagert", "bezahlt"]:
+			refs.append("%s (%s, %s)" % [o.id, o.supplier, o.status])
+	for pid in sim.city_depot.project_res:
+		if sim.city_depot.project_res[pid].reserved.has(l.item):
+			refs.append("reserviert für Projekt %s (%d)" % [pid, int(sim.city_depot.project_res[pid].reserved[l.item])])
+	txt += "Zugehörige Aufträge: " + (", ".join(refs.slice(-4)) if not refs.is_empty() else "keine") + "\n"
+	txt += "Bestand frei %d · reserviert %d" % [sim.stock.available(l.item, l.owner, int(l.loc)), sim.stock.reserved(l.item, l.owner, int(l.loc))]
+	return txt
+
+
 static func city_depot(sim: Simulation) -> String:
 	var D: CityDepot = sim.city_depot
 	var sm: Dictionary = D.summary()

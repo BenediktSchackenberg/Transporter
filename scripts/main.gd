@@ -64,6 +64,8 @@ func _apply_test_overrides(sim: Simulation) -> void:
 		_scenario_yard(sim)
 	if str(args.get("scenario", "")) == "site":
 		_scenario_site(sim, int(args.get("site-phase", "3")))
+	if str(args.get("scenario", "")) == "depot":
+		_scenario_depot(sim)
 	if args.has("layer"):
 		for i in int(args.layer):
 			session.city_view.parcel_layer.cycle()
@@ -173,6 +175,8 @@ func _process(_delta: float) -> void:
 				session.city_view.set_camera_world(Vector2((p.x + p.w * 0.5) * 32, (p.y + p.h * 0.5) * 32))
 			else:
 				session.follow({"kind": "worker", "id": f} if f.begins_with("W") else ({"kind": "person", "id": f} if f.begins_with("P") else {"kind": "avatar", "id": int(f)}))
+		if args.has("_select_depot"):
+			session.entity_view.selected = {"kind": "building", "id": session.sim.city_depot.building}
 		session.hud.show_tab(str(args.get("tab", "Aktivitäten")), int(args.get("econ", "0")))   # schliesst auch versehentlich geoeffnete Fenster
 		for i in 90:   # Kamera schwenken lassen
 			await get_tree().process_frame
@@ -216,6 +220,41 @@ func _scenario_site(sim: Simulation, phase: int) -> void:
 	var pc: Dictionary = sim.parcels.parcel(pid)
 	args["shot-tile"] = "%d,%d" % [int(pc.rect[0]) + int(pc.rect[2]) / 2 + 2, int(pc.rect[1]) + int(pc.rect[3]) / 2 - 2]
 	print("SZENARIO site: Phase %s, Fortschritt %.2f, Status %s" % [pr.get("phase"), pr.get("progress", 0.0), pr.get("status")])
+
+
+## Sichtpruefung des Zentrallagers: Lieferungen im Wareneingang, Ausgabe fuer ein Projekt, Lkw an der Rampe und in der Warteschlange; das Lager ist ausgewaehlt.
+func _scenario_depot(sim: Simulation) -> void:
+	var D: CityDepot = sim.city_depot
+	for item in ["kies", "schotter", "verkehrsschild", "kabel"]:
+		var qty := 120 if item != "kabel" else 400
+		sim.stock.add(item, qty, "P0", D.building, "Szenario", 0.0, "pruefung")
+		var o := D._new_order(item, qty, "Szenario")
+		o.status = "angeliefert"
+		o.arrived = GameCalendar.day_of(sim.game_min)
+		o["qty_received"] = qty
+		o.supplier = "T0"
+		D.orders[o.id] = o
+	var miss := D.reserve_for_project("P7", CityDepot.material_need(["strasse"], 1))
+	D.issues.append({"day": GameCalendar.day_of(sim.game_min), "item": "bordstein", "qty": 40, "to": "Baufirma", "mode": "ueberlassen", "ref": "P7"})
+	var vs: Array = sim.vehicles.values()
+	for i in mini(3, vs.size()):
+		var k := Contract.new()
+		k.id = "AS%d" % i
+		k.dropoff = D.building
+		k.pickup = sim.trader.bauhof
+		k.order_ref = "B999"
+		k.payer = "P0"
+		k.cargo = "baustoffe"
+		k.owner = vs[i].owner
+		k.status = "in_transit"
+		sim.contracts[k.id] = k
+		vs[i].stops = [{"contract_id": k.id, "art": "abladen", "ort": "ziel", "menge": 1}]
+		vs[i].state = "unloading" if i < 2 else "waiting_bay"
+		vs[i].timer = 9999.0
+	var b: Dictionary = sim.city.building(D.building)
+	args["shot-tile"] = "%d,%d" % [int(b.x) + int(b.w) / 2, int(b.y) + int(b.h) / 2]
+	args["_select_depot"] = true
+	print("SZENARIO depot: Lager %d, Rampen %d, Personal %d" % [D.building, D.ramps, D.roster().size()])
 
 
 func _autotest_finished(s: GameSession) -> void:
