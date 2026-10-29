@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3360,3 +3360,72 @@ func test_household_builder() -> void:
 	ok(identity_ok(s), "Geld nach Rückzahlung erhalten")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.banking.mortgages.size() == B.mortgages.size() and absf(float(s2.banking.mortgages[mort.id].outstanding) - float(mm.outstanding)) < 0.01, "Baukredit nach Laden")
+
+
+## Abnahme Auftrag 7 (Abschnitt 18), Schritte 1-12 ueber den Autopiloten der Haushalte; danach Mehrfamilienhaus mit Vermietung.
+func test_acceptance_flow() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	run(s, 60.0 * 2.0)
+	var C := s.construction
+	var P := s.parcels
+	for it in ["ziegel", "beton", "holz", "glas", "installation", "stahl", "verbindung", "rohmaterial"]:
+		s.stock.add(it, 1500, "T0", s.trader.bauhof, "Testbestand")
+	# nur Grundstuecke ohne volle Erschliessung bleiben frei, damit Schritt 6 (Erschliessung) stattfinden muss
+	for p in P.search({"zone": "wohnen", "limit": 2000}).filter(func(q): return q.state == "frei" and P.utility_level(q) == "voll"):
+		P.reserve(p.id, "HX")
+	var home := str(s.households.homes.keys()[3])
+	_fund_home(s, home, 15000.0)
+	s.households.homes[home].last_income = 3500.0
+	var m := 0
+	while not C.home_plans.has(home) and m < 24:
+		m += 1
+		C._household_month(m)
+	var pl: Dictionary = C.home_plans.get(home, {})
+	ok(not pl.is_empty(), "1+2: Haushalt sucht und reserviert/kauft ein Baugrundstück (nach %d Monaten)" % m)
+	var parcel: Dictionary = P.parcel(pl.parcel)
+	ok(parcel.owner == home and P.utility_level(parcel) != "voll", "Grundstück gehört dem Haushalt, Erschließung fehlt (%s)" % P.utility_level(parcel))
+	ok(float(pl.credit) > 0.0 and not s.banking.open_commitment(home).is_empty(), "3: Bank prüft und sagt Finanzierung zu (%s)" % Catalog.money(float(pl.credit)))
+	var app: Dictionary = s.permits.apps[pl.app]
+	ok(app.applicant == home and app.status in ["beantragt", "in_pruefung", "entschieden"], "4: Bauantrag gestellt")
+	var days := 0
+	while C.home_plans.has(home) and C.home_plans[home].stage == "antrag" and days < 60:
+		_build_days(s, 1)
+		days += 1
+	ok(app.status == "entschieden" and str(app.result).begins_with("genehmigt") and str(app.decision).length() > 10, "5: Verwaltung entscheidet begründet: %s" % str(app.decision).left(70))
+	var pr: Dictionary = C.projects.values().filter(func(p): return p.client == home)[0]
+	ok(pr.status == "erschliessung" and pr.offers.size() == 3 and pr.builder != "", "6+7: Angebote verglichen, Baufirma beauftragt, Erschließung vor dem Bau")
+	var seen_delivery := false
+	var seen_crew := false
+	var mort: Dictionary = s.banking.mortgage_of_project(pr.id)
+	var guard := 0
+	while pr.status not in ["uebergeben", "abgebrochen"] and guard < 300:
+		_build_days(s, 1)
+		guard += 1
+		seen_delivery = seen_delivery or not C.deliveries.is_empty()
+		seen_crew = seen_crew or C.crew_of(pr).get("people", 0) >= 3
+		if guard % 30 == 0:
+			ok(identity_ok(s), "Geld erhalten (Tag %d)" % guard)
+	ok(pr.status == "uebergeben", "11: Prüfung und Übergabe (%s)" % str(pr.blockers))
+	ok(P.utility_level(P.parcel(pr.parcel)) == "voll", "6: Erschließung hergestellt")
+	ok(seen_delivery and C.deliveries.values().all(func(l): return l.status == "geliefert"), "8: Material bestellt und geliefert")
+	ok(seen_crew, "9: Mannschaft und Geräte führen die Bauphasen aus")
+	ok(float(pr.paid) > 0.0 and float(s.banking.mortgages[mort.id].drawn) > 0.0, "10: Fortschritt und Zahlungen verbucht (bezahlt %s, davon Bank %s)" % [Catalog.money(float(pr.paid)), Catalog.money(float(s.banking.mortgages[mort.id].drawn))])
+	ok(int(s.households.homes[home].address) == int(pr.building) and C.units[pr.units[0]].tenant == home, "12: Haushalt zieht ein")
+	ok(identity_ok(s), "Geld nach dem Einzug erhalten")
+	# Danach: Mehrfamilienhaus mit mehreren Wohnungen und tatsaechlicher Vermietung (Bautraeger)
+	s.mayor.waiting = 12
+	var done := 0
+	for day in 400:
+		_build_days(s, 1)
+		if day % 30 == 0:
+			s.mayor.waiting = maxi(s.mayor.waiting, 12)
+			C.on_month(day / 30)
+		done = C.projects.values().filter(func(p): return p.client == Construction.DEVELOPER and p.status == "uebergeben").size()
+		if done >= 1 and day > 200:
+			break
+	var mfh: Array = C.projects.values().filter(func(p): return p.client == Construction.DEVELOPER and p.status == "uebergeben")
+	ok(not mfh.is_empty() and mfh[0].units.size() >= 3, "Mehrfamilienhaus mit mehreren Wohnungen übergeben")
+	var rented: int = C.units.values().filter(func(u): return u.owner == Construction.DEVELOPER and u.tenant != "").size()
+	ok(rented >= 1, "Wohnungen tatsächlich vermietet (%d)" % rented)
+	ok(identity_ok(s), "Geld nach Vermietung erhalten")

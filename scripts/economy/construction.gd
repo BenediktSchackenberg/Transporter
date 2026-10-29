@@ -679,9 +679,11 @@ func _has_house_project(hid: String) -> bool:
 
 func _plan_home(hid: String, h: Dictionary) -> Dictionary:
 	var P: Parcels = sim.parcels
-	var cands: Array = P.search({"zone": "wohnen", "min_area": 35, "limit": 60}).filter(func(p): return p.state == "frei" and p.owner == Parcels.CITY and P.utility_level(p) == "voll")
+	var cands: Array = P.search({"zone": "wohnen", "min_area": 35, "limit": 200}).filter(func(p): return p.state == "frei" and p.owner == Parcels.CITY and P.utility_level(p) != "keine")
+	cands.sort_custom(func(x, y): return (P.utility_level(x) == "voll") and (P.utility_level(y) != "voll"))   # voll erschlossene zuerst
+	cands = cands.slice(0, 40)
 	if cands.is_empty():
-		return {"ok": false, "msg": "sucht ein Baugrundstück, findet aber kein freies, erschlossenes Wohngrundstück."}
+		return {"ok": false, "msg": "sucht ein Baugrundstück, findet aber kein freies Wohngrundstück mit Straßenanschluss."}
 	var probe := {"def": HOME_DEF, "floors": 1, "parking": int(Planning.DEFS[HOME_DEF].parking), "financing": {"eigenmittel": 1.0e9}}
 	var why := ""
 	for p in cands:

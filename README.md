@@ -43,11 +43,11 @@ Kein Geld entsteht aus dem Nichts. Jede Zahlung bewegt Geld zwischen echten Kont
 |---|---|---|
 | 1 | Stadtleben: Wetter, Ereignisse, Kunden, isometrische Voxelgrafik, transparente KI | ✅ fertig |
 | 2 | Wirtschaftskreislauf: Konten, Banken, Rechtsformen, Insolvenz, Bauhof, Material, Ranglisten | ✅ weitgehend fertig (Spielerkredite fehlen) |
-| 3 | Kraftstoffpreise (real), Tankstellen, Haushalte, Löhne, Gebäudezustand | ⏳ geplant |
-| 4 | Öffentliche Hand: Steuern, Behörden, Geldschöpfung der Banken | ⏳ geplant |
+| 3 | Kraftstoffpreise (real), Tankstellen, Haushalte, Löhne, Gebäudezustand | ✅ fertig (Stadtviertel offen) |
+| 4 | Öffentliche Hand: Steuern, Behörden, Geldschöpfung der Banken | 🔧 Steuern, Ressorts, Prüfung, Bürger fertig; Geldschöpfung offen |
 | 5 | Versorgungsnetz: Stadtlager, Verkehr mit Kapazität, Restaurants, Läden, Müll und Mehrweg | ⏳ geplant |
 | 6 | Bewohner, Haushalte, Wohnungen, Mieten, private Kredite | ⏳ geplant |
-| 7 | Größere Karte, Baugrundstücke, Bauunternehmen, Bürgermeister-KI, Bauanträge | ⏳ geplant |
+| 7 | Größere Karte, Baugrundstücke, Bauunternehmen, Bürgermeister-KI, Bauanträge | ✅ fertig (siehe `docs/URBAN_DEVELOPMENT.md`) |
 
 Die Pläne stehen in [`docs/ECONOMY.md`](docs/ECONOMY.md) und [`STATUS.md`](STATUS.md).
 
