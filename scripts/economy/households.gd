@@ -148,6 +148,7 @@ func on_month(_month: int) -> void:
 			spent_total += pay
 		h.shortfall = maxf(0.0, need - pay)
 		h.deficit_months = int(h.deficit_months) + 1 if float(h.shortfall) > 0.0 else 0
+		h.last_income = float(h.income)
 		h.income = 0.0
 		for w in members:
 			_update_motivation(w, h)

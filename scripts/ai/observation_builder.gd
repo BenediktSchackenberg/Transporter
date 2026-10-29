@@ -348,7 +348,10 @@ static func _bauhof(sim: Simulation, cid: int) -> Dictionary:
 	var own: Array = []
 	for l in sim.stock.of_owner("C%d" % cid):
 		own.append({"material": l.item, "menge": l.qty, "ort": sim.city.building(int(l.loc)).name})
-	return {"standort": sim.city.building(sim.trader.bauhof).name, "preise": prices, "dein_material": own}
+	var jobs: Array = []
+	for d in sim.construction.open_deliveries().slice(0, 6):
+		jobs.append({"id": d.id, "baustelle": d.project, "material": d.need, "frachtlohn": d.freight, "warenwert": d.value})
+	return {"standort": sim.city.building(sim.trader.bauhof).name, "preise": prices, "dein_material": own, "lieferauftraege": jobs}
 
 
 static func _weather(sim: Simulation) -> Dictionary:

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3206,7 +3206,8 @@ func test_construction() -> void:
 	s.stock.add("holz", 300, "T0", s.trader.bauhof, "Testbestand")
 	s.economy.transfer("X0", "K0", 20000.0)
 	var cash0: float = s.companies[0].ledger.cash
-	var take := C.take_delivery(open_d[0].id, 0)
+	ok(ObservationBuilder._bauhof(s, 0).lieferauftraege.size() >= 1, "KI sieht offene Lieferaufträge in der Beobachtung")
+	var take := s.executor.execute(0, {"action": "bau_lieferung", "lieferung_id": open_d[0].id})
 	ok(take.ok and s.companies[0].ledger.cash > cash0, "Spieler übernimmt Lieferung und erhält Frachtlohn: " + str(take.msg))
 	ok(identity_ok(s), "Geld nach Lieferung erhalten")
 	C.fail_builder("BF3")
@@ -3291,3 +3292,51 @@ func test_developer_autopilot() -> void:
 	var rented: int = C.units.values().filter(func(u): return u.owner == Construction.DEVELOPER and u.tenant != "").size()
 	ok(rented > 0, "Wohnungen des Bauträgers vermietet (%d)" % rented)
 	ok(identity_ok(s), "Geld erhalten (Bauträger)")
+
+
+func test_household_builder() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	run(s, 60.0 * 2.0)
+	var C := s.construction
+	var B := s.banking
+	for it in ["ziegel", "beton", "holz", "glas", "installation", "stahl", "verbindung", "rohmaterial"]:
+		s.stock.add(it, 900, "T0", s.trader.bauhof, "Testbestand")
+	var ids: Array = s.households.homes.keys()
+	var poor: String = ids[0]
+	var rich: String = ids[1]
+	# ohne Einkommen und Eigenmittel sagt die Bank nicht zu
+	var q0 := B.mortgage_quote(poor, 30000.0, 32000.0)
+	ok(not q0.ok and "Eigenmittel" in q0.msg, "Bank lehnt ab ohne Eigenmittel: " + str(q0.msg).left(70))
+	_fund_home(s, poor, 6000.0)
+	var q1 := B.mortgage_quote(poor, 26000.0, 32000.0)
+	ok(not q1.ok and "Monatseinkommen" in q1.msg, "Bank lehnt ab ohne Einkommen: " + str(q1.msg).left(70))
+	# Haushalt mit Einkommen und Ersparnissen: Grundstueck, Bankzusage, Antrag, Bau, Einzug
+	_fund_home(s, rich, 12000.0)
+	s.households.homes[rich].last_income = 3000.0
+	var bank_cash0: float = B.bank_cash(1)
+	var r := C._plan_home(rich, s.households.homes[rich])
+	ok(r.ok, "Haushalt plant Hausbau: " + str(r.msg))
+	var pl: Dictionary = C.home_plans.get(rich, {})
+	ok(not pl.is_empty() and float(pl.credit) > 0.0, "Baukredit nötig (%s)" % Catalog.money(float(pl.get("credit", 0.0))))
+	ok(s.parcels.parcel(pl.parcel).owner == rich, "Haushalt kauft das Grundstück")
+	var mort := B.open_commitment(rich)
+	ok(not mort.is_empty() and float(mort.drawn) == 0.0 and B.bank_cash(1) == bank_cash0, "Zusage ohne Auszahlung")
+	var days := 0
+	while C.home_plans.has(rich) and days < 300:
+		_build_days(s, 1)
+		days += 1
+		if days % 25 == 0:
+			ok(identity_ok(s), "Geld erhalten (Tag %d)" % days)
+	var pr: Dictionary = C.projects.values().filter(func(p): return p.client == rich)[0]
+	ok(pr.status == "uebergeben", "Haus übergeben (%s)" % str(pr.blockers))
+	var mm: Dictionary = B.mortgages[mort.id]
+	ok(mm.status == "laufend" and absf(float(mm.drawn) - float(mm.committed)) < 1.0 and float(mm.drawn) > 0.0, "Bank zahlte je Bauabschnitt (%s)" % Catalog.money(float(mm.drawn)))
+	ok(B.bank_cash(1) < bank_cash0 and B.loans_of_bank(1) >= float(mm.outstanding), "Kredit steht in der Bankbilanz")
+	ok(int(s.households.homes[rich].address) == int(pr.building), "Haushalt zieht ein")
+	var out0: float = mm.outstanding
+	B.on_month(5)
+	ok(float(mm.outstanding) < out0, "Rate tilgt den Kredit")
+	ok(identity_ok(s), "Geld nach Rückzahlung erhalten")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.banking.mortgages.size() == B.mortgages.size() and absf(float(s2.banking.mortgages[mort.id].outstanding) - float(mm.outstanding)) < 0.01, "Baukredit nach Laden")

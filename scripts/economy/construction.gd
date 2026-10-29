@@ -34,6 +34,10 @@ const FREIGHT_RATE := 0.04            # Frachtlohn: Anteil am Materialwert der L
 const STORAGE_PHASES := 1             # Material hoechstens fuer die naechste Phase vorab liefern
 const RENT_PER_UNIT_MONTH := 700.0
 const DEVELOPER := "D0"
+const HOME_DEF := "einfamilienhaus"
+const HOME_RESERVE := 300.0           # so viel Bargeld behaelt ein bauender Haushalt
+const MAX_HOME_PLANS := 3             # gleichzeitig bauende Haushalte
+const HOME_DESIRE := 4                # jeder vierte Monat ein Haushalt mit Bauwunsch (je nach Haushalt)
 
 var sim
 var builders := {}                    # id -> {name, price, days, quality, reliability, capacity, status, history}
@@ -43,6 +47,8 @@ var units := {}                       # "W<n>" -> Wohneinheit
 var public := {}                      # Mayor-Projekt-ID -> Ausfuehrung {builder, price, days_left, ...}
 var reserved_co := {}                 # Unternehmen-ID -> fuer Bauvertraege zurueckgelegt
 var reserved_dev := 0.0               # beim Bautraeger fuer Vertraege zurueckgelegt
+var home_plans := {}                  # Haushalt -> {stage, parcel, app, project, credit, day}: Grundstueck -> Bank -> Antrag -> Bau
+var home_notes: Array = []            # letzte Entscheidungen (Ablehnung der Bank usw.) fuer die Oberflaeche
 var _next := 1
 var _next_delivery := 1
 var _next_unit := 1
@@ -109,7 +115,7 @@ func best_offer(offers: Array, base: float) -> Dictionary:
 # ------------------------------------------------------------------ Vorhaben (private Bauherren, Bautraeger, Stadt)
 func available_funds(client: String) -> float:
 	if client.begins_with("H"):
-		return float(sim.households.homes.get(client, {}).get("balance", 0.0))
+		return float(sim.households.homes.get(client, {}).get("balance", 0.0)) + float(sim.banking.open_commitment(client).get("committed", 0.0))
 	if client == DEVELOPER:
 		return float(sim.economy.accounts[DEVELOPER]) - reserved_dev
 	if client.begins_with("C"):
@@ -158,8 +164,17 @@ func accept(project_id: String, builder_id: String) -> Dictionary:
 	var need := float(offer.price) + float(pr.dev_cost) + Planning.TEMP_ACCESS_COST * (1.0 if not pr.missing.is_empty() else 0.0)
 	if available_funds(pr.client) + 0.5 < need:
 		return {"ok": false, "msg": "Mittel von %s reichen nicht: %s verfügbar, %s nötig (Finanzierung gesichert?)." % [pr.client, Catalog.money(available_funds(pr.client)), Catalog.money(need)]}
-	_reserve(pr.client, need)
-	pr.reserved = need
+	var credit := 0.0
+	if str(pr.client).begins_with("H"):
+		var m: Dictionary = sim.banking.open_commitment(pr.client)
+		if not m.is_empty():
+			credit = minf(float(m.committed), need)
+			m.project = pr.id
+			m.committed = credit
+	pr.credit_total = credit
+	pr.need_total = need
+	_reserve(pr.client, need - credit)
+	pr.reserved = need - credit
 	pr.builder = builder_id
 	pr.price = float(offer.price)
 	pr.plan_days = int(offer.days)
@@ -191,6 +206,9 @@ func cancel(project_id: String, reason: String) -> Dictionary:
 		return {"ok": false, "msg": "Bauvorhaben %s lässt sich nicht abbrechen." % project_id}
 	_release(pr.client, float(pr.reserved))
 	pr.reserved = 0.0
+	var mc: Dictionary = sim.banking.mortgage_of_project(pr.id)
+	if not mc.is_empty():
+		sim.banking.mortgage_close_commitment(mc.id)
 	pr.status = "abgebrochen"
 	_log(pr, "Abgebrochen: " + reason)
 	sim.parcels.mark(pr.parcel, "genehmigt" if int(pr.phase) == 0 else sim.parcels.parcel(pr.parcel).state, pr.app)
@@ -294,6 +312,7 @@ func on_day(day: int) -> void:
 		if d.status == "offen" and day - int(d.day) >= DELIVERY_FALLBACK_DAYS:
 			_deliver(d, false)     # Bauhof liefert selbst
 	_public_day(day)
+	_household_day()
 
 
 func _day_site(pr: Dictionary, day: int) -> void:
@@ -480,6 +499,7 @@ func on_month(_month: int) -> void:
 		if u.tenant != "" and float(u.rent) > 0.0:
 			_collect_rent(u)
 	_developer_month()
+	_household_month(_month)
 
 
 func _collect_rent(u: Dictionary) -> void:
@@ -530,6 +550,125 @@ func _developer_month() -> void:
 		sim.permits.apps[dr.id].financing = {"eigenmittel": float(chk.costs.gesamt)}
 		sim.permits.submit(dr.id)
 		return
+
+
+# ------------------------------------------------------------------ Haushalte als Bauherren (Abnahme Schritte 1-4, 7, 12)
+func _home_note(hid: String, text: String) -> void:
+	home_notes.append({"day": _today(), "home": hid, "text": text})
+	if home_notes.size() > 30:
+		home_notes.pop_front()
+	sim.log_event("Haushalt %s: %s" % [hid, text], "info")
+
+
+## Ein Haushalt mit Einkommen und Ersparnissen sucht ein Baugrundstueck, kauft es, laesst die Bank die Finanzierung pruefen und stellt den Antrag.
+func _household_month(month: int) -> void:
+	if home_plans.size() >= MAX_HOME_PLANS:
+		return
+	var ids: Array = sim.households.homes.keys()
+	ids.sort()
+	if ids.is_empty():
+		return
+	var told := false
+	for k in ids.size():
+		var hid: String = ids[(k + month) % ids.size()]
+		var h: Dictionary = sim.households.homes[hid]
+		if home_plans.has(hid) or float(h.get("last_income", 0.0)) <= 0.0 or float(h.balance) < 1500.0 or (hash(hid) + month) % HOME_DESIRE != 0:
+			continue
+		if _has_house_project(hid):
+			continue
+		var r := _plan_home(hid, h)
+		if not r.ok and not told:
+			_home_note(hid, str(r.msg))
+			told = true
+		if r.ok:
+			return
+
+
+func _has_house_project(hid: String) -> bool:
+	for pr in projects.values():
+		if pr.client == hid and pr.status not in ["abgebrochen"] and pr.def in ["einfamilienhaus", "doppelhaus"]:
+			return true
+	return false
+
+
+func _plan_home(hid: String, h: Dictionary) -> Dictionary:
+	var P: Parcels = sim.parcels
+	var cands: Array = P.search({"zone": "wohnen", "min_area": 35, "limit": 60}).filter(func(p): return p.state == "frei" and p.owner == Parcels.CITY and P.utility_level(p) == "voll")
+	if cands.is_empty():
+		return {"ok": false, "msg": "sucht ein Baugrundstück, findet aber kein freies, erschlossenes Wohngrundstück."}
+	var probe := {"def": HOME_DEF, "floors": 1, "parking": int(Planning.DEFS[HOME_DEF].parking), "financing": {"eigenmittel": 1.0e9}}
+	var why := ""
+	for p in cands:
+		var chk := Planning.assess(p, probe)
+		if not chk.ok or not chk.questions.is_empty():
+			continue
+		var total := float(p.price) + float(chk.costs.gesamt)
+		var credit := maxf(0.0, total - float(h.balance) + HOME_RESERVE)
+		var q := {"ok": true, "amount": 0.0}
+		if credit > 0.0:
+			q = sim.banking.mortgage_quote(hid, credit, total)
+		if not q.ok:
+			why = str(q.msg)
+			continue
+		var res: Dictionary = P.reserve(p.id, hid)
+		if not res.ok:
+			continue
+		var bought: Dictionary = P.buy_for_household(p.id, hid)
+		if not bought.ok:
+			P.release(p.id, hid)
+			continue
+		var m := {}
+		if credit > 0.0:
+			m = sim.banking.mortgage_commit(hid, q)
+		var fin := {"eigenmittel": float(chk.costs.gesamt) - credit}
+		if credit > 0.0:
+			fin["kredit"] = credit
+			fin["kredit_gesichert"] = true
+		var dr: Dictionary = sim.permits.draft(hid, p.id, {"def": HOME_DEF, "floors": 1, "parking": int(probe.parking), "financing": fin})
+		if not dr.ok:
+			if not m.is_empty():
+				sim.banking.mortgage_close_commitment(m.id)
+			return {"ok": false, "msg": str(dr.msg)}
+		sim.permits.submit(dr.id)
+		home_plans[hid] = {"stage": "antrag", "parcel": p.id, "app": dr.id, "project": "", "credit": credit, "day": _today()}
+		_home_note(hid, "kauft %s (%s), %s, stellt Bauantrag %s." % [p.id, Catalog.money(float(p.price)),
+			("Bank: " + str(q.msg)) if credit > 0.0 else "Finanzierung aus Eigenmitteln", dr.id])
+		return {"ok": true, "msg": ""}
+	return {"ok": false, "msg": why if why != "" else "findet kein geeignetes Grundstück."}
+
+
+func _household_day() -> void:
+	for hid in home_plans.keys():
+		var pl: Dictionary = home_plans[hid]
+		if pl.stage == "antrag":
+			var a: Dictionary = sim.permits.apps.get(pl.app, {})
+			if a.is_empty() or a.status != "entschieden":
+				continue
+			if not str(a.result).begins_with("genehmigt"):
+				_home_note(hid, "Bauantrag %s nicht genehmigt (%s)." % [a.id, a.result])
+				var mc: Dictionary = sim.banking.open_commitment(hid)
+				if not mc.is_empty():
+					sim.banking.mortgage_close_commitment(mc.id)
+				home_plans.erase(hid)
+				continue
+			var r := start_project(a.id)
+			if not r.ok:
+				continue
+			var acc := accept_best(r.id)
+			if not acc.ok:
+				cancel(r.id, "Haushalt kann den Bau nicht bezahlen")
+				_home_note(hid, "kann den Bau nicht bezahlen: " + str(acc.msg))
+				home_plans.erase(hid)
+				continue
+			pl.stage = "bau"
+			pl.project = r.id
+			_home_note(hid, "beauftragt %s (Vertrag %s)." % [builders[projects[r.id].builder].name, r.id])
+		elif pl.stage == "bau":
+			var pr: Dictionary = projects.get(pl.project, {})
+			if pr.is_empty() or pr.status in ["uebergeben", "abgebrochen"]:
+				if pr.get("status", "") == "uebergeben":
+					_home_note(hid, "zieht in das neue Haus ein (Gebäude %d)." % int(pr.building))
+				home_plans.erase(hid)
 
 
 # ------------------------------------------------------------------ Oeffentliche Erschliessung (Buergermeister-Projekte)
@@ -638,10 +777,18 @@ func _release(client: String, amount: float) -> void:
 func _pay(pr: Dictionary, amount: float, _note: String) -> bool:
 	if amount <= 0.0:
 		return true
-	if float(pr.reserved) + 0.5 < amount:
+	# Baukredit: die Bank zahlt ihren Anteil je Bauabschnitt direkt an die Baufirma
+	var draw := 0.0
+	var mort: Dictionary = sim.banking.mortgage_of_project(pr.id) if float(pr.get("credit_total", 0.0)) > 0.0 else {}
+	if not mort.is_empty():
+		draw = minf(amount * float(pr.credit_total) / maxf(float(pr.need_total), 1.0), float(mort.committed) - float(mort.drawn))
+	if float(pr.reserved) + 0.5 < amount - draw:
 		return false
+	if draw > 0.0:
+		draw = sim.banking.mortgage_draw(mort.id, draw)
+		amount -= draw
 	pr.reserved = float(pr.reserved) - amount
-	pr.paid = float(pr.paid) + amount
+	pr.paid = float(pr.paid) + amount + draw
 	if str(pr.client).begins_with("C"):
 		# Unternehmen: Bauaufwand zulasten der Firmenkasse (Gegenkonto S0), von dort an die Baufirmen
 		var c: Company = sim.company(int(str(pr.client).substr(1)))
@@ -660,6 +807,9 @@ func _pay(pr: Dictionary, amount: float, _note: String) -> bool:
 func _release_reserve_rest(pr: Dictionary) -> void:
 	_release(pr.client, float(pr.reserved))
 	pr.reserved = 0.0
+	var mc: Dictionary = sim.banking.mortgage_of_project(pr.id)
+	if not mc.is_empty():
+		sim.banking.mortgage_close_commitment(mc.id)
 
 
 # ------------------------------------------------------------------ Abfragen
@@ -711,7 +861,7 @@ func _log(pr: Dictionary, text: String) -> void:
 
 func to_dict() -> Dictionary:
 	return {"builders": builders, "projects": projects, "deliveries": deliveries, "units": units, "public": public, "reserved_dev": reserved_dev, "reserved_co": reserved_co,
-		"next": [_next, _next_delivery, _next_unit]}
+		"next": [_next, _next_delivery, _next_unit], "home_plans": home_plans, "home_notes": home_notes}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -726,6 +876,12 @@ func from_dict(d: Dictionary) -> void:
 	reserved_co = d.get("reserved_co", {})
 	for k in reserved_co:
 		reserved_co[k] = float(reserved_co[k])
+	home_plans = d.get("home_plans", {})
+	home_notes = d.get("home_notes", [])
+	for hid in home_plans:
+		home_plans[hid].day = int(home_plans[hid].day)
+	for n in home_notes:
+		n.day = int(n.day)
 	var nx: Array = d.get("next", [1, 1, 1])
 	_next = int(nx[0])
 	_next_delivery = int(nx[1])

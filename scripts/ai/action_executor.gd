@@ -64,6 +64,8 @@ const SCHEMA := {
 		"desc": "Bei einer Insolvenzauktion (obs.auktionen) bieten; mindestens 5 % über dem Höchstgebot. Zahlung erst beim Zuschlag."},
 	"buy_material": {"params": {"item": "string", "menge": "number", "lieferung": "string?", "depot_id": "int?"},
 		"desc": "Material beim Bauhof kaufen (obs.bauhof.preise). lieferung=abholen (Transportauftrag Bauhof→Depot, Eigentum sofort bei dir) oder liefern (frei Depot gegen Gebühr). Eigenbau nutzt eigenes Material zuerst."},
+	"bau_lieferung": {"params": {"lieferung_id": "string"},
+		"desc": "Offenen Baustoff-Lieferauftrag (obs.bauhof.lieferauftraege) für eine Baustelle übernehmen: Ware vom Bauhof, Frachtlohn bei Ausführung."},
 	"sell_material": {"params": {"item": "string", "menge": "number", "depot_id": "int?"}, "desc": "Eigenes Material (z. B. Altmaterial vom Rückbau) an den Bauhof verkaufen."},
 	"change_company_form": {"params": {"form": "string"}, "desc": "Rechtsform wechseln: einzel, ug oder gmbh (ab 3 Monaten, Mindest-Eigenkapital, Kosten, 15 Spieltage)."},
 	"deposit_money": {"params": {"amount": "number", "art": "string", "monate": "number?", "bank": "string?"},
@@ -501,6 +503,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.banking.early_repay(lid, amount, cid)
 		"bid_auction":
 			return sim.insolvency.bid(cid, _s(a.auction_id), _f(a.amount))
+		"bau_lieferung":
+			return sim.construction.take_delivery(_s(a.lieferung_id), cid)
 		"buy_material":
 			var item := _s(a.item)
 			var site: int = _i(a.depot_id) if a.get("depot_id") != null else int(c.depots[0])

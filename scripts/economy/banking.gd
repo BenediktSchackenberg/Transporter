@@ -13,6 +13,11 @@ const EARLY_FEE := 0.01          # Vorfaelligkeitsentschaedigung
 const DEFAULT_AFTER := 3         # offene Raten bis zum Ausfall
 const FORECLOSE_VALUE := 0.7     # Verwertungserloes der Sicherheit (Anteil Buchwert)
 const START_REF := 0.035
+const MORTGAGE_BANK := 1         # Investitionsbank
+const MORTGAGE_EQUITY := 0.15    # Eigenmittel mindestens 15 % der Gesamtkosten
+const MORTGAGE_BURDEN := 0.40    # Rate hoechstens 40 % des letzten Monatseinkommens
+const MORTGAGE_MONTHS := 120
+const MORTGAGE_SPREAD := 0.025   # Aufschlag auf den Referenzzins (Privatkunden)
 const BANKS := [
 	{"id": "B1", "name": "Geschäftsbank", "margin": 0.020, "min_m": 1, "max_m": 12, "cover": 0.5, "free_limit": 15000.0, "cash": 400000.0,
 		"focus": "Betriebsmittel, kurzfristig; kleine Beträge auch ohne Sicherheit"},
@@ -28,6 +33,8 @@ var loans := {}          # Kredit-ID -> Dictionary
 var deposits := {}       # Einlagen-ID -> Dictionary
 var losses := {"B1": 0.0, "B2": 0.0, "B3": 0.0}   # Kreditverluste je Bank
 var defaults_recent := 0
+var mortgages := {}      # "M<n>" -> Baukredit eines Haushalts {bank, home, committed, drawn, outstanding, rate, months, project, status, arrears}
+var _next_mort := 1
 var _next_loan := 1
 var _next_dep := 1
 
@@ -55,6 +62,9 @@ func loans_of_bank(i: int) -> float:
 	for l in loans.values():
 		if l.bank == i and l.status != "getilgt":
 			t += float(l.outstanding)
+	for m in mortgages.values():
+		if m.bank == i and m.status in ["zugesagt", "laufend", "rueckstand"]:
+			t += float(m.outstanding)
 	return t
 
 
@@ -364,6 +374,7 @@ func on_day(_day: int) -> void:
 
 
 func on_month(month: int) -> void:
+	_collect_mortgages()
 	for id in loans.keys():
 		var l: Dictionary = loans[id]
 		if l.status in ["laufend", "rueckstand"]:
@@ -481,12 +492,18 @@ func summary_of(cid: int) -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"ref_rate": ref_rate, "loans": loans, "deposits": deposits, "losses": losses, "defaults_recent": defaults_recent,
+	return {"mortgages": mortgages, "next_mort": _next_mort, "ref_rate": ref_rate, "loans": loans, "deposits": deposits, "losses": losses, "defaults_recent": defaults_recent,
 		"next_loan": _next_loan, "next_dep": _next_dep}
 
 
 func from_dict(d: Dictionary) -> void:
 	ref_rate = float(d.get("ref_rate", START_REF))
+	mortgages = d.get("mortgages", {})
+	for id in mortgages:
+		mortgages[id].bank = int(mortgages[id].bank)
+		mortgages[id].months = int(mortgages[id].months)
+		mortgages[id].arrears = int(mortgages[id].arrears)
+	_next_mort = int(d.get("next_mort", 1))
 	loans = {}
 	for id in d.get("loans", {}):
 		var l: Dictionary = d.loans[id]
@@ -507,3 +524,111 @@ func from_dict(d: Dictionary) -> void:
 	defaults_recent = int(d.get("defaults_recent", 0))
 	_next_loan = int(d.get("next_loan", 1))
 	_next_dep = int(d.get("next_dep", 1))
+
+
+# ------------------------------------------------------------------ Baukredit fuer Haushalte (Auftrag 7, Abschnitt 11)
+## Die Bank prueft Eigenmittel, Einkommen (Rate <= 40 %) und die eigene Liquiditaet. Zusage != Auszahlung: Das Geld fliesst erst
+## je abgeschlossener Bauphase direkt an die Baufirma (`mortgage_draw`).
+func mortgage_quote(home_id: String, credit: float, total: float) -> Dictionary:
+	var h: Dictionary = sim.households.homes.get(home_id, {})
+	var q := {"ok": false, "bank": MORTGAGE_BANK, "amount": credit, "msg": ""}
+	var B: Dictionary = BANKS[MORTGAGE_BANK]
+	if h.is_empty():
+		q.msg = "Haushalt %s unbekannt." % home_id
+		return q
+	var own := total - credit
+	if own < MORTGAGE_EQUITY * total:
+		q.msg = "%s lehnt ab: Eigenmittel %s sind weniger als %d %% der Gesamtkosten %s." % [B.name, Catalog.money(own), int(MORTGAGE_EQUITY * 100.0), Catalog.money(total)]
+		return q
+	q.rate = ref_rate + float(B.margin) + MORTGAGE_SPREAD
+	q.months = MORTGAGE_MONTHS
+	q.monthly = _annuity(credit, float(q.rate), MORTGAGE_MONTHS)
+	var income := float(h.get("last_income", 0.0))
+	if float(q.monthly) > MORTGAGE_BURDEN * income:
+		q.msg = "%s lehnt ab: Rate %s übersteigt %d %% des Monatseinkommens %s." % [B.name, Catalog.money(float(q.monthly)), int(MORTGAGE_BURDEN * 100.0), Catalog.money(income)]
+		return q
+	if credit > SINGLE_LIMIT * maxf(equity(MORTGAGE_BANK), 0.0) or credit > available(MORTGAGE_BANK):
+		q.msg = "%s lehnt ab: Kreditsumme %s übersteigt die eigenen Grenzen der Bank." % [B.name, Catalog.money(credit)]
+		return q
+	q.ok = true
+	q.msg = "%s sagt %s zu (%.2f %% p. a., %d Monate, Rate %s)." % [B.name, Catalog.money(credit), float(q.rate) * 100.0, MORTGAGE_MONTHS, Catalog.money(float(q.monthly))]
+	return q
+
+
+func mortgage_commit(home_id: String, q: Dictionary) -> Dictionary:
+	var m := {"id": "M%d" % _next_mort, "bank": int(q.bank), "home": home_id, "committed": float(q.amount), "drawn": 0.0, "outstanding": 0.0,
+		"rate": float(q.rate), "months": int(q.months), "project": "", "status": "zugesagt", "arrears": 0}
+	_next_mort += 1
+	mortgages[m.id] = m
+	return m
+
+
+## Noch nicht an ein Bauvorhaben gebundene Zusage eines Haushalts.
+func open_commitment(home_id: String) -> Dictionary:
+	for m in mortgages.values():
+		if m.home == home_id and m.status == "zugesagt" and m.project == "":
+			return m
+	return {}
+
+
+func mortgage_of_project(project_id: String) -> Dictionary:
+	for m in mortgages.values():
+		if m.project == project_id and m.status in ["zugesagt", "laufend", "rueckstand"]:
+			return m
+	return {}
+
+
+## Direkt an die Baufirma (K0) gezahlter Anteil; erhoeht die Schuld des Haushalts.
+func mortgage_draw(mid: String, amount: float) -> float:
+	var m: Dictionary = mortgages[mid]
+	var x := minf(amount, float(m.committed) - float(m.drawn))
+	if x <= 0.0:
+		return 0.0
+	sim.economy.transfer(BANKS[m.bank].id, "K0", x)
+	m.drawn = float(m.drawn) + x
+	m.outstanding = float(m.outstanding) + x
+	if m.status == "zugesagt":
+		m.status = "laufend"
+	return x
+
+
+## Nicht abgerufener Rest einer Zusage verfaellt (Bau abgebrochen oder uebergeben).
+func mortgage_close_commitment(mid: String) -> void:
+	var m: Dictionary = mortgages.get(mid, {})
+	if m.is_empty():
+		return
+	m.committed = m.drawn
+	if float(m.outstanding) <= 0.0:
+		m.status = "verfallen"
+
+
+func _annuity(amount: float, rate: float, months: int) -> float:
+	var r := rate / 12.0
+	return amount * r / (1.0 - pow(1.0 + r, -float(months))) if r > 0.0 else amount / float(months)
+
+
+func _collect_mortgages() -> void:
+	for m in mortgages.values():
+		if m.status not in ["laufend", "rueckstand"] or float(m.outstanding) <= 0.0:
+			continue
+		var h: Dictionary = sim.households.homes.get(m.home, {})
+		var interest := float(m.outstanding) * float(m.rate) / 12.0
+		var pay := minf(_annuity(float(m.outstanding), float(m.rate), int(m.months)), float(m.outstanding) + interest)
+		if h.is_empty() or float(h.balance) < pay:
+			m.arrears = int(m.arrears) + 1
+			m.status = "rueckstand"
+			if int(m.arrears) >= DEFAULT_AFTER:
+				losses[BANKS[m.bank].id] = float(losses[BANKS[m.bank].id]) + float(m.outstanding)
+				defaults_recent += 1
+				m.status = "ausgefallen"
+				m.outstanding = 0.0
+			continue
+		h.balance = float(h.balance) - pay
+		sim.economy.transfer("H0", BANKS[m.bank].id, pay)
+		m.outstanding = float(m.outstanding) - (pay - interest)
+		m.months = maxi(1, int(m.months) - 1)
+		m.arrears = 0
+		m.status = "laufend"
+		if float(m.outstanding) < 0.5:
+			m.outstanding = 0.0
+			m.status = "getilgt"
