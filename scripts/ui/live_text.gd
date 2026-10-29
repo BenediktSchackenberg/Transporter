@@ -550,6 +550,12 @@ static func site(sim: Simulation, pr: Dictionary) -> String:
 	txt += "Preis %s · bezahlt %s · zurückgelegt %s · Phase: %s · Fortschritt %.0f %% · Fertigstellung ca. Tag %d
 " % [Catalog.money(float(pr.price)), Catalog.money(float(pr.paid)),
 		Catalog.money(float(pr.reserved)), C.phase_label(pr), C.progress_of(pr) * 100.0, C.forecast_day(pr)]
+	var crew := C.crew_of(pr)
+	if not crew.is_empty():
+		var gear: Array = crew.gear.map(func(g): return Construction.GEAR_NAMES[g])
+		txt += "Mannschaft (%s): 1 Vorarbeiter, %d Bauarbeiter, %d Maschinenführer%s · %s
+" % [crew.role, int(crew.workers), int(crew.operators),
+			(" · Geräte: " + ", ".join(gear)) if not gear.is_empty() else "", "arbeitet" if crew.working else "steht still (Blockade)"]
 	var m: Dictionary = pr.mats.get(Construction.PHASES[mini(int(pr.phase), Construction.PHASES.size() - 1)].id, {})
 	if not m.is_empty():
 		txt += "Material dieser Phase: benötigt %s · geliefert %s

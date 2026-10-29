@@ -26,6 +26,25 @@ const PHASES := [
 	{"id": "aussenanlagen", "label": "Außenanlagen (Wege, Zufahrt, Grün)", "days": 0.06, "pay": 0.06, "mat": 0.10, "items": {"beton": 1, "rohmaterial": 2}, "wx": true},
 	{"id": "uebergabe", "label": "Prüfung und Übergabe", "days": 0.04, "pay": 0.08, "mat": 0.0, "items": {}, "wx": false},
 ]
+## Besetzung je Phase fuer ein Haus mit einer Einheit und einem Geschoss: Bauarbeiter (inkl. Fachkraefte), Maschinenfuehrer, Geraete
+const CREW := {
+	"vorbereitung": {"work": 2, "ops": 0, "gear": [], "role": "Vermessung und Absperrung"},
+	"erdarbeiten": {"work": 2, "ops": 1, "gear": ["bagger", "lkw"], "role": "Erdarbeiten"},
+	"fundament": {"work": 3, "ops": 1, "gear": ["betonmischer"], "role": "Fundament"},
+	"rohbau": {"work": 4, "ops": 1, "gear": ["kran"], "role": "Rohbau"},
+	"dach": {"work": 3, "ops": 1, "gear": ["kran"], "role": "Dachdecker"},
+	"huelle": {"work": 3, "ops": 0, "gear": [], "role": "Fenster- und Fassadenbau"},
+	"installation": {"work": 2, "ops": 0, "gear": [], "role": "Installation"},
+	"innenausbau": {"work": 3, "ops": 0, "gear": [], "role": "Innenausbau"},
+	"aussenanlagen": {"work": 2, "ops": 1, "gear": ["bagger"], "role": "Außenanlagen"},
+	"uebergabe": {"work": 1, "ops": 0, "gear": [], "role": "Prüfung"},
+}
+const GEAR_NAMES := {"bagger": "Bagger", "lkw": "Kipper", "betonmischer": "Betonmischer", "kran": "Kran"}
+## Auftraege beim Einzug (Abschnitt 14): ein Transportunternehmen kann sie annehmen, sonst erledigt nach 3 Tagen eine Spedition (K0).
+const MOVE_JOBS := {"umzug": {"label": "Umzug (Möbeltransport)", "fee": 320.0}, "moebel": {"label": "Möbellieferung (Küche, Betten)", "fee": 260.0}}
+const CONNECTION_FEE := 90.0         # Anmeldung von Strom, Wasser und Internet bei den Stadtwerken (an P0)
+const JOB_FALLBACK_DAYS := 3
+const ACTIVE_STATES := ["erschliessung", "im_bau", "pruefung", "wartet_anschluss"]
 const MATERIAL_SHARE := 0.30          # Anteil der Baukosten, der auf Material entfaellt
 const ADVANCE := 0.0                  # keine Anzahlung: Abschlaege nur nach abgeschlossenen Phasen
 const OFFER_VALID_DAYS := 10
@@ -44,6 +63,7 @@ var builders := {}                    # id -> {name, price, days, quality, relia
 var projects := {}                    # "BP<n>" -> Bauvorhaben
 var deliveries := {}                  # "L<n>" -> Lieferauftrag
 var units := {}                       # "W<n>" -> Wohneinheit
+var jobs := {}                        # "S<n>" -> Einzugsauftrag {kind, unit, payer, fee, status, carrier, day}
 var public := {}                      # Mayor-Projekt-ID -> Ausfuehrung {builder, price, days_left, ...}
 var reserved_co := {}                 # Unternehmen-ID -> fuer Bauvertraege zurueckgelegt
 var reserved_dev := 0.0               # beim Bautraeger fuer Vertraege zurueckgelegt
@@ -52,6 +72,7 @@ var home_notes: Array = []            # letzte Entscheidungen (Ablehnung der Ban
 var _next := 1
 var _next_delivery := 1
 var _next_unit := 1
+var _next_job := 1
 
 
 func setup(simulation) -> void:
@@ -256,6 +277,8 @@ func open_deliveries() -> Array:
 
 ## Ein Spieler uebernimmt einen Lieferauftrag, liefert (Ware wird beim Bauhof entnommen) und erhaelt den Frachtlohn.
 func take_delivery(delivery_id: String, company_id: int) -> Dictionary:
+	if jobs.has(delivery_id):
+		return take_job(delivery_id, company_id)
 	var d: Dictionary = deliveries.get(delivery_id, {})
 	if d.is_empty() or d.status != "offen":
 		return {"ok": false, "msg": "Lieferauftrag %s ist nicht offen." % delivery_id}
@@ -312,6 +335,7 @@ func on_day(day: int) -> void:
 		if d.status == "offen" and day - int(d.day) >= DELIVERY_FALLBACK_DAYS:
 			_deliver(d, false)     # Bauhof liefert selbst
 	_public_day(day)
+	_jobs_day(day)
 	_household_day()
 
 
@@ -483,8 +507,69 @@ func _create_units(pr: Dictionary, parcel: Dictionary) -> void:
 		first.tenant = pr.client
 		first.rent = 0.0
 		first.move_in_day = _today()
+		_move_in(first, pr.client)
 		sim.households.homes[pr.client].address = int(pr.building)
 		_log(pr, "Haushalt %s zieht in %s ein" % [pr.client, first.id])
+
+
+# ------------------------------------------------------------------ Einzug: Umzugs-, Moebel- und Versorgungsauftraege
+func _move_in(u: Dictionary, payer: String) -> void:
+	for kind in MOVE_JOBS:
+		var j := {"id": "S%d" % _next_job, "kind": kind, "unit": u.id, "payer": payer, "fee": float(MOVE_JOBS[kind].fee), "status": "offen", "carrier": "", "day": _today()}
+		_next_job += 1
+		jobs[j.id] = j
+	# Versorgungsauftrag: Anschluss auf den Namen des Einziehenden, Gebuehr an die Stadt
+	u["utilities_day"] = _today()
+	if payer.begins_with("H") and sim.households.homes.has(payer) and float(sim.households.homes[payer].balance) >= CONNECTION_FEE:
+		sim.households.homes[payer].balance = float(sim.households.homes[payer].balance) - CONNECTION_FEE
+		sim.economy.transfer("H0", "P0", CONNECTION_FEE)
+
+
+func open_jobs() -> Array:
+	return jobs.values().filter(func(j): return j.status == "offen")
+
+
+## Zahler -> Empfaenger (Unternehmen: Kasse; Spedition: K0). Zahlt der Haushalt nicht, entfaellt der Auftrag.
+func _settle_job(j: Dictionary, company_id: int) -> bool:
+	var payer := str(j.payer)
+	if payer.begins_with("H"):
+		var h: Dictionary = sim.households.homes.get(payer, {})
+		if h.is_empty() or float(h.balance) < float(j.fee):
+			return false
+		h.balance = float(h.balance) - float(j.fee)
+		if company_id >= 0:
+			sim.company(company_id).ledger.book("transport", float(j.fee), true, "%s %s" % [MOVE_JOBS[j.kind].label, j.unit], sim.game_min)
+		else:
+			sim.economy.transfer("H0", "K0", float(j.fee))
+		return true
+	if company_id >= 0:
+		sim.economy.transfer("X0", "H0", float(j.fee))
+		sim.company(company_id).ledger.book("transport", float(j.fee), true, "%s %s" % [MOVE_JOBS[j.kind].label, j.unit], sim.game_min)
+	else:
+		sim.economy.transfer("X0", "K0", float(j.fee))
+	return true
+
+
+func take_job(job_id: String, company_id: int) -> Dictionary:
+	var j: Dictionary = jobs.get(job_id, {})
+	if j.is_empty() or j.status != "offen":
+		return {"ok": false, "msg": "Auftrag %s ist nicht offen." % job_id}
+	var c: Company = sim.company(company_id)
+	if c == null or c.status in ["insolvenz", "verwertung", "geschlossen"]:
+		return {"ok": false, "msg": "Unternehmen %d kann nicht fahren." % company_id}
+	if not _settle_job(j, company_id):
+		j.status = "entfallen"
+		return {"ok": false, "msg": "Der Auftraggeber kann %s nicht bezahlen; Auftrag entfällt." % Catalog.money(float(j.fee))}
+	j.status = "erledigt"
+	j.carrier = "C%d" % company_id
+	return {"ok": true, "msg": "%s ausgeführt, Entgelt %s." % [MOVE_JOBS[j.kind].label, Catalog.money(float(j.fee))]}
+
+
+func _jobs_day(day: int) -> void:
+	for j in jobs.values():
+		if j.status == "offen" and day - int(j.day) >= JOB_FALLBACK_DAYS:
+			j.status = "erledigt" if _settle_job(j, -1) else "entfallen"
+			j.carrier = "K0"
 
 
 # ------------------------------------------------------------------ Monat: Vermietung
@@ -496,6 +581,7 @@ func on_month(_month: int) -> void:
 			sim.citizens.immigrate(int(Mayor.PERSONS_PER_UNIT), _today() / 30)
 			u.tenant = "W%d" % (hash(u.id) % 1000)
 			u.move_in_day = _today()
+			_move_in(u, "X0")
 		if u.tenant != "" and float(u.rent) > 0.0:
 			_collect_rent(u)
 	_developer_month()
@@ -813,6 +899,22 @@ func _release_reserve_rest(pr: Dictionary) -> void:
 
 
 # ------------------------------------------------------------------ Abfragen
+## Besetzung der Baustelle heute: Vorarbeiter, Bauarbeiter, Maschinenfuehrer und Geraete der laufenden Phase. `arbeitet` = false bei Blockade
+## (die Leute stehen dann auf der Baustelle, koennen aber nicht arbeiten). Ohne laufende Bauleistung leer.
+func crew_of(pr: Dictionary) -> Dictionary:
+	if pr.status not in ["erschliessung", "im_bau", "pruefung", "wartet_anschluss"]:
+		return {}
+	var phase_id: String = "erdarbeiten" if pr.status == "erschliessung" else "uebergabe" if pr.status in ["pruefung", "wartet_anschluss"] else PHASES[clampi(int(pr.phase), 0, PHASES.size() - 1)].id
+	var spec: Dictionary = CREW[phase_id]
+	var d: Dictionary = Planning.DEFS.get(pr.def, {})
+	var scale := 1.0 + 0.25 * float(maxi(int(d.get("units", 1)) - 1, 0)) + 0.2 * float(maxi(int(pr.floors) - 1, 0))
+	var work := int(ceil(float(spec.work) * scale))
+	var ops := int(spec.ops)
+	var working: bool = pr.blockers.is_empty() and int(pr.get("start", 0)) <= _today()
+	return {"phase": phase_id, "role": spec.role, "foreman": 1, "workers": work, "operators": ops, "gear": spec.gear.duplicate(), "working": working,
+		"people": 1 + work + ops, "builder": pr.builder}
+
+
 func progress_of(pr: Dictionary) -> float:
 	if pr.status == "uebergeben":
 		return 1.0
@@ -860,8 +962,8 @@ func _log(pr: Dictionary, text: String) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"builders": builders, "projects": projects, "deliveries": deliveries, "units": units, "public": public, "reserved_dev": reserved_dev, "reserved_co": reserved_co,
-		"next": [_next, _next_delivery, _next_unit], "home_plans": home_plans, "home_notes": home_notes}
+	return {"builders": builders, "projects": projects, "deliveries": deliveries, "units": units, "jobs": jobs, "public": public, "reserved_dev": reserved_dev, "reserved_co": reserved_co,
+		"next": [_next, _next_delivery, _next_unit, _next_job], "home_plans": home_plans, "home_notes": home_notes}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -871,6 +973,9 @@ func from_dict(d: Dictionary) -> void:
 	projects = d.get("projects", {})
 	deliveries = d.get("deliveries", {})
 	units = d.get("units", {})
+	jobs = d.get("jobs", {})
+	for j in jobs.values():
+		j.day = int(j.day)
 	public = d.get("public", {})
 	reserved_dev = float(d.get("reserved_dev", 0.0))
 	reserved_co = d.get("reserved_co", {})
@@ -886,6 +991,7 @@ func from_dict(d: Dictionary) -> void:
 	_next = int(nx[0])
 	_next_delivery = int(nx[1])
 	_next_unit = int(nx[2])
+	_next_job = int(nx[3]) if nx.size() > 3 else 1
 	for pr in projects.values():
 		for k in ["floors", "phase", "defects", "paid_phases", "build_days", "dev_days", "start", "end_planned", "end", "plan_days"]:
 			if pr.has(k):

@@ -21,6 +21,8 @@ var speed_opt: OptionButton
 var fault_spin: SpinBox
 var carry_check: CheckBox
 var weather_opt: OptionButton
+var mayor_opt: OptionButton
+var _mayor_extra := {}            # weitere Einstellungen des Buergermeisters aus einer geladenen Konfiguration (Modell, Adresse, Budget)
 const WEATHER_MODES := ["live", "sim", "replay"]
 var status_label: Label
 
@@ -82,6 +84,12 @@ func _ready() -> void:
 		weather_opt.add_item(t)
 	weather_opt.tooltip_text = "Live: echtes Wetter für Mainz, alle Spieler sehen denselben Stand. Wiederholung: spielt den aufgezeichneten Verlauf der letzten Partie ab (Vergleichspartien)."
 	g.add_child(weather_opt)
+	g.add_child(UITheme.label("Bürgermeister:"))
+	mayor_opt = OptionButton.new()
+	for t in ["Regelbasiert (kein Sprachmodell)", "Sprachmodell von Spieler 1 (eigener Kontext)"]:
+		mayor_opt.add_item(t)
+	mayor_opt.tooltip_text = "Die Bürgermeister-KI entscheidet über Quartiere, Erschließung und große Bauanträge. Regelbasiert braucht keinen Zugang; sonst nutzt sie Anbieter, Modell und Schlüssel von Spieler 1, aber mit eigenem Gedächtnis und Budget."
+	g.add_child(mayor_opt)
 	carry_check = CheckBox.new()
 	carry_check.text = "Erfahrungen der vorigen Partie übernehmen (alle Spieler)"
 	carry_check.tooltip_text = "Gespeicherte Erfahrungen je Spieler-Platz werden als Vermutungen übernommen. Für Vergleiche: für alle gleich."
@@ -266,8 +274,14 @@ func collect() -> Dictionary:
 			"timeout": 90.0 if provider == "ollama" else 45.0})
 	return {"seed": seed_edit.text.to_int(), "duration_min": DURATIONS[duration_opt.selected],
 		"speed_idx": speed_opt.selected, "demo_fault_rate": fault_spin.value, "carry_memory": carry_check.button_pressed,
-		"weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
+		"mayor": _mayor_config(), "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
 		"players": players}
+
+
+func _mayor_config() -> Dictionary:
+	var m := _mayor_extra.duplicate()
+	m["provider"] = "global" if mayor_opt.selected == 1 else "demo"
+	return m
 
 
 func _apply_config(cfg: Dictionary) -> void:
@@ -280,6 +294,8 @@ func _apply_config(cfg: Dictionary) -> void:
 	speed_opt.select(int(cfg.get("speed_idx", 1)))
 	fault_spin.value = float(cfg.get("demo_fault_rate", 0.1))
 	weather_opt.select(maxi(0, WEATHER_MODES.find(str(cfg.get("weather", "live")))))
+	_mayor_extra = cfg.get("mayor", {}).duplicate()
+	mayor_opt.select(1 if str(_mayor_extra.get("provider", "demo")) == "global" else 0)
 	for r in rows:
 		r.enabled.button_pressed = false
 	for p in cfg.get("players", []):
@@ -371,6 +387,8 @@ func _save_setup(cfg: Dictionary) -> void:
 	var copy := cfg.duplicate(true)
 	for p in copy.players:
 		p.erase("api_key")
+	if copy.has("mayor"):
+		copy.mayor.erase("api_key")
 	var f := FileAccess.open(SETUP_PATH, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(copy, "  "))

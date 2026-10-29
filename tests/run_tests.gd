@@ -2196,6 +2196,9 @@ func test_provider_choice() -> void:
 	ok(cfg.players[1].base_url == "https://api.example.com/v1" and cfg.players[1].model == "external-model"
 		and cfg.players[1].api_key == "TEST_KEY_REMOTE", "Externe API behält eigene URL, Modell und Key")
 	ok(SetupMenu.validate(cfg) == "", "gemischte Anbieter-Konfiguration gültig")
+	ok(cfg.mayor.provider == "demo", "Bürgermeister standardmäßig regelbasiert")
+	menu.mayor_opt.select(1)
+	ok(menu.collect().mayor.provider == "global", "Bürgermeister-Zugang im Startmenü wählbar")
 	cfg.players[1].base_url = "http://api.example.com/v1"
 	ok(SetupMenu.validate(cfg).contains("HTTPS"), "externer Key nicht über unverschlüsseltes HTTP")
 	cfg.players[1].base_url = "http://localhost:11435@api.example.com/v1"
@@ -3165,13 +3168,21 @@ func test_construction() -> void:
 	ok(P.parcel(pid).state in ["im_bau", "in_erschliessung"], "Grundstück im Bau")
 	var days := 0
 	var seen_phase := {}
+	var seen_gear := {}
+	var max_crew := 0
 	while pr.status not in ["uebergeben", "abgebrochen"] and days < 250:
 		_build_days(s, 1)
 		days += 1
 		seen_phase[C.phase_label(pr)] = true
+		var cr := C.crew_of(pr)
+		for g in cr.get("gear", []):
+			seen_gear[g] = true
+		max_crew = maxi(max_crew, int(cr.get("people", 0)))
 		if days % 20 == 0:
 			ok(identity_ok(s), "Geld erhalten während des Baus (Tag %d)" % days)
 	ok(pr.status == "uebergeben", "Bauvorhaben übergeben nach %d Tagen (%s)" % [days, str(pr.blockers)])
+	ok(seen_gear.has("bagger") and seen_gear.has("kran") and seen_gear.has("betonmischer") and max_crew >= 6, "Mannschaft und Geräte je Phase (bis %d Personen, Geräte %s)" % [max_crew, str(seen_gear.keys())])
+	ok(C.crew_of(pr).is_empty(), "übergebene Baustelle ohne Mannschaft")
 	ok(seen_phase.size() >= 8, "Bauphasen nacheinander durchlaufen (%d verschiedene)" % seen_phase.size())
 	ok(not C.deliveries.is_empty() and C.deliveries.values().all(func(l): return l.status == "geliefert"), "Materiallieferungen beauftragt und geliefert")
 	ok(absf(float(pr.paid) - (float(pr.price) + float(pr.dev_cost) + (Planning.TEMP_ACCESS_COST if pr.temp_access else 0.0))) < 5.0, "Zahlungen nach Bauabschnitten verbucht (%s)" % Catalog.money(float(pr.paid)))
@@ -3334,7 +3345,16 @@ func test_household_builder() -> void:
 	ok(mm.status == "laufend" and absf(float(mm.drawn) - float(mm.committed)) < 1.0 and float(mm.drawn) > 0.0, "Bank zahlte je Bauabschnitt (%s)" % Catalog.money(float(mm.drawn)))
 	ok(B.bank_cash(1) < bank_cash0 and B.loans_of_bank(1) >= float(mm.outstanding), "Kredit steht in der Bankbilanz")
 	ok(int(s.households.homes[rich].address) == int(pr.building), "Haushalt zieht ein")
+	var mine: Array = C.jobs.values().filter(func(j): return j.payer == rich)
+	ok(mine.size() == 2 and mine.all(func(j): return j.status == "offen"), "Einzug erzeugt Umzugs- und Möbelaufträge")
+	var cash_j: float = s.companies[0].ledger.cash
+	var tj := s.executor.execute(0, {"action": "bau_lieferung", "lieferung_id": mine[0].id})
+	ok(tj.ok and s.companies[0].ledger.cash > cash_j, "Spieler übernimmt Umzugsauftrag: " + str(tj.msg))
+	_build_days(s, 5)
+	ok(C.jobs[mine[1].id].status in ["erledigt", "entfallen"] and C.open_jobs().filter(func(j): return j.payer == rich).is_empty(), "übrige Aufträge erledigt die Spedition")
+	ok(identity_ok(s), "Geld nach Umzugsaufträgen erhalten")
 	var out0: float = mm.outstanding
+	_fund_home(s, rich, 3000.0)   # Gehaltseingang des Monats
 	B.on_month(5)
 	ok(float(mm.outstanding) < out0, "Rate tilgt den Kredit")
 	ok(identity_ok(s), "Geld nach Rückzahlung erhalten")

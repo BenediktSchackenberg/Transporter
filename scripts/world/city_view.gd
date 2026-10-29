@@ -50,6 +50,8 @@ var _sway_mat := ShaderMaterial.new()
 var _fog_mat := ShaderMaterial.new()
 var _heat_mat := ShaderMaterial.new()
 var _filter_zoom := -1.0
+var _detail_nodes: Array = []        # kleine Requisiten (Baenke, Laternen): erst ab Detailzoom sichtbar
+const DETAIL_ZOOM := 0.4
 
 
 func tex(name: String) -> Texture2D:
@@ -354,10 +356,10 @@ func _build_decor() -> void:
 		var s := _prop("d_tree%d" % t[1], Vector2(t[0].x * 32 + 16, t[0].y * 32 + 16), buildings_node)
 		s.material = _sway_mat
 	for b in c.benches:
-		_prop("d_bench", Vector2(b.x * 32 + 16, b.y * 32 + 16), decor_node)
+		_detail_nodes.append(_prop("d_bench", Vector2(b.x * 32 + 16, b.y * 32 + 16), decor_node))
 	for p in c.lamps:
 		var w := Vector2(p.x * 32 + 16, p.y * 32 + 16)
-		_prop("d_lamp", w, buildings_node)
+		_detail_nodes.append(_prop("d_lamp", w, buildings_node))
 		var g := Sprite2D.new()
 		g.texture = tex("glow_big")
 		g.material = _additive
@@ -616,4 +618,7 @@ func _update_filter() -> void:
 	if is_equal_approx(_filter_zoom, camera.zoom.x):
 		return
 	_filter_zoom = camera.zoom.x
+	var detail := camera.zoom.x >= DETAIL_ZOOM
+	for n in _detail_nodes:
+		n.visible = detail
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if camera.zoom.x >= 1.0 else CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS

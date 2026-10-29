@@ -351,6 +351,8 @@ static func _bauhof(sim: Simulation, cid: int) -> Dictionary:
 	var jobs: Array = []
 	for d in sim.construction.open_deliveries().slice(0, 6):
 		jobs.append({"id": d.id, "baustelle": d.project, "material": d.need, "frachtlohn": d.freight, "warenwert": d.value})
+	for j in sim.construction.open_jobs().slice(0, 4):
+		jobs.append({"id": j.id, "art": Construction.MOVE_JOBS[j.kind].label, "wohnung": j.unit, "frachtlohn": j.fee})
 	return {"standort": sim.city.building(sim.trader.bauhof).name, "preise": prices, "dein_material": own, "lieferauftraege": jobs}
 
 
