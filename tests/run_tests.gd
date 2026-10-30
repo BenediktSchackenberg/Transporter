@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3584,3 +3584,53 @@ func test_depot_operations() -> void:
 	ok(identity_ok(s), "Geld und Waren erhalten")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.city_depot.ramps == D.ramps and s2.city_depot.roster().size() == D.roster().size(), "Ausbau nach Laden erhalten")
+
+
+func test_traffic_flow() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	var T := s.traffic_flow
+	var road := Vector2i(-1, -1)
+	var junction := Vector2i(-1, -1)
+	for y in s.city.size:
+		for x in s.city.size:
+			var p := Vector2i(x, y)
+			if not s.city.is_road(p):
+				continue
+			if road.x < 0 and s.city.road_mask(p) not in TrafficFlow.JUNCTION_MASKS:
+				road = p
+			if junction.x < 0 and s.city.road_mask(p) in TrafficFlow.JUNCTION_MASKS:
+				junction = p
+	ok(road.x >= 0 and junction.x >= 0, "Karte hat Strassen und Kreuzungen")
+	ok(T.capacity_of(junction) < T.capacity_of(road), "Kreuzung fasst weniger Fahrzeuge als freie Strecke")
+	var cars := func(n: int) -> Array:
+		var a: Array = []
+		for i in n:
+			a.append(Mover.new())
+		return a
+	s._hash.clear()
+	s._hash[road] = cars.call(TrafficFlow.ROAD_CAPACITY)
+	ok(T.factor(road) == 1.0, "bis zur Kapazitaet ungebremst")
+	s._hash[road] = cars.call(TrafficFlow.ROAD_CAPACITY * 2)
+	ok(is_equal_approx(T.factor(road), 0.5), "doppelte Belegung halbiert das Tempo")
+	s._hash[road] = cars.call(40)
+	ok(T.factor(road) == TrafficFlow.MIN_FACTOR, "dichtester Stau bremst nicht unter den Mindestwert")
+	var lost0 := T.lost_total
+	T.record(road, 0.5, 10.0)
+	ok(is_equal_approx(T.lost_total - lost0, 5.0), "10 s bei halbem Tempo kosten 5 s")
+	ok(T.hotspots(1)[0].cell == road, "Engpass wird benannt")
+	T.record(junction, 1.0, 10.0)
+	ok(not T.lost_by_cell.has(junction), "freie Fahrt erzeugt keinen Zeitverlust")
+	ok(T.avg_speed() < 1.0 and T.avg_speed() > 0.0, "mittlere Geschwindigkeit sinkt")
+	# wiederkehrend: Stau an mehreren Tagen
+	for d in TrafficFlow.RECURRING_DAYS:
+		T.record(road, 0.5, 1.0)
+		s.game_min += GameCalendar.day_game_min
+		T.on_day()
+	ok(T.hotspots(1)[0].recurring, "Stau an mehreren Tagen gilt als wiederkehrender Engpass")
+	# im laufenden Spiel: Fahrzeuge bleiben unter ihrer freien Fahrt, Geld und Waren bleiben erhalten
+	var s2 := new_sim(4, 256)
+	run(s2, 60.0 * 2.0)
+	ok(s2.traffic_flow.moving_total > 0.0, "Fahrzeugzeit wird gemessen")
+	ok(s2.traffic_flow.avg_speed() > 0.3 and s2.traffic_flow.avg_speed() <= 1.0, "mittlere Geschwindigkeit plausibel (%.2f)" % s2.traffic_flow.avg_speed())
+	ok(identity_ok(s2), "Geld und Waren erhalten")

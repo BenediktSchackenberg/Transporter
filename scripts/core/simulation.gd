@@ -32,6 +32,7 @@ var permits := Permits.new()
 var mayor := Mayor.new()
 var construction := Construction.new()
 var city_depot := CityDepot.new()
+var traffic_flow := TrafficFlow.new()   # Strassenkapazitaet und Zeitverlust (Auftrag 5, Abschnitt 5)
 var reserve_share := 0.0
 var care := BuildingCare.new()
 var workforce := Workforce.new()
@@ -103,6 +104,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	mayor.setup(self)
 	construction.setup(self)
 	city_depot.setup(self)
+	traffic_flow.setup(self)
 	households.setup(self)
 	care.setup(self)
 	workforce.setup(self)
@@ -423,7 +425,7 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 	if _is_blocked(v):
 		return
 	var before := v.tiles_moved
-	v.advance(dt, _speed_factor(v))
+	v.advance(dt, _speed_factor(v) * _flow_step(v, dt))
 	var moved := v.tiles_moved - before
 	if moved > 0:
 		var spec := v.spec()
@@ -701,7 +703,15 @@ func _update_traffic_car(m: Mover, dt: float) -> void:
 		return
 	if _is_blocked(m):
 		return
-	m.advance(dt, wx.drive_factor() * (0.5 if nav.jams.has(m.tile()) else 1.0))
+	m.advance(dt, wx.drive_factor() * (0.5 if nav.jams.has(m.tile()) else 1.0) * _flow_step(m, dt))
+
+
+## Tempofaktor aus der Strassenkapazitaet der aktuellen Zelle; verbucht die dabei verlorene Zeit.
+func _flow_step(m: Mover, dt: float) -> float:
+	var t := m.tile()
+	var f := traffic_flow.factor(t)
+	traffic_flow.record(t, f, dt)
+	return f
 
 
 func light_green(cell: Vector2i, horizontal: bool) -> bool:
@@ -869,6 +879,7 @@ func _minute_tick() -> void:
 	if day != _last_day:
 		var new_month := GameCalendar.month_of(now) != GameCalendar.month_of(GameCalendar.day_start(_last_day))
 		_last_day = day
+		traffic_flow.on_day()
 		day_changed.emit(day)
 		if new_month:
 			month_changed.emit(GameCalendar.month_of(now))

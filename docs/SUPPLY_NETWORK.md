@@ -92,7 +92,7 @@ Ziel: Eine Stadt, deren Versorgung man beobachten und nachvollziehen kann: Waren
 **Etappenplan**
 1. Warenmodell und Stadtlager (Abschnitte 1–4, Teil von 11 und 13) – **fertig**
 2. Lager als Arbeitsort: Rampen, Lagerpersonal, sichtbare Tätigkeiten, interaktive Lagerübersicht (7, 8) – **fertig**
-3. Verkehr mit Kapazität (5)
+3. Verkehr mit Kapazität (5) – **Grundlage fertig** (siehe unten)
 4. Verkehrsmaßnahmen des Bürgermeisters, Ausbauprojekt mit Vorher/Nachher (6)
 5. Restaurants, Geschäfte, Haushaltsbedarf, Warenketten (9, 10, 11)
 6. Müll/Recycling und Mehrweg, Geschäftsereignisse und Diagnosebereich, Authentifizierungsfehler prüfen, Abnahmelauf (12–15)
@@ -118,3 +118,8 @@ Ziel: Eine Stadt, deren Versorgung man beobachten und nachvollziehen kann: Waren
 - Test `test_depot_operations`.
 - Offen: Ein- und Aussteigen der Lagerarbeiter wird nicht als Weg über das Gelände animiert (Positionen folgen der Aufgabe), Kommissionierung/Verladung sind an die Ausgabe für Projekte gekoppelt (Etappe 4 erweitert sie).
 - **Beobachtung zur Stadtkasse:** Die Kasse P0 sinkt im Basisspiel schon ohne Stadtlager (ca. −60 000 EUR je Monat: Gehälter der städtischen Beschäftigten und Sozialleistungen übersteigen die Steuern). Ab etwa Tag 90 ist sie im Minus; das Stadtlager bestellt dann nichts mehr (Vorschläge bleiben offen, Bestände werden kritisch). `Economy.flows` (Diagnose, nicht gespeichert) zeigt die Geldflüsse je Kontenpaar. Das Gleichgewicht der Stadtfinanzen gehört in Auftrag 4.
+
+**Etappe 3 – Verkehr mit Kapazität (Grundlage, 30.10.2026)**
+- `TrafficFlow` (`scripts/core/traffic_flow.gd`, `Simulation.traffic_flow`): Jede Straßenzelle fasst 3 Fahrzeuge, Kreuzungen 2. Bei Überfüllung sinkt das Tempo aller Fahrzeuge in der Zelle auf Kapazität/Belegung (mindestens 20 %), für Lieferfahrzeuge und NPC-Verkehr. Die Zeit geht tatsächlich verloren (spätere Ankunft, Folgen für Fristen).
+- Messdaten (Diagnose, nicht gespeichert): verlorene Fahrzeugsekunden je Zelle und Tageszeit (`delay_by_hour`), mittlere Geschwindigkeit (`avg_speed`), Engpässe (`hotspots`; wiederkehrend ab 3 Tagen mit Stau in derselben Zelle).
+- Offen: Fahrspuren/Fahrtrichtungen, Straßenzustand, Ladezonen und Haltebereiche, Arbeits-/Einkaufswege als Verkehrsquelle, Anzeige in der Oberfläche (Etappe 4 nutzt die Messdaten für Bürgermeister-Maßnahmen).
