@@ -9,6 +9,7 @@ const SOCIAL_RATE := 0.10         # Arbeitnehmeranteil Sozialversicherung
 const BENEFIT_SHARE := 0.6        # Anteil des Haushaltsdefizits, den die Sozialleistung deckt
 const CORPORATE_TAX := 0.15       # Ertragsteuer auf den kumulierten Gewinn (Verluste werden vorgetragen)
 const DEPARTMENTS := {"Verkehr": 0.4, "Bildung": 0.25, "Verwaltung": 0.2, "Gesundheit": 0.15}   # Verteilung der Auftraege
+const VAT_SHARE := 0.25           # kommunaler Anteil an der Umsatzsteuer auf den Konsum von Buergern und Haushalten (Anteil der Ausgaben)
 const AUDIT_CHANCE := 0.15          # Wahrscheinlichkeit je Firma und Monat
 const AUDIT_SURCHARGE := 0.10      # Zuschlag auf offene Steuer, wird als Bussgeld gebucht
 const SPEND_SHARE := 0.5          # Anteil der Mittel ueber dem Ausgangsstand, die als Auftraege an S0 gehen
@@ -19,6 +20,7 @@ var social_total := 0.0
 var benefits_total := 0.0
 var spending_total := 0.0
 var corporate_total := 0.0
+var vat_total := 0.0
 var audits: Array = []            # letzte Pruefungen: {cid, month, arrears, fine}
 var departments := {"Soziales": 0.0, "Verkehr": 0.0, "Bildung": 0.0, "Verwaltung": 0.0, "Gesundheit": 0.0}   # Ausgaben je Ressort
 
@@ -26,6 +28,16 @@ var departments := {"Soziales": 0.0, "Verkehr": 0.0, "Bildung": 0.0, "Verwaltung
 func setup(s: Simulation) -> void:
 	sim = s
 	s.month_changed.connect(on_month)
+
+
+## Umsatzsteuer-Anteil: Der Handel (S0) fuehrt einen Teil der Konsumausgaben an die Stadt ab. Gibt den Steuerbetrag zurueck.
+func consumption_tax(spent: float) -> float:
+	var tax := spent * VAT_SHARE
+	if tax <= 0.0:
+		return 0.0
+	sim.economy.transfer("S0", "P0", tax)
+	vat_total += tax
+	return tax
 
 
 ## Zieht Steuer und Sozialabgaben vom Bruttolohn (liegt auf H0) ab und gibt den Nettobetrag zurueck.

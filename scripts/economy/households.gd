@@ -144,6 +144,7 @@ func on_month(_month: int) -> void:
 			var imp := pay * IMPORT_SHARE
 			sim.economy.transfer("H0", "X0", imp)
 			sim.economy.transfer("H0", "S0", pay - imp)
+			sim.public_sector.consumption_tax(pay - imp)
 			h.spent = float(h.spent) + pay
 			spent_total += pay
 		h.shortfall = maxf(0.0, need - pay)

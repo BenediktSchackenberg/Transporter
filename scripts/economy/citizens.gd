@@ -229,6 +229,7 @@ func _pay() -> void:
 	stats.benefits = benefit
 	# Konsum der Buerger: Handel (S0) und Importe (X0)
 	sim.economy.transfer("H0", "S0", (net + benefit) * SPEND_SHARE)
+	sim.public_sector.consumption_tax((net + benefit) * SPEND_SHARE)
 	var imports := (net + benefit) * IMPORT_SHARE
 	sim.economy.transfer("H0", "X0", imports)
 	sim.economy.transfer("X0", "S0", imports)   # Ausfuhren der Stadtwirtschaft gleichen die Importe aus
