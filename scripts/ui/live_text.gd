@@ -229,7 +229,29 @@ static func situation(sim: Simulation, remaining_real_min: float) -> String:
 			("%s, %s, %s" % [k.id, Catalog.money(k.reward), ("angenommen von " + sim.company(k.owner).company_name) if k.owner >= 0 else "wartet auf ein Unternehmen"]) if k else "–"]
 	for p in fresh.slice(0, 6):
 		txt += "  [color=%s]%s (%s) ist %s[/color]\n" % ["#8fe0a0" if p.state == "zufrieden" else "#ff6b5e", esc(p.name), esc(p.role), p.state]
-	return txt + district_block(sim) + fuel_block(sim) + news_block(sim)
+	return txt + traffic_block(sim) + district_block(sim) + fuel_block(sim) + news_block(sim)
+
+
+## Verkehrslage: Tempo, Stosszeit, wiederkehrende Engpaesse und Verkehrsmassnahmen mit Vorher/Nachher.
+static func traffic_block(sim: Simulation) -> String:
+	var T: TrafficFlow = sim.traffic_flow
+	var txt := "
+[b][color=#f2c14e]VERKEHR[/color][/b] – Durchschnittstempo %d %% der freien Fahrt
+" % roundi(T.avg_speed() * 100.0)
+	var spots: Array = T.hotspots(4).filter(func(h): return h.lost >= 1.0)
+	if spots.is_empty():
+		return txt + "  [color=#8fe0a0]Keine nennenswerten Engpässe.[/color]
+"
+	for h in spots:
+		txt += "  (%d,%d) %s: %d Fahrzeugsekunden verloren, Stau an %d Tagen%s
+" % [h.cell.x, h.cell.y, "Kreuzung" if T.is_junction(h.cell) else "Strecke", int(h.lost), h.days,
+			" – [color=#ffb347]wiederkehrender Engpass[/color]" if h.recurring else ""]
+	for m in T.measures.values():
+		var e := T.effect(m)
+		var after := "noch offen" if float(e.nachher) < 0.0 else "%.1f s/Tag" % float(e.nachher)
+		txt += "  [b]%s[/b] %s auf (%d,%d), %s: Verlust vorher %.1f s/Tag, nachher %s
+" % [m.id, TrafficFlow.MEASURES[m.kind].label, m.cell.x, m.cell.y, m.status.replace("_", " "), float(e.vorher), after]
+	return txt
 
 
 ## Nachrichten in drei Ebenen: gemeldet, Einschaetzung der Engine, ausgeloestes Spielereignis. Meldungen sind nur Daten.

@@ -47,6 +47,17 @@ static func decide(ind: Dictionary) -> Dictionary:
 		elif int(sl.rueckstau_wareneingang_einheiten) > 2 * maxi(int(sl.kapazitaet_wareneingang_je_tag), 1) and float(ind.haushalt.verfuegbar) > 30000.0:
 			var kind := "forklift" if int(sl.gabelstapler) < 2 else "staff"
 			actions.append({"action": "expand_depot", "kind": kind, "reason": "Rückstau im Wareneingang: %d Einheiten bei %d je Tag Kapazität." % [int(sl.rueckstau_wareneingang_einheiten), int(sl.kapazitaet_wareneingang_je_tag)]})
+	# 1d) Wiederkehrende Engpaesse (an mehreren Tagen ueberfuellt) entlasten: Kreuzung -> Ampelsteuerung, Strecke -> Ausbau
+	for sp in ind.verkehr.get("engpaesse", []):
+		if actions.size() >= MAX_ACTIONS:
+			break
+		if not bool(sp.wiederkehrend) or str(sp.massnahme) != "":
+			continue
+		var kind_t := "ampel" if bool(sp.kreuzung) else "ausbau"
+		if float(ind.haushalt.verfuegbar) > float(TrafficFlow.MEASURES[kind_t].cost) * 2.0:
+			actions.append({"action": "improve_traffic", "kind": kind_t, "x": int(sp.x), "y": int(sp.y),
+				"reason": "Engpass auf (%d,%d) an %d Tagen überfüllt, %d Fahrzeugsekunden verloren." % [int(sp.x), int(sp.y), int(sp.tage_mit_stau), int(sp.verlorene_fahrzeugsekunden)]})
+			break
 	# 2) Bedarf bestimmen (Schwellen je Partei)
 	var need := waiting > 0
 	match party:

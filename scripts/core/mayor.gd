@@ -20,6 +20,8 @@ const SCHEMA := {
 		"desc": "Beschaffungsvorschlag des Stadtlagers (obs.stadtlager.vorschlaege) genehmigen: Budget wird reserviert, bester Anbieter bestellt, Transportauftrag ausgeschrieben."},
 	"expand_depot": {"params": {"kind": "string", "reason": "string"},
 		"desc": "Zentrallager ausbauen: kind ramp (Entladerampe, 18 000 EUR), staff (Lagerkraft einstellen) oder forklift (Gabelstapler). Sinnvoll bei wartenden Lkw oder Rückstau im Wareneingang (obs.stadtlager)."},
+	"improve_traffic": {"params": {"kind": "string", "x": "int", "y": "int", "reason": "string"},
+		"desc": "Verkehrsmaßnahme auf einem wiederkehrenden Engpass (obs.verkehr.engpaesse mit wiederkehrend=true): kind ampel (Kreuzung, 12 000 EUR, 2 Tage) oder ausbau (Straßenabschnitt, 40 000 EUR, 6 Tage, währenddessen eine Spur weniger). Ein einzelner Stau rechtfertigt keinen Ausbau."},
 	"reject_procurement": {"params": {"order_id": "string", "reason": "string"}, "desc": "Beschaffungsvorschlag ablehnen (Begründung nötig, z. B. Budget oder kein Bedarf)."},
 	"assess_financing": {"params": {"project_id": "string"}, "desc": "Finanzierungsbedarf eines Projekts oder Plans bewerten (nur Auskunft)."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
@@ -138,7 +140,7 @@ func indicators() -> Dictionary:
 			"offene_stellen_nach_arbeitgeber": by_vac},
 		"gewerbe": {"freie_gewerbeflaeche": free_by_zone.get("gewerbe", {}), "freie_industrieflaeche": free_by_zone.get("industrie", {}),
 			"nachfrage_stellen_baufirma_industrie": int(by_vac.get("baufirma", 0)) + int(by_vac.get("industrie", 0))},
-		"verkehr": {"fahrzeuge_unterwegs": sim.traffic.size(), "staus": jams, "strassenzellen": sim.city.road_count},
+		"verkehr": _traffic_indicators(jams),
 		"versorgung": {"freie_stadtgrundstuecke": free_n, "davon_voll_erschlossen": served,
 			"anteil_voll_erschlossen": snappedf(float(served) / maxf(1.0, float(free_n)), 0.01)},
 		"haushalt": {"kasse": snappedf(float(sim.economy.accounts.P0), 1.0), "reserviert": snappedf(commitments, 1.0), "verfuegbar": snappedf(available_budget(), 1.0),
@@ -154,6 +156,30 @@ func indicators() -> Dictionary:
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 	}
+
+
+## Verkehr: Mengen, Zeitverlust, wiederkehrende Engpaesse und laufende bzw. fertige Massnahmen mit Vorher/Nachher.
+func _traffic_indicators(jams: int) -> Dictionary:
+	var T: TrafficFlow = sim.traffic_flow
+	var busy := {}
+	for m in T.measures.values():
+		busy[m.cell] = m.status
+	var spots: Array = []
+	for h in T.hotspots(5):
+		spots.append({"x": h.cell.x, "y": h.cell.y, "verlorene_fahrzeugsekunden": snappedf(h.lost, 1.0), "tage_mit_stau": h.days, "wiederkehrend": h.recurring,
+			"kreuzung": T.is_junction(h.cell), "kapazitaet": T.capacity_of(h.cell), "massnahme": busy.get(h.cell, "")})
+	var done: Array = []
+	for m in T.measures.values():
+		var e := T.effect(m)
+		done.append({"id": m.id, "art": m.kind, "x": m.cell.x, "y": m.cell.y, "status": m.status, "kosten": m.cost,
+			"verlust_je_tag_vorher": snappedf(e.vorher, 0.1), "verlust_je_tag_nachher": snappedf(e.nachher, 0.1) if e.nachher >= 0.0 else null})
+	var worst := 0
+	var hours: Array = T.delay_by_hour()
+	for h in 24:
+		if hours[h] > hours[worst]:
+			worst = h
+	return {"fahrzeuge_unterwegs": sim.traffic.size(), "staus": jams, "strassenzellen": sim.city.road_count, "durchschnittstempo": snappedf(T.avg_speed(), 0.01),
+		"stosszeit_stunde": worst, "engpaesse": spots, "massnahmen": done.slice(-6)}
 
 
 ## Stadtlager: offene Beschaffungsvorschlaege (Entscheidung der Buergermeisterebene), kritische Bestaende, laufende Bestellungen.
@@ -287,6 +313,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.city_depot.approve(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
 			"expand_depot":
 				res = sim.city_depot.expand(str(a.get("kind", "")), "Bürgermeister %s" % name)
+			"improve_traffic":
+				res = _improve_traffic(a)
 			"reject_procurement":
 				res = sim.city_depot.reject(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
 			"assess_financing":
@@ -433,6 +461,19 @@ func _prioritize_road(a: Dictionary) -> Dictionary:
 	_next_project += 1
 	projects[prj.id] = prj
 	return {"ok": true, "msg": "Projekt %s: Straße auf Korridor %s, Priorität %d, %s reserviert. %s" % [prj.id, p.id, prio, Catalog.money(cost), v.text], "ref": prj.id}
+
+
+func _improve_traffic(a: Dictionary) -> Dictionary:
+	var kind := str(a.kind)
+	if not TrafficFlow.MEASURES.has(kind):
+		return {"ok": false, "msg": "Unbekannte Massnahme %s (ampel oder ausbau)." % kind}
+	var v := _proposal_vote("verkehr", float(TrafficFlow.MEASURES[kind].cost), 0, 0)
+	if not v.passed:
+		return {"ok": false, "msg": "Verkehrsmaßnahme abgelehnt: %s" % v.text}
+	var r: Dictionary = sim.traffic_flow.propose(kind, Vector2i(int(a.x), int(a.y)), str(a.reason))
+	if r.ok:
+		r.msg = "%s %s" % [r.msg, v.text]
+	return r
 
 
 func _tender(a: Dictionary) -> Dictionary:

@@ -93,7 +93,7 @@ Ziel: Eine Stadt, deren Versorgung man beobachten und nachvollziehen kann: Waren
 1. Warenmodell und Stadtlager (Abschnitte 1–4, Teil von 11 und 13) – **fertig**
 2. Lager als Arbeitsort: Rampen, Lagerpersonal, sichtbare Tätigkeiten, interaktive Lagerübersicht (7, 8) – **fertig**
 3. Verkehr mit Kapazität (5) – **Grundlage fertig** (siehe unten)
-4. Verkehrsmaßnahmen des Bürgermeisters, Ausbauprojekt mit Vorher/Nachher (6)
+4. Verkehrsmaßnahmen des Bürgermeisters, Ausbauprojekt mit Vorher/Nachher (6) – **Grundlage fertig** (siehe unten)
 5. Restaurants, Geschäfte, Haushaltsbedarf, Warenketten (9, 10, 11)
 6. Müll/Recycling und Mehrweg, Geschäftsereignisse und Diagnosebereich, Authentifizierungsfehler prüfen, Abnahmelauf (12–15)
 
@@ -123,3 +123,9 @@ Ziel: Eine Stadt, deren Versorgung man beobachten und nachvollziehen kann: Waren
 - `TrafficFlow` (`scripts/core/traffic_flow.gd`, `Simulation.traffic_flow`): Jede Straßenzelle fasst 3 Fahrzeuge, Kreuzungen 2. Bei Überfüllung sinkt das Tempo aller Fahrzeuge in der Zelle auf Kapazität/Belegung (mindestens 20 %), für Lieferfahrzeuge und NPC-Verkehr. Die Zeit geht tatsächlich verloren (spätere Ankunft, Folgen für Fristen).
 - Messdaten (Diagnose, nicht gespeichert): verlorene Fahrzeugsekunden je Zelle und Tageszeit (`delay_by_hour`), mittlere Geschwindigkeit (`avg_speed`), Engpässe (`hotspots`; wiederkehrend ab 3 Tagen mit Stau in derselben Zelle).
 - Offen: Fahrspuren/Fahrtrichtungen, Straßenzustand, Ladezonen und Haltebereiche, Arbeits-/Einkaufswege als Verkehrsquelle, Anzeige in der Oberfläche (Etappe 4 nutzt die Messdaten für Bürgermeister-Maßnahmen).
+
+**Etappe 4 – Verkehrsmaßnahmen des Bürgermeisters (Grundlage, 30.10.2026)**
+- Beobachtung `verkehr` des Bürgermeisters: Durchschnittstempo, Stoßzeit, Engpässe (Zelle, verlorene Fahrzeugsekunden, Tage mit Stau, wiederkehrend ja/nein, Kreuzung ja/nein) und Maßnahmen mit Vorher/Nachher.
+- Aktion `improve_traffic` (`kind` ampel: Kreuzung, 12 000 EUR, 2 Tage · ausbau: Strecke, 40 000 EUR, 6 Tage, währenddessen eine Spur weniger). Nur auf wiederkehrenden Engpässen (Stau an mindestens 3 Tagen); ein einzelner Stau rechtfertigt keinen Ausbau. Über 30 000 EUR entscheidet der Rat. Die Mittel werden reserviert, bei Fertigstellung aus der Stadtkasse bezahlt (Konto S0 = Baufirmen/Lieferanten); danach +1 Kapazität (höchstens +2 je Zelle). `MayorBrain` plant das selbst, wenn das Budget doppelt reicht.
+- Anzeige: Reiter Lage → Abschnitt VERKEHR (Engpässe, Maßnahmen, Verlust je Tag vorher/nachher). Speichern/Laden erhält Maßnahmen und Ausbaustufen.
+- Offen: Maßnahmen Ladezonen, Haltemöglichkeiten, Kreuzungsumbau; Material und Arbeitskräfte aus dem Stadtlager/den Bürgern statt Pauschalpreis; Sperrung der Zelle als sichtbare Baustelle.

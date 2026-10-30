@@ -3634,3 +3634,45 @@ func test_traffic_flow() -> void:
 	ok(s2.traffic_flow.moving_total > 0.0, "Fahrzeugzeit wird gemessen")
 	ok(s2.traffic_flow.avg_speed() > 0.3 and s2.traffic_flow.avg_speed() <= 1.0, "mittlere Geschwindigkeit plausibel (%.2f)" % s2.traffic_flow.avg_speed())
 	ok(identity_ok(s2), "Geld und Waren erhalten")
+	_traffic_measures_test()
+
+
+func _traffic_measures_test() -> void:
+	var s := new_sim(2, 256)
+	var T := s.traffic_flow
+	var junction := Vector2i(-1, -1)
+	var road := Vector2i(-1, -1)
+	for y in s.city.size:
+		for x in s.city.size:
+			var p := Vector2i(x, y)
+			if s.city.is_road(p):
+				if junction.x < 0 and T.is_junction(p):
+					junction = p
+				if road.x < 0 and not T.is_junction(p):
+					road = p
+	var r := T.propose("ampel", junction, "Test")
+	ok(not r.ok and "wiederkehrend" in r.msg, "ein einzelner Stau rechtfertigt keine Massnahme (%s)" % r.msg)
+	T.lost_by_cell[junction] = 120.0
+	T.jam_days[junction] = TrafficFlow.RECURRING_DAYS
+	ok(not T.propose("ampel", road, "Test").ok, "Ampelsteuerung nur an Kreuzungen")
+	var p0 := float(s.economy.accounts.P0)
+	var com := s.mayor.commitments
+	var cap0 := T.capacity_of(junction)
+	var mi := {"action": "improve_traffic", "kind": "ampel", "x": junction.x, "y": junction.y, "reason": "Engpass"}
+	var ind := s.mayor.indicators()
+	ok(ind.verkehr.engpaesse.any(func(e): return e.x == junction.x and e.wiederkehrend), "Beobachtung nennt den wiederkehrenden Engpass")
+	ok(MayorBrain.decide(ind).actions.any(func(a): return a.action == "improve_traffic" and a.x == junction.x), "Regelbuergermeister plant eine Massnahme")
+	r = s.mayor.execute(mi)
+	ok(r.ok and s.mayor.commitments == com + TrafficFlow.MEASURES.ampel.cost, "Massnahme angelegt, Mittel reserviert (%s)" % r.msg)
+	ok(T.capacity_of(junction) == cap0, "vor der Fertigstellung keine neue Kapazitaet")
+	ok(not s.mayor.execute(mi).ok, "keine zweite Massnahme auf derselben Zelle waehrend der Bauzeit")
+	s.game_min += GameCalendar.day_game_min * (TrafficFlow.MEASURES.ampel.days + 1)
+	T.on_day()
+	ok(T.capacity_of(junction) == cap0 + 1, "nach der Bauzeit wirkt die neue Kapazitaet")
+	ok(s.mayor.commitments == com and absf(float(s.economy.accounts.P0) - (p0 - TrafficFlow.MEASURES.ampel.cost)) < 0.01, "Kosten aus der Stadtkasse bezahlt")
+	var m: Dictionary = T.measures.values()[0]
+	ok(m.status == "fertig" and T.effect(m).vorher >= 0.0, "Vorher-Nachher-Vergleich vorhanden")
+	ok(s.mayor.indicators().verkehr.massnahmen.size() == 1, "fertige Massnahme steht in der Beobachtung")
+	ok(identity_ok(s), "Geld erhalten")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.traffic_flow.capacity_of(junction) == cap0 + 1 and s2.traffic_flow.measures.size() == 1, "Massnahmen nach Laden erhalten")
