@@ -87,10 +87,17 @@ func build(s: GameSession) -> void:
 func _build_top() -> void:
 	var top := PanelContainer.new()
 	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	top.custom_minimum_size.y = 40
+	top.custom_minimum_size.y = 48
+	var top_box := UITheme.box(Color("#1a1b29"), UITheme.ACCENT.darkened(0.5), 0, 5)
+	top_box.border_width_bottom = 3
+	top_box.corner_radius_top_left = 0
+	top_box.corner_radius_top_right = 0
+	top_box.content_margin_left = 12
+	top_box.content_margin_right = 12
+	top.add_theme_stylebox_override("panel", top_box)
 	add_child(top)
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 14)
+	h.add_theme_constant_override("separation", 9)
 	top.add_child(h)
 	h.add_child(_icon("i_clock"))
 	lbl_remaining = UITheme.label("", 20, UITheme.ACCENT)
@@ -108,6 +115,7 @@ func _build_top() -> void:
 	pause_btn = Button.new()
 	pause_btn.text = "Pause"
 	pause_btn.pressed.connect(func(): session.toggle_pause())
+	UITheme.color_button(pause_btn, Color("#c96b3c"))
 	h.add_child(pause_btn)
 	var group := ButtonGroup.new()
 	for i in GameSession.SPEEDS.size():
@@ -116,6 +124,9 @@ func _build_top() -> void:
 		b.toggle_mode = true
 		b.button_group = group
 		b.pressed.connect(func(): session.set_speed_idx(i))
+		UITheme.color_button(b, Color("#3d4466"), 16)
+		b.add_theme_stylebox_override("pressed", UITheme.box(UITheme.ACCENT.darkened(0.15), UITheme.ACCENT.lightened(0.3), 2, 5))
+		b.add_theme_color_override("font_pressed_color", Color("#1c1d2b"))
 		h.add_child(b)
 		speed_btns.append(b)
 	lbl_speed = UITheme.label("", 16, UITheme.MUTED)
@@ -125,10 +136,13 @@ func _build_top() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(spacer)
+	var menu_colors := {"Ereignisse": "#3a7fc4", "Speichern": "#3f9a5a", "Laden": "#8a6bc4", "Partie beenden": "#c4473f", "Menü": "#5a5f80"}
 	for spec in [["Ereignisse", func(): event_panel.visible = not event_panel.visible], ["Speichern", func(): session.save_game()], ["Laden", func(): session.load_requested.emit()],
 			["Partie beenden", Callable()], ["Menü", func(): session.back_to_menu()]]:
 		var b := Button.new()
 		b.text = spec[0]
+		UITheme.color_button(b, Color(menu_colors[spec[0]]))
+		b.custom_minimum_size = Vector2(96, 36)
 		b.focus_mode = Control.FOCUS_NONE   # Leertaste/Enter loesen keine Leistenknoepfe aus
 		if spec[0] == "Partie beenden":
 			b.pressed.connect(func(): _confirm_end(b))
@@ -168,36 +182,60 @@ func _build_left() -> void:
 	left_scroll = ScrollContainer.new()
 	left_scroll.anchor_bottom = 1.0
 	left_scroll.offset_left = 6
-	left_scroll.offset_top = 46
-	left_scroll.offset_right = 92
+	left_scroll.offset_top = 56
+	left_scroll.offset_right = 212
 	left_scroll.offset_bottom = -234   # ueber der Minimap
 	left_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	left_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(left_scroll)
 	var box := VBoxContainer.new()
 	left_box = box
-	box.custom_minimum_size = Vector2(78, 0)
-	box.add_theme_constant_override("separation", 8)
+	box.custom_minimum_size = Vector2(200, 0)
+	box.add_theme_constant_override("separation", 10)
 	left_scroll.add_child(box)
 	for c in sim.companies:
 		var p := PanelContainer.new()
-		var sb := UITheme.box(UITheme.PANEL, c.color, 3, 3)
+		var sb := UITheme.box(Color("#2a2d42"), c.color, 3, 4)
+		var sb_hover := UITheme.box(Color("#3a3f5c"), c.color.lightened(0.35), 3, 4)
 		p.add_theme_stylebox_override("panel", sb)
-		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		var cid := c.id
-		var bt := TextureButton.new()
-		bt.texture_normal = UITheme.portrait(c.avatar_style)
-		bt.texture_hover = bt.texture_normal
-		bt.texture_pressed = bt.texture_normal
-		bt.ignore_texture_size = true
-		bt.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-		bt.custom_minimum_size = Vector2(70, 70)
-		bt.focus_mode = Control.FOCUS_NONE
-		bt.tooltip_text = "%s · %s\nDetails öffnen" % [c.player_name, c.company_name]
-		bt.pressed.connect(func(): _open_entrepreneur(cid))
-		p.add_child(bt)
+		p.tooltip_text = "%s · %s\nKlicken: Details öffnen" % [c.player_name, c.company_name]
+		p.mouse_entered.connect(func(): p.add_theme_stylebox_override("panel", sb_hover))
+		p.mouse_exited.connect(func(): p.add_theme_stylebox_override("panel", sb))
+		p.gui_input.connect(func(ev: InputEvent):
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				_open_entrepreneur(cid))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_child(row)
+		var face := TextureRect.new()
+		face.texture = UITheme.portrait(c.avatar_style)
+		face.custom_minimum_size = Vector2(64, 64)
+		face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(face)
+		var info := VBoxContainer.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.alignment = BoxContainer.ALIGNMENT_CENTER
+		info.add_theme_constant_override("separation", 0)
+		info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(info)
+		var nm := UITheme.label(c.player_name, 18, c.color.lightened(0.35))
+		nm.clip_text = true
+		nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		info.add_child(nm)
+		var firm := UITheme.label(c.company_name, 13, UITheme.MUTED)
+		firm.clip_text = true
+		firm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		info.add_child(firm)
+		var cash := UITheme.label("", 16, UITheme.GOOD)
+		cash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		info.add_child(cash)
 		box.add_child(p)
-		cards.append({"panel": p, "button": bt})
+		cards.append({"panel": p, "cash": cash, "cid": cid})
 
 
 func _card_action(kind: String, cid: int) -> void:
@@ -262,7 +300,7 @@ func _build_right() -> void:
 	tabs.anchor_bottom = 1.0
 	tabs.offset_left = -440
 	tabs.offset_right = -6
-	tabs.offset_top = 46
+	tabs.offset_top = 56
 	tabs.offset_bottom = -6
 	add_child(tabs)
 	activity_rt = _rt("Aktivitäten")
@@ -652,7 +690,7 @@ func update_hud(delta: float) -> void:
 	lbl_clock.text = GameCalendar.long_text(sim.game_min)
 	lbl_clock.tooltip_text = GameCalendar.explain(float(session.speed()))
 	pause_btn.text = "Weiter" if session.paused else "Pause"
-	lbl_speed.text = "Simulation %dx%s" % [session.speed(), "  (PAUSIERT)" if session.paused else ""]
+	lbl_speed.text = "PAUSIERT" if session.paused else ""
 	for i in speed_btns.size():
 		speed_btns[i].set_pressed_no_signal(i == session.speed_idx)
 	minimap.queue_redraw()
@@ -678,6 +716,10 @@ func update_hud(delta: float) -> void:
 
 
 func _update_cards() -> void:
+	for c in cards:
+		var led: Ledger = sim.company(c.cid).ledger
+		c.cash.text = _k(led.cash)
+		c.cash.add_theme_color_override("font_color", UITheme.GOOD if led.profit() >= 0.0 else UITheme.BAD)
 	if entrepreneur_window.visible:
 		_update_entrepreneur()
 

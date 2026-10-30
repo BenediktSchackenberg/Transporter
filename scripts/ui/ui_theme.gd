@@ -74,6 +74,10 @@ static func portrait(avatar_style: int) -> AtlasTexture:
 static func box(bg: Color, border: Color, bw: int, margin: int) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = bg
+	s.set_corner_radius_all(6)
+	s.shadow_color = Color(0, 0, 0, 0.35)
+	s.shadow_size = 3
+	s.shadow_offset = Vector2(0, 2)
 	s.border_color = border
 	s.set_border_width_all(bw)
 	s.content_margin_left = margin + 3
@@ -81,6 +85,19 @@ static func box(bg: Color, border: Color, bw: int, margin: int) -> StyleBoxFlat:
 	s.content_margin_top = margin
 	s.content_margin_bottom = margin
 	return s
+
+
+## Freundlicher Knopf in einer Farbe (Bedienleisten): rund, mit Hover-Aufhellung und Druckeffekt.
+static func color_button(b: Button, base: Color, size: int = 17) -> void:
+	b.custom_minimum_size = Vector2(0, 34)
+	b.add_theme_font_size_override("font_size", size)
+	b.add_theme_stylebox_override("normal", box(base, base.darkened(0.45), 2, 5))
+	b.add_theme_stylebox_override("hover", box(base.lightened(0.18), Color.WHITE.darkened(0.15), 2, 5))
+	b.add_theme_stylebox_override("pressed", box(base.darkened(0.25), ACCENT, 2, 6))
+	b.add_theme_color_override("font_color", Color.WHITE)
+	b.add_theme_color_override("font_hover_color", Color.WHITE)
+	b.add_theme_color_override("font_pressed_color", ACCENT)
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 
 static func label(text: String, size: int = 16, color: Color = TEXT) -> Label:

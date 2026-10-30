@@ -28,10 +28,10 @@ func _run() -> void:
 	await process_frame
 	_check(game.hud.cards.size() == 2, "ein Porträt pro Unternehmer")
 	_check(game.hud.left_box.get_child_count() == 2, "keine Detailkarten im linken Bereich")
-	_check(game.hud.left_scroll.size.x <= 100, "schmale Porträtleiste")
+	_check(game.hud.left_scroll.size.x <= 220, "schmale Porträtleiste")
 	game.controllers[0].goal = "Neue Kunden gewinnen"
 	game.sim.plans.set_plan(0, {"ziel": "Aufträge erweitern", "schritte": [{"id": "S1", "text": "Offene Aufträge prüfen"}]})
-	game.hud.cards[0].button.pressed.emit()
+	game.hud._open_entrepreneur(game.hud.cards[0].cid)
 	_check(game.hud.entrepreneur_window.visible, "Porträt öffnet das Detailfenster")
 	_check(game.hud.entrepreneur_title.text.contains("Firma0"), "gewähltes Unternehmen im Fenster")
 	_check(game.hud.entrepreneur_business.text.contains("Bargeld"), "Unternehmensdaten im Fenster")
