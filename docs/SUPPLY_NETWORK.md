@@ -94,8 +94,8 @@ Ziel: Eine Stadt, deren Versorgung man beobachten und nachvollziehen kann: Waren
 2. Lager als Arbeitsort: Rampen, Lagerpersonal, sichtbare Tätigkeiten, interaktive Lagerübersicht (7, 8) – **fertig**
 3. Verkehr mit Kapazität (5) – **Grundlage fertig** (siehe unten)
 4. Verkehrsmaßnahmen des Bürgermeisters, Ausbauprojekt mit Vorher/Nachher (6) – **Grundlage fertig** (siehe unten)
-5. Restaurants, Geschäfte, Haushaltsbedarf, Warenketten (9, 10, 11)
-6. Müll/Recycling und Mehrweg, Geschäftsereignisse und Diagnosebereich, Authentifizierungsfehler prüfen, Abnahmelauf (12–15)
+5. Restaurants, Geschäfte, Haushaltsbedarf, Warenketten (9, 10, 11) – **fertig** (siehe unten)
+6. Müll/Recycling und Mehrweg, Geschäftsereignisse und Diagnosebereich, Authentifizierungsfehler prüfen, Abnahmelauf (12–15) – **fertig** (siehe unten)
 
 **Etappe 1 – Warenmodell und Stadtlager (29.10.2026)**
 - `StockBook` (`scripts/economy/stock_book.gd`): Posten haben jetzt einen Zustand (`ok`, `pruefung`) und Reservierungen (`reserve`, `release`, `move_reserved`, `consume_reserved`). Reservierte Ware kann weder verbraucht noch verkauft noch verschoben werden (auch nicht vom privaten Großhändler: `Trader.stock_of` zählt nur freie Ware). Verbrauch und Bewegung nie über den Bestand hinaus.
@@ -129,3 +129,19 @@ Ziel: Eine Stadt, deren Versorgung man beobachten und nachvollziehen kann: Waren
 - Aktion `improve_traffic` (`kind` ampel: Kreuzung, 12 000 EUR, 2 Tage · ausbau: Strecke, 40 000 EUR, 6 Tage, währenddessen eine Spur weniger). Nur auf wiederkehrenden Engpässen (Stau an mindestens 3 Tagen); ein einzelner Stau rechtfertigt keinen Ausbau. Über 30 000 EUR entscheidet der Rat. Die Mittel werden reserviert, bei Fertigstellung aus der Stadtkasse bezahlt (Konto S0 = Baufirmen/Lieferanten); danach +1 Kapazität (höchstens +2 je Zelle). `MayorBrain` plant das selbst, wenn das Budget doppelt reicht.
 - Anzeige: Reiter Lage → Abschnitt VERKEHR (Engpässe, Maßnahmen, Verlust je Tag vorher/nachher). Speichern/Laden erhält Maßnahmen und Ausbaustufen.
 - Offen: Maßnahmen Ladezonen, Haltemöglichkeiten, Kreuzungsumbau; Material und Arbeitskräfte aus dem Stadtlager/den Bürgern statt Pauschalpreis; Sperrung der Zelle als sichtbare Baustelle.
+
+**Etappe 5 – Restaurants, Geschäfte, Warenketten (30.10.2026)**
+- `Retail` (`scripts/economy/retail.gd`, `Simulation.retail`): Je Stadtplan bis zu 5 Restaurants, 2 Bäckereien, 2 Lebensmittelgeschäfte (Supermarkt/Kiosk), 1 Getränkemarkt, 1 Drogerie (Apotheke), 1 Möbel- und 1 Technikgeschäft. Jeder Betrieb hat ein eigenes Geschäftskonto (`R<n>` in der Economy, Startkapital von I0), eigenen Bestand im StockBook (Eigentümer = Konto, Standort = Gebäude), Personal (Lohn über S0 wie der Arbeitgeber „handel“), Miete an die Stadt (P0), Preisniveau (Betreiberregel monatlich, 0,85–1,25) und Status (offen, zahlungsschwach, nach 4 Monaten geschlossen).
+- **Restaurant:** Speisekarte mit 4 Gerichten (Gemüsepfanne, Nudeln, Braten, Fassgetränk) aus konkreten Zutaten. Gast kommt → Zutaten werden verbraucht → Haushalt zahlt an der Kasse (H0 → Betriebskonto). Fehlt eine Zutat, entfällt das Gericht (entgangener Umsatz gezählt, Karte zeigt „nicht verfügbar“). Verderb verdirbt täglich einen Teil verderblicher Ware.
+- **Geschäfte:** Regale folgen dem Bestand; leeres Regal ist im Infofeld „AUSVERKAUFT“ und kostet Umsatz. Kundschaft folgt Bevölkerung, Beschäftigung, Wetter (Regen) und Preisniveau; Bedarfsschätzung zählt entgangene Nachfrage mit.
+- **Warenkette:** Produzenten (F0) → Lebensmittelgroßhandel (W0, Lager im Grosshandelsgebäude, Aufschlag 30 %) → Betriebslager → Küche/Regal → Haushalt. Nachschub: Bestand + Bestelltes unter Meldebestand (4 Tage) → Ware beim Großhandel reserviert → echter Transportauftrag (`Contract`, Zahler = Betriebskonto, Auftragsreferenz `shop:…`), den jedes Transportunternehmen annehmen kann; nach 1 Tag ohne Annahme einmal neu ausgeschrieben, danach fährt der Lieferdienst des Großhandels (Lohn an S0). Bezahlt wird bei der Anlieferung. Kein Verbrauch ohne Bestand, keine doppelt verkaufte Ware (Reservierung).
+- Kassenumsatz mindert den pauschalen Konsum der Bürger (`Retail.take_month_sales`), die Haushalte zahlen nicht doppelt.
+- Anzeige: Betrieb anklicken → `LiveText.shop_panel` (Konto, Gewinn, Lager, Speisekarte, Bestellungen); Reiter Lage → HANDEL UND GASTRONOMIE. Geschäftsereignisse im Ereignisprotokoll („X bestellt 24 × Gemüse nach.“, „X: … angeliefert“).
+- Offen: Baumarkt ist als Betriebsart angelegt, aber der Stadtplan enthält kein Baumarkt-Gebäude; Schulen/Kitas als Abnehmer; Betriebsentscheidungen durch Sprachmodelle (derzeit Betreiberregeln; `Retail.set_price_factor` ist die Schnittstelle).
+
+**Etappe 6 – Müll, Recycling, Mehrweg, Abnahme (30.10.2026)**
+- `Waste` (`scripts/economy/waste.gd`, `Simulation.waste`): Abfall aus Haushalten (0,9 kg je Person und Tag) und Verpackung der Verkäufe. Entsorger (S0) holt ab (55 EUR/t) und behandelt Restmüll (70 EUR/t) aus der Stadtkasse; Wertstoffe (Recyclingquote 35 % + bis zu 25 Punkte durch Mehrweg) bringen 30 EUR/t aus dem Ausland. Die Haushalte zahlen monatlich eine Müllgebühr (Kosten + 10 %).
+- **Mehrweg:** Flaschen tragen Pfand (0,25 EUR, bezahlt vom Kunden, erstattet bei Rückgabe). Leergut gehört dem Betrieb, fährt mit der nächsten Lieferung zum Großhandel zurück (keine Leerfahrt; Großhandel erstattet das Pfand) und wird dort wiederbefüllt (40 % des Neupreises).
+- **Abnahme (Abschnitt 15):** `test_supply_acceptance` fährt Engpass → Maßnahme des Bürgermeisters → neue Kapazität und parallel Restaurant-Bestellung → Lieferung → Gericht → Konten durch. Diagnose: `tests/probe_city_cash.gd` (Stadtkasse), Reiter Lage.
+- Stadtfinanzen: Der Rat passt den kommunalen Umsatzsteueranteil monatlich an die Stadtkasse an (`PublicSector._adjust_rate`, Soll 250 000 EUR, 15–60 %); dazu Mieten der Betriebe und Müllgebühr.
+- Offen: Müllbehälter/Fahrzeuge aus dem Stadtlager statt Pauschalpreis, Sprachmodell-Entscheidungen der Betriebe, öffentlicher Nahverkehr, Strom/Wasser, Landwirtschaft, Reparaturbetriebe (Abschnitt 12 „anschließende Kreisläufe“).

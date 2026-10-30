@@ -10,7 +10,7 @@ func _initialize() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1
 	var last_day := -1
-	for step in 330000:
+	for step in 420000:
 		if step % 200 == 0:
 			for c in s.companies:
 				var obs := ObservationBuilder.build(s, c.id, [], 0.0, 10.0)
@@ -22,7 +22,7 @@ func _initialize() -> void:
 			last_day = day
 			if day >= 105 and day % 15 == 0:
 				_dump(s)
-			print("Tag %d  P0 %d  vat %d" % [day, int(s.economy.accounts.get("P0", 0.0)), int(s.public_sector.vat_total)])
+			print("Tag %d  P0 %d  vat %d  Satz %.2f" % [day, int(s.economy.accounts.get("P0", 0.0)), int(s.public_sector.vat_total), s.public_sector.vat_rate])
 	quit()
 
 

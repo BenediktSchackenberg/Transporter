@@ -13,7 +13,7 @@ extends RefCounted
 const SEED := {"H0": 300000.0, "P0": 200000.0, "X0": 200000.0, "S0": 100000.0, "B1": 400000.0, "B2": 600000.0, "B3": 300000.0, "T0": 120000.0, "G0": 80000.0, "C0": 0.0, "I0": 150000.0, "K0": 0.0, "D0": 140000.0}
 const NAMES := {
 	"H0": "Haushalte", "P0": "Öffentliche Hand", "X0": "Ausland", "S0": "Dienstleister",
-	"B1": "Geschäftsbank", "B2": "Investitionsbank", "B3": "Handelsbank", "T0": "Bauhof (Großhandel)", "G0": "Tankstellenbetreiber", "C0": "Verrechnung zwischen Firmen", "I0": "Kapitalgeber", "K0": "Baufirmen", "D0": "Bauträger",
+	"B1": "Geschäftsbank", "B2": "Investitionsbank", "B3": "Handelsbank", "T0": "Bauhof (Großhandel)", "G0": "Tankstellenbetreiber", "C0": "Verrechnung zwischen Firmen", "I0": "Kapitalgeber", "K0": "Baufirmen", "D0": "Bauträger", "W0": "Lebensmittelgroßhandel", "F0": "Produzenten",
 }
 ## Standardgegenkonto je Buchungskategorie (siehe Ledger.LABELS)
 const COUNTER := {

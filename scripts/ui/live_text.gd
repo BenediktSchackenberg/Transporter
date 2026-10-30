@@ -229,7 +229,72 @@ static func situation(sim: Simulation, remaining_real_min: float) -> String:
 			("%s, %s, %s" % [k.id, Catalog.money(k.reward), ("angenommen von " + sim.company(k.owner).company_name) if k.owner >= 0 else "wartet auf ein Unternehmen"]) if k else "–"]
 	for p in fresh.slice(0, 6):
 		txt += "  [color=%s]%s (%s) ist %s[/color]\n" % ["#8fe0a0" if p.state == "zufrieden" else "#ff6b5e", esc(p.name), esc(p.role), p.state]
-	return txt + traffic_block(sim) + district_block(sim) + fuel_block(sim) + news_block(sim)
+	return txt + traffic_block(sim) + retail_block(sim) + district_block(sim) + fuel_block(sim) + news_block(sim)
+
+
+## Handel und Abfall: Kennzahlen aller Restaurants und Geschaefte, Muellabfuhr mit Recyclingquote.
+static func retail_block(sim: Simulation) -> String:
+	var R: Retail = sim.retail
+	var sm := R.summary()
+	var txt := "
+[b][color=#f2c14e]HANDEL UND GASTRONOMIE[/color][/b] – %d Betriebe, Umsatz %s, %d Verkäufe, %d entgangen, %d Nachbestellungen (%d geliefert, %d mit eigenem Lieferdienst)
+" % [
+		int(sm.betriebe), Catalog.money(float(sm.umsatz)), int(sm.verkauft), int(sm.entgangen), int(sm.bestellungen), int(sm.geliefert), int(sm.eigene_lieferfahrten)]
+	for s in R.shops.values():
+		var col := "#8fe0a0" if s.status == "offen" else "#ff6b5e"
+		txt += "  [color=%s]%s[/color] (%s) Kasse %s · Gewinn %s%s
+" % [col, esc(s.name), R.spec_of(s).label, Catalog.money(float(sim.economy.accounts[s.id])), Catalog.money(R.profit_of(s)),
+			(" · [color=#ffb347]fehlt: " + ", ".join(s.missing.map(func(k): return Retail.GOODS[k].name)) + "[/color]") if not s.missing.is_empty() else ""]
+	var W: Waste = sim.waste
+	txt += "[b]Müllabfuhr[/b] %.1f t gesamt · Recyclingquote %d %% · Mehrwegquote %d %% · %d Flaschen wiederbefüllt · Gebühren %s, Kosten %s
+" % [float(W.total.tons), roundi(W.rate * 100.0),
+		roundi(W.mehrweg_share() * 100.0), int(R.stats.bottles_reused), Catalog.money(float(W.total.fees)), Catalog.money(float(W.total.cost))]
+	return txt
+
+
+## Anzeige eines angeklickten Betriebs: Konto, Personal, Bestand, Bestellungen, Zahlen.
+static func shop_panel(sim: Simulation, s: Dictionary) -> String:
+	var R: Retail = sim.retail
+	var spec: Dictionary = R.spec_of(s)
+	var txt := "[b]%s[/b] (%s) · Konto %s · Status %s
+" % [esc(s.name), spec.label, s.id, s.status]
+	txt += "Kasse %s · Personal %d · Miete %s/Monat · Preisniveau %.2f
+" % [Catalog.money(float(sim.economy.accounts[s.id])), int(s.staff), Catalog.money(float(spec.rent)), float(s.price_factor)]
+	txt += "Umsatz %s · Wareneinsatz %s · Löhne %s · Miete %s · Fracht %s → [b]Gewinn %s[/b] · %d Verkäufe, %d entgangen
+" % [Catalog.money(float(s.revenue)), Catalog.money(float(s.cogs)),
+		Catalog.money(float(s.wages)), Catalog.money(float(s.rent)), Catalog.money(float(s.freight)), Catalog.money(R.profit_of(s)), int(s.units), int(s.lost)]
+	txt += "[b]Lager[/b]
+"
+	for item in spec.goods:
+		var have := R.stock_of(s, item)
+		var inc := R.incoming(s, item)
+		var empty := have <= 0
+		txt += "  %s%s: %d %s%s%s[/color]
+" % ["[color=#ff6b5e]" if empty else "[color=#ece8dc]", Retail.GOODS[item].name, have, Retail.GOODS[item].unit,
+			(" · unterwegs %d" % inc) if inc > 0 else "", " – AUSVERKAUFT" if empty else ""]
+	var leer := sim.stock.qty("leergut", s.id, int(s.building))
+	if leer > 0 or int(s.out_bottles) > 0:
+		txt += "  Leergut im Lager: %d · Pfandflaschen bei Kunden: %d
+" % [leer, int(s.out_bottles)]
+	if s.kind == "restaurant":
+		var menu: Array = []
+		for dn in spec.dishes:
+			var d: Dictionary = Retail.DISHES[dn]
+			var can := true
+			for it in d.uses:
+				if R.stock_of(s, it) < int(d.uses[it]):
+					can = false
+			menu.append("%s %s%s" % [d.name, Catalog.money(float(d.price) * float(s.price_factor)), "" if can else " (nicht verfügbar)"])
+		txt += "[b]Speisekarte[/b] " + " · ".join(menu) + "
+"
+	var mine: Array = R.orders.values().filter(func(o): return o.shop == s.id and o.status != "geliefert")
+	for o in mine.slice(0, 4):
+		txt += "  Bestellung %s: %d × %s – %s
+" % [o.id, int(o.qty), Retail.GOODS[o.item].name, o.status]
+	if s.last_event != "":
+		txt += "[color=#9a98a8]%s[/color]
+" % esc(s.last_event)
+	return txt
 
 
 ## Verkehrslage: Tempo, Stosszeit, wiederkehrende Engpaesse und Verkehrsmassnahmen mit Vorher/Nachher.

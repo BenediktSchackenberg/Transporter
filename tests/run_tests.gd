@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3676,3 +3676,94 @@ func _traffic_measures_test() -> void:
 	ok(identity_ok(s), "Geld erhalten")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.traffic_flow.capacity_of(junction) == cap0 + 1 and s2.traffic_flow.measures.size() == 1, "Massnahmen nach Laden erhalten")
+
+
+func test_retail() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	var R := s.retail
+	ok(R.shops.size() >= 3, "Restaurants und Geschäfte aus dem Stadtplan (%d Betriebe)" % R.shops.size())
+	ok(R.shops.values().any(func(x): return x.kind == "restaurant"), "mindestens ein Restaurant")
+	for x in R.shops.values():
+		ok(s.economy.accounts.has(x.id) and float(s.economy.accounts[x.id]) >= 0.0, "Betrieb %s hat ein eigenes Konto" % x.name)
+		break
+	ok(identity_ok(s), "Geld und Waren zu Beginn erhalten")
+	run(s, 60.0 * 12.0)
+	var sm := R.summary()
+	ok(float(sm.umsatz) > 0.0 and int(sm.verkauft) > 0, "Haushalte kaufen ein (Umsatz %s)" % Catalog.money(float(sm.umsatz)))
+	ok(int(sm.bestellungen) > 0, "Betriebe bestellen Nachschub (%d Bestellungen)" % int(sm.bestellungen))
+	ok(int(sm.geliefert) > 0, "Nachschub wird angeliefert (%d)" % int(sm.geliefert))
+	ok(R.orders.values().any(func(o): return s.contracts.has(o.contract) and s.contracts[o.contract].payer == o.shop), "Transportauftrag mit dem Betrieb als Zahler")
+	ok(s.stock.balance_error() == 0, "Warenbilanz stimmt")
+	ok(identity_ok(s), "Geld und Waren nach 12 Tagen erhalten")
+	# fehlende Zutat: Gericht entfaellt, entgangener Umsatz wird gezaehlt
+	var rest: Dictionary = R.shops.values().filter(func(x): return x.kind == "restaurant")[0]
+	for it in ["gemuese", "fleisch", "teigwaren", "milch_zutat", "fassgetraenk"]:
+		s.stock.consume(it, s.stock.qty(it, rest.id, rest.building) + 0, rest.id, rest.building, "Test")
+	var lost0 := int(rest.lost)
+	R._serve(rest, 99)
+	ok(int(rest.lost) > lost0 and "gemuese" in rest.missing, "ohne Zutaten keine Gerichte, Verlust gezählt")
+	# Pfand und Mehrweg
+	var bev: Dictionary = R.shops.values().filter(func(x): return "flasche" in R.spec_of(x).goods)[0]
+	s.stock.add("flasche", 40, bev.id, bev.building, "Test", s.game_min)
+	var h0 := float(s.economy.accounts.H0)
+	R._serve(bev, 100)
+	R._returns(bev)
+	ok(s.stock.qty("leergut", bev.id, bev.building) > 0, "Leergut kommt zurück und gehört dem Betrieb")
+	R._return_empties(bev)
+	ok(s.stock.qty("leergut", bev.id, bev.building) == 0 and s.stock.qty("leergut", Retail.WHOLESALER, R.wholesale_building) > 0, "Leergut fährt mit der Lieferung zum Großhandel zurück")
+	ok(identity_ok(s), "Pfandkreislauf erhält Geld und Waren")
+	# Monatsabschluss: Loehne an S0, Miete an P0
+	var p0 := float(s.economy.accounts.P0)
+	R.on_month(1)
+	ok(float(s.economy.accounts.P0) > p0 and rest.wages > 0.0, "Miete an die Stadt, Löhne bezahlt")
+	ok(identity_ok(s), "Monatsabschluss erhält Geld")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.retail.shops.size() == R.shops.size() and s2.retail.orders.size() == R.orders.size(), "Betriebe und Bestellungen nach Laden erhalten")
+	ok(identity_ok(s2), "Geld und Waren nach Laden erhalten")
+
+func test_waste() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	var W := s.waste
+	var p0 := float(s.economy.accounts.P0)
+	run(s, 60.0 * 31.0)   # ein Monat
+	ok(float(W.total.tons) > 20.0 and float(W.total.cost) > 0.0, "Abfall wird gesammelt und bezahlt (%.1f t)" % float(W.total.tons))
+	ok(W.rate >= Waste.BASE_RECYCLING and W.rate <= Waste.BASE_RECYCLING + Waste.MEHRWEG_BONUS, "Recyclingquote im Rahmen (%d %%)" % roundi(W.rate * 100.0))
+	ok(float(W.total.fees) > 0.0 and not W.last_month.is_empty(), "Gebühr der Haushalte nach Monatsabschluss")
+	ok(float(s.economy.accounts.P0) > p0 - 20000.0, "Müllabfuhr bricht die Stadtkasse nicht")
+	ok(s.retail.stats.bottles_sold > 0 and s.retail.stats.bottles_returned > 0, "Mehrwegflaschen werden verkauft und zurückgegeben")
+	ok(identity_ok(s), "Geld und Waren erhalten")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(is_equal_approx(float(s2.waste.total.tons), float(W.total.tons)) and s2.waste.rate == W.rate, "Müllstatistik nach Laden erhalten")
+	ok(LiveText.retail_block(s).contains("HANDEL") and LiveText.shop_panel(s, s.retail.shops.values()[0]).contains("Lager"), "Anzeigen liefern Text")
+
+## Abnahme Auftrag 5 (Abschnitt 15): Engpass -> Massnahme des Buergermeisters -> neue Kapazitaet; parallel Restaurant: Bestellung -> Lieferung -> Gericht -> Konten.
+func test_supply_acceptance() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2, 256)
+	var T := s.traffic_flow
+	var cell := Vector2i(-1, -1)
+	for y in s.city.size:
+		for x in s.city.size:
+			if cell.x < 0 and s.city.is_road(Vector2i(x, y)) and T.is_junction(Vector2i(x, y)):
+				cell = Vector2i(x, y)
+	T.lost_by_cell[cell] = 300.0                                  # 1 wiederkehrender Engpass
+	T.jam_days[cell] = TrafficFlow.RECURRING_DAYS
+	var cap0 := T.capacity_of(cell)
+	var plan := MayorBrain.decide(s.mayor.indicators())           # 2 Verwaltung beschliesst eine finanzierte Massnahme
+	var act: Dictionary = plan.actions.filter(func(a): return a.action == "improve_traffic")[0]
+	ok(s.mayor.execute(act).ok, "Bürgermeister beschließt die Verkehrsmaßnahme")
+	var rest: Dictionary = s.retail.shops.values().filter(func(x): return x.kind == "restaurant")[0]
+	var orders0: int = s.retail.stats.orders
+	run(s, 60.0 * 10.0)                                           # 9-10 Restaurant bestellt, Lieferung kommt an (Transportauftrag oder Lieferdienst)
+	ok(T.capacity_of(cell) == cap0 + 1, "8 nach der Bauzeit wirkt die neue Kapazität")
+	ok(s.retail.stats.orders > orders0 and s.retail.stats.delivered > 0, "Betriebe bestellen und bekommen Ware")
+	var rev0 := float(rest.revenue)
+	run(s, 60.0 * 2.0)
+	ok(float(rest.revenue) > rev0 and float(rest.cogs) > 0.0, "11 Bewohner bezahlen Gerichte, Zutaten werden verbraucht")
+	var p0 := float(s.economy.accounts.P0)
+	var s0 := float(s.economy.accounts.S0)
+	s.retail.on_month(1)
+	ok(float(s.economy.accounts.P0) > p0 and rest.wages > 0.0 and float(s.economy.accounts.S0) != s0, "12 Löhne, Miete und Abgaben erscheinen in den Konten")
+	ok(identity_ok(s), "Geld und Waren bleiben in allen Konten erhalten")

@@ -32,6 +32,8 @@ var permits := Permits.new()
 var mayor := Mayor.new()
 var construction := Construction.new()
 var city_depot := CityDepot.new()
+var waste := Waste.new()              # Muell, Recycling, Mehrweg (Auftrag 5, Abschnitt 12)
+var retail := Retail.new()              # Restaurants und Geschaefte (Auftrag 5, Abschnitte 9-11)
 var traffic_flow := TrafficFlow.new()   # Strassenkapazitaet und Zeitverlust (Auftrag 5, Abschnitt 5)
 var reserve_share := 0.0
 var care := BuildingCare.new()
@@ -105,6 +107,8 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	construction.setup(self)
 	city_depot.setup(self)
 	traffic_flow.setup(self)
+	retail.setup(self)
+	waste.setup(self)
 	households.setup(self)
 	care.setup(self)
 	workforce.setup(self)
@@ -598,7 +602,9 @@ func deliver_contract(v: FleetVehicle, k: Contract) -> void:
 	k.status = "delivered"
 	k.paid = pay
 	k.done_at = game_min
-	if k.order_ref != "":
+	if k.order_ref.begins_with("shop:"):
+		retail.contract_delivered(k)
+	elif k.order_ref != "":
 		city_depot.contract_delivered(k)
 	memory.record_contract(c.id, k, late_h <= 0.0, pay)
 	decisions.note(c.id, "auto", "Auftrag %s geliefert: %s%s" % [k.id, Catalog.money(pay), "" if late_h <= 0.0 else " (verspätet)"], {"contract_id": k.id})
@@ -1041,7 +1047,7 @@ func to_dict() -> Dictionary:
 	return {"seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
 
@@ -1081,6 +1087,8 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.construction.from_dict(d.get("construction", {}))
 	s.city_depot.from_dict(d.get("city_depot", {}))
 	s.traffic_flow.from_dict(d.get("traffic_flow", {}))
+	s.retail.from_dict(d.get("retail", {}))
+	s.waste.from_dict(d.get("waste", {}))
 	s.care.from_dict(d.get("care", {}))
 	s.workforce.from_dict(d.get("workforce", {}))
 	s.news.from_dict(d.get("news", {}))

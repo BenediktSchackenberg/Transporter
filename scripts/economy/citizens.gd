@@ -228,8 +228,10 @@ func _pay() -> void:
 		sim.public_sector.departments.Soziales += benefit
 	stats.benefits = benefit
 	# Konsum der Buerger: Handel (S0) und Importe (X0)
-	sim.economy.transfer("H0", "S0", (net + benefit) * SPEND_SHARE)
-	sim.public_sector.consumption_tax((net + benefit) * SPEND_SHARE)
+	var spend := (net + benefit) * SPEND_SHARE
+	var at_tills := minf(spend, sim.retail.take_month_sales())   # was an den Kassen der Betriebe bezahlt wurde, zahlt der Haushalt nicht noch einmal pauschal
+	sim.economy.transfer("H0", "S0", spend - at_tills)
+	sim.public_sector.consumption_tax(spend)
 	var imports := (net + benefit) * IMPORT_SHARE
 	sim.economy.transfer("H0", "X0", imports)
 	sim.economy.transfer("X0", "S0", imports)   # Ausfuhren der Stadtwirtschaft gleichen die Importe aus
