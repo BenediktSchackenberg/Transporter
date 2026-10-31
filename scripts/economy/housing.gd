@@ -27,7 +27,7 @@ const INDEX_STEP := 0.004          # hoechste Mietanpassung je Monat (rund 5 % i
 var sim: Simulation
 var units := {}                    # "E<n>" -> {id, building, area, base, rent, owner ("V0" | "D0" | "H<n>" | "C<n>"), tenant ("" | "H<n>" | "B" = Buergergruppe), arrears, paid}
 var index := 1.0                   # Mietspiegel relativ zum Ausgangswert, folgt dem Mietindex des Buergermeisters
-var stats := {"rent": 0.0, "evictions": 0, "homeless": 0, "moves": 0}
+var stats := {"rent": 0.0, "evictions": 0, "homeless": 0, "moves": 0, "job_moves": 0}
 var _next := 1
 
 
@@ -253,6 +253,41 @@ func _evict_overdue() -> void:
 
 
 ## Wer ohne Wohnung ist (geraeumt oder zugezogen), bekommt die guenstigste freie Einheit.
+## Umzug nach Arbeitsplatzwechsel: Liegt die neue Stelle in einem anderen Viertel als die Wohnung, zieht die ganze Buergergruppe in die
+## passende freie Einheit des Arbeitsviertels, sofern die Miete hoechstens MAX_BURDEN des geschaetzten Haushaltseinkommens betraegt.
+const MAX_BURDEN := 0.4
+const MOVE_CHANCE := 0.5
+
+func relocate_for_job(p: Dictionary, district: int, month: int) -> bool:
+	var uid := str(p.get("home", ""))
+	var old: Dictionary = units.get(uid, {})
+	if old.is_empty() or old.tenant != "B" or Citizens.roll(int(p.id), month, 6) >= MOVE_CHANCE:
+		return false
+	if int(sim.city.building(int(old.building)).get("district", 0)) == district:
+		return false
+	var group: Array = _citizen_occupants().get(uid, [])
+	var income := 0.0
+	for q in group:
+		income += float(q.wage) * Citizens.HOURS_PER_MONTH * 0.78
+	var want := 35.0 * group.size()
+	var best: Dictionary = {}
+	for u in vacant_units():
+		if int(sim.city.building(int(u.building)).get("district", 0)) != district or float(u.rent) > MAX_BURDEN * income:
+			continue
+		if best.is_empty() or absf(u.area - want) < absf(best.area - want) or (absf(u.area - want) == absf(best.area - want) and u.id < best.id):
+			best = u
+	if best.is_empty():
+		return false
+	for q in group:
+		q.home = best.id
+	best.tenant = "B"
+	best.arrears = 0
+	old.tenant = ""
+	old.arrears = 0
+	stats.job_moves += 1
+	return true
+
+
 func _house_homeless() -> void:
 	var free := vacant_units()
 	free.sort_custom(func(a, b): return a.rent < b.rent or (a.rent == b.rent and a.id < b.id))
@@ -335,5 +370,6 @@ func from_dict(d: Dictionary) -> void:
 	stats.evictions = int(stats.evictions)
 	stats.homeless = int(stats.homeless)
 	stats.moves = int(stats.moves)
+	stats.job_moves = int(stats.get("job_moves", 0))
 	_next = int(d.get("next", 1))
 	index = float(d.get("index", 1.0))

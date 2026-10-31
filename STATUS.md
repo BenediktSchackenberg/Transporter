@@ -150,4 +150,5 @@ Entwurf, Umsetzung und Grenzen je Etappe stehen in `docs/HOUSING_AND_MONEY.md` (
 - **Aufsicht (B5):** Gewerbeaufsicht mit Auflagen und Bußgeldern, Einsätze der Stadt bei Wetterereignissen.
 - **Nicht gemessen:** Das Langzeitverhalten der Konten mit Mieten (`tests/probe_housing_cash.gd` brach wegen Speichermangel nach 15 Spieltagen ab) und die Szenarien des Wirtschaftslabors über 30 Tage.
 - **Frühere Testfehler behoben (31.10.2026):** `StockBook.consume` buchte auch die nicht vorhandene Menge als verbraucht (Warenbilanz, `test_city_depot`); `test_money_conservation` und `test_public_sector` prüften veraltete Annahmen (Anfangsbestand von I0, Stadtkasse über dem Ausgangsstand).
-- **Noch offen im Gesamtprojekt:** Umzug bei Arbeitsplatzwechsel, Spielerkredite (Auftrag 2, M8 macht eine andere KI), Animationen Ein-/Aussteigen und Winterkleidung, Strategische Steuerung Stufe 6, Tests für Kühllager, Tankstelle, Waschplatz, Schulung, Garage.
+- **Umzug bei Arbeitsplatzwechsel:** Bürgergruppen ziehen ins Arbeitsviertel (`Housing.relocate_for_job`, Test `test_job_move`).
+- **Noch offen im Gesamtprojekt:** Spielerkredite (Auftrag 2, M8 macht eine andere KI), Animationen Ein-/Aussteigen und Winterkleidung, Strategische Steuerung Stufe 6. Tests für Kühllager, Tankstelle, Waschplatz, Schulung und Garage: `test_estate_facilities`.

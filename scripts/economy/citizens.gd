@@ -14,14 +14,14 @@ const DEMAND_SWING := 0.12         # Schwankung des Personalbedarfs je Arbeitgeb
 const BENEFIT_RATE := 0.6          # Arbeitslosengeld in Anteil des mittleren Nettolohns
 const SPEND_SHARE := 0.8           # Anteil des Nettos, der an S0 geht
 const IMPORT_SHARE := 0.1          # Anteil fuer Importe (X0); der Rest wird gespart
-## Arbeitgeber der uebrigen Buerger: Anteil an den Stellen, Stundenlohn, zahlendes Konto
+## Arbeitgeber der uebrigen Buerger: Anteil an den Stellen, Stundenlohn, zahlendes Konto, Arbeitsviertel (Index in Catalog.DISTRICTS)
 const EMPLOYERS := {
-	"rathaus": {"label": "Rathaus", "share": 0.06, "wage": 15.0, "payer": "P0"},
-	"schule_klinik": {"label": "Schulen und Klinik", "share": 0.10, "wage": 14.0, "payer": "P0"},
-	"baufirma": {"label": "Baufirma", "share": 0.20, "wage": 15.0, "payer": "S0"},
-	"handel": {"label": "Handel und Gastronomie", "share": 0.32, "wage": 11.0, "payer": "S0"},
-	"industrie": {"label": "Industrie und Handwerk", "share": 0.32, "wage": 14.0, "payer": "S0"},
-	"stadtlager": {"label": "Stadtlager", "share": 0.008, "wage": 13.0, "payer": "P0"},
+	"rathaus": {"label": "Rathaus", "share": 0.06, "wage": 15.0, "payer": "P0", "district": 0},
+	"schule_klinik": {"label": "Schulen und Klinik", "share": 0.10, "wage": 14.0, "payer": "P0", "district": 1},
+	"baufirma": {"label": "Baufirma", "share": 0.20, "wage": 15.0, "payer": "S0", "district": 5},
+	"handel": {"label": "Handel und Gastronomie", "share": 0.32, "wage": 11.0, "payer": "S0", "district": 0},
+	"industrie": {"label": "Industrie und Handwerk", "share": 0.32, "wage": 14.0, "payer": "S0", "district": 2},
+	"stadtlager": {"label": "Stadtlager", "share": 0.008, "wage": 13.0, "payer": "P0", "district": 3},
 }
 
 var sim: Simulation
@@ -180,6 +180,7 @@ func _dynamics(month: int) -> void:
 				vac[p.employer] = int(vac[p.employer]) + 1
 				vac[target] = int(vac[target]) - 1
 				_employ(p, target, roll(int(p.id), month, 4))
+				sim.housing.relocate_for_job(p, int(EMPLOYERS[target].district), month)
 				stats.changes += 1
 		elif r > 1.0 - DROP_CHANCE:
 			vac[p.employer] = int(vac[p.employer]) + 1
@@ -198,6 +199,7 @@ func _dynamics(month: int) -> void:
 			break
 		vac[best] = int(vac[best]) - 1
 		_employ(p, best, roll(int(p.id), month, 5))
+		sim.housing.relocate_for_job(p, int(EMPLOYERS[best].district), month)
 		stats.hires += 1
 	for p in people:
 		if p.employer == "":

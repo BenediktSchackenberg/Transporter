@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3860,6 +3860,53 @@ func test_housing() -> void:
 	ok(s2.citizens.people.all(func(p): return str(p.get("home", "")) == "" or s2.housing.units.has(p.home)), "Wohnorte der Bürger geladen")
 	run(s2, 60.0 * 35.0)
 	ok(identity_ok(s2), "Geld erhalten nach Laden mit Mieten")
+
+
+func test_job_move() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var H: Housing = s.housing
+	var occ := H._citizen_occupants()
+	var uid := ""
+	for k in occ:
+		if H.units[k].tenant == "B":
+			uid = k
+			break
+	ok(uid != "", "Es gibt eine bewohnte Bürgereinheit")
+	var group: Array = occ[uid]
+	var p: Dictionary = group[0]
+	for q in group:
+		q.wage = 20.0
+	var old: Dictionary = H.units[uid]
+	var old_d := int(s.city.building(int(old.building)).get("district", 0))
+	var target: Dictionary = {}
+	for u in H.vacant_units():
+		if int(s.city.building(int(u.building)).get("district", 0)) != old_d:
+			target = u
+			break
+	ok(not target.is_empty(), "Freie Einheit in einem anderen Viertel vorhanden")
+	var d := int(s.city.building(int(target.building)).get("district", 0))
+	var month := 0
+	while Citizens.roll(int(p.id), month, 6) >= Housing.MOVE_CHANCE:
+		month += 1
+	# gleiches Viertel: kein Umzug
+	ok(not H.relocate_for_job(p, old_d, month), "Stelle im eigenen Viertel: kein Umzug")
+	# zu geringes Einkommen: kein Umzug
+	for q in group:
+		q.wage = 0.1
+	ok(not H.relocate_for_job(p, d, month), "Miete über der Belastungsgrenze: kein Umzug")
+	for q in group:
+		q.wage = 200.0
+	var total := s.citizens.people.size()
+	ok(H.relocate_for_job(p, d, month), "Neue Stelle im anderen Viertel: Umzug")
+	var moved := true
+	for q in group:
+		moved = moved and str(q.home) != uid and int(s.city.building(int(H.units[str(q.home)].building)).get("district", 0)) == d
+	ok(moved and old.tenant == "" and H.units[str(p.home)].tenant == "B", "Ganze Gruppe zieht um, alte Einheit wird frei")
+	ok(H.stats.job_moves == 1 and s.citizens.people.size() == total, "Umzug gezählt, niemand verschwindet")
+	ok(identity_ok(s), "Geld erhalten nach Umzug")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.housing.stats.job_moves == 1, "Umzugszähler bleibt nach Laden erhalten")
 
 
 func test_housing_market() -> void:
