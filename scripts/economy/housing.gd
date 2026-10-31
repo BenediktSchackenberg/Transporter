@@ -302,6 +302,26 @@ func summary() -> Dictionary:
 		"mieteinnahmen": stats.rent, "raeumungen": stats.evictions, "wohnungslos": homeless_count()}
 
 
+## Planungshilfen fuer Buergermeister und Bautraeger: Wohnungsbedarf und Zahlungsfaehigkeit der Mieter.
+## Bedarf = wohnungslose Personen (je Einheit PERSONS_PER_UNIT) + wartende Haushalte - Leerstand ueber dem Sollwert.
+func planning_aids() -> Dictionary:
+	var vacant := vacant_units().size()
+	var spare := maxi(0, vacant - ceili(Mayor.BASE_VACANCY * units.size()))
+	var need := maxi(0, ceili(float(homeless_count()) / Mayor.PERSONS_PER_UNIT) + sim.mayor.waiting - spare)
+	var occupied := units.size() - vacant
+	var late := units.values().filter(func(u): return u.tenant != "" and int(u.arrears) > 0).size()
+	var burden := 0.0
+	var k := 0
+	for u in units.values():
+		if u.tenant != "" and u.tenant != "B" and sim.households.homes.has(u.tenant):
+			var inc := float(sim.households.homes[u.tenant].get("last_income", 0.0))
+			if inc > 0.0:
+				burden += rent_due(u) / inc
+				k += 1
+	return {"wohnungsbedarf_einheiten": need, "zahlungsfaehigkeit": snappedf(1.0 - float(late) / maxf(1.0, float(occupied)), 0.001),
+		"mietbelastung_firmenhaushalte": snappedf(burden / maxf(1.0, float(k)), 0.01), "mietspiegel": snappedf(index, 0.001)}
+
+
 func to_dict() -> Dictionary:
 	return {"units": units, "stats": stats, "next": _next, "index": index}
 

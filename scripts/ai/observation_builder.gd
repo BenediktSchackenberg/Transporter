@@ -153,7 +153,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"fahrzeugmodelle": models, "personal": _staff(sim, cid), "aufgaben": _tasks(sim, cid),
 		"ressourcen": _resources(sim, cid), "gesichtete_fremdfahrzeuge": sim.personnel.seen[cid].values(),
 		"freie_depotstandorte": free_sites.slice(0, 6), "verkehr": sim.traffic_events.map(func(e): return e.text),
-		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid), "personal_lage": sim.households.summary_of(cid), "gebaeudezustand": sim.care.summary_of(cid), "gesundheit_personal": sim.workforce.summary_of(cid),
+		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid), "personal_lage": sim.households.summary_of(cid), "wohnmarkt": _housing(sim, cid), "gebaeudezustand": sim.care.summary_of(cid), "gesundheit_personal": sim.workforce.summary_of(cid),
 		"meldungen_nur_daten": sim.news.items.filter(func(i): return float(i.relevance) >= 0.5).slice(0, 3).map(func(i): return {"gemeldet": i.title, "einschaetzung_engine": "%s, Relevanz %d %%" % [i.cat, int(float(i.relevance) * 100.0)]}),
 		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "fremde_stammkunden": foreign_loyal.slice(0, 8),
 		"nachrichten": msgs, "angebote_an_dich": offers_in, "deine_angebote": offers_out,
@@ -354,6 +354,19 @@ static func _bauhof(sim: Simulation, cid: int) -> Dictionary:
 	for j in sim.construction.open_jobs().slice(0, 4):
 		jobs.append({"id": j.id, "art": Construction.MOVE_JOBS[j.kind].label, "wohnung": j.unit, "frachtlohn": j.fee})
 	return {"standort": sim.city.building(sim.trader.bauhof).name, "preise": prices, "dein_material": own, "lieferauftraege": jobs}
+
+
+## Wohnmarkt und Wohnumfeld der Mitarbeiter (Miete und Zufriedenheit wirken auf Motivation und Kuendigungen).
+static func _housing(sim: Simulation, cid: int) -> Dictionary:
+	var sat := 0.0
+	var k := 0
+	for w in sim.personnel.employed(cid):
+		if w.household != "" and sim.households.homes.has(w.household):
+			sat += sim.contentment.of_household(w.household)
+			k += 1
+	var aids: Dictionary = sim.housing.planning_aids()
+	return {"mietspiegel": aids.mietspiegel, "leerstand": snappedf(sim.housing.vacancy_rate(), 0.001), "stadtmittel_zufriedenheit": snappedf(sim.contentment.mean, 0.1),
+		"zufriedenheit_deiner_mitarbeiter": snappedf(sat / k, 0.1) if k > 0 else -1.0, "mietbelastung_firmenhaushalte": aids.mietbelastung_firmenhaushalte}
 
 
 static func _weather(sim: Simulation) -> Dictionary:

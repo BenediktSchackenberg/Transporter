@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3976,3 +3976,35 @@ func test_contentment() -> void:
 	ok(absf(s2.contentment.mean - C.mean) < 0.001 and s2.contentment.emigrated == C.emigrated, "Zufriedenheit gespeichert und geladen")
 	run(s2, 60.0 * 35.0)
 	ok(identity_ok(s2), "Geld erhalten nach Laden mit Zufriedenheit")
+
+
+func test_planning_aids() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	s.contentment.on_month(1)
+	var aids: Dictionary = s.housing.planning_aids()
+	ok(aids.has("wohnungsbedarf_einheiten") and aids.has("zahlungsfaehigkeit") and aids.has("mietbelastung_firmenhaushalte"), "Planungshilfen vollständig")
+	ok(float(aids.zahlungsfaehigkeit) <= 1.0 and float(aids.zahlungsfaehigkeit) > 0.9, "Zahlungsfähigkeit zu Beginn hoch (%.3f)" % float(aids.zahlungsfaehigkeit))
+	# Wohnungsnot erhöht den Bedarf
+	var need0 := int(aids.wohnungsbedarf_einheiten)
+	s.mayor.waiting = 2000   # mehr als der Leerstand über dem Sollwert
+	ok(int(s.housing.planning_aids().wohnungsbedarf_einheiten) >= need0 + 1, "Wartende Haushalte erhöhen den Wohnungsbedarf (%d)" % int(s.housing.planning_aids().wohnungsbedarf_einheiten))
+	var homeless := 0
+	for p in s.citizens.people.slice(0, 24):
+		p.home = ""
+		homeless += 1
+	ok(s.housing.homeless_count() == homeless, "Wohnungslose gezählt (%d)" % homeless)
+	# Zahlungsfähigkeit sinkt mit Mietrückstand
+	var late := 0
+	for u in s.housing.units.values():
+		if u.tenant != "" and late < 20:
+			u.arrears = 1
+			late += 1
+	ok(float(s.housing.planning_aids().zahlungsfaehigkeit) < float(aids.zahlungsfaehigkeit), "Mietrückstände senken die Zahlungsfähigkeit")
+	# Bürgermeister sieht die Kennzahlen
+	var ind: Dictionary = s.mayor.indicators()
+	ok(ind.wohnen.has("planung") and ind.wohnen.has("zufriedenheit") and ind.wohnen.has("wohnungslos"), "Bürgermeister-Kennzahlen enthalten Wohnen, Zufriedenheit und Planung")
+	# Spielerbeobachtung enthält den Wohnmarkt
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	ok(obs.has("wohnmarkt") and obs.wohnmarkt.has("mietspiegel") and obs.wohnmarkt.has("zufriedenheit_deiner_mitarbeiter"), "Beobachtung enthält den Wohnmarkt")
+	ok(JSON.stringify(obs).length() > 0 and JSON.parse_string(JSON.stringify(obs.wohnmarkt)) != null, "Wohnmarkt ist als JSON darstellbar")
