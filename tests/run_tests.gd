@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3923,3 +3923,56 @@ func test_consumer_credit() -> void:
 	# Speichern und Laden
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.banking.consumer_summary().vergeben == 1, "Konsumkredit gespeichert und geladen")
+
+
+func test_contentment() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var C: Contentment = s.contentment
+	var H: Housing = s.housing
+	C.on_month(1)
+	var occupied: Array = H.units.values().filter(func(u): return u.tenant != "")
+	ok(occupied.size() > 0 and occupied.all(func(u): return float(u.sat) >= 0.0 and float(u.sat) <= 100.0), "Index 0-100 für alle belegten Einheiten (%d)" % occupied.size())
+	ok(C.mean > 20.0 and C.mean < 95.0, "Stadtmittel plausibel (%.1f)" % C.mean)
+	ok(not C.by_district.is_empty(), "Mittelwerte je Viertel")
+	ok(C.spend_factor() >= 0.85 and C.spend_factor() <= 1.1, "Konsumfaktor begrenzt (%.3f)" % C.spend_factor())
+	# Gebäudezustand und Mietrückstand wirken auf die Wohnung
+	var u: Dictionary = occupied.filter(func(x): return x.tenant == "B")[0]
+	s.care.condition[int(u.building)] = 100.0
+	C.on_month(2)
+	var good := float(u.sat)
+	s.care.condition[int(u.building)] = 0.0
+	C.on_month(3)
+	ok(float(u.sat) < good, "Verfallenes Gebäude senkt die Zufriedenheit (%.1f -> %.1f)" % [good, float(u.sat)])
+	u.arrears = 2
+	var before := float(u.sat)
+	C.on_month(4)
+	ok(float(u.sat) < before, "Mietrückstand senkt die Zufriedenheit (%.1f -> %.1f)" % [before, float(u.sat)])
+	# schlechte Versorgung und Verkehr: Wegzug nach drei Monaten, deterministisch über die Monate verteilt
+	for shop in s.retail.shops.values():
+		shop.status = "geschlossen"
+	s.traffic_flow.moving_total = 100.0
+	s.traffic_flow.lost_total = 60.0
+	ok(C.traffic_score() == 0.0 and C.supply_score() < 35.0, "Verkehr und Versorgung bewertet (%.0f / %.0f)" % [C.traffic_score(), C.supply_score()])
+	var members: Array = s.citizens.people.filter(func(p): return p.home == u.id)
+	for p in members:
+		p.employer = ""
+		p.jobless_months = 6
+		p.net = 0.0
+	var pop0 := s.citizens.people.size()
+	var gone0 := C.emigrated
+	for m in range(5, 45):
+		C.on_month(m)
+		if C.emigrated > gone0:
+			break
+	ok(C.emigrated > gone0 and s.citizens.people.size() < pop0, "Unzufriedene ziehen weg (%d Personen)" % (C.emigrated - gone0))
+	ok(H.units.values().all(func(x): return x.tenant != "" or not s.citizens.people.any(func(p): return p.get("home", "") == x.id)), "Freie Wohnungen haben keine Bewohner")
+	ok(identity_ok(s), "Geld erhalten nach Wegzug")
+	# Firmenhaushalt: Motivation folgt dem Wohnumfeld
+	var h: Dictionary = s.households.household_of(s.personnel.employed(0)[0])
+	ok(C.of_household(h.id) >= 0.0, "Index des Firmenhaushalts abrufbar (%.1f)" % C.of_household(h.id))
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(absf(s2.contentment.mean - C.mean) < 0.001 and s2.contentment.emigrated == C.emigrated, "Zufriedenheit gespeichert und geladen")
+	run(s2, 60.0 * 35.0)
+	ok(identity_ok(s2), "Geld erhalten nach Laden mit Zufriedenheit")

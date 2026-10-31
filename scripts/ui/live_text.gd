@@ -623,6 +623,12 @@ static func housing(sim: Simulation) -> String:
 " % [Catalog.money(float(sm.durchschnittsmiete)), float(sm.mietspiegel) * 100.0, Catalog.money(float(sm.mieteinnahmen))]
 	txt += "Räumungen %d · Menschen ohne Wohnung %d
 " % [int(sm.raeumungen), int(sm.wohnungslos)]
+	var ct: Contentment = sim.contentment
+	txt += "Zufriedenheit %.0f von 100 (Wohnung %.0f · Arbeit %.0f · Versorgung %.0f · Verkehr %.0f) · Wegzüge %d
+" % [ct.mean, float(ct.parts.wohnung), float(ct.parts.arbeit), float(ct.parts.versorgung), float(ct.parts.verkehr), ct.emigrated]
+	for d in ct.by_district:
+		txt += "  %s: %.0f
+" % [d, float(ct.by_district[d])]
 	var cs: Dictionary = sim.banking.consumer_summary()
 	txt += "Konsumkredite: %d laufend (%s) · %d im Rückstand · %d in Pfändung (Restschuld %s) · %d vergeben
 " % [int(cs.laufend), Catalog.money(float(cs.volumen)), int(cs.rueckstand), int(cs.pfaendung), Catalog.money(float(cs.restschuld_pfaendung)), int(cs.vergeben)]

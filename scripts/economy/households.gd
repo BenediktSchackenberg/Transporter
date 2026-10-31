@@ -170,6 +170,7 @@ func _update_motivation(w: Worker, h: Dictionary) -> void:
 		target -= 12.0 + 6.0 * minf(3.0, int(h.deficit_months))
 	elif float(h.balance) > 2.0 * costs(h):
 		target += 6.0
+	target += 0.1 * (sim.contentment.of_household(h.id) - 50.0)   # Wohnumfeld: +-5 Punkte
 	target -= 0.15 * w.fatigue
 	target -= 0.12 * (100.0 - w.health)
 	target -= 8.0 if sim.company(w.employer).ledger.payables > 1.0 else 0.0

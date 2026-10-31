@@ -76,6 +76,13 @@ func immigrate(n: int, month: int, home: String = "") -> void:
 		_next += 1
 
 
+## Wegzug: alle Buerger der Wohneinheit verlassen die Stadt. Gibt ihre Zahl zurueck.
+func emigrate(unit_id: String) -> int:
+	var before := people.size()
+	people = people.filter(func(p): return str(p.get("home", "")) != unit_id)
+	return before - people.size()
+
+
 func _employ(p: Dictionary, k: String, r: float) -> void:
 	p.employer = k
 	p.wage = snappedf(float(EMPLOYERS[k].wage) * (0.9 + 0.2 * r), 0.1)
@@ -231,7 +238,7 @@ func _pay() -> void:
 	var rent := sim.housing.collect_citizen_rent()   # Miete zuerst; den Rest geben die Buerger aus
 	var disposable := maxf(0.0, net + benefit - rent)
 	# Konsum der Buerger: Handel (S0) und Importe (X0)
-	var spend := disposable * SPEND_SHARE
+	var spend := disposable * SPEND_SHARE * sim.contentment.spend_factor()   # zufriedene Buerger geben mehr aus
 	var at_tills := minf(spend, sim.retail.take_month_sales())   # was an den Kassen der Betriebe bezahlt wurde, zahlt der Haushalt nicht noch einmal pauschal
 	sim.economy.transfer("H0", "S0", spend - at_tills)
 	sim.public_sector.consumption_tax(spend)
