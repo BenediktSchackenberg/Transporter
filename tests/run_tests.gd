@@ -1753,9 +1753,10 @@ func test_money_conservation() -> void:
 	run(s, 400.0)
 	ok(identity_ok(s), "Geld erhalten nach 13 Spielstunden")
 	ok(s.economy.accounts.H0 != h0, "Haushalte erhalten Löhne und zahlen Transporte")
+	var i0: float = s.economy.accounts.I0
 	s.companies[0].ledger.inject(5000.0)
 	ok(identity_ok(s), "Kapitaleinlage hat Gegenkonto")
-	ok(is_equal_approx(s.economy.accounts.I0, Economy.SEED.I0 - 5000.0), "Kapitalgeber-Konto zeigt Einlage")
+	ok(is_equal_approx(s.economy.accounts.I0, i0 - 5000.0), "Kapitalgeber-Konto zeigt Einlage")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(absf(s2.economy.conservation_error()) < 0.01, "Geld erhalten nach Laden")
 	run(s2, 120.0)
@@ -2735,6 +2736,9 @@ func test_public_sector() -> void:
 	ok(identity_ok(s), "Geld erhalten nach Abzug")
 	run(s, 60.0 * 40.0)
 	ok(ps.tax_total > 0.0 and ps.social_total > 0.0, "Lohnsteuer und Sozialabgaben fließen (%.0f / %.0f)" % [ps.tax_total, ps.social_total])
+	# Aufträge gibt die Stadt nur aus Mitteln über dem Ausgangsstand weiter; die Kasse liegt nach dem Stadtlager darunter, also anheben
+	s.economy.transfer("X0", "P0", maxf(0.0, float(Economy.SEED.P0) + 50000.0 - float(s.economy.accounts.P0)))
+	ps.on_month(0)
 	ok(ps.spending_total > 0.0, "Öffentliche Hand gibt Mittel als Aufträge weiter (%.0f)" % ps.spending_total)
 	var h: Dictionary = s.households.homes.values()[0]
 	h.shortfall = 100.0

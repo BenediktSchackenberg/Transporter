@@ -114,6 +114,7 @@ func add(item: String, amount: int, owner: String, loc: int, source: String, now
 ## Menge aus Posten (Eigentuemer, Standort) entnehmen und vernichten. Gibt die tatsaechlich entnommene Menge zurueck (nie mehr als vorhanden).
 func consume(item: String, amount: int, owner: String, loc: int, reason: String, now: float = 0.0) -> int:
 	var left := _free_limit(item, amount, owner, loc)
+	var done := 0
 	for id in lots.keys():
 		var l: Dictionary = lots[id]
 		if left <= 0:
@@ -122,9 +123,9 @@ func consume(item: String, amount: int, owner: String, loc: int, reason: String,
 			var take := mini(left, int(l.qty))
 			l.qty = int(l.qty) - take
 			left -= take
+			done += take
 			if int(l.qty) <= 0:
 				lots.erase(id)
-	var done := amount - left
 	if done > 0:
 		consumed[item] = int(consumed.get(item, 0)) + done
 		_note(now, item, done, "%s@%d" % [owner, loc], "-", reason)
