@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2218,6 +2218,41 @@ func test_arena() -> void:
 	ok(cmp.summary.all(func(x): return x.laeufe == 2), "Mittelwerte über gleich viele Läufe")
 	var csv := Arena.to_csv(cmp.rows)
 	ok(csv.begins_with("platz;strategie;rang;gewinn") and csv.count("\n") == 5, "CSV-Export: Kopfzeile und vier Datenzeilen")
+
+
+func test_action_assist() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var c := s.companies[0]
+	# Lücken füllen: recruit_worker ohne worker_id nimmt den günstigsten Bewerber
+	var a: Dictionary = s.executor.assist.complete(0, {"action": "recruit_worker"})
+	ok(a.has("worker_id") and a.has("_ergaenzt"), "recruit_worker ohne worker_id: Bewerber ergänzt (%s)" % str(a.get("worker_id", "-")))
+	# Fahrzeug ohne Fahrer + Arbeiter ohne kind -> fahren
+	var w := hire_free(s, 0, "driver")
+	var offer: Dictionary = s.resources.cheapest_offer(Catalog.VEHICLE_MODELS.keys()[0])
+	c.ledger.inject(50000.0)
+	c.ledger.invest(5000.0)
+	var nv := s.add_vehicle(0, offer.model if not offer.is_empty() else Catalog.VEHICLE_MODELS.keys()[0], 5000.0, s.depot_road(0))
+	var t: Dictionary = s.executor.assist.complete(0, {"action": "assign_worker_task", "worker_id": w.id})
+	ok(t.get("kind", "") == "fahren" and t.has("vehicle_id"), "assign_worker_task ohne kind: Fahrer ohne Fahrzeug wird zugeteilt")
+	var vid: int = t.vehicle_id
+	ok(s.vehicles[vid].owner == 0 and s.personnel.driver_of(vid) == null, "…einem Fahrzeug ohne Fahrer")
+	var keep: Dictionary = s.executor.assist.complete(0, {"action": "assign_worker_task", "worker_id": w.id, "kind": "reparieren", "vehicle_id": nv.id})
+	ok(keep.kind == "reparieren" and not keep.has("_ergaenzt"), "Vollständige Aktionen bleiben unverändert")
+	# Voller Hof: Meldung enthält fertige place_building-Aktion
+	while c.vehicle_ids.size() < c.fleet_limit():
+		c.ledger.invest(5000.0)
+		s.add_vehicle(0, nv.model, 5000.0, s.depot_road(0))
+	var r: Dictionary = s.executor.execute(0, {"action": "buy_vehicle", "model": nv.model})
+	ok(not r.ok and "place_building" in r.msg and "stellplatz" in r.msg and "\"x\"" in r.msg, "Voller Hof: Meldung nennt konkrete Bauaktion")
+	# Geldmangel: Meldung nennt Kredit
+	var c1 := s.companies[1]
+	c1.ledger.pay_out_owner(c1.ledger.cash - 100.0, "H0")
+	var o1: Dictionary = s.resources.cheapest_offer(nv.model)
+	if not o1.is_empty():
+		var r1: Dictionary = s.executor.execute(1, {"action": "buy_vehicle", "offer_id": o1.id})
+		ok(not r1.ok and ("take_loan" in r1.msg or "Bargeld" in r1.msg), "Geldmangel: Meldung nennt Bargeld und möglichen Kredit")
+	ok(identity_ok(s), "Geld, Waren und Bilanz erhalten")
 
 
 func test_standings() -> void:

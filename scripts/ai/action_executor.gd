@@ -99,6 +99,7 @@ var executed := {}     # Idempotenzschluessel -> true (verhindert Doppelausfuehr
 var worker_actions := WorkerActions.new()
 var estate_actions := EstateActions.new()
 var loan_actions := LoanActions.new()
+var assist := ActionAssist.new()
 var _cur_key := ""        # Schluessel/Herkunft der gerade ausgefuehrten Aktion (fuer Besuche und Protokoll)
 var _cur_origin := "api"
 
@@ -108,6 +109,7 @@ func setup(simulation) -> void:
 	worker_actions.setup(simulation, self)
 	estate_actions.setup(simulation, self)
 	loan_actions.setup(simulation)
+	assist.setup(simulation)
 
 
 ## Alle Aktionen mit Schema (allgemein + Personal/Ressourcen).
@@ -165,7 +167,7 @@ static func normalize(action: Dictionary) -> Dictionary:
 
 
 func execute(cid: int, action: Dictionary, key: String = "", origin: String = "api", ctx: Dictionary = {}) -> Dictionary:
-	action = normalize(action)
+	action = assist.complete(cid, normalize(action))
 	if key != "" and executed.has(key):
 		return {"ok": false, "duplicate": true, "msg": "Aktion wurde bereits ausgeführt (Wiederholung ignoriert)."}
 	var name := str(action.get("action", action.get("type", "")))
@@ -191,6 +193,26 @@ func execute(cid: int, action: Dictionary, key: String = "", origin: String = "a
 	r = _done(cid, key, name, r)
 	sim.decisions.record(cid, origin, action, r, key)
 	return r
+
+
+## Konkreter Vorschlag fuer den naechsten Schritt, wenn der Hof voll ist: fertige place_building-Aktion mit gueltiger Position.
+func _yard_hint(cid: int) -> String:
+	var site: int = sim.company(cid).depots[0]
+	var sug: Dictionary = sim.estate.suggestions(cid, site)
+	if not sug.has("stellplatz"):
+		return ""
+	var xy: Array = sug["stellplatz"]
+	return " Vorschlag: {\"action\":\"place_building\",\"plot_id\":%d,\"typ\":\"stellplatz\",\"x\":%d,\"y\":%d,\"rot\":%d} (900 EUR + 40 %% Baufirma, +2 Stellplätze)." % [site, xy[0], xy[1], xy[2]]
+
+
+## Fehlt Geld, nennt die Meldung einen passenden Kredit (Betrag, Bank, Laufzeit) samt fertiger Aktion.
+func _loan_hint(cid: int, missing: float) -> String:
+	var amount := maxf(500.0, ceilf(missing / 500.0) * 500.0)
+	for bank in [0, 1, 2]:
+		var q: Dictionary = sim.banking.quote(bank, cid, amount, 12, sim.banking.best_collateral(cid) if amount > float(Banking.BANKS[bank].free_limit) else -1)
+		if q.ok:
+			return " Kredit möglich: {\"action\":\"take_loan\",\"amount\":%d,\"bank\":\"%s\",\"monate\":12} (Rate %s)." % [int(amount), Banking.BANKS[bank].id, Catalog.money(q.monthly)]
+	return ""
 
 
 func _done(cid: int, key: String, name: String, r: Dictionary) -> Dictionary:
@@ -374,9 +396,9 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 				return {"ok": false, "msg": "Angebot %s ist bereits verkauft." % offer.id}
 			var spec := Catalog.model(offer.model)
 			if c.vehicle_ids.size() >= c.fleet_limit():
-				return {"ok": false, "msg": "Alle %d Stellplätze belegt – Stellplätze/Halle bauen (place_building) oder Depot anmieten." % c.fleet_limit()}
+				return {"ok": false, "msg": "Alle %d Stellplätze belegt – Stellplätze/Halle bauen (place_building) oder Depot anmieten.%s" % [c.fleet_limit(), _yard_hint(cid)]}
 			if L.cash < offer.price:
-				return {"ok": false, "msg": "Nicht genug Bargeld: %s benötigt, %s vorhanden." % [Catalog.money(offer.price), Catalog.money(L.cash)]}
+				return {"ok": false, "msg": "Nicht genug Bargeld: %s benötigt, %s vorhanden.%s" % [Catalog.money(offer.price), Catalog.money(L.cash), _loan_hint(cid, offer.price - L.cash)]}
 			var dealer: Dictionary = sim.city.building(offer.dealer)
 			if not on_site and not _near(cid, dealer.walk):
 				var visit := a.duplicate()
