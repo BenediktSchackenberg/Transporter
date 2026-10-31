@@ -118,7 +118,7 @@ func pledged_to(vehicle_id: int) -> String:
 	for l in loans.values():
 		if l.collateral == vehicle_id and l.status in ["laufend", "rueckstand"]:
 			return l.id
-	return ""
+	return sim.player_loans.pledged_to(vehicle_id)
 
 
 ## Bestes ungebundenes Fahrzeug als Sicherheit.

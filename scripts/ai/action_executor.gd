@@ -98,6 +98,7 @@ var sim
 var executed := {}     # Idempotenzschluessel -> true (verhindert Doppelausfuehrung)
 var worker_actions := WorkerActions.new()
 var estate_actions := EstateActions.new()
+var loan_actions := LoanActions.new()
 var _cur_key := ""        # Schluessel/Herkunft der gerade ausgefuehrten Aktion (fuer Besuche und Protokoll)
 var _cur_origin := "api"
 
@@ -106,6 +107,7 @@ func setup(simulation) -> void:
 	sim = simulation
 	worker_actions.setup(simulation, self)
 	estate_actions.setup(simulation, self)
+	loan_actions.setup(simulation)
 
 
 ## Alle Aktionen mit Schema (allgemein + Personal/Ressourcen).
@@ -113,6 +115,7 @@ static func all_schema() -> Dictionary:
 	var d := SCHEMA.duplicate()
 	d.merge(WorkerActions.SCHEMA)
 	d.merge(EstateActions.SCHEMA)
+	d.merge(LoanActions.SCHEMA)
 	return d
 
 
@@ -260,6 +263,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 		return worker_actions.run(cid, name, a, on_site)
 	if EstateActions.SCHEMA.has(name):
 		return estate_actions.run(cid, name, a)
+	if LoanActions.SCHEMA.has(name):
+		return loan_actions.run(cid, name, a)
 	var c: Company = sim.company(cid)
 	var L: Ledger = c.ledger
 	match name:

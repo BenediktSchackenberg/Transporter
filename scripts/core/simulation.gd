@@ -47,6 +47,7 @@ var standings := Standings.new()
 var stock := StockBook.new()
 var trader := Trader.new()
 var banking := Banking.new()
+var player_loans := PlayerLoans.new()   # Kredite zwischen Unternehmen (Auftrag 2)
 var insolvency := Insolvency.new()
 var economy := Economy.new()        # Konten ausserhalb der Firmen, Geldkonservierung
 var world_events := WorldEvents.new()   # automatischer Ereignismanager
@@ -101,6 +102,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	events.setup(self)
 	world_events.setup(self)
 	banking.setup(self)
+	player_loans.setup(self)
 	central_bank.setup(self)
 	oversight.setup(self)
 	insolvency.setup(self)
@@ -236,7 +238,7 @@ func fleet_book_value(cid: int) -> float:
 
 ## Buchwert aller Anlagen (Fahrzeuge, Bueros, Land) plus Einlagen minus aufgelaufene Lohnrueckstaende.
 func book_assets(cid: int) -> float:
-	return fleet_book_value(cid) + companies[cid].property_book + companies[cid].land_book + companies[cid].ledger.deposits - companies[cid].ledger.payables
+	return fleet_book_value(cid) + companies[cid].property_book + companies[cid].land_book + companies[cid].ledger.deposits + companies[cid].ledger.receivables - companies[cid].ledger.payables
 
 
 func net_worth(cid: int) -> float:
@@ -1056,7 +1058,7 @@ func to_dict() -> Dictionary:
 	return {"seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
 
@@ -1084,6 +1086,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 		s.economy.attach(c.ledger, "C%d" % c.id)
 	s.economy.from_dict(d.get("economy", {}))
 	s.banking.from_dict(d.get("banking", {}))
+	s.player_loans.from_dict(d.get("player_loans", {}))
 	s.insolvency.from_dict(d.get("insolvency", {}))
 	s.stock.from_dict(d.get("stock", {}))
 	s.standings.from_dict(d.get("standings", {}))

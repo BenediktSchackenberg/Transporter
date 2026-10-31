@@ -24,6 +24,7 @@ var cash: float
 var debt := 0.0
 var deposits := 0.0       # Einlagen bei Banken (Vermoegen)
 var payables := 0.0       # aufgelaufene, noch nicht gezahlte Loehne (Verbindlichkeit)
+var receivables := 0.0    # Forderungen aus Krediten an andere Firmen (Vermoegen)
 var totals := {}          # Kategorie -> Summe (vorzeichenbehaftet)
 var entries: Array = []   # letzte Buchungen fuer die Anzeige
 var history: Array = []   # [Spielminute, Gewinn, Bargeld]
@@ -134,6 +135,28 @@ func pay_to(other: Ledger, amount: float) -> void:
 	other._move(amount, "")
 
 
+## Kredit an eine andere Firma (Spielerkredit): Bargeld wandert zwischen den Firmenbuechern, Forderung beim Geber, Schuld beim Nehmer.
+func lend_to(other: Ledger, amount: float) -> void:
+	_move(-amount, "")
+	other._move(amount, "")
+	receivables += amount
+	other.debt += amount
+
+
+## Rate eines Spielerkredits: Tilgung mindert Forderung und Schuld, Zins ist Aufwand beim Nehmer und Ertrag beim Geber.
+func receive_installment(from: Ledger, principal: float, interest: float, note: String, time: float) -> void:
+	from._move(-(principal + interest), "")
+	_move(principal + interest, "")
+	from.debt -= principal
+	receivables -= principal
+	if interest > 0.0:
+		from.totals["interest"] = from.totals.get("interest", 0.0) - interest
+		totals["interest_income"] = totals.get("interest_income", 0.0) + interest
+		if interest >= 50.0:
+			from.entries.append({"t": time, "cat": "interest", "amount": -interest, "note": note})
+			entries.append({"t": time, "cat": "interest_income", "amount": interest, "note": note})
+
+
 ## Privatvermoegen des Gruenders haftet (Einzelunternehmen): Kapitalzufuehrung aus dem Haushaltssektor.
 func take_private(amount: float) -> void:
 	_move(amount, "H0")
@@ -183,7 +206,7 @@ func sample(time: float) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"start_capital": start_capital, "cash": cash, "debt": debt, "deposits": deposits, "payables": payables, "totals": totals,
+	return {"start_capital": start_capital, "cash": cash, "debt": debt, "deposits": deposits, "payables": payables, "receivables": receivables, "totals": totals,
 		"entries": entries, "history": history}
 
 
@@ -193,6 +216,7 @@ func from_dict(d: Dictionary) -> void:
 	debt = d.debt
 	deposits = float(d.get("deposits", 0.0))
 	payables = float(d.get("payables", 0.0))
+	receivables = float(d.get("receivables", 0.0))
 	totals = d.totals
 	entries = d.entries
 	history = d.history

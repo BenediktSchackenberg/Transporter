@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2117,6 +2117,78 @@ func test_estate_facilities() -> void:
 	until_done(s, func(): return int(w.skills.get(skill, 0)) > lvl0 or lvl0 >= 3, 600.0)
 	ok(int(w.skills.get(skill, 0)) == mini(3, lvl0 + 1), "Fähigkeit steigt um 1 (%d → %d)" % [lvl0, int(w.skills.get(skill, 0))])
 	ok(identity_ok(s), "Geld und Waren erhalten nach allen Einrichtungen")
+
+
+func test_player_loans() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var P: PlayerLoans = s.player_loans
+	var A := s.companies[0]
+	var B := s.companies[1]
+	A.ledger.inject(20000.0)
+	ok(not P.offer(0, 0, 1000.0, 0.05, 6).ok, "Kein Kredit an sich selbst")
+	ok(not P.offer(0, 1, 100.0, 0.05, 6).ok, "Mindestbetrag")
+	ok(not P.offer(0, 1, 900000.0, 0.05, 6).ok, "Geber muss das Geld besitzen")
+	var o := P.offer(0, 1, 4000.0, 0.06, 6)
+	ok(o.ok, "Angebot: " + o.msg)
+	var id: String = o.loan_id
+	var cashA := A.ledger.cash
+	ok(A.ledger.cash == cashA and B.ledger.debt == 0.0, "Vor der Annahme fließt kein Geld")
+	ok(not P.accept(id, 0).ok, "Der Anbieter kann sein eigenes Angebot nicht annehmen")
+	ok(not P.counter(id, 0, 3000.0).ok, "Der Anbieter kann sich nicht selbst antworten")
+	# Gegenangebote bis zur Grenze
+	var c1 := P.counter(id, 1, 3000.0, 0.04)
+	ok(c1.ok and P.loans[id].amount == 3000.0 and P.loans[id].proposer == 1, "Gegenangebot ändert Bedingungen: " + c1.msg)
+	ok(P.counter(id, 0, -1.0, 0.05).ok and P.counter(id, 1, -1.0, 0.045).ok, "Weitere Gegenangebote")
+	ok(not P.counter(id, 0, -1.0, 0.048).ok, "Nach 3 Gegenangeboten nur noch annehmen oder ablehnen")
+	var cashB := B.ledger.cash
+	var r := P.accept(id, 0)
+	ok(r.ok and absf(A.ledger.cash - (cashA - 3000.0)) < 0.01 and absf(B.ledger.cash - (cashB + 3000.0)) < 0.01, "Annahme zahlt aus: " + r.msg)
+	ok(A.ledger.receivables == 3000.0 and B.ledger.debt == 3000.0, "Forderung beim Geber, Schuld beim Nehmer")
+	ok(identity_ok(s), "Geld und Bilanz erhalten nach Auszahlung")
+	# Raten
+	run(s, 60.0 * 65.0)
+	var l: Dictionary = P.loans[id]
+	var paid: int = l.plan.filter(func(x): return x.status == "bezahlt").size()
+	ok(paid >= 1 and l.outstanding < 3000.0, "Raten werden eingezogen (%d bezahlt)" % paid)
+	ok(A.ledger.totals.get("interest_income", 0.0) > 0.0 and B.ledger.totals.get("interest", 0.0) < 0.0, "Zins ist Ertrag beim Geber und Aufwand beim Nehmer")
+	ok(absf(A.ledger.receivables - l.outstanding) < 0.01 and absf(B.ledger.debt - l.outstanding) < 0.01 + B.ledger.debt - l.outstanding, "Forderung folgt der Restschuld")
+	ok(identity_ok(s), "Geld und Bilanz erhalten nach Raten")
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.player_loans.loans[id].outstanding == l.outstanding and s2.player_loans.loans[id].status == l.status, "Kredit bleibt nach Laden erhalten")
+	# Ausfall mit Fahrzeugpfand
+	var veh: FleetVehicle = s.vehicles[B.vehicle_ids[0]]
+	var o2 := P.offer(0, 1, 2000.0, 0.05, 6, veh.id)
+	ok(o2.ok and s.banking.pledged_to(veh.id) == o2.loan_id, "Fahrzeug als Pfand gesperrt: " + o2.msg)
+	ok(P.accept(o2.loan_id, 1).ok, "Nehmer nimmt Kredit mit Pfand an")
+	var drain := B.ledger.cash
+	B.ledger.pay_out_owner(drain, "H0")
+	var nveh := s.vehicles.size()
+	for m in 4:
+		P.on_month(GameCalendar.month_of(s.game_min) + 8 + m)
+	var l2: Dictionary = P.loans[o2.loan_id]
+	ok((int(l2.arrears) >= 1 or l2.status == "getilgt") and l2.status in ["ausgefallen", "rueckstand", "getilgt"], "Ausbleibende Raten führen zu Rückstand (%s)" % l2.status)
+	ok(s.vehicles.size() == nveh - 1 and l2.collateral == -1 and l2.outstanding < 2000.0, "Ausfall verwertet das Pfand-Fahrzeug, Erlös mindert die Schuld (%.0f)" % l2.outstanding)
+	ok(identity_ok(s), "Geld und Bilanz erhalten nach Ausfall")
+	# Ablehnen und Verfall
+	var o3 := P.offer(0, 1, 800.0, 0.05, 3)
+	ok(P.decline(o3.loan_id, 1).ok and P.loans[o3.loan_id].status == "abgelehnt", "Ablehnen beendet das Angebot")
+	var o4 := P.offer(0, 1, 800.0, 0.05, 3)
+	P.loans[o4.loan_id].since = GameCalendar.day_of(s.game_min) - 20
+	P.on_day(0)
+	ok(P.loans[o4.loan_id].status == "abgelaufen", "Angebote verfallen nach %d Tagen" % PlayerLoans.OFFER_DAYS)
+	# Aktionen und Beobachtung
+	var ra := s.executor.execute(0, {"action": "offer_loan", "nehmer": 1, "betrag": 1000, "zins": 0.05, "monate": 4})
+	ok(ra.ok, "KI-Aktion offer_loan: " + str(ra.get("msg", "")))
+	ok(s.player_loans.summary_of(1).angebote.size() == 1 and s.player_loans.summary_of(1).angebote[0].du_antwortest, "Beobachtung zeigt das Angebot an die Gegenseite")
+	ok(s.executor.execute(1, {"action": "accept_loan", "kredit_id": s.player_loans.summary_of(1).angebote[0].id}).ok, "KI-Aktion accept_loan")
+	# Insolvenz des Nehmers: Abschreibung
+	B.status = "insolvenz"
+	P.on_day(0)
+	var open_left := P.loans.values().filter(func(x): return x.status in ["laufend", "rueckstand", "ausgefallen"]).size()
+	ok(open_left == 0 and A.ledger.receivables < 0.01, "Fällt eine Seite weg, wird abgeschrieben")
+	ok(identity_ok(s), "Geld und Bilanz erhalten nach Abschreibung")
 
 
 func test_standings() -> void:
