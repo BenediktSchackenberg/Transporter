@@ -613,6 +613,26 @@ static func citizens(sim: Simulation) -> String:
 	return txt
 
 
+static func housing(sim: Simulation) -> String:
+	var sm: Dictionary = sim.housing.summary()
+	var txt := "[b][color=#f2c14e]WOHNEN[/color][/b]
+"
+	txt += "%d Wohneinheiten · %d belegt · Leerstand %.1f %%
+" % [int(sm.einheiten), int(sm.belegt), float(sm.leerstand) * 100.0]
+	txt += "Durchschnittsmiete %s je Monat · Mieteinnahmen seit Beginn %s
+" % [Catalog.money(float(sm.durchschnittsmiete)), Catalog.money(float(sm.mieteinnahmen))]
+	txt += "Räumungen %d · Menschen ohne Wohnung %d
+" % [int(sm.raeumungen), int(sm.wohnungslos)]
+	var late: Array = sim.housing.units.values().filter(func(u): return int(u.arrears) > 0)
+	txt += "
+[b]Mietrückstand (%d)[/b]
+" % late.size()
+	for u in late.slice(0, 8):
+		txt += "  %s · Gebäude %d · %d Monate · Miete %s
+" % [u.id, int(u.building), int(u.arrears), Catalog.money(float(u.rent))]
+	return txt
+
+
 static func parcels(sim: Simulation) -> String:
 	var P: Parcels = sim.parcels
 	var sm: Dictionary = P.summary()

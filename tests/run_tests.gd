@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3767,3 +3767,51 @@ func test_supply_acceptance() -> void:
 	s.retail.on_month(1)
 	ok(float(s.economy.accounts.P0) > p0 and rest.wages > 0.0 and float(s.economy.accounts.S0) != s0, "12 Löhne, Miete und Abgaben erscheinen in den Konten")
 	ok(identity_ok(s), "Geld und Waren bleiben in allen Konten erhalten")
+
+
+func test_housing() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var H: Housing = s.housing
+	var people: Array = s.citizens.people
+	ok(H.units.size() > 0, "Wohnungsbestand angelegt (%d Einheiten)" % H.units.size())
+	ok(H.vacancy_rate() > 0.02 and H.vacancy_rate() < 0.3, "Leerstand plausibel (%.1f %%)" % (H.vacancy_rate() * 100.0))
+	ok(people.all(func(p): return H.units.has(str(p.get("home", "")))), "Jeder Bürger hat eine Wohnung")
+	ok(s.households.homes.values().all(func(h): return H.units.has(str(h.get("unit", "")))), "Jeder Firmenhaushalt hat eine Wohnung")
+	var tenants := {}
+	var clash := false
+	for h in s.households.homes.values():
+		clash = clash or tenants.has(h.unit)
+		tenants[h.unit] = true
+	for p in people:
+		clash = clash or (tenants.has(p.home) and H.units[p.home].tenant != "B")
+	ok(not clash, "Keine Wohnung mit zwei Mietverträgen")
+	ok(H.units.values().all(func(u): return u.tenant != "" or not people.any(func(p): return p.home == u.id)), "Freie Wohnungen haben keine Bewohner")
+	# Miete fließt über V0 und bleibt im Geldkreislauf
+	var p0 := float(s.economy.accounts.P0)
+	run(s, 60.0 * 65.0)
+	ok(H.stats.rent > 0.0, "Miete wird gezahlt (%.0f)" % H.stats.rent)
+	ok(absf(float(s.economy.accounts.V0)) < 0.01, "Vermieterkonto V0 leitet die Miete weiter")
+	ok(float(s.economy.accounts.P0) != p0, "Grundsteuer erreicht die Stadtkasse")
+	ok(identity_ok(s), "Geld erhalten mit Mieten")
+	# Räumung nach drei Monaten Rückstand
+	var cu: Dictionary = {}
+	for u in H.units.values():
+		if u.tenant == "B":
+			cu = u
+			break
+	var members: Array = people.filter(func(p): return p.home == cu.id)
+	ok(members.size() > 0, "Bürgergruppe gefunden")
+	cu.arrears = Housing.EVICT_AFTER
+	var ev := int(H.stats.evictions)
+	H.on_month(0)
+	ok(int(H.stats.evictions) == ev + 1, "Rückstand führt zur Räumung")
+	ok(members.all(func(p): return p.home != cu.id), "Geräumte Bürger ziehen aus")
+	ok(members.all(func(p): return str(p.home) == "" or H.units.has(p.home)), "Geräumte finden eine andere Wohnung oder sind wohnungslos")
+	ok(identity_ok(s), "Geld erhalten nach Räumung")
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.housing.units.size() == H.units.size(), "Wohnungsbestand geladen")
+	ok(s2.citizens.people.all(func(p): return str(p.get("home", "")) == "" or s2.housing.units.has(p.home)), "Wohnorte der Bürger geladen")
+	run(s2, 60.0 * 35.0)
+	ok(identity_ok(s2), "Geld erhalten nach Laden mit Mieten")

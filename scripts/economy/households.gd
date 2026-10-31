@@ -35,6 +35,7 @@ func household_of(w: Worker) -> Dictionary:
 	_next += 1
 	homes[h.id] = h
 	w.household = h.id
+	sim.housing.assign_household(h)
 	# Startguthaben stammt aus dem Haushaltssektor (Teilbuch von H0), kein neues Geld
 	return h
 
@@ -139,12 +140,15 @@ func on_month(_month: int) -> void:
 				members.append(w)
 		var need := costs(h)
 		var pay := minf(need, maxf(0.0, float(h.balance)))
+		var rent_paid := minf(sim.housing.rent_of(h.id), pay)   # Miete ist Teil der Lebenshaltung und wird zuerst bezahlt
+		sim.housing.settle_household(h.id, rent_paid)
 		if pay > 0.0:
 			h.balance = float(h.balance) - pay
-			var imp := pay * IMPORT_SHARE
+			var rest := pay - rent_paid
+			var imp := rest * IMPORT_SHARE
 			sim.economy.transfer("H0", "X0", imp)
-			sim.economy.transfer("H0", "S0", pay - imp)
-			sim.public_sector.consumption_tax(pay - imp)
+			sim.economy.transfer("H0", "S0", rest - imp)
+			sim.public_sector.consumption_tax(rest - imp)
 			h.spent = float(h.spent) + pay
 			spent_total += pay
 		h.shortfall = maxf(0.0, need - pay)

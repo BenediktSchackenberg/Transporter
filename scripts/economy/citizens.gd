@@ -227,15 +227,24 @@ func _pay() -> void:
 		sim.public_sector.benefits_total += benefit
 		sim.public_sector.departments.Soziales += benefit
 	stats.benefits = benefit
+	_set_net_income(net / gross if gross > 0.0 else 0.0, benefit / jobless if jobless > 0 else 0.0)
+	var rent := sim.housing.collect_citizen_rent()   # Miete zuerst; den Rest geben die Buerger aus
+	var disposable := maxf(0.0, net + benefit - rent)
 	# Konsum der Buerger: Handel (S0) und Importe (X0)
-	var spend := (net + benefit) * SPEND_SHARE
+	var spend := disposable * SPEND_SHARE
 	var at_tills := minf(spend, sim.retail.take_month_sales())   # was an den Kassen der Betriebe bezahlt wurde, zahlt der Haushalt nicht noch einmal pauschal
 	sim.economy.transfer("H0", "S0", spend - at_tills)
 	sim.public_sector.consumption_tax(spend)
-	var imports := (net + benefit) * IMPORT_SHARE
+	var imports := disposable * IMPORT_SHARE
 	sim.economy.transfer("H0", "X0", imports)
 	sim.economy.transfer("X0", "S0", imports)   # Ausfuhren der Stadtwirtschaft gleichen die Importe aus
 	sim.economy.outflow["H0"] = outflow_h0
+
+
+## Netto je Person fuer die Mietzahlung: Beschaeftigte Lohn mal Nettoanteil, Arbeitslose ihr Arbeitslosengeld.
+func _set_net_income(net_share: float, benefit_each: float) -> void:
+	for p in people:
+		p.net = float(p.wage) * HOURS_PER_MONTH * net_share if p.employer != "" else benefit_each
 
 
 func summary() -> Dictionary:

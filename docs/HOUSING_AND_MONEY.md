@@ -1,6 +1,6 @@
 # Entwurf: Auftrag 6 (Bewohner, Wohnen, private Kredite) und Rest von Auftrag 4 (Zentralbank, Geldschöpfung)
 
-Status: **ENTWURF zur Freigabe** (31.10.2026). Der Wortlaut der beiden Aufträge liegt nicht im Repo; dieser Entwurf stammt aus den
+Status: **freigegeben am 31.10.2026**, in Umsetzung (Stand siehe unten). Der Wortlaut der beiden Aufträge liegt nicht im Repo; dieser Entwurf stammt aus den
 Stichworten der Auftragswarteschlange und dem vorhandenen Code. Nach Freigabe wird er Etappe für Etappe umgesetzt, jede Etappe mit Tests,
 Konservierungsprüfung (`Economy.conservation_error() == 0`) und Eintrag im Abschnitt „Stand“ unten.
 
@@ -32,4 +32,8 @@ A1 → A2 → A3 → A7 (Wohnen ohne Kredit lauffähig) · A4 (braucht A2) · A5
 Offene Entscheidungen (Annahmen, bitte bestätigen oder ändern): Miete 40 % des Einkommens als Obergrenze; Räumung nach 3 Monaten; Leerstand 4 % als Startwert; Zentralbankkonto `Z0` als neuer Sektor.
 
 ## Stand
-Noch nichts umgesetzt.
+- **A1/A2 (Teil) – umgesetzt (31.10.2026):** `Housing` (`scripts/economy/housing.gd`, `Simulation.housing`), Sektorkonto `V0` (Vermieter). Die Karte hat rund 10 000 Wohneinheiten in Wohngebäuden, die Bevölkerung braucht etwa 600: Es wird nur ein zufälliger, vom Stadtsamen abhängiger Teil der Wohngebäude mit Einheiten belegt (Bürgergruppen von 1–4 Personen, Leerstand 4 % plus 120 Reserveeinheiten für Firmenhaushalte und Zuzug); alle übrigen Gebäude sind Kulisse ohne Bewohner und Miete. Miete = Fläche × 2,6 EUR; Firmenhaushalte zahlen sie als ersten Teil ihrer Lebenshaltung (`Households.on_month`), Bürgergruppen aus dem Netto ihrer Mitglieder (`Citizens._pay`, vor dem Konsum). V0 leitet 25 % an S0 (Instandhaltung), 10 % an P0 (Grundsteuer) und 65 % an H0 (Vermieterertrag) weiter. Drei Monate Rückstand führen zur Räumung, die Betroffenen suchen die günstigste freie Einheit, sonst gelten sie als wohnungslos. Zuziehende ohne Wohnung werden monatlich untergebracht.
+- **A7 (Teil):** Ansicht „Wohnen“ im Reiter Wirtschaft (Einheiten, Leerstand, Durchschnittsmiete, Mieteinnahmen, Räumungen, Mietrückstände). Test `test_housing`, Messskript `tests/probe_housing_cash.gd`.
+- **Offen in A1–A3:** Mietspiegel mit Angebot und Nachfrage (A3), Umzug bei Arbeitsplatzwechsel, Zusammenführung mit den Einheiten aus `Construction` (diese zahlen noch aus X0 und haben Scheinmieter), Anpassung der Bauträger an Wohnungsmangel.
+- **Noch nicht begonnen:** A4 private Kredite, A5 Zufriedenheit, A6 Planungshilfen für die KI, B1–B6.
+- **Vorhandene Testfehler (vor diesen Änderungen schon da):** `test_money_conservation` (Kapitalgeber-Konto), `test_public_sector` (öffentliche Aufträge), `test_city_depot` (Warenbilanz 50, vier Prüfungen).
