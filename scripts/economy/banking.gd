@@ -35,6 +35,7 @@ const BANKS := [
 
 var sim: Simulation
 var ref_rate := START_REF
+var reserve_ratio := RESERVE       # Mindestreserve auf Einlagen (Stellgroesse der Zentralbank, Wirtschaftslabor)
 var loans := {}          # Kredit-ID -> Dictionary
 var deposits := {}       # Einlagen-ID -> Dictionary
 var losses := {"B1": 0.0, "B2": 0.0, "B3": 0.0}   # Kreditverluste je Bank
@@ -87,7 +88,7 @@ func equity(i: int) -> float:
 
 
 func available(i: int) -> float:
-	return maxf(0.0, bank_cash(i) - RESERVE * deposits_of_bank(i))
+	return maxf(0.0, bank_cash(i) - reserve_ratio * deposits_of_bank(i)) + sim.central_bank.headroom(i)   # plus Refinanzierung bei der Zentralbank
 
 
 func liquidity_ratio(i: int) -> float:
@@ -217,6 +218,7 @@ func grant(q: Dictionary, cid: int, collateral: int, purpose: String = "") -> Di
 		"fees_due": 0.0}
 	_next_loan += 1
 	loans[l.id] = l
+	sim.central_bank.ensure(int(q.bank), float(q.amount))
 	c.ledger.borrow(q.amount, B.id)
 	sim.log_event("%s nimmt bei der %s einen Kredit über %s auf (%.2f %% p. a., %d Monate)." % [c.company_name, B.name, Catalog.money(q.amount), q.rate * 100.0, q.months], "info", cid)
 	return l
@@ -477,7 +479,7 @@ func _update_ref_rate() -> void:
 		lent += loans_of_bank(i)
 		cash += bank_cash(i)
 	var util := lent / maxf(lent + cash, 1.0)
-	var target := START_REF + 0.06 * (util - 0.3) + 0.01 * defaults_recent
+	var target := sim.central_bank.policy_rate + 0.015 + 0.06 * (util - 0.3) + 0.01 * defaults_recent   # Leitzins + Marge der Banken
 	ref_rate = clampf(ref_rate + clampf(target - ref_rate, -0.0025, 0.0025), 0.01, 0.12)   # langsame Anpassung
 	defaults_recent = maxi(0, defaults_recent - 1)
 
@@ -591,6 +593,7 @@ func mortgage_draw(mid: String, amount: float) -> float:
 	var x := minf(amount, float(m.committed) - float(m.drawn))
 	if x <= 0.0:
 		return 0.0
+	sim.central_bank.ensure(int(m.bank), x)
 	sim.economy.transfer(BANKS[m.bank].id, "K0", x)
 	m.drawn = float(m.drawn) + x
 	m.outstanding = float(m.outstanding) + x
@@ -691,6 +694,7 @@ func consumer_grant(home_id: String, q: Dictionary) -> Dictionary:
 		"rate": float(q.rate), "months": int(q.months), "project": "", "status": "laufend", "arrears": 0, "kind": "konsum", "residual": 0.0}
 	_next_mort += 1
 	mortgages[m.id] = m
+	sim.central_bank.ensure(int(q.bank), float(q.amount))
 	sim.economy.transfer(BANKS[m.bank].id, "H0", float(q.amount))
 	h.balance = float(h.balance) + float(q.amount)
 	return m

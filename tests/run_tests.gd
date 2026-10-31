@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -4008,3 +4008,63 @@ func test_planning_aids() -> void:
 	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
 	ok(obs.has("wohnmarkt") and obs.wohnmarkt.has("mietspiegel") and obs.wohnmarkt.has("zufriedenheit_deiner_mitarbeiter"), "Beobachtung enthält den Wohnmarkt")
 	ok(JSON.stringify(obs).length() > 0 and JSON.parse_string(JSON.stringify(obs.wohnmarkt)) != null, "Wohnmarkt ist als JSON darstellbar")
+
+
+func test_central_bank() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var Z: CentralBank = s.central_bank
+	var Bk: Banking = s.banking
+	ok(s.economy.accounts.has("Z0") and absf(float(s.economy.accounts.Z0)) < 0.001, "Zentralbankkonto Z0 vorhanden")
+	# Geldmenge: Nichtbanken + Banken + Z0 + Ausland + Kapitalgeber = Gesamtbestand
+	var parts: float = Z.money_supply()
+	for k in ["B1", "B2", "B3", "Z0", "X0", "I0"]:
+		parts += float(s.economy.accounts[k])
+	ok(absf(parts - s.economy.total()) < 0.01, "Geldmenge und Bankkonten ergeben den Gesamtbestand")
+	# Einlage bringt Reserve, Entnahme darunter löst Refinanzierung aus
+	s.companies[0].ledger.inject(60000.0)
+	var dep := Bk.deposit(0, 0, 50000.0, "tages", 0)
+	ok(dep.get("ok", true), "Einlage bei der Geschäftsbank")
+	Bk.reserve_ratio = 10.0   # strenge Reservepflicht: Bargeld 450 000 liegt unter der Mindestreserve 500 000
+	var req := Z.required(0)
+	ok(req > Bk.bank_cash(0), "Bank liegt unter der Mindestreserve (%.0f < %.0f)" % [Bk.bank_cash(0), req])
+	var cash_before := Bk.bank_cash(0)
+	Z.on_month(1)
+	ok(Bk.bank_cash(0) > cash_before and float(Z.refi.B1) > 0.0, "Bank unter Mindestreserve leiht bei der Zentralbank (%.0f)" % float(Z.refi.B1))
+	ok(float(s.economy.accounts.Z0) < 0.0 and absf(float(s.economy.accounts.Z0) + float(Z.refi.B1)) < 0.01 + Z.interest_total, "Z0 zeigt das ausgegebene Zentralbankgeld")
+	ok(identity_ok(s), "Geld erhalten bei Refinanzierung")
+	ok(Z.refi.B1 <= Z.headroom(0) + Z.refi.B1 + 0.01, "Refinanzierung im Rahmen der Grenze")
+	# Rückzahlung bei reichlich Reserve
+	var refi0 := float(Z.refi.B1)
+	Bk.reserve_ratio = Banking.RESERVE
+	s.economy.transfer("X0", "B1", 100000.0)
+	Z.on_month(2)
+	ok(float(Z.refi.B1) < refi0, "Reichlich Reserve tilgt den Zentralbankkredit (%.0f -> %.0f)" % [refi0, float(Z.refi.B1)])
+	ok(identity_ok(s), "Geld erhalten bei Rückzahlung")
+	# Bilanz
+	var bs := Z.balance_sheet(0)
+	ok(absf(float(bs.eigenkapital) - (Bk.equity(0) - float(Z.refi.B1))) < 0.01, "Bankbilanz: Eigenkapital = Aktiva - Einlagen - Zentralbankkredit")
+	# Leitzins folgt der Inflation, höchstens um STEP je Monat
+	var r0 := Z.policy_rate
+	for shop in s.retail.shops.values():
+		shop.price_factor = 1.3
+	s.housing.index = 1.3
+	var steps_ok := true
+	var last := Z.policy_rate
+	for m in range(3, 8):
+		Z.on_month(m)
+		steps_ok = steps_ok and absf(Z.policy_rate - last) <= CentralBank.STEP + 0.000001
+		last = Z.policy_rate
+	ok(Z.inflation > 0.05 and Z.policy_rate > r0, "Hohe Inflation hebt den Leitzins (%.2f %% -> %.2f %%, Inflation %.0f %%)" % [r0 * 100.0, Z.policy_rate * 100.0, Z.inflation * 100.0])
+	ok(steps_ok, "Zinsschritte höchstens %.2f Punkte" % (CentralBank.STEP * 100.0))
+	Z.policy_rate = 0.10
+	for m in 12:
+		Bk.on_month(20 + m)
+	ok(Bk.ref_rate > Banking.START_REF + 0.02, "Referenzzins der Banken folgt dem Leitzins (%.2f %%)" % (Bk.ref_rate * 100.0))
+	ok(Z.summary().preisindex > 100.0, "Preisindex steigt (%.1f)" % Z.cpi)
+	ok(identity_ok(s), "Geld erhalten nach Zinsanstieg")
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(absf(s2.central_bank.policy_rate - Z.policy_rate) < 0.00001 and absf(float(s2.central_bank.refi.B1) - float(Z.refi.B1)) < 0.01, "Zentralbank gespeichert und geladen")
+	run(s2, 60.0 * 35.0)
+	ok(identity_ok(s2), "Geld erhalten nach Laden mit Zentralbank")

@@ -642,6 +642,27 @@ static func housing(sim: Simulation) -> String:
 	return txt
 
 
+static func central_bank(sim: Simulation) -> String:
+	var Z: CentralBank = sim.central_bank
+	var sm: Dictionary = Z.summary()
+	var txt := "[b][color=#f2c14e]ZENTRALBANK UND GELDMENGE[/color][/b]
+"
+	txt += "Leitzins %.2f %% · Referenzzins der Banken %.2f %% · Inflation %.1f %% p. a. · Preisindex %.1f
+" % [Z.policy_rate * 100.0, sim.banking.ref_rate * 100.0, Z.inflation * 100.0, Z.cpi]
+	txt += "Geldmenge der Nichtbanken %s · Kreditvolumen %s · Zentralbankgeld in Umlauf %s
+" % [Catalog.money(float(sm.geldmenge)), Catalog.money(float(sm.kreditvolumen)), Catalog.money(float(sm.zentralbankgeld))]
+	txt += "Schulden: Haushalte %s · Unternehmen %s · Mindestreserve %d %%
+" % [Catalog.money(float(sm.haushaltsschulden)), Catalog.money(float(sm.firmenschulden)), roundi(sim.banking.reserve_ratio * 100.0)]
+	txt += "
+[b]Bankbilanzen[/b]
+"
+	for i in Banking.BANKS.size():
+		var b: Dictionary = Z.balance_sheet(i)
+		txt += "  %s: Reserve %s + Kredite %s = Aktiva %s | Einlagen %s + Zentralbankkredit %s + Eigenkapital %s
+" % [b.bank, Catalog.money(float(b.reserve)), Catalog.money(float(b.kredite)), Catalog.money(float(b.aktiva)), Catalog.money(float(b.einlagen)), Catalog.money(float(b.zentralbankkredit)), Catalog.money(float(b.eigenkapital))]
+	return txt
+
+
 static func parcels(sim: Simulation) -> String:
 	var P: Parcels = sim.parcels
 	var sm: Dictionary = P.summary()
