@@ -1,6 +1,6 @@
 # Umsetzungsstand
 
-Stand: 25.10.2026. „Geprüft“ heißt: durch automatische Tests (`tests/run_tests.gd`) und/oder Autotest-Partien belegt.
+Stand: 31.10.2026 (Aufträge 1, 2, 3, 5 und 7 fertig, Auftrag 4 teilweise, Auftrag 6 offen; Abschnitte unten nach Auftrag). „Geprüft“ heißt: durch automatische Tests (`tests/run_tests.gd`) und/oder Autotest-Partien belegt.
 Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Spiel-Prompt und gültigem Aktions-JSON getestet (Godot 4.7.2). Der aktuelle vollständige Headless-Lauf bestand 4374 Prüfungen ohne Testfehler.
 Externe Sprachmodell-APIs wurden mangels Key nicht live getestet. Die übrigen Adaptertests nutzen den
 DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen lokalen Mock-Server.
@@ -25,7 +25,7 @@ DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen l
 **Bewusst nicht umgesetzt / Grenzen dieses Stands**
 - Gebäude-Zustandsvarianten und Renovierung (Teil des Auftrags „Stadtviertel“) sowie Winterkleidung der Figuren fehlen.
 - Ein- und Aussteigen der Fahrer wird nicht animiert; die Nahaufnahme „arbeitender Betriebshof“ wurde mit einem Testszenario (`--scenario=yard`) geprüft, in dem Bau und Reparatur laufen, aber nur wenige Arbeiter sichtbar sind.
-- Die Aufträge „Wirtschaftskreislauf“ (Banken, Kredite, Insolvenz, Großhändler, Produktion), „Kraftstoffpreise, Löhne, Haushalte, Stadtviertel“ und „Öffentliche Hand, Steuern, Geldschöpfung“ sind **noch nicht umgesetzt**. Vorhanden sind nur der Entwurf (`docs/ECONOMY.md`), die Kalenderklasse `GameCalendar` (Spieltag/Monat/Jahr, im HUD angezeigt) und die Partiedauern 4 h/12 h/24 h/Endlos.
+- Zum Stand vom 25.10. waren die Aufträge „Wirtschaftskreislauf“, „Kraftstoffpreise, Löhne, Haushalte, Stadtviertel“ und „Öffentliche Hand“ noch offen; sie sind inzwischen umgesetzt (Abschnitte „Auftrag 3“ bis „Auftrag 5“ unten), vom Auftrag „Öffentliche Hand“ fehlen Zentralbank und Geldschöpfungsmodell.
 - Externe Sprachmodell-APIs wurden weiterhin nicht live getestet; das lokale Ollama-Modell wurde geprüft.
 
 ## Fertig
@@ -135,3 +135,8 @@ Handel, Sabotage (Ruf/Depot), Spielende nach aktiver Echtzeit (max. 240 min), Sp
 - **Fertig:** Karte 512 mit Grundstücken, Planungsregeln und Bauantrag, Bürgermeister-KI mit Gemeinderat und Wahl, Baufirmen mit Angebot/Vertrag/zehn Bauphasen/Material/Erschließung/Übergabe/Einzug, Bauträger, Unternehmen als Bauherren, Haushalte als Bauherren mit Baukredit der Investitionsbank (Zusage, Auszahlung je Bauabschnitt, Annuität, Ausfall), sichtbare Baustellen mit Mannschaft und Geräten, Einzugsaufträge (Umzug, Möbel), KI-Aktion `bau_lieferung`, Kartenebenen (Taste L, inkl. Engpässe), Detailstufe, Bürgermeister-Zugang im Startmenü.
 - **Geprüft:** `test_acceptance_flow` (Abnahme Schritte 1–12 über den Autopiloten, danach Mehrfamilienhaus mit Vermietung), `test_household_builder`, `test_construction`, `test_developer_autopilot`; Autotest 150 s/16× ohne Skriptfehler. Einzelheiten und Grenzen: `docs/URBAN_DEVELOPMENT.md`, Abschnitt „Stand der Umsetzung“.
 - **Grenzen:** Haushalte bauen nur, wenn Einkommen und Eigenmittel der Bank genügen – im normalen Spielverlauf (Anfangsguthaben 150) geschieht das selten; die Mannschaft ist ein Besetzungsmodell mit Darstellung, keine Personen im Personalsystem; Unternehmen finanzieren Bauten nur aus der Kasse (Bankkredit für Bauherren-Unternehmen folgt mit Auftrag 6); der Verkehr kennt keine Kapazität (Auftrag 5), die Engpass-Ebene zeigt Ereignisse und Fahrzeugdichte.
+
+## Auftrag 5 – Versorgungsnetz (Stand 31.10.2026)
+- **Fertig (Etappen 1–6):** Warenmodell mit Eigentümer, Standort, Zustand und Reservierung; Warenkatalog `CityGoods`; kommunales Zentrallager `CityDepot` mit Beschaffungskette, Lagerpersonal aus Bürgern, Rampen, Rückstau, Ausbau und Innenansicht; Straßenkapazität `TrafficFlow` mit Tempodrosselung und Engpassmessung; Verkehrsmaßnahmen des Bürgermeisters (Ampel, Straßenausbau); Restaurants und Geschäfte mit Geschäftskonto, Bestand und Nachschub per Transportauftrag; Pfand/Mehrweg; Müllabfuhr mit Recycling. Abnahme: `test_supply_acceptance`. Einzelheiten: `docs/SUPPLY_NETWORK.md`.
+- **Stadtkasse:** Der Rat passt den kommunalen Umsatzsteueranteil monatlich an (`PublicSector._adjust_rate`). Messlauf `tests/probe_city_cash.gd` (Seed 21, 690 Spieltage, rund 64 Minuten): Die Kasse bleibt zwischen etwa 250 000 und 355 000 EUR, nie im Minus; von Tag 585 bis 690 sinkt sie um etwa 30 000 EUR je Monat, die Regel hebt den Satz erst unter 200 000 EUR an. Nur ein Seed gemessen.
+- **Offen:** Auftrag 6 (Bewohner, Mieten, private Kredite, Zufriedenheit), Rest von Auftrag 4 (Zentralbank, Geldschöpfung).
