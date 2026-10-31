@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2076,6 +2076,47 @@ func test_build_materials() -> void:
 	ok(is_equal_approx(T.cash(), t1), "Bauhof erhält nichts für bereits vorhandenes Material")
 	ok(cash1 - c.ledger.cash < 2000.0 * 1.4 - 1.0, "Eigenes Material mindert die Bezahlung")
 	ok(identity_ok(s), "Bilanz mit eigenem Material")
+
+
+func test_estate_facilities() -> void:
+	var s := new_sim(2)
+	var E := s.estate
+	var c := s.companies[0]
+	c.ledger.inject(100000.0)
+	var site: int = c.depots[0]
+	var slots0 := c.parking_slots
+	var fuel0 := c.fuel_cap
+	var cold0 := E.storage_cap(site, true)
+	for typ in ["garage", "kuehllager", "tankstelle", "waschplatz", "schulung"]:
+		var r := place_suggested(s, 0, typ, "extern")
+		ok(r.ok, "%s wird gebaut: %s" % [typ, r.msg])
+		if r.ok:
+			var f: Dictionary = E.facilities[r.building_id]
+			until_done(s, func(): return f.status == "fertig", 3000.0)
+			ok(f.status == "fertig", "%s fertiggestellt" % typ)
+	ok(c.parking_slots == slots0 + 2, "Fahrzeughalle: 2 Stellplätze mehr")
+	ok(E.storage_cap(site, true) == cold0 + 25, "Kühllager: 25 gekühlte Lagerplätze")
+	ok(is_equal_approx(c.fuel_cap, fuel0 + 3000.0), "Betriebstankstelle: Tank +3000 l")
+	# Waschplatz: Fahrzeug auf dem Hof waschen
+	var v: FleetVehicle = s.vehicles[c.vehicle_ids[0]]
+	v.state = "idle"
+	v.pos = Vector2(s.city.building(site).x + 1, s.city.building(site).y + 1)
+	var cash0 := c.ledger.cash
+	var rw := s.executor.execute(0, {"action": "wash_vehicle", "vehicle_id": v.id})
+	if rw.ok:
+		ok(v.state == "washing" and v.clean_until > s.game_min and is_equal_approx(cash0 - c.ledger.cash, 30.0), "Wäsche kostet 30 EUR und macht das Fahrzeug sauber")
+	else:
+		ok(E.on_plot(0, v.pos) < 0, "Wäsche nur auf dem Hof: " + rw.msg)
+	# Schulung: Fähigkeit +1 gegen 800 EUR
+	var w := hire_free(s, 0, "loader")
+	var skill: String = Worker.SKILLS[0]
+	var lvl0 := int(w.skills.get(skill, 0))
+	var cash1 := c.ledger.cash
+	var rt := s.executor.execute(0, {"action": "train_worker", "worker_id": w.id, "faehigkeit": skill})
+	ok(rt.ok and is_equal_approx(cash1 - c.ledger.cash, 800.0), "Schulung kostet 800 EUR: " + str(rt.get("msg", "")))
+	until_done(s, func(): return int(w.skills.get(skill, 0)) > lvl0 or lvl0 >= 3, 600.0)
+	ok(int(w.skills.get(skill, 0)) == mini(3, lvl0 + 1), "Fähigkeit steigt um 1 (%d → %d)" % [lvl0, int(w.skills.get(skill, 0))])
+	ok(identity_ok(s), "Geld und Waren erhalten nach allen Einrichtungen")
 
 
 func test_standings() -> void:
