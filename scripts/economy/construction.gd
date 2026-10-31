@@ -499,6 +499,9 @@ func _create_units(pr: Dictionary, parcel: Dictionary) -> void:
 	for i in n:
 		var u := {"id": "W%d" % _next_unit, "building": int(pr.building), "project": pr.id, "owner": pr.client, "tenant": "", "rent": RENT_PER_UNIT_MONTH, "area": 60 + 10 * i % 3 * 5, "move_in_day": -1}
 		_next_unit += 1
+		var hu: Dictionary = sim.housing.register_unit(int(pr.building), float(u.area), str(pr.client))   # Mietvertraege laufen ueber Housing
+		u["hid"] = hu.id
+		u.rent = hu.rent
 		units[u.id] = u
 		pr.units.append(u.id)
 	# Der Bauherr-Haushalt zieht in die erste Wohneinheit ein; alle anderen werden vermietet.
@@ -506,6 +509,7 @@ func _create_units(pr: Dictionary, parcel: Dictionary) -> void:
 		var first: Dictionary = units[pr.units[0]]
 		first.tenant = pr.client
 		first.rent = 0.0
+		sim.housing.move_household(pr.client, first.hid)
 		first.move_in_day = _today()
 		_move_in(first, pr.client)
 		sim.households.homes[pr.client].address = int(pr.building)
@@ -576,6 +580,21 @@ func _jobs_day(day: int) -> void:
 func on_month(_month: int) -> void:
 	var M: Mayor = sim.mayor
 	for u in units.values():
+		var hu: Dictionary = sim.housing.units.get(str(u.get("hid", "")), {})
+		if not hu.is_empty():
+			# Wohnungssuchende ziehen in die neue Einheit; Mietvertrag und Miete laufen ueber Housing (Zahlung an den Eigentuemer).
+			u.rent = hu.rent
+			if hu.tenant == "" and M.waiting > 0:
+				M.waiting -= 1
+				sim.citizens.immigrate(int(Mayor.PERSONS_PER_UNIT), _today() / 30, hu.id)
+				hu.tenant = "B"
+			if u.tenant == "" and hu.tenant != "":
+				u.tenant = str(hu.tenant)
+				u.move_in_day = _today()
+				_move_in(u, "X0")
+			elif u.tenant != "" and hu.tenant == "":
+				u.tenant = ""
+			continue
 		if u.tenant == "" and M.waiting > 0:
 			M.waiting -= 1
 			sim.citizens.immigrate(int(Mayor.PERSONS_PER_UNIT), _today() / 30)

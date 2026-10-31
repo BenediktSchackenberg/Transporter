@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3815,3 +3815,55 @@ func test_housing() -> void:
 	ok(s2.citizens.people.all(func(p): return str(p.get("home", "")) == "" or s2.housing.units.has(p.home)), "Wohnorte der Bürger geladen")
 	run(s2, 60.0 * 35.0)
 	ok(identity_ok(s2), "Geld erhalten nach Laden mit Mieten")
+
+
+func test_housing_market() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var H: Housing = s.housing
+	# Mietspiegel folgt dem Mietindex des Bürgermeisters, aber höchstens um INDEX_STEP je Monat
+	var u0: Dictionary = H.units.values()[0]
+	var base := float(u0.base)
+	s.mayor.waiting = 100000
+	ok(s.mayor.rent_index() > 150.0, "Wohnungsnot treibt den Mietindex (%.0f)" % s.mayor.rent_index())
+	for m in 12:
+		H.on_month(m)
+	ok(absf(H.index - (1.0 + 12.0 * Housing.INDEX_STEP)) < 0.0001, "Mietspiegel steigt höchstens 0,4 %% je Monat (%.3f)" % H.index)
+	ok(absf(float(u0.rent) - roundf(base * H.index)) < 0.01, "Miete der Einheit folgt dem Mietspiegel (%.0f)" % float(u0.rent))
+	s.mayor.waiting = 0
+	s.mayor.stock_units = 100000   # viel Leerstand
+	H.on_month(13)
+	ok(H.index < 1.0 + 12.0 * Housing.INDEX_STEP, "Leerstand senkt den Mietspiegel wieder (%.3f)" % H.index)
+	# Miete geht an den Eigentümer
+	var ids: Array = H.units.keys()
+	var a: Dictionary = H.units[ids[0]]
+	var b: Dictionary = H.units[ids[1]]
+	var c: Dictionary = H.units[ids[2]]
+	a.owner = "D0"
+	a.tenant = "B"
+	b.owner = "C0"
+	b.tenant = "B"
+	c.owner = "B"   # unbekannter Eigentümer fällt auf V0 zurück
+	c.tenant = "B"
+	var d0 := float(s.economy.accounts.D0)
+	var v0 := float(s.economy.accounts.V0)
+	var cash0 := s.companies[0].ledger.cash
+	H._pay_owner(a, 100.0)
+	H._pay_owner(b, 50.0)
+	H._pay_owner(c, 10.0)
+	ok(absf(float(s.economy.accounts.D0) - d0 - 100.0) < 0.001, "Bauträger erhält Miete")
+	ok(absf(s.companies[0].ledger.cash - cash0 - 50.0) < 0.001, "Unternehmen erhält Miete in die Kasse")
+	ok(absf(float(s.economy.accounts.V0) - v0 - 10.0) < 0.001, "Unbekannter Eigentümer: Miete an V0")
+	ok(identity_ok(s), "Geld erhalten bei Zahlung an Eigentümer")
+	# Selbstnutzer zahlen keine Miete
+	a.owner = "H1"
+	a.tenant = "H1"
+	ok(H.rent_due(a) == 0.0, "Selbstnutzer zahlt keine Miete")
+	# Neue Einheit mit Wohnungssuchenden: Zuzug bekommt den Wohnort der Einheit
+	var hu: Dictionary = H.register_unit(1, 70.0, "D0")
+	var persons := s.citizens.people.size()
+	s.citizens.immigrate(2, 1, hu.id)
+	ok(s.citizens.people.size() == persons + 2 and str(s.citizens.people[-1].home) == hu.id, "Zuzügler tragen ihre Wohneinheit")
+	ok(H.vacant_units().any(func(x): return x.id == hu.id), "Einheit ohne Mietvertrag bleibt frei, bis Housing sie vergibt")
+	H.on_month(14)
+	ok(H.units[hu.id].rent > 0.0 and identity_ok(s), "Neue Einheit läuft im Mietspiegel")

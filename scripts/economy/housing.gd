@@ -22,9 +22,11 @@ const RESERVE_UNITS := 120         # zusaetzliche Einheiten fuer Firmenhaushalte
 const EVICT_AFTER := 3             # Monate Mietrueckstand bis zur Raeumung
 const MAINTENANCE_SHARE := 0.25    # Anteil der Mieteinnahmen fuer Instandhaltung (an S0)
 const PROPERTY_TAX_SHARE := 0.10   # Grundsteuer (an P0); der Rest ist Vermieterertrag (an H0)
+const INDEX_STEP := 0.004          # hoechste Mietanpassung je Monat (rund 5 % im Jahr)
 
 var sim: Simulation
-var units := {}                    # "E<n>" -> {id, building, area, rent, tenant ("" | "H<n>" | "B" = Buergergruppe), arrears, paid}
+var units := {}                    # "E<n>" -> {id, building, area, base, rent, owner ("V0" | "D0" | "H<n>" | "C<n>"), tenant ("" | "H<n>" | "B" = Buergergruppe), arrears, paid}
+var index := 1.0                   # Mietspiegel relativ zum Ausgangswert, folgt dem Mietindex des Buergermeisters
 var stats := {"rent": 0.0, "evictions": 0, "homeless": 0, "moves": 0}
 var _next := 1
 
@@ -65,7 +67,7 @@ func generate() -> void:
 		var k: Dictionary = KINDS[b.type]
 		for n in int(k.units):
 			var area: float = float(k.area) + (5.0 * (n % 3) if b.type == "apartment" or b.type == "highrise" else 0.0)
-			var u := {"id": "E%d" % _next, "building": int(b.id), "area": area, "rent": roundf(area * RENT_PER_SQM), "tenant": "", "arrears": 0, "paid": 0.0}
+			var u := {"id": "E%d" % _next, "building": int(b.id), "area": area, "base": roundf(area * RENT_PER_SQM), "rent": roundf(area * RENT_PER_SQM), "owner": LANDLORD, "tenant": "", "arrears": 0, "paid": 0.0}
 			_next += 1
 			units[u.id] = u
 	# grosse Gruppen in grosse Einheiten
@@ -111,13 +113,43 @@ func assign_household(h: Dictionary) -> Dictionary:
 	return best
 
 
+## Neue Wohneinheit eines Bauherrn (aus Construction). Der Eigentuemer erhaelt die Miete.
+func register_unit(building: int, area: float, owner: String) -> Dictionary:
+	var base := roundf(area * RENT_PER_SQM)
+	var u := {"id": "E%d" % _next, "building": building, "area": area, "base": base, "rent": roundf(base * index), "owner": owner, "tenant": "", "arrears": 0, "paid": 0.0}
+	_next += 1
+	units[u.id] = u
+	return u
+
+
+## Haushalt zieht in die angegebene (freie) Einheit um; die bisherige wird frei.
+func move_household(hid: String, unit_id: String) -> void:
+	var h: Dictionary = sim.households.homes.get(hid, {})
+	var u: Dictionary = units.get(unit_id, {})
+	if h.is_empty() or u.is_empty():
+		return
+	var old: Dictionary = units.get(str(h.get("unit", "")), {})
+	if not old.is_empty() and old.tenant == hid:
+		old.tenant = ""
+		old.arrears = 0
+	u.tenant = hid
+	u.arrears = 0
+	h.unit = unit_id
+	h.address = int(u.building)
+
+
+## Faellige Miete: Selbstnutzer zahlen keine.
+func rent_due(u: Dictionary) -> float:
+	return 0.0 if u.is_empty() or u.owner == u.tenant else float(u.rent)
+
+
 func unit_of_household(hid: String) -> Dictionary:
 	var h: Dictionary = sim.households.homes.get(hid, {})
 	return units.get(str(h.get("unit", "")), {})
 
 
 func rent_of(hid: String) -> float:
-	return float(unit_of_household(hid).get("rent", 0.0))
+	return rent_due(unit_of_household(hid))
 
 
 # ------------------------------------------------------------------ Mietzahlung
@@ -127,10 +159,23 @@ func settle_household(hid: String, paid: float) -> void:
 	if u.is_empty():
 		return
 	if paid > 0.0:
-		sim.economy.transfer("H0", LANDLORD, paid)
+		_pay_owner(u, paid)
 		stats.rent += paid
 	u.paid = paid
-	u.arrears = 0 if paid >= float(u.rent) - 0.01 else int(u.arrears) + 1
+	u.arrears = 0 if paid >= rent_due(u) - 0.01 else int(u.arrears) + 1
+
+
+## Die Miete geht an den Eigentuemer: Vermietersektor, Bautraeger, Haushalt (bleibt im Haushaltssektor) oder Firmenkasse.
+func _pay_owner(u: Dictionary, amount: float) -> void:
+	var owner := str(u.owner)
+	if owner.begins_with("H") and sim.households.homes.has(owner):
+		sim.households.homes[owner].balance = float(sim.households.homes[owner].balance) + amount
+	elif owner.begins_with("C") and sim.company(int(owner.substr(1))) != null:
+		sim.company(int(owner.substr(1))).ledger.book("rent_income", amount, true, "Mieteinnahmen %s" % u.id, sim.game_min)
+	elif owner == "D0":
+		sim.economy.transfer("H0", "D0", amount)
+	else:
+		sim.economy.transfer("H0", LANDLORD, amount)
 
 
 ## Buergergruppen zahlen aus dem Netto ihrer Mitglieder (`net`, gesetzt von Citizens). Gibt die gezahlte Gesamtmiete zurueck.
@@ -142,12 +187,12 @@ func collect_citizen_rent() -> float:
 		var income := 0.0
 		for p in occ[uid]:
 			income += float(p.get("net", 0.0))
-		var pay := minf(float(u.rent), income)
+		var pay := minf(rent_due(u), income)
 		if pay > 0.0:
-			sim.economy.transfer("H0", LANDLORD, pay)
+			_pay_owner(u, pay)
 			total += pay
 		u.paid = pay
-		u.arrears = 0 if pay >= float(u.rent) - 0.01 else int(u.arrears) + 1
+		u.arrears = 0 if pay >= rent_due(u) - 0.01 else int(u.arrears) + 1
 	stats.rent += total
 	return total
 
@@ -165,10 +210,19 @@ func _citizen_occupants() -> Dictionary:
 
 # ------------------------------------------------------------------ Monat
 func on_month(_month: int) -> void:
+	_update_rents()
 	_distribute_landlord_income()
 	_evict_overdue()
 	_house_homeless()
 	stats.homeless = homeless_count()
+
+
+## Mietspiegel: folgt dem Mietindex des Buergermeisters (Wohnungssuchende, Leerstand), hoechstens INDEX_STEP je Monat.
+func _update_rents() -> void:
+	var target: float = sim.mayor.rent_index() / 100.0
+	index = clampf(target, index - INDEX_STEP, index + INDEX_STEP)
+	for u in units.values():
+		u.rent = roundf(float(u.base) * index)
 
 
 func _distribute_landlord_income() -> void:
@@ -244,12 +298,12 @@ func summary() -> Dictionary:
 	var avg := 0.0
 	for r in rents:
 		avg += r
-	return {"einheiten": units.size(), "belegt": occupied, "leerstand": vacancy_rate(), "durchschnittsmiete": avg / maxf(1.0, float(rents.size())),
+	return {"einheiten": units.size(), "belegt": occupied, "leerstand": vacancy_rate(), "durchschnittsmiete": avg / maxf(1.0, float(rents.size())), "mietspiegel": index,
 		"mieteinnahmen": stats.rent, "raeumungen": stats.evictions, "wohnungslos": homeless_count()}
 
 
 func to_dict() -> Dictionary:
-	return {"units": units, "stats": stats, "next": _next}
+	return {"units": units, "stats": stats, "next": _next, "index": index}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -262,3 +316,4 @@ func from_dict(d: Dictionary) -> void:
 	stats.homeless = int(stats.homeless)
 	stats.moves = int(stats.moves)
 	_next = int(d.get("next", 1))
+	index = float(d.get("index", 1.0))
