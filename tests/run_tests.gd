@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -4068,3 +4068,63 @@ func test_central_bank() -> void:
 	ok(absf(s2.central_bank.policy_rate - Z.policy_rate) < 0.00001 and absf(float(s2.central_bank.refi.B1) - float(Z.refi.B1)) < 0.01, "Zentralbank gespeichert und geladen")
 	run(s2, 60.0 * 35.0)
 	ok(identity_ok(s2), "Geld erhalten nach Laden mit Zentralbank")
+
+
+func test_oversight() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var O: Oversight = s.oversight
+	var c := s.companies[0]
+	# Einrichtung der Firma verwahrlost lassen
+	c.ledger.inject(40000.0)
+	var placed := place_suggested(s, 0, "stellplatz", "extern")
+	var fid := str(placed.building_id)
+	until_done(s, func(): return s.estate.facilities[fid].status == "fertig", 3000.0)
+	ok(fid != "", "Firma hat eine fertige Einrichtung (%s)" % fid)
+	s.estate.facilities[fid].condition = 10.0
+	var found := false
+	for m in range(1, 60):
+		O.on_month(m)
+		if not O.open_for("C%d" % c.id).is_empty():
+			found = true
+			break
+	ok(found, "Gewerbeaufsicht erteilt eine Auflage für verwahrloste Einrichtung")
+	var o: Dictionary = O.open_for("C%d" % c.id)[0]
+	ok(int(o.deadline) - int(o.found) == Oversight.DEADLINE_DAYS and o.status == "offen", "Frist von %d Tagen" % Oversight.DEADLINE_DAYS)
+	var obs := ObservationBuilder.build(s, c.id, [], 0.0, 10.0)
+	ok(obs.has("auflagen") and obs.auflagen.size() == 1 and int(obs.auflagen[0].zustand) == 10, "Auflage erscheint in der Spielerbeobachtung")
+	ok(not O._has_open("F" + fid) == false, "Keine zweite Auflage für dieselbe Einrichtung")
+	for m in range(60, 120):
+		O.on_month(m)
+	ok(O.orders.values().filter(func(x): return x.what == "F" + fid).size() == 1, "Genau eine offene Auflage je Einrichtung")
+	# Erfüllung: Zustand verbessern
+	s.estate.facilities[fid].condition = 80.0
+	O.on_day(1)
+	ok(O.orders[o.id].status == "erfuellt", "Instandsetzung erfüllt die Auflage")
+	ok(O.fines_total == 0.0, "Kein Bußgeld bei erfüllter Auflage")
+	# Frist verstreicht: Bußgeld an die Stadtkasse
+	s.estate.facilities[fid].condition = 5.0
+	var o2 := {"id": "A99", "target": "C%d" % c.id, "what": "F" + fid, "label": "Test", "found": 0, "deadline": 0, "status": "offen", "fine": 0.0}
+	O.orders[o2.id] = o2
+	var p0 := float(s.economy.accounts.P0)
+	var cash0 := c.ledger.cash
+	O.on_day(2)
+	ok(o2.status == "bussgeld" and absf(float(o2.fine) - minf(Oversight.FINE, cash0)) < 0.01, "Unerfüllte Auflage: Bußgeld %.0f" % float(o2.fine))
+	ok(float(s.economy.accounts.P0) > p0 and c.ledger.cash < cash0, "Bußgeld geht von der Firma an die Stadtkasse")
+	ok(identity_ok(s), "Geld erhalten bei Bußgeld")
+	# Einsatz bei schwerem Wetterereignis, einmal je Ereignis
+	var e: Dictionary = s.events.create("starkregen", "Test", "Starkregen", 2, 480.0)
+	s.care.condition[0] = 5.0
+	var spent0 := O.mission_cost_total
+	O.on_day(3)
+	ok(O.missions.size() == 1 and O.mission_cost_total > spent0, "Einsatz der Stadt bei Starkregen (%.0f)" % O.mission_cost_total)
+	ok(s.care.get_condition(0) > 5.0, "Einsatz setzt verfallene Gebäude instand")
+	O.on_day(4)
+	ok(O.missions.size() == 1, "Je Ereignis nur ein Einsatz")
+	ok(float(s.public_sector.departments.Verkehr) >= Oversight.EINSATZ.starkregen.cost, "Kosten im Ressort Verkehr")
+	ok(identity_ok(s), "Geld erhalten bei Einsatz")
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.oversight.orders.size() == O.orders.size() and s2.oversight.missions.size() == 1, "Aufsicht gespeichert und geladen")
+	s2.oversight.on_day(5)
+	ok(s2.oversight.missions.size() == 1, "Geladenes Ereignis löst keinen zweiten Einsatz aus")

@@ -632,6 +632,9 @@ static func housing(sim: Simulation) -> String:
 	var cs: Dictionary = sim.banking.consumer_summary()
 	txt += "Konsumkredite: %d laufend (%s) · %d im Rückstand · %d in Pfändung (Restschuld %s) · %d vergeben
 " % [int(cs.laufend), Catalog.money(float(cs.volumen)), int(cs.rueckstand), int(cs.pfaendung), Catalog.money(float(cs.restschuld_pfaendung)), int(cs.vergeben)]
+	var os: Dictionary = sim.oversight.summary()
+	txt += "Gewerbeaufsicht: %d Auflagen offen · %d erfüllt · %d mit Bußgeld (%s) · Einsätze der Stadt %d (%s)
+" % [int(os.auflagen.offen), int(os.auflagen.erfuellt), int(os.auflagen.bussgeld), Catalog.money(float(os.bussgelder)), int(os.einsaetze), Catalog.money(float(os.einsatzkosten))]
 	var late: Array = sim.housing.units.values().filter(func(u): return int(u.arrears) > 0)
 	txt += "
 [b]Mietrückstand (%d)[/b]

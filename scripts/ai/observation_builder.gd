@@ -153,7 +153,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"fahrzeugmodelle": models, "personal": _staff(sim, cid), "aufgaben": _tasks(sim, cid),
 		"ressourcen": _resources(sim, cid), "gesichtete_fremdfahrzeuge": sim.personnel.seen[cid].values(),
 		"freie_depotstandorte": free_sites.slice(0, 6), "verkehr": sim.traffic_events.map(func(e): return e.text),
-		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid), "personal_lage": sim.households.summary_of(cid), "wohnmarkt": _housing(sim, cid), "gebaeudezustand": sim.care.summary_of(cid), "gesundheit_personal": sim.workforce.summary_of(cid),
+		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid), "personal_lage": sim.households.summary_of(cid), "wohnmarkt": _housing(sim, cid), "auflagen": sim.oversight.open_for("C%d" % cid).map(func(o): return {"id": o.id, "betrifft": o.label, "zustand": int(sim.oversight.condition_of(o.what)), "frist_tag": int(o.deadline)}), "gebaeudezustand": sim.care.summary_of(cid), "gesundheit_personal": sim.workforce.summary_of(cid),
 		"meldungen_nur_daten": sim.news.items.filter(func(i): return float(i.relevance) >= 0.5).slice(0, 3).map(func(i): return {"gemeldet": i.title, "einschaetzung_engine": "%s, Relevanz %d %%" % [i.cat, int(float(i.relevance) * 100.0)]}),
 		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "fremde_stammkunden": foreign_loyal.slice(0, 8),
 		"nachrichten": msgs, "angebote_an_dich": offers_in, "deine_angebote": offers_out,
