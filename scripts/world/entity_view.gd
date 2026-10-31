@@ -35,6 +35,12 @@ var person_nodes := {}                  # Kunden-ID -> Node2D
 var marker_node := Node2D.new()         # Ressourcen-Markierungen (Haendlerbestand, Waren, Vorraete)
 var select_marker := Node2D.new()
 var selected := {}                      # {kind: vehicle|avatar|worker|person|building, id}
+var winter := false                  # kalt oder Schnee: Figuren tragen Jacken
+var _board := {}                     # Arbeiter-ID -> Dauer des laufenden Ein-/Aussteigens
+var _was_inside := {}
+var _last_vehicle := {}
+const WINTER_BULK := 1.06
+const BOARD_TIME := 0.45
 var anim_time := 0.0
 var _marker_timer := 0.0
 var _ped_rng := RandomNumberGenerator.new()
@@ -125,7 +131,7 @@ func _make_figure(style: int, scale_f: float, shirt: Color) -> Node2D:
 	var n := Node2D.new()
 	var fig: Dictionary = cv.man.figures["fig_%d" % style]
 	var piv := Vector2(fig.pivot[0], fig.pivot[1])
-	for layer in ["base", "shirt"]:
+	for layer in ["base", "shirt", "coat"]:
 		var sp := Sprite2D.new()
 		sp.name = layer
 		sp.texture = cv.tex("fig_%d" % style if layer == "base" else "fig_%d_mask" % style)
@@ -133,9 +139,11 @@ func _make_figure(style: int, scale_f: float, shirt: Color) -> Node2D:
 		sp.vframes = 4
 		sp.centered = false
 		sp.offset = -piv
-		sp.scale = Vector2(scale_f, scale_f)
+		sp.scale = Vector2(scale_f, scale_f) * (WINTER_BULK if layer == "coat" else 1.0)
 		if layer == "shirt":
 			sp.modulate = shirt
+		if layer == "coat":
+			sp.visible = false
 		n.add_child(sp)
 	var um := Node2D.new()
 	um.name = "umbrella"
@@ -159,8 +167,12 @@ func _make_figure(style: int, scale_f: float, shirt: Color) -> Node2D:
 
 
 func _set_figure_frame(n: Node2D, dir: int, frame: int, rainy: bool) -> void:
-	for s in [n.get_node("base"), n.get_node("shirt")]:
+	for s in [n.get_node("base"), n.get_node("shirt"), n.get_node("coat")]:
 		s.frame = dir * FRAMES + frame
+	var coat: Sprite2D = n.get_node("coat")
+	coat.visible = winter
+	if winter:   # Winterjacke: dunklere, kuehle Variante der Hemdfarbe
+		coat.modulate = (n.get_node("shirt") as Sprite2D).modulate.darkened(0.45).lerp(Color(0.22, 0.26, 0.36), 0.4)
 	var um: Node2D = n.get_node("umbrella")
 	um.visible = rainy
 	if rainy:
@@ -267,6 +279,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 	anim_time += delta
 	var inv := clampf(1.0 / zoom, 0.6, 2.5)
 	var rainy := sim.wx.is_rain()
+	winter = sim.wx.is_cold() or sim.wx.is_snow()
 	for id in vehicle_nodes.keys():
 		if not sim.vehicles.has(id):
 			vehicle_nodes[id].queue_free()
@@ -416,10 +429,33 @@ func _update_workers(inv: float, rainy: bool) -> void:
 		if n == null:
 			n = _make_worker(w)
 		var inside: bool = w.vehicle_id >= 0 and sim.vehicles.has(w.vehicle_id)
-		n.visible = not w.lost and not inside
+		if inside:
+			_last_vehicle[w.id] = w.vehicle_id
+		if _was_inside.has(w.id) and _was_inside[w.id] != inside:
+			_board[w.id] = 0.0   # Ein- bzw. Aussteigen beginnt
+		_was_inside[w.id] = inside
+		var boarding: bool = _board.has(w.id) and not w.lost
+		n.visible = not w.lost and (not inside or boarding)
+		n.modulate.a = 1.0
+		n.scale = Vector2.ONE
 		if not n.visible:
 			continue
 		n.position = Iso.to_screen(w.pos)
+		if boarding:
+			_board[w.id] = float(_board[w.id]) + get_process_delta_time()
+			var k := clampf(float(_board[w.id]) / BOARD_TIME, 0.0, 1.0)
+			var door := n.position
+			var vn: Node2D = vehicle_nodes.get(int(_last_vehicle.get(w.id, -1)))
+			if vn != null:
+				door = vn.position
+			var f := k if inside else 1.0 - k   # Einsteigen: zur Tuer hin und ausblenden, Aussteigen umgekehrt
+			n.position = n.position.lerp(door, f)
+			n.modulate.a = 1.0 - f
+			n.scale = Vector2.ONE * (1.0 - 0.35 * f)
+			if k >= 1.0:
+				_board.erase(w.id)
+				if inside:
+					n.visible = false
 		var shirt: Color = sim.company(w.employer).color if w.employer >= 0 else FREE_SHIRT
 		n.get_node("shirt").modulate = shirt
 		var t: WorkerTask = sim.personnel.tasks.get(w.task_id)

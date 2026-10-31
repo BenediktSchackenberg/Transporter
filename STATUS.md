@@ -152,4 +152,5 @@ Entwurf, Umsetzung und Grenzen je Etappe stehen in `docs/HOUSING_AND_MONEY.md` (
 - **Frühere Testfehler behoben (31.10.2026):** `StockBook.consume` buchte auch die nicht vorhandene Menge als verbraucht (Warenbilanz, `test_city_depot`); `test_money_conservation` und `test_public_sector` prüften veraltete Annahmen (Anfangsbestand von I0, Stadtkasse über dem Ausgangsstand).
 - **Umzug bei Arbeitsplatzwechsel:** Bürgergruppen ziehen ins Arbeitsviertel (`Housing.relocate_for_job`, Test `test_job_move`).
 - **Spielerkredite (Auftrag 2):** `PlayerLoans`, Aktionen `offer_loan`/`counter_loan`/`accept_loan`/`decline_loan`, Test `test_player_loans`.
-- **Noch offen im Gesamtprojekt:** Animationen Ein-/Aussteigen und Winterkleidung. Tests für Kühllager, Tankstelle, Waschplatz, Schulung und Garage: `test_estate_facilities`.
+- **Figuren (31.10.2026):** Winterjacke (dunklere, etwas füllige Ebene über dem Hemd) bei Kälte oder Schnee; Ein- und Aussteigen der Arbeiter an Fahrzeugen als kurzes Hinein-/Herausgleiten mit Ausblenden (0,45 s, `EntityView`). Sichtprüfung per Screenshot, kein automatischer Test.
+- **Noch offen im Gesamtprojekt:** Zustandsvarianten der Gebäude, Langzeitmessungen. Tests für Kühllager, Tankstelle, Waschplatz, Schulung und Garage: `test_estate_facilities`.
