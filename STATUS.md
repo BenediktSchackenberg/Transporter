@@ -1,6 +1,6 @@
 # Umsetzungsstand
 
-Stand: 31.10.2026 (Aufträge 1, 2, 3, 5 und 7 fertig, Auftrag 4 teilweise, Auftrag 6 offen; Abschnitte unten nach Auftrag). „Geprüft“ heißt: durch automatische Tests (`tests/run_tests.gd`) und/oder Autotest-Partien belegt.
+Stand: 31.10.2026 (Aufträge 1, 2, 3, 4, 5, 6 und 7 umgesetzt, Grenzen siehe Abschnitte unten). „Geprüft“ heißt: durch automatische Tests (`tests/run_tests.gd`) und/oder Autotest-Partien belegt.
 Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Spiel-Prompt und gültigem Aktions-JSON getestet (Godot 4.7.2). Der aktuelle vollständige Headless-Lauf bestand 4374 Prüfungen ohne Testfehler.
 Externe Sprachmodell-APIs wurden mangels Key nicht live getestet. Die übrigen Adaptertests nutzen den
 DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen lokalen Mock-Server.
@@ -139,4 +139,15 @@ Handel, Sabotage (Ruf/Depot), Spielende nach aktiver Echtzeit (max. 240 min), Sp
 ## Auftrag 5 – Versorgungsnetz (Stand 31.10.2026)
 - **Fertig (Etappen 1–6):** Warenmodell mit Eigentümer, Standort, Zustand und Reservierung; Warenkatalog `CityGoods`; kommunales Zentrallager `CityDepot` mit Beschaffungskette, Lagerpersonal aus Bürgern, Rampen, Rückstau, Ausbau und Innenansicht; Straßenkapazität `TrafficFlow` mit Tempodrosselung und Engpassmessung; Verkehrsmaßnahmen des Bürgermeisters (Ampel, Straßenausbau); Restaurants und Geschäfte mit Geschäftskonto, Bestand und Nachschub per Transportauftrag; Pfand/Mehrweg; Müllabfuhr mit Recycling. Abnahme: `test_supply_acceptance`. Einzelheiten: `docs/SUPPLY_NETWORK.md`.
 - **Stadtkasse:** Der Rat passt den kommunalen Umsatzsteueranteil monatlich an (`PublicSector._adjust_rate`). Messlauf `tests/probe_city_cash.gd` (Seed 21, 690 Spieltage, rund 64 Minuten): Die Kasse bleibt zwischen etwa 250 000 und 355 000 EUR, nie im Minus; von Tag 585 bis 690 sinkt sie um etwa 30 000 EUR je Monat, die Regel hebt den Satz erst unter 200 000 EUR an. Nur ein Seed gemessen.
-- **Offen:** Auftrag 6 (Bewohner, Mieten, private Kredite, Zufriedenheit), Rest von Auftrag 4 (Zentralbank, Geldschöpfung).
+
+## Auftrag 6 (Wohnen) und Rest von Auftrag 4 (Zentralbank, Aufsicht) – Stand 31.10.2026
+Entwurf, Umsetzung und Grenzen je Etappe stehen in `docs/HOUSING_AND_MONEY.md` (Abschnitt „Stand“). Kurz:
+- **Wohnen (A1–A3, A7):** `Housing` mit Wohneinheiten (nur ein Teil der Kartengebäude, Rest Kulisse), Mietverträgen, Mietzahlung über Vermieterkonto `V0` bzw. an den Eigentümer, Räumung nach 3 Monaten Rückstand, Mietspiegel nach Mietindex (höchstens 5 % im Jahr), Neubauten aus `Construction` als echte Einheiten. Ansicht „Wohnen“.
+- **Kredite (A4):** Konsumkredit für Haushalte mit Fehlbetrag, Pfändung nach Ausfall, Bankkredit für Unternehmen als Bauherren.
+- **Zufriedenheit und Viertel (A5, B6):** `Contentment` (Index 0–100, wirkt auf Konsum, Motivation, Wegzug; Viertelattraktivität wirkt auf Mieten und Kundschaft).
+- **KI-Planungshilfen (A6):** Wohnungsbedarf, Zahlungsfähigkeit, Zufriedenheit in Bürgermeister-Kennzahlen und Spielerbeobachtung.
+- **Zentralbank (B1–B4):** Konto `Z0`, Refinanzierung der Banken, Leitzins nach Inflation und Beschäftigung, Preisindex, Geldmengenkennzahlen, Bankbilanz, Wirtschaftslabor `tests/lab_economy.gd`.
+- **Aufsicht (B5):** Gewerbeaufsicht mit Auflagen und Bußgeldern, Einsätze der Stadt bei Wetterereignissen.
+- **Nicht gemessen:** Das Langzeitverhalten der Konten mit Mieten (`tests/probe_housing_cash.gd` brach wegen Speichermangel nach 15 Spieltagen ab) und die Szenarien des Wirtschaftslabors über 30 Tage.
+- **Bekannte Testfehler, schon vor diesen Änderungen vorhanden:** `test_money_conservation` (Kapitalgeber-Konto), `test_public_sector` (öffentliche Aufträge), `test_city_depot` (Warenbilanz, 4 Prüfungen).
+- **Noch offen im Gesamtprojekt:** Umzug bei Arbeitsplatzwechsel, Spielerkredite (Auftrag 2, M8 macht eine andere KI), Animationen Ein-/Aussteigen und Winterkleidung, Strategische Steuerung Stufe 6, Tests für Kühllager, Tankstelle, Waschplatz, Schulung, Garage.
