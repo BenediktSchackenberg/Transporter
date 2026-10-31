@@ -106,7 +106,7 @@ Handel, Sabotage (Ruf/Depot), Spielende nach aktiver Echtzeit (max. 240 min), Sp
 - „Partie beenden“ verlangt einen zweiten Klick; Leistenknöpfe reagieren nicht mehr auf Leertaste/Enter.
 
 ## Offen
-- Strategische Steuerung Stufe 6: Vergleichsmodus (Metrik-Export, rotierende Startpositionen, gleiche Budgets) und exakte Wiederholung ohne API-Aufrufe; Abnahmeszenario mit Straßensperrung.
+- Strategische Steuerung Stufe 6 ist umgesetzt (`Arena`, `scripts/ai/arena.gd`): Vergleichsmodus mit rotierenden Startpositionen, gleichem Startkapital und Aktionsbudget, CSV-Export (`tests/arena_compare.gd`), exakte Wiederholung der aufgezeichneten Aktionen ohne Entscheidungsinstanz (gleicher Fingerabdruck), Abnahmeszenario mit Straßensperrung (`test_arena`). Grenze: Es spielen Regel-KIs; echte API-Spieler würden ihre Antworten aufzeichnen und über `Arena.replay` wiederholen, das ist noch nicht an die Spielsitzung angebunden.
 - Auftrag „Grundstücke und Stadt“, Teil 2: Villen, Schulen, Kitas, Frachtterminal, gebäudetypabhängige Kundenaufträge und die Animationen Tragen/Reparieren/Sprechen sind umgesetzt; offen sind Ein-/Aussteigen und Zustandsvarianten der Gebäude.
 - Nicht automatisch getestet: Kühllager-Pflicht für Kühlware am Hof, Tankstelle, Waschplatz, Schulung, Garage/Sicherheit-Bonus (Code vorhanden, kein eigener Test).
 
@@ -152,4 +152,4 @@ Entwurf, Umsetzung und Grenzen je Etappe stehen in `docs/HOUSING_AND_MONEY.md` (
 - **Frühere Testfehler behoben (31.10.2026):** `StockBook.consume` buchte auch die nicht vorhandene Menge als verbraucht (Warenbilanz, `test_city_depot`); `test_money_conservation` und `test_public_sector` prüften veraltete Annahmen (Anfangsbestand von I0, Stadtkasse über dem Ausgangsstand).
 - **Umzug bei Arbeitsplatzwechsel:** Bürgergruppen ziehen ins Arbeitsviertel (`Housing.relocate_for_job`, Test `test_job_move`).
 - **Spielerkredite (Auftrag 2):** `PlayerLoans`, Aktionen `offer_loan`/`counter_loan`/`accept_loan`/`decline_loan`, Test `test_player_loans`.
-- **Noch offen im Gesamtprojekt:** Animationen Ein-/Aussteigen und Winterkleidung, Strategische Steuerung Stufe 6. Tests für Kühllager, Tankstelle, Waschplatz, Schulung und Garage: `test_estate_facilities`.
+- **Noch offen im Gesamtprojekt:** Animationen Ein-/Aussteigen und Winterkleidung. Tests für Kühllager, Tankstelle, Waschplatz, Schulung und Garage: `test_estate_facilities`.

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2189,6 +2189,35 @@ func test_player_loans() -> void:
 	var open_left := P.loans.values().filter(func(x): return x.status in ["laufend", "rueckstand", "ausgefallen"]).size()
 	ok(open_left == 0 and A.ledger.receivables < 0.01, "Fällt eine Seite weg, wird abgeschrieben")
 	ok(identity_ok(s), "Geld und Bilanz erhalten nach Abschreibung")
+
+
+func test_arena() -> void:
+	GameCalendar.configure(60.0)
+	var spec := {"seed": 21, "map": 128, "steps": 1200, "brains": ["kostenoptimierer", "wachstum"], "max_actions": 4,
+		"events": [{"step": 400, "typ": "strassensperre", "params": {"cell": "depot0"}, "duration": 300.0}]}
+	var a := Arena.run(spec)
+	ok(a.actions.size() > 0, "Regel-KIs entscheiden und werden aufgezeichnet (%d Aktionen)" % a.actions.size())
+	var cap_ok := true
+	var per := {}
+	for x in a.actions:
+		var k := "%d:%d" % [x.step, x.cid]
+		per[k] = int(per.get(k, 0)) + 1
+		cap_ok = cap_ok and int(per[k]) <= 4
+	ok(cap_ok, "Gleiches Aktionsbudget je Entscheidung")
+	ok(a.sim.traffic_events.any(func(t): return t.kind == "sperrung"), "Straßensperrung im Abnahmeszenario ausgelöst")
+	ok(identity_ok(a.sim), "Geld, Waren und Bilanz erhalten")
+	var r := Arena.replay(spec, a.actions)
+	ok(r.fingerprint == a.fingerprint, "Wiederholung ohne API/KI ergibt denselben Endstand")
+	ok(str(r.rows) == str(a.rows), "Kennzahlen der Wiederholung identisch")
+	var cmp := Arena.compare(spec)
+	ok(cmp.rows.size() == 4 and cmp.summary.size() == 2, "Zwei Strategien in zwei Runden (%d Zeilen)" % cmp.rows.size())
+	var sites := {}
+	for row in cmp.rows:
+		sites["%s@%d" % [row.strategie, row.platz]] = true
+	ok(sites.size() == 4, "Jede Strategie sitzt auf jedem Startplatz")
+	ok(cmp.summary.all(func(x): return x.laeufe == 2), "Mittelwerte über gleich viele Läufe")
+	var csv := Arena.to_csv(cmp.rows)
+	ok(csv.begins_with("platz;strategie;rang;gewinn") and csv.count("\n") == 5, "CSV-Export: Kopfzeile und vier Datenzeilen")
 
 
 func test_standings() -> void:
