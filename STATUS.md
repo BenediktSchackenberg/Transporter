@@ -153,4 +153,4 @@ Entwurf, Umsetzung und Grenzen je Etappe stehen in `docs/HOUSING_AND_MONEY.md` (
 - **Umzug bei Arbeitsplatzwechsel:** Bürgergruppen ziehen ins Arbeitsviertel (`Housing.relocate_for_job`, Test `test_job_move`).
 - **Spielerkredite (Auftrag 2):** `PlayerLoans`, Aktionen `offer_loan`/`counter_loan`/`accept_loan`/`decline_loan`, Test `test_player_loans`.
 - **Figuren (31.10.2026):** Winterjacke (dunklere, etwas füllige Ebene über dem Hemd) bei Kälte oder Schnee; Ein- und Aussteigen der Arbeiter an Fahrzeugen als kurzes Hinein-/Herausgleiten mit Ausblenden (0,45 s, `EntityView`). Sichtprüfung per Screenshot, kein automatischer Test.
-- **Noch offen im Gesamtprojekt:** Zustandsvarianten der Gebäude, Langzeitmessungen. Tests für Kühllager, Tankstelle, Waschplatz, Schulung und Garage: `test_estate_facilities`.
+- **Noch offen im Gesamtprojekt:** Langzeitmessungen. Gebäude: gepflegt/genutzt/vernachlässigt über Farbton, baufällige (Zustand < 20) zusätzlich entsättigt (`BuildingCare.tint`). Tests für Kühllager, Tankstelle, Waschplatz, Schulung und Garage: `test_estate_facilities`.

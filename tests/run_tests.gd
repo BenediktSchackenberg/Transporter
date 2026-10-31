@@ -2574,6 +2574,9 @@ func test_building_care() -> void:
 	var vals: Array = C.condition.values()
 	ok(vals.all(func(v): return v >= BuildingCare.START_MIN - 0.01 and v <= BuildingCare.START_MAX + 0.01), "Startzustand im erwarteten Bereich")
 	ok(BuildingCare.tint(100.0) == Color(1, 1, 1, 1) and BuildingCare.tint(10.0).r < 0.8, "gepflegt unverändert, verwahrlost dunkler")
+	var worn := BuildingCare.tint(40.0)
+	var ruin := BuildingCare.tint(0.0)
+	ok(absf(ruin.r - ruin.g) < absf(worn.r - worn.g) and absf(ruin.g - ruin.b) < absf(worn.g - worn.b), "baufällig: Farbe weicht (grauer als verwittert)")
 	ok(C.state_of(80.0) == "gepflegt" and C.state_of(50.0) == "genutzt" and C.state_of(30.0) == "vernachlässigt" and C.state_of(5.0) == "baufällig", "Zustandsstufen")
 	# Verfall ohne Pflege: H0 arm -> kein Unterhalt
 	s.economy.accounts.H0 = 0.0

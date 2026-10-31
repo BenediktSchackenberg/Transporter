@@ -47,7 +47,11 @@ func state_of(c: float) -> String:
 ## Farbton fuer die Anzeige: gepflegt = unveraendert, verwahrlost = dunkler und braeunlich.
 static func tint(c: float) -> Color:
 	var k := clampf((70.0 - c) / 70.0, 0.0, 1.0)
-	return Color(1.0 - 0.34 * k, 1.0 - 0.38 * k, 1.0 - 0.46 * k, 1.0)
+	var col := Color(1.0 - 0.34 * k, 1.0 - 0.38 * k, 1.0 - 0.46 * k, 1.0)
+	# baufaellig (< 20): Farbe weicht, das Gebaeude wirkt grau und stumpf
+	var grey := 0.7 * clampf((20.0 - c) / 20.0, 0.0, 1.0)
+	var lum := 0.3 * col.r + 0.59 * col.g + 0.11 * col.b
+	return Color(lerpf(col.r, lum, grey), lerpf(col.g, lum, grey), lerpf(col.b, lum, grey), 1.0)
 
 
 func get_condition(building_id: int) -> float:
