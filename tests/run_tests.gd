@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -4128,3 +4128,51 @@ func test_oversight() -> void:
 	ok(s2.oversight.orders.size() == O.orders.size() and s2.oversight.missions.size() == 1, "Aufsicht gespeichert und geladen")
 	s2.oversight.on_day(5)
 	ok(s2.oversight.missions.size() == 1, "Geladenes Ereignis löst keinen zweiten Einsatz aus")
+
+
+func test_districts() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var C: Contentment = s.contentment
+	C.on_month(1)
+	ok(C.attractiveness.size() == Catalog.DISTRICTS.size(), "Attraktivität für jedes Viertel (%d)" % C.attractiveness.size())
+	ok(Catalog.DISTRICTS.all(func(d): return C.attractiveness.has(d) and C.trend.has(d)), "Entwicklung (Trend) für jedes Viertel")
+	ok(range(Catalog.DISTRICTS.size()).all(func(i): return C.district_factor(i) >= 0.9 and C.district_factor(i) <= 1.1), "Lagefaktoren zwischen 0,9 und 1,1")
+	# Ein Viertel mit Geschäft und Wohnungen verfallen lassen
+	var shop: Dictionary = s.retail.shops.values()[0]
+	var dist := int(s.city.building(int(shop.building)).get("district", 0))
+	var name: String = Catalog.DISTRICTS[dist]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var good_customers := 0
+	for i in 20:
+		good_customers += s.retail.customers(shop, rng)
+	var unit: Dictionary = {}
+	for u in s.housing.units.values():
+		if int(s.city.building(int(u.building)).get("district", 0)) == dist:
+			unit = u
+			break
+	for id in s.care.condition:
+		if int(s.city.building(int(id)).get("district", 0)) == dist:
+			s.care.condition[id] = 100.0
+	C.on_month(2)
+	var attr_good := float(C.attractiveness[name])
+	s.housing._update_rents()
+	var rent_good := float(unit.rent) if not unit.is_empty() else 0.0
+	for id in s.care.condition:
+		if int(s.city.building(int(id)).get("district", 0)) == dist:
+			s.care.condition[id] = 0.0
+	C.on_month(3)
+	ok(float(C.attractiveness[name]) < attr_good and float(C.trend[name]) < 0.0, "Verfall senkt die Attraktivität von %s (%.1f -> %.1f)" % [name, attr_good, float(C.attractiveness[name])])
+	ok(C.district_factor(dist) < 1.0, "Verfallenes Viertel hat Lagefaktor unter 1 (%.3f)" % C.district_factor(dist))
+	s.housing._update_rents()
+	if not unit.is_empty():
+		ok(float(unit.rent) < rent_good, "Mieten im verfallenen Viertel sinken (%.0f -> %.0f)" % [rent_good, float(unit.rent)])
+	rng.seed = 5
+	var bad_customers := 0
+	for i in 20:
+		bad_customers += s.retail.customers(shop, rng)
+	ok(bad_customers < good_customers, "Weniger Kundschaft im verfallenen Viertel (%d -> %d)" % [good_customers, bad_customers])
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(absf(float(s2.contentment.attractiveness[name]) - float(C.attractiveness[name])) < 0.01, "Viertelentwicklung gespeichert und geladen")
+	ok(identity_ok(s), "Geld erhalten")

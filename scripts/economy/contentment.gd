@@ -21,6 +21,8 @@ var mean := NEUTRAL               # Stadtmittel ueber alle belegten Einheiten
 var by_district := {}              # Viertelname -> Mittelwert
 var parts := {"wohnung": 0.0, "arbeit": 0.0, "versorgung": 0.0, "verkehr": 0.0}   # Stadtmittel je Teil
 var emigrated := 0
+var attractiveness := {}           # Viertelname -> Attraktivitaet 0-100 (Zufriedenheit und Gebaeudezustand)
+var trend := {}                    # Viertelname -> Aenderung gegenueber dem Vormonat
 
 
 func setup(s: Simulation) -> void:
@@ -31,6 +33,17 @@ func setup(s: Simulation) -> void:
 ## Faktor fuer den Konsum der Buerger (0.85 bis 1.1).
 func spend_factor() -> float:
 	return clampf(1.0 + (mean - NEUTRAL) / 200.0, 0.85, 1.1)
+
+
+## Lagefaktor eines Viertels fuer Mieten und Kundschaft (0.9 bis 1.1 um die Attraktivitaet NEUTRAL).
+func district_factor(district: int) -> float:
+	var name: String = Catalog.DISTRICTS[clampi(district, 0, Catalog.DISTRICTS.size() - 1)]
+	return clampf(1.0 + 0.1 * (float(attractiveness.get(name, NEUTRAL)) - NEUTRAL) / 40.0, 0.9, 1.1)
+
+
+## Lagefaktor des Viertels, in dem das Gebaeude steht.
+func building_factor(building_id: int) -> float:
+	return district_factor(int(sim.city.building(building_id).get("district", 0)))
 
 
 ## Index der Wohneinheit eines Firmenhaushalts (50 ohne Wohnung).
@@ -116,8 +129,19 @@ func on_month(month: int) -> void:
 	by_district = {}
 	for d in dsum:
 		by_district[d] = snappedf(float(dsum[d]) / int(dn[d]), 0.1)
+	_develop_districts()
 	for u in leaving:
 		_emigrate(u)
+
+
+## Viertelentwicklung: Attraktivitaet = Mittel aus Zufriedenheit der Bewohner und Zustand der Gebaeude (Viertel ohne Bewohner: nur Zustand).
+func _develop_districts() -> void:
+	var cond: Array = sim.care.district_means()
+	for i in Catalog.DISTRICTS.size():
+		var name: String = Catalog.DISTRICTS[i]
+		var a: float = float(cond[i]) if not by_district.has(name) else 0.5 * float(by_district[name]) + 0.5 * float(cond[i])
+		trend[name] = snappedf(a - float(attractiveness.get(name, a)), 0.1)
+		attractiveness[name] = snappedf(a, 0.1)
 
 
 func _motivation(h: Dictionary) -> float:
@@ -142,7 +166,7 @@ func _emigrate(u: Dictionary) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"mean": mean, "by_district": by_district, "parts": parts, "emigrated": emigrated}
+	return {"mean": mean, "by_district": by_district, "parts": parts, "emigrated": emigrated, "attractiveness": attractiveness, "trend": trend}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -150,3 +174,5 @@ func from_dict(d: Dictionary) -> void:
 	by_district = d.get("by_district", {})
 	parts = d.get("parts", parts)
 	emigrated = int(d.get("emigrated", 0))
+	attractiveness = d.get("attractiveness", {})
+	trend = d.get("trend", {})

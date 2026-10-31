@@ -242,7 +242,8 @@ func customers(s: Dictionary, r: RandomNumberGenerator) -> int:
 	elif s.kind != "restaurant" and sim.wx.is_heavy_rain():
 		wx = 0.9
 	var elastic := pow(1.0 / maxf(0.5, float(s.price_factor)), 1.6)
-	return maxi(0, int(round(base * pop * power * wx * elastic * r.randf_range(0.8, 1.2))))
+	var location := sim.contentment.building_factor(int(s.building))   # attraktive Viertel haben mehr Kundschaft
+	return maxi(0, int(round(base * pop * power * wx * elastic * location * r.randf_range(0.8, 1.2))))
 
 
 func _serve(s: Dictionary, day: int) -> void:
