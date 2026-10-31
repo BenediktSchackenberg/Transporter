@@ -18,6 +18,12 @@ const MORTGAGE_EQUITY := 0.15    # Eigenmittel mindestens 15 % der Gesamtkosten
 const MORTGAGE_BURDEN := 0.40    # Rate hoechstens 40 % des letzten Monatseinkommens
 const MORTGAGE_MONTHS := 120
 const MORTGAGE_SPREAD := 0.025   # Aufschlag auf den Referenzzins (Privatkunden)
+const CONSUMER_BANK := 0           # Geschaeftsbank vergibt Konsumkredite an Haushalte (Auftrag 6, A4)
+const CONSUMER_SPREAD := 0.06      # Aufschlag auf den Referenzzins
+const CONSUMER_MONTHS := 12
+const CONSUMER_BURDEN := 0.30      # alle Konsumraten zusammen hoechstens 30 % des letzten Monatseinkommens
+const CONSUMER_MIN := 300.0
+const GARNISH_SHARE := 0.5         # Pfaendung nach Ausfall: Anteil des Einkommens ueber der Lebenshaltung
 const BANKS := [
 	{"id": "B1", "name": "Geschäftsbank", "margin": 0.020, "min_m": 1, "max_m": 12, "cover": 0.5, "free_limit": 15000.0, "cash": 400000.0,
 		"focus": "Betriebsmittel, kurzfristig; kleine Beträge auch ohne Sicherheit"},
@@ -375,6 +381,7 @@ func on_day(_day: int) -> void:
 
 func on_month(month: int) -> void:
 	_collect_mortgages()
+	_garnish()
 	for id in loans.keys():
 		var l: Dictionary = loans[id]
 		if l.status in ["laufend", "rueckstand"]:
@@ -620,7 +627,11 @@ func _collect_mortgages() -> void:
 			if int(m.arrears) >= DEFAULT_AFTER:
 				losses[BANKS[m.bank].id] = float(losses[BANKS[m.bank].id]) + float(m.outstanding)
 				defaults_recent += 1
-				m.status = "ausgefallen"
+				if m.get("kind", "bau") == "konsum":
+					m.residual = float(m.outstanding)   # Restschuld wird gepfaendet (_garnish)
+					m.status = "pfaendung"
+				else:
+					m.status = "ausgefallen"
 				m.outstanding = 0.0
 			continue
 		h.balance = float(h.balance) - pay
@@ -632,3 +643,104 @@ func _collect_mortgages() -> void:
 		if float(m.outstanding) < 0.5:
 			m.outstanding = 0.0
 			m.status = "getilgt"
+
+# ------------------------------------------------------------------ Konsumkredit fuer Haushalte (Auftrag 6, A4)
+## Kurzer Kredit der Geschaeftsbank fuer Haushalte, die ihre Lebenshaltung nicht decken. Rate (alle Konsumkredite zusammen) hoechstens
+## 30 % des letzten Monatseinkommens; wer im Rueckstand ist oder gepfaendet wird, bekommt keinen neuen. Kreditsumme und Raten laufen
+## ueber Economy (Bank <-> H0), die Konten der Haushalte sind Teilbuecher von H0. Faellt ein Kredit aus, pfaendet die Bank
+## monatlich GARNISH_SHARE des Einkommens ueber der Lebenshaltung, bis die Restschuld getilgt ist.
+func consumer_loans_of(home_id: String) -> Array:
+	return mortgages.values().filter(func(m): return m.home == home_id and m.get("kind", "bau") == "konsum")
+
+
+func consumer_quote(home_id: String, amount: float) -> Dictionary:
+	var B: Dictionary = BANKS[CONSUMER_BANK]
+	var q := {"ok": false, "bank": CONSUMER_BANK, "amount": amount, "msg": ""}
+	var h: Dictionary = sim.households.homes.get(home_id, {})
+	if h.is_empty():
+		q.msg = "Haushalt %s unbekannt." % home_id
+		return q
+	if amount < CONSUMER_MIN:
+		q.msg = "Mindestbetrag %s." % Catalog.money(CONSUMER_MIN)
+		return q
+	var burden := 0.0
+	for m in consumer_loans_of(home_id):
+		if m.status in ["rueckstand", "pfaendung"]:
+			q.msg = "%s lehnt ab: offener Rückstand oder Pfändung." % B.name
+			return q
+		if m.status == "laufend":
+			burden += _annuity(float(m.outstanding), float(m.rate), int(m.months))
+	q.rate = ref_rate + float(B.margin) + CONSUMER_SPREAD
+	q.months = CONSUMER_MONTHS
+	q.monthly = _annuity(amount, float(q.rate), CONSUMER_MONTHS)
+	var income := float(h.get("last_income", 0.0))
+	if burden + float(q.monthly) > CONSUMER_BURDEN * income:
+		q.msg = "%s lehnt ab: Raten %s übersteigen %d %% des Monatseinkommens %s." % [B.name, Catalog.money(burden + float(q.monthly)), int(CONSUMER_BURDEN * 100.0), Catalog.money(income)]
+		return q
+	if amount > SINGLE_LIMIT * maxf(equity(CONSUMER_BANK), 0.0) or amount > available(CONSUMER_BANK):
+		q.msg = "%s lehnt ab: Kreditsumme übersteigt die eigenen Grenzen der Bank." % B.name
+		return q
+	q.ok = true
+	q.msg = "%s bietet %s (%.2f %% p. a., %d Monate, Rate %s)." % [B.name, Catalog.money(amount), float(q.rate) * 100.0, CONSUMER_MONTHS, Catalog.money(float(q.monthly))]
+	return q
+
+
+func consumer_grant(home_id: String, q: Dictionary) -> Dictionary:
+	var h: Dictionary = sim.households.homes[home_id]
+	var m := {"id": "M%d" % _next_mort, "bank": int(q.bank), "home": home_id, "committed": float(q.amount), "drawn": float(q.amount), "outstanding": float(q.amount),
+		"rate": float(q.rate), "months": int(q.months), "project": "", "status": "laufend", "arrears": 0, "kind": "konsum", "residual": 0.0}
+	_next_mort += 1
+	mortgages[m.id] = m
+	sim.economy.transfer(BANKS[m.bank].id, "H0", float(q.amount))
+	h.balance = float(h.balance) + float(q.amount)
+	return m
+
+
+## Haushalt mit Fehlbetrag beantragt einen Konsumkredit ueber das Dreifache des Fehlbetrags (300 bis 3000). Gibt den Kredit oder {} zurueck.
+func consumer_apply(home_id: String) -> Dictionary:
+	var h: Dictionary = sim.households.homes.get(home_id, {})
+	if h.is_empty() or float(h.shortfall) <= 0.0:
+		return {}
+	var amount := clampf(snappedf(3.0 * float(h.shortfall), 100.0), CONSUMER_MIN, 3000.0)
+	var q := consumer_quote(home_id, amount)
+	return consumer_grant(home_id, q) if q.ok else {}
+
+
+func _garnish() -> void:
+	for m in mortgages.values():
+		if m.get("kind", "bau") != "konsum" or m.status != "pfaendung":
+			continue
+		var h: Dictionary = sim.households.homes.get(m.home, {})
+		if h.is_empty():
+			continue
+		var free_income := maxf(0.0, float(h.get("last_income", 0.0)) - sim.households.costs(h))
+		var take := minf(minf(float(m.residual), GARNISH_SHARE * free_income), maxf(0.0, float(h.balance)))
+		if take > 0.0:
+			h.balance = float(h.balance) - take
+			sim.economy.transfer("H0", BANKS[m.bank].id, take)
+			m.residual = float(m.residual) - take
+			losses[BANKS[m.bank].id] = maxf(0.0, float(losses[BANKS[m.bank].id]) - take)
+		if float(m.residual) < 0.5:
+			m.residual = 0.0
+			m.status = "getilgt"
+
+
+func consumer_summary() -> Dictionary:
+	var s := {"laufend": 0, "volumen": 0.0, "rueckstand": 0, "pfaendung": 0, "restschuld_pfaendung": 0.0, "vergeben": 0, "getilgt": 0}
+	for m in mortgages.values():
+		if m.get("kind", "bau") != "konsum":
+			continue
+		s.vergeben += 1
+		match m.status:
+			"laufend":
+				s.laufend += 1
+				s.volumen += float(m.outstanding)
+			"rueckstand":
+				s.rueckstand += 1
+				s.volumen += float(m.outstanding)
+			"pfaendung":
+				s.pfaendung += 1
+				s.restschuld_pfaendung += float(m.residual)
+			"getilgt":
+				s.getilgt += 1
+	return s

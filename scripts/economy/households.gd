@@ -152,6 +152,8 @@ func on_month(_month: int) -> void:
 			h.spent = float(h.spent) + pay
 			spent_total += pay
 		h.shortfall = maxf(0.0, need - pay)
+		if float(h.shortfall) > 0.0:
+			sim.banking.consumer_apply(h.id)   # Ueberbrueckungskredit, wenn Einkommen und Bank es zulassen
 		h.deficit_months = int(h.deficit_months) + 1 if float(h.shortfall) > 0.0 else 0
 		h.last_income = float(h.income)
 		h.income = 0.0

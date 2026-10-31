@@ -623,6 +623,9 @@ static func housing(sim: Simulation) -> String:
 " % [Catalog.money(float(sm.durchschnittsmiete)), float(sm.mietspiegel) * 100.0, Catalog.money(float(sm.mieteinnahmen))]
 	txt += "Räumungen %d · Menschen ohne Wohnung %d
 " % [int(sm.raeumungen), int(sm.wohnungslos)]
+	var cs: Dictionary = sim.banking.consumer_summary()
+	txt += "Konsumkredite: %d laufend (%s) · %d im Rückstand · %d in Pfändung (Restschuld %s) · %d vergeben
+" % [int(cs.laufend), Catalog.money(float(cs.volumen)), int(cs.rueckstand), int(cs.pfaendung), Catalog.money(float(cs.restschuld_pfaendung)), int(cs.vergeben)]
 	var late: Array = sim.housing.units.values().filter(func(u): return int(u.arrears) > 0)
 	txt += "
 [b]Mietrückstand (%d)[/b]

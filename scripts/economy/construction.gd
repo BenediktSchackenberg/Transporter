@@ -145,6 +145,23 @@ func available_funds(client: String) -> float:
 	return 0.0
 
 
+## Unternehmen als Bauherren finanzieren fehlende Mittel ueber einen Bankkredit (Auftrag 6, A4): erst Investitionsbank mit dem
+## wertvollsten freien Fahrzeug als Pfand, dann Geschaeftsbank. Die Bank prueft Kreditrahmen, Sicherheit und eigene Grenzen wie sonst.
+func _company_credit(client: String, shortfall: float) -> bool:
+	var cid := int(client.substr(1))
+	if sim.company(cid) == null:
+		return false
+	var amount := ceilf(shortfall / 500.0) * 500.0
+	var collateral: int = sim.banking.best_collateral(cid)
+	for bank in [1, 0]:
+		var B: Dictionary = Banking.BANKS[bank]
+		var q: Dictionary = sim.banking.quote(bank, cid, amount, clampi(60, int(B.min_m), int(B.max_m)), collateral)
+		if q.ok:
+			sim.banking.grant(q, cid, collateral if float(B.cover) > 0.0 and amount > float(B.free_limit) else -1, "Bauvorhaben %s" % client)
+			return true
+	return false
+
+
 ## Bauvorhaben aus einer genehmigten Genehmigung anlegen und Angebote einholen.
 func start_project(app_id: String) -> Dictionary:
 	var a: Dictionary = sim.permits.apps.get(app_id, {})
@@ -183,6 +200,8 @@ func accept(project_id: String, builder_id: String) -> Dictionary:
 	if builders[builder_id].status != "aktiv":
 		return {"ok": false, "msg": "%s kann keine Aufträge übernehmen." % builders[builder_id].name}
 	var need := float(offer.price) + float(pr.dev_cost) + Planning.TEMP_ACCESS_COST * (1.0 if not pr.missing.is_empty() else 0.0)
+	if available_funds(pr.client) + 0.5 < need and str(pr.client).begins_with("C"):
+		_company_credit(str(pr.client), need - available_funds(pr.client))
 	if available_funds(pr.client) + 0.5 < need:
 		return {"ok": false, "msg": "Mittel von %s reichen nicht: %s verfügbar, %s nötig (Finanzierung gesichert?)." % [pr.client, Catalog.money(available_funds(pr.client)), Catalog.money(need)]}
 	var credit := 0.0

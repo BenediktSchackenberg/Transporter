@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_consumer_credit"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3867,3 +3867,59 @@ func test_housing_market() -> void:
 	ok(H.vacant_units().any(func(x): return x.id == hu.id), "Einheit ohne Mietvertrag bleibt frei, bis Housing sie vergibt")
 	H.on_month(14)
 	ok(H.units[hu.id].rent > 0.0 and identity_ok(s), "Neue Einheit läuft im Mietspiegel")
+
+
+func test_consumer_credit() -> void:
+	GameCalendar.configure(60.0)
+	var s := new_sim(2)
+	var Bk: Banking = s.banking
+	var h: Dictionary = s.households.household_of(s.personnel.employed(0)[0])
+	ok(not h.is_empty(), "Firmenhaushalt vorhanden")
+	h.last_income = 900.0
+	h.shortfall = 200.0
+	var cash0 := Bk.bank_cash(Banking.CONSUMER_BANK)
+	var bal0 := float(h.balance)
+	var m := Bk.consumer_apply(h.id)
+	ok(not m.is_empty() and m.kind == "konsum", "Haushalt mit Fehlbetrag bekommt Konsumkredit")
+	ok(absf(float(h.balance) - bal0 - float(m.outstanding)) < 0.01, "Kreditsumme landet auf dem Haushaltskonto (%.0f)" % float(m.outstanding))
+	ok(Bk.bank_cash(Banking.CONSUMER_BANK) < cash0, "Bargeld der Bank sinkt")
+	ok(identity_ok(s), "Geld erhalten nach Konsumkredit")
+	# weitere Kredite nur im Rahmen der Belastungsgrenze (30 % des Einkommens)
+	h.shortfall = 3000.0
+	var q := Bk.consumer_quote(h.id, 3000.0)
+	ok(not q.ok and "übersteigen" in q.msg, "Belastungsgrenze: " + q.msg)
+	ok(Bk.consumer_quote(h.id, 100.0).ok == false, "Mindestbetrag")
+	# Tilgung über die Monate
+	h.balance = 5000.0
+	var out0 := float(m.outstanding)
+	Bk.on_month(1)
+	ok(float(m.outstanding) < out0 and m.status == "laufend", "Rate wird gezahlt (Restschuld %.0f)" % float(m.outstanding))
+	# Rückstand, Ausfall, Pfändung
+	h.balance = 0.0
+	for i in Banking.DEFAULT_AFTER:
+		Bk.on_month(2 + i)
+	ok(m.status == "pfaendung" and float(m.residual) > 0.0, "Nach drei Monaten Rückstand beginnt die Pfändung (%s)" % m.status)
+	var q2 := Bk.consumer_quote(h.id, 300.0)
+	ok(not q2.ok and "Pfändung" in q2.msg, "Keine neuen Kredite bei Pfändung")
+	h.balance = 2000.0
+	h.last_income = 1800.0   # 1200 über der Lebenshaltung -> 600 werden gepfändet
+	var res0 := float(m.residual)
+	Bk._garnish()
+	ok(absf(res0 - float(m.residual) - minf(res0, 0.5 * (1800.0 - s.households.costs(h)))) < 0.01, "Pfändung zieht den Anteil über der Lebenshaltung (%.0f)" % (res0 - float(m.residual)))
+	for i in 20:
+		h.balance = 2000.0
+		Bk._garnish()
+	ok(m.status == "getilgt", "Restschuld ist vollständig gepfändet (%s)" % m.status)
+	ok(identity_ok(s), "Geld erhalten nach Pfändung")
+	var cs := Bk.consumer_summary()
+	ok(int(cs.vergeben) == 1 and int(cs.getilgt) == 1, "Zusammenfassung zählt den Kredit")
+	# Unternehmen als Bauherren: fehlende Mittel über Bankkredit
+	var c := s.companies[0]
+	var debt0 := c.ledger.debt
+	var cash1 := c.ledger.cash
+	var granted: bool = s.construction._company_credit("C0", 4000.0)
+	ok(granted and c.ledger.debt > debt0 and c.ledger.cash > cash1, "Unternehmen finanziert Bauvorhaben über Bankkredit (Schuld %.0f)" % c.ledger.debt)
+	ok(identity_ok(s), "Geld erhalten nach Firmenkredit für den Bau")
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.banking.consumer_summary().vergeben == 1, "Konsumkredit gespeichert und geladen")
