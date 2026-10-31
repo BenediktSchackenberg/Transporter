@@ -23,6 +23,11 @@ var entrepreneur_business: RichTextLabel
 var entrepreneur_ai: RichTextLabel
 var entrepreneur_company := -1
 var tabs: TabContainer
+var right_box: VBoxContainer         # Navigation (Bereiche und Unterseiten) ueber den Inhaltsseiten
+var nav_cat_btns: Array = []
+var nav_sub_box: HFlowContainer
+var nav_hint: Label
+var nav_cat := 0
 var activity_rt: RichTextLabel
 var situation_rt: RichTextLabel
 var events_rt: RichTextLabel
@@ -47,6 +52,39 @@ var left_box: VBoxContainer
 var left_scroll: ScrollContainer
 var economy_rt: RichTextLabel
 var economy_view := 0
+## Navigation rechts: Bereich -> Seiten. Eine Seite ist ein Reiter (`tab`) und bei "Wirtschaft" zusaetzlich eine Ansicht (`view`).
+## Jede Seite hat einen Satz, der sagt, was man dort sieht.
+const NAV := [
+	{"name": "Überblick", "hint": "Was gerade im Spiel passiert", "pages": [
+		{"label": "Aktivitäten", "tab": "Aktivitäten", "hint": "Was jeder Spieler gerade tut und plant."},
+		{"label": "Lage", "tab": "Lage", "hint": "Wetter, Verkehr, Engpässe und Stimmung in der Stadt."},
+		{"label": "Ereignisse", "tab": "Ereignisse", "hint": "Nachrichten und Ereignisse: Sperrungen, Unfälle, Pleiten."},
+		{"label": "Rangliste", "tab": "Wirtschaft", "view": 0, "hint": "Wer führt? Gewinn und Zahlungsfähigkeit aller Spieler. Zahlungsunfähige können nicht gewinnen."}]},
+	{"name": "Spieler", "hint": "Die Unternehmer und ihre Entscheidungen", "pages": [
+		{"label": "KI-Spieler", "tab": "KI-Spieler", "hint": "Anbieter, Modell, Antworten und Fehler der KI-Spieler."},
+		{"label": "Entscheidungen", "tab": "Entscheidungen", "hint": "Jede Aktion mit Begründung, Prüfergebnis und Folgen."},
+		{"label": "Dialoge", "tab": "Dialoge", "hint": "Nachrichten zwischen den Spielern."},
+		{"label": "Personal", "tab": "Personal", "hint": "Mitarbeiter, ihre Aufgaben, Motivation und Gesundheit."}]},
+	{"name": "Betrieb", "hint": "Aufträge, Fahrzeuge und Geld der Firmen", "pages": [
+		{"label": "Aufträge", "tab": "Aufträge", "hint": "Offene und laufende Transportaufträge mit Frist und Vergütung."},
+		{"label": "Fahrzeuge", "tab": "Fahrzeuge", "hint": "Alle Fahrzeuge mit Zustand und aktuellem Auftrag."},
+		{"label": "Finanzen", "tab": "Finanzen", "hint": "Gewinn- und Bargeldverlauf der Firmen."},
+		{"label": "Firmen", "tab": "Wirtschaft", "view": 2, "hint": "Bilanz, Schulden, Rechtsform und Status jeder Firma."}]},
+	{"name": "Geld", "hint": "Banken, Zentralbank, Staat und Haushalte", "pages": [
+		{"label": "Banken", "tab": "Wirtschaft", "view": 1, "hint": "Kredite, Einlagen, Zinsen und Bonität der Banken."},
+		{"label": "Zentralbank", "tab": "Wirtschaft", "view": 13, "hint": "Leitzins, Inflation, Geldmenge und Bankbilanzen."},
+		{"label": "Staat", "tab": "Wirtschaft", "view": 5, "hint": "Stadtkasse, Steuern, Ausgaben und Prüfungen."},
+		{"label": "Haushalte", "tab": "Wirtschaft", "view": 4, "hint": "Mitarbeiterhaushalte: Einkommen, Miete, Rücklagen."}]},
+	{"name": "Stadt", "hint": "Bürger, Wohnen, Bauen und Versorgung", "pages": [
+		{"label": "Bürger", "tab": "Wirtschaft", "view": 6, "hint": "Bevölkerung, Arbeitsmarkt und Löhne."},
+		{"label": "Wohnen", "tab": "Wirtschaft", "view": 12, "hint": "Wohnungen, Mieten, Leerstand und Zufriedenheit je Viertel."},
+		{"label": "Bürgermeister", "tab": "Wirtschaft", "view": 9, "hint": "Stadtplanung, Kennzahlen und Beschlüsse."},
+		{"label": "Bauvorhaben", "tab": "Wirtschaft", "view": 10, "hint": "Laufende Baustellen und ihr Fortschritt."},
+		{"label": "Bauanträge", "tab": "Wirtschaft", "view": 8, "hint": "Anträge und Genehmigungen."},
+		{"label": "Grundstücke", "tab": "Wirtschaft", "view": 7, "hint": "Flächen, Eigentümer und Preise."},
+		{"label": "Stadtlager", "tab": "Wirtschaft", "view": 11, "hint": "Bestand, Bestellungen und Personal des Zentrallagers."},
+		{"label": "Bauhof", "tab": "Wirtschaft", "view": 3, "hint": "Großhändler: Material, Preise und Bestand."}]},
+]
 const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat", "Bürger", "Grundstücke", "Bauanträge", "Bürgermeister", "Bauvorhaben", "Stadtlager", "Wohnen", "Zentralbank"]
 var decision_company := -1
 var decision_company_opt: OptionButton
@@ -174,7 +212,7 @@ func toggle_panels() -> void:
 	if entrepreneur_window.visible:
 		_close_entrepreneur()
 		return
-	for n in [left_scroll, tabs, minimap, sel_panel]:
+	for n in [left_scroll, right_box, minimap, sel_panel]:
 		n.visible = not n.visible
 
 
@@ -294,15 +332,20 @@ func _update_weather() -> void:
 
 
 func _build_right() -> void:
+	right_box = VBoxContainer.new()
+	right_box.anchor_left = 1.0
+	right_box.anchor_right = 1.0
+	right_box.anchor_bottom = 1.0
+	right_box.offset_left = -460
+	right_box.offset_right = -6
+	right_box.offset_top = 56
+	right_box.offset_bottom = -6
+	right_box.add_theme_constant_override("separation", 4)
+	add_child(right_box)
 	tabs = TabContainer.new()
-	tabs.anchor_left = 1.0
-	tabs.anchor_right = 1.0
-	tabs.anchor_bottom = 1.0
-	tabs.offset_left = -440
-	tabs.offset_right = -6
-	tabs.offset_top = 56
-	tabs.offset_bottom = -6
-	add_child(tabs)
+	tabs.tabs_visible = false   # Navigation uebernimmt _build_nav
+	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_box.add_child(tabs)
 	activity_rt = _rt("Aktivitäten")
 	situation_rt = _rt("Lage")
 	_build_economy_tab()
@@ -354,6 +397,100 @@ func _build_right() -> void:
 	decisions_rt.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	decisions_rt.add_theme_font_size_override("normal_font_size", 12)
 	dec.add_child(decisions_rt)
+	_build_nav()
+	tabs.current_tab = 0
+
+
+## Zweistufige Navigation: oben die Bereiche, darunter die Seiten des gewaehlten Bereichs, darunter ein Satz zur aktuellen Seite.
+func _build_nav() -> void:
+	var panel := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.09, 0.1, 0.16, 0.96)
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 6
+	sb.content_margin_right = 6
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	panel.add_theme_stylebox_override("panel", sb)
+	right_box.add_child(panel)
+	right_box.move_child(panel, 0)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 5)
+	panel.add_child(col)
+	var cats := HBoxContainer.new()
+	cats.add_theme_constant_override("separation", 4)
+	col.add_child(cats)
+	for i in NAV.size():
+		var bt := Button.new()
+		bt.text = NAV[i].name
+		bt.toggle_mode = true
+		bt.focus_mode = Control.FOCUS_NONE
+		bt.custom_minimum_size = Vector2(0, 34)
+		bt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		bt.add_theme_font_size_override("font_size", 14)
+		bt.tooltip_text = NAV[i].hint
+		bt.pressed.connect(func(): goto_page(i, 0))
+		cats.add_child(bt)
+		nav_cat_btns.append(bt)
+	nav_sub_box = HFlowContainer.new()
+	nav_sub_box.add_theme_constant_override("h_separation", 4)
+	nav_sub_box.add_theme_constant_override("v_separation", 4)
+	col.add_child(nav_sub_box)
+	nav_hint = Label.new()
+	nav_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nav_hint.add_theme_font_size_override("font_size", 12)
+	nav_hint.add_theme_color_override("font_color", Color(0.72, 0.8, 0.92))
+	nav_hint.custom_minimum_size = Vector2(0, 32)
+	col.add_child(nav_hint)
+
+
+## Bereich `cat` mit Seite `page` anzeigen.
+func goto_page(cat: int, page: int) -> void:
+	nav_cat = clampi(cat, 0, NAV.size() - 1)
+	var pg: Dictionary = NAV[nav_cat].pages[clampi(page, 0, NAV[nav_cat].pages.size() - 1)]
+	show_tab(str(pg.tab), int(pg.get("view", 0)))
+
+
+## Hebt Bereich und Seite passend zum sichtbaren Reiter hervor (auch wenn der Reiter von anderer Stelle gewechselt wurde).
+func _sync_nav() -> void:
+	if nav_sub_box == null:
+		return
+	var cur: String = tabs.get_current_tab_control().name
+	var found := Vector2i(-1, -1)
+	for ci in NAV.size():
+		for pi in NAV[ci].pages.size():
+			var pg: Dictionary = NAV[ci].pages[pi]
+			if pg.tab == cur and (not pg.has("view") or int(pg.view) == economy_view or cur != "Wirtschaft"):
+				if found.x < 0 or ci == nav_cat:
+					found = Vector2i(ci, pi)
+					if ci == nav_cat:
+						break
+	if found.x >= 0:
+		nav_cat = found.x
+	for i in nav_cat_btns.size():
+		nav_cat_btns[i].set_pressed_no_signal(i == nav_cat)
+	var pages: Array = NAV[nav_cat].pages
+	if nav_sub_box.get_child_count() != pages.size() or str(nav_sub_box.get_meta("cat", -1)) != str(nav_cat):
+		for ch in nav_sub_box.get_children():
+			ch.queue_free()
+		nav_sub_box.set_meta("cat", nav_cat)
+		for pi in pages.size():
+			var bt := Button.new()
+			bt.text = pages[pi].label
+			bt.toggle_mode = true
+			bt.focus_mode = Control.FOCUS_NONE
+			bt.custom_minimum_size = Vector2(0, 28)
+			bt.add_theme_font_size_override("font_size", 12)
+			bt.pressed.connect(func(): goto_page(nav_cat, pi))
+			nav_sub_box.add_child(bt)
+	var hint := str(NAV[nav_cat].hint)
+	for pi in pages.size():
+		var active: bool = found.x == nav_cat and found.y == pi
+		if pi < nav_sub_box.get_child_count():
+			(nav_sub_box.get_child(pi) as Button).set_pressed_no_signal(active)
+		if active:
+			hint = str(pages[pi].hint)
+	nav_hint.text = hint
 
 
 ## Ein Reiter "Wirtschaft" mit Umschalter (Rangliste, Banken, Unternehmen, Bauhof) statt vieler einzelner Reiter.
@@ -362,6 +499,7 @@ func _build_economy_tab() -> void:
 	box.name = "Wirtschaft"
 	tabs.add_child(box)
 	var row := HBoxContainer.new()
+	row.visible = false   # die Navigation oben waehlt die Ansicht
 	box.add_child(row)
 	for i in ECONOMY_VIEWS.size():
 		var bt := Button.new()
@@ -700,6 +838,7 @@ func update_hud(delta: float) -> void:
 	if _refresh > 0.0:
 		return
 	_refresh = 0.3
+	_sync_nav()
 	_update_cards()
 	_update_weather()
 	_append_events()
