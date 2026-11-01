@@ -2458,6 +2458,15 @@ func test_action_assist() -> void:
 	ok(int(e4.vehicle_id) != foreign and s2.vehicles[int(e4.vehicle_id)].owner == 0, "Fremdes Fahrzeug wird durch eigenes ersetzt")
 	var e5: Dictionary = s2.executor.assist.complete(0, {"action": "assign_worker_task", "kind": "refuel_vehicle", "worker_id": w2.id})
 	ok(e5.action == "schedule_refueling" and e5.has("below_l"), "Tank-Aufgabe wird zur Nachtank-Regel")
+	# Offener bekannter Auftrag: assign_transport wird zu accept_contract mit Fahrzeug
+	var ocands: Array = s2.market.open_contracts().filter(func(k): return k.vehicle_ok("cargobike") or k.vehicle_ok("van"))
+	var drv_v = s2.company_vehicles(0).filter(func(v): return s2.personnel.driver_of(v.id) != null and v.state == "idle")
+	if not ocands.is_empty() and not drv_v.is_empty():
+		var kk = ocands.filter(func(k): return k.vehicle_ok(drv_v[0].model))
+		if not kk.is_empty():
+			s2.companies[0].known[kk[0].id] = true
+			var e7: Dictionary = s2.executor.assist.complete(0, ActionExecutor.normalize({"action": "assign_transport", "target_id": kk[0].id, "vehicle_id": "F9"}))
+			ok(e7.action == "accept_contract" and e7.contract_id == kk[0].id and s2.vehicles[int(e7.vehicle_id)].owner == 0, "Offener Auftrag: erst annehmen statt zuweisen (target_id und fremde Fahrzeug-ID)")
 	var e6: Dictionary = s2.executor.assist.complete(0, {"action": "assign_transport", "contract_id": "C1", "vehicle_id": null})
 	ok(e6.action == "assign_transport" or e6.action == "assign_worker_task", "erfundene Auftrags-ID und vehicle_id=null stürzen nicht ab")
 	# Geldmangel: Meldung nennt Kredit

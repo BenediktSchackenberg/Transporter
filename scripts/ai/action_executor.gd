@@ -162,6 +162,11 @@ static func normalize(action: Dictionary) -> Dictionary:
 				name = part.strip_edges()
 				a["action"] = name
 				break
+	if name in ["assign_transport", "assign_vehicle"] and not a.has("contract_id"):
+		for k in ["target_id", "target", "ziel_auftrag", "auftrag"]:
+			if a.get(k) is String and RegEx.create_from_string("^[A-Za-z]+\\d+$").search(str(a[k])):
+				a["contract_id"] = a[k]
+				break
 	if name == "accept_contract" and not a.has("contract_id"):
 		for k in ["id", "target_id", "target"]:
 			if a.has(k):

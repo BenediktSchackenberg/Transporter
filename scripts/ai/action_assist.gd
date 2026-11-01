@@ -91,6 +91,15 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 						out["worker_id"] = wd.id
 						added.append("worker_id")
 		"assign_vehicle", "assign_transport":
+			# Offener, bekannter Marktauftrag statt eines angenommenen: erst annehmen (mit passendem Fahrzeug mit Fahrer)
+			var oc2: Contract = sim.contracts.get(str(out.get("contract_id", "")))
+			if oc2 != null and oc2.status == "open" and sim.company(cid).known.has(oc2.id):
+				var ov2: FleetVehicle = sim.vehicles.get(ActionExecutor._i(out.vehicle_id)) if out.get("vehicle_id") != null else null
+				if ov2 == null or ov2.owner != cid or not oc2.vehicle_ok(ov2.model):
+					ov2 = _idle_vehicle(cid, oc2.id)
+				if ov2 != null:
+					return {"action": "accept_contract", "contract_id": oc2.id, "vehicle_id": ov2.id,
+						"_ergaenzt": ["statt %s: Auftrag zuerst annehmen" % name]}
 			if not out.has("contract_id"):
 				var v2: FleetVehicle = sim.vehicles.get(ActionExecutor._i(out.vehicle_id)) if out.has("vehicle_id") else _idle_vehicle(cid)
 				if v2 != null:
