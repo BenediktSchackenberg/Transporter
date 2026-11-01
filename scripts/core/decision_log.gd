@@ -98,7 +98,7 @@ func consequences(e: Dictionary) -> String:
 			parts.append("#%d: %d Tiles gefahren, Buchwert %s" % [v.id, v.odometer, Catalog.money(v.book_value)])
 	if str(e.aktion).begins_with("set_plan") or str(e.aktion).begins_with("execute_plan_step"):
 		var p: Dictionary = sim.plans.current(e.company)
-		if p.get("id", "") == e.plan:
+		if not p.is_empty() and p.get("id", "") == e.plan:
 			parts.append("Plan %s %s, Gewinnänderung seit Start %s" % [p.id, p.status, Catalog.money(sim.company(e.company).ledger.profit() - float(p.gewinn_bei_start))])
 		else:
 			for h in sim.plans.history.get(e.company, []):
