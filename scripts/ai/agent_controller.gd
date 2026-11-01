@@ -223,7 +223,9 @@ func _run_fallback() -> void:
 
 
 const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", "collect_contracts", "repair_vehicle", "buy_supplies",
-	"schedule_refueling", "assign_foreman"]
+	"schedule_refueling", "assign_foreman",
+	# Aufbau des Betriebshofs (Plan aus der Regel-KI: Stellplatz, Büro, Lager, Werkstatt, Internet), damit der Hof nicht leer bleibt
+	"set_plan", "execute_plan_step", "place_building", "build_office", "upgrade_building", "upgrade_office", "install_internet"]
 
 
 ## Nur der Tagesbetrieb aus der Regel-KI: Auftraege annehmen und zuweisen, Fahrer einsetzen, reparieren, tanken.
@@ -315,10 +317,12 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 	if summary != "":
 		sim.memory.add_event(cid, "entscheidung", summary)
 	sim.memory.add_event(cid, "ausfuehrung", "%d Aktionen ausgeführt, %d abgelehnt" % [effective, actions.size() - effective])
-	# Kleine lokale Modelle scheitern oft an Pflichtangaben: blieb die Runde wirkungslos, setzt die Disposition (Regeln) die
+	# Kleine lokale Modelle scheitern oft an Pflichtangaben: blieb die Runde wirkungslos oder steht ein Fahrzeug still, setzt die Disposition (Regeln) die
 	# Fahrzeuge und Arbeiter ein, damit sie nicht untaetig herumstehen. Eigene Strategie und Investitionen bleiben beim Modell.
-	if effective == 0 and source == "KI" and config.get("provider", "") == "ollama" and bool(config.get("dispatch_help", true)):
-		_run_dispatch_help()
+	if source == "KI" and config.get("provider", "") == "ollama" and bool(config.get("dispatch_help", true)):
+		var idle_vehicle: bool = sim.company_vehicles(cid).any(func(v): return v.state == "idle" and v.stops.is_empty() and v.contract_id == "")
+		if effective == 0 or idle_vehicle:   # auch wenn nur "abgewartet"-Aktionen gelangen, aber Fahrzeuge herumstehen
+			_run_dispatch_help()
 
 
 func _ground_action(a: Dictionary) -> Dictionary:

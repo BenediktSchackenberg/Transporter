@@ -171,10 +171,11 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		actions.append({"action": "schedule_refueling", "below_l": 250 * fuel_vehicles, "buy_l": 500 * mini(2, fuel_vehicles)})
 		planned.append("schedule_refueling")
 		reasons.append("lege eine feste Nachtank-Regel an")
-	if fuel_have < 300 * fuel_vehicles and cash > 3000.0:
+	var tank_room := int(me.vorraete.get("tank_kapazitaet_l", 1000)) - fuel_have   # mehr passt nicht in den Tank
+	if fuel_have < 300 * fuel_vehicles and cash > 3000.0 and tank_room >= 100:
 		var fuel := _supply(res, "Treibstoff", 400)
 		if not fuel.is_empty() and float(fuel.preis) < float(res.nachtanken_ohne_vorrat_preis_l):
-			actions.append({"action": "buy_supplies", "resource_id": fuel.id, "amount": 400 * mini(2, fuel_vehicles)})
+			actions.append({"action": "buy_supplies", "resource_id": fuel.id, "amount": mini(400 * mini(2, fuel_vehicles), tank_room)})
 			reasons.append("bestelle Treibstoff früh (%.2f EUR/l, Lieferung dauert)" % fuel.preis)
 	var growth: Array = []   # Investitionen laufen als Plan mit einzeln ausgefuehrten Schritten
 	var yard: Dictionary = obs.get("betriebshof", {})
