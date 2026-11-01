@@ -275,6 +275,10 @@ func _autotest_finished(s: GameSession) -> void:
 		ok = false
 		print("AUTOTEST FEHLER: Partie lief zu lange")
 	print("AUTOTEST ERGEBNIS (%s, %.1f s aktiv, Spielzeit %s):" % [s.end_reason, s.active_seconds, Catalog.game_minutes_to_text(s.sim.game_min)])
+	var accepted_quotes: int = s.sim.social.agreements.values().filter(func(g): return g.kind == "split_contract" and s.sim.operations.requests.values().any(func(r): return str(g.offer) in r.offers)).size()
+	print("  Betrieb: Linien %d · Linienfrachten %d · zugestellt %d · Frachtanfragen %d · angenommene Preisangebote %d" % [
+		s.sim.operations.lines.size(), s.sim.operations.jobs.size(), s.sim.operations.lines.values().reduce(func(total, line): return total + int(line.delivered), 0),
+		s.sim.operations.requests.size(), accepted_quotes])
 	for i in rank.size():
 		var c: Company = rank[i]
 		var ctl: AgentController = s.controllers[c.id]

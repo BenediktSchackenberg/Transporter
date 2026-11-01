@@ -82,7 +82,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 				reasons.append("werbe Fahrer %s an, weil #%d keinen Fahrer hat" % [cand.name, v.id])
 	# 3) angenommene, noch nicht disponierte Auftraege zuweisen
 	var ready: Array = obs.fahrzeuge.filter(func(v): return v.status in ["bereit", "fährt zum Depot"] \
-		and v.warteschlange.is_empty() and v.fahrer != null and not busy_vehicles.has(int(v.id)) and int(v.zustand) >= 45)
+		and str(v.get("linie", "")) == "" and v.warteschlange.is_empty() and v.fahrer != null and not busy_vehicles.has(int(v.id)) and int(v.zustand) >= 45)
 	for k in obs.meine_auftraege:
 		if k.status != "accepted":
 			continue
@@ -101,10 +101,41 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		if best.is_empty():
 			unserved += 1
 			continue
-		actions.append({"action": "accept_contract", "contract_id": best.id, "vehicle_id": v.id})
+		if best.get("ware", "") in Catalog.CARGO and not best.get("kuehlung", false):
+			actions.append({"action": "create_transport_line", "name": "%s-Verteilung" % str(best.bezeichnung), "cargo": best.ware, "vehicle_ids": [v.id], "via_depot": int(best.get("hof_umweg_tiles", 0)) <= 20})
+		else:
+			actions.append({"action": "accept_contract", "contract_id": best.id, "vehicle_id": v.id})
 		market.erase(best)
 		active += 1
-		reasons.append("nehme %s für #%d an (%d EUR, %s)" % [best.id, v.id, best.verguetung, best.bezeichnung])
+		reasons.append("disponiere %s fuer #%d als zusammenhaengenden Betriebsablauf (%d EUR, %s)" % [best.id, v.id, best.verguetung, best.bezeichnung])
+	# Konkrete Frachtanfragen statt grundloser Rundrufe. Der Empfaenger entscheidet ueber den Preis.
+	var ops: Dictionary = obs.get("betriebsablauf", {})
+	for inquiry in ops.get("hilfeanfragen", []):
+		var helpers: Array = obs.fahrzeuge.filter(func(v): return v.status in ["bereit", "fährt zum Depot", "parkt auf dem Betriebshof"] and v.fahrer != null and v.warteschlange.is_empty() and (not bool(inquiry.get("needs_cold", false)) or bool(models[v.modell].kuehlung)) and (not bool(inquiry.get("needs_heavy", false)) or bool(models[v.modell].schwer)) and (str(v.get("linie", "")) == "" or ops.get("linien", []).any(func(l): return l.id == v.get("linie", "") and int(l.get("pending", 0)) == 0)))
+		if not inquiry.own and not inquiry.quote_pending and not helpers.is_empty():
+			if str(helpers[0].get("linie", "")) != "":
+				actions.append({"action": "pause_transport_line", "line_id": helpers[0].linie})
+			actions.append({"action": "quote_transport_help", "request_id": inquiry.id, "fee": maxf(1.0, float(inquiry.max_fee) * 0.9)})
+			reasons.append("biete freie Transportkapazitaet auf Anfrage %s an" % inquiry.id)
+			break
+	if ready.is_empty():
+		for k in obs.meine_auftraege:
+			if k.status == "accepted" and not ops.get("hilfeanfragen", []).any(func(r): return r.own and r.contract_id == k.id) and cash > 1000.0:
+				actions.append({"action": "request_transport_help", "contract_id": k.id, "max_fee": minf(cash * 0.1, float(k.verguetung) * 0.4)})
+				reasons.append("frage Partner fuer unbediente Fracht %s an" % k.id)
+				break
+	# Bei voller eigener Flotte kann eine weitere profitable Fracht als Partnerauftrag geplant werden.
+	if ready.is_empty() and active < capacity and cash > buffer + 3000.0 and not market.is_empty() and not ops.get("hilfeanfragen", []).any(func(r): return r.own):
+		var partner_job: Dictionary = market[0]
+		if float(partner_job.verguetung) > 500.0 and float(me.reputation) >= float(partner_job.get("min_reputation", 0)):
+			actions.append({"action": "accept_contract", "contract_id": partner_job.id})
+			actions.append({"action": "request_transport_help", "contract_id": partner_job.id, "max_fee": minf(cash * 0.1, float(partner_job.verguetung) * 0.4)})
+			reasons.append("vergebe Zusatzfracht %s an einen Partner, weil die eigene Flotte ausgelastet ist" % partner_job.id)
+	for line in ops.get("linien", []):
+		if line.active and int(line.get("pending", 0)) == 0 and line.has("idle_since") and float(obs.get("spielminute", 0.0)) - float(line.idle_since) > 90.0 and not market.is_empty():
+			actions.append({"action": "pause_transport_line", "line_id": line.id})
+			reasons.append("stelle unbeschaeftigte Linie %s auf neue Nachfrage um" % line.id)
+			break
 	# 4b) Angebote an mich pruefen
 	for o in obs.angebote_an_dich:
 		var accept := false
@@ -121,7 +152,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 			"capacity_rental":
 				accept = market.size() > ready.size() + 1 and cash > _price(o.beschreibung) * 3.0
 			"storage_share", "split_contract":
-				accept = not ready.is_empty() and personality != "risikospieler"
+				accept = (bool(o.get("hilfe_angebot", false)) and float(o.get("preis", INF)) <= minf(cash, float(o.get("auftrag_verguetung", 0.0)) * 0.45)) or (not ready.is_empty() and personality != "risikospieler")
 		actions.append({"action": "accept_trade" if accept else "reject_trade", "offer_id": o.id})
 		if accept:
 			reasons.append("nehme Angebot %s an" % o.id)
@@ -186,7 +217,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 			planned.append("buy_vehicle")
 	if not growth.is_empty():
 		pass
-	elif ready.is_empty() and good_jobs >= 3 and _free_slots(me) > 0 and active < capacity and "buy_vehicle" not in planned:
+	elif ready.is_empty() and not ops.get("linien", []).any(func(l): return l.active and int(l.get("pending", 0)) == 0) and good_jobs >= 3 and _free_slots(me) > 0 and active < capacity and "buy_vehicle" not in planned:
 		var wanted := ["van", "transporter", "cargobike"]
 		if personality == "wachstum" and good_jobs >= 6:
 			wanted = ["truck", "transporter", "van"]

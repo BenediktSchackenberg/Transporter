@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3938,7 +3938,7 @@ func test_waste() -> void:
 	ok(s.retail.stats.bottles_sold > 0 and s.retail.stats.bottles_returned > 0, "Mehrwegflaschen werden verkauft und zurückgegeben")
 	ok(identity_ok(s), "Geld und Waren erhalten")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
-	ok(is_equal_approx(float(s2.waste.total.tons), float(W.total.tons)) and s2.waste.rate == W.rate, "Müllstatistik nach Laden erhalten")
+	ok(is_equal_approx(float(s2.waste.total.tons), float(W.total.tons)) and is_equal_approx(s2.waste.rate, W.rate), "Müllstatistik nach Laden erhalten")
 	ok(LiveText.retail_block(s).contains("HANDEL") and LiveText.shop_panel(s, s.retail.shops.values()[0]).contains("Lager"), "Anzeigen liefern Text")
 
 ## Abnahme Auftrag 5 (Abschnitt 15): Engpass -> Massnahme des Buergermeisters -> neue Kapazitaet; parallel Restaurant: Bestellung -> Lieferung -> Gericht -> Konten.
@@ -4426,3 +4426,15 @@ func test_districts() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(absf(float(s2.contentment.attractiveness[name]) - float(C.attractiveness[name])) < 0.01, "Viertelentwicklung gespeichert und geladen")
 	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_company_operations() -> void:
+	var suite = load("res://tests/company_operations_tests.gd")
+	ok(suite != null and suite.can_instantiate(), "Betriebsablauf-Tests kompilieren")
+	if suite == null or not suite.can_instantiate():
+		return
+	suite.run(self)
+	suite.cooperation(self)
+	suite.planning_limits(self)
+	suite.intentions(self)
+	suite.daily_routes(self)

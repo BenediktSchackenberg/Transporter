@@ -31,6 +31,49 @@ var cap := {}                      # aktueller Bedarf
 var stats := {"changes": 0, "layoffs": 0, "hires": 0, "quits": 0, "wages": 0.0, "tax": 0.0, "benefits": 0.0}
 var last := {}                     # Kennzahlen des letzten Monatsabschlusses
 var _next := 1
+var _travel_places := {}
+var _travel_revision := -1
+
+
+## Sichtbare Alltagswege aus bestehenden Wohn-, Arbeits- und Einkommensdaten.
+## Die Bewegung selbst erzeugt keine zweite Lohn-, Miet- oder Konsumbuchung.
+func travel_plan(person: Dictionary, hour: float = -1.0) -> Dictionary:
+	if _travel_revision != sim.city.buildings.size():
+		_travel_places.clear()
+		_travel_revision = sim.city.buildings.size()
+	if hour < 0.0:
+		hour = Catalog.hour_of_day(sim.game_min)
+	var unit: Dictionary = sim.housing.units.get(str(person.get("home", "")), {})
+	var home := int(unit.get("building", -1))
+	var employer := str(person.get("employer", ""))
+	if home >= 0 and (hour < 6.0 or hour >= 20.0):
+		return {"building": home, "purpose": "Nach Hause", "cell": sim.city.building(home).walk}
+	var kind := "work:" + employer
+	var purpose := "Zur Arbeit: " + str(EMPLOYERS.get(employer, {}).get("label", employer))
+	var types: Array = {"rathaus": ["office", "bank"], "schule_klinik": ["school", "kindergarten", "clinic"], "baufirma": ["construction", "warehouse"],
+		"handel": ["shop", "restaurant"], "industrie": ["factory", "brewery", "bakery", "workshop"], "stadtlager": ["warehouse"]}.get(employer, ["office"])
+	if employer == "":
+		kind = "staffing"
+		types = ["office"]
+		purpose = "Zur Arbeitsvermittlung"
+	elif hour >= 12.0 and hour < 14.0:
+		kind = "shopping"
+		types = ["shop", "supermarket", "bakery"]
+		purpose = "Einkaufen fuer den Haushalt"
+	elif hour >= 17.0 and hour < 20.0 and float(person.get("wage", 0.0)) > 0.0:
+		kind = "restaurant"
+		types = ["restaurant", "cafe", "hotel"]
+		purpose = "Restaurantbesuch nach der Arbeit"
+	if not _travel_places.has(kind):
+		var places: Array = sim.city.buildings.filter(func(b): return (b.type in types or (kind == "staffing" and b.role == "staffing")) and sim.city.walkable(b.walk))
+		if places.is_empty():
+			places = sim.city.buildings.filter(func(b): return sim.city.walkable(b.walk) and b.type not in ["plot", "free_plot"])
+		_travel_places[kind] = places.map(func(b): return int(b.id))
+	var places: Array = _travel_places[kind]
+	if places.is_empty():
+		return {}
+	var building := int(places[posmod(int(person.id), places.size())])
+	return {"building": building, "purpose": purpose, "cell": sim.city.building(building).walk}
 
 
 func setup(s: Simulation) -> void:

@@ -6,6 +6,39 @@ extends RefCounted
 const SEVERITY := ["", "leicht", "mittel", "schwer"]
 
 
+static func operations(sim: Simulation) -> String:
+	var text := "[b]BETRIEBSABLAUF[/b]\nAuftrag → Fahrer → Hofkontrolle → Abholung → Lager / Umschlag → Zustellung → Rueckmeldung\n\n"
+	for c in sim.companies:
+		text += "[color=#%s][b]%s[/b][/color]\n" % [_col(c), esc(c.company_name)]
+		var summary: Dictionary = sim.operations.summary(c.id)
+		if summary.linien.is_empty():
+			text += "  Einzelauftraege; die KI hat noch keinen Liniendienst beauftragt.\n"
+		for line in summary.linien:
+			text += "  [b]%s · %s[/b]%s\n    %s\n    %d zugestellt · Erloes %s\n" % [line.id, esc(line.name), " (pausiert, laufende Fracht wird fertiggestellt)" if not line.active else "", esc(line.status), int(line.delivered), Catalog.money(line.revenue)]
+		for v in sim.company_vehicles(c.id):
+			var driver: Worker = sim.driver_of(v)
+			text += "  #%d %s · %s · Fahrer: %s\n" % [v.id, esc(v.spec().name), esc(FleetVehicle.STATE_TEXT.get(v.state, v.state)), esc(driver.name) if driver else "FEHLT"]
+			if not v.stops.is_empty():
+				var stop: Dictionary = v.stops[0]
+				var k: Contract = sim.contracts.get(str(stop.contract_id))
+				if k:
+					var site: int = sim.logistics.place_building(k, str(stop.ort))
+					text += "    %s · %d x %s · %s bei %s\n" % [k.id, int(stop.menge), esc(k.cargo_name()), "laden" if stop.art == "laden" else "entladen", esc(sim.city.building(site).name)]
+		var duty_counts := {}
+		for w in sim.personnel.employed(c.id):
+			if w.duty_label != "" and w.vehicle_id < 0:
+				duty_counts[w.duty_label] = int(duty_counts.get(w.duty_label, 0)) + 1
+		for duty in duty_counts:
+			text += "  Hof: %d Mitarbeiter · %s\n" % [int(duty_counts[duty]), esc(duty)]
+		for site in c.depots:
+			text += "  Lager %d: %d / %d Einheiten\n" % [int(site), sim.logistics.storage_used(int(site)), sim.logistics.storage_cap(int(site))]
+		text += "\n"
+	text += "[b]BETRIEBSFUNK[/b] · Meldungen aus ausgefuehrten Vorgaengen\n"
+	for entry in sim.operations.dialogue.slice(-14):
+		text += "%s · %s · %s: %s\n" % [Catalog.game_time_short(float(entry.t)), esc(sim.company(int(entry.company)).player_name), esc(entry.speaker), esc(entry.text)]
+	return text
+
+
 static func esc(t: Variant) -> String:
 	return str(t).replace("[", "[lb]")
 
@@ -32,7 +65,7 @@ static func figure_text(sim: Simulation, cid: int) -> String:
 			(", danach %d weitere Besuche" % a.queue.size()) if not a.queue.is_empty() else ""]
 	if a.state == "talking":
 		return "spricht mit %s" % (sim.company(a.talk_with).player_name if a.talk_with >= 0 else "einer Person")
-	return "überlegt am Betriebshof oder ist unterwegs"
+	return "disponiert am Betriebshof; wartet auf Rueckmeldungen"
 
 
 ## Konkreter Zustand eines Unternehmens mit tatsaechlicher Ursache (Karte im Dashboard).

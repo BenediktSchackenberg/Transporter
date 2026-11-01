@@ -118,6 +118,7 @@ static func all_schema() -> Dictionary:
 	d.merge(WorkerActions.SCHEMA)
 	d.merge(EstateActions.SCHEMA)
 	d.merge(LoanActions.SCHEMA)
+	d.merge(CompanyOperations.SCHEMA)
 	return d
 
 
@@ -280,7 +281,14 @@ static func _s(v) -> String:
 
 
 func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
+	var operation: Dictionary = sim.operations.run(cid, name, a)
+	if not operation.is_empty():
+		return operation
 	name = ALIASES.get(name, name)
+	if name in ["assign_vehicle", "assign_transport", "plan_tour", "move_vehicle", "clear_tour", "sell_vehicle", "accept_contract"] and a.get("vehicle_id") != null:
+		var reserved: String = sim.operations.line_of(_i(a.vehicle_id))
+		if reserved != "":
+			return {"ok": false, "msg": "Fahrzeug gehoert zu Linie %s. Erst pause_transport_line; laufende Fracht wird fertig zugestellt." % reserved}
 	if WorkerActions.SCHEMA.has(name):
 		return worker_actions.run(cid, name, a, on_site)
 	if EstateActions.SCHEMA.has(name):

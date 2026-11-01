@@ -222,19 +222,26 @@ func _make_avatar(cid: int) -> void:
 
 
 func _spawn_ped() -> void:
-	var G := CityData.G
-	for attempt in 30:
-		var p := Vector2i(_ped_rng.randi_range(0, sim.city.size - 1), _ped_rng.randi_range(0, sim.city.size - 1))
-		if sim.city.g(p) in [G.SIDEWALK, G.PLAZA, G.PARK, G.GRAVEL] and sim.city.walkable(p):
-			var m := Mover.new()
-			m.lane = 0.0
-			m.speed = _ped_rng.randf_range(0.8, 1.2)
-			m.pos = sim.city.tile_center(p) + Vector2(_ped_rng.randf_range(-8, 8), _ped_rng.randf_range(-8, 8))
-			var n := _make_figure(_ped_rng.randi() % Catalog.AVATAR_COUNT, 1.0, SHIRTS[_ped_rng.randi() % SHIRTS.size()])
-			n.set_meta("umbrella_user", _ped_rng.randf() < 0.55)
-			add_child(n)
-			peds.append([m, n, _ped_rng.randf_range(0.0, 3.0)])
-			return
+	if sim.citizens.people.is_empty() or peds.size() >= sim.citizens.people.size():
+		return
+	var person: Dictionary = sim.citizens.people[peds.size()]
+	var plan: Dictionary = sim.citizens.travel_plan(person)
+	if plan.is_empty():
+		return
+	var unit: Dictionary = sim.housing.units.get(str(person.get("home", "")), {})
+	var cell: Vector2i = sim.city.building(int(unit.building)).walk if unit.has("building") else plan.cell
+	var m := Mover.new()
+	m.lane = 0.0
+	m.speed = 1.1
+	m.pos = sim.city.tile_center(cell)
+	var style := posmod(int(person.id), Catalog.AVATAR_COUNT)
+	var n := _make_figure(style, 1.0, SHIRTS[posmod(int(person.id), SHIRTS.size())])
+	n.set_meta("umbrella_user", int(person.id) % 2 == 0)
+	n.set_meta("citizen", person)
+	n.set_meta("purpose", "Zu Hause" if unit.has("building") else plan.purpose)
+	n.set_meta("destination", int(unit.get("building", plan.building)))
+	add_child(n)
+	peds.append([m, n, float(int(person.id) % 5)])
 
 
 func _make_worker(w: Worker) -> Node2D:
@@ -252,6 +259,13 @@ func _make_worker(w: Worker) -> Node2D:
 	carry.position = Vector2(0, -22)
 	carry.visible = false
 	n.add_child(carry)
+	var duty := Label.new()
+	duty.name = "duty"
+	duty.add_theme_font_size_override("font_size", 11)
+	duty.add_theme_color_override("font_outline_color", Color("171c26"))
+	duty.add_theme_constant_override("outline_size", 4)
+	duty.position = Vector2(-55, -88)
+	n.add_child(duty)
 	add_child(n)
 	worker_nodes[w.id] = n
 	return n
@@ -347,7 +361,10 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		tag.scale = Vector2(inv, inv)
 		tag.position = Vector2(-40 * inv, -84 - 14 * (inv - 1.0))
 		var bubble: PanelContainer = bubble_nodes[cid]
-		bubble.visible = a.bubble_timer > 0.0
+		if a.bubble_timer > 0.0 and (bubble.get_meta("last_text", "") != a.bubble or anim_time > float(bubble.get_meta("until", 0.0)) + 1.0):
+			bubble.set_meta("last_text", a.bubble)
+			bubble.set_meta("until", anim_time + 4.0)
+		bubble.visible = anim_time < float(bubble.get_meta("until", 0.0))
 		if bubble.visible:
 			var lbl: Label = bubble.get_node("text")
 			if lbl.text != a.bubble:
@@ -357,27 +374,32 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			sb.bg_color = Color(0.92, 0.88, 1.0, 0.96) if a.bubble_private else Color(0.98, 0.97, 0.92, 0.96)
 			bubble.scale = Vector2(inv, inv)
 			bubble.position = Iso.to_screen(a.pos) + Vector2(-bubble.size.x * 0.5 * inv, -100.0 * inv - bubble.size.y * inv)
-	# Fussgaenger (rein dekorativ)
+	# Sichtbare Buerger: vorhandene Wohnung, Arbeitgeber und benanntes Tagesziel.
 	var view := _view_rect(300.0)
+	var route_budget := 4
 	for p in peds:
 		var m: Mover = p[0]
 		var n: Node2D = p[1]
-		if not view.has_point(n.position):
-			continue   # rein dekorativ: ausserhalb des Bildes ruhen sie
-		if m.arrived():
-			p[2] -= delta * sim_speed
-			if p[2] <= 0.0:
-				var t := m.tile() + Vector2i(_ped_rng.randi_range(-10, 10), _ped_rng.randi_range(-10, 10))
-				if sim.city.walkable(t) and sim.city.g(t) != CityData.G.ROAD:
-					var path := sim.nav.walk_path(m.tile(), t)
-					if path.size() > 1:
-						m.set_path(path)
-				p[2] = _ped_rng.randf_range(1.0, 5.0)
-		else:
+		if not m.arrived():
 			m.advance(delta * sim_speed, 1.0)
 		n.position = Iso.to_screen(m.pos)
+		if not view.has_point(n.position):
+			continue   # Wege laufen weiter; nur neue Wegsuche und Animation werden ausserhalb des Bilds gespart.
+		if m.arrived():
+			p[2] -= delta * sim_speed
+			if p[2] <= 0.0 and route_budget > 0:
+				route_budget -= 1
+				var plan: Dictionary = sim.citizens.travel_plan(n.get_meta("citizen"))
+				if not plan.is_empty():
+					n.set_meta("purpose", plan.purpose)
+					n.set_meta("destination", int(plan.building))
+					var path := sim.nav.walk_path(m.tile(), plan.cell)
+					if path.size() > 1:
+						m.set_path(path)
+				p[2] = 6.0
 		var moving := not m.arrived()
 		_set_figure_frame(n, _dir_of(m.heading), (1 + int(anim_time * 7.0 + m.speed * 10.0) % 4) if moving else 0, rainy and bool(n.get_meta("umbrella_user")))
+
 	# Auswahlmarkierung
 	select_marker.visible = false
 	if not selected.is_empty():
@@ -392,7 +414,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 func _update_routes() -> void:
 	var seen := {}
 	for v in sim.vehicles.values():
-		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop"] and not v.arrived():
+		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "to_dispatch", "yard_parking"] and not v.arrived():
 			_route_line(str(v.id), v, sim.company(v.owner).color, 3.0, 0.4)
 			seen[str(v.id)] = true
 	for cid in sim.avatars:
@@ -459,7 +481,7 @@ func _update_workers(inv: float, rainy: bool) -> void:
 		var shirt: Color = sim.company(w.employer).color if w.employer >= 0 else FREE_SHIRT
 		n.get_node("shirt").modulate = shirt
 		var t: WorkerTask = sim.personnel.tasks.get(w.task_id)
-		var working: bool = t != null and t.status == "in Bearbeitung"
+		var working: bool = (t != null and t.status == "in Bearbeitung") or w.duty_carrying
 		var moving: bool = not w.arrived()
 		var frame := 0
 		if moving:
@@ -467,13 +489,17 @@ func _update_workers(inv: float, rainy: bool) -> void:
 		elif working:
 			frame = 5 + int(anim_time * 3.0) % 2   # Arbeitsbewegung
 		var dir := _dir_of(w.heading)
-		if working and t.kind in ["reparieren", "sabotage", "verladen"]:
+		if working and t != null and t.kind in ["reparieren", "sabotage", "verladen"]:
 			dir = 1   # zum Fahrzeug/Gebaeude gewandt
 		var carrying: bool = t != null and not t.is_final() and t.kind == "verladen" and t.status in ["unterwegs", "in Bearbeitung"]
-		n.get_node("carry").visible = carrying
+		n.get_node("carry").visible = carrying or w.duty_carrying
+		var duty: Label = n.get_node("duty")
+		duty.text = w.duty_label.left(38)
+		duty.visible = w.duty_label != "" and inv < 1.8
+		duty.scale = Vector2(inv, inv)
 		_set_figure_frame(n, dir, frame, rainy and not working)
 		var icon: Sprite2D = n.get_node("icon")
-		var key: String = "i_clipboard" if w.role == "foreman" else (TASK_ICONS.get(t.kind, "") if t and not t.is_final() else "")
+		var key: String = "i_clipboard" if w.role == "foreman" else (TASK_ICONS.get(t.kind, "") if t and not t.is_final() else TASK_ICONS.get("verladen", "") if w.duty_carrying else "")
 		icon.visible = key != ""
 		if icon.visible:
 			icon.texture = cv.tex(key)
@@ -578,6 +604,10 @@ func selected_position() -> Vector2:
 			var w: Worker = sim.personnel.workers.get(selected.id)
 			if w and not w.lost:
 				return w.pos
+		"citizen":
+			for pedestrian in peds:
+				if int(pedestrian[1].get_meta("citizen").id) == int(selected.id):
+					return pedestrian[0].pos
 		"person":
 			var pn: Node2D = person_nodes.get(selected.id)
 			if pn:
@@ -615,6 +645,12 @@ func pick(click: Vector2) -> Dictionary:
 		if d < 28.0 and d < best_d:
 			best = {"kind": "person", "id": pid}
 			best_d = d
+	for pedestrian in peds:
+		var point: Vector2 = Iso.to_screen(pedestrian[0].pos) + Vector2(0, -22)
+		var distance := point.distance_to(click)
+		if distance < 20.0 and distance < best_d:
+			best = {"kind": "citizen", "id": int(pedestrian[1].get_meta("citizen").id)}
+			best_d = distance
 	if not best.is_empty():
 		return best
 	for v in sim.vehicles.values():

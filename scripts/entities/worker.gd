@@ -24,6 +24,9 @@ var lost := false                 # bei Sabotage erwischt: fuer die Partie verlo
 var leaving := false              # abgeworben, wechselt nach der aktuellen Fahrt
 var transfer_to := -1             # neuer Arbeitgeber nach dem Wechsel
 var idle_timer := 0.0
+var duty_label := ""
+var duty_carrying := false
+var duty_leg := 0
 var rest_until := 0.0             # Pause (Fahrerengpass): bis dahin keine neuen Aufgaben
 var household := ""               # Haushalt (siehe Households)
 var motivation := 60.0            # 0..100, haengt an Lohn, Haushaltslage, Erschoepfung und verlaesslicher Bezahlung
@@ -73,7 +76,7 @@ func status_text(sim) -> String:
 			return "unterwegs" if t.status == "unterwegs" else "arbeitet"
 	if fatigue >= 90.0:
 		return "erschöpft"
-	return "bereit"
+	return "bereit" + (" · " + duty_label if duty_label != "" else "")
 
 
 func skill_text() -> String:

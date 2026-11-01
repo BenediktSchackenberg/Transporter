@@ -1,9 +1,15 @@
 # Umsetzungsstand
 
-Stand: 31.10.2026 (Aufträge 1, 2, 3, 4, 5, 6 und 7 umgesetzt, Grenzen siehe Abschnitte unten). „Geprüft“ heißt: durch automatische Tests (`tests/run_tests.gd`) und/oder Autotest-Partien belegt.
-Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Spiel-Prompt und gültigem Aktions-JSON getestet (Godot 4.7.2). Der aktuelle vollständige Headless-Lauf bestand 4374 Prüfungen ohne Testfehler.
+Stand: 01.11.2026 (Aufträge 1, 2, 3, 4, 5, 6 und 7 umgesetzt, Grenzen siehe Abschnitte unten). „Geprüft“ heißt: durch automatische Tests (`tests/run_tests.gd`) und/oder Autotest-Partien belegt.
+Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Spiel-Prompt und gültigem Aktions-JSON getestet (Godot 4.7.2). Der vollständige Headless-Lauf unter Godot 4.4.1 bestand 5094 Prüfungen ohne Testfehler. Der zusätzlich aus `main` übernommene Finanztest bestand separat 4 Prüfungen.
 Externe Sprachmodell-APIs wurden mangels Key nicht live getestet. Die übrigen Adaptertests nutzen den
 DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen lokalen Mock-Server.
+
+## Zusammenspiel „Linien, Betriebshof, Interaktion“ (01.11.2026)
+
+Die neue Betriebsroutine verbindet bestehende Aufträge, Fahrzeuge, Personal, Lager, Sozialverträge und Zuschaueranzeigen. Die KI kann Linien beauftragen und Transporthilfe mit Preis und Gegenpreis verhandeln. Hofpersonal hat feste Aufgaben, LKW fahren zur Ladezone und parken auf dem Hof; Bürgerwege nutzen Wohn- und Arbeitsplatzdaten. Die Routinen sind von Modellentscheidungen unterscheidbar. [Verhalten, Aktionen, Reproduktion und Grenzen](docs/COMPANY_OPERATIONS.md).
+
+48 neue Integrationstests bestehen unter Godot 4.4.1. Zusätzlich wurde die vollständige Verhandlungskette über den HTTP-Adapter gegen einen lokalen Testserver gefahren: 100 gültige Antworten, keine Adapterfehler, keine abgelehnten Aktionen und tatsächliche Zustellung samt Zahlung des Gegenpreises. Im grafischen Vier-Spieler-Probelauf wurden 15 Linienfrachten tatsächlich zugestellt, 11 Frachtanfragen gestellt und ein Preisangebot angenommen; Geld- und Warenabweichung jeweils null. Die Firmen machten in dieser kurzen Partie Verlust: Das ist kein Beleg für eine fertig ausbalancierte Wirtschaft. Die aktuellen Änderungen an der Demo-KI aus `main` wurden übernommen. Ressourcenwarnungen beim Beenden bleiben bestehen; ein neuer nativer Windows-Lauf ist nicht erfolgt.
 
 ## Auftrag „Stadtleben, Wetter, Kunden, Grafik“ (25.10.2026)
 

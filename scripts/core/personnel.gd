@@ -347,7 +347,11 @@ func update(dt: float) -> void:
 			w.pos = sim.vehicles[w.vehicle_id].pos
 		var t: WorkerTask = tasks.get(w.task_id)
 		if t != null and not t.is_final():
+			w.duty_label = ""
+			w.duty_carrying = false
 			_progress(t, w, dt)
+		elif w.employer >= 0 and w.vehicle_id < 0:
+			sim.operations.update_worker(w)
 		if not w.arrived():
 			w.advance(dt, 0.75 if w.fatigue > 85.0 else 1.0)
 
@@ -412,6 +416,7 @@ func _start_work(t: WorkerTask, w: Worker) -> void:
 				t.status = "unterwegs"   # Fahrzeug faehrt noch, hinterhergehen
 				return
 			w.vehicle_id = v.id
+			v.crew_requested = false
 			w.pos = v.pos
 			var kid := str(t.target.get("contract_id", ""))
 			if kid == "":
@@ -552,7 +557,7 @@ func loading_factor(cid: int, building_id: int, driver: Worker) -> float:
 	for t in tasks.values():
 		if t.company == cid and t.kind == "verladen" and t.status == "in Bearbeitung" and int(t.target.building) == building_id:
 			f *= 0.5
-	return maxf(0.35, f)
+	return maxf(0.35, f * sim.operations.loading_factor(cid, building_id))
 
 
 # ------------------------------------------------------------------ Sabotage durch Arbeiter
@@ -835,7 +840,7 @@ func minute_tick(now: float) -> void:
 			continue
 		var t: WorkerTask = tasks.get(w.task_id)
 		var v: FleetVehicle = sim.vehicles.get(w.vehicle_id)
-		if v and v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop"]:
+		if v and v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "to_dispatch"]:
 			w.fatigue = minf(100.0, w.fatigue + 0.12)
 		elif t and t.status == "in Bearbeitung":
 			w.fatigue = minf(100.0, w.fatigue + (0.05 if t.kind == "bewachen" else 0.1))

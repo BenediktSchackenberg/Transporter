@@ -29,6 +29,7 @@ var nav_sub_box: HFlowContainer
 var nav_hint: Label
 var nav_cat := 0
 var activity_rt: RichTextLabel
+var operations_rt: RichTextLabel
 var situation_rt: RichTextLabel
 var events_rt: RichTextLabel
 var dialog_rt: RichTextLabel
@@ -66,6 +67,7 @@ const NAV := [
 		{"label": "Dialoge", "tab": "Dialoge", "hint": "Nachrichten zwischen den Spielern."},
 		{"label": "Personal", "tab": "Personal", "hint": "Mitarbeiter, ihre Aufgaben, Motivation und Gesundheit."}]},
 	{"name": "Betrieb", "hint": "Aufträge, Fahrzeuge und Geld der Firmen", "pages": [
+		{"label": "Betriebsablauf", "tab": "Betriebsablauf", "hint": "Linien, Fahrer, Hofarbeit, Lagerumschlag und verbindliche Frachtgespraeche."},
 		{"label": "Aufträge", "tab": "Aufträge", "hint": "Offene und laufende Transportaufträge mit Frist und Vergütung."},
 		{"label": "Fahrzeuge", "tab": "Fahrzeuge", "hint": "Alle Fahrzeuge mit Zustand und aktuellem Auftrag."},
 		{"label": "Finanzen", "tab": "Finanzen", "hint": "Gewinn- und Bargeldverlauf der Firmen."},
@@ -347,6 +349,8 @@ func _build_right() -> void:
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right_box.add_child(tabs)
 	activity_rt = _rt("Aktivitäten")
+	operations_rt = _rt("Betriebsablauf")
+	operations_rt.scroll_following = false
 	situation_rt = _rt("Lage")
 	_build_economy_tab()
 	activity_rt.scroll_following = false
@@ -846,6 +850,7 @@ func update_hud(delta: float) -> void:
 	_update_selection()
 	match tabs.get_current_tab_control().name:
 		"Aktivitäten": _update_scroll(activity_rt, LiveText.activities(sim, session.controllers))
+		"Betriebsablauf": _update_scroll(operations_rt, LiveText.operations(sim))
 		"Wirtschaft": _update_scroll(economy_rt, _economy_text())
 		"Lage": _update_scroll(situation_rt, LiveText.situation(sim, session.remaining_seconds() / 60.0))
 		"Aufträge": _update_contracts()
@@ -1084,6 +1089,24 @@ func _update_selection() -> void:
 		sel_text.text = ""
 		return
 	match sel.kind:
+		"citizen":
+			var people: Array = sim.citizens.people.filter(func(p): return int(p.id) == int(sel.id))
+			if people.is_empty():
+				session.entity_view.selected = {}
+				return
+			var person: Dictionary = people[0]
+			var unit: Dictionary = sim.housing.units.get(str(person.get("home", "")), {})
+			var plan: Dictionary = sim.citizens.travel_plan(person)
+			for pedestrian in session.entity_view.peds:
+				if int(pedestrian[1].get_meta("citizen").id) == int(sel.id):
+					plan = {"purpose": pedestrian[1].get_meta("purpose"), "building": pedestrian[1].get_meta("destination")}
+					break
+			sel_title.text = str(person.name)
+			sel_text.text = "Arbeit: %s · Stundenlohn %.0f EUR\n" % [Citizens.EMPLOYERS.get(str(person.employer), {}).get("label", "arbeitsuchend"), float(person.wage)]
+			if unit.has("building"):
+				sel_text.text += "Wohnung %s · %s · Miete %.0f EUR/Monat fuer die Wohneinheit\n" % [unit.id, sim.city.building(int(unit.building)).name, float(unit.rent)]
+			if not plan.is_empty():
+				sel_text.text += "%s → %s" % [plan.purpose, sim.city.building(int(plan.building)).name]
 		"vehicle":
 			var v: FleetVehicle = sim.vehicles.get(sel.id)
 			if v == null:
