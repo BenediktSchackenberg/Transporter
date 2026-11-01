@@ -148,13 +148,36 @@ static func normalize(action: Dictionary) -> Dictionary:
 		if m:
 			a["vehicle_id"] = int(m.get_string(1))
 	# Listenform ("fahrzeuge": [2.0], "auftraege": ["A2"]) -> erster Eintrag
-	for pair in [["fahrzeuge", "vehicle_id"], ["auftraege", "contract_id"], ["arbeiter", "worker_id"], ["ziele", "contract_id"]]:
+	for pair in [["fahrzeuge", "vehicle_id"], ["auftraege", "contract_id"], ["arbeiter", "worker_id"], ["ziele", "contract_id"],
+			["available_orders", "contract_id"], ["verfuegbare_auftraege", "contract_id"], ["contracts", "contract_id"]]:
 		if a.get(pair[1]) == null and a.get(pair[0]) is Array and not a[pair[0]].is_empty():
 			var first = a[pair[0]][0]
 			a[pair[1]] = int(first) if pair[1] == "vehicle_id" and (first is float or first is int) else first
+	# Mehrere Kandidaten genannt: die erste ID gilt, die Liste bleibt fuer den Assistenten (falls der erste Auftrag weg ist)
+	for lk in ["auftraege", "ziele", "available_orders", "verfuegbare_auftraege", "contracts"]:
+		if a.get(lk) is Array and a[lk].size() > 1 and not a.has("_kandidaten"):
+			a["_kandidaten"] = a[lk].map(func(x): return str(x))
 	if a.get("kind") is String and KIND_ALIASES.has(str(a.kind).to_lower()):
 		a["kind"] = KIND_ALIASES[str(a.kind).to_lower()]
 	var name := str(a.get("action", a.get("type", "")))
+	if name == "set_plan":   # Plan in freier Form (goals/next_steps) -> ziel/schritte
+		if not a.has("ziel"):
+			for gk in ["goals", "goal", "objective", "ziele", "plan"]:
+				if a.get(gk) is String and str(a[gk]) != "":
+					a["ziel"] = str(a[gk]).left(200)
+					break
+				if a.get(gk) is Array and not a[gk].is_empty():
+					a["ziel"] = "; ".join(a[gk].map(func(x): return str(x))).left(200)
+					break
+		if not a.has("schritte"):
+			for sk in ["next_steps", "steps", "naechste_schritte", "actions"]:
+				if a.get(sk) is Array and not a[sk].is_empty():
+					var steps: Array = []
+					for i in mini(a[sk].size(), 8):
+						var x = a[sk][i]
+						steps.append({"id": "S%d" % (i + 1), "text": str(x.get("text", x.get("beschreibung", str(x)))).left(160) if x is Dictionary else str(x).left(160)})
+					a["schritte"] = steps
+					break
 	# "assign_transport/plan_tour": Modell nennt mehrere Aktionen in einem Namen -> erste bekannte nehmen
 	if not all_schema().has(name):
 		for part in name.replace("|", "/").replace(",", "/").split("/"):

@@ -2481,6 +2481,16 @@ func test_action_assist() -> void:
 	var small_v := s2.add_vehicle(0, "cargobike", 2500.0, s2.depot_road(0))
 	var e8: Dictionary = s2.executor.assist.complete(0, {"action": "assign_transport", "contract_id": "ABIG", "vehicle_id": small_v.id})
 	ok(s2.personnel.driver_of(big_v.id) != null and int(e8.vehicle_id) == big_v.id, "Zu kleines Fahrzeug wird durch das passende mit Fahrer ersetzt")
+	# Freie Plan- und Auftragslisten des Modells
+	var np := ActionExecutor.normalize({"action": "set_plan", "goals": ["Aufträge fahren", "Flotte ausbauen"], "next_steps": ["Auftrag sammeln", "Fahrzeug kaufen"]})
+	ok(str(np.ziel).contains("Aufträge fahren") and np.schritte.size() == 2 and np.schritte[1].text == "Fahrzeug kaufen", "set_plan aus goals/next_steps")
+	var na := ActionExecutor.normalize({"action": "accept_contract", "details": {"ziele": ["A3", "A5", "A6"]}})
+	ok(na.contract_id == "A3" and na._kandidaten.size() == 3, "accept_contract mit Zielliste: erste ID plus Kandidaten")
+	var open_ids: Array = s2.market.open_contracts().map(func(k): return k.id)
+	if open_ids.size() >= 1:
+		s2.companies[0].known[open_ids[0]] = true
+		var nc := s2.executor.assist.complete(0, {"action": "accept_contract", "contract_id": "AX999", "_kandidaten": ["AX999", open_ids[0]]})
+		ok(nc.contract_id == open_ids[0], "Erster Kandidat weg: nächster freier bekannter Auftrag wird genommen")
 	var e6: Dictionary = s2.executor.assist.complete(0, {"action": "assign_transport", "contract_id": "C1", "vehicle_id": null})
 	ok(e6.action == "assign_transport" or e6.action == "assign_worker_task", "erfundene Auftrags-ID und vehicle_id=null stürzen nicht ab")
 	# Geldmangel: Meldung nennt Kredit

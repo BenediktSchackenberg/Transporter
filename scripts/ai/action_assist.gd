@@ -28,6 +28,16 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 			if oc == null:   # nur erfundene IDs; Unterauftraege anderer Firmen sind erlaubt
 				out.erase("contract_id")
 				added.append("contract_id verworfen")
+	if name == "accept_contract":
+		# Genannter Auftrag nicht mehr frei: den ersten noch freien, bekannten und passenden aus der Kandidatenliste nehmen
+		var first: Contract = sim.contracts.get(str(out.get("contract_id", "")))
+		if (first == null or first.status != "open") and out.get("_kandidaten") is Array:
+			for cand in out["_kandidaten"]:
+				var kc: Contract = sim.contracts.get(str(cand))
+				if kc != null and kc.status == "open" and sim.company(cid).known.has(kc.id):
+					out["contract_id"] = kc.id
+					added.append("contract_id aus Kandidaten")
+					break
 	match name:
 		"assign_worker_task":
 			var kind_given := str(out.get("kind", ""))
@@ -93,13 +103,17 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 		"assign_vehicle", "assign_transport":
 			# Offener, bekannter Marktauftrag statt eines angenommenen: erst annehmen (mit passendem Fahrzeug mit Fahrer)
 			var oc2: Contract = sim.contracts.get(str(out.get("contract_id", "")))
-			if oc2 != null and oc2.status == "open" and sim.company(cid).known.has(oc2.id):
+			var junk_vehicle: bool = out.get("vehicle_id") is String and not str(out.vehicle_id).is_valid_int()   # Unsinn meldet das Schema
+			if oc2 != null and oc2.status == "open" and sim.company(cid).known.has(oc2.id) and not junk_vehicle:
 				var ov2: FleetVehicle = sim.vehicles.get(ActionExecutor._i(out.vehicle_id)) if out.get("vehicle_id") != null else null
 				if ov2 == null or ov2.owner != cid or not oc2.vehicle_ok(ov2.model):
 					ov2 = _idle_vehicle(cid, oc2.id)
 				if ov2 != null:
 					return {"action": "accept_contract", "contract_id": oc2.id, "vehicle_id": ov2.id,
 						"_ergaenzt": ["statt %s: Auftrag zuerst annehmen" % name]}
+				if sim.executor.active_contracts(cid) < sim.company(cid).contract_capacity():
+					return {"action": "accept_contract", "contract_id": oc2.id,
+						"_ergaenzt": ["statt %s: Auftrag annehmen (kein Fahrzeug mit Fahrer frei, Zuweisung folgt)" % name]}
 			# Gewähltes Fahrzeug zu klein oder ungeeignet für den Auftrag: ein passendes freies Fahrzeug mit Fahrer nehmen
 			var fc: Contract = sim.contracts.get(str(out.get("contract_id", "")))
 			var fv: FleetVehicle = sim.vehicles.get(ActionExecutor._i(out.vehicle_id)) if out.get("vehicle_id") != null else null
