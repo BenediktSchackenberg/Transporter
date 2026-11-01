@@ -51,6 +51,7 @@ func _start(cfg: Dictionary, loaded: Dictionary = {}) -> void:
 	if args.has("no-residents"):
 		session.sim.residents.enabled = false   # Diagnose: Vergleich ohne Kundenanfragen
 	if args.has("autotest"):
+		session.sim_budget_ms = 0.0   # Test misst die volle Simulationszeit
 		_apply_test_overrides(session.sim)
 	session.menu_requested.connect(_show_menu)
 	session.load_requested.connect(_load)

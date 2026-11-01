@@ -12,6 +12,7 @@ const SPEEDS := [1, 2, 4, 8, 16]
 const SAVE_PATH := "user://saves/quicksave.json"
 const SUBSTEP := 0.1
 const MAX_FRAME_DT := 0.25
+var sim_budget_ms := 60.0         # max. Rechenzeit der Simulation je Bild (0 = unbegrenzt); darüber läuft das Spiel langsamer statt zu ruckeln
 
 var cfg := {}                     # Spielkonfiguration OHNE API-Keys
 var sim: Simulation
@@ -260,6 +261,9 @@ func _process(delta: float) -> void:
 		while _sim_acc >= SUBSTEP:
 			sim.step(SUBSTEP)
 			_sim_acc -= SUBSTEP
+			if sim_budget_ms > 0.0 and (Time.get_ticks_usec() - t0) / 1000.0 > sim_budget_ms:
+				_sim_acc = 0.0   # Rückstand verwerfen, sonst wächst er weiter an
+				break
 		frame_stats.sim_ms += (Time.get_ticks_usec() - t0) / 1000.0
 		if not is_endless() and active_seconds >= duration_seconds:
 			end_match("Zeit abgelaufen")
