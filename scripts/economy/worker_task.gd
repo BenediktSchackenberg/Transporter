@@ -11,6 +11,7 @@ const KINDS := {
 	"verladen": "beim Verladen an einem Gebäude helfen (halbiert Ladezeit)",
 	"auskundschaften": "gegnerisches Depot beobachten und berichten",
 	"sabotage": "gegnerisches Fahrzeug vorübergehend außer Betrieb setzen",
+	"blockieren": "Straße vor einem gegnerischen Depot mit Hindernissen blockieren (Stau, riskant)",
 	"unterstuetzen": "anderen Arbeiter bei Reparatur oder Verladen unterstützen",
 	"gehen": "zu einem Ort gehen",
 	"bauen": "auf einer eigenen Baustelle mitarbeiten (Eigenbau)",
@@ -34,6 +35,11 @@ var created := 0.0
 var cost := 0.0                   # bereits entstandene Kosten
 var report := ""                  # letzte Rueckmeldung
 var cell := Vector2i(-1, -1)      # Einsatzort
+
+
+## Füllaufgabe der Leerlauf-Routine: jederzeit durch eine echte Aufgabe ersetzbar
+func is_filler() -> bool:
+	return bool(target.get("_leerlauf", false))
 
 
 func is_final() -> bool:

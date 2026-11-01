@@ -9,6 +9,13 @@ extends RefCounted
 
 const SABOTAGE_COST := 800.0
 const SABOTAGE_COOLDOWN := 180.0       # Spielminuten je Unternehmen
+const BLOCKADE_COST := 500.0
+const BLOCKADE_COOLDOWN := 720.0       # Spielminuten je Paar Angreifer/Opfer
+const BLOCKADE_SELF_COOLDOWN := 1440.0 # Spielminuten zwischen zwei Blockaden desselben Angreifers
+const BLOCKADE_MINUTES := 45.0         # so lange hält der Stau vor dem Depot
+const BLOCKADE_FINE := 750.0
+const BLOCKADE_COMPENSATION := 500.0
+const IDLE_AFTER := 20.0               # Spielminuten ohne Aufgabe, bevor die Leerlauf-Routine eine Aufgabe vergibt
 const VEHICLE_PROTECTION := 240.0      # Spielminuten je Zielfahrzeug
 const SABOTAGE_FINE := 1500.0
 const SABOTAGE_COMPENSATION := 1000.0
@@ -23,6 +30,10 @@ var next_worker := 1
 var next_task := 1
 var seen := {}                         # Firma -> {Fahrzeug-ID(str): {owner, model, state, x, y, t, quelle}}
 var cooldowns := {}
+var idle_aggression := 0.3             # Anteil der Leerlauf-Entscheidungen kampflustiger Unternehmer, die eine Blockade wählen (0 = nie)
+var idle_routine := true               # Leerlauf-Routine: niemand soll untätig herumstehen
+var idle_stats := {}                   # Aufgabenart -> Anzahl durch die Routine vergebener Aufgaben
+var _idle_since := {}                  # Arbeiter-ID -> Spielminute, seit der er ohne Aufgabe ist
 var force_outcome := ""                # nur fuer Tests: success | fail | caught
 var shortage_until := 0.0              # Arbeitskraeftemangel (Ereignisregler)
 
@@ -204,7 +215,7 @@ func can_take(w: Worker, kind: String) -> String:
 		return "%s ist nicht mehr verfügbar." % w.name
 	if w.role == "foreman":
 		return "%s ist Vorarbeiter und führt selbst keine Aufgaben aus." % w.name
-	if w.task_id != "" and tasks.has(w.task_id) and not tasks[w.task_id].is_final() and tasks[w.task_id].kind != "gehen":
+	if w.task_id != "" and tasks.has(w.task_id) and not tasks[w.task_id].is_final() and tasks[w.task_id].kind != "gehen" and not tasks[w.task_id].is_filler():
 		return "%s ist mit Aufgabe %s beschäftigt." % [w.name, w.task_id]
 	if w.vehicle_id >= 0 and kind != "fahren":
 		var v: FleetVehicle = sim.vehicles.get(w.vehicle_id)
@@ -242,8 +253,8 @@ func create_task(cid: int, kind: String, target: Dictionary, worker_id: String, 
 
 func _bind(t: WorkerTask, w: Worker) -> void:
 	var old: WorkerTask = tasks.get(w.task_id)
-	if old and not old.is_final() and old.kind == "gehen":
-		old.status = "abgebrochen"   # reiner Weg wird durch die neue Aufgabe ersetzt
+	if old and not old.is_final() and (old.kind == "gehen" or old.is_filler()):
+		old.status = "abgebrochen"   # reiner Weg und Leerlauf-Füllaufgabe werden durch die neue Aufgabe ersetzt
 		old.report = "durch %s ersetzt" % t.id
 	if w.vehicle_id >= 0 and t.kind != "fahren":
 		var v: FleetVehicle = sim.vehicles.get(w.vehicle_id)
@@ -304,7 +315,7 @@ func task_cell(t: WorkerTask, w: Worker) -> Vector2i:
 			return sim.city.building(int(t.target.building)).walk
 		"bauen", "schulung":
 			return sim.city.building(int(t.target.building)).walk   # Zugang zum Grundstueck
-		"auskundschaften":
+		"auskundschaften", "blockieren":
 			var rival: Company = sim.company(int(t.target.company))
 			return sim.city.building(rival.depots[0]).walk + Vector2i(2, 2)
 		"unterstuetzen":
@@ -470,6 +481,10 @@ func _start_work(t: WorkerTask, w: Worker) -> void:
 			t.work_needed = 60.0
 			t.status = "in Bearbeitung"
 			t.report = "beobachtet"
+		"blockieren":
+			t.work_needed = 25.0
+			t.status = "in Bearbeitung"
+			t.report = "stellt Hindernisse auf die Straße"
 		"sabotage":
 			var v: FleetVehicle = sim.vehicles.get(int(t.target.vehicle_id))
 			if v == null or not _vehicle_reachable(v, w):
@@ -545,6 +560,10 @@ func _work(t: WorkerTask, w: Worker, dt: float) -> void:
 			t.progress += minutes / t.work_needed
 			if t.progress >= 1.0:
 				_resolve_sabotage(t, w)
+		"blockieren":
+			t.progress += minutes / t.work_needed
+			if t.progress >= 1.0:
+				_resolve_blockade(t, w)
 		"unterstuetzen":
 			var o: Worker = workers.get(str(t.target.worker_id))
 			if o == null or o.lost or o.task_id == "" or not tasks.has(o.task_id) or tasks[o.task_id].is_final():
@@ -630,6 +649,140 @@ func _resolve_sabotage(t: WorkerTask, w: Worker) -> void:
 			sim.sfx.emit("sabotage")
 		_:
 			_finish(t, "fehlgeschlagen", "Sabotage an #%d misslang, %s blieb unentdeckt" % [v.id, w.name])
+
+
+## Straßenblockade vor dem Depot eines Konkurrenten: bei Erfolg Stau (halbe Geschwindigkeit, Umwege) für BLOCKADE_MINUTES.
+func _resolve_blockade(t: WorkerTask, w: Worker) -> void:
+	var c: Company = sim.company(t.company)
+	var victim: Company = sim.company(int(t.target.company))
+	if victim == null or victim.id == c.id:
+		_finish(t, "fehlgeschlagen", "Zielfirma ungültig")
+		return
+	cooldowns["block:%d:%d" % [c.id, victim.id]] = sim.game_min + BLOCKADE_COOLDOWN
+	cooldowns["block:%d" % c.id] = sim.game_min + BLOCKADE_SELF_COOLDOWN
+	var depot: Dictionary = sim.city.building(victim.depots[0])
+	var witnesses := 0
+	for o in workers.values():
+		if not o.lost and o.employer == victim.id and o.pos.distance_to(sim.city.tile_center(depot.walk)) <= 128.0:
+			witnesses += 1
+	var detect := clampf(0.25 + 0.1 * victim.security_level + 0.05 * minf(4.0, float(witnesses)) - w.experience / 400.0, 0.08, 0.8)
+	var outcome := force_outcome
+	if outcome == "":
+		outcome = "caught" if sim.rng.randf() < detect else "success"
+	c.ledger.book("sabotage", -BLOCKADE_COST, true, "Straßenblockade gegen %s" % victim.company_name, sim.game_min)
+	if outcome == "caught":
+		c.ledger.book("fines", -(BLOCKADE_FINE + BLOCKADE_COMPENSATION), true, "Bußgeld/Schadensersatz Blockade", sim.game_min)
+		victim.ledger.book("compensation", BLOCKADE_COMPENSATION, true, "Schadensersatz von " + c.company_name, sim.game_min)
+		c.reputation = maxf(0.0, c.reputation - 8.0)
+		c.stats.sabotage_caught += 1
+		sim.social.add_trust(c.id, victim.id, -30.0)
+		_finish(t, "fehlgeschlagen", "%s wurde bei der Blockade erwischt" % w.name)
+		sim.log_event("%s (%s) wurde beim Blockieren der Straße vor dem Depot von %s erwischt – Bußgeld %s." % [w.name, c.company_name, victim.company_name,
+			Catalog.money(BLOCKADE_FINE + BLOCKADE_COMPENSATION)], "bad", c.id)
+		sim.notify(victim.id, "%s von %s wurde beim Blockieren der Straße vor deinem Depot gestellt. Schadensersatz %s erhalten." % [w.name, c.company_name, Catalog.money(BLOCKADE_COMPENSATION)])
+		return
+	var cells: Array = []
+	var until: float = sim.game_min + BLOCKADE_MINUTES
+	for dy in range(-4, 5):
+		for dx in range(-4, 5):
+			var q: Vector2i = depot.road + Vector2i(dx, dy)
+			if absi(dx) + absi(dy) <= 3 and sim.city.inside(q) and sim.city.is_road(q) and cells.size() < 8:
+				sim.nav.add_jam(q, until)
+				cells.append(q)
+	var txt := "Stau vor dem Depot von %s (Hindernisse auf der Straße)" % victim.company_name
+	sim.traffic_events.append({"kind": "stau", "cells": cells, "until": until, "text": txt})
+	c.stats.sabotage_ok += 1
+	victim.add_key_event("Straße vor dem Depot blockiert", sim.game_min)
+	_finish(t, "abgeschlossen", "Straße vor dem Depot von %s blockiert (%d Felder, %d min)" % [victim.company_name, cells.size(), int(BLOCKADE_MINUTES)])
+	sim.log_event("Verkehr: " + txt + " – Täter unbekannt.", "bad", victim.id)
+
+
+# ------------------------------------------------------------------ Leerlauf-Routine
+## Niemand soll untätig herumstehen: wer 20 Spielminuten ohne Aufgabe ist, bekommt eine passende. Reihenfolge: Fahrzeug ohne Fahrer besetzen ·
+## beschädigtes Fahrzeug reparieren · beim Verladen helfen · (kampflustige Unternehmer) Straße vor einem Konkurrenten blockieren oder dessen Depot
+## beobachten · sonst das eigene Depot bewachen. Aufgaben der Modelle und Vorarbeiter haben Vorrang: es werden nur freie Arbeiter ohne Fahrzeug eingesetzt.
+func idle_tick(now: float) -> void:
+	if not idle_routine:
+		return
+	for c in sim.companies:
+		if not c.is_active():
+			continue
+		var given := 0
+		for w in employed(c.id):
+			if w.role != "worker" or w.lost or given >= 2:
+				continue
+			var t: WorkerTask = tasks.get(w.task_id)
+			var busy: bool = (t != null and not t.is_final()) or w.vehicle_id >= 0 or w.rest_until > now or w.fatigue >= 80.0 or not w.arrived() or w.leaving
+			if busy:
+				_idle_since.erase(w.id)
+				continue
+			if not _idle_since.has(w.id):
+				_idle_since[w.id] = now
+			# Ein Fahrzeug mit Auftrag, aber ohne Fahrer, wird sofort besetzt; alles andere erst nach der Wartezeit
+			var urgent: FleetVehicle = _vehicle_waiting_for_driver(c.id) if int(w.skills.fahren) >= 1 and can_take(w, "fahren") == "" else null
+			if urgent != null:
+				var ut := _idle_task(c, w, "fahren", {"vehicle_id": urgent.id}, "besetzt #%d (Auftrag wartet)" % urgent.id)
+				if ut != null:
+					given += 1
+					_idle_since.erase(w.id)
+					idle_stats["fahren"] = int(idle_stats.get("fahren", 0)) + 1
+					continue
+			if now - float(_idle_since[w.id]) < IDLE_AFTER:
+				continue
+			var nt := _idle_job(c, w, now)
+			if nt != null:
+				given += 1
+				_idle_since.erase(w.id)
+				idle_stats[nt.kind] = int(idle_stats.get(nt.kind, 0)) + 1
+
+
+func _vehicle_waiting_for_driver(cid: int) -> FleetVehicle:
+	for v in sim.company_vehicles(cid):
+		if v.state == "idle" and not v.stops.is_empty() and driver_of(v.id) == null and not _has_task_for(v.id, "fahren"):
+			return v
+	return null
+
+
+func _idle_job(c: Company, w: Worker, now: float) -> WorkerTask:
+	var cid: int = c.id
+	# 1) Fahrzeug ohne Fahrer besetzen
+	if int(w.skills.fahren) >= 1 and can_take(w, "fahren") == "":
+		for v in sim.company_vehicles(cid):
+			if v.state in ["idle", "returning"] and driver_of(v.id) == null and not _has_task_for(v.id, "fahren"):
+				return _idle_task(c, w, "fahren", {"vehicle_id": v.id}, "besetzt #%d" % v.id)
+	# 2) beschädigtes Fahrzeug im Stand reparieren (Ersatzteile vorhanden)
+	if int(w.skills.reparieren) >= 1 and can_take(w, "reparieren") == "":
+		for v in sim.company_vehicles(cid):
+			var needed := maxi(1, ceili((100.0 - v.condition) / 20.0))
+			if v.state == "idle" and v.condition < 60.0 and v.held_by == "" and c.parts >= needed and not _has_task_for(v.id, "reparieren"):
+				return _idle_task(c, w, "reparieren", {"vehicle_id": v.id}, "repariert #%d" % v.id)
+	# 3) kampflustige Unternehmer: Blockade oder Beobachtung
+	var rivals: Array = sim.companies.filter(func(o): return o.id != cid and o.is_active())
+	if not rivals.is_empty():
+		var roll: float = sim.rng.randf()
+		var aggressive: bool = c.personality == "risikospieler" and c.ledger.cash > 15000.0 and float(cooldowns.get("block:%d" % cid, 0.0)) <= now
+		if aggressive and roll < idle_aggression:
+			var targets := rivals.filter(func(o): return float(cooldowns.get("block:%d:%d" % [cid, o.id], 0.0)) <= now and o.protected_until <= now)
+			if not targets.is_empty():
+				var victim: Company = targets[sim.rng.randi() % targets.size()]
+				return _idle_task(c, w, "blockieren", {"company": victim.id}, "blockiert die Straße vor dem Depot von %s" % victim.company_name)
+		if c.personality != "netzwerker" and roll < 0.4:
+			var spy: Company = rivals[sim.rng.randi() % rivals.size()]
+			return _idle_task(c, w, "auskundschaften", {"company": spy.id}, "beobachtet das Depot von %s" % spy.company_name)
+	# 4) beim Verladen am eigenen Depot helfen
+	if int(w.skills.verladen) >= 1 and can_take(w, "verladen") == "":
+		return _idle_task(c, w, "verladen", {"building": c.depots[0]}, "hilft beim Verladen")
+	# 5) sonst das eigene Depot bewachen (schützt vor Sabotage)
+	return _idle_task(c, w, "bewachen", {"site": c.depots[0]}, "bewacht das Depot")
+
+
+func _idle_task(c: Company, w: Worker, kind: String, target: Dictionary, what: String) -> WorkerTask:
+	if can_take(w, kind) != "":
+		return null
+	target["_leerlauf"] = true
+	var nt := create_task(c.id, kind, target, w.id, "", 3, "Leerlauf")
+	nt.report = "Leerlauf-Routine: %s" % what
+	return nt
 
 
 # ------------------------------------------------------------------ Sichtungen & Vorarbeiter
@@ -854,6 +1007,8 @@ func minute_tick(now: float) -> void:
 		update_seen()
 	if sim.minute_index % 10 == 0:
 		foremen_tick()
+	if sim.minute_index % 15 == 7:
+		idle_tick(now)
 	if sim.minute_index % 90 == 0 and now >= shortage_until and available().size() < 4 + 2 * sim.companies.size():
 		var kinds := ["driver", "loader", "mechanic", "guard", "driver", "foreman"]
 		spawn_available(kinds[sim.rng.randi() % kinds.size()])

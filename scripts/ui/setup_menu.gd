@@ -7,7 +7,7 @@ extends Control
 signal start_requested(cfg: Dictionary)
 signal load_requested(path: String)
 
-const SETUP_PATH := "user://setup.json"
+static var setup_path := "user://setup.json"   # Tests lenken auf eine eigene Datei um, damit die Einstellungen des Spielers sie nicht beeinflussen
 const EXAMPLE_PATH := "res://config/example_config.json"
 const DURATIONS := [5, 15, 30, 60, 120, 240, 720, 1440, 0]   # aktive Echtzeitminuten, 0 = Endlosmodus
 const PROVIDERS := ["demo", "ollama", "openai", "ionos"]
@@ -129,7 +129,7 @@ func _ready() -> void:
 	status_label = UITheme.label("", 16, UITheme.WARN)
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(status_label)
-	var saved := _read_json(SETUP_PATH)
+	var saved := _read_json(setup_path)
 	if not saved.is_empty():
 		_apply_config(saved)
 
@@ -389,7 +389,7 @@ func _save_setup(cfg: Dictionary) -> void:
 		p.erase("api_key")
 	if copy.has("mayor"):
 		copy.mayor.erase("api_key")
-	var f := FileAccess.open(SETUP_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(setup_path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(copy, "  "))
 

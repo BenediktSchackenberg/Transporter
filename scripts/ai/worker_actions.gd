@@ -232,10 +232,15 @@ func _assign_task(cid: int, a: Dictionary) -> Dictionary:
 			if b.is_empty():
 				return {"ok": false, "msg": "building_id fehlt oder ist unbekannt."}
 			target.building = b.id
-		"auskundschaften":
+		"auskundschaften", "blockieren":
 			var rc := ActionExecutor._i(a.get("company", -1)) if a.get("company") != null else -1
 			if sim.company(rc) == null or rc == cid:
 				return {"ok": false, "msg": "company muss eine gegnerische Firmen-ID sein."}
+			if kind == "blockieren":
+				if float(P.cooldowns.get("block:%d:%d" % [cid, rc], 0.0)) > sim.game_min:
+					return {"ok": false, "msg": "Blockade gegen diese Firma hat Abklingzeit."}
+				if sim.company(rc).protected_until > sim.game_min:
+					return {"ok": false, "msg": "Die Firma steht unter Schutzfrist."}
 			target.company = rc
 		"unterstuetzen":
 			var o := _own_worker(cid, str(a.get("target_worker", "")))

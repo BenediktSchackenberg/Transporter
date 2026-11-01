@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -47,6 +47,7 @@ func players(n: int) -> Array:
 func new_sim(n: int = 4, size: int = 128) -> Simulation:
 	var s := Simulation.new()
 	s.setup(4242, players(n), size, 0.5)
+	s.personnel.idle_routine = false   # Tests pruefen gezielt einzelne Aufgaben; die Leerlauf-Routine hat einen eigenen Test
 	return s
 
 
@@ -910,6 +911,48 @@ func test_tiers_supply() -> void:
 	var apps_after: int = s.permits.apps.values().filter(func(a): return a.applicant == "D0").size()
 	ok(started and apps_after == apps_before + 1, "Bautraeger beantragt Versorgungsbau (%d -> %d Antraege)" % [apps_before, apps_after])
 	ok(int(T2.gap_months["1:haushalt"]) < 0 and T2.supply_gap().is_empty(), "Beantragter Bau wird nicht erneut geplant")
+	ok(identity_ok(s), "Geld und Bilanz erhalten")
+
+
+func test_idle_routine() -> void:
+	var s := new_sim(2)
+	s.personnel.idle_routine = true
+	var c := s.companies[0]
+	var staff: Array = s.personnel.employed(0).filter(func(w): return w.role == "worker")
+	ok(staff.size() >= 2, "Startbelegschaft vorhanden (%d)" % staff.size())
+	# Ohne Aufgabe und ohne Fahrzeug: nach der Wartezeit bekommt jeder Arbeiter eine Aufgabe (Fahrzeug besetzen, Verladen, Bewachen ...)
+	for w in staff:
+		w.vehicle_id = -1
+		w.task_id = ""
+	var now := s.game_min
+	s.personnel.idle_tick(now)
+	var assigned := staff.filter(func(w): return w.task_id != "").size()
+	ok(assigned == 0, "Direkt nach dem Leerlaufbeginn noch keine Aufgabe (Wartezeit)")
+	s.personnel.idle_tick(now + Personnel.IDLE_AFTER + 1.0)
+	s.personnel.idle_tick(now + Personnel.IDLE_AFTER + 2.0)
+	assigned = staff.filter(func(w): return w.task_id != "" and not s.personnel.tasks[w.task_id].is_final()).size()
+	ok(assigned >= 2, "Nach der Wartezeit bekommen untätige Arbeiter Aufgaben (%d von %d)" % [assigned, staff.size()])
+	ok(not s.personnel.idle_stats.is_empty(), "Statistik der Routine: %s" % str(s.personnel.idle_stats))
+	# Blockade: Erfolg erzeugt Stau vor dem Depot des Opfers, Entdeckung kostet Bussgeld
+	var w0: Worker = staff[0]
+	var victim := s.companies[1]
+	var jams_before: int = s.nav.jams.size()
+	var t := s.personnel.create_task(0, "blockieren", {"company": 1}, w0.id, "", 2, "Test")
+	t.work_needed = 1.0
+	s.personnel.force_outcome = "success"
+	s.personnel._resolve_blockade(t, w0)
+	ok(s.nav.jams.size() > jams_before and t.status == "abgeschlossen", "Blockade: Stau vor dem Depot (%d Felder)" % (s.nav.jams.size() - jams_before))
+	ok(s.traffic_events.any(func(e): return e.kind == "stau" and str(e.text).contains(victim.company_name)), "Stau erscheint in den Verkehrsereignissen")
+	var cash0 := c.ledger.cash
+	var vcash0 := victim.ledger.cash
+	var t2 := s.personnel.create_task(0, "blockieren", {"company": 1}, w0.id, "", 2, "Test")
+	s.personnel.force_outcome = "caught"
+	s.personnel._resolve_blockade(t2, w0)
+	ok(t2.status == "fehlgeschlagen" and c.ledger.cash < cash0 and victim.ledger.cash > vcash0, "Erwischt: Bußgeld, Schadensersatz an das Opfer")
+	s.personnel.force_outcome = ""
+	# Abklingzeit und Schutzfrist gelten auch fuer Modelle (Aktion)
+	var r := s.executor.execute(0, {"action": "assign_worker_task", "kind": "blockieren", "worker_id": staff[1].id, "company": 1})
+	ok(not r.ok and r.msg.contains("Abklingzeit"), "Zweite Blockade gegen dieselbe Firma: Abklingzeit (%s)" % r.msg)
 	ok(identity_ok(s), "Geld und Bilanz erhalten")
 
 
@@ -2598,6 +2641,8 @@ func test_multi_year_consistency() -> void:
 
 
 func test_provider_choice() -> void:
+	var saved_path := SetupMenu.setup_path
+	SetupMenu.setup_path = "user://test_setup_does_not_exist.json"   # unabhängig von den gespeicherten Einstellungen des Spielers
 	var menu := SetupMenu.new()
 	menu._ready()
 	for i in [2, 3]:
@@ -2623,6 +2668,7 @@ func test_provider_choice() -> void:
 		and cfg.players[1].api_key == "TEST_KEY_REMOTE", "Externe API behält eigene URL, Modell und Key")
 	ok(SetupMenu.validate(cfg) == "", "gemischte Anbieter-Konfiguration gültig")
 	ok(cfg.mayor.provider == "demo", "Bürgermeister standardmäßig regelbasiert")
+	SetupMenu.setup_path = saved_path
 	menu.mayor_opt.select(1)
 	ok(menu.collect().mayor.provider == "global", "Bürgermeister-Zugang im Startmenü wählbar")
 	cfg.players[1].base_url = "http://api.example.com/v1"

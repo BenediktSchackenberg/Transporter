@@ -73,6 +73,8 @@ func status_text(sim) -> String:
 		if t and not t.is_final():
 			if t.kind == "gehen":
 				return "bereit (unterwegs)"   # reiner Weg ist unterbrechbar
+			if t.is_filler():
+				return "bereit (Leerlauf: %s)" % t.kind   # Leerlauf-Routine, jederzeit ersetzbar
 			return "unterwegs" if t.status == "unterwegs" else "arbeitet"
 	if fatigue >= 90.0:
 		return "erschöpft"

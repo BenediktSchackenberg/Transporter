@@ -26,6 +26,9 @@ var _layout_revision := ""
 var _last_phase := {}
 
 
+const DISPATCH_DETOUR_MAX := 18       # Felder: weiter vom Hof entfernt fährt ein Fahrzeug ohne Hofkontrolle direkt zum nächsten Auftrag
+
+
 func setup(s) -> void:
 	sim = s
 
@@ -283,7 +286,10 @@ func prepare_dispatch(v: FleetVehicle) -> bool:
 	if not enabled(v.owner, "yard_checks") or not v.needs_dispatch or v.stops.is_empty() or sim.driver_of(v) == null:
 		return false
 	if not sim.at_depot(v):
-		sim.route(v, sim.nearest_depot_road(v.owner, v.tile()), "to_dispatch")
+		var home: Vector2i = sim.nearest_depot_road(v.owner, v.tile())
+		if absi(home.x - v.tile().x) + absi(home.y - v.tile().y) > DISPATCH_DETOUR_MAX:
+			return false   # weit weg vom Hof: keine Hofkontrolle, sonst kostet der Umweg mehr als die Fahrt (Fristen, Ruf)
+		sim.route(v, home, "to_dispatch")
 		return true
 	begin_dispatch(v)
 	return true
@@ -452,7 +458,9 @@ func loading_factor(cid: int, site: int) -> float:
 		return 1.0
 	var count := 0
 	for w in sim.personnel.employed(cid):
-		if w.vehicle_id < 0 and w.task_id == "" and w.fatigue < 85.0 and int(w.skills.verladen) > 0 and sim.estate.on_plot(cid, w.pos) >= 0:
+		var wt: WorkerTask = sim.personnel.tasks.get(w.task_id)
+		var free: bool = w.task_id == "" or wt == null or wt.is_final() or wt.is_filler()   # Füllaufgaben der Leerlauf-Routine zählen als frei
+		if w.vehicle_id < 0 and free and w.fatigue < 85.0 and int(w.skills.verladen) > 0 and sim.estate.on_plot(cid, w.pos) >= 0:
 			count += 1
 	return maxf(0.55, 1.0 - count * 0.12)
 
