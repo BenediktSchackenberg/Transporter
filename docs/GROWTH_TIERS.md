@@ -35,8 +35,24 @@ ist verkaufte Kunden / (verkaufte + entgangene) seit dem letzten Monatswechsel, 
 - Ereignisse: „Viertel: n Haushalte steigen auf / sinken ab (…)“ und „Neues Geschäft …“.
 - KI-Beobachtung: `bevoelkerung` (Stufenmittel, Viertel mit Mangel und welche Bedürfnisse).
 
+## Versorgungsbau (Etappe 2)
+Fehlt ein Bedürfnis in einem Viertel (mindestens 60 Bewohner) zwei Monate lang ganz, und gibt es kein leeres Ladengebäude mehr, baut der **Bautraeger (D0)** auf einem freien
+städtischen Grundstück des Viertels: Supermarkt/Bäckerei, Getränkemarkt, Drogerie, Restaurant, Möbelhaus, Technik-Fachmarkt, Klinik oder Schule
+(Gebäudedefinitionen in `Planning.DEFS`, Zone Wohnen/Misch/Gewerbe). Ablauf wie jedes Bauvorhaben (Antrag, Genehmigung, Angebote, Bau, Übergabe). Nach der Übergabe
+eröffnet bei Läden automatisch ein Geschäft (`Retail.on_building_added`); dessen Miete geht an den Bautraeger statt an die Stadt, so trägt sich das Programm.
+Ein beantragter Bau wird acht Monate lang nicht doppelt geplant.
+
+## Versorgungsprämie (Etappe 3)
+Bestellt ein unterversorgtes Geschäft (Versorgungsgrad unter 75 %) Nachschub, trägt der Transportauftrag eine **Prämie der Stadt** (50 % der Fracht, höchstens 300 EUR),
+sichtbar im Auftragstext und als `praemie_stadt` in der KI-Beobachtung. Bezahlt wird bei Lieferung aus der Stadtkasse (Kategorie `subsidy`), höchstens 3000 EUR im
+Monat und nur oberhalb der Mindestreserve der Stadtkasse. Die Regel-KI rechnet die Prämie in ihren Gewinn ein.
+
+## Freischaltungen und Meilensteine (Etappe 4)
+- **Freischaltungen** nach Stadtmittel der Wohnstufen: Stadtvilla ab 2,5, Hochhaus ab 3,0. Anträge auf gesperrte Gebäude lehnt `Permits.draft` mit Begründung ab; der Bautraeger baut ab 2,5 jeden dritten Wohnbau als Stadtvilla.
+- **Meilensteine** (Ansicht „Wohnen“, Ereignisliste): alle bewohnten Viertel bis Stufe 2 versorgt · Stadtmittel 2,5 · Stadtmittel 3,0 · 100 Bewohner auf Stufe 4 · 5 neue Geschäfte · erste Stadtvilla freigeschaltet.
+
 ## Grenzen / nächste Schritte
-- Viertel ohne passendes leeres Ladengebäude (z. B. keine Drogerie) bleiben bei fehlendem Bedürfnis stehen. Dort müsste der Bürgermeister bzw. ein Bauherr ein Geschäft bauen.
-- Kliniken und Schulen entstehen nicht automatisch; ihre Deckung kommt nur aus vorhandenen Gebäuden.
-- Keine Freischaltung neuer Gebäude oder Waren durch Stufen und keine Bedarfs-Boni auf Frachtlöhne (müssten aus einer Kasse bezahlt werden).
-- Die Zahlen sind nicht langzeitbalanciert: Lauf mit 75 Spieltagen (Wirtschaftslabor, Seed 21): Stadtkasse 363 k, Geld erhalten, Zufriedenheit 84.
+- Läden in Vierteln ohne freies Grundstück passender Größe oder ohne Mittel des Bautraegers entstehen nicht (im Probelauf blieb eine Lücke für einen Supermarkt im Randbezirk bestehen).
+- Kliniken und Schulen baut ebenfalls der Bautraeger (privat); eine öffentliche Trägerschaft über die Stadtkasse ist nicht umgesetzt.
+- Die Prämie wurde im 36-Monats-Probelauf nie ausgelöst, weil Regale selten leer waren; sie greift erst bei echtem Mangel.
+- Balance: 36 Monate Probelauf (kleine Karte): Stadtmittel pendelt sich bei 3,2 ein, Zufriedenheit 82-84, Stadtkasse 280-430 k, Geld erhalten. Längere Läufe mit KI-Spielern fehlen.

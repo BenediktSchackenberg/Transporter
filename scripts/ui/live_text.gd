@@ -663,6 +663,18 @@ static func tiers_block(sim: Simulation) -> String:
 		if not e.fehlt.is_empty():
 			txt += "    unversorgt: %s
 " % ", ".join(e.fehlt.map(func(f): return "%s (%d %%%s)" % [f.bedarf, roundi(float(f.deckung) * 100.0), (", Ware: " + str(f.ware)) if str(f.ware) != "" else ""]))
+	txt += "  Neue Geschäfte durch Marktzutritt %d · Versorgungsbauten beantragt %d · Prämien der Stadt %s
+" % [int(T.stats.shops_opened), int(T.stats.supply_projects), Catalog.money(float(T.stats.get("bonus_paid", 0.0)))]
+	var locks: Array = []
+	for def_id in Tiers.UNLOCK:
+		locks.append("%s %s (ab Stufenmittel %.1f)" % [Planning.DEFS[def_id].label, "frei" if T.unlocked(def_id) else "gesperrt", float(Tiers.UNLOCK[def_id])])
+	txt += "  Freischaltungen: %s
+" % ", ".join(locks)
+	txt += "  Meilensteine:
+"
+	for id in Tiers.MILESTONES:
+		txt += "    %s %s%s
+" % ["✔" if T.milestones.has(id) else "○", Tiers.MILESTONES[id], (" (Tag %d)" % int(T.milestones[id])) if T.milestones.has(id) else ""]
 	return txt
 
 

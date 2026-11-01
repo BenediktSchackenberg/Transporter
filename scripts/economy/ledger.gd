@@ -7,9 +7,9 @@ extends RefCounted
 ##   Bargeld + Buchwert (Fahrzeuge + Bueros) - Schulden == Startkapital + Gewinn
 ## Startkapital, Kredite, Tilgung, Fahrzeug- und Buerokaeufe sind keine Erfolgsbuchungen.
 
-const INCOME := ["transport", "trade_income", "insurance_payout", "compensation", "asset_result", "rent_income", "interest_income"]
+const INCOME := ["transport", "trade_income", "insurance_payout", "compensation", "asset_result", "rent_income", "interest_income", "subsidy"]
 const LABELS := {
-	"transport": "Transporterlöse", "trade_income": "Erlöse aus Geschäften", "insurance_payout": "Versicherungsleistungen",
+	"transport": "Transporterlöse", "subsidy": "Prämien der Stadt", "trade_income": "Erlöse aus Geschäften", "insurance_payout": "Versicherungsleistungen",
 	"compensation": "Schadensersatz erhalten", "asset_result": "Ergebnis Fahrzeugverkauf", "fuel": "Treibstoff",
 	"wages": "Löhne", "hire_fees": "Einstellungs-/Abwerbegebühren", "repairs": "Reparaturen & Abschleppen",
 	"rent": "Miete", "depreciation": "Abschreibungen", "interest": "Zinsen", "penalties": "Vertragsstrafen",

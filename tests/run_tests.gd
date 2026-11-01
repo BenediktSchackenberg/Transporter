@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_tiers", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -853,6 +853,63 @@ func test_tiers() -> void:
 	ok(txt.contains("Wohnstufen") and txt.contains("Bewohner"), "Wohnen-Ansicht zeigt Wohnstufen")
 	var ob := ObservationBuilder._population(s)
 	ok(ob.has("stadtmittel_stufe") and ob.has("viertel_mit_mangel"), "Beobachtung enthält Bevölkerungsstufen")
+	ok(identity_ok(s), "Geld und Bilanz erhalten")
+
+
+func test_tiers_supply() -> void:
+	GameCalendar.configure(5.0)
+	var s := new_sim(2)
+	var T: Tiers = s.tiers
+	T.on_month(1)
+	# Freischaltung nach Stadtmittel
+	T.mix = {"1": {"personen": 100, "stufen": {1: 50, 2: 50, 3: 0, 4: 0}, "summe": 150.0, "mittel": 1.5}}
+	ok(not T.unlocked("stadtvilla") and T.unlocked("mehrfamilienhaus"), "Stadtvilla bei Stufenmittel 1,5 gesperrt, Standardbau frei")
+	var parcel: Dictionary = s.parcels.search({"zone": "wohnen", "min_area": 30, "limit": 1})[0]
+	s.parcels.reserve(parcel.id, "D0")
+	var blocked: Dictionary = s.permits.draft("D0", parcel.id, {"def": "stadtvilla", "floors": 1})
+	ok(not blocked.ok and blocked.msg.contains("freigeschaltet"), "Antrag auf gesperrten Bau wird abgelehnt: " + str(blocked.msg))
+	T.mix = {"1": {"personen": 100, "stufen": {1: 0, 2: 20, 3: 60, 4: 20}, "summe": 300.0, "mittel": 3.0}}
+	ok(T.unlocked("stadtvilla") and T.unlocked("hochhaus"), "Bei Stufenmittel 3,0 sind Stadtvilla und Hochhaus frei")
+	var okd: Dictionary = s.permits.draft("D0", parcel.id, {"def": "stadtvilla", "floors": 1})
+	ok(okd.ok, "Antrag auf freigeschalteten Bau wird angelegt")
+	# Meilensteine
+	T.milestones.clear()
+	T._check_milestones(5)
+	ok(T.milestones.has("mittel_25") and T.milestones.has("mittel_30") and T.milestones.has("villa"), "Meilensteine werden erreicht und vermerkt (%s)" % str(T.milestones.keys()))
+	# Versorgungspraemie: leeres Regal -> Praemie, gut versorgt -> keine; Zahlung aus der Stadtkasse, Geld bleibt erhalten
+	var shop: Dictionary = s.retail.shops.values()[0]
+	T._snap[shop.id] = {"units": int(shop.units), "lost": int(shop.lost)}
+	shop.units = int(shop.units) + 2
+	shop.lost = int(shop.lost) + 10
+	ok(T.shortage_bonus(shop, 60.0) == 30.0, "Praemie 50 Prozent der Fracht bei Mangel (%.0f)" % T.shortage_bonus(shop, 60.0))
+	shop.units = int(shop.units) + 100
+	ok(T.shortage_bonus(shop, 60.0) == 0.0, "Keine Praemie bei guter Versorgung")
+	var c := s.companies[0]
+	var k := Contract.new()
+	k.id = "ATEST"
+	k.bonus = 40.0
+	k.cargo = "pakete"
+	var cash0 := c.ledger.cash
+	var p0 := float(s.economy.accounts["P0"])
+	s.economy.transfer("I0", "P0", 500000.0 - p0)
+	T.pay_bonus(k, c)
+	ok(absf(c.ledger.cash - cash0 - 40.0) < 0.01 and absf(float(s.economy.accounts["P0"]) - 499960.0) < 0.01, "Praemie fliesst von der Stadtkasse an das Unternehmen")
+	s.economy.transfer("P0", "I0", float(s.economy.accounts["P0"]) - 100010.0)
+	cash0 = c.ledger.cash
+	T.pay_bonus(k, c)
+	ok(absf(c.ledger.cash - cash0) < 0.01, "Unter der Mindestreserve der Stadtkasse keine Praemie")
+	# Versorgungsbau: Loch im Wohnviertel fuehrt zu einem Antrag des Bautraegers, danach wird nicht doppelt geplant
+	s.economy.transfer("I0", "P0", p0 - float(s.economy.accounts["P0"]))
+	var T2: Tiers = s.tiers
+	T2.mix = {"1": {"personen": 400, "stufen": {1: 0, 2: 400, 3: 0, 4: 0}, "summe": 800.0, "mittel": 2.0}}
+	T2.gap_months = {"1:haushalt": 3}
+	var gap := T2.supply_gap()
+	ok(gap.get("def", "") == "drogerie_laden" and int(gap.district) == 1, "Dauerhaftes Loch wird erkannt (%s)" % str(gap.get("def", "-")))
+	var apps_before: int = s.permits.apps.values().filter(func(a): return a.applicant == "D0").size()
+	var started: bool = s.construction._supply_project()
+	var apps_after: int = s.permits.apps.values().filter(func(a): return a.applicant == "D0").size()
+	ok(started and apps_after == apps_before + 1, "Bautraeger beantragt Versorgungsbau (%d -> %d Antraege)" % [apps_before, apps_after])
+	ok(int(T2.gap_months["1:haushalt"]) < 0 and T2.supply_gap().is_empty(), "Beantragter Bau wird nicht erneut geplant")
 	ok(identity_ok(s), "Geld und Bilanz erhalten")
 
 

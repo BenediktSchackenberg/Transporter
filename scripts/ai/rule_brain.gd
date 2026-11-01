@@ -497,7 +497,7 @@ static func _best_contract(market: Array, v: Dictionary, spec: Dictionary, rep: 
 		var minutes_needed := tiles * 1.25 / float(spec.tempo) * 2.0 + 40.0   # Umwege, Ampeln, Laden (knapp, aber Puffer bleibt: verspaetet war <2 %)
 		if minutes_needed > k.frist_in_min:
 			continue
-		var margin := float(k.verguetung) - tiles * float(spec.kosten_pro_tile) * 1.1
+		var margin := float(k.verguetung) + float(k.get("praemie_stadt", 0)) - tiles * float(spec.kosten_pro_tile) * 1.1
 		var score := margin / (tiles + 30.0)
 		if margin > 30.0 and score > best_score:
 			best_score = score

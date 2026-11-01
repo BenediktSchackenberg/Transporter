@@ -34,6 +34,7 @@ var requester := ""          # Kundenfigur (Residents), deren Anliegen dieser Au
 var concern := ""            # Anliegen im Klartext, z. B. "Getraenke gehen zur Neige"
 var payer := ""              # zahlende Stelle, falls nicht der Markt (z. B. "P0" fuer Stadtlager-Lieferungen)
 var order_ref := ""          # Bestellung des Stadtlagers (CityDepot), zu der dieser Transport gehoert
+var bonus := 0.0               # Versorgungspraemie der Stadt bei Lieferung an ein unterversorgtes Geschaeft (siehe Tiers)
 var cause := ""              # Ereignis-ID, aus der der Auftrag entstand (Ursachenkette)
 
 
@@ -62,7 +63,7 @@ func to_dict() -> Dictionary:
 		"owner": owner, "vehicle_id": vehicle_id, "exclusive_for": exclusive_for,
 		"exclusive_until": exclusive_until, "distance": distance, "paid": paid, "picked": picked,
 		"delivered_qty": delivered_qty, "fuel_cost": fuel_cost, "accepted_at": accepted_at, "done_at": done_at, "internal": internal,
-		"requester": requester, "concern": concern, "cause": cause, "payer": payer, "order_ref": order_ref}
+		"requester": requester, "concern": concern, "cause": cause, "payer": payer, "order_ref": order_ref, "bonus": bonus}
 
 
 static func from_dict(d: Dictionary) -> Contract:

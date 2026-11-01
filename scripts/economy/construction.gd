@@ -68,6 +68,7 @@ var public := {}                      # Mayor-Projekt-ID -> Ausfuehrung {builder
 var reserved_co := {}                 # Unternehmen-ID -> fuer Bauvertraege zurueckgelegt
 var reserved_dev := 0.0               # beim Bautraeger fuer Vertraege zurueckgelegt
 var home_plans := {}                  # Haushalt -> {stage, parcel, app, project, credit, day}: Grundstueck -> Bank -> Antrag -> Bau
+var dev_shops: Array = []              # Gebaeude-IDs der vom Bautraeger errichteten Versorgungsbauten: ihre Geschaeftsmiete geht an D0
 var home_notes: Array = []            # letzte Entscheidungen (Ablehnung der Bank usw.) fuer die Oberflaeche
 var _next := 1
 var _next_delivery := 1
@@ -497,6 +498,9 @@ func _hand_over(pr: Dictionary, day: int) -> void:
 		return
 	sim.market.refresh()
 	sim.residents.add_for_buildings([b.id])
+	if str(d.use) == "versorgung" and pr.client == DEVELOPER:
+		dev_shops.append(int(b.id))
+	sim.retail.on_building_added(b)   # Geschaefte und Restaurants nehmen den Betrieb auf (Versorgungsbauten, Auftrag 8)
 	sim.events.buildings_added.emit([b.id])
 	pr.building = int(b.id)
 	pr.status = "uebergeben"
@@ -641,8 +645,6 @@ func _collect_rent(u: Dictionary) -> void:
 # ------------------------------------------------------------------ Bautraeger (Immobilienunternehmen, baut selbststaendig)
 func _developer_month() -> void:
 	var M: Mayor = sim.mayor
-	if M.waiting <= 0 and M.vacancy() > 0.02:
-		return
 	for pr in projects.values():
 		if pr.client == DEVELOPER and pr.status in ["angebote", "erschliessung", "im_bau", "pruefung", "wartet_anschluss"]:
 			return        # ein Vorhaben nach dem anderen
@@ -658,8 +660,15 @@ func _developer_month() -> void:
 				if r.ok:
 					accept_best(r.id)
 				return
+	if _supply_project():
+		return
+	if M.waiting <= 0 and M.vacancy() > 0.02:
+		return
 	var cands: Array = sim.parcels.search({"zone": "wohnen", "min_area": 40, "limit": 80}).filter(func(p): return sim.parcels.utility_level(p) == "voll" and p.state == "frei" and p.owner == Parcels.CITY)
-	var probe := {"def": "mehrfamilienhaus", "floors": 3, "parking": int(Planning.DEFS.mehrfamilienhaus.parking), "financing": {"eigenmittel": 1.0e9}}
+	var def_id := "mehrfamilienhaus"
+	if sim.tiers.unlocked("stadtvilla") and (_next % 3) == 0:
+		def_id = "stadtvilla"   # gehobener Wohnungsbau, sobald die Wohnstufen der Stadt ihn tragen
+	var probe := {"def": def_id, "floors": 3 if def_id == "mehrfamilienhaus" else int(Planning.DEFS[def_id].floors[0]), "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": 1.0e9}}
 	for p in cands:
 		var chk := Planning.assess(p, probe)
 		if not chk.ok or not chk.questions.is_empty() or float(chk.costs.gesamt) > available_funds(DEVELOPER):
@@ -674,6 +683,36 @@ func _developer_month() -> void:
 		sim.permits.apps[dr.id].financing = {"eigenmittel": float(chk.costs.gesamt)}
 		sim.permits.submit(dr.id)
 		return
+
+
+## Versorgungsbau (Auftrag 8): Fehlt einem Viertel dauerhaft ein Geschaeft oder eine Einrichtung fuer ein Beduerfnis seiner Bewohner und gibt es
+## kein leeres Ladengebaeude mehr, baut der Bautraeger auf einem freien Grundstueck des Viertels. Ein Vorhaben nach dem anderen.
+func _supply_project() -> bool:
+	var gap: Dictionary = sim.tiers.supply_gap()
+	if gap.is_empty():
+		return false
+	for def_id in gap.get("defs", [gap.def]):
+		var d: Dictionary = Planning.DEFS[def_id]
+		var probe := {"def": def_id, "floors": int(d.floors[0]), "parking": int(d.parking), "financing": {"eigenmittel": 1.0e9}}
+		for zone in d.zones:
+			var cands: Array = sim.parcels.search({"zone": zone, "min_area": int(d.w) * int(d.h), "limit": 120}).filter(func(p): return 				p.state == "frei" and p.owner == Parcels.CITY and sim.city.district_of(Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)) == int(gap.district))
+			for p in cands:
+				var chk := Planning.assess(p, probe)
+				if not chk.ok or not chk.questions.is_empty() or float(chk.costs.gesamt) > available_funds(DEVELOPER):
+					continue
+				var res: Dictionary = sim.parcels.reserve(p.id, DEVELOPER)
+				if not res.ok:
+					continue
+				var dr: Dictionary = sim.permits.draft(DEVELOPER, p.id, probe)
+				if not dr.ok:
+					sim.parcels.release(p.id, DEVELOPER)
+					continue
+				sim.permits.apps[dr.id].financing = {"eigenmittel": float(chk.costs.gesamt)}
+				sim.permits.submit(dr.id)
+				sim.tiers.note_supply_project(gap)
+				sim.log_event("%s: Der Bautraeger plant %s (%s fehlt im Viertel)." % [Catalog.DISTRICTS[int(gap.district)], d.label, gap.label], "info")
+				return true
+	return false
 
 
 # ------------------------------------------------------------------ Haushalte als Bauherren (Abnahme Schritte 1-4, 7, 12)
@@ -1013,7 +1052,7 @@ func _log(pr: Dictionary, text: String) -> void:
 
 func to_dict() -> Dictionary:
 	return {"builders": builders, "projects": projects, "deliveries": deliveries, "units": units, "jobs": jobs, "public": public, "reserved_dev": reserved_dev, "reserved_co": reserved_co,
-		"next": [_next, _next_delivery, _next_unit, _next_job], "home_plans": home_plans, "home_notes": home_notes}
+		"next": [_next, _next_delivery, _next_unit, _next_job], "home_plans": home_plans, "home_notes": home_notes, "dev_shops": dev_shops}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -1033,6 +1072,7 @@ func from_dict(d: Dictionary) -> void:
 		reserved_co[k] = float(reserved_co[k])
 	home_plans = d.get("home_plans", {})
 	home_notes = d.get("home_notes", [])
+	dev_shops = d.get("dev_shops", []).map(func(x): return int(x))
 	for hid in home_plans:
 		home_plans[hid].day = int(home_plans[hid].day)
 	for n in home_notes:

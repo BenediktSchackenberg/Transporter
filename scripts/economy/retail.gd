@@ -203,6 +203,13 @@ static func kind_for(b: Dictionary) -> String:
 	return ""
 
 
+## Neu uebergebenes Gebaeude: gehoert es zu einer Geschaeftsart, eroeffnet dort ein Geschaeft.
+func on_building_added(b: Dictionary) -> void:
+	var kind := kind_for(b)
+	if kind != "":
+		open_shop(b, kind)
+
+
 ## Weiteres Geschaeft eroeffnen (Marktzutritt bei unterversorgtem Viertel, siehe Tiers).
 func open_shop(b: Dictionary, kind: String) -> void:
 	if not shop_of_building(int(b.id)).is_empty():
@@ -433,6 +440,9 @@ func _issue_contract(o: Dictionary, s: Dictionary) -> void:
 	k.deadline = sim.game_min + GameCalendar.days_to_min(float(OFFER_DAYS + 2))
 	k.distance = absi(src.road.x - dst.road.x) + absi(src.road.y - dst.road.y)
 	k.needs_cold = bool(Catalog.CARGO[k.cargo].refrigerated)
+	k.bonus = sim.tiers.shortage_bonus(s, k.reward)
+	if k.bonus > 0.0:
+		k.label += " · Versorgungsprämie der Stadt +%d EUR" % int(k.bonus)
 	sim.contracts[k.id] = k
 	o.contract = k.id
 	o.status = "transport"
@@ -481,6 +491,8 @@ func contract_delivered(k: Contract) -> void:
 	if o.is_empty() or o.status not in ["transport", "unterwegs"]:
 		return
 	var s: Dictionary = shops[o.shop]
+	if k.bonus > 0.0 and k.owner >= 0:
+		sim.tiers.pay_bonus(k, sim.company(k.owner))
 	o.freight_paid = k.paid
 	s.freight += k.paid
 	stats.freight += k.paid
@@ -531,7 +543,7 @@ func on_month(_month: int) -> void:
 		sim.economy.transfer(s.id, "S0", pay_w)   # S0 zahlt die Loehne des Handels (Citizens, Arbeitgeber "handel")
 		s.wages += pay_w
 		var rent := minf(float(spec.rent), maxf(0.0, float(sim.economy.accounts[s.id])))
-		sim.economy.transfer(s.id, "P0", rent)
+		sim.economy.transfer(s.id, "D0" if sim.construction.dev_shops.has(int(s.building)) else "P0", rent)   # Eigentuemer: Bautraeger oder Stadt
 		s.rent += rent
 		if pay_w < wages or rent < float(spec.rent):
 			s.status = "zahlungsschwach"

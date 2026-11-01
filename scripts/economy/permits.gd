@@ -41,6 +41,8 @@ func draft(applicant: String, parcel_id: String, params: Dictionary) -> Dictiona
 			return {"ok": false, "msg": "Für %s läuft bereits der Antrag %s." % [parcel_id, a.id]}
 		if a.parcel == parcel_id and a.status == "entschieden" and a.result in ["genehmigt", "genehmigt_mit_bedingungen"] and not a.get("expired", false):
 			return {"ok": false, "msg": "Für %s liegt bereits die Genehmigung %s vor." % [parcel_id, a.id]}
+	if not sim.tiers.unlocked(str(params.def)):
+		return {"ok": false, "msg": sim.tiers.unlock_text(str(params.def))}
 	var d: Dictionary = Planning.DEFS[params.def]
 	var app := {"id": "A%d" % _next, "applicant": applicant, "parcel": parcel_id, "def": str(params.def), "floors": int(params.get("floors", d.floors[0])),
 		"parking": int(params.get("parking", d.parking)), "financing": params.get("financing", {}).duplicate(), "status": "entwurf", "result": "",

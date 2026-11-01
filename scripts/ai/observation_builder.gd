@@ -67,7 +67,8 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 			"verguetung": int(k.reward), "frist_in_min": int(k.deadline - now), "kuehlung": k.needs_cold,
 			"schwer": k.needs_heavy, "min_reputation": int(k.min_rep),
 			"exklusiv_fuer_dich": k.exclusive_for == cid and k.exclusive_until > now,
-			"_score": k.reward / float(k.distance + approach + 30)})
+			"praemie_stadt": int(k.bonus),
+			"_score": (k.reward + k.bonus) / float(k.distance + approach + 30)})
 		if k.requester != "":
 			market[-1]["kunde"] = _customer(sim, k)
 	market.sort_custom(func(a, b): return a._score > b._score)

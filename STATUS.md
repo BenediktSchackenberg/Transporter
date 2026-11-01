@@ -7,7 +7,7 @@ DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen l
 
 ## Auftrag 8: Wohnstufen und Bedürfnisse (01.11.2026)
 
-Wohneinheiten haben Stufen 1-4; Bedürfnisse (Nahrung, Getränke, Haushalt, Gesundheit, Bildung, Gastronomie, Möbel, Technik) werden über die Geschäfte des Viertels gedeckt, deren Regale per Transportauftrag gefüllt werden. Aufstieg/Abstieg, Mieten, Nachfrage, Marktzutritt neuer Geschäfte, Ansicht „Wohnen“ und KI-Beobachtung. 14 Prüfungen in `test_tiers`. [Regeln und Grenzen](docs/GROWTH_TIERS.md).
+Wohneinheiten haben Stufen 1-4; Bedürfnisse (Nahrung, Getränke, Haushalt, Gesundheit, Bildung, Gastronomie, Möbel, Technik) werden über die Geschäfte des Viertels gedeckt, deren Regale per Transportauftrag gefüllt werden. Aufstieg/Abstieg, Mieten, Nachfrage, Marktzutritt neuer Geschäfte, Ansicht „Wohnen“ und KI-Beobachtung. Dazu: Marktzutritt und Versorgungsbau durch den Bautraeger, Versorgungsprämie der Stadt, Freischaltungen (Stadtvilla, Hochhaus) und Meilensteine. 27 Prüfungen in `test_tiers` und `test_tiers_supply`. [Regeln und Grenzen](docs/GROWTH_TIERS.md).
 
 ## Zusammenspiel „Linien, Betriebshof, Interaktion“ (01.11.2026)
 

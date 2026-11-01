@@ -29,6 +29,27 @@ const TIER_NAMES := {1: "Einfache Haushalte", 2: "Familien", 3: "Bürger", 4: "W
 const CAP := {"apartment": 3, "house": 3, "semi": 3, "highrise": 4, "villa": 4}
 const START := {"apartment": 2, "house": 2, "semi": 2, "highrise": 2, "villa": 3}
 
+## Gebäudedefinition (Planning.DEFS), mit der ein fehlendes Bedürfnis gedeckt wird (erste Wahl zuerst)
+const SUPPLY_DEFS := {"nahrung": ["supermarkt", "baeckerei_laden"], "getraenke": ["getraenkemarkt"], "haushalt": ["drogerie_laden"], "gesundheit": ["klinik"],
+	"bildung": ["schule"], "gastro": ["restaurant_neu"], "wohnen": ["moebelhaus"], "technik": ["technik_fachmarkt"]}
+const PENDING_MONTHS := 8        # so lange wartet ein beantragter Versorgungsbau, bevor ein neuer Anlauf zählt
+const BONUS_SHARE := 0.5           # Praemie in Anteil der Fracht
+const BONUS_MAX := 300.0
+const BONUS_BUDGET := 3000.0       # hoechstens so viel zahlt die Stadt je Monat an Praemien
+const BONUS_BELOW := 0.75          # Geschaefte unter diesem Versorgungsgrad gelten als unterversorgt
+## Freischaltungen: Gebaeudedefinition -> Stadtmittel der Wohnstufe, ab dem sie gebaut werden darf
+const UNLOCK := {"stadtvilla": 2.5, "hochhaus": 3.0}
+## Meilensteine: ID -> Titel (Pruefung in _check_milestones)
+const MILESTONES := {
+	"versorgt": "Alle bewohnten Viertel haben die Bedürfnisse bis Stufe 2 gedeckt",
+	"mittel_25": "Stadtmittel der Wohnstufen 2,5",
+	"mittel_30": "Stadtmittel der Wohnstufen 3,0",
+	"stufe4_100": "100 Bewohner auf Stufe 4",
+	"neue_laeden": "5 neue Geschäfte durch Marktzutritt oder Bautraeger",
+	"villa": "Erste Stadtvilla freigeschaltet",
+}
+const GAP_MONTHS := 2              # so lange fehlt das Angebot, bevor der Bautraeger baut
+
 ## Bedürfnis: Stufe, Geschäftsarten (Retail.KINDS) oder Gebäudearten, Ladung für die Anlieferung
 const NEEDS := [
 	{"id": "nahrung", "label": "Grundnahrung", "tier": 1, "kinds": ["lebensmittel", "baeckerei"], "cargo": "lebensmittel"},
@@ -47,7 +68,10 @@ var sim: Simulation
 var coverage := {}                 # Viertelindex (str) -> {Bedürfnis-ID: 0..1}
 var mix := {}                      # Viertelindex (str) -> {"personen": n, "stufen": {1: n, ..}, "mittel": x}
 var _snap := {}                    # Geschäft -> {units, lost} Stand zum letzten Monatswechsel
-var stats := {"up": 0, "down": 0}
+var stats := {"up": 0, "down": 0, "supply_projects": 0, "shops_opened": 0}
+var bonus_spent := 0.0             # Versorgungspraemien im laufenden Monat (Haushalt der Stadt)
+var milestones := {}               # ID -> Tag der Erreichung
+var gap_months := {}               # "Viertel:Bedürfnis" -> Monate ohne Angebot im Viertel
 var history: Array = []            # Monatsberichte (max. 24)
 
 
@@ -135,6 +159,9 @@ func on_month(month: int) -> void:
 			_update_unit(u, ups, downs)
 	_recompute_mix(occ)
 	_expand_supply()
+	_track_gaps()
+	bonus_spent = 0.0
+	_check_milestones(GameCalendar.day_of(sim.game_min))
 	_log_changes(ups, downs)
 	for shop in sim.retail.shops.values():
 		_snap[shop.id] = {"units": int(shop.units), "lost": int(shop.lost)}
@@ -159,8 +186,114 @@ func _expand_supply() -> void:
 				continue
 			var kind: String = Retail.kind_for(b)
 			sim.retail.open_shop(b, kind)
+			stats.shops_opened += 1
 			sim.log_event("%s: Neues Geschäft %s (%s) – %s wurde im Viertel nachgefragt." % [Catalog.DISTRICTS[d], b.name, Retail.KINDS[kind].label, need.label], "good")
 			break
+
+
+## Gibt es im Viertel ein offenes Geschäft der Art bzw. ein Gebäude der Einrichtung?
+func has_local(need: Dictionary, district: int) -> bool:
+	if need.has("kinds"):
+		for shop in sim.retail.shops.values():
+			if need.kinds.has(shop.kind) and shop.status == "offen" and int(sim.city.building(int(shop.building)).get("district", 0)) == district:
+				return true
+		return false
+	for b in sim.city.buildings:
+		if need.buildings.has(b.type) and int(b.get("district", 0)) == district:
+			return true
+	return false
+
+
+func _track_gaps() -> void:
+	for d in Catalog.DISTRICTS.size():
+		var m: Dictionary = mix.get(str(d), {})
+		var populated: bool = not m.is_empty() and int(m.personen) >= MIN_PERSONS_FOR_SHOP
+		var wanted := {}
+		for need in missing(d, NO_LOCAL_BELOW):
+			wanted[need.id] = need
+		for need in NEEDS:
+			var key := "%d:%s" % [d, need.id]
+			var cur := int(gap_months.get(key, 0))
+			if cur < 0 and not has_local(need, d):
+				gap_months[key] = cur + 1      # Bauvorhaben laeuft: bis zu PENDING_MONTHS abwarten, dann neu bewerten
+			elif populated and wanted.has(need.id) and not has_local(need, d):
+				gap_months[key] = maxi(0, cur) + 1
+			else:
+				gap_months[key] = 0
+
+
+## Größtes dauerhaftes Versorgungsloch (Viertel, Bedürfnis, Gebäudedefinition) oder leer.
+func supply_gap() -> Dictionary:
+	var best := {}
+	var best_pop := 0
+	for key in gap_months:
+		if int(gap_months[key]) < GAP_MONTHS:
+			continue
+		var parts: PackedStringArray = str(key).split(":")
+		var d := int(parts[0])
+		var need_id := parts[1]
+		var pop := int(mix.get(str(d), {}).get("personen", 0))
+		if pop > best_pop and SUPPLY_DEFS.has(need_id):
+			var label := need_id
+			for n in NEEDS:
+				if n.id == need_id:
+					label = n.label
+			best_pop = pop
+			best = {"district": d, "need": need_id, "label": label, "def": SUPPLY_DEFS[need_id][0], "defs": SUPPLY_DEFS[need_id], "pop": pop}
+	return best
+
+
+## Praemie fuer die Anlieferung an ein unterversorgtes Geschaeft (zahlt die Stadt, solange das Monatsbudget und die Reserve der Stadtkasse reichen).
+func shortage_bonus(shop: Dictionary, freight: float) -> float:
+	if shop_level(shop) >= BONUS_BELOW or bonus_spent >= BONUS_BUDGET:
+		return 0.0
+	return minf(BONUS_MAX, snappedf(freight * BONUS_SHARE, 5.0))
+
+
+func pay_bonus(k: Contract, c: Company) -> void:
+	var amount := minf(k.bonus, BONUS_BUDGET - bonus_spent)
+	if c == null or amount <= 0.0 or float(sim.economy.accounts["P0"]) - amount < Mayor.RESERVE_CASH:
+		return
+	c.ledger.book("subsidy", amount, true, "Versorgungsprämie %s" % k.id, sim.game_min, "P0")
+	bonus_spent += amount
+	stats["bonus_paid"] = float(stats.get("bonus_paid", 0.0)) + amount
+	sim.log_event("%s erhält %s Versorgungsprämie der Stadt (%s)." % [c.company_name, Catalog.money(amount), k.cargo_name()], "good", c.id)
+
+
+## Darf diese Gebaeudedefinition schon gebaut werden? (Stadtmittel der Wohnstufen)
+func unlocked(def_id: String) -> bool:
+	return not UNLOCK.has(def_id) or city_mean() >= float(UNLOCK[def_id])
+
+
+func unlock_text(def_id: String) -> String:
+	return "%s wird erst ab dem Stadtmittel %.1f der Wohnstufen freigeschaltet (jetzt %.2f)." % [Planning.DEFS[def_id].label, float(UNLOCK[def_id]), city_mean()]
+
+
+func _check_milestones(day: int) -> void:
+	var checks := {}
+	var all_ok := not mix.is_empty()
+	for d in mix:
+		for need in NEEDS:
+			if int(need.tier) <= 2 and int(mix[d].personen) >= MIN_PERSONS_FOR_SHOP and coverage_of(int(d), need.id) < UP_AT:
+				all_ok = false
+	checks["versorgt"] = all_ok
+	checks["mittel_25"] = city_mean() >= 2.5
+	checks["mittel_30"] = city_mean() >= 3.0
+	var s4 := 0
+	for d in mix:
+		s4 += int(mix[d].stufen[4])
+	checks["stufe4_100"] = s4 >= 100
+	checks["neue_laeden"] = int(stats.shops_opened) + int(sim.construction.dev_shops.size()) >= 5
+	checks["villa"] = unlocked("stadtvilla")
+	for id in MILESTONES:
+		if checks.get(id, false) and not milestones.has(id):
+			milestones[id] = day
+			sim.log_event("Meilenstein erreicht: %s." % MILESTONES[id], "good")
+
+
+func note_supply_project(gap: Dictionary) -> void:
+	gap_months["%d:%s" % [int(gap.district), str(gap.need)]] = -PENDING_MONTHS   # beantragt: nicht erneut planen, bis das Gebäude steht
+	stats.supply_projects += 1
 
 
 func _free_building(district: int, kinds: Array) -> Dictionary:
@@ -303,7 +436,7 @@ func summary() -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"coverage": coverage, "mix": mix, "snap": _snap, "stats": stats, "history": history}
+	return {"coverage": coverage, "mix": mix, "snap": _snap, "stats": stats, "history": history, "gaps": gap_months, "bonus_spent": bonus_spent, "milestones": milestones}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -319,3 +452,6 @@ func from_dict(d: Dictionary) -> void:
 	_snap = d.get("snap", {})
 	stats = d.get("stats", stats)
 	history = d.get("history", [])
+	gap_months = d.get("gaps", {})
+	bonus_spent = float(d.get("bonus_spent", 0.0))
+	milestones = d.get("milestones", {})
