@@ -164,6 +164,16 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		special = ["reefer"]
 	elif not has_heavy and heavy_jobs >= 2 and personality in ["wachstum", "kostenoptimierer"]:
 		special = ["truck"]
+	else:
+		# Zu grosse Auftraege: Menge uebersteigt die groesste Ladekapazitaet der Flotte (Van 8, Lieferwagen 18, LKW 40)
+		var max_cap := 0
+		for v in obs.fahrzeuge:
+			max_cap = maxi(max_cap, int(models[v.modell].kapazitaet))
+		var big: Array = market.filter(func(k): return not k.kuehlung and int(k.menge) > max_cap and k.verguetung > 200)
+		if big.size() >= 3:
+			special = ["transporter"]
+			if big.any(func(k): return int(k.menge) > 18):
+				special = ["truck"]
 	if not special.is_empty() and _free_slots(me) > 0 and "buy_vehicle" not in planned and obs.fahrzeuge.size() >= 2:
 		var so := _cheapest_offer(res.fahrzeugangebote, special)
 		if not so.is_empty() and cash > float(so.preis) + buffer:
@@ -452,7 +462,7 @@ static func _best_contract(market: Array, v: Dictionary, spec: Dictionary, rep: 
 		if rep < k.min_reputation:
 			continue
 		var tiles := float(k.strecke) + _dist(k.von_pos, v.pos)
-		var minutes_needed := tiles * 1.4 / float(spec.tempo) * 2.0 + 60.0   # Umwege, Ampeln, Laden
+		var minutes_needed := tiles * 1.25 / float(spec.tempo) * 2.0 + 40.0   # Umwege, Ampeln, Laden (knapp, aber Puffer bleibt: verspaetet war <2 %)
 		if minutes_needed > k.frist_in_min:
 			continue
 		var margin := float(k.verguetung) - tiles * float(spec.kosten_pro_tile) * 1.1
