@@ -7,6 +7,10 @@ extends RefCounted
 ## Schutzfrist pro Opfer und begrenzte Dauer verhindern, dass jemand dauerhaft handlungsunfaehig wird.
 
 const POACH_COOLDOWN := 120.0
+const REPORT_COOLDOWN := 2880.0         # Spielminuten zwischen zwei Anzeigen derselben Firma
+const REPORT_TARGET_COOLDOWN := 4320.0  # dieselbe Zielfirma wird nicht haeufiger angezeigt
+const REPORT_FALSE_FINE := 400.0        # unbegruendete Anzeige
+const REPORT_ARREARS_FINE := 600.0      # Zahlungsrueckstand wird festgestellt
 
 var sim
 var cooldowns := {}     # "art:firma" -> Spielminute
@@ -155,6 +159,52 @@ func poach_customer(cid: int, building_id: int) -> Dictionary:
 		sim.notify(loyal, "%s hat deinen Stammkunden %s abgeworben." % [c.company_name, b.name])
 		return {"ok": true, "msg": "%s ist jetzt dein Stammkunde." % b.name}
 	return {"ok": true, "msg": "%s bleibt bei %s (Reputation zu niedrig oder Pech)." % [b.name, t.company_name]}
+
+
+## Anzeige beim Buergermeister: Das Amt prueft die Zielfirma sofort (Steuer, Zahlungsrueckstaende, verwahrloste Einrichtungen).
+## Gibt es Beanstandungen, tragen sie die Folgen (Nachforderung, Bussgeld, Auflage, Rufverlust). Gibt es keine, zahlt der Anzeigende ein
+## Bussgeld und verliert Ruf und Vertrauen: wer ohne Anlass anzeigt, schadet sich selbst.
+func report_rival(cid: int, target: int, reason: String = "") -> Dictionary:
+	var c: Company = sim.company(cid)
+	var t: Company = sim.company(target)
+	if t == null or target == cid:
+		return {"ok": false, "msg": "Ungültiges Ziel."}
+	if not t.is_active() and t.status != "warnung":
+		return {"ok": false, "msg": "%s steht bereits unter Insolvenzverwaltung." % t.company_name}
+	var key := "report:%d" % cid
+	var tkey := "reported:%d" % target
+	if _cooldown_left(key) > 0.0:
+		return {"ok": false, "msg": "Die nächste Anzeige ist erst in %d Spielminuten möglich." % int(_cooldown_left(key))}
+	if _cooldown_left(tkey) > 0.0:
+		return {"ok": false, "msg": "%s wurde kürzlich geprüft (noch %d Spielminuten)." % [t.company_name, int(_cooldown_left(tkey))]}
+	cooldowns[key] = sim.game_min + REPORT_COOLDOWN
+	cooldowns[tkey] = sim.game_min + REPORT_TARGET_COOLDOWN
+	var findings: Array = []
+	var audit: Dictionary = sim.public_sector.audit(t, GameCalendar.month_of(sim.game_min))
+	if float(audit.arrears) > 0.01:
+		findings.append("Steuernachforderung %s" % Catalog.money(float(audit.arrears)))
+	if sim.insolvency.has_arrears(t) or t.ledger.cash < 0.0:
+		var fine := minf(REPORT_ARREARS_FINE, maxf(0.0, t.ledger.cash))
+		if fine > 0.01:
+			t.ledger.book("fines", -fine, true, "Zahlungsrückstand nach Anzeige", sim.game_min)
+		findings.append("Zahlungsrückstand")
+	var orders: int = sim.oversight.inspect_company_now(target)
+	if orders > 0:
+		findings.append("%d Auflage(n) der Gewerbeaufsicht" % orders)
+	if findings.is_empty():
+		var f2 := minf(REPORT_FALSE_FINE, maxf(0.0, c.ledger.cash))
+		if f2 > 0.01:
+			c.ledger.book("fines", -f2, true, "Unbegründete Anzeige gegen " + t.company_name, sim.game_min)
+		c.reputation = maxf(0.0, c.reputation - 3.0)
+		sim.social.add_trust(cid, target, -20.0)
+		sim.log_event("Anzeige von %s gegen %s: ohne Beanstandung, der Anzeigende zahlt %s Bußgeld." % [c.company_name, t.company_name, Catalog.money(f2)], "warn", cid)
+		sim.notify(target, "Eine Anzeige gegen dich wurde geprüft und blieb ohne Beanstandung.")
+		return {"ok": true, "msg": "Das Amt fand nichts. Unbegründete Anzeige: %s Bußgeld, Ruf −3." % Catalog.money(f2)}
+	t.reputation = maxf(0.0, t.reputation - 3.0)
+	t.add_key_event("Nach Anzeige geprüft: " + ", ".join(findings), sim.game_min)
+	sim.log_event("Anzeige von %s: %s wird geprüft – %s." % [c.company_name, t.company_name, ", ".join(findings)], "bad", target)
+	sim.notify(target, "Nach einer Anzeige hat das Amt dich geprüft: %s." % ", ".join(findings))
+	return {"ok": true, "msg": "Prüfung bei %s: %s." % [t.company_name, ", ".join(findings)]}
 
 
 func buy_security(cid: int, level: int) -> Dictionary:

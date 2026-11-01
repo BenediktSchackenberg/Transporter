@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -954,6 +954,43 @@ func test_idle_routine() -> void:
 	var r := s.executor.execute(0, {"action": "assign_worker_task", "kind": "blockieren", "worker_id": staff[1].id, "company": 1})
 	ok(not r.ok and r.msg.contains("Abklingzeit"), "Zweite Blockade gegen dieselbe Firma: Abklingzeit (%s)" % r.msg)
 	ok(identity_ok(s), "Geld und Bilanz erhalten")
+
+
+func test_report_rival() -> void:
+	var s := new_sim(3)
+	# Unbegruendete Anzeige: nichts zu finden, der Anzeigende zahlt Bussgeld und verliert Ruf
+	var rep0 := s.company(0).reputation
+	var cash0 := s.company(0).ledger.cash
+	var r1 := s.rivalry.report_rival(0, 1, "test")
+	ok(r1.ok and s.company(0).ledger.cash < cash0 and s.company(0).reputation < rep0, "Anzeige ohne Anlass: Bußgeld und Rufverlust für den Anzeigenden")
+	ok(not s.rivalry.report_rival(0, 2, "x").ok, "Abklingzeit: zweite Anzeige direkt danach abgelehnt")
+	# Begruendete Anzeige: Gewinn ohne gezahlte Steuer wird nachgefordert
+	s.company(2).ledger.book("transport", 30000.0, true, "Test-Erloes", s.game_min)
+	s.company(1).ledger.book("transport", 30000.0, true, "Test-Erloes", s.game_min)
+	s.company(0).ledger.inject(5000.0)
+	s.rivalry.cooldowns.clear()
+	var rep2 := s.company(1).reputation
+	var r2 := s.rivalry.report_rival(0, 1, "test")
+	ok(r2.ok and s.company(1).reputation < rep2 and str(r2.msg).contains("Steuer"), "Begründete Anzeige: Prüfung findet die Steuernachforderung, Ziel verliert Ruf")
+	ok(not s.rivalry.report_rival(0, 1, "x").ok, "dieselbe Firma wird nicht sofort erneut angezeigt")
+	ok(not s.rivalry.report_rival(0, 0, "x").ok, "sich selbst anzeigen geht nicht")
+	# Regel-KI: ein Konkurrent im Zahlungsverzug wird angezeigt, wenn sie verdient
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	ok(obs.konkurrenten.all(func(r): return r.has("zahlungsverzug")), "Beobachtung zeigt den öffentlichen Zahlungsverzug der Konkurrenten")
+	var acts: Array = []
+	var rs: Array = []
+	var rng := RandomNumberGenerator.new()
+	var me := {"gewinn": 100.0}
+	var riv := [{"id": 1, "name": "A", "reputation": 20, "fahrzeuge": 1, "personal": 1, "pakt_mit_dir": false, "schutzfrist": false, "zahlungsverzug": true},
+		{"id": 2, "name": "B", "reputation": 60, "fahrzeuge": 5, "personal": 6, "pakt_mit_dir": false, "schutzfrist": false, "zahlungsverzug": false}]
+	RuleBrain._dominate(riv, "wachstum", me, 50000.0, 6000.0, rng, acts, rs)
+	ok(acts.size() == 1 and acts[0].action == "report_rival" and acts[0].target == 1, "Regel-KI zeigt den Konkurrenten im Zahlungsverzug an")
+	riv[0].zahlungsverzug = false
+	riv[0].personal = 4
+	acts.clear()
+	RuleBrain._dominate(riv, "wachstum", me, 50000.0, 6000.0, rng, acts, rs)
+	ok(acts.size() == 1 and acts[0].action != "report_rival" and acts[0].target == 1, "ohne Verzug wirbt sie beim schwächsten Konkurrenten ab")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten (Bußgelder und Nachforderungen laufen über Konten)")
 
 
 func test_dispatch_help() -> void:

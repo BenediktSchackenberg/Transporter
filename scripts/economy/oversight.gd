@@ -68,8 +68,18 @@ func on_month(month: int) -> void:
 			_inspect(str(shop.id), "G%d" % int(shop.building), str(shop.name), month)
 
 
-func _inspect(target: String, what: String, label: String, month: int) -> void:
-	if _has_open(what) or Citizens.roll(target.hash(), month, 11) >= INSPECT_CHANCE:
+## Sofortpruefung nach einer Anzeige: alle Einrichtungen der Firma, ohne Zufallswurf. Gibt die Zahl neuer Auflagen zurueck.
+func inspect_company_now(cid: int) -> int:
+	var before := orders.size()
+	var month := GameCalendar.month_of(sim.game_min)
+	for f in sim.estate.facilities.values():
+		if int(f.owner) == cid and f.status == "fertig":
+			_inspect("C%d" % cid, "F" + str(f.id), "%s (%s)" % [Estate.FACILITIES[f.typ].name, sim.company(cid).company_name], month, true)
+	return orders.size() - before
+
+
+func _inspect(target: String, what: String, label: String, month: int, forced: bool = false) -> void:
+	if _has_open(what) or (not forced and Citizens.roll(target.hash(), month, 11) >= INSPECT_CHANCE):
 		return
 	var cond := condition_of(what)
 	if cond >= CONDITION_MIN:

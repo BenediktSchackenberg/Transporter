@@ -16,6 +16,8 @@ const LINES := {
 }
 const BUFFER := {"kostenoptimierer": 20000.0, "wachstum": 6000.0, "netzwerker": 12000.0, "risikospieler": 9000.0}
 const MAX_ACTIONS := 6
+## Dominanzstreben: Wahrscheinlichkeit je Entscheidung, den schwaechsten Konkurrenten gezielt unter Druck zu setzen (nur aus Gewinn heraus).
+const DOMINANCE := {"wachstum": 0.25, "risikospieler": 0.30, "kostenoptimierer": 0.12, "netzwerker": 0.04}
 
 
 static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenerator) -> Dictionary:
@@ -347,6 +349,9 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 			_:
 				if roll < 0.2:
 					_offer_unserved(obs, r, actions, reasons)
+	# 11b) Dominanz: den schwaechsten Konkurrenten bedraengen (Anzeige beim Buergermeister, Abwerbung, Rufschaedigung)
+	if actions.size() < MAX_ACTIONS and float(me.gewinn) > 0.0 and cash > buffer * 1.5 and not rivals.is_empty() 			and rng.randf() < float(DOMINANCE.get(personality, 0.1)):
+		_dominate(rivals, personality, me, cash, buffer, rng, actions, reasons)
 	# 10b) Finanzierung und Personalabbau: Kredit bei knapper Kasse, Tilgung bei Überschuss, Entlassung bei Verlust
 	var debt := float(me.schulden)
 	if debt <= 0.0 and cash < buffer * 0.4 and float(me.umsatz) > 0.0 and float(me.kreditrahmen_frei) >= 5000.0 			and obs.fahrzeuge.size() > 0:
@@ -399,6 +404,31 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 
 
 ## Risikospieler: erst auskundschaften, dann mit dem entbehrlichsten Arbeiter ein stehendes Fremdfahrzeug angreifen.
+## Schwaechster Konkurrent (wenig Ruf, Fahrzeuge, Personal; Zahlungsverzug zaehlt am meisten) ohne Pakt und ohne Schutzfrist.
+## Im Zahlungsverzug lohnt eine Anzeige (das Amt findet Rueckstaende); sonst wird abgeworben, und der Risikospieler streut Geruechte.
+static func _dominate(rivals: Array, personality: String, me: Dictionary, cash: float, buffer: float, rng: RandomNumberGenerator, actions: Array, reasons: Array) -> void:
+	var target := {}
+	var worst := INF
+	for r in rivals:
+		if r.pakt_mit_dir:
+			continue
+		var weakness := float(r.reputation) + 6.0 * float(r.fahrzeuge) + 3.0 * float(r.personal) - (60.0 if r.get("zahlungsverzug", false) else 0.0)
+		if weakness < worst:
+			worst = weakness
+			target = r
+	if target.is_empty():
+		return
+	if target.get("zahlungsverzug", false):
+		actions.append({"action": "report_rival", "target": target.id, "reason": "Zahlungsverzug"})
+		reasons.append("zeige %s beim Bürgermeister an, weil die Firma im Zahlungsverzug ist" % target.name)
+	elif int(target.personal) >= 3 and not bool(target.schutzfrist) and cash > buffer * 2.0:
+		actions.append({"action": "poach_worker", "target": target.id, "wage": 30})
+		reasons.append("werbe einen Arbeiter von %s ab, um die schwächste Konkurrenz zu schwächen" % target.name)
+	elif personality == "risikospieler" and not bool(target.schutzfrist) and not me.has("sabotage_bereit_in_min") and cash > buffer * 2.0:
+		actions.append({"action": "attempt_sabotage", "target": target.id, "kind": "smear_campaign"})
+		reasons.append("streue Gerüchte über die schwächste Konkurrenz %s" % target.name)
+
+
 static func _risky_moves(obs: Dictionary, free_staff: Array, cash: float, roll: float, actions: Array, reasons: Array, can_afford: bool = true) -> void:
 	var cooling := false
 	for e in obs.ergebnisse_deiner_aktionen:

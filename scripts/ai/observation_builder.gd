@@ -104,7 +104,8 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 			"erledigte_auftraege": o.stats.completed, "pakt_mit_dir": sim.social.has_pact(cid, o.id),
 			"dein_vertrauen": int(sim.social.get_trust(cid, o.id)),
 			"figur_im": Catalog.DISTRICTS[sim.city.district_of(sim.avatars[o.id].tile())],
-			"schutzfrist": now < o.protected_until})
+			"schutzfrist": now < o.protected_until,
+			"zahlungsverzug": o.status in ["verzug", "insolvenz", "verwertung"]})   # oeffentlich bekannt (Glaeubiger, Insolvenzregister)
 	var foreign_loyal: Array = []
 	for b in sim.customers:
 		var owner: int = sim.customers[b].loyal
