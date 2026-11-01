@@ -201,7 +201,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	elif _free_slots(me) == 0 and not _has_facility(yard, "stellplatz", true) and yard_sug.has("stellplatz") \
 			and cash > 1500.0 + buffer:
 		growth.append(_place(plot_id, "stellplatz", yard_sug))
-	elif _free_slots(me) == 0 and cash > 30000.0 + buffer and personality in ["wachstum", "netzwerker"] \
+	elif _free_slots(me) == 0 and cash > 30000.0 + buffer and (personality in ["wachstum", "netzwerker"] or good_jobs >= 3) \
 			and not obs.freie_depotstandorte.is_empty():
 		growth.append({"action": "rent_depot", "depot_id": obs.freie_depotstandorte[0].id})
 	# 8) Buero: Firmensitz auf dem eigenen Grundstueck bauen/ausbauen, Internet einrichten
@@ -307,7 +307,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 				elif not obs.fremde_stammkunden.is_empty() and roll < 0.2:
 					actions.append({"action": "poach_customer", "customer_id": obs.fremde_stammkunden[0].kunde_id})
 			"risikospieler":
-				if roll > 0.85 and cash > 5000.0 and not me.has("sabotage_bereit_in_min"):
+				if roll > 0.85 and cash > 2.0 * buffer and not me.has("sabotage_bereit_in_min"):
 					actions.append({"action": "attempt_sabotage", "target": r.id, "kind": "smear_campaign"})
 					reasons.append("streue Gerüchte über %s" % r.name)
 				else:
@@ -383,7 +383,7 @@ static func _risky_moves(obs: Dictionary, free_staff: Array, cash: float, roll: 
 			expendable = w
 	if expendable.is_empty() or free_staff.size() < 2:
 		return
-	if not targets.is_empty() and not cooling and cash > 8000.0 and roll < 0.3:
+	if not targets.is_empty() and not cooling and cash > 1.5 * 9000.0 and roll < 0.3:
 		var v: Dictionary = targets[0]
 		actions.append({"action": "attempt_vehicle_sabotage", "worker_id": expendable.id, "vehicle_id": v.id})
 		reasons.append("riskiere mit %s einen Anschlag auf #%d" % [expendable.name, v.id])
