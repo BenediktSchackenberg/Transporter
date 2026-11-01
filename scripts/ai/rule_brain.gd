@@ -171,7 +171,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		actions.append({"action": "schedule_refueling", "below_l": 250 * fuel_vehicles, "buy_l": 500 * mini(2, fuel_vehicles)})
 		planned.append("schedule_refueling")
 		reasons.append("lege eine feste Nachtank-Regel an")
-	var tank_room := int(me.vorraete.get("tank_kapazitaet_l", 1000)) - fuel_have   # mehr passt nicht in den Tank
+	var tank_room := int(me.vorraete.get("tank_kapazitaet_l", 1000)) - fuel_have - 5   # mehr passt nicht in den Tank (Rundung der Anzeige abfangen)
 	if fuel_have < 300 * fuel_vehicles and cash > 3000.0 and tank_room >= 100:
 		var fuel := _supply(res, "Treibstoff", 400)
 		if not fuel.is_empty() and float(fuel.preis) < float(res.nachtanken_ohne_vorrat_preis_l):
@@ -256,7 +256,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	elif yard_office.is_empty() and active >= capacity and int(office.zentrale_stufe) < 3 and "upgrade_office" not in planned \
 			and cash > float(Catalog.OFFICE_UPGRADE_COST[int(office.zentrale_stufe)]) + office_buffer:
 		growth.append({"action": "upgrade_office"})
-	elif int(office.internet) == 0 and cash > Catalog.INTERNET_COST[0] + office_buffer and "install_internet" not in planned:
+	elif int(office.internet) == 0 and not office.bueros.is_empty() and cash > Catalog.INTERNET_COST[0] + office_buffer and "install_internet" not in planned:
 		growth.append({"action": "install_internet"})
 	# 8b) Betriebshof: Lager, Werkstatt, vermietbare Bueros – nur mit Reserve
 	var fleet_n: int = obs.fahrzeuge.size()
