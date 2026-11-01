@@ -151,7 +151,32 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	var plot_id := int(me.depots[0].id)
 	# 7) Wachstum: Fahrzeug aus dem Haendlerbestand + Fahrer
 	var good_jobs := market.filter(func(k): return k.verguetung > 250).size()
-	if ready.is_empty() and good_jobs >= 3 and _free_slots(me) > 0 and active < capacity and "buy_vehicle" not in planned:
+	# Spezialfahrzeuge: Gekuehlte und schwere Auftraege (Lebensmittel, Medikamente, Baustoffe) bleiben sonst liegen
+	var has_cold := false
+	var has_heavy := false
+	for v in obs.fahrzeuge:
+		has_cold = has_cold or bool(models[v.modell].kuehlung)
+		has_heavy = has_heavy or bool(models[v.modell].schwer)
+	var cold_jobs := market.filter(func(k): return k.kuehlung and k.verguetung > 150).size()
+	var heavy_jobs := market.filter(func(k): return k.schwer and k.verguetung > 150).size()
+	var special: Array = []
+	if not has_cold and cold_jobs >= 2:
+		special = ["reefer"]
+	elif not has_heavy and heavy_jobs >= 2 and personality in ["wachstum", "kostenoptimierer"]:
+		special = ["truck"]
+	if not special.is_empty() and _free_slots(me) > 0 and "buy_vehicle" not in planned and obs.fahrzeuge.size() >= 2:
+		var so := _cheapest_offer(res.fahrzeugangebote, special)
+		if not so.is_empty() and cash > float(so.preis) + buffer:
+			growth.append({"action": "buy_vehicle", "offer_id": so.id})
+			if free_staff.filter(func(w): return int(w.faehigkeiten.get("fahren", 0)) > 0).is_empty() and "recruit_worker" not in planned:
+				var sc := _best_candidate(res.arbeitskraefte, "fahren")
+				if not sc.is_empty():
+					growth.append({"action": "recruit_worker", "worker_id": sc.id})
+					planned.append("recruit_worker")
+			planned.append("buy_vehicle")
+	if not growth.is_empty():
+		pass
+	elif ready.is_empty() and good_jobs >= 3 and _free_slots(me) > 0 and active < capacity and "buy_vehicle" not in planned:
 		var wanted := ["van", "transporter", "cargobike"]
 		if personality == "wachstum" and good_jobs >= 6:
 			wanted = ["truck", "transporter", "van"]
