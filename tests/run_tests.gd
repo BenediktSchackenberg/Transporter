@@ -2467,6 +2467,20 @@ func test_action_assist() -> void:
 			s2.companies[0].known[kk[0].id] = true
 			var e7: Dictionary = s2.executor.assist.complete(0, ActionExecutor.normalize({"action": "assign_transport", "target_id": kk[0].id, "vehicle_id": "F9"}))
 			ok(e7.action == "accept_contract" and e7.contract_id == kk[0].id and s2.vehicles[int(e7.vehicle_id)].owner == 0, "Offener Auftrag: erst annehmen statt zuweisen (target_id und fremde Fahrzeug-ID)")
+	# Zu kleines Fahrzeug fuer den eigenen Auftrag: passendes freies Fahrzeug mit Fahrer
+	var big_v := s2.add_vehicle(0, "transporter", 5000.0, s2.depot_road(0))
+	var wd2 := hire_free(s2, 0, "driver")
+	wd2.vehicle_id = big_v.id   # Fahrer sitzt am Steuer
+	var bk := Contract.new()
+	bk.id = "ABIG"
+	bk.qty = 15
+	bk.owner = 0
+	bk.status = "accepted"
+	bk.cargo = "pakete"
+	s2.contracts[bk.id] = bk
+	var small_v := s2.add_vehicle(0, "cargobike", 2500.0, s2.depot_road(0))
+	var e8: Dictionary = s2.executor.assist.complete(0, {"action": "assign_transport", "contract_id": "ABIG", "vehicle_id": small_v.id})
+	ok(s2.personnel.driver_of(big_v.id) != null and int(e8.vehicle_id) == big_v.id, "Zu kleines Fahrzeug wird durch das passende mit Fahrer ersetzt")
 	var e6: Dictionary = s2.executor.assist.complete(0, {"action": "assign_transport", "contract_id": "C1", "vehicle_id": null})
 	ok(e6.action == "assign_transport" or e6.action == "assign_worker_task", "erfundene Auftrags-ID und vehicle_id=null stürzen nicht ab")
 	# Geldmangel: Meldung nennt Kredit
