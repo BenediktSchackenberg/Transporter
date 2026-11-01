@@ -740,6 +740,8 @@ func _move_to(cid: int, target: String) -> Dictionary:
 func _start_visit(cid: int, action: Dictionary, cell: Vector2i, follow: int, where: String) -> Dictionary:
 	var a: Avatar = sim.avatars[cid]
 	var visit := {"action": action.duplicate(), "follow": follow, "place": where, "cell": cell, "key": _cur_key, "origin": _cur_origin}
+	if _visit_planned(a, action):
+		return {"ok": false, "msg": "%s ist schon als Besuch eingeplant – erst abwarten, bevor du es erneut anforderst." % where}
 	if a.pending.has("action"):
 		if a.queue.size() >= 3:
 			return {"ok": false, "msg": "Die Figur hat schon 4 Besuche geplant. Erst abarbeiten lassen."}
@@ -749,6 +751,23 @@ func _start_visit(cid: int, action: Dictionary, cell: Vector2i, follow: int, whe
 		return {"ok": false, "msg": "Kein Fußweg zu %s gefunden." % where}
 	a.pending = visit
 	return {"ok": true, "pending": true, "msg": "Figur geht zu %s; Ausführung bei Ankunft." % where}
+
+
+## Gleicher Besuch schon unterwegs oder eingereiht? (Kleine Modelle fordern denselben Kauf mehrfach an und fuellen so die Besuchsliste.)
+func _visit_planned(a: Avatar, action: Dictionary) -> bool:
+	var name := str(action.get("action", ""))
+	var all: Array = [a.pending] + a.queue
+	for v in all:
+		if not v is Dictionary or not v.has("action"):
+			continue
+		var va: Dictionary = v.action
+		if str(va.get("action", "")) != name:
+			continue
+		if name in ["buy_vehicle", "collect_contracts"]:
+			return true
+		if name == "recruit_worker" and str(va.get("worker_id", "")) == str(action.get("worker_id", "")):
+			return true
+	return false
 
 
 ## Naechsten eingereihten Besuch starten (nach Ankunft beim vorherigen).
