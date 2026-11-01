@@ -148,7 +148,7 @@ static func normalize(action: Dictionary) -> Dictionary:
 		if m:
 			a["vehicle_id"] = int(m.get_string(1))
 	# Listenform ("fahrzeuge": [2.0], "auftraege": ["A2"]) -> erster Eintrag
-	for pair in [["fahrzeuge", "vehicle_id"], ["auftraege", "contract_id"], ["arbeiter", "worker_id"]]:
+	for pair in [["fahrzeuge", "vehicle_id"], ["auftraege", "contract_id"], ["arbeiter", "worker_id"], ["ziele", "contract_id"]]:
 		if a.get(pair[1]) == null and a.get(pair[0]) is Array and not a[pair[0]].is_empty():
 			var first = a[pair[0]][0]
 			a[pair[1]] = int(first) if pair[1] == "vehicle_id" and (first is float or first is int) else first

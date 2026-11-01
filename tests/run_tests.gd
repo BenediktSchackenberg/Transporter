@@ -2309,6 +2309,13 @@ func test_action_assist() -> void:
 	ok(s2.vehicles.has(int(e2.vehicle_id)) and s2.vehicles[int(e2.vehicle_id)].owner == 0, "Fahraufgabe mit erfundener Fahrzeug-ID: eigenes Fahrzeug eingesetzt")
 	var e3: Dictionary = s2.executor.assist.complete(0, {"action": "assign_worker_task", "kind": "fahren", "vehicle_id": nv2.id})
 	ok(e3.get("worker_id", "") != "", "Fahraufgabe ohne Arbeiter: freier Fahrer ergänzt")
+	var foreign: int = s2.companies[1].vehicle_ids[0]
+	var e4: Dictionary = s2.executor.assist.complete(0, {"action": "assign_worker_task", "kind": "fahren", "vehicle_id": foreign, "worker_id": w2.id})
+	ok(int(e4.vehicle_id) != foreign and s2.vehicles[int(e4.vehicle_id)].owner == 0, "Fremdes Fahrzeug wird durch eigenes ersetzt")
+	var e5: Dictionary = s2.executor.assist.complete(0, {"action": "assign_worker_task", "kind": "refuel_vehicle", "worker_id": w2.id})
+	ok(e5.action == "schedule_refueling" and e5.has("below_l"), "Tank-Aufgabe wird zur Nachtank-Regel")
+	var e6: Dictionary = s2.executor.assist.complete(0, {"action": "assign_transport", "contract_id": "C1", "vehicle_id": null})
+	ok(e6.action == "assign_transport" or e6.action == "assign_worker_task", "erfundene Auftrags-ID und vehicle_id=null stürzen nicht ab")
 	# Geldmangel: Meldung nennt Kredit
 	var c1 := s.companies[1]
 	c1.ledger.pay_out_owner(c1.ledger.cash - 100.0, "H0")

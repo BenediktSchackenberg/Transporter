@@ -16,9 +16,34 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 	var name := str(a.get("action", a.get("type", "")))
 	var out := a.duplicate()
 	var added: Array = []
+	if name in ["assign_vehicle", "assign_transport", "assign_worker_task"]:
+		# Erfundene oder fremde Fahrzeug-/Auftrags-IDs verwerfen, damit die Luecken unten sinnvoll gefuellt werden
+		if out.has("vehicle_id"):
+			var ov: FleetVehicle = sim.vehicles.get(ActionExecutor._i(out.vehicle_id)) if out.vehicle_id != null else null
+			if ov == null or ov.owner != cid:
+				out.erase("vehicle_id")
+				added.append("vehicle_id verworfen")
+		if name != "assign_worker_task" and out.has("contract_id"):
+			var oc: Contract = sim.contracts.get(str(out.contract_id))
+			if oc == null or oc.owner != cid:
+				out.erase("contract_id")
+				added.append("contract_id verworfen")
 	match name:
 		"assign_worker_task":
 			var kind_given := str(out.get("kind", ""))
+			var kl := kind_given.to_lower()
+			if kl.contains("fuel") or kl.contains("tank"):
+				# Tanken ist keine Arbeiteraufgabe: feste Nachtank-Regel anlegen (falls noch keine besteht)
+				var cf: Company = sim.company(cid)
+				var nv := maxi(1, sim.company_vehicles(cid).size())
+				if cf.fuel_rule.is_empty():
+					return {"action": "schedule_refueling", "below_l": 250 * nv, "buy_l": 500 * mini(2, nv),
+						"_ergaenzt": ["statt Tank-Aufgabe: Nachtank-Regel"]}
+				return {"action": "wait", "_ergaenzt": ["Nachtank-Regel besteht bereits"]}
+			if kl in ["transport", "deliver", "delivery", "lieferung", "liefern"]:
+				out["kind"] = "fahren"
+				kind_given = "fahren"
+				added.append("kind=fahren")
 			if kind_given == "" and not out.has("worker_id"):
 				# Weder Art noch Arbeiter genannt: Fahrzeug ohne Fahrer mit freiem Arbeiter besetzen
 				var v0 := _undriven_vehicle(cid)
@@ -36,6 +61,12 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 						added.append("contract_id")
 			elif kind_given == "" and out.has("worker_id"):
 				var w: Worker = sim.personnel.workers.get(str(out.worker_id))
+				if w != null and int(w.skills.get("fahren", 0)) < 1:
+					var alt := _free_driver(cid)   # genannter Arbeiter kann nicht fahren: einen fahrtauglichen nehmen
+					if alt != null:
+						w = alt
+						out["worker_id"] = alt.id
+						added.append("worker_id getauscht")
 				var v := _undriven_vehicle(cid) if w != null and w.employer == cid else null
 				if v != null:
 					out["kind"] = "fahren"
@@ -61,7 +92,7 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 						added.append("worker_id")
 		"assign_vehicle", "assign_transport":
 			if not out.has("contract_id"):
-				var v2: FleetVehicle = sim.vehicles.get(int(out.vehicle_id)) if out.has("vehicle_id") else _idle_vehicle(cid)
+				var v2: FleetVehicle = sim.vehicles.get(ActionExecutor._i(out.vehicle_id)) if out.has("vehicle_id") else _idle_vehicle(cid)
 				if v2 != null:
 					var k2 := _unassigned_contract(cid, v2)
 					if k2 != "":
