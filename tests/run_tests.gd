@@ -849,6 +849,10 @@ func test_tiers() -> void:
 	T2.from_dict(JSON.parse_string(JSON.stringify(T.to_dict())))
 	var k0: String = T.mix.keys()[0]
 	ok(T2.mix.size() == T.mix.size() and int(T2.mix[k0].stufen[1]) == int(T.mix[k0].stufen[1]) and int(T2.mix[k0].personen) == int(T.mix[k0].personen), "Zustand übersteht Speichern und Laden")
+	var txt := LiveText.housing(s)
+	ok(txt.contains("Wohnstufen") and txt.contains("Bewohner"), "Wohnen-Ansicht zeigt Wohnstufen")
+	var ob := ObservationBuilder._population(s)
+	ok(ob.has("stadtmittel_stufe") and ob.has("viertel_mit_mangel"), "Beobachtung enthält Bevölkerungsstufen")
 	ok(identity_ok(s), "Geld und Bilanz erhalten")
 
 

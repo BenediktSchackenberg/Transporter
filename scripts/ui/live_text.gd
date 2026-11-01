@@ -646,6 +646,26 @@ static func citizens(sim: Simulation) -> String:
 	return txt
 
 
+## Wohnstufen je Viertel: Verteilung, Stufenmittel und welche Bedürfnisse unversorgt sind (mit der Ware, die Spediteure liefern können).
+static func tiers_block(sim: Simulation) -> String:
+	var T: Tiers = sim.tiers
+	var sm: Dictionary = T.summary()
+	if sm.is_empty():
+		return ""
+	var txt := "
+[b]Wohnstufen[/b] (Stadtmittel %.2f · Aufstiege %d · Abstiege %d)
+" % [T.city_mean(), int(T.stats.up), int(T.stats.down)]
+	for d in sm:
+		var e: Dictionary = sm[d]
+		var st: Dictionary = e.stufen
+		txt += "  %s: %d Bewohner · Stufe 1/2/3/4 = %d/%d/%d/%d · Mittel %.2f
+" % [d, int(e.personen), int(st[1]), int(st[2]), int(st[3]), int(st[4]), float(e.mittel)]
+		if not e.fehlt.is_empty():
+			txt += "    unversorgt: %s
+" % ", ".join(e.fehlt.map(func(f): return "%s (%d %%%s)" % [f.bedarf, roundi(float(f.deckung) * 100.0), (", Ware: " + str(f.ware)) if str(f.ware) != "" else ""]))
+	return txt
+
+
 static func housing(sim: Simulation) -> String:
 	var sm: Dictionary = sim.housing.summary()
 	var txt := "[b][color=#f2c14e]WOHNEN[/color][/b]
@@ -663,6 +683,7 @@ static func housing(sim: Simulation) -> String:
 		var tr: float = float(ct.trend.get(d, 0.0))
 		txt += "  %s: Zufriedenheit %s · Attraktivität %.0f %s (Lagefaktor %.2f)
 " % [d, "%.0f" % float(ct.by_district[d]) if ct.by_district.has(d) else "–", float(ct.attractiveness[d]), "▲" if tr > 0.5 else ("▼" if tr < -0.5 else "▬"), ct.district_factor(Catalog.DISTRICTS.find(d))]
+	txt += tiers_block(sim)
 	var cs: Dictionary = sim.banking.consumer_summary()
 	txt += "Konsumkredite: %d laufend (%s) · %d im Rückstand · %d in Pfändung (Restschuld %s) · %d vergeben
 " % [int(cs.laufend), Catalog.money(float(cs.volumen)), int(cs.rueckstand), int(cs.pfaendung), Catalog.money(float(cs.restschuld_pfaendung)), int(cs.vergeben)]

@@ -5,6 +5,10 @@ Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Sp
 Externe Sprachmodell-APIs wurden mangels Key nicht live getestet. Die übrigen Adaptertests nutzen den
 DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen lokalen Mock-Server.
 
+## Auftrag 8: Wohnstufen und Bedürfnisse (01.11.2026)
+
+Wohneinheiten haben Stufen 1-4; Bedürfnisse (Nahrung, Getränke, Haushalt, Gesundheit, Bildung, Gastronomie, Möbel, Technik) werden über die Geschäfte des Viertels gedeckt, deren Regale per Transportauftrag gefüllt werden. Aufstieg/Abstieg, Mieten, Nachfrage, Marktzutritt neuer Geschäfte, Ansicht „Wohnen“ und KI-Beobachtung. 14 Prüfungen in `test_tiers`. [Regeln und Grenzen](docs/GROWTH_TIERS.md).
+
 ## Zusammenspiel „Linien, Betriebshof, Interaktion“ (01.11.2026)
 
 Die neue Betriebsroutine verbindet bestehende Aufträge, Fahrzeuge, Personal, Lager, Sozialverträge und Zuschaueranzeigen. Die KI kann Linien beauftragen und Transporthilfe mit Preis und Gegenpreis verhandeln. Hofpersonal hat feste Aufgaben, LKW fahren zur Ladezone und parken auf dem Hof; Bürgerwege nutzen Wohn- und Arbeitsplatzdaten. Die Routinen sind von Modellentscheidungen unterscheidbar. [Verhalten, Aktionen, Reproduktion und Grenzen](docs/COMPANY_OPERATIONS.md).

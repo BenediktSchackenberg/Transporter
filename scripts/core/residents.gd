@@ -113,6 +113,9 @@ func minute_tick(now: float) -> void:
 	for t in PROFILES:
 		open_now[t] = is_open(t, hour)
 	var ready: Array = []
+	var tier_rate: Array = []   # Konsumfaktor je Viertel aus den Wohnstufen (wohlhabendere Viertel melden sich öfter)
+	for d in Catalog.DISTRICTS.size():
+		tier_rate.append(sim.tiers.spend_factor(d))
 	for i in range(sim.minute_index % SLICES, _ids.size(), SLICES):
 		var p: Dictionary = people[_ids[i]]
 		if p.contract != "":
@@ -124,7 +127,7 @@ func minute_tick(now: float) -> void:
 		var pr: Dictionary = PROFILES[p.ptype]
 		if p.need < 0 or rng.randf() < 0.01:
 			p.need = rng.randi() % pr.needs.size()   # welcher Bedarf gerade drueckt
-		p.pressure = minf(1.5, float(p.pressure) + need_rate(pr.needs[p.need], hour) / 60.0 * SLICES)
+		p.pressure = minf(1.5, float(p.pressure) + need_rate(pr.needs[p.need], hour) * float(tier_rate[int(sim.city.building(int(p.building)).get("district", 0))]) / 60.0 * SLICES)
 		if float(p.pressure) >= 1.0:
 			ready.append(p)
 	if enabled and not ready.is_empty() and open_requests < OPEN_MAX + 3 * sim.companies.size():
