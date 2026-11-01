@@ -272,10 +272,32 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 				elif not obs.fremde_stammkunden.is_empty() and roll < 0.2:
 					actions.append({"action": "poach_customer", "customer_id": obs.fremde_stammkunden[0].kunde_id})
 			"risikospieler":
-				_risky_moves(obs, free_staff, cash, roll, actions, reasons)
+				if roll > 0.85 and cash > 5000.0 and not me.has("sabotage_bereit_in_min"):
+					actions.append({"action": "attempt_sabotage", "target": r.id, "kind": "smear_campaign"})
+					reasons.append("streue Gerüchte über %s" % r.name)
+				else:
+					_risky_moves(obs, free_staff, cash, roll, actions, reasons)
 			_:
 				if roll < 0.2:
 					_offer_unserved(obs, r, actions, reasons)
+	# 10b) Finanzierung und Personalabbau: Kredit bei knapper Kasse, Tilgung bei Überschuss, Entlassung bei Verlust
+	var debt := float(me.schulden)
+	if debt <= 0.0 and cash < buffer * 0.4 and float(me.umsatz) > 0.0 and float(me.kreditrahmen_frei) >= 5000.0 			and obs.fahrzeuge.size() > 0:
+		var amount := minf(15000.0, floorf(float(me.kreditrahmen_frei) * 0.5 / 1000.0) * 1000.0)
+		actions.insert(0, {"action": "take_loan", "amount": amount, "monate": 6})
+		reasons.append("nehme %d EUR Kredit auf, weil die Kasse knapp ist" % int(amount))
+	elif debt > 0.0 and cash > buffer * 2.0 + debt:
+		actions.insert(0, {"action": "repay_loan", "amount": debt})
+		reasons.append("tilge %d EUR Schulden aus Überschuss" % int(debt))
+	if cash < buffer * 0.3 and float(me.gewinn) < 0.0 and workers_n > obs.fahrzeuge.size() + 1 and "recruit_worker" not in planned:
+		var idle := free_staff.filter(func(w): return int(w.faehigkeiten.get("fahren", 0)) < 2)
+		if not idle.is_empty():
+			var w: Dictionary = idle[0]
+			for c in idle:
+				if float(c.lohn_h) > float(w.lohn_h):
+					w = c   # den teuersten entbehrlichen Arbeiter zuerst
+			actions.insert(0, {"action": "dismiss_worker", "worker_id": w.id})
+			reasons.append("entlasse %s, weil Kasse und Gewinn im Minus sind" % w.name)
 	# 11b) Insolvenzauktionen: Fahrzeuge deutlich unter Wert ersteigern, wenn Geld und Stellplatz da sind
 	if _free_slots(me) > 0 and actions.size() < MAX_ACTIONS and rng.randf() < 0.5:
 		for au in obs.get("auktionen", []):

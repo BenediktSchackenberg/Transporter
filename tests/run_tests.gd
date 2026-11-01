@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -693,6 +693,25 @@ func test_prompt_builds() -> void:
 	ok(not sp.contains("%s") and not sp.contains("%d"), "keine offenen Platzhalter")
 	ok(up.length() / 4 < 5500, "Beobachtung kompakt (~%d Token)" % (up.length() / 4))
 	ctl.free()
+
+
+func test_rule_brain_finance() -> void:
+	var s := new_sim(2)
+	for i in 600:
+		s.step(0.5)
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0, "", "")
+	obs.ich.bargeld = 2000
+	obs.ich.gewinn = -5000
+	obs.ich.umsatz = 9000
+	var names: Array = RuleBrain.decide(obs, "kostenoptimierer", RandomNumberGenerator.new()).actions.map(func(a): return a.action)
+	ok("take_loan" in names, "Knappe Kasse: Kredit wird beantragt")
+	ok("dismiss_worker" in names, "Verlust und Überbesetzung: Entlassung")
+	obs.ich.bargeld = 500000
+	obs.ich.schulden = 10000
+	obs.ich.gewinn = 5000
+	names = RuleBrain.decide(obs, "kostenoptimierer", RandomNumberGenerator.new()).actions.map(func(a): return a.action)
+	ok("repay_loan" in names, "Überschuss: Kredit wird getilgt")
+	ok("take_loan" not in names and "dismiss_worker" not in names, "Gesunde Firma: weder Kredit noch Entlassung")
 
 
 func test_local_agent_choices() -> void:
