@@ -1,0 +1,41 @@
+name: Sicherheit und Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-and-tests:
+    name: Secret-Scan und Godot-Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Quellcode laden
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Zugangsdaten prüfen
+        run: python3 tools/check_secrets.py
+
+      - name: Offizielles Godot 4.4.1 laden und prüfen
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error --retry 3 \
+            https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip \
+            --output "$RUNNER_TEMP/godot.zip"
+          echo "d6e382fb531019f85630c1f485a561a0d20c4a2344b6c3847735cfee7da812aa  $RUNNER_TEMP/godot.zip" | sha256sum --check -
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          chmod +x "$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64"
+
+      - name: Projekt importieren
+        run: "$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path . --import"
+
+      - name: Godot-Tests ausführen
+        run: "$RUNNER_TEMP/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path . -s res://tests/run_tests.gd"

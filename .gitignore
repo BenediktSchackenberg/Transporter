@@ -7,3 +7,21 @@ user_data/
 Thumbs.db
 desktop.ini
 local-ai/.env
+
+# Zugangsdaten und lokale Konfiguration
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+id_rsa
+id_ed25519
+id_ecdsa
+
+# Lokale Archive und Exporte
+*.zip
+*.7z
+*.tar.gz
