@@ -19,6 +19,7 @@ var executor := ActionExecutor.new()
 var personnel := Personnel.new()
 var resources := ResourceMarket.new()
 var logistics := Logistics.new()
+var operations := CompanyOperations.new()
 var plans := PlanBook.new()
 var memory := MemoryBook.new()
 var decisions := DecisionLog.new()
@@ -96,6 +97,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	rivalry.setup(self)
 	executor.setup(self)
 	logistics.setup(self)
+	operations.setup(self)
 	estate.setup(self)
 	plans.setup(self)
 	decisions.setup(self)
@@ -199,6 +201,8 @@ func nearest_depot_road(cid: int, from: Vector2i) -> Vector2i:
 
 
 func at_depot(v: FleetVehicle) -> bool:
+	if estate.on_plot(v.owner, v.pos) >= 0:
+		return true
 	for site in companies[v.owner].depots:
 		var r: Vector2i = city.building(site).road
 		if absi(r.x - v.tile().x) + absi(r.y - v.tile().y) <= 2:
@@ -313,7 +317,10 @@ func _create_vehicle(cid: int, model_id: String, price: float, cell: Vector2i) -
 
 func add_vehicle(cid: int, model_id: String, price: float, at_cell: Vector2i) -> FleetVehicle:
 	var v := _create_vehicle(cid, model_id, price, at_cell)
-	route(v, nearest_depot_road(cid, at_cell), "returning")
+	v.needs_dispatch = true
+	v.crew_requested = true
+	# Der eingeteilte Fahrer holt den Kauf beim Haendler ab. Kein fahrerloser Autopilot.
+	v.state = "idle"
 	return v
 
 
@@ -332,7 +339,11 @@ func remove_vehicle(v: FleetVehicle) -> void:
 
 func route(v: Mover, to: Vector2i, new_state: String = "") -> bool:
 	var from := v.tile()
-	if not city.is_road(from):
+	var yard_site := estate.on_plot(v.owner, v.pos) if v is FleetVehicle else -1
+	var yard := v is FleetVehicle and not city.is_road(from) and yard_site >= 0
+	if yard:
+		from = nearest_depot_road(v.owner, from)
+	elif not city.is_road(from):
 		from = _nearest_road(from)
 	var was_blocked := nav.is_blocked_road(from)
 	if was_blocked:
@@ -342,6 +353,13 @@ func route(v: Mover, to: Vector2i, new_state: String = "") -> bool:
 		nav.road.set_point_solid(from, true)
 	if p.is_empty():
 		return false
+	if yard:
+		var exit_path := operations._yard_path(v.tile(), from, estate._root(yard_site))
+		if exit_path.is_empty():
+			return false
+		exit_path.append_array(p.slice(1))
+		p = exit_path
+		v.lane = 7.0
 	v.set_path(p)
 	if new_state != "" and v is FleetVehicle:
 		v.state = new_state
@@ -367,6 +385,8 @@ func start_next_job(v: FleetVehicle) -> void:
 			v.stops.pop_front()
 			continue
 		logistics.sync_view(v)
+		if operations.prepare_dispatch(v):
+			return
 		var cell := logistics.place_cell(k, st.ort)
 		if not route(v, cell, "to_pickup" if st.art == "laden" else "to_dropoff"):
 			v.state = "idle"   # Ziel derzeit unerreichbar (Baustelle) -> spaeter erneut
@@ -393,6 +413,22 @@ func _update_vehicle(v: FleetVehicle, dt: float) -> void:
 	if v.state == "returning" and not v.stops.is_empty() and driver_of(v) != null 			and not c.is_disrupted(game_min):
 		start_next_job(v)   # Rueckfahrt abbrechen, neuer Auftrag hat Vorrang
 	match v.state:
+		"yard_parking":
+			if driver_of(v) == null:
+				return
+			v.advance(dt, 0.35)
+			if v.arrived():
+				v.state = "idle"
+				v.idle_since = game_min
+		"dispatching":
+			if driver_of(v) == null:
+				v.state = "idle"
+				return
+			v.timer -= dt * Catalog.GAME_MIN_PER_SIM_SEC
+			if v.timer <= 0.0:
+				v.needs_dispatch = false
+				v.state = "idle"
+				start_next_job(v)
 		"idle":
 			if v.held_by != "":
 				return   # wird gerade vor Ort repariert
@@ -400,7 +436,7 @@ func _update_vehicle(v: FleetVehicle, dt: float) -> void:
 				if c.is_disrupted(game_min) and at_depot(v):
 					return   # Betriebsstoerung: Depot kann nicht disponieren
 				start_next_job(v)
-			elif not at_depot(v) and v.stops.is_empty() and game_min - v.idle_since > 20.0:
+			elif operations.enabled(v.owner, "return_home") and driver_of(v) != null and not at_depot(v) and v.stops.is_empty() and game_min - v.idle_since > 20.0:
 				route(v, nearest_depot_road(v.owner, v.tile()), "returning")
 		"broken":
 			if v.no_fuel:
@@ -433,14 +469,17 @@ func _update_vehicle(v: FleetVehicle, dt: float) -> void:
 
 
 func _drive(v: FleetVehicle, dt: float) -> void:
-	if not v.arrived() and nav.is_blocked_road(v.next_tile()) and v.next_tile() != v.goal:
+	if driver_of(v) == null and v.state != "to_workshop":
+		v.state = "idle"
+		return
+	if not v.arrived() and city.is_road(v.next_tile()) and nav.is_blocked_road(v.next_tile()) and v.next_tile() != v.goal:
 		events.reroutes[v.owner] = int(events.reroutes.get(v.owner, 0)) + 1
 		if not route(v, v.goal):
 			return   # vorerst kein Weg: warten
 	if _is_blocked(v):
 		return
 	var before := v.tiles_moved
-	v.advance(dt, _speed_factor(v) * _flow_step(v, dt))
+	v.advance(dt, _speed_factor(v) * _flow_step(v, dt) * (0.35 if not city.is_road(v.tile()) else 1.0))
 	var moved := v.tiles_moved - before
 	if moved > 0:
 		var spec := v.spec()
@@ -521,6 +560,8 @@ func tow_to_workshop(v: FleetVehicle) -> void:
 
 func _on_arrival(v: FleetVehicle) -> void:
 	match v.state:
+		"to_dispatch":
+			operations.begin_dispatch(v)
 		"to_pickup", "to_dropoff":
 			if v.stops.is_empty():
 				_after_job(v)
@@ -531,6 +572,9 @@ func _on_arrival(v: FleetVehicle) -> void:
 				v.state = "waiting_bay"   # alle Laderampen des Hofes belegt
 				if k != null and k.order_ref != "":
 					city_depot.truck_waits(v)
+				return
+			var yard_site := Logistics.store_site(str(st.ort))
+			if yard_site >= 0 and operations.approach_dock(v, yard_site):
 				return
 			v.state = "loading" if v.state == "to_pickup" else "unloading"
 			# Dauer waechst mit der Menge; Helfer und Fahrer-Geschick verkuerzen sie
@@ -548,8 +592,7 @@ func _on_arrival(v: FleetVehicle) -> void:
 			if v.state == "loading":
 				bark(v.owner, "laden")
 		"returning":
-			v.state = "idle"
-			v.idle_since = game_min
+			operations.park(v)
 		"to_workshop":
 			v.state = "repairing"
 			v.timer = Catalog.REPAIR_MIN
@@ -577,6 +620,7 @@ func _on_timer_done(v: FleetVehicle) -> void:
 
 
 func _after_job(v: FleetVehicle) -> void:
+	v.needs_dispatch = true
 	var c := companies[v.owner]
 	var d := driver_of(v)
 	if d and d.leaving:
@@ -593,6 +637,10 @@ func _after_job(v: FleetVehicle) -> void:
 	else:
 		# vor Ort auf den naechsten Auftrag warten; nach 20 Spielminuten faehrt es zum Depot zurueck
 		v.path.clear()
+		if at_depot(v):
+			operations.park(v)
+		else:
+			operations.say(v.owner, "Fahrer", "%s: Zustellung beendet, Rueckfahrt zum Hof." % v.display_name(), v.contract_id)
 		agent_event.emit(v.owner, "%s ist frei" % v.display_name())
 
 
@@ -613,6 +661,7 @@ func deliver_contract(v: FleetVehicle, k: Contract) -> void:
 	k.status = "delivered"
 	k.paid = pay
 	k.done_at = game_min
+	operations.completed(k)
 	if k.order_ref.begins_with("shop:"):
 		retail.contract_delivered(k)
 	elif k.order_ref != "":
@@ -742,7 +791,7 @@ func _rebuild_hash() -> void:
 	for m in traffic:
 		_hash_add(m)
 	for v in vehicles.values():
-		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "loading", "unloading", "broken"]:
+		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "loading", "unloading", "broken", "to_dispatch"]:
 			_hash_add(v)
 
 
@@ -818,13 +867,10 @@ func _update_avatar(a: Avatar, dt: float) -> void:
 		_:
 			if _resume_visit(a):
 				return
-			a.wander_timer -= dt
-			if a.wander_timer <= 0.0:
-				var home: Vector2i = city.building(companies[a.owner].depots[0]).walk
-				var t := home + Vector2i(rng.randi_range(-6, 6), rng.randi_range(-6, 6))
-				if city.walkable(t) and walk_avatar(a, t):
-					a.state = "wander"
-				a.wander_timer = 4.0
+			var home: Vector2i = operations.yard_layout(int(companies[a.owner].depots[0])).office
+			if a.tile().distance_to(home) > 1.0:
+				walk_avatar(a, home)
+
 
 
 ## Offenen Besuch fortsetzen (z. B. nach einem Gespraech unterwegs). Gibt true zurueck, wenn die Figur wieder laeuft.
@@ -934,6 +980,8 @@ func _minute_tick() -> void:
 	social.tick(now)
 	personnel.minute_tick(now)
 	resources.minute_tick(now)
+	if minute_index % 5 == 0:
+		operations.tick()
 	estate.minute_tick(now)
 	events.minute_tick(now)
 	world_events.minute_tick(now)
@@ -1057,7 +1105,7 @@ func to_dict() -> Dictionary:
 		owners[str(s)] = depot_owner[s]
 	return {"seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
-		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
+		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
@@ -1141,6 +1189,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 		for kid in d.storage[site]:
 			s.storage[int(site)][kid] = int(d.storage[site][kid])
 	s.resources.from_dict(d.resources)
+	s.operations.from_dict(d.get("operations", {}))
 	s.customers.clear()
 	for b in d.customers:
 		s.customers[int(b)] = d.customers[b]
@@ -1167,7 +1216,13 @@ static func from_dict(d: Dictionary) -> Simulation:
 	# Fahrzeuge auf ihr gespeichertes Ziel neu routen
 	for v in s.vehicles.values():
 		s.logistics.sync_view(v)
-		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop"]:
-			if not s.route(v, v.goal):
+		if v.state == "yard_parking":
+			s.operations.park(v)
+		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "to_dispatch"]:
+			var yard_site := s.estate.on_plot(v.owner, s.city.tile_center(v.goal))
+			if not s.city.is_road(v.goal) and yard_site >= 0:
+				v.set_path(s.operations._yard_path(v.tile(), v.goal, yard_site))
+				v.lane = 0.0
+			elif not s.route(v, v.goal):
 				v.state = "idle"
 	return s

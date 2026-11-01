@@ -7,7 +7,7 @@ extends Mover
 const STATE_TEXT := {"idle": "bereit", "to_pickup": "fährt zur Abholung", "loading": "lädt",
 	"to_dropoff": "liefert aus", "unloading": "entlädt", "returning": "fährt zum Depot",
 	"to_workshop": "fährt zur Werkstatt", "repairing": "in Reparatur", "broken": "Panne", "waiting_bay": "wartet auf Laderampe",
-	"washing": "wird gewaschen"}
+	"washing": "wird gewaschen", "to_dispatch": "faehrt zur Disposition", "dispatching": "Hofkontrolle und Tourfreigabe", "yard_parking": "parkt auf dem Betriebshof"}
 
 var id: int
 var owner: int
@@ -32,6 +32,8 @@ var operator := -1           # Mieter (Kapazitaetsvermietung); -1 = Halter betre
 var held_by := ""            # Aufgaben-ID, die das Fahrzeug festhaelt (Reparatur vor Ort)
 var resume_state := ""       # Zustand vor einer Panne/Sabotage (wird nach Reparatur fortgesetzt)
 var resume_timer := 0.0
+var needs_dispatch := true
+var crew_requested := false
 
 
 func setup(vid: int, owner_id: int, model_id: String, price: float, p: Vector2) -> void:
@@ -57,7 +59,7 @@ func to_dict() -> Dictionary:
 		"condition": condition, "state": state, "contract_id": contract_id, "queue": queue, "timer": timer,
 		"odometer": odometer, "idle_since": idle_since, "cargo": cargo, "x": pos.x, "y": pos.y,
 		"goal": [goal.x, goal.y], "held_by": held_by, "stops": stops, "load": load, "operator": operator, "parking": parking, "bay_pref": bay_pref,
-		"clean_until": clean_until, "resume_state": resume_state, "resume_timer": resume_timer, "no_fuel": no_fuel}
+		"clean_until": clean_until, "resume_state": resume_state, "resume_timer": resume_timer, "needs_dispatch": needs_dispatch, "crew_requested": crew_requested, "no_fuel": no_fuel}
 
 
 static func from_dict(d: Dictionary) -> FleetVehicle:
@@ -86,4 +88,6 @@ static func from_dict(d: Dictionary) -> FleetVehicle:
 		v.load[kid] = int(d.load[kid])
 	v.resume_state = d.get("resume_state", "")
 	v.resume_timer = float(d.get("resume_timer", 0.0))
+	v.needs_dispatch = bool(d.get("needs_dispatch", false))
+	v.crew_requested = bool(d.get("crew_requested", false))
 	return v

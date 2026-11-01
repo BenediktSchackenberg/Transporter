@@ -7,6 +7,7 @@ var sim: Simulation
 var view: CityView
 var _plots := {}        # Grundstueck -> {node, owner, warn}
 var _facs := {}         # Einrichtungs-ID -> {node, sprites, masks, site, bar_bg, bar, level, lit}
+var _yards := {}
 
 
 func setup(simulation: Simulation, city_view: CityView) -> void:
@@ -49,6 +50,72 @@ func update_view(blink_on: bool) -> void:
 		if not _facs.has(f.id):
 			_add_fac(f)
 		_update_fac(f, blink_on)
+	for site in _plots:
+		_update_yard(site)
+
+
+## Vorhandener Bestand und tatsaechliche Hofzonen. Keine dekorativ erfundenen Lieferungen.
+func _update_yard(site: int) -> void:
+	var p: Dictionary = sim.estate.plots[site]
+	var cid := int(p.owner)
+	var stamp := "frei"
+	if cid >= 0:
+		stamp = "%d:%d:%d:%d:%d:%d" % [cid, sim.logistics.storage_used(site), int(sim.company(cid).fuel / 100.0), sim.company(cid).parts, sim.estate.next_id, sim.estate.facilities.size()]
+	if _yards.has(site) and _yards[site].stamp == stamp:
+		return
+	if _yards.has(site):
+		_yards[site].node.queue_free()
+	var root := Node2D.new()
+	root.y_sort_enabled = true
+	add_child(root)
+	_yards[site] = {"node": root, "stamp": stamp}
+	if cid < 0 or int(p.parent) >= 0:
+		return
+	var layout: Dictionary = sim.operations.yard_layout(site)
+	var color: Color = sim.company(cid).color
+	for zone in [{"key": "dock", "name": "WARENEINGANG"}, {"key": "storage", "name": "LAGER"}, {"key": "office", "name": "DISPOSITION"}, {"key": "service", "name": "WARTUNG"}]:
+		var cell: Vector2i = layout[zone.key]
+		var world := sim.city.tile_center(cell)
+		var line := Line2D.new()
+		line.width = 1.5
+		line.default_color = Color(color, 0.6)
+		line.points = PackedVector2Array([Iso.to_screen(world + Vector2(-15, -15)), Iso.to_screen(world + Vector2(15, -15)), Iso.to_screen(world + Vector2(15, 15)), Iso.to_screen(world + Vector2(-15, 15)), Iso.to_screen(world + Vector2(-15, -15))])
+		line.z_index = -8
+		root.add_child(line)
+		var label := Label.new()
+		label.text = zone.name
+		label.add_theme_font_size_override("font_size", 9)
+		label.add_theme_constant_override("outline_size", 3)
+		label.add_theme_color_override("font_outline_color", Color("101820"))
+		label.modulate = color.lightened(0.65)
+		label.position = Iso.to_screen(world) + Vector2(-30, 15)
+		label.z_index = -7
+		root.add_child(label)
+	for cell in layout.parking:
+		var center: Vector2 = sim.city.tile_center(cell)
+		var marking := Line2D.new()
+		marking.width = 1.5
+		marking.default_color = Color("d4d1be")
+		marking.z_index = -7
+		marking.points = PackedVector2Array([Iso.to_screen(center + Vector2(-13, -24)), Iso.to_screen(center + Vector2(-13, 24)), Iso.to_screen(center + Vector2(13, 24)), Iso.to_screen(center + Vector2(13, -24))])
+		root.add_child(marking)
+	var stock := sim.logistics.storage_used(site)
+	var items := [{"qty": mini(8, ceili(float(stock) / 2.0)), "color": Color("f2c14e"), "key": "storage"},
+		{"qty": mini(3, int(sim.company(cid).fuel / 100.0)), "color": Color("6ba6d5"), "key": "service"},
+		{"qty": mini(3, sim.company(cid).parts), "color": Color("d6a36a"), "key": "service"}]
+	var index := 0
+	for item in items:
+		for i in int(item.qty):
+			var box := Sprite2D.new()
+			box.texture = view.tex("c_pakete")
+			box.centered = false
+			box.offset = -view.pivot_of("c_pakete")
+			var cell: Vector2i = layout[item.key]
+			box.position = Iso.to_screen(sim.city.tile_center(cell)) + Vector2(float(index % 3) * 10.0 - 10.0, -float(index / 3) * 8.0)
+			box.modulate = item.color
+			box.scale = Vector2(0.7, 0.7)
+			root.add_child(box)
+			index += 1
 
 
 func _wp(x: float, y: float) -> Vector2:
@@ -72,7 +139,7 @@ func _draw_plot(id: int) -> void:
 	var ring := PackedVector2Array([_wp(x0 + 1, y0 + 1) + up, _wp(x1 - 1, y0 + 1) + up, _wp(x1 - 1, y1 - 1) + up, _wp(x0 + 1, y1 - 1) + up, _wp(x0 + 1, y0 + 1) + up])
 	var fill := Polygon2D.new()
 	fill.polygon = ring.slice(0, 4)
-	fill.color = Color(col, 0.10)
+	fill.color = Color("606973").lerp(Color(col, 1.0), 0.06) if p.owner >= 0 else Color(col, 0.10)
 	n.add_child(fill)
 	var line := Line2D.new()
 	line.width = 3.0

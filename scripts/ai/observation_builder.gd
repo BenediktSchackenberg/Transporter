@@ -35,7 +35,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	var fleet: Array = []
 	for v in sim.company_vehicles(cid):
 		var t: Vector2i = v.tile()
-		fleet.append({"id": v.id, "modell": v.model, "status": FleetVehicle.STATE_TEXT.get(v.state, v.state),
+		fleet.append({"id": v.id, "linie": sim.operations.line_of(v.id), "modell": v.model, "status": FleetVehicle.STATE_TEXT.get(v.state, v.state),
 			"zustand": int(v.condition), "fahrer": sim.driver_of(v).id if sim.driver_of(v) else null, "auftrag": v.contract_id,
 			"warteschlange": v.queue, "stopps": v.stops.slice(0, 6), "ladung": v.load,
 			"kapazitaet_frei": int(v.spec().capacity) - sim.logistics.load_total(v),
@@ -60,8 +60,10 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 			continue
 		var pick: Vector2i = sim.city.building(k.pickup).road
 		var approach := absi(pick.x - depot0.x) + absi(pick.y - depot0.y)
+		var drop: Vector2i = sim.city.building(k.dropoff).road
+		var hub_extra := approach + absi(drop.x - depot0.x) + absi(drop.y - depot0.y) - (absi(pick.x - drop.x) + absi(pick.y - drop.y))
 		market.append({"id": k.id, "ware": k.cargo, "bezeichnung": k.cargo_name(), "menge": k.qty, "von": _place(sim, k.pickup), "von_pos": [pick.x, pick.y],
-			"nach": _place(sim, k.dropoff), "strecke": k.distance, "anfahrt_vom_depot": approach,
+			"nach": _place(sim, k.dropoff), "strecke": k.distance, "anfahrt_vom_depot": approach, "hof_umweg_tiles": maxi(0, hub_extra),
 			"verguetung": int(k.reward), "frist_in_min": int(k.deadline - now), "kuehlung": k.needs_cold,
 			"schwer": k.needs_heavy, "min_reputation": int(k.min_rep),
 			"exklusiv_fuer_dich": k.exclusive_for == cid and k.exclusive_until > now,
@@ -120,10 +122,14 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	for o in sim.social.offers.values():
 		var entry := {"id": o.id, "art": o.kind, "beschreibung": sim.social.describe(o), "status": o.status,
 			"laeuft_ab_in_min": int(o.expires - now), "notiz": o.note}
+		if int(o.get("quote_by", -1)) >= 0:
+			entry["hilfe_angebot"] = true
+			entry["preis"] = float(o.price)
+			entry["auftrag_verguetung"] = float(sim.contracts[o.contract_id].reward) if sim.contracts.has(o.contract_id) else 0.0
 		if o.kind == "transfer_contract" and sim.contracts.has(o.contract_id):
 			entry["auftrag_verguetung"] = int(sim.contracts[o.contract_id].reward)
 		if int(o.get("awaiting", o.to)) == cid and o.status == "open":
-			entry["von"] = o.from
+			entry["von"] = int(o.get("quote_by", o.from))
 			offers_in.append(entry)
 		elif o.from == cid and now - o.created < 120.0:
 			entry["an"] = o.to
@@ -148,7 +154,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	return {
 		"zeit": {"spielzeit": Catalog.game_minutes_to_text(now), "verbleibende_echtzeit_min": snappedf(remaining_real_min, 0.1),
 			"stunde": int(Catalog.hour_of_day(now))},
-		"dein_ziel": goal, "ich": me, "figur": figure, "fahrzeuge": fleet, "meine_auftraege": mine,
+		"spielminute": now, "dein_ziel": goal, "ich": me, "figur": figure, "fahrzeuge": fleet, "meine_auftraege": mine,
 		"markt": market, "unbekannte_offene_auftraege": unknown, "orte": places, "besuchte_orte": visited.slice(-8),
 		"fahrzeugmodelle": models, "personal": _staff(sim, cid), "aufgaben": _tasks(sim, cid),
 		"ressourcen": _resources(sim, cid), "gesichtete_fremdfahrzeuge": sim.personnel.seen[cid].values(),
@@ -159,7 +165,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"nachrichten": msgs, "angebote_an_dich": offers_in, "deine_angebote": offers_out,
 		"ergebnisse_deiner_aktionen": results.slice(-10), "ereignisse": events.slice(-10),
 		"hinweis": hint, "plan": sim.plans.summary(cid), "gedaechtnis": sim.memory.relevant(cid, _context(sim, cid, market)),
-		"experimente": sim.experiments.summary(cid), "betriebshof": sim.estate.summary(cid), "vertraege": sim.social.agreements_of(cid),
+		"betriebsablauf": sim.operations.summary(cid), "experimente": sim.experiments.summary(cid), "betriebshof": sim.estate.summary(cid), "vertraege": sim.social.agreements_of(cid),
 		"gemietete_fahrzeuge": sim.vehicles.values().filter(func(v): return v.operator == cid).map(func(v): return {"id": v.id,
 			"modell": v.model, "status": FleetVehicle.STATE_TEXT.get(v.state, v.state), "stopps": v.stops.slice(0, 6), "ladung": v.load}), "lager": _storage(sim, cid),
 		"verfuegbare_aktionen": _available(sim, cid),
@@ -294,9 +300,9 @@ static func _financed_vehicles(sim: Simulation, cid: int, known_open: Array) -> 
 ## Lokales Modell bekommt die fuer Transportentscheidungen relevanten Fakten und
 ## exakte IDs. Der vollstaendige Zustand bleibt fuer andere Provider erhalten.
 static func compact_for_local(obs: Dictionary) -> Dictionary:
-	var keys := ["zeit", "dein_ziel", "ich", "figur", "fahrzeuge", "meine_auftraege", "markt",
+	var keys := ["spielminute", "zeit", "dein_ziel", "ich", "figur", "fahrzeuge", "meine_auftraege", "markt",
 		"unbekannte_offene_auftraege", "fahrzeugmodelle", "personal", "aufgaben", "ressourcen", "bank",
-		"verfuegbare_aktionen", "freie_depotstandorte", "orte", "plan", "hinweis", "ereignisse", "lage", "angebote_an_dich"]
+		"verfuegbare_aktionen", "freie_depotstandorte", "orte", "plan", "hinweis", "ereignisse", "lage", "angebote_an_dich", "betriebsablauf"]
 	var out := {}
 	for key in keys:
 		if obs.has(key):

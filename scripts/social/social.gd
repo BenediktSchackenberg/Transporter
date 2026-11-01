@@ -131,6 +131,8 @@ func create_offer(from: int, to: int, kind: String, p: Dictionary) -> Dictionary
 
 
 func describe(o: Dictionary) -> String:
+	if int(o.get("quote_by", -1)) >= 0:
+		return "Preisvorschlag von %s: %d Einheiten %s fuer %s bei Lieferung; %s muss bestaetigen" % [sim.company(int(o.quote_by)).company_name, int(o.menge), o.contract_id, Catalog.money(o.price), sim.company(int(o.awaiting)).company_name]
 	match o.kind:
 		"sell_vehicle":
 			return "verkauft Fahrzeug #%d für %s" % [o.vehicle_id, Catalog.money(o.price)]
@@ -153,8 +155,16 @@ func describe(o: Dictionary) -> String:
 
 ## Prueft ein Angebot gegen den aktuellen Zustand. final = bei Annahme.
 func _validate(o: Dictionary, final: bool) -> String:
+	if o.get("request_id", "") != "":
+		var request: Dictionary = sim.operations.requests.get(str(o.request_id), {})
+		if request.is_empty() or int(request.generation) != sim.company(int(o.from)).generation or request.status != "offen" or sim.game_min >= float(request.expires) or int(o.get("helper_generation", sim.company(int(o.to)).generation)) != sim.company(int(o.to)).generation:
+			return "Die zugrunde liegende Frachtanfrage ist nicht mehr aktuell."
+		if float(o.price) > float(request.max_fee):
+			return "Preis uebersteigt das Limit der Frachtanfrage."
 	var a: Company = sim.company(o.from)
 	var b: Company = sim.company(o.to)
+	if o.kind in ["sell_vehicle", "capacity_rental"] and sim.operations.line_of(int(o.vehicle_id)) != "":
+		return "Fahrzeug ist in einer Transportlinie gebunden. Erst Linie pausieren und laufende Fracht zustellen."
 	match o.kind:
 		"sell_vehicle", "buy_vehicle":
 			var seller: Company = a if o.kind == "sell_vehicle" else b
@@ -302,6 +312,9 @@ func counter_offer(by: int, offer_id: String, p: Dictionary) -> Dictionary:
 		o.status = "open"
 		return {"ok": false, "msg": "Gegenangebot ungültig: " + err}
 	offers[c.id] = c
+	if c.get("request_id", "") != "":
+		c["quote_by"] = by
+		sim.operations.requests[str(c.request_id)].offers.append(c.id)
 	sim.log_event("%s: Gegenangebot %s zu %s (%s, Runde %d)" % [sim.company(by).company_name, c.id, o.id, describe(c), c.round], "deal", by)
 	sim.agent_event.emit(int(c.awaiting), "Gegenangebot %s von %s" % [c.id, sim.company(by).player_name])
 	return {"ok": true, "msg": "Gegenangebot %s gesendet (Runde %d/%d)." % [c.id, c.round, MAX_ROUNDS], "id": c.id}
@@ -322,6 +335,7 @@ func accept_offer(by: int, offer_id: String) -> Dictionary:
 		return {"ok": false, "msg": "Angebot ungültig: " + err}
 	_execute(o)
 	o.status = "accepted"
+	sim.operations.offer_accepted(o)
 	var a: Company = sim.company(o.from)
 	var b: Company = sim.company(o.to)
 	a.stats.deals += 1

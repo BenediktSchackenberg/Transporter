@@ -24,6 +24,12 @@ Die gesamte Stadt (Gebäude, Fahrzeuge, Figuren, Straßen) wird aus **Voxeln ger
 - Das **Entscheidungsprotokoll** verknüpft Ursache → Entscheidung → Aktion → Folge.
 - **Demo, Ersatzmodus und echte API** sind überall klar gekennzeichnet. API-Schlüssel landen nie in Spielständen oder Logs.
 
+### 🚚 Zusammenhängender Betrieb
+- **Transportlinien als KI-Dauerauftrag**: Fahrer einteilen, Hofkontrolle, Abholung, echter Lagerumschlag und Kundenzustellung. Fristen und geschätzte Fahrtkosten begrenzen die Annahme.
+- **Belebte Betriebshöfe**: feste Arbeitsplätze, kommissionierende Mitarbeiter, sichtbarer Warenbestand und LKW an Ladezone und Stellplatz.
+- **Konkrete Frachtgespräche**: Kapazität anfragen, Preise und Gegenpreise verhandeln, verbindlich beauftragen und nach tatsächlicher Lieferung bezahlen.
+- **Betrieb → Betriebsablauf** zeigt die ganze Kette. Bürgerwege führen zu Wohnung, Arbeit, Einkauf und Gastronomie. [Details, KI-Aktionen und Grenzen](docs/COMPANY_OPERATIONS.md).
+
 ### 💶 Ein geschlossener Wirtschaftskreislauf
 Kein Geld entsteht aus dem Nichts. Jede Zahlung bewegt Geld zwischen echten Konten, und ein Test prüft nach jeder Aktion, dass die **Gesamtsumme erhalten bleibt**.
 - **Drei Banken** mit eigener Bilanz, Referenzzins, Annuitätenkrediten mit Tilgungsplan, Verzug, Ausfall und Pfandverwertung, dazu Tages- und Festgeld.
@@ -33,7 +39,7 @@ Kein Geld entsteht aus dem Nichts. Jede Zahlung bewegt Geld zwischen echten Kont
 - **Spielkalender** (Tag, Monat, Jahr) mit Partiedauern von 5 Minuten bis 24 Stunden oder Endlos.
 
 ### 🔬 Gebaut mit Beweisen
-Über **4300 automatische Prüfungen** (Geldkonservierung, Warenbilanz, Bilanzidentität, Speichern und Laden, Insolvenzablauf, Wetter, Ereignisse, Grafik-Vollständigkeit). Der Stand jedes Bereichs steht ehrlich in [`STATUS.md`](STATUS.md), samt dem, was **noch nicht** fertig ist.
+Über **5000 automatische Prüfungen** (Geldkonservierung, Warenbilanz, Bilanzidentität, Speichern und Laden, Insolvenzablauf, Wetter, Ereignisse, Grafik-Vollständigkeit). Der Stand jedes Bereichs steht ehrlich in [`STATUS.md`](STATUS.md), samt dem, was **noch nicht** fertig ist.
 
 ---
 
