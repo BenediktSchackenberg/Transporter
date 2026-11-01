@@ -251,6 +251,23 @@ func _yard_hint(cid: int) -> String:
 
 
 ## Fehlt Geld, nennt die Meldung einen passenden Kredit (Betrag, Bank, Laufzeit) samt fertiger Aktion.
+const RESERVE_FACTOR := 1.5   # Bargeld nach einer Investition: mindestens so viele Male die Pflichten der naechsten 30 Tage
+
+
+## Liquiditaetsreserve: Gibt die Begruendung zurueck, wenn die Investition das Bargeld unter die Reserve druecken wuerde, sonst "".
+## Vermoegen (Fahrzeuge, Gebaeude) bezahlt keine Loehne; wer sein Geld bindet, ohne Reserve zu halten, rutscht in den Zahlungsverzug.
+func _reserve_block(cid: int, price: float) -> String:
+	var c: Company = sim.company(cid)
+	if c.vehicle_ids.size() < 2:   # die Grundausstattung darf immer entstehen
+		return ""
+	var need: float = RESERVE_FACTOR * sim.insolvency.obligations_30d(c)
+	var left: float = c.ledger.cash - price
+	if left >= need:
+		return ""
+	return " Nach dem Kauf blieben %s Bargeld, die Reserve muss mindestens %s betragen (das %s-Fache der Pflichten der nächsten 30 Tage: Löhne, Raten, Mieten). Erst Umsatz erzielen oder einen Kredit aufnehmen.%s" % [
+		Catalog.money(left), Catalog.money(need), str(RESERVE_FACTOR).replace(".", ","), _loan_hint(cid, need - left)]
+
+
 func _loan_hint(cid: int, missing: float) -> String:
 	var amount := maxf(500.0, ceilf(missing / 500.0) * 500.0)
 	for bank in [0, 1, 2]:
@@ -451,6 +468,9 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 				return {"ok": false, "msg": "Alle %d Stellplätze belegt – Stellplätze/Halle bauen (place_building) oder Depot anmieten.%s" % [c.fleet_limit(), _yard_hint(cid)]}
 			if L.cash < offer.price:
 				return {"ok": false, "msg": "Nicht genug Bargeld: %s benötigt, %s vorhanden.%s" % [Catalog.money(offer.price), Catalog.money(L.cash), _loan_hint(cid, offer.price - L.cash)]}
+			var reserve := _reserve_block(cid, float(offer.price))
+			if reserve != "":
+				return {"ok": false, "msg": "Kaufpreis %s." % Catalog.money(offer.price) + reserve}
 			var dealer: Dictionary = sim.city.building(offer.dealer)
 			if not on_site and not _near(cid, dealer.walk):
 				var visit := a.duplicate()
@@ -519,6 +539,9 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			var cost: float = Catalog.OFFICE_UPGRADE_COST[c.office_level]
 			if L.cash < cost:
 				return {"ok": false, "msg": "Ausbau kostet %s." % Catalog.money(cost)}
+			var reserve_u := _reserve_block(cid, cost)
+			if reserve_u != "":
+				return {"ok": false, "msg": "Ausbau kostet %s." % Catalog.money(cost) + reserve_u}
 			var hq: Dictionary = sim.city.building(c.offices[0])
 			if not on_site and not _near(cid, hq.walk):
 				return _start_visit(cid, a, hq.walk, -1, hq.name)
@@ -539,6 +562,9 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			var cost: float = Catalog.INTERNET_COST[c.internet_level]
 			if L.cash < cost:
 				return {"ok": false, "msg": "Internetausbau kostet %s." % Catalog.money(cost)}
+			var reserve_i := _reserve_block(cid, cost)
+			if reserve_i != "":
+				return {"ok": false, "msg": "Internetausbau kostet %s." % Catalog.money(cost) + reserve_i}
 			if not on_site and not _at_own_office(cid):
 				var ob: Dictionary = _nearest_own_office(cid)
 				return _start_visit(cid, a, ob.walk, -1, ob.name)
