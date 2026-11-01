@@ -192,6 +192,24 @@ func spec_of(s: Dictionary) -> Dictionary:
 	return KINDS[s.kind]
 
 
+## Geschaeftsart, die zu einem Gebaeude passt ("" = keines).
+static func kind_for(b: Dictionary) -> String:
+	if b.type == "restaurant":
+		return "restaurant"
+	if b.type == "pharmacy":
+		return "drogerie"
+	if b.type == "shop":
+		return str(SHOP_KIND.get(str(b.name).split(" ")[0], ""))
+	return ""
+
+
+## Weiteres Geschaeft eroeffnen (Marktzutritt bei unterversorgtem Viertel, siehe Tiers).
+func open_shop(b: Dictionary, kind: String) -> void:
+	if not shop_of_building(int(b.id)).is_empty():
+		return
+	_open_shop(b, kind)
+
+
 func shop_of_building(bid: int) -> Dictionary:
 	for s in shops.values():
 		if int(s.building) == bid:
@@ -243,7 +261,8 @@ func customers(s: Dictionary, r: RandomNumberGenerator) -> int:
 		wx = 0.9
 	var elastic := pow(1.0 / maxf(0.5, float(s.price_factor)), 1.6)
 	var location := sim.contentment.building_factor(int(s.building))   # attraktive Viertel haben mehr Kundschaft
-	return maxi(0, int(round(base * pop * power * wx * elastic * location * r.randf_range(0.8, 1.2))))
+	var tier_demand := sim.tiers.demand_factor(s)   # Wohnstufen im Viertel (gehobene Angebote brauchen höhere Stufen)
+	return maxi(0, int(round(base * pop * power * wx * elastic * location * tier_demand * r.randf_range(0.8, 1.2))))
 
 
 func _serve(s: Dictionary, day: int) -> void:

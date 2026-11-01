@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_tiers", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -780,6 +780,76 @@ func test_visit_dedupe() -> void:
 	var c1: Dictionary = s.executor.execute(0, {"action": "collect_contracts"})
 	var c2: Dictionary = s.executor.execute(0, {"action": "collect_contracts"})
 	ok(not c2.ok or not c1.get("pending", false), "doppeltes collect_contracts wird nicht doppelt eingereiht")
+
+
+func test_tiers() -> void:
+	GameCalendar.configure(5.0)
+	var s := new_sim(2)
+	var T: Tiers = s.tiers
+	T.on_month(1)
+	var occupied: Array = s.housing.units.values().filter(func(u): return u.tenant != "")
+	ok(occupied.size() > 0 and occupied.all(func(u): return int(u.tier) >= 1 and int(u.tier) <= Tiers.cap_of(str(s.city.building(int(u.building)).type))), "Startstufen liegen im erlaubten Bereich (%d Einheiten)" % occupied.size())
+	ok(T.city_mean() >= 1.8 and T.city_mean() <= 3.2, "Stadtmittel der Stufen plausibel (%.2f)" % T.city_mean())
+	for d in T.coverage:
+		for n in Tiers.NEEDS:
+			if float(T.coverage[d][n.id]) < 0.0 or float(T.coverage[d][n.id]) > 1.0:
+				ok(false, "Deckung außerhalb 0-1")
+	# Aufstieg: alle Bedürfnisse gedeckt, Zufriedenheit ausreichend, zwei Monate in Folge, Gebäude erlaubt es
+	var u: Dictionary = occupied.filter(func(x): return str(s.city.building(int(x.building)).type) == "villa" or Tiers.cap_of(str(s.city.building(int(x.building)).type)) >= 3)[0]
+	var d := int(s.city.building(int(u.building)).district)
+	var cap := Tiers.cap_of(str(s.city.building(int(u.building)).type))
+	u.tier = 2
+	u.sat = 80.0
+	for n in Tiers.NEEDS:
+		T.coverage[str(d)][n.id] = 1.0
+	var ups := {}
+	var downs := {}
+	T._update_unit(u, ups, downs)
+	ok(int(u.tier) == 2, "Ein Monat reicht nicht für den Aufstieg")
+	T._update_unit(u, ups, downs)
+	ok(int(u.tier) == 3, "Nach zwei Monaten mit gedeckten Bedürfnissen: Stufe 3")
+	u.sat = 30.0
+	T._update_unit(u, ups, downs)
+	T._update_unit(u, ups, downs)
+	ok(int(u.tier) == 3, "Unzufriedene Bewohner steigen nicht auf")
+	# Gebäude begrenzt die Stufe
+	u.tier = cap
+	u.sat = 90.0
+	T._update_unit(u, ups, downs)
+	T._update_unit(u, ups, downs)
+	T._update_unit(u, ups, downs)
+	ok(int(u.tier) == cap, "Höchststufe des Gebäudes wird nicht überschritten (%d)" % cap)
+	# Abstieg: ein Bedürfnis der eigenen Stufe fällt drei Monate unter die Schwelle
+	u.tier = 3
+	T.coverage[str(d)]["gastro"] = 0.1
+	for i in Tiers.DOWN_MONTHS:
+		T._update_unit(u, ups, downs)
+	ok(int(u.tier) == 2, "Abstieg nach %d Monaten unversorgt" % Tiers.DOWN_MONTHS)
+	# Wirkung: Miete und Nachfrage folgen der Stufe
+	u.tier = 1
+	var r1 := T.rent_factor(u)
+	u.tier = 4
+	ok(T.rent_factor(u) > r1 and absf(T.rent_factor(u) - 1.3) < 0.001, "Miete steigt mit der Stufe (%.2f -> %.2f)" % [r1, T.rent_factor(u)])
+	var rest: Dictionary = s.retail.shops.values().filter(func(x): return x.kind == "restaurant")[0]
+	var dist := int(s.city.building(int(rest.building)).district)
+	var m: Dictionary = T.mix.get(str(dist), {"personen": 100, "stufen": {1: 100, 2: 0, 3: 0, 4: 0}, "summe": 100.0, "mittel": 1.0})
+	T.mix[str(dist)] = {"personen": 100, "stufen": {1: 100, 2: 0, 3: 0, 4: 0}, "summe": 100.0, "mittel": 1.0}
+	var poor := T.demand_factor(rest)
+	T.mix[str(dist)] = {"personen": 100, "stufen": {1: 0, 2: 0, 3: 50, 4: 50}, "summe": 350.0, "mittel": 3.5}
+	var rich := T.demand_factor(rest)
+	ok(rich > poor * 1.5, "Restaurants leben von höheren Stufen (%.2f -> %.2f)" % [poor, rich])
+	# Marktzutritt: Viertel mit vielen Bewohnern ohne Geschäft bekommt eines
+	var shops_before: int = s.retail.shops.size()
+	for sh in s.retail.shops.values():
+		sh.status = "geschlossen"
+	T.on_month(2)
+	ok(s.retail.shops.size() >= shops_before, "Marktzutritt bricht nichts ab (%d -> %d Geschäfte)" % [shops_before, s.retail.shops.size()])
+	# Speichern und Laden
+	var T2 := Tiers.new()
+	T2.from_dict(JSON.parse_string(JSON.stringify(T.to_dict())))
+	var k0: String = T.mix.keys()[0]
+	ok(T2.mix.size() == T.mix.size() and int(T2.mix[k0].stufen[1]) == int(T.mix[k0].stufen[1]) and int(T2.mix[k0].personen) == int(T.mix[k0].personen), "Zustand übersteht Speichern und Laden")
+	ok(identity_ok(s), "Geld und Bilanz erhalten")
 
 
 func test_dispatch_help() -> void:

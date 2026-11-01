@@ -222,7 +222,7 @@ func _update_rents() -> void:
 	var target: float = sim.mayor.rent_index() / 100.0
 	index = clampf(target, index - INDEX_STEP, index + INDEX_STEP)
 	for u in units.values():
-		u.rent = roundf(float(u.base) * index * sim.contentment.building_factor(int(u.building)))   # Lage des Viertels
+		u.rent = roundf(float(u.base) * index * sim.contentment.building_factor(int(u.building)) * sim.tiers.rent_factor(u))   # Lage des Viertels, Wohnstufe
 
 
 func _distribute_landlord_income() -> void:
