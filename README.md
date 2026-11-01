@@ -38,8 +38,14 @@ Kein Geld entsteht aus dem Nichts. Jede Zahlung bewegt Geld zwischen echten Kont
 - **Bauhof (Großhandel)**: importiert, produziert (Paletten, Beton, Module, Recycling), verkauft Material und exportiert Überschüsse. Jede Ware hat **Eigentümer und Standort**; Baustellen verbrauchen echtes Material, das vorher geliefert werden muss.
 - **Spielkalender** (Tag, Monat, Jahr) mit Partiedauern von 5 Minuten bis 24 Stunden oder Endlos.
 
+### 🏘️ Viertel, die wachsen
+Jede Wohneinheit hat eine **Wohnstufe 1 bis 4**. Mit der Stufe wachsen die Ansprüche (Nahrung, Haushaltswaren, Gesundheit, Bildung, Gastronomie, Möbel, Technik). Ob ein Viertel versorgt ist, hängt von seinen Geschäften ab, und deren Regale füllen die **Transportaufträge der Spediteure**. Fehlt ein Angebot dauerhaft, eröffnet ein Laden oder der Bautraeger baut einen neuen; unterversorgte Geschäfte locken mit einer **Prämie der Stadt**. Höhere Stufen schalten Gebäude frei (Stadtvilla, Hochhaus) und erreichen Meilensteine. [Regeln und Grenzen](docs/GROWTH_TIERS.md).
+
+### 🤝 Kleine lokale Modelle kommen zurecht
+Ein 9B-Modell vergisst oft Pflichtangaben. Ein **Assistent** ergänzt Lücken (Fahrer, Fahrzeug, Auftrag annehmen, Stellplatz bauen, Nachtank-Regel), normalisiert Antworten (`"F2"` → `2`, `details`-Blöcke, Listenform) und eine **Disposition** übernimmt bei wirkungslosen Runden den Tagesbetrieb. Alles ist im Entscheidungsprotokoll als ergänzt gekennzeichnet.
+
 ### 🔬 Gebaut mit Beweisen
-Über **5000 automatische Prüfungen** (Geldkonservierung, Warenbilanz, Bilanzidentität, Speichern und Laden, Insolvenzablauf, Wetter, Ereignisse, Grafik-Vollständigkeit). Der Stand jedes Bereichs steht ehrlich in [`STATUS.md`](STATUS.md), samt dem, was **noch nicht** fertig ist.
+Über **5100 automatische Prüfungen** (Geldkonservierung, Warenbilanz, Bilanzidentität, Speichern und Laden, Insolvenzablauf, Wetter, Ereignisse, Grafik-Vollständigkeit). Der Stand jedes Bereichs steht ehrlich in [`STATUS.md`](STATUS.md), samt dem, was **noch nicht** fertig ist.
 
 ---
 
@@ -50,10 +56,11 @@ Kein Geld entsteht aus dem Nichts. Jede Zahlung bewegt Geld zwischen echten Kont
 | 1 | Stadtleben: Wetter, Ereignisse, Kunden, isometrische Voxelgrafik, transparente KI | ✅ fertig |
 | 2 | Wirtschaftskreislauf: Konten, Banken, Rechtsformen, Insolvenz, Bauhof, Material, Ranglisten | ✅ fertig (M8 KI/API-Konfiguration durch andere KI) |
 | 3 | Kraftstoffpreise (real), Tankstellen, Haushalte, Löhne, Gebäudezustand | ✅ fertig (Stadtviertel offen) |
-| 4 | Öffentliche Hand: Steuern, Behörden, Geldschöpfung der Banken | 🔧 Steuern, Ressorts, Prüfung, Bürger fertig; Geldschöpfung offen |
-| 5 | Versorgungsnetz: Stadtlager, Verkehr mit Kapazität, Restaurants, Läden, Müll und Mehrweg | ⏳ geplant |
-| 6 | Bewohner, Haushalte, Wohnungen, Mieten, private Kredite | ⏳ geplant |
+| 4 | Öffentliche Hand: Steuern, Behörden, Zentralbank, Geldschöpfung der Banken | ✅ fertig (Grenzen in `docs/HOUSING_AND_MONEY.md`) |
+| 5 | Versorgungsnetz: Stadtlager, Verkehr mit Kapazität, Restaurants, Läden, Müll und Mehrweg | ✅ fertig (`docs/SUPPLY_NETWORK.md`) |
+| 6 | Bewohner, Haushalte, Wohnungen, Mieten, private Kredite, Zufriedenheit | ✅ fertig (`docs/HOUSING_AND_MONEY.md`) |
 | 7 | Größere Karte, Baugrundstücke, Bauunternehmen, Bürgermeister-KI, Bauanträge | ✅ fertig (siehe `docs/URBAN_DEVELOPMENT.md`) |
+| 8 | Wohnstufen und Bedürfnisse (Anno-Prinzip): Versorgung der Viertel als Transportbedarf, Versorgungsbau, Prämien, Freischaltungen, Meilensteine | ✅ umgesetzt, Balance nur in Probeläufen (`docs/GROWTH_TIERS.md`) |
 
 Die Pläne stehen in [`docs/ECONOMY.md`](docs/ECONOMY.md) und [`STATUS.md`](STATUS.md).
 

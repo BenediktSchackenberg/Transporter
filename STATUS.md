@@ -5,6 +5,16 @@ Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Sp
 Externe Sprachmodell-APIs wurden mangels Key nicht live getestet. Die übrigen Adaptertests nutzen den
 DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen lokalen Mock-Server.
 
+## Hilfen für kleine lokale Modelle (01.11.2026)
+
+Spieler mit Ollama (z. B. `qwen3.5:9b`) scheiterten anfangs an rund 78 % ihrer Aktionen, meist wegen fehlender Pflichtangaben. Gegenmaßnahmen, alle im Entscheidungsprotokoll als ergänzt gekennzeichnet:
+- **`ActionAssist`** (`scripts/ai/action_assist.gd`): ergänzt Fahrer und Fahrzeug, nimmt offene Aufträge an statt sie zuzuweisen, tauscht fremde oder zu kleine Fahrzeuge, baut bei vollem Hof einen Stellplatz, wandelt „Tank-Aufgaben“ in die Nachtank-Regel.
+- **`ActionExecutor.normalize`**: `"F2"`/`"V7"` → Fahrzeug-ID, `details`/`payload`-Blöcke, Listenform (`fahrzeuge: [2.0]`), `task_type`, Synonyme.
+- **Disposition** (`agent_controller.gd`): bleibt eine Runde wirkungslos oder steht ein Fahrzeug still, setzt die Regel-KI Tagesbetrieb und Hofaufbau um (abschaltbar mit `dispatch_help=false`).
+- **Besuchsliste**: gleicher Kauf oder gleiche Auftragssuche wird nicht doppelt eingereiht. **Rechenzeitbudget** von 60 ms je Bild (`sim_budget_ms`).
+- **Regel-KI**: Kühl-/Lastfahrzeuge bei passenden Aufträgen, Kredite, Entlassung bei Verlust, Tankkauf nur bis Tankgröße.
+Messung im laufenden Spiel (vier Ollama-Spieler): Erfolgsquote der Aktionen von etwa 22 % auf 44-49 %, `assign_worker_task` von 3 auf über 40 % bis 65 %. Grenze: `assign_transport` und `plan_tour` scheitern weiter oft, weil das Modell Aufträge und Fahrzeuge verwechselt.
+
 ## Auftrag 8: Wohnstufen und Bedürfnisse (01.11.2026)
 
 Wohneinheiten haben Stufen 1-4; Bedürfnisse (Nahrung, Getränke, Haushalt, Gesundheit, Bildung, Gastronomie, Möbel, Technik) werden über die Geschäfte des Viertels gedeckt, deren Regale per Transportauftrag gefüllt werden. Aufstieg/Abstieg, Mieten, Nachfrage, Marktzutritt neuer Geschäfte, Ansicht „Wohnen“ und KI-Beobachtung. Dazu: Marktzutritt und Versorgungsbau durch den Bautraeger, Versorgungsprämie der Stadt, Freischaltungen (Stadtvilla, Hochhaus) und Meilensteine. 27 Prüfungen in `test_tiers` und `test_tiers_supply`. [Regeln und Grenzen](docs/GROWTH_TIERS.md).
