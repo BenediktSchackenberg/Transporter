@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -755,6 +755,26 @@ func test_local_agent_choices() -> void:
 	ctl._apply(bad, "bad2", "KI")
 	ctl._apply(bad, "bad3", "KI")
 	ok(ctl._rapid_retry_count == 2, "schnelle Wiederholungen bleiben begrenzt")
+	ctl.free()
+
+
+func test_dispatch_help() -> void:
+	var s := new_sim(2)
+	var ctl := AgentController.new()
+	ctl.setup_for_test(s, 0)
+	ctl.config["provider"] = "ollama"
+	var w := hire_free(s, 0, "driver")
+	s.company(0).ledger.inject(50000.0)
+	s.company(0).ledger.invest(5000.0)
+	var nv := s.add_vehicle(0, "van", 5000.0, s.depot_road(0))
+	ok(s.personnel.driver_of(nv.id) == null, "Ausgangslage: neues Fahrzeug ohne Fahrer")
+	var bad := AgentController.parse_response('{"summary":"Ich setze jemanden ein.","actions":[{"action":"assign_worker_task"}]}')
+	ctl._apply(bad, "d1", "KI")
+	ok(s.personnel.driver_of(nv.id) != null or ctl.stats.actions_ok > 0, "Fahrzeug bekommt einen Fahrer (Assistent oder Disposition)")
+	ctl.config["dispatch_help"] = false
+	var before := int(ctl.stats.get("dispatch_help", 0))
+	ctl._apply(AgentController.parse_response('{"summary":"x","actions":[{"action":"accept_contract","contract_id":"A999999"}]}'), "d2", "KI")
+	ok(int(ctl.stats.get("dispatch_help", 0)) == before, "abschaltbar über dispatch_help=false")
 	ctl.free()
 
 
@@ -2263,7 +2283,21 @@ func test_action_assist() -> void:
 		c.ledger.invest(5000.0)
 		s.add_vehicle(0, nv.model, 5000.0, s.depot_road(0))
 	var r: Dictionary = s.executor.execute(0, {"action": "buy_vehicle", "model": nv.model})
-	ok(not r.ok and "place_building" in r.msg and "stellplatz" in r.msg and "\"x\"" in r.msg, "Voller Hof: Meldung nennt konkrete Bauaktion")
+	ok(r.ok and s.executor.assist._parking_in_construction(0), "Voller Hof: Assistent baut selbst einen Stellplatz")
+	var r2: Dictionary = s.executor.execute(0, {"action": "buy_vehicle", "model": nv.model})
+	ok(not r2.ok and "place_building" in r2.msg and "stellplatz" in r2.msg and "\"x\"" in r2.msg, "Stellplatz im Bau: Meldung nennt weiter die Bauaktion, kein zweiter Bau")
+	# Fahrzeug ohne Fahrer + freier Arbeiter: Fahrbefehle ohne Angaben oder mit falscher Fahrzeug-ID werden ergaenzt
+	var s2 := new_sim(2)
+	var w2 := hire_free(s2, 0, "driver")
+	s2.companies[0].ledger.inject(50000.0)
+	s2.companies[0].ledger.invest(5000.0)
+	var nv2 := s2.add_vehicle(0, Catalog.VEHICLE_MODELS.keys()[0], 5000.0, s2.depot_road(0))
+	var e1: Dictionary = s2.executor.assist.complete(0, {"action": "assign_worker_task"})
+	ok(e1.get("kind", "") == "fahren" and e1.has("worker_id") and e1.has("vehicle_id"), "assign_worker_task ganz ohne Angaben: Fahrer und Fahrzeug ergänzt")
+	var e2: Dictionary = s2.executor.assist.complete(0, {"action": "assign_worker_task", "kind": "fahren", "vehicle_id": 99999, "worker_id": w2.id})
+	ok(s2.vehicles.has(int(e2.vehicle_id)) and s2.vehicles[int(e2.vehicle_id)].owner == 0, "Fahraufgabe mit erfundener Fahrzeug-ID: eigenes Fahrzeug eingesetzt")
+	var e3: Dictionary = s2.executor.assist.complete(0, {"action": "assign_worker_task", "kind": "fahren", "vehicle_id": nv2.id})
+	ok(e3.get("worker_id", "") != "", "Fahraufgabe ohne Arbeiter: freier Fahrer ergänzt")
 	# Geldmangel: Meldung nennt Kredit
 	var c1 := s.companies[1]
 	c1.ledger.pay_out_owner(c1.ledger.cash - 100.0, "H0")

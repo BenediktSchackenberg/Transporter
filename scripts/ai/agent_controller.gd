@@ -222,6 +222,33 @@ func _run_fallback() -> void:
 	_next_req += 1
 
 
+const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", "collect_contracts", "repair_vehicle", "buy_supplies",
+	"schedule_refueling", "assign_foreman"]
+
+
+## Nur der Tagesbetrieb aus der Regel-KI: Auftraege annehmen und zuweisen, Fahrer einsetzen, reparieren, tanken.
+func _run_dispatch_help() -> void:
+	var obs := ObservationBuilder.build(sim, cid, [], _last_obs_min, remaining_real_min, goal, "")
+	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng)
+	d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) in DISPATCH)
+	if d.actions.is_empty():
+		return
+	d["summary"] = ""
+	d["goal"] = ""
+	d["memory"] = ""
+	var parsed := parse_response(JSON.stringify(d))
+	# Rueckmeldungen und Zaehler gehoeren dem Modell: die Disposition soll sie weder beschoenigen noch verfaelschen
+	var keep_events := _events.duplicate()
+	var keep_retry := _rapid_retry_count
+	var keep_streak := passive_streak
+	_apply(parsed, "dp%d" % _next_req, "Disposition")
+	_events = keep_events
+	_rapid_retry_count = keep_retry
+	passive_streak = keep_streak
+	_next_req += 1
+	stats["dispatch_help"] = int(stats.get("dispatch_help", 0)) + 1
+
+
 const PASSIVE := ["wait", "send_message", "inspect_resource", "request_progress_report", "update_plan_step", "remember", "forget"]
 
 
@@ -288,6 +315,10 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 	if summary != "":
 		sim.memory.add_event(cid, "entscheidung", summary)
 	sim.memory.add_event(cid, "ausfuehrung", "%d Aktionen ausgeführt, %d abgelehnt" % [effective, actions.size() - effective])
+	# Kleine lokale Modelle scheitern oft an Pflichtangaben: blieb die Runde wirkungslos, setzt die Disposition (Regeln) die
+	# Fahrzeuge und Arbeiter ein, damit sie nicht untaetig herumstehen. Eigene Strategie und Investitionen bleiben beim Modell.
+	if effective == 0 and source == "KI" and config.get("provider", "") == "ollama" and bool(config.get("dispatch_help", true)):
+		_run_dispatch_help()
 
 
 func _ground_action(a: Dictionary) -> Dictionary:
