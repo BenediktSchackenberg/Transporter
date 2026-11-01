@@ -366,5 +366,12 @@ Das Preset `Windows Desktop` (x86_64, PCK eingebettet, `*.json` eingeschlossen) 
 - **Ausgewogenheit:** In Demo-Partien liegen sparsame Logistiker vorn, und Sabotage lohnt sich selten. Bei sehr hoher Simulationsgeschwindigkeit (16×) reagieren echte Modelle im Verhältnis zur Spielwelt langsam; für echte KIs sind 1×–4× gedacht.
 - Die **Sounds** sind einfache generierte Effekte (kein Musiktrack).
 
+## Repository-Sicherheit
+
+Sicherheitslücken bitte [vertraulich melden](SECURITY.md). Die
+[Anleitung für den GitHub-Repository-Schutz](docs/REPOSITORY_SECURITY.md)
+beschreibt Branch-Regeln, Secret Scanning und die CI-Prüfung. API-Keys gehören
+weder in Commits noch in Issues oder Pull Requests.
+
 ## Lizenzen
 Schrift: Pixelify Sans (SIL Open Font License, `assets/fonts/OFL.txt`). Alle übrigen Grafiken und Sounds werden von `tools/gen_assets.py` erzeugt und gehören zum Projekt.
