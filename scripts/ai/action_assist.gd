@@ -18,7 +18,7 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 	var added: Array = []
 	if name in ["assign_vehicle", "assign_transport", "assign_worker_task"]:
 		# Erfundene oder fremde Fahrzeug-/Auftrags-IDs verwerfen, damit die Luecken unten sinnvoll gefuellt werden
-		if out.has("vehicle_id"):
+		if out.has("vehicle_id") and not (out.vehicle_id is String and not str(out.vehicle_id).is_valid_int()):   # Unsinn bleibt Unsinn: Schema meldet ihn
 			var ov: FleetVehicle = sim.vehicles.get(ActionExecutor._i(out.vehicle_id)) if out.vehicle_id != null else null
 			if ov == null or ov.owner != cid:
 				out.erase("vehicle_id")
