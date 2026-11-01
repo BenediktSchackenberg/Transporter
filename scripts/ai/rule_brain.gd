@@ -101,10 +101,8 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		if best.is_empty():
 			unserved += 1
 			continue
-		if best.get("ware", "") in Catalog.CARGO and not best.get("kuehlung", false):
-			actions.append({"action": "create_transport_line", "name": "%s-Verteilung" % str(best.bezeichnung), "cargo": best.ware, "vehicle_ids": [v.id], "via_depot": int(best.get("hof_umweg_tiles", 0)) <= 20})
-		else:
-			actions.append({"action": "accept_contract", "contract_id": best.id, "vehicle_id": v.id})
+		# Direkt annehmen und zuweisen: eine Linie bearbeitet nur einen Auftrag zugleich und faehrt ueber den Hof (zwei Fahrten je Fracht).
+		actions.append({"action": "accept_contract", "contract_id": best.id, "vehicle_id": v.id})
 		market.erase(best)
 		active += 1
 		reasons.append("disponiere %s fuer #%d als zusammenhaengenden Betriebsablauf (%d EUR, %s)" % [best.id, v.id, best.verguetung, best.bezeichnung])
@@ -333,17 +331,19 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 				elif roll < 0.5:
 					_offer_unserved(obs, r, actions, reasons)
 			"wachstum":
-				if int(r.personal) >= 3 and roll < 0.08 and cash > 5000.0:
+				var profitable: bool = float(me.gewinn) > 0.0 and cash > buffer * 1.5   # Abwerbung und Kundenwerbung kosten Geld: nur aus Gewinn
+				if profitable and int(r.personal) >= 3 and roll < 0.08:
 					actions.append({"action": "poach_worker", "target": r.id, "wage": 30})
 					reasons.append("werbe einen Arbeiter von %s ab" % r.name)
-				elif not obs.fremde_stammkunden.is_empty() and roll < 0.2:
+				elif profitable and not obs.fremde_stammkunden.is_empty() and roll < 0.2:
 					actions.append({"action": "poach_customer", "customer_id": obs.fremde_stammkunden[0].kunde_id})
 			"risikospieler":
-				if roll > 0.85 and cash > 2.0 * buffer and not me.has("sabotage_bereit_in_min"):
+				var can_afford: bool = float(me.gewinn) > 0.0 and cash > 2.0 * buffer   # Anschlaege nur aus Gewinn: Strafen und Kosten uebersteigen sonst den Nutzen
+				if roll > 0.85 and can_afford and not me.has("sabotage_bereit_in_min"):
 					actions.append({"action": "attempt_sabotage", "target": r.id, "kind": "smear_campaign"})
 					reasons.append("streue Gerüchte über %s" % r.name)
 				else:
-					_risky_moves(obs, free_staff, cash, roll, actions, reasons)
+					_risky_moves(obs, free_staff, cash, roll, actions, reasons, can_afford)
 			_:
 				if roll < 0.2:
 					_offer_unserved(obs, r, actions, reasons)
@@ -356,7 +356,8 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	elif debt > 0.0 and cash > buffer * 2.0 + debt:
 		actions.insert(0, {"action": "repay_loan", "amount": debt})
 		reasons.append("tilge %d EUR Schulden aus Überschuss" % int(debt))
-	if cash < buffer * 0.3 and float(me.gewinn) < 0.0 and workers_n > obs.fahrzeuge.size() + 1 and "recruit_worker" not in planned:
+	var overstaffed: bool = workers_n > obs.fahrzeuge.size() + 2 and cash < buffer * 1.5
+	if (cash < buffer * 0.3 or overstaffed) and float(me.gewinn) < 0.0 and workers_n > obs.fahrzeuge.size() + 1 and "recruit_worker" not in planned:
 		var idle := free_staff.filter(func(w): return int(w.faehigkeiten.get("fahren", 0)) < 2)
 		if not idle.is_empty():
 			var w: Dictionary = idle[0]
@@ -398,7 +399,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 
 
 ## Risikospieler: erst auskundschaften, dann mit dem entbehrlichsten Arbeiter ein stehendes Fremdfahrzeug angreifen.
-static func _risky_moves(obs: Dictionary, free_staff: Array, cash: float, roll: float, actions: Array, reasons: Array) -> void:
+static func _risky_moves(obs: Dictionary, free_staff: Array, cash: float, roll: float, actions: Array, reasons: Array, can_afford: bool = true) -> void:
 	var cooling := false
 	for e in obs.ergebnisse_deiner_aktionen:
 		if str(e).contains("Abklingzeit"):
@@ -415,7 +416,7 @@ static func _risky_moves(obs: Dictionary, free_staff: Array, cash: float, roll: 
 			expendable = w
 	if expendable.is_empty() or free_staff.size() < 2:
 		return
-	if not targets.is_empty() and not cooling and cash > 1.5 * 9000.0 and roll < 0.3:
+	if not targets.is_empty() and not cooling and can_afford and roll < 0.3:
 		var v: Dictionary = targets[0]
 		actions.append({"action": "attempt_vehicle_sabotage", "worker_id": expendable.id, "vehicle_id": v.id})
 		reasons.append("riskiere mit %s einen Anschlag auf #%d" % [expendable.name, v.id])

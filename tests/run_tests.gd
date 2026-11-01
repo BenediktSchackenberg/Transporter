@@ -974,6 +974,21 @@ func test_dispatch_help() -> void:
 	ctl._apply(AgentController.parse_response('{"summary":"x","actions":[{"action":"accept_contract","contract_id":"A999999"}]}'), "d2", "KI")
 	ok(int(ctl.stats.get("dispatch_help", 0)) == before, "abschaltbar über dispatch_help=false")
 	ctl.free()
+	# Eigener Takt: ein Fahrzeug mit Fahrer steht ohne Auftrag still, ein bekannter Auftrag ist offen. Ohne jeden Modellaufruf wird er zugewiesen.
+	var s2 := new_sim(2)
+	var c2 := AgentController.new()
+	c2.setup_for_test(s2, 0)
+	c2.config["provider"] = "ollama"
+	s2.company(0).ledger.inject(50000.0)
+	var v2 := vehicle_with_driver(s2, 0, "van")
+	var k2 := fresh_contract(s2, 0, 4)
+	k2.reward = 900.0
+	s2.game_min += 200.0
+	c2._dispatch_tick()
+	ok(int(c2.stats.get("dispatch_help", 0)) == 1, "Takt: Disposition läuft ohne Modellaufruf (Fahrzeug steht still)")
+	c2._dispatch_tick()
+	ok(int(c2.stats.get("dispatch_help", 0)) == 1, "Takt: nicht erneut innerhalb von %d Spielminuten" % int(AgentController.DISPATCH_EVERY_MIN))
+	c2.free()
 
 
 ## Testhilfe: zusaetzliches Fahrzeug mit Fahrer direkt am Depot (ohne Kauf-/Anwerbewege).

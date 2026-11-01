@@ -30,6 +30,7 @@ var status := "bereit"
 var last_error := ""
 var fallback_active := false
 var real_time := 0.0
+var _dispatch_min := 0.0          # Spielminute der letzten Disposition ohne Modellaufruf
 var speed := 1.0                  # aktuelle Simulationsgeschwindigkeit (die Veraltet-Grenze waechst mit ihr)
 
 var _inflight := -1
@@ -93,6 +94,7 @@ func _process(delta: float) -> void:
 	while not _deferred.is_empty():
 		var d: Array = _deferred.pop_front()
 		handle_result(d[0], d[1])
+	_dispatch_tick()
 	if _inflight >= 0:
 		# Wachhund: falls der Adapter nie antwortet
 		if real_time - _inflight_sent > float(config.get("timeout", 45.0)) + 5.0:
@@ -220,6 +222,22 @@ func _run_fallback() -> void:
 	var parsed := parse_response(JSON.stringify(d))
 	_apply(parsed, "fb%d" % _next_req, "Ersatzmodus")
 	_next_req += 1
+
+
+const DISPATCH_EVERY_MIN := 60.0   # Spielminuten zwischen zwei Hofrunden der Disposition (Marktangebote verfallen nach 90-160 Minuten)
+
+
+## Die Disposition wartet nicht auf das Modell: Marktangebote verfallen nach 90 bis 160 Spielminuten, eine Modellrunde dauert laenger.
+## Steht ein Fahrzeug mit Fahrer ohne Auftrag still, uebernimmt sie in kurzem Takt die Annahme und Zuweisung (auch waehrend ein Modellaufruf laeuft).
+func _dispatch_tick() -> void:
+	if config.get("provider", "") != "ollama" or not bool(config.get("dispatch_help", true)) or fallback_active:
+		return
+	if sim.game_min - _dispatch_min < DISPATCH_EVERY_MIN:
+		return
+	_dispatch_min = sim.game_min
+	var idle: bool = sim.company_vehicles(cid).any(func(v): return v.state == "idle" and v.stops.is_empty() and v.contract_id == "" and sim.driver_of(v) != null)
+	if idle:
+		_run_dispatch_help()
 
 
 const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", "collect_contracts", "repair_vehicle", "buy_supplies",
