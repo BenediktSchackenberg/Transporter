@@ -126,12 +126,15 @@ static func all_schema() -> Dictionary:
 ## origin: "api" (Modellentscheidung), "plan" (Planschritt), "fallback" (Ersatzmodus), "foreman", "auto", "spectator"
 ## Haeufige Formfehler kleiner Modelle glaetten: verschachtelte "parameters", abweichende Schluesselnamen, fehlendes "kind".
 ## Vorhandene Schluessel werden nie ueberschrieben; inhaltliche Fehler bleiben Fehler.
-const KEY_ALIASES := {"contract": "contract_id", "vehicle": "vehicle_id", "driver": "worker_id", "driver_id": "worker_id", "worker": "worker_id", "offer": "offer_id"}
+const KEY_ALIASES := {"contract": "contract_id", "vehicle": "vehicle_id", "driver": "worker_id", "driver_id": "worker_id", "worker": "worker_id", "offer": "offer_id",
+	"fahrzeug_id": "vehicle_id", "fahrer_id": "worker_id", "auftrag_id": "contract_id", "task_type": "kind", "task": "kind"}
+const KIND_ALIASES := {"repair_vehicle": "reparieren", "repair": "reparieren", "drive": "fahren", "driving": "fahren", "drive_vehicle": "fahren",
+	"guard": "bewachen", "scout": "auskundschaften", "load": "verladen"}
 
 
 static func normalize(action: Dictionary) -> Dictionary:
 	var a := action.duplicate()
-	for nest in ["parameters", "params", "args", "arguments"]:
+	for nest in ["parameters", "params", "args", "arguments", "details", "data", "payload", "input", "action_input"]:
 		if a.get(nest) is Dictionary:
 			for k in a[nest]:
 				if not a.has(k):
@@ -139,6 +142,18 @@ static func normalize(action: Dictionary) -> Dictionary:
 	for k in KEY_ALIASES:
 		if a.has(k) and not a.has(KEY_ALIASES[k]) and not a[k] is Dictionary and not a[k] is Array:
 			a[KEY_ALIASES[k]] = a[k]
+	# Fahrzeug-ID als Text ("F2", "V2", "#2") -> Zahl; kleine Modelle verwechseln sie mit Angebotsnummern
+	if a.get("vehicle_id") is String and not str(a.get("action", "")).begins_with("buy_vehicle"):   # dort ist es eine Angebots-ID
+		var m := RegEx.create_from_string("^\\D*(\\d+)\\.?0*$").search(str(a.vehicle_id).strip_edges())
+		if m:
+			a["vehicle_id"] = int(m.get_string(1))
+	# Listenform ("fahrzeuge": [2.0], "auftraege": ["A2"]) -> erster Eintrag
+	for pair in [["fahrzeuge", "vehicle_id"], ["auftraege", "contract_id"], ["arbeiter", "worker_id"]]:
+		if a.get(pair[1]) == null and a.get(pair[0]) is Array and not a[pair[0]].is_empty():
+			var first = a[pair[0]][0]
+			a[pair[1]] = int(first) if pair[1] == "vehicle_id" and (first is float or first is int) else first
+	if a.get("kind") is String and KIND_ALIASES.has(str(a.kind).to_lower()):
+		a["kind"] = KIND_ALIASES[str(a.kind).to_lower()]
 	var name := str(a.get("action", a.get("type", "")))
 	# "assign_transport/plan_tour": Modell nennt mehrere Aktionen in einem Namen -> erste bekannte nehmen
 	if not all_schema().has(name):
