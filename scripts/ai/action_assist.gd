@@ -25,7 +25,7 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 				added.append("vehicle_id verworfen")
 		if name != "assign_worker_task" and out.has("contract_id"):
 			var oc: Contract = sim.contracts.get(str(out.contract_id))
-			if oc == null or oc.owner != cid:
+			if oc == null:   # nur erfundene IDs; Unterauftraege anderer Firmen sind erlaubt
 				out.erase("contract_id")
 				added.append("contract_id verworfen")
 	match name:
