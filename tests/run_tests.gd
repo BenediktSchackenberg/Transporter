@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -4871,3 +4871,22 @@ func test_strategy_learning() -> void:
 	ok(s2.strategy.memory.records[0].size() == L.memory.records[0].size() and s2.strategy.state[0].current == target, "Lerndaten nach Laden erhalten")
 	ok(s2.strategy.memory.notes[0].size() == 1, "Vermutungen nach Laden erhalten")
 	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+func test_strategy_arena() -> void:
+	GameCalendar.configure(60.0)
+	var spec := {"seed": 21, "map": 128, "steps": 2400, "brains": ["wachstum", "wachstum", "wachstum", "wachstum"], "max_actions": 4,
+		"strategies": ["konservativ", "wachstum", "effizient", "lernend"], "events": []}
+	var a := Arena.run(spec)
+	ok(a.rows.map(func(r): return r.profil) == ["konservativ", "wachstum", "effizient", "lernend"], "Plaetze erhalten die Strategien des Plans")
+	ok(a.sim.strategy.state[0].locked and a.sim.strategy.state[0].current == "konservativ", "feste Strategie ist gesperrt")
+	ok(not a.sim.strategy.state[3].locked, "lernende Strategie bleibt frei")
+	var b := Arena.run(spec)
+	ok(a.fingerprint == b.fingerprint, "gleicher Plan, gleicher Seed: identischer Endstand (deterministisch)")
+	ok(identity_ok(a.sim), "Geld und Waren erhalten")
+	var r := Arena.replay(spec, a.actions)
+	ok(r.fingerprint == a.fingerprint, "Wiederholung ohne KI ergibt denselben Endstand")
+	var rotated := Arena.run(spec, 1)
+	ok(rotated.rows.map(func(x): return x.profil) == ["wachstum", "effizient", "lernend", "konservativ"], "Strategien rotieren mit den Startplaetzen")
+	var base := Arena.run({"seed": 21, "map": 128, "steps": 2400, "brains": ["wachstum", "wachstum"], "max_actions": 4, "events": []})
+	ok(base.rows.all(func(x): return x.profil == ""), "ohne Plan bleibt die Arena unveraendert")

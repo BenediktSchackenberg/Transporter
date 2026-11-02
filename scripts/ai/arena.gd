@@ -8,6 +8,8 @@ extends RefCounted
 ## aufgezeichneten Aktionen und Ereignisse ohne jede Entscheidungsinstanz (keine API-Aufrufe) erneut aus; der Fingerabdruck des Endstands
 ## ist identisch. `to_csv` exportiert die Kennzahlen.
 ## spec: {seed, map, steps, brains: [Persoenlichkeit, ...], max_actions, events: [{step, typ, params, duration}]}
+## Optional `strategies` (parallel zu `brains`, mit denselben rotierenden Plaetzen): "konservativ"/"wachstum"/"effizient" = feste Strategieparameter (StrategyLearner),
+## "lernend" = der StrategyLearner waehlt selbst, "" = keine Parameter (bisherige Regel-KI).
 ## In Ereignisparametern steht "cell": "depot<N>" fuer die Zufahrt des Depots von Unternehmen N.
 
 const ACT_EVERY := 200                # Schritte (20 Sim-s) zwischen zwei Entscheidungen
@@ -28,6 +30,19 @@ static func _setup(spec: Dictionary, rotation: int) -> Simulation:
 	return s
 
 
+## Strategieplan je Platz: Platz c.id erhaelt strategies[(c.id + rotation) % n]. Feste Strategien werden im Lerner gesperrt, "" und "lernend" nicht.
+static func strategy_of(spec: Dictionary, cid: int, rotation: int) -> String:
+	var list: Array = spec.get("strategies", [])
+	return "" if list.is_empty() else str(list[(cid + rotation) % list.size()])
+
+
+static func _apply_strategies(s: Simulation, spec: Dictionary, rotation: int) -> void:
+	for c in s.companies:
+		var id := strategy_of(spec, c.id, rotation)
+		if id != "" and id != "lernend":
+			s.strategy.fix(c.id, id)
+
+
 static func _fire(s: Simulation, spec: Dictionary, step: int) -> void:
 	for e in spec.get("events", []):
 		if int(e.step) == step:
@@ -41,6 +56,7 @@ static func _fire(s: Simulation, spec: Dictionary, step: int) -> void:
 ## Partie mit aufgezeichneten Entscheidungen. Gibt {sim, actions, rows, fingerprint} zurueck.
 static func run(spec: Dictionary, rotation: int = 0) -> Dictionary:
 	var s := _setup(spec, rotation)
+	_apply_strategies(s, spec, rotation)
 	var actions: Array = []
 	var rngs: Array = []
 	for c in s.companies:
@@ -53,12 +69,13 @@ static func run(spec: Dictionary, rotation: int = 0) -> Dictionary:
 		if step % ACT_EVERY == 0:
 			for c in s.companies:
 				var obs := ObservationBuilder.build(s, c.id, [], 0.0, 10.0)
-				var todo: Array = RuleBrain.decide(obs, c.personality, rngs[c.id]).actions
+				var params: Dictionary = s.strategy.params_of(c.id) if strategy_of(spec, c.id, rotation) != "" else {}
+				var todo: Array = RuleBrain.decide(obs, c.personality, rngs[c.id], params).actions
 				for a in todo.slice(0, budget):
 					actions.append({"step": step, "cid": c.id, "action": a})
 					s.executor.execute(c.id, a, "", "fallback")
 		s.step(0.1)
-	return {"sim": s, "actions": actions, "rows": metrics(s, rotation, spec.brains), "fingerprint": fingerprint(s)}
+	return {"sim": s, "actions": actions, "rows": metrics(s, rotation, spec.brains, spec), "fingerprint": fingerprint(s)}
 
 
 ## Wiederholung ohne Entscheidungsinstanz: nur die aufgezeichneten Aktionen und Ereignisse.
@@ -71,18 +88,18 @@ static func replay(spec: Dictionary, actions: Array, rotation: int = 0) -> Dicti
 			s.executor.execute(int(actions[i].cid), actions[i].action, "", "fallback")
 			i += 1
 		s.step(0.1)
-	return {"sim": s, "rows": metrics(s, rotation, spec.brains), "fingerprint": fingerprint(s)}
+	return {"sim": s, "rows": metrics(s, rotation, spec.brains, spec), "fingerprint": fingerprint(s)}
 
 
 ## Kennzahlen je Unternehmen; `strategie` ist die Strategie, die diesen Platz belegt.
-static func metrics(s: Simulation, rotation: int, brains: Array) -> Array:
+static func metrics(s: Simulation, rotation: int, brains: Array, spec: Dictionary = {}) -> Array:
 	var rank := s.ranking()
 	var rows: Array = []
 	for c in s.companies:
 		rows.append({"platz": c.id, "strategie": brains[(c.id + rotation) % brains.size()], "rang": rank.find(c) + 1,
 			"gewinn": snappedf(c.ledger.profit(), 0.01), "bargeld": snappedf(c.ledger.cash, 0.01), "vermoegen": snappedf(s.net_worth(c.id), 0.01),
 			"schulden": snappedf(c.ledger.debt, 0.01), "fahrzeuge": s.company_vehicles(c.id).size(), "umsatz": snappedf(c.ledger.revenue(), 0.01),
-			"status": c.status})
+			"status": c.status, "profil": strategy_of(spec, c.id, rotation)})
 	return rows
 
 
@@ -107,13 +124,14 @@ static func compare(spec: Dictionary) -> Dictionary:
 			rows.append(row)
 	var by := {}
 	for row in rows:
-		var b: Dictionary = by.get(row.strategie, {"strategie": row.strategie, "laeufe": 0, "gewinn": 0.0, "vermoegen": 0.0, "rang": 0.0, "siege": 0})
+		var key: String = row.profil if row.profil != "" else row.strategie   # mit Strategieplan wird nach Profil gemittelt
+		var b: Dictionary = by.get(key, {"strategie": key, "laeufe": 0, "gewinn": 0.0, "vermoegen": 0.0, "rang": 0.0, "siege": 0})
 		b.laeufe += 1
 		b.gewinn += float(row.gewinn)
 		b.vermoegen += float(row.vermoegen)
 		b.rang += float(row.rang)
 		b.siege += 1 if int(row.rang) == 1 else 0
-		by[row.strategie] = b
+		by[key] = b
 	var summary: Array = []
 	for k in by:
 		var b: Dictionary = by[k]
