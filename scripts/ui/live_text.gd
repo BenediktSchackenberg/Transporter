@@ -171,6 +171,40 @@ static func last_decision(sim: Simulation, c: Company) -> Dictionary:
 
 
 ## Was tut jede Firma gerade? Ziel, Plan, Figur, Fahrzeuge (mit Kunde und Anlass), Personal, letzte Entscheidungen.
+## Reiter "Strategie": je Unternehmen die laufende Strategie und die gemessenen Ergebnisse der bewerteten Zeitraeume (keine erfundenen Gedanken).
+static func strategy(sim: Simulation) -> String:
+	var txt := "[b]Strategie und Lernen[/b]
+Messwerte kommen aus der Buchhaltung und den Auftragszählern. Weniger als %d Aufträge gelten als unsicher.
+
+" % StrategyMemory.MIN_CONTRACTS
+	for c in sim.companies:
+		var s: Dictionary = sim.strategy.summary_of(c.id)
+		if s.is_empty():
+			continue
+		txt += "[color=#%s][b]%s[/b][/color]  aktuell [b]%s[/b] seit %d Tagen · bewertete Strategien %d · Zeiträume %d
+" % [_col(c), esc(c.company_name), esc(s.bezeichnung), int(s.tage_im_zeitraum), int(s.bewertet), int(s.zeitraeume_gesamt)]
+		for id in s.bewertungen:
+			var r: Dictionary = s.bewertungen[id]
+			if int(r.zeitraeume) == 0:
+				txt += "    %s: noch nicht erprobt
+" % esc(sim.strategy.label_of(id))
+			else:
+				txt += "    %s: %s je Spieltag · %d Zeiträume · %d Aufträge · %s
+" % [esc(sim.strategy.label_of(id)), Catalog.money(float(r.gewinn_je_tag)), int(r.zeitraeume), int(r.auftraege), r.vertrauen]
+		if int(s.letzter_wechsel_tag) > 0:
+			txt += "    Letzter Strategiewechsel: Spieltag %d
+" % (int(s.letzter_wechsel_tag) + 1)
+		if str(s.letzte_erkenntnis) != "":
+			txt += "    [color=#f2c14e]Letzte Erkenntnis:[/color] %s
+" % esc(str(s.letzte_erkenntnis))
+		for n in s.vermutungen:
+			txt += "    [color=#9fd8ff]Vermutung des Spielers (Tag %d, nicht bewiesen):[/color] %s
+" % [int(n.tag) + 1, esc(str(n.text))]
+		txt += "
+"
+	return txt
+
+
 static func activities(sim: Simulation, controllers: Array) -> String:
 	var txt := ""
 	for c in sim.companies:

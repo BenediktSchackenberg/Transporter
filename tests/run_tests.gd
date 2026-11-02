@@ -4870,6 +4870,8 @@ func test_strategy_learning() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.strategy.memory.records[0].size() == L.memory.records[0].size() and s2.strategy.state[0].current == target, "Lerndaten nach Laden erhalten")
 	ok(s2.strategy.memory.notes[0].size() == 1, "Vermutungen nach Laden erhalten")
+	var page := LiveText.strategy(s)
+	ok(page.contains(s.company(0).company_name) and page.contains("nicht bewiesen") and page.contains("Letzte Erkenntnis"), "Reiter Strategie zeigt Messwerte, Erkenntnis und Vermutungen getrennt")
 	ok(identity_ok(s), "Geld und Waren erhalten")
 
 

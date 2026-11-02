@@ -5,6 +5,19 @@ Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Sp
 Externe Sprachmodell-APIs wurden mangels Key nicht live getestet. Die übrigen Adaptertests nutzen den
 DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen lokalen Mock-Server.
 
+## Strategielernen der KI-Unternehmer (02.11.2026)
+
+Drei Strategieprofile in `config/strategies.json` (konservativ, wachstum, effizient: `cash_reserve_factor`, `min_expected_margin_ratio`, `fleet_purchase_utilization_min`). `wachstum` entspricht dem bisherigen Verhalten der Regel-KI. Die Parameter wirken nur in `RuleBrain.decide` (Puffer = Persönlichkeitspuffer × Faktor / 1,5; Mindestmarge je Auftrag; Flottenkauf nur bei gemessener Auslastung). Sicherheitsregeln des `ActionExecutor` (Liquiditätsreserve u. a.) bleiben unverändert.
+- **`StrategyEvaluator`**: Strategiewert = Gewinn je Spieltag aus dem Ledger (keine doppelten Kosten), Abzug 300 EUR bei Liquiditätsproblem (Bargeld < 0 oder Zahlungsverzug). Erfasst werden außerdem Aufträge, Pünktlichkeit, gescheiterte Aufträge, Auslastung und Leerfahrtenanteil (stündliche Flottenstichprobe) sowie der Kontext (Flotte, Bargeld, offene Aufträge, Fahrfaktor des Wetters).
+- **`StrategyLearner`** (`Simulation.strategy`): Zeitraum 5 Spieltage, verlängert bis 8 Aufträge, höchstens 7 Tage (dann „unsicher“). Epsilon-Greedy: zuerst jede Strategie einmal, danach meist die beste (Mittelwert), mit 15 % eine andere. Eigener Zufallsgenerator, mit gespeichert. Startprofil aus der Persönlichkeit.
+- **`StrategyMemory`**: bewertete Zeiträume je Firma; Vertrauen „unsicher“ (< 8 Aufträge), „vorlaeufig“ (ein Zeitraum), „bestaetigt“ (≥ 2 Zeiträume). Vermutungen des Modells liegen getrennt (`art: vermutung`).
+- **KI-Aktion `set_strategy`** (nur eigene Firma, frühestens nach 3 Tagen, bekannte Profile). Beobachtung `strategie_lernen`; `compact_for_local` enthält jetzt auch `gedaechtnis` und `experimente` (vorher fehlten sie für Ollama).
+- **Arena**: `strategies` im Spec (feste Profile oder `lernend`), rotierend mit den Plätzen; deterministisch und wiederholbar. Trainingsliga: `tests/train_strategies.gd -- --seeds=21,22,23 --days=40` (ohne Modellaufrufe; schreibt `user://strategy_training.json`, ändert die Konfiguration nicht).
+- **Oberfläche**: Reiter „Strategie“ (Überblick → Spieler) mit laufender Strategie, Ergebnis je Strategie, letzter Erkenntnis und getrennt gekennzeichneten Vermutungen.
+- **Tests**: `test_strategy_learning` (22), `test_strategy_arena` (8).
+
+**Ergebnis der ersten Trainingsliga (4 gleiche Wachstums-Persönlichkeiten, Karte 128, 40 Tage, Seeds 21–23, mittlerer Gewinn je Firma):** effizient −3 853, konservativ −4 813, lernend −5 154, wachstum −5 226 EUR. Siege je Karte: je ein Profil, **keines bewährt sich auf zwei von drei Karten** und der Lerner ist bisher nicht besser als die festen Profile (in 40 Tagen bleiben nur etwa sechs Zeiträume, davon drei zum Erproben). Alle Firmen liegen in dieser Konstellation im Minus; die Unterschiede sind klein gegenüber der Streuung zwischen den Karten. Die Strategie-KI ist damit mechanisch fertig, aber **nicht als überlegen belegt**. Offen: längere Läufe (100+ Tage), mehr Karten, kontextabhängiges Lernen und Vergleich mit gemischten Persönlichkeiten; Lernen über mehrere Partien (`carry_memory`) und eigene Strategievorschläge der Sprachmodelle in der Arena.
+
 ## Hilfen für kleine lokale Modelle (01.11.2026)
 
 Spieler mit Ollama (z. B. `qwen3.5:9b`) scheiterten anfangs an rund 78 % ihrer Aktionen, meist wegen fehlender Pflichtangaben. Gegenmaßnahmen, alle im Entscheidungsprotokoll als ergänzt gekennzeichnet:

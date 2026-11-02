@@ -52,6 +52,7 @@ var toast: Label
 var left_box: VBoxContainer
 var left_scroll: ScrollContainer
 var economy_rt: RichTextLabel
+var strategy_rt: RichTextLabel
 var economy_view := 0
 ## Navigation rechts: Bereich -> Seiten. Eine Seite ist ein Reiter (`tab`) und bei "Wirtschaft" zusaetzlich eine Ansicht (`view`).
 ## Jede Seite hat einen Satz, der sagt, was man dort sieht.
@@ -63,6 +64,7 @@ const NAV := [
 		{"label": "Rangliste", "tab": "Wirtschaft", "view": 0, "hint": "Wer führt? Gewinn und Zahlungsfähigkeit aller Spieler. Zahlungsunfähige können nicht gewinnen."}]},
 	{"name": "Spieler", "hint": "Die Unternehmer und ihre Entscheidungen", "pages": [
 		{"label": "KI-Spieler", "tab": "KI-Spieler", "hint": "Anbieter, Modell, Antworten und Fehler der KI-Spieler."},
+		{"label": "Strategie", "tab": "Strategie", "hint": "Gewählte Strategie, bewertete Zeiträume und Erkenntnisse (nur Messwerte)."},
 		{"label": "Entscheidungen", "tab": "Entscheidungen", "hint": "Jede Aktion mit Begründung, Prüfergebnis und Folgen."},
 		{"label": "Dialoge", "tab": "Dialoge", "hint": "Nachrichten zwischen den Spielern."},
 		{"label": "Personal", "tab": "Personal", "hint": "Mitarbeiter, ihre Aufgaben, Motivation und Gesundheit."}]},
@@ -352,6 +354,8 @@ func _build_right() -> void:
 	operations_rt = _rt("Betriebsablauf")
 	operations_rt.scroll_following = false
 	situation_rt = _rt("Lage")
+	strategy_rt = _rt("Strategie")
+	strategy_rt.scroll_following = false
 	_build_economy_tab()
 	activity_rt.scroll_following = false
 	situation_rt.scroll_following = false
@@ -852,6 +856,7 @@ func update_hud(delta: float) -> void:
 		"Aktivitäten": _update_scroll(activity_rt, LiveText.activities(sim, session.controllers))
 		"Betriebsablauf": _update_scroll(operations_rt, LiveText.operations(sim))
 		"Wirtschaft": _update_scroll(economy_rt, _economy_text())
+		"Strategie": _update_scroll(strategy_rt, LiveText.strategy(sim))
 		"Lage": _update_scroll(situation_rt, LiveText.situation(sim, session.remaining_seconds() / 60.0))
 		"Aufträge": _update_contracts()
 		"Fahrzeuge": _update_vehicles()
