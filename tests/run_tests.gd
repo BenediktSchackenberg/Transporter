@@ -4228,6 +4228,7 @@ func test_retail() -> void:
 	var R := s.retail
 	ok(R.shops.size() >= 3, "Restaurants und Geschäfte aus dem Stadtplan (%d Betriebe)" % R.shops.size())
 	ok(R.shops.values().any(func(x): return x.kind == "restaurant"), "mindestens ein Restaurant")
+	ok(R.shops.values().any(func(x): return x.kind == "baumarkt"), "der Stadtplan enthält einen Baumarkt")
 	for x in R.shops.values():
 		ok(s.economy.accounts.has(x.id) and float(s.economy.accounts[x.id]) >= 0.0, "Betrieb %s hat ein eigenes Konto" % x.name)
 		break

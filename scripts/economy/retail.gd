@@ -87,6 +87,7 @@ func setup(s: Simulation) -> void:
 			s.economy.accounts[acct] = 0.0
 	wholesale_building = _pick_wholesale()
 	var per_kind := {}
+	_ensure_hardware_store()
 	for b in s.city.buildings:
 		if b.role == "plot":
 			continue
@@ -102,6 +103,21 @@ func setup(s: Simulation) -> void:
 			_open_shop(b, kind)
 	s.economy.transfer("I0", WHOLESALER, WHOLESALER_CAPITAL)
 	_stock_wholesale(0)
+
+
+## Der Stadtplan erzeugt keinen Baumarkt: ein Laden ohne Versorgungsaufgabe (Buchhandlung, Blumen, Modehaus) wird zum Baumarkt umgewidmet.
+func _ensure_hardware_store() -> void:
+	var candidates: Array = []
+	for b in sim.city.buildings:
+		if b.role == "plot" or b.type != "shop":
+			continue
+		var head := str(b.name).split(" ")[0]
+		if head == "Baumarkt":
+			return
+		if head in ["Buchhandlung", "Blumen", "Modehaus"]:
+			candidates.append(b)
+	if not candidates.is_empty():
+		candidates[0].name = "Baumarkt"
 
 
 func _pick_wholesale() -> int:
