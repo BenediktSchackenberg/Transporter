@@ -13,6 +13,7 @@ const MAX_BONUS := 2                # so viele Ausbauten verkraftet eine Zelle
 const MEASURES := {
 	"ampel": {"label": "Ampelsteuerung verbessern", "cost": 12000.0, "days": 2, "junction": true},
 	"ausbau": {"label": "Strassenabschnitt ausbauen", "cost": 40000.0, "days": 6, "junction": false},
+	"ladezone": {"label": "Ladezone einrichten", "cost": 8000.0, "days": 3, "junction": false, "near_building": true},   # Haltebucht neben einem Gebaeude: haltende Lieferwagen blockieren die Fahrbahn nicht, keine Spur weniger waehrend des Baus
 }
 
 var sim: Simulation
@@ -52,6 +53,16 @@ func base_capacity(cell: Vector2i) -> int:
 
 func is_junction(cell: Vector2i) -> bool:
 	return sim.city.road_mask(cell) in JUNCTION_MASKS
+
+
+## Liegt ein Gebaeude hoechstens zwei Zellen entfernt (dazwischen der Gehweg)? Nur dort kann eine Ladezone entstehen.
+func next_to_building(cell: Vector2i) -> bool:
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var n := cell + Vector2i(dx, dy)
+			if sim.city.inside(n) and sim.city.building_at[sim.city.idx(n)] >= 0:
+				return true
+	return false
 
 
 func _under_works(cell: Vector2i) -> bool:
@@ -129,6 +140,8 @@ func propose(kind: String, cell: Vector2i, reason: String) -> Dictionary:
 		return {"ok": false, "msg": "Auf (%d,%d) liegt keine Strasse." % [cell.x, cell.y]}
 	if spec.junction and not is_junction(cell):
 		return {"ok": false, "msg": "Ampelsteuerung gibt es nur an Kreuzungen; (%d,%d) ist keine." % [cell.x, cell.y]}
+	if spec.get("near_building", false) and (is_junction(cell) or not next_to_building(cell)):
+		return {"ok": false, "msg": "Eine Ladezone braucht eine Strecke (keine Kreuzung) neben einem Gebäude; (%d,%d) erfüllt das nicht." % [cell.x, cell.y]}
 	if int(jam_days.get(cell, 0)) < RECURRING_DAYS:
 		return {"ok": false, "msg": "Kein wiederkehrender Engpass auf (%d,%d): Stau an %d Tagen, nötig sind %d. Ein einzelner Stau rechtfertigt keinen Ausbau." % [cell.x, cell.y, int(jam_days.get(cell, 0)), RECURRING_DAYS]}
 	if int(bonus.get(cell, 0)) >= MAX_BONUS:

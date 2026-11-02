@@ -53,7 +53,7 @@ static func decide(ind: Dictionary) -> Dictionary:
 			break
 		if not bool(sp.wiederkehrend) or str(sp.massnahme) != "":
 			continue
-		var kind_t := "ampel" if bool(sp.kreuzung) else "ausbau"
+		var kind_t := "ampel" if bool(sp.kreuzung) else ("ladezone" if bool(sp.get("neben_gebaeude", false)) else "ausbau")
 		if float(ind.haushalt.verfuegbar) > float(TrafficFlow.MEASURES[kind_t].cost) * 2.0:
 			actions.append({"action": "improve_traffic", "kind": kind_t, "x": int(sp.x), "y": int(sp.y),
 				"reason": "Engpass auf (%d,%d) an %d Tagen überfüllt, %d Fahrzeugsekunden verloren." % [int(sp.x), int(sp.y), int(sp.tage_mit_stau), int(sp.verlorene_fahrzeugsekunden)]})

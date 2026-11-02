@@ -4220,6 +4220,32 @@ func _traffic_measures_test() -> void:
 	ok(identity_ok(s), "Geld erhalten")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.traffic_flow.capacity_of(junction) == cap0 + 1 and s2.traffic_flow.measures.size() == 1, "Massnahmen nach Laden erhalten")
+	# Ladezone: nur auf Strecken neben Gebaeuden, billiger als Ausbau, keine Spur weniger waehrend des Baus
+	var bay := Vector2i(-1, -1)
+	var bare := Vector2i(-1, -1)
+	for y in s.city.size:
+		for x in s.city.size:
+			var q := Vector2i(x, y)
+			if s.city.is_road(q) and not T.is_junction(q):
+				if bay.x < 0 and T.next_to_building(q):
+					bay = q
+				elif bare.x < 0 and not T.next_to_building(q):
+					bare = q
+	ok(bay.x >= 0, "Karte hat Strecken neben Gebaeuden")
+	T.jam_days[bay] = TrafficFlow.RECURRING_DAYS
+	T.jam_days[junction] = TrafficFlow.RECURRING_DAYS
+	ok(not T.propose("ladezone", junction, "Test").ok, "keine Ladezone auf einer Kreuzung")
+	if bare.x >= 0:
+		T.jam_days[bare] = TrafficFlow.RECURRING_DAYS
+		ok(not T.propose("ladezone", bare, "Test").ok, "keine Ladezone ohne Gebaeude daneben")
+	var cap_bay := T.capacity_of(bay)
+	var rb := T.propose("ladezone", bay, "Test")
+	ok(rb.ok and T.capacity_of(bay) == cap_bay, "Ladezone angelegt, waehrend des Baus keine Spur weniger (%s)" % rb.msg)
+	s.game_min += GameCalendar.day_game_min * (TrafficFlow.MEASURES.ladezone.days + 1)
+	T.on_day()
+	ok(T.capacity_of(bay) == cap_bay + 1, "fertige Ladezone erhoeht die Kapazitaet")
+	ok(TrafficFlow.MEASURES.ladezone.cost < TrafficFlow.MEASURES.ausbau.cost, "Ladezone ist guenstiger als Ausbau")
+	ok(identity_ok(s), "Geld nach Ladezone erhalten")
 
 
 func test_retail() -> void:

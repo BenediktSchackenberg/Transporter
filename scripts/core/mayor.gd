@@ -21,7 +21,7 @@ const SCHEMA := {
 	"expand_depot": {"params": {"kind": "string", "reason": "string"},
 		"desc": "Zentrallager ausbauen: kind ramp (Entladerampe, 18 000 EUR), staff (Lagerkraft einstellen) oder forklift (Gabelstapler). Sinnvoll bei wartenden Lkw oder Rückstau im Wareneingang (obs.stadtlager)."},
 	"improve_traffic": {"params": {"kind": "string", "x": "int", "y": "int", "reason": "string"},
-		"desc": "Verkehrsmaßnahme auf einem wiederkehrenden Engpass (obs.verkehr.engpaesse mit wiederkehrend=true): kind ampel (Kreuzung, 12 000 EUR, 2 Tage) oder ausbau (Straßenabschnitt, 40 000 EUR, 6 Tage, währenddessen eine Spur weniger). Ein einzelner Stau rechtfertigt keinen Ausbau."},
+		"desc": "Verkehrsmaßnahme auf einem wiederkehrenden Engpass (obs.verkehr.engpaesse mit wiederkehrend=true): kind ampel (Kreuzung, 12 000 EUR, 2 Tage), ladezone (Strecke neben einem Gebäude, 8 000 EUR, 3 Tage, Haltebucht für Lieferfahrzeuge, +1 Kapazität) oder ausbau (Straßenabschnitt, 40 000 EUR, 6 Tage, währenddessen eine Spur weniger). Ein einzelner Stau rechtfertigt keinen Ausbau."},
 	"reject_procurement": {"params": {"order_id": "string", "reason": "string"}, "desc": "Beschaffungsvorschlag ablehnen (Begründung nötig, z. B. Budget oder kein Bedarf)."},
 	"assess_financing": {"params": {"project_id": "string"}, "desc": "Finanzierungsbedarf eines Projekts oder Plans bewerten (nur Auskunft)."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
@@ -169,7 +169,7 @@ func _traffic_indicators(jams: int) -> Dictionary:
 	var spots: Array = []
 	for h in T.hotspots(5):
 		spots.append({"x": h.cell.x, "y": h.cell.y, "verlorene_fahrzeugsekunden": snappedf(h.lost, 1.0), "tage_mit_stau": h.days, "wiederkehrend": h.recurring,
-			"kreuzung": T.is_junction(h.cell), "kapazitaet": T.capacity_of(h.cell), "massnahme": busy.get(h.cell, "")})
+			"kreuzung": T.is_junction(h.cell), "neben_gebaeude": T.next_to_building(h.cell), "kapazitaet": T.capacity_of(h.cell), "massnahme": busy.get(h.cell, "")})
 	var done: Array = []
 	for m in T.measures.values():
 		var e := T.effect(m)
@@ -468,7 +468,7 @@ func _prioritize_road(a: Dictionary) -> Dictionary:
 func _improve_traffic(a: Dictionary) -> Dictionary:
 	var kind := str(a.kind)
 	if not TrafficFlow.MEASURES.has(kind):
-		return {"ok": false, "msg": "Unbekannte Massnahme %s (ampel oder ausbau)." % kind}
+		return {"ok": false, "msg": "Unbekannte Massnahme %s (ampel, ladezone oder ausbau)." % kind}
 	var v := _proposal_vote("verkehr", float(TrafficFlow.MEASURES[kind].cost), 0, 0)
 	if not v.passed:
 		return {"ok": false, "msg": "Verkehrsmaßnahme abgelehnt: %s" % v.text}
