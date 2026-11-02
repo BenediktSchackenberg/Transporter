@@ -218,7 +218,7 @@ func _run_fallback() -> void:
 	_perceived = _events.duplicate()
 	_events.clear()
 	_last_obs_min = sim.game_min
-	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng)
+	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng, sim.strategy.params_of(cid))
 	var parsed := parse_response(JSON.stringify(d))
 	_apply(parsed, "fb%d" % _next_req, "Ersatzmodus")
 	_next_req += 1
@@ -249,7 +249,7 @@ const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", 
 ## Nur der Tagesbetrieb aus der Regel-KI: Auftraege annehmen und zuweisen, Fahrer einsetzen, reparieren, tanken.
 func _run_dispatch_help() -> void:
 	var obs := ObservationBuilder.build(sim, cid, [], _last_obs_min, remaining_real_min, goal, "")
-	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng)
+	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng, sim.strategy.params_of(cid))
 	d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) in DISPATCH)
 	if d.actions.is_empty():
 		return

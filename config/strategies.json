@@ -1,0 +1,23 @@
+{
+  "konservativ": {
+    "label": "Konservativ",
+    "beschreibung": "Sichert Liquidität, nimmt nur Aufträge mit hoher Marge an und kauft Fahrzeuge erst bei hoher Auslastung.",
+    "cash_reserve_factor": 2.0,
+    "min_expected_margin_ratio": 0.25,
+    "fleet_purchase_utilization_min": 0.85
+  },
+  "wachstum": {
+    "label": "Wachstum",
+    "beschreibung": "Baut die Flotte schneller aus und akzeptiert niedrigere Margen. Entspricht dem bisherigen Verhalten der Regel-KI.",
+    "cash_reserve_factor": 1.5,
+    "min_expected_margin_ratio": 0.0,
+    "fleet_purchase_utilization_min": 0.0
+  },
+  "effizient": {
+    "label": "Effizienz",
+    "beschreibung": "Optimiert die Auslastung, kauft Fahrzeuge erst bei sehr hoher Auslastung und achtet auf die Marge je Auftrag.",
+    "cash_reserve_factor": 1.8,
+    "min_expected_margin_ratio": 0.22,
+    "fleet_purchase_utilization_min": 0.90
+  }
+}

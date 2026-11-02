@@ -39,6 +39,8 @@ const SCHEMA := {
 	"remember": {"params": {"inhalt": "string", "bereich": "array?", "art": "string?", "vertrauen": "number?", "id": "string?"},
 		"desc": "Erfahrung im eigenen Gedächtnis anlegen oder (mit id) aktualisieren; art tatsache|vermutung, vertrauen 0–1."},
 	"forget": {"params": {"id": "string"}, "desc": "Eigene Erfahrung verwerfen (z. B. widerlegt)."},
+	"set_strategy": {"params": {"strategie": "string", "begruendung": "string"},
+		"desc": "Geschäftsstrategie der Regelroutinen wechseln (konservativ, wachstum, effizient; siehe obs.strategie_lernen). Frühestens nach 3 Tagen; der laufende Zeitraum wird bewertet. Ändert Reserve, Mindestmarge und Flottenkauf-Schwelle, nie die Sicherheitsprüfungen."},
 	"move_vehicle": {"params": {"vehicle_id": "int", "site_id": "int"}, "desc": "Fahrzeug (mit Fahrer, ohne Stopps) zu einem eigenen Depot versetzen."},
 	"repair_vehicle": {"params": {"vehicle_id": "int", "worker_id": "string?"},
 		"desc": "Mit worker_id: eigener Mechaniker repariert vor Ort (Ersatzteile nötig). Ohne: Werkstatt (teurer; liegengebliebene Fahrzeuge werden abgeschleppt)."},
@@ -372,6 +374,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return {"ok": true, "msg": "Erfahrung %s gespeichert." % id}
 		"forget":
 			return {"ok": sim.memory.forget(cid, _s(a.id)), "msg": "Erfahrung %s verworfen." % a.id}
+		"set_strategy":
+			return sim.strategy.set_by_model(cid, _s(a.strategie), _s(a.begruendung))
 		"execute_plan_step":
 			var sid := _s(a.step_id)
 			var sub := (_cur_key if _cur_key != "" else "plan:%d" % sim.step_count) + "/" + sid

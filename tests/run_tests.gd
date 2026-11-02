@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -4806,3 +4806,68 @@ func test_company_operations() -> void:
 	suite.planning_limits(self)
 	suite.intentions(self)
 	suite.daily_routes(self)
+
+
+func test_strategy_learning() -> void:
+	GameCalendar.configure(60.0)
+	var prof := StrategyLearner.profiles()
+	ok(prof.has("konservativ") and prof.has("wachstum") and prof.has("effizient"), "drei Strategieprofile geladen")
+	var s := new_sim(4, 256)
+	var L := s.strategy
+	ok(L.state.size() == 4, "jedes Unternehmen hat einen Strategiezustand")
+	# 1) Parameter wirken, ohne Strategie bleibt das Verhalten gleich
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	var rng_a := RandomNumberGenerator.new()
+	rng_a.seed = 5
+	var rng_b := RandomNumberGenerator.new()
+	rng_b.seed = 5
+	var base: Dictionary = RuleBrain.decide(obs.duplicate(true), "wachstum", rng_a)   # decide ergaenzt geplante_aktionen im Eingabeobjekt
+	var growth: Dictionary = RuleBrain.decide(obs.duplicate(true), "wachstum", rng_b, prof.wachstum)
+	ok(JSON.stringify(base.actions) == JSON.stringify(growth.actions), "Profil wachstum entspricht dem bisherigen Verhalten")
+	var market: Array = [{"menge": 5, "kuehlung": false, "schwer": false, "min_reputation": 0, "strecke": 10, "von_pos": [0, 0], "frist_in_min": 9999, "verguetung": 100.0}]
+	var v := {"pos": [0, 0]}
+	var spec := {"kapazitaet": 10, "kuehlung": false, "schwer": false, "tempo": 1.0, "kosten_pro_tile": 6.0}
+	ok(not RuleBrain._best_contract(market, v, spec, 0.0, 0.0).is_empty(), "Auftrag mit kleiner Marge wird ohne Mindestmarge angenommen")
+	ok(RuleBrain._best_contract(market, v, spec, 0.0, 0.5).is_empty(), "Mindestmarge von 50 %% lehnt ihn ab")
+	# 2) Zeitraeume werden bewertet, jede Strategie wird einmal erprobt
+	var first: String = L.state[0].current
+	var day0 := GameCalendar.day_of(s.game_min)
+	var seen := {first: true}
+	for i in 3:
+		s.game_min += GameCalendar.day_game_min * StrategyLearner.MAX_DAYS
+		L.on_day(GameCalendar.day_of(s.game_min))
+		seen[L.state[0].current] = true
+	ok(L.memory.records[0].size() == 3, "drei Zeitraeume bewertet (%d)" % L.memory.records[0].size())
+	ok(seen.size() == 3, "alle drei Strategien wurden erprobt")
+	var rec: Dictionary = L.memory.records[0][0]
+	ok(rec.days >= StrategyLearner.PERIOD_DAYS and rec.has("situation") and rec.has("utilization"), "Bewertung enthaelt Tage, Kontext und Auslastung")
+	ok(L.memory.aggregate(0, rec.strategy).vertrauen == "unsicher", "weniger als %d Auftraege bleibt ausdruecklich unsicher" % StrategyMemory.MIN_CONTRACTS)
+	# 3) beste Strategie wird bevorzugt, Exploration bleibt selten
+	for id in prof:
+		L.memory.add(1, {"strategy": id, "value": 900.0 if id == "effizient" else 100.0, "contracts": 10, "days": 5})
+	var best := 0
+	for i in 400:
+		best += 1 if L._choose(1) == "effizient" else 0
+	ok(best > 300 and best < 400, "meist die beste Strategie, gelegentlich eine andere (%d von 400)" % best)
+	ok(L.memory.aggregate(1, "effizient").vertrauen == "bestaetigt" or L.memory.aggregate(1, "effizient").vertrauen == "vorlaeufig", "ausreichende Stichprobe gilt nicht mehr als unsicher")
+	# 4) Modellwechsel: nur nach Mindestdauer, nur bekannte Strategien, nur die eigene Firma
+	var other_before: String = L.state[2].current
+	var st0: String = L.state[0].current
+	var target := "konservativ" if st0 != "konservativ" else "wachstum"
+	ok(not s.executor.execute(0, {"action": "set_strategy", "strategie": target, "begruendung": "Test"}).ok, "Wechsel vor %d Tagen wird abgelehnt" % StrategyLearner.MIN_MODEL_DAYS)
+	s.game_min += GameCalendar.day_game_min * StrategyLearner.MIN_MODEL_DAYS
+	ok(not s.executor.execute(0, {"action": "set_strategy", "strategie": "unfug", "begruendung": "Test"}).ok, "unbekannte Strategie wird abgelehnt")
+	var rr: Dictionary = s.executor.execute(0, {"action": "set_strategy", "strategie": target, "begruendung": "Auslastung zu niedrig"})
+	ok(rr.ok and L.state[0].current == target, "gueltiger Wechsel (%s)" % rr.msg)
+	ok(L.state[2].current == other_before, "fremde Unternehmen bleiben unberuehrt")
+	ok(L.memory.notes[0][0].art == "vermutung", "Begruendung des Modells gilt als Vermutung, nicht als Messwert")
+	# 5) Beobachtung fuer das lokale Modell enthaelt Gedaechtnis, Experimente und Lernbericht
+	var o2 := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	var compact := ObservationBuilder.compact_for_local(o2)
+	ok(compact.has("gedaechtnis") and compact.has("experimente") and compact.has("strategie_lernen"), "lokale Beobachtung enthaelt Lernfelder")
+	ok(o2.strategie_lernen.bewertet >= 1 and o2.strategie_lernen.has("letzte_erkenntnis"), "Lernbericht nennt bewertete Strategien")
+	# 6) Speichern und Laden ohne Verlust
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.strategy.memory.records[0].size() == L.memory.records[0].size() and s2.strategy.state[0].current == target, "Lerndaten nach Laden erhalten")
+	ok(s2.strategy.memory.notes[0].size() == 1, "Vermutungen nach Laden erhalten")
+	ok(identity_ok(s), "Geld und Waren erhalten")

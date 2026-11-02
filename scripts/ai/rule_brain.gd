@@ -16,11 +16,13 @@ const LINES := {
 }
 const BUFFER := {"kostenoptimierer": 20000.0, "wachstum": 6000.0, "netzwerker": 12000.0, "risikospieler": 9000.0}
 const MAX_ACTIONS := 6
+const REFERENCE_RESERVE_FACTOR := 1.5   # Reservefaktor, bei dem der Puffer der Persoenlichkeit unveraendert gilt
 ## Dominanzstreben: Wahrscheinlichkeit je Entscheidung, den schwaechsten Konkurrenten gezielt unter Druck zu setzen (nur aus Gewinn heraus).
 const DOMINANCE := {"wachstum": 0.25, "risikospieler": 0.30, "kostenoptimierer": 0.12, "netzwerker": 0.04}
 
 
-static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenerator) -> Dictionary:
+## strategy: optionale Parameter des StrategyLearner (cash_reserve_factor, min_expected_margin_ratio, fleet_purchase_utilization_min, utilization_now); leer = bisheriges Verhalten.
+static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenerator, strategy: Dictionary = {}) -> Dictionary:
 	if obs.is_empty():
 		return {"summary": "Ich warte ab.", "actions": [{"action": "wait"}], "memory": ""}
 	var me: Dictionary = obs.ich
@@ -30,6 +32,11 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	var reasons: Array = []
 	var cash := float(me.bargeld)
 	var buffer: float = BUFFER.get(personality, 12000.0)
+	if strategy.has("cash_reserve_factor"):
+		buffer *= float(strategy.cash_reserve_factor) / REFERENCE_RESERVE_FACTOR
+	var min_margin := float(strategy.get("min_expected_margin_ratio", 0.0))
+	# Flottenkauf nur bei ausreichender gemessener Auslastung (solange noch keine Messung vorliegt: keine Sperre)
+	var util_ok: bool = float(strategy.get("utilization_now", 1.0)) >= float(strategy.get("fleet_purchase_utilization_min", 0.0))
 	var planned: Array = obs.figur.geplante_aktionen
 	var load: PackedStringArray = str(me.buero.laufende_auftraege).split("/")
 	var active := load[0].to_int()
@@ -99,7 +106,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		if active >= capacity:
 			unserved += 1
 			continue
-		var best := _best_contract(market, v, models[v.modell], float(me.reputation))
+		var best := _best_contract(market, v, models[v.modell], float(me.reputation), min_margin)
 		if best.is_empty():
 			unserved += 1
 			continue
@@ -218,7 +225,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 			planned.append("buy_vehicle")
 	if not growth.is_empty():
 		pass
-	elif ready.is_empty() and not ops.get("linien", []).any(func(l): return l.active and int(l.get("pending", 0)) == 0) and good_jobs >= 3 and _free_slots(me) > 0 and active < capacity and "buy_vehicle" not in planned:
+	elif ready.is_empty() and not ops.get("linien", []).any(func(l): return l.active and int(l.get("pending", 0)) == 0) and good_jobs >= 3 and util_ok and _free_slots(me) > 0 and active < capacity and "buy_vehicle" not in planned:
 		var wanted := ["van", "transporter", "cargobike"]
 		if personality == "wachstum" and good_jobs >= 6:
 			wanted = ["truck", "transporter", "van"]
@@ -516,7 +523,7 @@ static func _cheapest_offer(offers: Array, models: Array) -> Dictionary:
 	return best
 
 
-static func _best_contract(market: Array, v: Dictionary, spec: Dictionary, rep: float) -> Dictionary:
+static func _best_contract(market: Array, v: Dictionary, spec: Dictionary, rep: float, min_margin: float = 0.0) -> Dictionary:
 	var best := {}
 	var best_score := 0.0
 	for k in market:
@@ -530,7 +537,8 @@ static func _best_contract(market: Array, v: Dictionary, spec: Dictionary, rep: 
 			continue
 		var margin := float(k.verguetung) + float(k.get("praemie_stadt", 0)) - tiles * float(spec.kosten_pro_tile) * 1.1
 		var score := margin / (tiles + 30.0)
-		if margin > 30.0 and score > best_score:
+		var revenue := float(k.verguetung) + float(k.get("praemie_stadt", 0))
+		if margin > 30.0 and margin >= min_margin * revenue and score > best_score:
 			best_score = score
 			best = k
 	return best
