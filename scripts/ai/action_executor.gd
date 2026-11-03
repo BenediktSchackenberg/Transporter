@@ -163,13 +163,19 @@ static func normalize(action: Dictionary) -> Dictionary:
 	if a.get("kind") is String and KIND_ALIASES.has(str(a.kind).to_lower()):
 		a["kind"] = KIND_ALIASES[str(a.kind).to_lower()]
 	var name := str(a.get("action", a.get("type", "")))
+	if not all_schema().has(name):   # "assign_transport/plan_tour" u. Ae.: erste bekannte Aktion nehmen, bevor die Schluessel gedeutet werden
+		for part in name.replace("|", "/").replace(",", "/").split("/"):
+			if all_schema().has(part.strip_edges()):
+				name = part.strip_edges()
+				a["action"] = name
+				break
 	# Weitere Schluesselformen kleiner Modelle (Listen unter anderem Namen, Auftrags-/Fahrzeug-/Angebotsnummer unter einem Fantasienamen)
 	var ctx_keys: Dictionary = {
 		"vehicle_id": ["vehicles", "vehicle_ids", "truck_id", "trucks", "target_vehicles", "fahrzeug"],
 		"worker_id": ["workers", "worker_ids", "arbeiter_id", "mitarbeiter"],
 	}
 	if name in ["accept_contract", "assign_transport", "assign_vehicle", "plan_tour"]:
-		ctx_keys["contract_id"] = ["contract_ids", "task_id", "tasks", "targets", "order_id", "orders", "auftrag"]
+		ctx_keys["contract_id"] = ["contract_ids", "task_id", "task_ids", "tasks", "targets", "order_id", "orders", "auftrag"]
 	elif name == "buy_vehicle":
 		ctx_keys["offer_id"] = ["angebote", "offers", "offer_ids", "targets", "vehicle_ids", "angebot"]
 	for ck in ctx_keys:

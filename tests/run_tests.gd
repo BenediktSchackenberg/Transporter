@@ -779,6 +779,10 @@ func test_action_normalize_models() -> void:
 	ok(n8.offer_id == "F3", "angebote-Liste wird zu offer_id")
 	var n9 := ActionExecutor.normalize({"action": "set_plan", "next_steps": ["Flotte prüfen", "Aufträge sammeln"]})
 	ok(n9.ziel == "Flotte prüfen" and n9.schritte.size() == 2, "set_plan ohne ziel erhält es aus dem ersten Schritt")
+	var n11 := ActionExecutor.normalize({"action": "assign_transport/plan_tour", "arguments": {"contract_ids": ["A19"], "truck_id": 1.0}})
+	ok(n11.action == "assign_transport" and n11.contract_id == "A19" and n11.vehicle_id == 1, "Doppelname + contract_ids/truck_id (Protokoll 03.11. abends)")
+	var n12 := ActionExecutor.normalize({"action": "assign_transport/plan_tour", "task_ids": ["A6"], "vehicle_ids": [2.0]})
+	ok(n12.contract_id == "A6" and n12.vehicle_id == 2, "task_ids/vehicle_ids")
 	var n10 := ActionExecutor.normalize({"action": "assign_worker_task", "workers": ["W4"], "vehicle_id": 2})
 	ok(n10.worker_id == "W4" and n10.kind == "fahren", "workers-Liste wird zu worker_id")
 
