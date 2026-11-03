@@ -22,6 +22,9 @@ var entrepreneur_portrait: TextureRect
 var entrepreneur_business: RichTextLabel
 var entrepreneur_ai: RichTextLabel
 var entrepreneur_company := -1
+const MAYOR_VIEW := -2               # entrepreneur_company-Wert fuer die Detailansicht des Buergermeisters
+var mayor_card := {}                  # Karte des Buergermeisters (panel, mode, act)
+var entrepreneur_actions: HBoxContainer
 var tabs: TabContainer
 var right_box: VBoxContainer         # Navigation (Bereiche und Unterseiten) ueber den Inhaltsseiten
 var nav_cat_btns: Array = []
@@ -235,6 +238,7 @@ func _build_left() -> void:
 	box.custom_minimum_size = Vector2(200, 0)
 	box.add_theme_constant_override("separation", 10)
 	left_scroll.add_child(box)
+	_build_mayor_card(box)
 	for c in sim.companies:
 		var p := PanelContainer.new()
 		var sb := UITheme.box(Color("#2a2d42"), c.color, 3, 4)
@@ -278,6 +282,70 @@ func _build_left() -> void:
 		info.add_child(cash)
 		box.add_child(p)
 		cards.append({"panel": p, "cash": cash, "cid": cid})
+
+
+## Karte des Buergermeisters (wie die Unternehmer): Modus (Claude/Modell/Regeln), aktuelles Tun, Klick oeffnet die Details.
+func _build_mayor_card(box: VBoxContainer) -> void:
+	var gold := UITheme.ACCENT
+	var p := PanelContainer.new()
+	var sb := UITheme.box(Color("#2f2c3a"), gold, 3, 4)
+	var sb_hover := UITheme.box(Color("#403b50"), gold.lightened(0.3), 3, 4)
+	p.add_theme_stylebox_override("panel", sb)
+	p.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	p.tooltip_text = "Bürgermeister\nKlicken: Entscheidungen und Lage öffnen"
+	p.mouse_entered.connect(func(): p.add_theme_stylebox_override("panel", sb_hover))
+	p.mouse_exited.connect(func(): p.add_theme_stylebox_override("panel", sb))
+	p.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_open_entrepreneur(MAYOR_VIEW))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(row)
+	var face := TextureRect.new()
+	face.texture = UITheme.portrait(2)
+	face.modulate = Color(1.0, 0.9, 0.62)      # goldener Ton: unterscheidet das Amt von den Unternehmern
+	face.custom_minimum_size = Vector2(64, 64)
+	face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(face)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.alignment = BoxContainer.ALIGNMENT_CENTER
+	info.add_theme_constant_override("separation", 0)
+	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(info)
+	var role := UITheme.label("BÜRGERMEISTER", 11, gold)
+	role.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(role)
+	var nm := UITheme.label(sim.mayor.name, 17, gold.lightened(0.4))
+	nm.clip_text = true
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(nm)
+	var mode := UITheme.label("", 12, UITheme.MUTED)
+	mode.clip_text = true
+	mode.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(mode)
+	var act := UITheme.label("", 12, UITheme.GOOD)
+	act.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	act.custom_minimum_size = Vector2(110, 0)
+	act.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(act)
+	box.add_child(p)
+	mayor_card = {"panel": p, "name": nm, "mode": mode, "act": act}
+
+
+func _update_mayor_card() -> void:
+	if mayor_card.is_empty():
+		return
+	var agent: MayorAgent = session.mayor_agent
+	mayor_card.name.text = sim.mayor.name
+	mayor_card.mode.text = LiveText.mayor_mode(agent)
+	var act := LiveText.mayor_now(sim, agent)
+	mayor_card.act.text = act.text
+	mayor_card.act.add_theme_color_override("font_color", act.color)
+	mayor_card.panel.tooltip_text = "Bürgermeister %s\n%s\nKlicken: Entscheidungen und Lage öffnen" % [sim.mayor.name, act.detail]
 
 
 func _card_action(kind: String, cid: int) -> void:
@@ -688,6 +756,7 @@ func _build_entrepreneur_window() -> void:
 	entrepreneur_business = _entrepreneur_column(columns)
 	entrepreneur_ai = _entrepreneur_column(columns)
 	var actions := HBoxContainer.new()
+	entrepreneur_actions = actions
 	actions.add_theme_constant_override("separation", 10)
 	layout.add_child(actions)
 	for kind in ["Folgen", "Betriebshof", "Verlauf"]:
@@ -717,6 +786,7 @@ func _entrepreneur_column(parent: HBoxContainer) -> RichTextLabel:
 
 func _open_entrepreneur(cid: int) -> void:
 	entrepreneur_company = cid
+	entrepreneur_actions.visible = cid != MAYOR_VIEW
 	entrepreneur_window.visible = true
 	entrepreneur_business.get_v_scroll_bar().value = 0
 	entrepreneur_ai.get_v_scroll_bar().value = 0
@@ -743,7 +813,23 @@ func _set_entrepreneur_text(rt: RichTextLabel, value: String) -> void:
 	rt.get_v_scroll_bar().value = scroll
 
 
+func _update_mayor_window() -> void:
+	var agent: MayorAgent = session.mayor_agent
+	var M: Mayor = sim.mayor
+	entrepreneur_title.text = "Bürgermeister %s" % M.name
+	entrepreneur_title.add_theme_color_override("font_color", UITheme.ACCENT)
+	entrepreneur_subtitle.text = "%s  ·  Zustimmung %.0f %%  ·  %s" % [Council.LABELS.get(M.party, M.party), M.approval, LiveText.mayor_mode(agent)]
+	entrepreneur_portrait.texture = UITheme.portrait(2)
+	entrepreneur_portrait.modulate = Color(1.0, 0.9, 0.62)
+	_set_entrepreneur_text(entrepreneur_business, LiveText.mayor_state(sim))
+	_set_entrepreneur_text(entrepreneur_ai, LiveText.mayor_activity(sim, agent))
+
+
 func _update_entrepreneur() -> void:
+	if entrepreneur_company == MAYOR_VIEW:
+		_update_mayor_window()
+		return
+	entrepreneur_portrait.modulate = Color.WHITE
 	if entrepreneur_company < 0 or entrepreneur_company >= sim.companies.size():
 		return
 	var c: Company = sim.company(entrepreneur_company)
@@ -871,6 +957,7 @@ func _update_cards() -> void:
 		var led: Ledger = sim.company(c.cid).ledger
 		c.cash.text = _k(led.cash)
 		c.cash.add_theme_color_override("font_color", UITheme.GOOD if led.profit() >= 0.0 else UITheme.BAD)
+	_update_mayor_card()
 	if entrepreneur_window.visible:
 		_update_entrepreneur()
 

@@ -783,6 +783,8 @@ func test_action_normalize_models() -> void:
 	ok(n11.action == "assign_transport" and n11.contract_id == "A19" and n11.vehicle_id == 1, "Doppelname + contract_ids/truck_id (Protokoll 03.11. abends)")
 	var n12 := ActionExecutor.normalize({"action": "assign_transport/plan_tour", "task_ids": ["A6"], "vehicle_ids": [2.0]})
 	ok(n12.contract_id == "A6" and n12.vehicle_id == 2, "task_ids/vehicle_ids")
+	var n13 := ActionExecutor.normalize({"action": "remember", "content": "Notiz"})
+	ok(n13.inhalt == "Notiz", "remember: content wird zu inhalt (Bürgermeister-Protokoll 03.11.)")
 	var n10 := ActionExecutor.normalize({"action": "assign_worker_task", "workers": ["W4"], "vehicle_id": 2})
 	ok(n10.worker_id == "W4" and n10.kind == "fahren", "workers-Liste wird zu worker_id")
 
@@ -3656,6 +3658,8 @@ func test_mayor() -> void:
 	var q1 := M.execute({"action": "designate_quarter", "name": "Testquartier", "parcel_ids": c0.grundstuecke, "zone": c0.zone, "reason": "30 Haushalte suchen Wohnraum"})
 	ok(q1.ok and "Abstimmung" in q1.msg and M.plans.has(q1.ref), "Quartier beschlossen: " + q1.msg.left(160))
 	ok(P.parcel(c0.grundstuecke[0]).state in ["zur_entwicklung", "frei"], "Grundstücke zur Entwicklung vorgesehen")
+	var dup := M.execute({"action": "designate_quarter", "name": "Doppelt", "parcel_ids": c0.grundstuecke, "zone": c0.zone, "reason": "nochmal"})
+	ok(not dup.ok and "bereits zum beschlossenen Quartier" in dup.msg, "dieselben Grundstücke werden nicht ein zweites Mal als Quartier beschlossen: " + dup.msg.left(100))
 	var offer := M.execute({"action": "offer_parcels", "parcel_ids": c0.grundstuecke, "price_factor": 0.9, "reason": "Quartier beschlossen"})
 	ok(offer.ok and P.parcel(c0.grundstuecke[0]).state == "frei", "Grundstücke zur Vergabe freigegeben: " + offer.msg)
 	ok(not M.execute({"action": "offer_parcels", "parcel_ids": ["G999999"], "reason": "x"}).ok, "unbekanntes Grundstück abgelehnt")

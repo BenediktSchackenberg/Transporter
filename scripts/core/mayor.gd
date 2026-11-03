@@ -371,6 +371,13 @@ func _designate_quarter(a: Dictionary) -> Dictionary:
 	var chk := _city_parcels(a.parcel_ids, ["frei", "zur_entwicklung"])
 	if chk.has("error"):
 		return {"ok": false, "msg": chk.error}
+	var covered := ""
+	for pl in plans.values():
+		if pl.status == "beschlossen" and pl.zone == zone and chk.parcels.all(func(p): return p.id in pl.parcels):
+			covered = str(pl.id)
+			break
+	if covered != "":
+		return {"ok": false, "msg": "Diese Grundstücke gehören bereits zum beschlossenen Quartier %s (Zone %s): kein zweites Quartier ausweisen, sondern mit offer_parcels vergeben." % [covered, zone]}
 	var area := 0
 	for p in chk.parcels:
 		area += int(p.area)

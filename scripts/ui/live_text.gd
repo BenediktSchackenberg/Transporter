@@ -989,6 +989,95 @@ static func permits(sim: Simulation) -> String:
 	return txt
 
 
+## Kurzbezeichnung der Steuerung des Buergermeisters fuer Karte und Kopfzeile.
+static func mayor_mode(agent: MayorAgent) -> String:
+	if agent == null or not agent.uses_model():
+		return "Regeln"
+	var provider := str(agent.config.get("provider", ""))
+	var model := str(agent.config.get("model", ""))
+	var label := "Claude" if provider == "anthropic" else ("Ollama" if provider == "ollama" else provider)
+	var txt := "%s · %s" % [label, model]
+	if agent.fallback_active:
+		txt += " · Ersatzmodus"
+	return txt
+
+
+## Was der Buergermeister gerade tut: {text, color, detail} fuer die Karte.
+static func mayor_now(sim: Simulation, agent: MayorAgent) -> Dictionary:
+	var M: Mayor = sim.mayor
+	var last: Dictionary = M.decisions.back() if not M.decisions.is_empty() else {}
+	var detail := ""
+	if agent != null and not agent.summaries.is_empty():
+		detail = str(agent.summaries.back().text).left(240)
+	var text := "wartet auf die nächste Runde"
+	var color := UITheme.MUTED
+	if agent != null and agent.status.begins_with("wartet"):
+		text = "überlegt gerade …"
+		color = UITheme.ACCENT
+	elif agent != null and agent.status.begins_with("Fehler"):
+		text = "Störung: %s" % agent.last_error.left(40)
+		color = UITheme.BAD
+	elif not last.is_empty():
+		text = "Zuletzt: %s%s" % [str(last.action), "" if last.ok else " (abgelehnt)"]
+		color = UITheme.GOOD if last.ok else UITheme.BAD
+	return {"text": text, "color": color, "detail": detail}
+
+
+## Lage der Stadt aus Sicht des Buergermeisters (linke Spalte der Detailansicht).
+static func mayor_state(sim: Simulation) -> String:
+	var M: Mayor = sim.mayor
+	var txt := "[b][color=#f2c14e]LAGE DER STADT[/color][/b]\n"
+	txt += _mayor_lage(M, M.indicators())
+	txt += "\n[b]Wahlen[/b]\n"
+	for e in M.elections:
+		txt += "  Tag %d: %s (Zustimmung %.0f %%)%s\n" % [int(e.day), e.ergebnis, float(e.zustimmung), (", Nachfolger " + esc(str(e.nachfolger))) if e.has("nachfolger") else ""]
+	if M.elections.is_empty():
+		txt += "  Noch keine Wahl.\n"
+	return txt
+
+
+## Was die Steuerung gerade macht und entschieden hat (rechte Spalte der Detailansicht).
+static func mayor_activity(sim: Simulation, agent: MayorAgent) -> String:
+	var M: Mayor = sim.mayor
+	var txt := "[b][color=#f2c14e]STEUERUNG[/color][/b]\n"
+	if agent != null:
+		txt += "%s · Status: [b]%s[/b]\nAnfragen %d · gültig %d · Fehler %d · ungültige Antworten %d · Token %d\nAktionen ausgeführt %d · abgelehnt %d\n" % [
+			mayor_mode(agent), esc(agent.status), int(agent.stats.requests), int(agent.stats.ok), int(agent.stats.errors), int(agent.stats.invalid),
+			int(agent.stats.tokens), int(agent.stats.actions_ok), int(agent.stats.actions_rejected)]
+		if agent.last_error != "":
+			txt += "[color=#ff6b5e]Letzter Fehler: %s[/color]\n" % esc(agent.last_error.left(200))
+		txt += "\n[b][color=#f2c14e]BEGRÜNDUNGEN DER LETZTEN RUNDEN[/color][/b]\n"
+		if agent.summaries.is_empty():
+			txt += "Noch keine Runde abgeschlossen.\n"
+		for s in agent.summaries.slice(-5):
+			txt += "• [color=#9a98a8](%s, %s)[/color] %s\n" % [Catalog.game_time_short(float(s.t)), esc(str(s.source)), esc(str(s.text))]
+	txt += "\n[b][color=#f2c14e]LETZTE ENTSCHEIDUNGEN[/color][/b]\n"
+	if M.decisions.is_empty():
+		txt += "Noch keine.\n"
+	for d in M.decisions.slice(-10):
+		txt += "[b]Tag %d · %s[/b] [color=#%s]%s[/color]\n    Grund: %s\n    Ergebnis: %s\n" % [int(d.day), esc(str(d.action)), "6fd08c" if d.ok else "ff6b5e",
+			"ausgeführt" if d.ok else "abgelehnt", esc(str(d.reason)), esc(str(d.msg).left(160))]
+	return txt
+
+
+static func _mayor_lage(M: Mayor, ind: Dictionary) -> String:
+	var w: Dictionary = ind.wohnen
+	var a: Dictionary = ind.arbeit
+	var h: Dictionary = ind.haushalt
+	var txt := "Einwohner %d (%+d) · Wohnungen %d, Leerstand %.1f %% · wohnungssuchende Haushalte %d · Mietindex %.0f\n" % [int(ind.bevoelkerung.einwohner),
+		int(ind.bevoelkerung.veraenderung_letzter_monat), int(w.bestand_einheiten), float(w.leerstand) * 100.0, int(w.wohnungssuchende_haushalte), float(w.mietindex)]
+	txt += "Beschäftigung %.1f %% · arbeitslos %d · offene Stellen %d\n" % [float(a.quote) * 100.0, int(a.arbeitslos), int(a.offene_stellen)]
+	txt += "Stadtkasse %s · reserviert %s · verfügbar %s%s\n" % [Catalog.money(float(h.kasse)), Catalog.money(float(h.reserviert)), Catalog.money(float(h.verfuegbar)), " · DEFIZIT" if h.defizit else ""]
+	txt += "\n[b]Entwicklungspläne[/b]\n"
+	for p in M.plans.values():
+		txt += "  %s %s · %s · %d Grundstücke · %s\n    %s\n" % [p.id, esc(str(p.name)), p.status, p.parcels.size(), Parcels.ZONES[p.zone].label, esc(str(p.vote).left(220))]
+	txt += "\n[b]Öffentliche Projekte[/b]\n"
+	for p in M.projects.values():
+		txt += "  %s %s · %s · %s · Priorität %d\n" % [p.id, p.kind, p.status, Catalog.money(float(p.cost)), int(p.get("priority", 0))]
+	txt += "\n[b]Bauanträge zur Entscheidung[/b]: %d\n" % ind.bauantraege.zur_entscheidung.size()
+	return txt
+
+
 static func mayor(sim: Simulation, agent: MayorAgent = null) -> String:
 	var M: Mayor = sim.mayor
 	var ind: Dictionary = M.indicators()

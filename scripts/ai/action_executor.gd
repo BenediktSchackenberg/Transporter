@@ -195,6 +195,11 @@ static func normalize(action: Dictionary) -> Dictionary:
 				if a.get(alt) is Array and a[alt].size() > 1 and not a.has("_kandidaten") and ck in ["contract_id", "offer_id"]:
 					a["_kandidaten"] = a[alt].map(func(x): return str(x))
 				break
+	if name == "remember" and not a.has("inhalt"):   # Notiz unter anderem Namen (Mayor-Schema verlangt "inhalt")
+		for nk in ["content", "text", "note", "notiz", "memory", "erfahrung"]:
+			if a.get(nk) is String and str(a[nk]) != "":
+				a["inhalt"] = a[nk]
+				break
 	if name == "set_plan":   # Plan in freier Form (goals/next_steps) -> ziel/schritte
 		if not a.has("ziel"):
 			for gk in ["goals", "goal", "objective", "ziele", "plan"]:
