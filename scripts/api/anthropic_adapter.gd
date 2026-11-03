@@ -9,6 +9,7 @@ extends LLMAdapter
 
 const DEFAULT_BASE_URL := "https://api.anthropic.com/v1"
 const DEFAULT_MODEL := "claude-sonnet-5-5"
+const DISPATCH_MODEL := "claude-haiku-5-5"      # Disponent: viele kurze Auswahlentscheidungen
 const API_VERSION := "2023-06-01"
 const MIN_OUTPUT_TOKENS := 4000     # Denkanteil und Antwort teilen sich max_tokens
 
