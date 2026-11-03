@@ -155,6 +155,7 @@ func _setup_dispatcher() -> void:
 		return
 	dc["base_url"] = str(dc.get("base_url", AnthropicAdapter.DEFAULT_BASE_URL))
 	dc["model"] = str(dc.get("model", AnthropicAdapter.DISPATCH_MODEL))   # haeufige, kurze Entscheidungen: Haiku
+	dc["effort"] = str(dc.get("effort", "low"))   # Auswahl aus fertiger Kandidatenliste: wenig Denkaufwand genuegt
 	if not dc.has("api_key"):
 		dc["api_key"] = AnthropicAdapter.mayor_key()
 	dispatch_agent = DispatchAgent.new()
