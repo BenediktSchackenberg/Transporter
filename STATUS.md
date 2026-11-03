@@ -5,6 +5,8 @@ Ein lokales Qwen-3.5-Modell wurde über Ollamas native API mit vollständigem Sp
 Externe Sprachmodell-APIs wurden mangels Key nicht live getestet. Die übrigen Adaptertests nutzen den
 DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen lokalen Mock-Server.
 
+**KI-Verbesserung 03.11.2026 (Messung, kein Codewechsel):** `tests/probe_expiry.gd` ordnet verfallene Marktaufträge nach Eigenschaften ein (Seed 21, 20 Tage: 151 von 831). Rund die Hälfte sind reine Stadtaufträge (Vergütung unter 100 EUR, für Spieler unsichtbar, unproblematisch). Der Rest sind wertvolle Fahrten (Ø 400–850 EUR), meist weit oder gekühlt, bei denen die Flotte fachlich passt, aber kein Fahrzeug frei ist. Versuch: Fahrzeugkauf auch bei bereiten Fahrzeugen, sobald mindestens zwei lohnende Aufträge kein bereites Fahrzeug finden (Bargeld über 4 × Puffer + 20 000). Ergebnis über Seeds 21–24, 30 Tage: Gewinnsumme aller vier Firmen −18 267 statt −4 136 EUR, also schlechter; **verworfen**. Mehr Fahrzeuge lösen den Engpass nicht (Fahrer, Hof, Marge). Nächste Hebel: Disposition über Tourenbündelung (zwei Aufträge je Fahrt), Risikospieler gibt über 10 000 EUR in 30 Tagen für Anschläge aus.
+
 ## Strategielernen der KI-Unternehmer (02.11.2026)
 
 Drei Strategieprofile in `config/strategies.json` (konservativ, wachstum, effizient: `cash_reserve_factor`, `min_expected_margin_ratio`, `fleet_purchase_utilization_min`). `wachstum` entspricht dem bisherigen Verhalten der Regel-KI. Die Parameter wirken nur in `RuleBrain.decide` (Puffer = Persönlichkeitspuffer × Faktor / 1,5; Mindestmarge je Auftrag; Flottenkauf nur bei gemessener Auslastung). Sicherheitsregeln des `ActionExecutor` (Liquiditätsreserve u. a.) bleiben unverändert.
