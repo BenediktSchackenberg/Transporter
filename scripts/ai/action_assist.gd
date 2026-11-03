@@ -50,6 +50,8 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 					return {"action": "schedule_refueling", "below_l": 250 * nv, "buy_l": 500 * mini(2, nv),
 						"_ergaenzt": ["statt Tank-Aufgabe: Nachtank-Regel"]}
 				return {"action": "wait", "_ergaenzt": ["Nachtank-Regel besteht bereits"]}
+			if kl in ["collect_contracts", "collect", "auftraege_sammeln", "jobs"]:
+				return {"action": "collect_contracts", "_ergaenzt": ["statt Arbeiteraufgabe '%s': Auftraege sammeln" % kind_given]}
 			if kl in ["transport", "deliver", "delivery", "lieferung", "liefern"]:
 				out["kind"] = "fahren"
 				kind_given = "fahren"
@@ -87,6 +89,18 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 						if k != "":
 							out["contract_id"] = k
 							added.append("contract_id")
+				elif w != null and w.employer == cid and int(w.skills.get("reparieren", 0)) >= 1:
+					# Kein Fahrzeug ohne Fahrer, aber ein Fahrzeug braucht Pflege: Mechaniker hinschicken
+					var rv: FleetVehicle = null
+					for cv in sim.company_vehicles(cid):
+						if cv.state == "broken" or cv.condition < 50.0:
+							rv = cv
+							break
+					if rv != null:
+						out["kind"] = "reparieren"
+						out["vehicle_id"] = rv.id
+						added.append("kind=reparieren")
+						added.append("vehicle_id")
 			elif str(out.get("kind", "")) == "fahren":
 				# Fahraufgabe mit fehlendem oder fremdem Fahrzeug / ohne Arbeiter: Luecken schliessen
 				var vv: FleetVehicle = sim.vehicles.get(ActionExecutor._i(out.get("vehicle_id", -1))) if out.get("vehicle_id") != null else null

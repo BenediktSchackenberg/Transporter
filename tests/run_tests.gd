@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -785,6 +785,33 @@ func test_action_normalize_models() -> void:
 	ok(n12.contract_id == "A6" and n12.vehicle_id == 2, "task_ids/vehicle_ids")
 	var n10 := ActionExecutor.normalize({"action": "assign_worker_task", "workers": ["W4"], "vehicle_id": 2})
 	ok(n10.worker_id == "W4" and n10.kind == "fahren", "workers-Liste wird zu worker_id")
+
+
+func test_assist_trips_and_kind() -> void:
+	var s := new_sim(2)
+	var c: Company = s.companies[0]
+	c.ledger.inject(50000.0)
+	var v: FleetVehicle = s.company_vehicles(0)[0]
+	var cap := int(v.spec().capacity)
+	var k := Contract.new()
+	k.id = "ZT1"
+	k.pickup = c.depots[0]
+	k.dropoff = int(s.city.buildings[3].id)
+	k.qty = cap * 2
+	k.reward = 1000.0
+	k.status = "accepted"
+	k.owner = 0
+	k.deadline = 99999.0
+	k.offer_until = 99999.0
+	s.contracts[k.id] = k
+	var r0: Dictionary = s.executor.execute(0, {"action": "assign_transport", "contract_id": k.id, "vehicle_id": v.id})
+	ok(not r0.ok, "ohne Hilfe bleibt ein zu grosser Auftrag abgelehnt")
+	s.executor.auto_split[0] = true
+	var r: Dictionary = s.executor.execute(0, {"action": "assign_transport", "contract_id": k.id, "vehicle_id": v.id})
+	ok(r.ok and r.msg.contains("2 Fahrten"), "zu grosser Auftrag wird auf zwei Fahrten verteilt (%s)" % r.msg)
+	ok(v.stops.size() >= 4, "Fahrzeug hat Stopps fuer beide Fuellungen (%d)" % v.stops.size())
+	var r2: Dictionary = s.executor.execute(0, {"action": "assign_worker_task", "kind": "collect_contracts", "worker_id": "W1"})
+	ok(str(r2.get("msg", "")) != "" and not str(r2.msg).contains("Unbekannte Aufgabe"), "collect_contracts als Aufgabenart wird zur Aktion umgeleitet (%s)" % r2.get("msg", ""))
 
 
 func test_visit_dedupe() -> void:

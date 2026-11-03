@@ -103,6 +103,7 @@ var worker_actions := WorkerActions.new()
 var estate_actions := EstateActions.new()
 var loan_actions := LoanActions.new()
 var assist := ActionAssist.new()
+var auto_split := {}       # Firma -> true: zu grosse Auftraege ohne menge auf bis zu drei Fahrten verteilen (Hilfe fuer kleine Modelle)
 var _cur_key := ""        # Schluessel/Herkunft der gerade ausgefuehrten Aktion (fuer Besuche und Protokoll)
 var _cur_origin := "api"
 
@@ -792,7 +793,10 @@ func _assign(cid: int, vid: int, kid: String, qty: int = -1, from: String = Logi
 	if qty < 0:
 		qty = avail
 		if qty > int(v.spec().capacity):
-			return {"ok": false, "msg": "%s hat %d Einheiten, #%d fasst %d – mit 'menge' aufteilen oder plan_tour nutzen." % [kid, qty, vid, v.spec().capacity]}
+			var cap_q := int(v.spec().capacity)
+			if not auto_split.has(cid) or cap_q <= 0 or ceili(float(qty) / float(cap_q)) > 3:   # mehr als drei Fahrten lohnen nicht: anderes Fahrzeug waehlen
+				return {"ok": false, "msg": "%s hat %d Einheiten, #%d fasst %d – mit 'menge' aufteilen oder plan_tour nutzen." % [kid, qty, vid, v.spec().capacity]}
+			return _assign_in_trips(cid, v, k, qty, cap_q, from, to)
 	if qty <= 0:
 		return {"ok": false, "msg": "Bei %s ist von %s nichts mehr zu verplanen." % [from, kid]}
 	var stops: Array = sim.logistics.direct_stops(k, qty, from, to)
@@ -802,6 +806,27 @@ func _assign(cid: int, vid: int, kid: String, qty: int = -1, from: String = Logi
 	sim.logistics.add_stops(v, stops)
 	var note := "" if sim.driver_of(v) != null else " Achtung: #%d hat keinen Fahrer – Aufgabe 'fahren' vergeben!" % vid
 	return {"ok": true, "msg": "%d × %s (%s) von %s nach %s an #%d disponiert.%s" % [qty, k.cargo_name(), kid, from, to, vid, note]}
+
+
+## Auftrag groesser als das Fahrzeug: in Fuellungen zu je `cap` Einheiten nacheinander fahren (bezahlt wird erst bei vollstaendiger Lieferung).
+func _assign_in_trips(cid: int, v: FleetVehicle, k: Contract, qty: int, cap: int, from: String, to: String) -> Dictionary:
+	var trips := 0
+	var left := qty
+	while left > 0:
+		var q := mini(cap, mini(left, sim.logistics.available(k, from, null)))
+		if q <= 0:
+			break
+		var stops: Array = sim.logistics.direct_stops(k, q, from, to)
+		var err: String = sim.logistics.validate(v, stops)
+		if err != "":
+			if trips == 0:
+				return {"ok": false, "msg": err}
+			break
+		sim.logistics.add_stops(v, stops)
+		trips += 1
+		left -= q
+	var note := "" if sim.driver_of(v) != null else " Achtung: #%d hat keinen Fahrer – Aufgabe 'fahren' vergeben!" % v.id
+	return {"ok": true, "msg": "%s: %d von %d Einheiten in %d Fahrten an #%d disponiert (Fassungsvermögen %d).%s" % [k.id, qty - left, qty, trips, v.id, cap, note]}
 
 
 func _near(cid: int, cell: Vector2i) -> bool:

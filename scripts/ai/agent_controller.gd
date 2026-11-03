@@ -310,6 +310,8 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 		var actual: Dictionary = _ground_action(a)
 		if str(actual.get("action", "")) == "set_plan" and _same_plan(actual):
 			continue
+		if config.get("provider", "") == "ollama" and bool(config.get("dispatch_help", true)):
+			sim.executor.auto_split[cid] = true
 		var res := sim.executor.execute(cid, actual, "p%d:%s:a%d" % [cid, key_prefix, i], origin)
 		i += 1
 		if res.ok:
