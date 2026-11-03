@@ -28,6 +28,8 @@ static func create(provider: String) -> LLMAdapter:
 			return OllamaAdapter.new()
 		"openai", "ionos":
 			return OpenAIAdapter.new()
+		"anthropic":
+			return AnthropicAdapter.new()
 		"demo":
 			return DemoAdapter.new()
 	push_error("Unbekannter Anbieter: " + provider)

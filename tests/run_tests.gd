@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -812,6 +812,31 @@ func test_assist_trips_and_kind() -> void:
 	ok(v.stops.size() >= 4, "Fahrzeug hat Stopps fuer beide Fuellungen (%d)" % v.stops.size())
 	var r2: Dictionary = s.executor.execute(0, {"action": "assign_worker_task", "kind": "collect_contracts", "worker_id": "W1"})
 	ok(str(r2.get("msg", "")) != "" and not str(r2.msg).contains("Unbekannte Aufgabe"), "collect_contracts als Aufgabenart wird zur Aktion umgeleitet (%s)" % r2.get("msg", ""))
+
+
+func test_anthropic_adapter() -> void:
+	var ad := AnthropicAdapter.new()
+	ad.config = {"model": "claude-sonnet-5-5", "max_tokens_per_request": 900, "api_key": "TEST_KEY_MUST_NOT_LEAVE"}
+	var msgs: Array = [{"role": "system", "content": "Antworte als JSON."}, {"role": "system", "content": "Du bist der Marktmacher."},
+		{"role": "user", "content": "Lage A"}, {"role": "user", "content": "Lage B"}, {"role": "assistant", "content": "ok"}, {"role": "user", "content": "weiter"}]
+	var b: Dictionary = ad.build_body(msgs)
+	ok(b.system == "Antworte als JSON.
+
+Du bist der Marktmacher.", "Systemnachrichten werden zu einem Feld")
+	ok(b.messages.size() == 3 and b.messages[0].role == "user" and b.messages[0].content.contains("Lage B"), "gleiche Rollen werden zusammengefuehrt, abwechselnd user/assistant")
+	ok(b.max_tokens >= 4000 and not b.has("temperature"), "max_tokens reicht fuer Denkanteil, kein temperature")
+	ok(b.output_config.effort == "medium", "Aufwand standardmaessig medium")
+	ok(not JSON.stringify(b).contains("TEST_KEY_MUST_NOT_LEAVE"), "Schluessel steht nicht im Anfragekoerper")
+	var first_assistant: Dictionary = ad.build_body([{"role": "assistant", "content": "x"}])
+	ok(first_assistant.messages[0].role == "user", "Verlauf beginnt immer mit user")
+	var good := AnthropicAdapter.parse_response(200, JSON.stringify({"content": [{"type": "thinking", "thinking": ""}, {"type": "text", "text": "{\"a\":1}"}], "stop_reason": "end_turn", "usage": {"input_tokens": 100, "output_tokens": 20}}))
+	ok(good.ok and good.content == "{\"a\":1}" and good.usage.total_tokens == 120, "Text wird aus den Bloecken gelesen, Denkbloecke uebersprungen")
+	ok(not AnthropicAdapter.parse_response(200, JSON.stringify({"content": [], "stop_reason": "refusal"})).ok, "Ablehnung ist ein Fehler")
+	var rl := AnthropicAdapter.parse_response(429, "{}", "7")
+	ok(not rl.ok and rl.retry_after == 7.0, "Rate Limit mit retry-after")
+	ok(AnthropicAdapter.parse_response(401, JSON.stringify({"error": {"message": "invalid x-api-key"}})).error.contains("invalid x-api-key"), "Fehlermeldung der API")
+	ok(LLMAdapter.create("anthropic") is AnthropicAdapter, "Anbieter anthropic ist registriert")
+	ad.free()
 
 
 func test_visit_dedupe() -> void:

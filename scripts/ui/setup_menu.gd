@@ -10,7 +10,7 @@ signal load_requested(path: String)
 static var setup_path := "user://setup.json"   # Tests lenken auf eine eigene Datei um, damit die Einstellungen des Spielers sie nicht beeinflussen
 const EXAMPLE_PATH := "res://config/example_config.json"
 const DURATIONS := [5, 15, 30, 60, 120, 240, 720, 1440, 0]   # aktive Echtzeitminuten, 0 = Endlosmodus
-const PROVIDERS := ["demo", "ollama", "openai", "ionos"]
+const PROVIDERS := ["demo", "ollama", "openai", "ionos", "anthropic"]
 const DEFAULT_NAMES := [["Greta", "Greta Logistik"], ["Viktor", "Vitesse Transporte"], ["Amira", "Amira Express"],
 	["Bodo", "Bodo & Söhne"]]
 
@@ -206,11 +206,14 @@ func _configure_provider(r: Dictionary, provider: String, set_defaults: bool) ->
 			"ionos":
 				r.base_url.text = OpenAIAdapter.IONOS_BASE_URL
 				r.model.text = OpenAIAdapter.IONOS_MODEL
+			"anthropic":
+				r.base_url.text = AnthropicAdapter.DEFAULT_BASE_URL
+				r.model.text = AnthropicAdapter.DEFAULT_MODEL
 			"openai":
 				if r.base_url.text in [OllamaAdapter.DEFAULT_BASE_URL, OpenAIAdapter.IONOS_BASE_URL]:
 					r.base_url.text = "https://api.openai.com/v1"
 					r.model.text = "gpt-4o-mini"
-	var external := provider in ["openai", "ionos"]
+	var external := provider in ["openai", "ionos", "anthropic"]
 	r.base_url.editable = provider != "demo"
 	r.model.editable = provider != "demo"
 	r.api_key.editable = external
@@ -266,8 +269,8 @@ func collect() -> Dictionary:
 			"color_idx": r.color.selected, "avatar_style": r.avatar.selected,
 			"personality": Catalog.PERSONALITIES.keys()[r.personality.selected], "form": CompanyForms.FORMS.keys()[r.form.selected],
 			"provider": provider, "base_url": r.base_url.text.strip_edges(),
-			"model": r.model.text.strip_edges(), "api_key": r.api_key.text.strip_edges() if provider in ["openai", "ionos"] else "",
-			"save_key": r.save_key.button_pressed if provider in ["openai", "ionos"] else false,
+			"model": r.model.text.strip_edges(), "api_key": r.api_key.text.strip_edges() if provider in ["openai", "ionos", "anthropic"] else "",
+			"save_key": r.save_key.button_pressed if provider in ["openai", "ionos", "anthropic"] else false,
 			"interval": r.interval.value, "max_requests": int(r.max_requests.value),
 			"max_tokens": int(r.max_tokens.value), "max_tokens_per_request": int(r.tokens_per_request.value),
 			"fallback": r.fallback.button_pressed, "strategy": r.strategy.text.strip_edges(),
@@ -369,7 +372,7 @@ static func validate(cfg: Dictionary) -> String:
 			return "%s: Für die echte API sind Basis-URL und Modell nötig." % p.player_name
 		if p.provider == "ollama" and (not _is_loopback_url(str(p.base_url)) or str(p.base_url).ends_with("/v1")):
 			return "%s: Ollama lokal braucht eine Adresse wie http://127.0.0.1:11435 (ohne /v1)." % p.player_name
-		if p.provider in ["openai", "ionos"] and not str(p.base_url).begins_with("https://") and not _is_loopback_url(str(p.base_url)):
+		if p.provider in ["openai", "ionos", "anthropic"] and not str(p.base_url).begins_with("https://") and not _is_loopback_url(str(p.base_url)):
 			return "%s: Externe API nur über HTTPS verbinden." % p.player_name
 	if int(cfg.duration_min) not in DURATIONS:
 		return "Ungültige Partiedauer."
