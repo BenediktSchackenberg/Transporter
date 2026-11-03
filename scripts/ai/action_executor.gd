@@ -163,6 +163,31 @@ static func normalize(action: Dictionary) -> Dictionary:
 	if a.get("kind") is String and KIND_ALIASES.has(str(a.kind).to_lower()):
 		a["kind"] = KIND_ALIASES[str(a.kind).to_lower()]
 	var name := str(a.get("action", a.get("type", "")))
+	# Weitere Schluesselformen kleiner Modelle (Listen unter anderem Namen, Auftrags-/Fahrzeug-/Angebotsnummer unter einem Fantasienamen)
+	var ctx_keys: Dictionary = {
+		"vehicle_id": ["vehicles", "vehicle_ids", "truck_id", "trucks", "target_vehicles", "fahrzeug"],
+		"worker_id": ["workers", "worker_ids", "arbeiter_id", "mitarbeiter"],
+	}
+	if name in ["accept_contract", "assign_transport", "assign_vehicle", "plan_tour"]:
+		ctx_keys["contract_id"] = ["contract_ids", "task_id", "tasks", "targets", "order_id", "orders", "auftrag"]
+	elif name == "buy_vehicle":
+		ctx_keys["offer_id"] = ["angebote", "offers", "offer_ids", "targets", "vehicle_ids", "angebot"]
+	for ck in ctx_keys:
+		if a.get(ck) != null:
+			continue
+		for alt in ctx_keys[ck]:
+			var av = a.get(alt)
+			if av is Array and not av.is_empty():
+				av = av[0]
+			if av != null and not av is Dictionary and not av is Array:
+				a[ck] = int(av) if ck == "vehicle_id" and av is float else av
+				if ck == "vehicle_id" and a[ck] is String:
+					var vm := RegEx.create_from_string("^\\D*(\\d+)\\.?0*$").search(str(a[ck]).strip_edges())
+					if vm:
+						a[ck] = int(vm.get_string(1))
+				if a.get(alt) is Array and a[alt].size() > 1 and not a.has("_kandidaten") and ck in ["contract_id", "offer_id"]:
+					a["_kandidaten"] = a[alt].map(func(x): return str(x))
+				break
 	if name == "set_plan":   # Plan in freier Form (goals/next_steps) -> ziel/schritte
 		if not a.has("ziel"):
 			for gk in ["goals", "goal", "objective", "ziele", "plan"]:
@@ -171,6 +196,11 @@ static func normalize(action: Dictionary) -> Dictionary:
 					break
 				if a.get(gk) is Array and not a[gk].is_empty():
 					a["ziel"] = "; ".join(a[gk].map(func(x): return str(x))).left(200)
+					break
+		if not a.has("ziel"):
+			for sk in ["next_steps", "steps", "naechste_schritte", "short_term", "tour"]:
+				if a.get(sk) is Array and not a[sk].is_empty():
+					a["ziel"] = str(a[sk][0].get("text", str(a[sk][0])) if a[sk][0] is Dictionary else a[sk][0]).left(200)
 					break
 		if not a.has("schritte"):
 			for sk in ["next_steps", "steps", "naechste_schritte", "actions"]:

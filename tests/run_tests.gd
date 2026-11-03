@@ -768,6 +768,19 @@ func test_action_normalize_models() -> void:
 	ok(n3.kind == "reparieren" and n3.vehicle_id == 7 and n3.worker_id == "W3", "task_type, Synonym und fahrer_id werden übersetzt")
 	var n4 := ActionExecutor.normalize({"action": "assign_transport", "vehicle_id": 5, "contract_id": "A9"})
 	ok(n4.vehicle_id == 5, "korrekte Angaben bleiben unverändert")
+	# Formen aus dem Spielerprotokoll vom 03.11.2026 (qwen3.5:9b)
+	var n5 := ActionExecutor.normalize({"action": "accept_contract", "targets": ["A382", "A390"]})
+	ok(n5.contract_id == "A382" and n5._kandidaten == ["A382", "A390"], "targets-Liste wird zu contract_id mit Kandidaten")
+	var n6 := ActionExecutor.normalize({"action": "assign_transport", "contracts": ["A1"], "vehicles": [4.0]})
+	ok(n6.contract_id == "A1" and n6.vehicle_id == 4, "contracts/vehicles-Listen werden zu IDs")
+	var n7 := ActionExecutor.normalize({"action": "assign_transport", "arguments": {"contract_ids": ["A5"], "truck_id": "F3"}})
+	ok(n7.contract_id == "A5" and n7.vehicle_id == 3, "contract_ids und truck_id im arguments-Block")
+	var n8 := ActionExecutor.normalize({"action": "buy_vehicle", "parameters": {"angebote": ["F3", "F4"]}})
+	ok(n8.offer_id == "F3", "angebote-Liste wird zu offer_id")
+	var n9 := ActionExecutor.normalize({"action": "set_plan", "next_steps": ["Flotte prüfen", "Aufträge sammeln"]})
+	ok(n9.ziel == "Flotte prüfen" and n9.schritte.size() == 2, "set_plan ohne ziel erhält es aus dem ersten Schritt")
+	var n10 := ActionExecutor.normalize({"action": "assign_worker_task", "workers": ["W4"], "vehicle_id": 2})
+	ok(n10.worker_id == "W4" and n10.kind == "fahren", "workers-Liste wird zu worker_id")
 
 
 func test_visit_dedupe() -> void:
