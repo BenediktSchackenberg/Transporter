@@ -54,6 +54,7 @@ func record(cid: int, origin: String, action: Dictionary, result: Dictionary, ke
 	entries.append(e)
 	if entries.size() > MAX:
 		entries.pop_front()
+	sim.activity.from_decision(cid, origin, action, result, str(e.begruendung))
 
 
 ## Vorgang ohne KI-Entscheidung (Vorarbeiter, Simulation, Zuschauer).

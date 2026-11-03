@@ -19,6 +19,7 @@ var sim: Simulation
 var controllers: Array[AgentController] = []
 var mayor_agent: MayorAgent
 var dispatch_agent: DispatchAgent
+var activity_layer: ActivityLayer
 var city_view: CityView
 var entity_view: EntityView
 var hud: HUD
@@ -71,6 +72,14 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	entity_view = EntityView.new()
 	city_view.add_child(entity_view)
 	entity_view.build(sim, city_view)
+	# Eigene Ebene ueber Nachtfaerbung, Fensterlicht und Wetter (folgt der Kamera), damit Markierungen auch nachts sichtbar sind
+	var activity_canvas := CanvasLayer.new()
+	activity_canvas.layer = 4
+	activity_canvas.follow_viewport_enabled = true
+	add_child(activity_canvas)
+	activity_layer = ActivityLayer.new()
+	activity_canvas.add_child(activity_layer)
+	activity_layer.setup(sim, city_view)
 	if loaded.is_empty() and cfg.get("carry_memory", false):
 		# Uebernahme gespeicherter Erfahrungen: gleiche Regel fuer alle Spieler (Vergleichbarkeit)
 		for i in cfg.players.size():
@@ -305,6 +314,7 @@ func _process(delta: float) -> void:
 	city_view.update_view(delta)
 	var t2 := Time.get_ticks_usec()
 	entity_view.update_view(delta, 0.0 if not running else float(speed()), city_view.camera.zoom.x)
+	activity_layer.update_view(delta, city_view.camera.zoom.x)
 	city_view.depot_view.update_view(delta, entity_view.selected)
 	var t3 := Time.get_ticks_usec()
 	hud.update_hud(delta)

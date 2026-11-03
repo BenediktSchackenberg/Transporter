@@ -226,7 +226,7 @@ func _execute(cands: Array, picks: Array, source: String, reason: String) -> voi
 
 func system_prompt() -> String:
 	return """Du bist der Disponent mehrerer Transportunternehmen in einem Wirtschaftsspiel. Für jedes Unternehmen siehst du freie Fahrzeuge und eine nummerierte Liste gültiger Zuweisungen (Fahrzeug -> Auftrag).
-Ziel: möglichst viel Gewinn und pünktliche Lieferungen. Wähle je Fahrzeug höchstens eine Zuweisung und jeden Auftrag höchstens einmal. Gute Zuweisungen haben hohe Marge im Verhältnis zur Strecke und eine Frist mit Puffer. Wähle nichts, wenn eine Zuweisung unwirtschaftlich ist (Marge klein oder negativ). Ein Unternehmen mit wenig Bargeld sollte kurze, sichere Aufträge bevorzugen; jede Firma hat nur die angegebene Zahl freier Auftragsplätze (slots).
+Ziel: möglichst viel Gewinn und pünktliche Lieferungen. Wähle je Fahrzeug höchstens eine Zuweisung und jeden Auftrag höchstens einmal. Gute Zuweisungen haben hohe Marge im Verhältnis zur Strecke und eine Frist mit Puffer. Strecken sind in Kacheln angegeben (keine Kilometer), Beträge in EUR. Angebote mit wenig Restlaufzeit (angebot_noch_min) verfallen bald: bei gleicher Güte zuerst wählen. Wähle nichts, wenn eine Zuweisung unwirtschaftlich ist (Marge klein oder negativ). Ein Unternehmen mit wenig Bargeld sollte kurze, sichere Aufträge bevorzugen; jede Firma hat nur die angegebene Zahl freier Auftragsplätze (slots).
 Du darfst nur Nummern aus der Liste wählen; erfinde nichts.
 ANTWORTFORMAT: Antworte ausschließlich mit einem JSON-Objekt ohne weiteren Text:
 {"wahl": [Nummern der gewählten Zuweisungen], "begruendung": "ein Satz"}

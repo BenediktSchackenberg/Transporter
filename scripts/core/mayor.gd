@@ -24,6 +24,8 @@ const SCHEMA := {
 		"desc": "Verkehrsmaßnahme auf einem wiederkehrenden Engpass (obs.verkehr.engpaesse mit wiederkehrend=true): kind ampel (Kreuzung, 12 000 EUR, 2 Tage), ladezone (Strecke neben einem Gebäude, 8 000 EUR, 3 Tage, Haltebucht für Lieferfahrzeuge, +1 Kapazität) oder ausbau (Straßenabschnitt, 40 000 EUR, 6 Tage, währenddessen eine Spur weniger). Ein einzelner Stau rechtfertigt keinen Ausbau."},
 	"reject_procurement": {"params": {"order_id": "string", "reason": "string"}, "desc": "Beschaffungsvorschlag ablehnen (Begründung nötig, z. B. Budget oder kein Bedarf)."},
 	"assess_financing": {"params": {"project_id": "string"}, "desc": "Finanzierungsbedarf eines Projekts oder Plans bewerten (nur Auskunft)."},
+	"set_property_tax": {"params": {"satz_prozent": "number", "reason": "string"},
+		"desc": "Grundsteuersatz in Prozent des Immobilienwerts je Jahr festlegen (0,2–3,0; je Beschluss höchstens ±0,5 Punkte). Alle Bürger-Eigentümer zahlen ihn an die Stadtkasse; siehe obs.bevoelkerungsmodell."},
 	"hire_staff": {"params": {"abteilung": "string", "anzahl": "int", "reason": "string"},
 		"desc": "Im Rathaus Stellen ausschreiben (abteilung verwaltung | bauamt | strassen | pruefdienst; 1-5 je Aktion, höchstens 120 insgesamt). Besetzung zum Monatsende, Gehälter zahlt die Stadtkasse; nur wenn sie sechs Monatsgehälter der neuen Kräfte deckt. Siehe obs.rathaus."},
 	"dismiss_staff": {"params": {"abteilung": "string", "anzahl": "int", "reason": "string"},
@@ -160,6 +162,7 @@ func indicators() -> Dictionary:
 		"entwicklungsvorschlaege": quarter_candidates(3),
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),
 		"rathaus": sim.town_hall.summary(),
+		"bevoelkerungsmodell": sim.population.summary(),
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 	}
@@ -264,7 +267,7 @@ func on_month(month: int) -> void:
 func _update_approval() -> void:
 	var Z: Citizens = sim.citizens
 	var target := 55.0
-	target += 20.0 * (Z.employment_rate() - Citizens.EMPLOYMENT_TARGET) / 0.1
+	target += 20.0 * (Z.employment_rate() - Citizens.employment_target()) / 0.1
 	target -= 250.0 * float(waiting) / maxf(1.0, float(stock_units)) * 10.0 / 10.0
 	if float(sim.economy.accounts.P0) < RESERVE_CASH:
 		target -= 10.0
@@ -328,6 +331,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = _assess_financing(a)
 			"decide_application":
 				res = _decide_application(a)
+			"set_property_tax":
+				res = sim.population.set_tax_rate(float(a.satz_prozent))
 			"hire_staff":
 				res = sim.town_hall.hire(str(a.abteilung), int(a.anzahl), "Bürgermeister %s" % name)
 			"dismiss_staff":
@@ -341,7 +346,23 @@ func execute(action: Dictionary) -> Dictionary:
 		if decisions.size() > 120:
 			decisions.pop_front()
 		sim.log_event("Bürgermeister %s: %s – %s" % [name, act, str(res.msg).left(140)], "info")
+		if res.ok and act not in ["remember", "assess_financing"]:
+			sim.activity.add("buergermeister", -1, "stadt", "Bürgermeister %s: %s" % [name, act], str(a.get("reason", "")), _action_cell(a))
 	return res
+
+
+## Ort einer Massnahme fuer die Kartenanzeige: erstes betroffenes Grundstueck, Verkehrszelle oder das Rathaus.
+func _action_cell(a: Dictionary) -> Vector2i:
+	if a.get("x") != null and a.get("y") != null:
+		return Vector2i(int(a.x), int(a.y))
+	var ids = a.get("parcel_ids", [])
+	if ids is Array and not ids.is_empty():
+		var p: Dictionary = sim.parcels.parcel(str(ids[0]))
+		if p.has("rect"):
+			return Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)
+	if sim.town_hall.building >= 0:
+		return sim.city.building(sim.town_hall.building).walk
+	return Vector2i(sim.city.size / 2, sim.city.size / 2)
 
 
 func remember(text: String) -> void:

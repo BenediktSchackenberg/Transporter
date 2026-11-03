@@ -166,6 +166,32 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 					var xy: Array = sug["stellplatz"]
 					return {"action": "place_building", "plot_id": site, "typ": "stellplatz", "x": xy[0], "y": xy[1], "rot": xy[2],
 						"_ergaenzt": ["statt buy_vehicle: Hof voll, Stellplatz gebaut"]}
+		"attempt_vehicle_sabotage":
+			var P: Personnel = sim.personnel
+			var vid := ActionExecutor._i(out.get("vehicle_id", -1)) if out.get("vehicle_id") != null else -1
+			var seen: Dictionary = P.seen.get(cid, {})
+			if not seen.has(vid):
+				for e in seen.values():
+					if e.state in ["idle", "loading", "unloading"]:
+						out["vehicle_id"] = int(e.id)
+						added.append("vehicle_id (gesichtetes Ziel)")
+						break
+			var wk: Worker = P.workers.get(str(out.get("worker_id", ""))) if out.get("worker_id") != null else null
+			if wk == null or wk.employer != cid:
+				var best: Worker = null
+				var low := 99
+				for w in P.employed(cid):
+					if w.vehicle_id >= 0 or P.can_take(w, "sabotage") != "":
+						continue
+					var total := 0
+					for k in w.skills:
+						total += int(w.skills[k])
+					if total < low:
+						low = total
+						best = w
+				if best != null:
+					out["worker_id"] = best.id
+					added.append("worker_id (entbehrlichster Arbeiter)")
 		"recruit_worker":
 			if not out.has("worker_id"):
 				var w2 := _best_applicant(false)

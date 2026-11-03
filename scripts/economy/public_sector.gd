@@ -27,6 +27,7 @@ var corporate_total := 0.0
 var vat_total := 0.0
 var vat_rate := VAT_SHARE         # aktueller Hebesatz; der Rat passt ihn monatlich an die Stadtkasse an
 var audits: Array = []            # letzte Pruefungen: {cid, month, arrears, fine}
+var property_tax_total := 0.0     # Grundsteuer der Buerger-Eigentuemer (Population)
 var departments := {"Soziales": 0.0, "Verkehr": 0.0, "Bildung": 0.0, "Verwaltung": 0.0, "Gesundheit": 0.0}   # Ausgaben je Ressort
 
 
@@ -46,10 +47,10 @@ func consumption_tax(spent: float) -> float:
 
 
 ## Zieht Steuer und Sozialabgaben vom Bruttolohn (liegt auf H0) ab und gibt den Nettobetrag zurueck.
-func withhold(gross: float) -> float:
+func withhold(gross: float, acct: String = "H0") -> float:
 	var tax := gross * INCOME_TAX
 	var social := gross * SOCIAL_RATE
-	sim.economy.transfer("H0", "P0", tax + social)
+	sim.economy.transfer(acct, "P0", tax + social)
 	tax_total += tax
 	social_total += social
 	return gross - tax - social
@@ -127,10 +128,11 @@ func audit(c: Company, month: int) -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"tax": tax_total, "social": social_total, "benefits": benefits_total, "spending": spending_total, "corporate": corporate_total, "vat": vat_total, "vat_rate": vat_rate, "audits": audits, "departments": departments}
+	return {"tax": tax_total, "social": social_total, "benefits": benefits_total, "spending": spending_total, "corporate": corporate_total, "vat": vat_total, "vat_rate": vat_rate, "audits": audits, "departments": departments, "property_tax": property_tax_total}
 
 
 func from_dict(d: Dictionary) -> void:
+	property_tax_total = float(d.get("property_tax", 0.0))
 	tax_total = float(d.get("tax", 0.0))
 	social_total = float(d.get("social", 0.0))
 	benefits_total = float(d.get("benefits", 0.0))

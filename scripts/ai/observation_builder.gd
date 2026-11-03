@@ -64,7 +64,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		var hub_extra := approach + absi(drop.x - depot0.x) + absi(drop.y - depot0.y) - (absi(pick.x - drop.x) + absi(pick.y - drop.y))
 		market.append({"id": k.id, "ware": k.cargo, "bezeichnung": k.cargo_name(), "menge": k.qty, "von": _place(sim, k.pickup), "von_pos": [pick.x, pick.y],
 			"nach": _place(sim, k.dropoff), "strecke": k.distance, "anfahrt_vom_depot": approach, "hof_umweg_tiles": maxi(0, hub_extra),
-			"verguetung": int(k.reward), "frist_in_min": int(k.deadline - now), "kuehlung": k.needs_cold,
+			"verguetung": int(k.reward), "frist_in_min": int(k.deadline - now), "angebot_noch_min": int(k.offer_until - now), "kuehlung": k.needs_cold,
 			"schwer": k.needs_heavy, "min_reputation": int(k.min_rep),
 			"exklusiv_fuer_dich": k.exclusive_for == cid and k.exclusive_until > now,
 			"praemie_stadt": int(k.bonus),

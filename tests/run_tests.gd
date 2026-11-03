@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_population", "test_activity_feed", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -60,6 +60,9 @@ func identity_ok(s: Simulation) -> bool:
 			return false
 	if absf(s.economy.conservation_error()) > 0.01:
 		print("    Geldkonservierung verletzt: %.4f" % s.economy.conservation_error())
+		return false
+	if absf(s.population.account_error()) > 0.01:
+		print("    Bürgerkonten weichen von R0 ab: %.4f" % s.population.account_error())
 		return false
 	if s.stock.balance_error() != 0:
 		print("    Warenbilanz verletzt: %d" % s.stock.balance_error())
@@ -3408,7 +3411,7 @@ func test_citizens() -> void:
 	var s := new_sim(4)
 	var cz := s.citizens
 	ok(cz.population() >= 1000, "mindestens 1000 Bürger (%d)" % cz.population())
-	ok(absf(cz.employment_rate() - 0.8) < 0.02, "80 %% haben Arbeit (%.1f %%)" % (cz.employment_rate() * 100.0))
+	ok(absf(cz.employment_rate() - Citizens.employment_target()) < 0.02, "%.0f %%%% haben Arbeit laut Konfiguration (%.1f %%%%)" % [Citizens.employment_target() * 100.0, cz.employment_rate() * 100.0])
 	for c in s.companies:
 		ok(s.personnel.employed(c.id).size() >= 10, "%s hat mindestens 10 Mitarbeiter (%d)" % [c.company_name, s.personnel.employed(c.id).size()])
 	ok(cz.employed_count("rathaus") > 0 and cz.employed_count("baufirma") > 0, "Rathaus und Baufirma beschäftigen Bürger")
@@ -3430,7 +3433,7 @@ func test_citizens() -> void:
 	ok(s.public_sector.tax_total > tax0, "Bürger zahlen Lohnsteuer")
 	ok(changes > 0, "Bürger wechseln die Stelle (%d)" % changes)
 	ok(layoffs > 0 and hires > 0, "Entlassungen (%d) und Einstellungen (%d)" % [layoffs, hires])
-	ok(cz.unemployed_total() > 0 and rate_min > 0.7 and rate_max < 0.9, "Arbeitslosigkeit bleibt realistisch (%.1f–%.1f %%)" % [rate_min * 100.0, rate_max * 100.0])
+	ok(cz.unemployed_total() > 0 and rate_min > Citizens.employment_target() - 0.1 and rate_max < minf(0.99, Citizens.employment_target() + 0.1), "Arbeitslosigkeit bleibt realistisch (%.1f–%.1f %%)" % [rate_min * 100.0, rate_max * 100.0])
 	ok("BÜRGER UND ARBEITSMARKT" in LiveText.citizens(s), "Ansicht Bürger")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.citizens.people.size() == cz.people.size() and s2.citizens.employed_total() == cz.employed_total(), "Bürger nach Laden")
@@ -5136,4 +5139,116 @@ func test_town_hall() -> void:
 	# Speichern und Laden
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.town_hall.target == T.target and s2.town_hall.building == T.building, "Rathaus nach Laden")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_population() -> void:
+	var s := new_sim(2)
+	var P: Population = s.population
+	var c := Population.cfg()
+	var people: Array = s.citizens.people
+	ok(people.all(func(p): return p.has("age") and p.has("education") and p.has("balance") and p.has("needs")), "jeder Bewohner hat Alter, Bildung, Konto und Bedürfnisse")
+	ok(people.all(func(p): return int(p.age) >= int(c.alter_min) and int(p.age) <= int(c.alter_max) and int(p.education) >= 0 and int(p.education) <= 3), "Alter und Bildung im Rahmen")
+	var checks: Array = P.validate(false)
+	for ch in checks:
+		ok(ch.ok, "Startprüfung: %s = %s (Ziel %s)" % [ch.pruefung, str(ch.wert), str(ch.ziel)])
+	ok(absf(P.account_error()) < 0.01 and float(s.economy.accounts.R0) > 0.0, "Summe der Personenguthaben = R0 (%.0f)" % float(s.economy.accounts.R0))
+	# Bildung lenkt die Stellenvergabe: im Rathaus im Mittel höhere Bildung als bei den Arbeitslosen
+	var edu_of := func(sel: Array) -> float:
+		var sum := 0.0
+		for p in sel:
+			sum += float(p.education)
+		return sum / maxf(1.0, float(sel.size()))
+	var town: Array = people.filter(func(p): return p.employer == "rathaus")
+	var none: Array = people.filter(func(p): return p.employer == "")
+	ok(edu_of.call(town) > edu_of.call(none), "Rathaus beschäftigt höher Gebildete (%.2f) als die Arbeitslosen haben (%.2f)" % [edu_of.call(town), edu_of.call(none)])
+	# Eigentum: Selbstnutzer zahlen keine Miete, Vermieter erhalten Miete von Person zu Person
+	var units: Dictionary = s.housing.units
+	var self_u: Array = units.values().filter(func(u): return bool(u.get("owner_occupied", false)))
+	var rented: Array = units.values().filter(func(u): return u.tenant == "B" and not bool(u.get("owner_occupied", false)) and str(u.owner).begins_with("R"))
+	ok(not self_u.is_empty() and self_u.all(func(u): return s.housing.rent_due(u) == 0.0), "Selbstnutzer zahlen keine Miete (%d Einheiten)" % self_u.size())
+	ok(not rented.is_empty(), "Bürger vermieten Wohnungen an Bürger (%d Einheiten)" % rented.size())
+	var u0: Dictionary = rented[0]
+	var lord: Dictionary = P._person(int(str(u0.owner).substr(1)))
+	var tenants: Array = people.filter(func(p): return str(p.get("home", "")) == u0.id)
+	var lord_before := float(lord.balance)
+	var tenant_before := 0.0
+	for q in tenants:
+		tenant_before += float(q.balance)
+	var r0_before := float(s.economy.accounts.R0)
+	s.housing.collect_citizen_rent()
+	var tenant_after := 0.0
+	for q in tenants:
+		tenant_after += float(q.balance)
+	var rent := float(s.housing.rent_due(u0))
+	ok(absf(tenant_before - tenant_after - rent) < 0.01, "Mieter zahlen die Miete von ihren Konten (%.0f)" % rent)
+	ok(float(lord.balance) >= lord_before + rent - 0.01, "Vermieter %s erhält die Miete" % lord.name)
+	ok(float(s.economy.accounts.R0) <= r0_before + 0.01 and absf(P.account_error()) < 0.01, "Miete zwischen Personen bleibt in R0")
+	# Mietrückstand: leeres Konto -> Rückstand
+	P.pay_out("X0", tenants.map(func(q): return [q, float(q.balance)]))   # Mieter haben kein Guthaben mehr (gebucht, nicht gesetzt)
+	s.housing.collect_citizen_rent()
+	ok(int(u0.arrears) >= 1, "ohne Guthaben entsteht ein Mietrückstand")
+	# Grundsteuer: Satz des Bürgermeisters, Zahlung an die Stadtkasse
+	var p0 := float(s.economy.accounts.P0)
+	var paid := P.collect_property_tax(2)
+	ok(paid > 0.0 and absf(float(s.economy.accounts.P0) - p0 - paid) < 0.01, "Grundsteuer fließt an die Stadtkasse (%.0f)" % paid)
+	ok(not P.set_tax_rate(5.0).ok and not P.set_tax_rate(2.0).ok, "Satz nur 0,2–3,0 und höchstens ±0,5 je Beschluss")
+	var r := s.mayor.execute({"action": "set_property_tax", "satz_prozent": 1.4, "reason": "Haushalt"})
+	ok(r.ok and absf(P.tax_rate - 1.4) < 0.001, "Bürgermeister setzt den Satz: " + str(r.msg).left(80))
+	ok(s.mayor.indicators().has("bevoelkerungsmodell"), "Bürgermeister sieht das Bevölkerungsmodell")
+	# Monatszyklus: Konten stimmen, Protokoll wird geschrieben, Bedürfnisse liegen im Rahmen
+	s.citizens.on_month(3)
+	ok(absf(P.account_error()) < 0.01, "nach dem Monatszyklus: Personenguthaben = R0")
+	ok(not P.month_log.is_empty() and P.month_log.back().loehne > 0.0, "Monatsprotokoll mit Löhnen, Miete, Grundsteuer, Konsum")
+	ok(people.all(func(p): return float(p.needs.glueck) >= 0.0 and float(p.needs.glueck) <= 100.0), "Glück zwischen 0 und 100")
+	# Wegzug: Guthaben verlassen die Stadt, Eigentum geht an den Vermietersektor
+	var e_unit: Dictionary = self_u[0]
+	var leaving: Array = people.filter(func(p): return str(p.get("home", "")) == e_unit.id)
+	var bal := 0.0
+	for q in leaving:
+		bal += maxf(0.0, float(q.balance))
+	var x0 := float(s.economy.accounts.X0)
+	s.citizens.emigrate(e_unit.id)
+	ok(absf(float(s.economy.accounts.X0) - x0 - bal) < 0.01 and e_unit.owner == Housing.LANDLORD, "Wegzug nimmt das Guthaben mit, die Wohnung geht an den Vermietersektor")
+	ok(absf(P.account_error()) < 0.01, "nach Wegzug: Personenguthaben = R0")
+	# Zuzug erhält Alter, Bildung, Startguthaben
+	s.citizens.immigrate(3, 4)
+	var newest: Dictionary = people.back()
+	ok(newest.has("education") and float(newest.balance) > 0.0 and absf(P.account_error()) < 0.01, "Zugezogene erhalten Attribute und Startguthaben")
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(absf(s2.population.account_error()) < 0.01 and absf(s2.population.tax_rate - 1.4) < 0.001, "Bevölkerungsmodell nach Laden")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_activity_feed() -> void:
+	var s := new_sim(2)
+	for k in s.market.open_contracts():
+		s.companies[0].known[k.id] = true
+	var A: ActivityFeed = s.activity
+	var n0 := A.items.size()
+	# Auftrag annehmen: Markierung am Abholort mit Firma und Text
+	var v: FleetVehicle = s.company_vehicles(0)[0]
+	var k: Contract = s.market.open_contracts().filter(func(x): return s.companies[0].known.has(x.id) and x.vehicle_ok(v.model) and x.min_rep <= s.companies[0].reputation)[0]
+	var r: Dictionary = s.executor.execute(0, {"action": "accept_contract", "contract_id": k.id, "vehicle_id": v.id}, "", "api")
+	ok(r.ok and A.items.size() == n0 + 1, "ausgeführte Entscheidung erscheint in der Aktivität")
+	var e: Dictionary = A.items.back()
+	ok(e.kind == "auftrag" and Vector2i(int(e.x), int(e.y)) == s.city.building(k.pickup).walk and e.text.contains(k.id), "Ort ist der Abholort, Text nennt den Auftrag (%s)" % e.text)
+	# Abgelehnte Aktionen und Routine erscheinen nicht
+	s.executor.execute(0, {"action": "accept_contract", "contract_id": "A999999"}, "", "api")
+	s.executor.execute(0, {"action": "wait"}, "", "api")
+	ok(A.items.size() == n0 + 1, "abgelehnte Aktionen und Warten erscheinen nicht")
+	# Buergermeister: Massnahme mit Ort
+	s.economy.transfer("X0", "P0", 300000.0)
+	s.mayor.execute({"action": "hire_staff", "abteilung": "bauamt", "anzahl": 1, "reason": "Anträge"})
+	ok(A.items.back().actor == "buergermeister" and A.items.back().kind == "stadt", "Bürgermeister-Maßnahmen erscheinen (gold)")
+	ok(A.active(s.game_min).size() >= 2 and A.active(s.game_min + ActivityFeed.KEEP_MIN + 1.0).is_empty(), "Einträge verblassen nach %d Spielminuten" % int(ActivityFeed.KEEP_MIN))
+	# Sabotage: Assistent ergaenzt Arbeiter und gesichtetes Ziel
+	var foreign: FleetVehicle = s.company_vehicles(1)[0]
+	s.personnel.seen[0][foreign.id] = {"id": foreign.id, "state": "idle", "owner": 1}
+	var done: Dictionary = s.executor.assist.complete(0, {"action": "attempt_vehicle_sabotage"})
+	ok(done.get("worker_id") != null and int(done.get("vehicle_id", -1)) == foreign.id, "Sabotage ohne Angaben: Arbeiter und Ziel werden ergänzt (%s)" % str(done.get("_ergaenzt", [])))
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.activity.items.size() == A.items.size(), "Aktivität nach Laden")
 	ok(identity_ok(s), "Geld erhalten")

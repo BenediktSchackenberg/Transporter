@@ -291,6 +291,8 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 			summaries.pop_front()
 		var who := sim.company(cid).player_name
 		sim.log_event("%s%s: „%s“" % [who, " [ERSATZMODUS]" if source == "Ersatzmodus" else "", summary], "ai", cid)
+		if source == "KI" and cid < sim.avatars.size():
+			sim.avatars[cid].say(summary.left(110), false)   # was sich die KI ueberlegt hat, sichtbar an der Figur
 		decided.emit(cid, summary, source)
 	if parsed.memory != "":
 		memory_note = parsed.memory.left(600)

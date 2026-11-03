@@ -5,6 +5,8 @@ extends RefCounted
 ## Regel-KI (Kapazitaet, Kuehlung, Schwerlast, Ruf, Frist), damit nie etwas vorgeschlagen wird, das ohnehin scheitern wuerde.
 
 const PER_VEHICLE := 3          # beste Kandidaten je Fahrzeug
+const MIN_MARGIN := 150.0       # Kandidaten mit weniger Marge (EUR) werden nicht angeboten
+const MIN_MARGIN_SHARE := 0.10  # ... oder weniger als 10 % der Verguetung
 
 
 ## obs: Beobachtung der Firma (ObservationBuilder). first_nr: laufende Nummer, ab der gezaehlt wird.
@@ -36,8 +38,10 @@ static func build(obs: Dictionary, first_nr: int = 1) -> Dictionary:
 			var tiles := float(best.strecke) + RuleBrain._dist(best.von_pos, v.pos)
 			var revenue := float(best.verguetung) + float(best.get("praemie_stadt", 0))
 			var margin := revenue - tiles * float(spec.kosten_pro_tile) * 1.1
+			if margin < maxf(MIN_MARGIN, MIN_MARGIN_SHARE * revenue):
+				continue   # lohnt nicht: gar nicht erst zur Wahl stellen
 			out.candidates.append({"nr": nr, "vehicle_id": int(v.id), "contract_id": str(best.id), "ware": str(best.get("bezeichnung", "")),
-				"menge": int(best.menge), "verguetung": int(revenue), "strecke": int(tiles), "frist_min": int(best.frist_in_min),
+				"menge": int(best.menge), "verguetung": int(revenue), "strecke_kacheln": int(tiles), "frist_min": int(best.frist_in_min), "angebot_noch_min": int(best.get("angebot_noch_min", -1)),
 				"marge": int(margin), "score": snappedf(margin / (tiles + 30.0), 0.01)})
 			nr += 1
 	return out

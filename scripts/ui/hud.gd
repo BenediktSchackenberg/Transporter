@@ -25,6 +25,10 @@ var entrepreneur_company := -1
 const MAYOR_VIEW := -2               # entrepreneur_company-Wert fuer die Detailansicht des Buergermeisters
 var mayor_card := {}                  # Karte des Buergermeisters (panel, mode, act)
 var entrepreneur_actions: HBoxContainer
+var ticker_panel: PanelContainer
+var ticker_toggle: Button
+var ticker_rows: Array = []
+var _ticker_timer := 0.0
 var tabs: TabContainer
 var right_box: VBoxContainer         # Navigation (Bereiche und Unterseiten) ueber den Inhaltsseiten
 var nav_cat_btns: Array = []
@@ -110,6 +114,7 @@ func build(s: GameSession) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_top()
 	_build_left()
+	_build_activity_ticker()
 	_build_right()
 	_build_bottom()
 	event_panel = EventPanel.new()
@@ -285,6 +290,88 @@ func _build_left() -> void:
 
 
 ## Karte des Buergermeisters (wie die Unternehmer): Modus (Claude/Modell/Regeln), aktuelles Tun, Klick oeffnet die Details.
+## Leiste "KI-Aktivität": die neuesten Entscheidungen mit Ort (ActivityFeed). Klick springt mit der Kamera hin; die Schaltfläche
+## schaltet die Kartenmarkierungen (ActivityLayer) ein und aus (auch Taste K).
+const TICKER_ROWS := 6
+
+
+func _build_activity_ticker() -> void:
+	ticker_panel = PanelContainer.new()
+	ticker_panel.offset_left = 222
+	ticker_panel.offset_top = 56
+	ticker_panel.offset_right = 222 + 470
+	ticker_panel.add_theme_stylebox_override("panel", UITheme.box(Color(0.08, 0.08, 0.12, 0.82), UITheme.BORDER, 1, 6))
+	ticker_panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	add_child(ticker_panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 1)
+	ticker_panel.add_child(box)
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var title := UITheme.label("KI-AKTIVITÄT AUF DER KARTE", 12, UITheme.ACCENT)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	ticker_toggle = Button.new()
+	ticker_toggle.focus_mode = Control.FOCUS_NONE
+	ticker_toggle.flat = true
+	ticker_toggle.add_theme_font_size_override("font_size", 12)
+	ticker_toggle.tooltip_text = "Markierungen auf der Karte ein-/ausblenden (Taste K)"
+	ticker_toggle.pressed.connect(toggle_activity_layer)
+	head.add_child(ticker_toggle)
+	for i in TICKER_ROWS:
+		var b := Button.new()
+		b.flat = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.clip_text = true
+		b.custom_minimum_size = Vector2(450, 0)
+		b.add_theme_font_size_override("font_size", 13)
+		b.pressed.connect(func(): _ticker_jump(i))
+		box.add_child(b)
+		ticker_rows.append(b)
+	_update_ticker()
+
+
+func toggle_activity_layer() -> void:
+	if session.activity_layer != null:
+		session.activity_layer.enabled = not session.activity_layer.enabled
+	_update_ticker()
+
+
+func _ticker_items() -> Array:
+	var items: Array = sim.activity.items.slice(-TICKER_ROWS)
+	items.reverse()
+	return items
+
+
+func _ticker_jump(i: int) -> void:
+	var items := _ticker_items()
+	if i < items.size():
+		var e: Dictionary = items[i]
+		session.camera_to(Vector2((int(e.x) + 0.5) * 32.0, (int(e.y) + 0.5) * 32.0))
+
+
+func _update_ticker() -> void:
+	if ticker_panel == null:
+		return
+	var on: bool = session.activity_layer == null or session.activity_layer.enabled
+	ticker_toggle.text = "Karte: an" if on else "Karte: aus"
+	var items := _ticker_items()
+	for i in ticker_rows.size():
+		var b: Button = ticker_rows[i]
+		if i >= items.size():
+			b.text = "" if i > 0 else "Noch keine Entscheidung mit Ort."
+			b.tooltip_text = ""
+			continue
+		var e: Dictionary = items[i]
+		var hostile: bool = str(e.kind) in ["sabotage", "angriff"]
+		b.text = "%s  %s%s" % [Catalog.game_time_short(float(e.t)), "⚠ " if hostile else "", str(e.text)]
+		b.tooltip_text = "%s\nWarum: %s\nKlicken: zur Stelle auf der Karte" % [str(e.text), str(e.why) if str(e.why) != "" else "–"]
+		var col: Color = Color("#ff6b5e") if hostile else (UITheme.ACCENT if str(e.actor) == "buergermeister" else (sim.company(int(e.company)).color.lightened(0.35) if sim.company(int(e.company)) != null else Color.WHITE))
+		b.add_theme_color_override("font_color", col)
+		b.add_theme_color_override("font_hover_color", col.lightened(0.3))
+
+
 func _build_mayor_card(box: VBoxContainer) -> void:
 	var gold := UITheme.ACCENT
 	var p := PanelContainer.new()
@@ -799,6 +886,8 @@ func _close_entrepreneur() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_K and not (entrepreneur_window != null and entrepreneur_window.visible):
+		toggle_activity_layer()
 	if entrepreneur_window != null and entrepreneur_window.visible and event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE:
 			_close_entrepreneur()
@@ -915,6 +1004,10 @@ func _update_entrepreneur() -> void:
 func update_hud(delta: float) -> void:
 	_toast_time -= delta
 	toast.visible = _toast_time > 0.0
+	_ticker_timer -= delta
+	if _ticker_timer <= 0.0:
+		_ticker_timer = 0.5
+		_update_ticker()
 	var rem := session.remaining_seconds()
 	if session.is_endless():
 		var act := session.active_seconds

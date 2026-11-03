@@ -154,6 +154,10 @@ func _process(_delta: float) -> void:
 		_shot_done = true
 		if args.has("shot-zoom"):
 			session.city_view.camera.zoom = Vector2.ONE * float(args["shot-zoom"])
+		if args.has("shot-activity") and not session.sim.activity.items.is_empty():   # Kamera auf die neueste KI-Aktivitaet (Pruefung der Kartenebene)
+			var e: Dictionary = session.sim.activity.items.back()
+			session.set_follow(false)
+			session.city_view.set_camera_world(Vector2(float(e.x) * 32.0 + 16.0, float(e.y) * 32.0 + 16.0))
 		if args.has("shot-tile"):
 			var xy: PackedStringArray = str(args["shot-tile"]).split(",")
 			session.set_follow(false)

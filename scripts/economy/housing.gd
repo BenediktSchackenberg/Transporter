@@ -140,7 +140,7 @@ func move_household(hid: String, unit_id: String) -> void:
 
 ## Faellige Miete: Selbstnutzer zahlen keine.
 func rent_due(u: Dictionary) -> float:
-	return 0.0 if u.is_empty() or u.owner == u.tenant else float(u.rent)
+	return 0.0 if u.is_empty() or u.owner == u.tenant or bool(u.get("owner_occupied", false)) else float(u.rent)
 
 
 func unit_of_household(hid: String) -> Dictionary:
@@ -174,25 +174,47 @@ func _pay_owner(u: Dictionary, amount: float) -> void:
 		sim.company(int(owner.substr(1))).ledger.book("rent_income", amount, true, "Mieteinnahmen %s" % u.id, sim.game_min)
 	elif owner == "D0":
 		sim.economy.transfer("H0", "D0", amount)
+	elif sim.population.credit_owner(owner, amount, "H0"):
+		pass   # Buerger-Vermieter (Firmenhaushalt zahlt aus H0)
 	else:
 		sim.economy.transfer("H0", LANDLORD, amount)
 
 
-## Buergergruppen zahlen aus dem Netto ihrer Mitglieder (`net`, gesetzt von Citizens). Gibt die gezahlte Gesamtmiete zurueck.
+## Buergergruppen zahlen die Miete aus den Guthaben ihrer Mitglieder (Personenkonten R0): an einen Buerger-Vermieter innerhalb
+## von R0, sonst an den Bautraeger (D0) oder den Vermietersektor (V0). Reicht das Guthaben nicht, entsteht ein Rueckstand.
 func collect_citizen_rent() -> float:
 	var occ := _citizen_occupants()
+	var idx: Dictionary = sim.population.person_index()
 	var total := 0.0
+	var to_sector := {}
 	for uid in occ:
 		var u: Dictionary = units[uid]
-		var income := 0.0
+		var due := rent_due(u)
+		var left := due
+		var lord: Dictionary = {}
+		var owner := str(u.owner)
+		if owner.begins_with(Population.OWNER_PREFIX) and owner.substr(1).is_valid_int():
+			lord = idx.get(int(owner.substr(1)), {})
+		var paid := 0.0
 		for p in occ[uid]:
-			income += float(p.get("net", 0.0))
-		var pay := minf(rent_due(u), income)
-		if pay > 0.0:
-			_pay_owner(u, pay)
-			total += pay
-		u.paid = pay
-		u.arrears = 0 if pay >= rent_due(u) - 0.01 else int(u.arrears) + 1
+			if left <= 0.0:
+				break
+			var amt := minf(left, maxf(0.0, float(p.get("balance", 0.0))))
+			if amt <= 0.0:
+				continue
+			if not lord.is_empty():
+				paid += Population.move(p, lord, amt)
+			else:
+				p.balance = float(p.balance) - amt
+				var acct := "D0" if owner == "D0" else LANDLORD
+				to_sector[acct] = float(to_sector.get(acct, 0.0)) + amt
+				paid += amt
+			left -= amt
+		u.paid = paid
+		u.arrears = 0 if paid >= due - 0.01 else int(u.arrears) + 1
+		total += paid
+	for acct in to_sector:
+		sim.economy.transfer(Population.ACCOUNT, acct, to_sector[acct])
 	stats.rent += total
 	return total
 
@@ -261,7 +283,7 @@ const MOVE_CHANCE := 0.5
 func relocate_for_job(p: Dictionary, district: int, month: int) -> bool:
 	var uid := str(p.get("home", ""))
 	var old: Dictionary = units.get(uid, {})
-	if old.is_empty() or old.tenant != "B" or Citizens.roll(int(p.id), month, 6) >= MOVE_CHANCE:
+	if old.is_empty() or old.tenant != "B" or bool(old.get("owner_occupied", false)) or Citizens.roll(int(p.id), month, 6) >= MOVE_CHANCE:   # Eigennutzer ziehen nicht wegen der Arbeit um
 		return false
 	if int(sim.city.building(int(old.building)).get("district", 0)) == district:
 		return false

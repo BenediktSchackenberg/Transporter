@@ -439,6 +439,7 @@ func _finish_phase(pr: Dictionary) -> void:
 		pr.paid_phases = int(pr.paid_phases) + 1
 		pr.paid_price = float(pr.get("paid_price", 0.0)) + pay
 	_log(pr, "Phase abgeschlossen: " + ph.label)
+	sim.activity.add("stadt", -1, "bau", "Baustelle %s: %s abgeschlossen" % [pr.id, ph.label.split(" (")[0]], "Baufirma %s" % builders[pr.builder].name, sim.activity.parcel_cell(str(pr.parcel)))
 	pr.progress = 0.0
 	pr.phase = int(pr.phase) + 1
 	if int(pr.phase) >= PHASES.size() - 1:
@@ -511,6 +512,7 @@ func _hand_over(pr: Dictionary, day: int) -> void:
 	_create_units(pr, parcel)
 	_log(pr, "Übergeben am Tag %d: %s (Gebäude %d)" % [day, d.label, b.id])
 	sim.log_event("Bauvorhaben %s übergeben: %s auf %s (%s)." % [pr.id, d.label, pr.parcel, builders[pr.builder].name], "info")
+	sim.activity.add("stadt", -1, "bau", "Neues Gebäude: %s (%s)" % [d.label, pr.id], "Übergabe durch %s" % builders[pr.builder].name, b.walk)
 
 
 func _create_units(pr: Dictionary, parcel: Dictionary) -> void:

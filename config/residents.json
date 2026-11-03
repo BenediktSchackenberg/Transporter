@@ -1,0 +1,20 @@
+{
+  "_hinweis": "Bevölkerungsmodell (Auftrag 10, docs/RESIDENTS.md). Werte werden beim Spielstart gelesen; fehlende Schlüssel nehmen den Standard aus scripts/economy/population.gd.",
+  "bevoelkerung": 1000,
+  "beschaeftigungsquote": 0.9,
+  "eigentuemerquote": 0.35,
+  "alter_min": 18,
+  "alter_max": 67,
+  "bildung_verteilung": [0.25, 0.40, 0.25, 0.10],
+  "startguthaben_basis": 1500.0,
+  "startguthaben_je_bildungsstufe": 1000.0,
+  "startguthaben_eigentuemer": 4000.0,
+  "lohnzuschlag_je_bildungsstufe": 0.08,
+  "grundsteuer_satz_prozent_jahr": 1.0,
+  "grundsteuer_intervall": "monat",
+  "immobilienwert_jahresmieten": 15.0,
+  "eigennutzer_anteil_einfamilienhaus": 0.8,
+  "eigennutzer_anteil_wohnblock": 0.25,
+  "vermieter_max_einheiten": 6,
+  "beduerfnis_gewichte_glueck": {"geld": 0.3, "arbeit": 0.25, "bildung": 0.15, "wohnen": 0.3}
+}

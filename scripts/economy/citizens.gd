@@ -5,7 +5,7 @@ extends RefCounted
 ## Monatlich: Arbeitgeber passen ihren Bedarf an (Entlassungen/Einstellungen), Buerger wechseln die Stelle oder werden arbeitslos,
 ## Loehne fliessen vom Arbeitgeberkonto an H0, Lohnsteuer und Sozialabgaben an P0, Arbeitslose erhalten Arbeitslosengeld von P0.
 
-const POPULATION := 1200
+const POPULATION := 1200            # nur Rueckfall; massgeblich ist config/residents.json (Population.cfg)
 const EMPLOYMENT_TARGET := 0.8
 const HOURS_PER_MONTH := 60.0
 const QUIT_CHANCE := 0.02          # freiwilliger Stellenwechsel je Monat
@@ -84,13 +84,13 @@ func setup(s: Simulation) -> void:
 ## Erzeugt die Bevoelkerung nach dem Startpersonal der Firmen.
 func generate() -> void:
 	var real := _real_workers()
-	var total := maxi(POPULATION, real + 1)
+	var total := maxi(int(Population.cfg().get("bevoelkerung", POPULATION)), real + 1)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(sim.city.seed_value) + 4711
 	var real_employed := 0
 	for c in sim.companies:
 		real_employed += sim.personnel.employed(c.id).size()
-	var jobs := maxi(0, roundi(total * EMPLOYMENT_TARGET) - real_employed)
+	var jobs := maxi(0, roundi(total * employment_target()) - real_employed)
 	for k in EMPLOYERS:
 		base_cap[k] = roundi(jobs * float(EMPLOYERS[k].share))
 	cap = base_cap.duplicate()
@@ -99,12 +99,16 @@ func generate() -> void:
 		people.append({"id": _next, "name": "%s %s" % [first[rng.randi() % first.size()],
 			CityGenerator.SURNAMES[rng.randi() % CityGenerator.SURNAMES.size()]], "employer": "", "wage": 0.0, "jobless_months": 0})
 		_next += 1
+	# Bildung vor der Vergabe: Rathaus und Schulen/Klinik zuerst, Hoeherqualifizierte zuerst (Vorlage: Buero/Verwaltung bevorzugt hoehere Bildung)
+	sim.population.assign_attributes(people)
+	var by_edu: Array = people.duplicate()
+	by_edu.sort_custom(func(a, b): return int(a.education) > int(b.education) or (int(a.education) == int(b.education) and int(a.id) < int(b.id)))
 	var assigned := 0
 	for k in EMPLOYERS:
 		for j in int(base_cap[k]):
-			if assigned >= people.size():
+			if assigned >= by_edu.size():
 				break
-			_employ(people[assigned], k, rng.randf())
+			_employ(by_edu[assigned], k, rng.randf())
 			assigned += 1
 
 
@@ -117,18 +121,20 @@ func immigrate(n: int, month: int, home: String = "") -> void:
 		people.append({"id": _next, "name": "%s %s" % [first[rng.randi() % first.size()],
 			CityGenerator.SURNAMES[rng.randi() % CityGenerator.SURNAMES.size()]], "employer": "", "wage": 0.0, "jobless_months": 0, "home": home})
 		_next += 1
+	sim.population.init_people(people.slice(people.size() - n), month)
 
 
 ## Wegzug: alle Buerger der Wohneinheit verlassen die Stadt. Gibt ihre Zahl zurueck.
 func emigrate(unit_id: String) -> int:
 	var before := people.size()
+	sim.population.on_emigrate(people.filter(func(p): return str(p.get("home", "")) == unit_id))
 	people = people.filter(func(p): return str(p.get("home", "")) != unit_id)
 	return before - people.size()
 
 
 func _employ(p: Dictionary, k: String, r: float) -> void:
 	p.employer = k
-	p.wage = snappedf(float(EMPLOYERS[k].wage) * (0.9 + 0.2 * r), 0.1)
+	p.wage = snappedf(float(EMPLOYERS[k].wage) * (0.9 + 0.2 * r) * Population.wage_factor(p), 0.1)
 	p.jobless_months = 0
 
 
@@ -142,6 +148,11 @@ func _real_workers() -> int:
 
 func population() -> int:
 	return people.size() + _real_workers()
+
+
+## Beschaeftigungsziel aus der Konfiguration (Population.cfg), Standard 0,9.
+static func employment_target() -> float:
+	return float(Population.cfg().get("beschaeftigungsquote", EMPLOYMENT_TARGET))
 
 
 func employed_count(k: String) -> int:
@@ -178,7 +189,7 @@ static func roll(a: int, b: int, salt: int) -> float:
 func on_month(month: int) -> void:
 	stats = {"changes": 0, "layoffs": 0, "hires": 0, "quits": 0, "wages": 0.0, "tax": 0.0, "benefits": 0.0}
 	_dynamics(month)
-	_pay()
+	_pay(month)
 	last = summary()
 
 
@@ -251,9 +262,16 @@ func _dynamics(month: int) -> void:
 			p.jobless_months = int(p.jobless_months) + 1
 
 
-func _pay() -> void:
+## Monatszyklus der Buerger in fester Reihenfolge (docs/RESIDENTS.md): 1 Loehne, 2 Grundsicherung, 3 Miete, 4 Grundsteuer,
+## 5 Konsum, 6 Beduerfnisse und Protokoll. Alle Zahlungen laufen ueber die Personenkonten (Sektorkonto R0).
+func _pay(month: int = 0) -> void:
 	# Die Haushaltsabrechnung (Households) leitet Auslandseinkommen aus den H0-Abfluessen ab; Buergerzahlungen zaehlen dort nicht mit.
 	var outflow_h0 := float(sim.economy.outflow.get("H0", 0.0))
+	var P: Population = sim.population
+	var start_bal := {}
+	for p in people:
+		start_bal[int(p.id)] = float(p.get("balance", 0.0))
+	# 1) Loehne je Arbeitgeberkonto (Rathaus aus der Stadtkasse), dann Lohnsteuer und Sozialabgaben
 	var by_payer := {}
 	var gross := 0.0
 	var employed := 0
@@ -262,37 +280,66 @@ func _pay() -> void:
 			continue
 		var w: float = float(p.wage) * HOURS_PER_MONTH
 		var payer: String = EMPLOYERS[p.employer].payer
-		by_payer[payer] = float(by_payer.get(payer, 0.0)) + w
+		if not by_payer.has(payer):
+			by_payer[payer] = []
+		by_payer[payer].append([p, w])
 		gross += w
 		employed += 1
 	for payer in by_payer:
-		sim.economy.transfer(payer, "H0", by_payer[payer])
+		P.pay_in(payer, by_payer[payer])
 	var net := 0.0
+	var net_share := 0.0
 	if gross > 0.0:
-		net = sim.public_sector.withhold(gross)
+		net_share = 1.0 - PublicSector.INCOME_TAX - PublicSector.SOCIAL_RATE
+		for payer in by_payer:
+			for e in by_payer[payer]:
+				e[0].balance = float(e[0].balance) - float(e[1]) * (1.0 - net_share)
+		net = sim.public_sector.withhold(gross, Population.ACCOUNT)
 		stats.tax = gross - net
 	stats.wages = gross
-	# Arbeitslosengeld: Anteil des mittleren Nettolohns
-	var jobless := people.size() - employed
+	# 2) Grundsicherung: Anteil des mittleren Nettolohns fuer jeden Arbeitslosen
+	var jobless: Array = people.filter(func(q): return q.employer == "")
 	var benefit := 0.0
-	if employed > 0 and jobless > 0:
-		benefit = BENEFIT_RATE * net / employed * jobless
-		sim.economy.transfer("P0", "H0", benefit)
+	var benefit_each := 0.0
+	if employed > 0 and not jobless.is_empty():
+		benefit_each = BENEFIT_RATE * net / employed
+		benefit = P.pay_in("P0", jobless.map(func(q): return [q, benefit_each]))
 		sim.public_sector.benefits_total += benefit
 		sim.public_sector.departments.Soziales += benefit
 	stats.benefits = benefit
-	_set_net_income(net / gross if gross > 0.0 else 0.0, benefit / jobless if jobless > 0 else 0.0)
-	var rent := sim.housing.collect_citizen_rent()   # Miete zuerst; den Rest geben die Buerger aus
-	var disposable := maxf(0.0, net + benefit - rent)
-	# Konsum der Buerger: Handel (S0) und Importe (X0)
-	var spend := disposable * SPEND_SHARE * sim.contentment.spend_factor()   # zufriedene Buerger geben mehr aus
-	var at_tills := minf(spend, sim.retail.take_month_sales())   # was an den Kassen der Betriebe bezahlt wurde, zahlt der Haushalt nicht noch einmal pauschal
-	sim.economy.transfer("H0", "S0", spend - at_tills)
-	sim.public_sector.consumption_tax(spend)
-	var imports := disposable * IMPORT_SHARE
-	sim.economy.transfer("H0", "X0", imports)
-	sim.economy.transfer("X0", "S0", imports)   # Ausfuhren der Stadtwirtschaft gleichen die Importe aus
+	_set_net_income(net_share, benefit_each)
+	# 3) Miete (Mieter -> Eigentuemer bzw. Vermietersektor), 4) Grundsteuer der Eigentuemer
+	var rent := sim.housing.collect_citizen_rent()
+	var prop_tax := P.collect_property_tax(month)
+	# 5) Konsum aus dem Monatseinkommen nach Miete, hoechstens das Guthaben: Handel (S0), Kassenkaeufe (bereits ueber H0), Importe (X0)
+	var factor: float = SPEND_SHARE * sim.contentment.spend_factor()
+	var spend_entries: Array = []
+	var import_entries: Array = []
+	var spend := 0.0
+	var imports := 0.0
+	for p in people:
+		var income_left := maxf(0.0, float(p.balance) - float(start_bal.get(int(p.id), 0.0)))
+		var s := minf(income_left * factor, maxf(0.0, float(p.balance)))
+		var imp := minf(income_left * IMPORT_SHARE, maxf(0.0, float(p.balance) - s))
+		spend_entries.append([p, s])
+		import_entries.append([p, imp])
+		spend += s
+		imports += imp
+	var at_tills := minf(spend, sim.retail.take_month_sales())   # was an den Kassen der Betriebe bezahlt wurde, lief schon ueber H0
+	var paid_spend := P.pay_out("S0", spend_entries)
+	if at_tills > 0.0:
+		sim.economy.transfer("S0", "H0", minf(at_tills, paid_spend))   # Kassenkaeufe: der Haushaltssektor wird entlastet, nicht doppelt belastet
+	sim.public_sector.consumption_tax(paid_spend)
+	var paid_imports := P.pay_out("X0", import_entries)
+	sim.economy.transfer("X0", "S0", paid_imports)   # Ausfuhren der Stadtwirtschaft gleichen die Importe aus
 	sim.economy.outflow["H0"] = outflow_h0
+	# 6) Beduerfnisse und Monatsprotokoll
+	P.update_needs()
+	P.month_log.append({"monat": month, "loehne": snappedf(gross, 1.0), "abgaben": snappedf(gross - net, 1.0), "grundsicherung": snappedf(benefit, 1.0),
+		"miete": snappedf(rent, 1.0), "grundsteuer": snappedf(prop_tax, 1.0), "konsum": snappedf(paid_spend, 1.0), "importe": snappedf(paid_imports, 1.0),
+		"guthaben": snappedf(float(sim.economy.accounts.get(Population.ACCOUNT, 0.0)), 1.0)})
+	if P.month_log.size() > 36:
+		P.month_log.pop_front()
 
 
 ## Netto je Person fuer die Mietzahlung: Beschaeftigte Lohn mal Nettoanteil, Arbeitslose ihr Arbeitslosengeld.
