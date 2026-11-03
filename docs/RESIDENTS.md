@@ -38,7 +38,7 @@ Godot 4.4.1, GDScript, isometrische Pixelgrafik. Bestehende Bausteine: `Citizens
 |---|---|---|
 | 1 | Personenmodell (Alter, Bildung, Konto R0, Bedürfnisse), Konfiguration, Eigentümer/Mieter, Miete von Person zu Person, Grundsteuer mit Satz des Bürgermeisters, Monatszyklus in fester Reihenfolge, Startprüfung | fertig (03.11.2026): `scripts/economy/population.gd`, `config/residents.json`, `test_population`; Volltest 5314 Prüfungen (2 angepasste Erwartungen an 90 % Beschäftigung); Stadtkasse über 180 Tage 200 k → 440 k, nie im Minus |
 | 2 | Verhalten aus Bedürfnissen: Jobsuche nach Bildung, Schulbesuch, Umzug und Jobwechsel bei Unglück, Zu- und Abwanderung nach Wirtschaftslage | offen |
-| 3 | Polizei, Gefängnis, Arztpraxen, Krankenhaus: Gebäude, Personal (wohnt in der Stadt), Krankheit und Einweisung, Kriminalität, Festnahme, Haft mit Verlust von Arbeit und ggf. Wohnung | offen |
+| 3 | Polizei, Gefängnis, Arztpraxen, Krankenhaus: Gebäude, Personal (wohnt in der Stadt), Krankheit und Einweisung, Kriminalität, Festnahme, Haft mit Verlust von Arbeit und ggf. Wohnung | fertig (03.11.2026): `scripts/economy/public_safety.gd`, `test_public_safety`; Streifen- und Krankenwagen fahren sichtbar, Polizei sichert Sperrungen ab |
 | 4 | Darstellung und Leistung: neue Wegziele, Streifen, Messung mit `tests/probe_perf.gd`, Optimierung nur wo gemessen nötig | offen |
 
 ## Monatszyklus (Ziel von Etappe 1)
@@ -49,3 +49,14 @@ Godot 4.4.1, GDScript, isometrische Pixelgrafik. Bestehende Bausteine: `Citizens
 4. Grundsteuer: Eigentümer → P0.
 5. Konsum aus dem verfügbaren Einkommen (R0 → S0, X0).
 6. Bedürfnisse und Statistik; Monatsprotokoll der Summen.
+
+## Etappe 3: Umsetzung
+
+- **Gebäude** (nach allen anderen, letzte IDs, Zufallszustand wiederhergestellt): Polizeiwache, Justizvollzugsanstalt, zwei Arztpraxen; Krankenhaus ist die vorhandene Stadtklinik.
+- **Personal**: Arbeitgeber `polizei` (3 % der Stellen) und `gesundheit` (4 %), Löhne aus der Stadtkasse; der Handel gibt dafür 7 Punkte ab. Das Personal sind Bürger mit Wohnung.
+- **Gesundheit** (täglich): Erkrankungsrisiko steigt mit Unglück und Alter; leichte Fälle 1–3 Tage beim Arzt, schwere (25 % oder bei überlasteten Praxen) 3–10 Tage Krankenhaus mit Krankenwagen. Kosten (60 EUR Arzt, 250 EUR je Krankenhaustag) zahlt die Stadtkasse an die Dienstleister.
+- **Kriminalität** (täglich): Ladendiebstahl; Wahrscheinlichkeit ×3 bei Geldnot, ×2 arbeitslos, ×2 unglücklich. Beute vom Handel auf das Konto des Täters.
+- **Polizei**: Aufklärung je Tag 10 % + 2,5 % je Polizist (höchstens 90 %); Festnahme mit Streifenwagen, Beute erstattet, Haft 30–90 Tage, Arbeit weg; Mieter verlieren ab 60 Tagen Haft die Wohnung, Eigentümer mit Steuerrückstand bei langer Haft ihr Haus (Zwangsversteigerung an den Vermietersektor, 60 % des Werts). Häftlinge werden weder eingestellt noch untergebracht und erhalten keine Grundsicherung.
+- **Streifenwagen** sichern freie Sperrungen ab (stehen mit Blaulicht daneben), sonst Streife; Krankenwagen warten am Krankenhaus.
+- **Anzeige**: Diebstahl rot, Polizei blau, Krankenwagen weiß auf der Karte und in der Leiste; der Bürgermeister sieht `sicherheit_gesundheit`.
+- **Grenzen**: Arbeitsausfall Kranker wirkt nicht auf den Lohn (Lohnfortzahlung); Personalstärke von Polizei und Gesundheit steuert der Bürgermeister noch nicht.

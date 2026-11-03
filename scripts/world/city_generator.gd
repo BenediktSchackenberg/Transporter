@@ -42,6 +42,9 @@ const TYPES := {
 	"staffing": [["staffing"], 2, 2, [], []],
 	"office_site": [["office0", "office1"], 3, 3, [], []],
 	"townhall": [["office1"], 3, 3, [], []],   # Rathaus (Rolle town_hall): kein Marktteilnehmer
+	"police": [["office0"], 3, 3, [], []],     # Polizeiwache (Rolle police)
+	"prison": [["warehouse"], 4, 3, [], []],  # Gefaengnis (Rolle prison)
+	"doctor": [["pharmacy"], 2, 2, [], []],   # Arztpraxis (Rolle doctor)
 }
 
 const LOTS := [
@@ -105,6 +108,10 @@ func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: 
 func _place_town_hall() -> void:
 	var rng_state := rng.state
 	_place_in_block("townhall", center, "town_hall", "Rathaus")
+	_place_in_block("police", center + Vector2(6, 4), "police", "Polizeiwache")
+	_place_in_block("prison", Vector2(n * 0.7, n * 0.75), "prison", "Justizvollzugsanstalt")
+	_place_in_block("doctor", center + Vector2(-8, -6), "doctor", "Arztpraxis am Markt")
+	_place_in_block("doctor", Vector2(n * 0.3, n * 0.62), "doctor", "Arztpraxis West")
 	rng.state = rng_state
 
 

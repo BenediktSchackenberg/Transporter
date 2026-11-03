@@ -317,8 +317,9 @@ func _house_homeless() -> void:
 		return
 	var n := 0
 	var seeking: Array = []
+	var day: int = GameCalendar.day_of(sim.game_min)
 	for p in sim.citizens.people:
-		if str(p.get("home", "")) == "":
+		if str(p.get("home", "")) == "" and not PublicSafety.in_prison(p, day):
 			seeking.append(p)
 	# Gruppen: jeweils bis zu vier Personen ohne Wohnung teilen sich eine Einheit
 	var idx := 0

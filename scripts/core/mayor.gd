@@ -163,6 +163,7 @@ func indicators() -> Dictionary:
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),
 		"rathaus": sim.town_hall.summary(),
 		"bevoelkerungsmodell": sim.population.summary(),
+		"sicherheit_gesundheit": sim.safety.summary(),
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 	}

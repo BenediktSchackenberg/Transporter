@@ -4,9 +4,12 @@ extends Node2D
 ## Unternehmerfigur zum Ziel (solange die Entscheidung frisch ist) und ein Schild mit Wer/Was. Sabotage und Angriffe rot und
 ## groesser. Reine Darstellung; Ein-/Ausschalten ueber `enabled` (HUD-Schaltflaeche, Taste K).
 
-const LINE_MIN := 60.0              # Spielminuten mit Verbindungslinie
-const LABELS_MAX := 8               # so viele neueste Eintraege tragen ein Schild
+## Anzeigedauer in Echtzeit (nicht Spielzeit): bei 16-facher Geschwindigkeit waeren 240 Spielminuten nur gut 7 Sekunden.
+const SHOW_S := 30.0                # so lange bleibt eine Markierung sichtbar
+const LABEL_S := 20.0               # so lange tragen neue Eintraege Linie und Schild
+const LABELS_MAX := 8               # hoechstens so viele Schilder zugleich
 const ACTOR_COLORS := {"buergermeister": Color("#f2c14e"), "disponent": Color("#5ad1e6"), "stadt": Color("#9ad06a")}
+const KIND_COLORS := {"verbrechen": Color("#ff4d4d"), "polizei": Color("#4d8dff"), "gesundheit": Color("#ffffff")}
 
 var sim: Simulation
 var cv: CityView
@@ -14,6 +17,7 @@ var enabled := true
 var zoom := 1.0
 var _t := 0.0
 var _font: Font
+var _seen := {}                     # Eintrags-ID -> Echtzeit, zu der er zuerst angezeigt wurde
 
 
 func setup(simulation: Simulation, city_view: CityView) -> void:
@@ -36,6 +40,8 @@ static func cell_screen(x: int, y: int) -> Vector2:
 
 
 func color_of(e: Dictionary) -> Color:
+	if KIND_COLORS.has(str(e.kind)):
+		return KIND_COLORS[str(e.kind)]
 	if ACTOR_COLORS.has(str(e.actor)):
 		return ACTOR_COLORS[str(e.actor)]
 	var c = sim.company(int(e.company))
@@ -45,21 +51,34 @@ func color_of(e: Dictionary) -> Color:
 func _draw() -> void:
 	if sim == null or sim.activity == null:
 		return
-	var now: float = sim.game_min
-	var items: Array = sim.activity.active(now)
+	var items: Array = []
+	for e in sim.activity.items:
+		var first := float(_seen.get(int(e.id), -1.0))
+		if first < 0.0:
+			first = _t
+			_seen[int(e.id)] = first
+		if _t - first <= SHOW_S:
+			items.append(e)
+	if _seen.size() > 400:
+		var keep := {}
+		for e in sim.activity.items:
+			if _seen.has(int(e.id)):
+				keep[int(e.id)] = _seen[int(e.id)]
+		_seen = keep
 	var inv := 1.0 / zoom
 	var n := items.size()
 	for i in n:
 		var e: Dictionary = items[i]
-		var age := now - float(e.t)
-		var fade := clampf(1.0 - age / ActivityFeed.KEEP_MIN, 0.25, 1.0)
-		var hostile: bool = str(e.kind) in ["sabotage", "angriff"]
+		var age := _t - float(_seen[int(e.id)])
+		var fade := clampf(1.0 - age / SHOW_S, 0.3, 1.0)
+		var fresh := age <= LABEL_S
+		var hostile: bool = str(e.kind) in ["sabotage", "angriff", "verbrechen"]
 		var col := Color("#ff4d4d") if hostile else color_of(e)
 		var p := cell_screen(int(e.x), int(e.y))
 		var pulse := 1.0 + 0.18 * sin(_t * 5.0 + float(e.id))
 		var r := (46.0 if hostile else 32.0) * pulse * clampf(inv, 1.0, 3.0)
 		# Verbindungslinie von der Unternehmerfigur zum Ziel
-		if age < LINE_MIN and str(e.actor).begins_with("C") and int(e.company) >= 0 and int(e.company) < sim.avatars.size():
+		if fresh and str(e.actor).begins_with("C") and int(e.company) >= 0 and int(e.company) < sim.avatars.size():
 			var from: Vector2 = Iso.to_screen(sim.avatars[int(e.company)].pos) + Vector2(0, -40)
 			draw_line(from, p, Color(col, 0.55 * fade), 3.0 * clampf(inv, 1.0, 3.0), true)
 		draw_arc(p, r + 3.0 * clampf(inv, 1.0, 3.0), 0.0, TAU, 40, Color(0, 0, 0, 0.6 * fade), 3.0 * clampf(inv, 1.0, 3.0), true)   # dunkler Rand: auch auf hellem Grund sichtbar
@@ -71,7 +90,7 @@ func _draw() -> void:
 			var s := Vector2(28, 28) * clampf(inv, 0.8, 3.0)
 			draw_texture_rect(tex, Rect2(p - s * 0.5 - Vector2(0, r + s.y * 0.6), s), false, Color(1, 1, 1, fade))
 		# Schild nur fuer die neuesten Eintraege (sonst wird die Karte unlesbar)
-		if i >= n - LABELS_MAX and _font != null:
+		if fresh and i >= n - LABELS_MAX and _font != null:
 			var fs := int(clampf(15.0 * inv, 16.0, 44.0))
 			var label: String = str(e.text)
 			var size := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)

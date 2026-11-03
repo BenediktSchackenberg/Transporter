@@ -18,6 +18,9 @@ const KINDS := {
 	"reparatur": {"label": "Reparatur", "icon": "i_wrench"},
 	"kundschaft": {"label": "Kundschaft", "icon": "i_eye"},
 	"stadt": {"label": "Stadt", "icon": "i_shield"},
+	"verbrechen": {"label": "Verbrechen", "icon": "i_bolt"},
+	"polizei": {"label": "Polizei", "icon": "i_shield"},
+	"gesundheit": {"label": "Gesundheit", "icon": "i_star"},
 	"sonstiges": {"label": "Aktion", "icon": "i_chat"},
 }
 const ACTION_KIND := {

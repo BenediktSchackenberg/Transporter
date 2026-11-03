@@ -23,6 +23,7 @@ var sim: Simulation
 var cv: CityView
 var vehicle_nodes := {}
 var traffic_nodes: Array = []
+var service_nodes: Array = []         # Streifen- und Krankenwagen (PublicSafety.vehicles)
 var avatar_nodes := {}
 var _people_timer := 0.0
 var _people_cache: Array = []
@@ -52,6 +53,17 @@ func build(simulation: Simulation, city_view: CityView) -> void:
 	cv = city_view
 	y_sort_enabled = true
 	_ped_rng.seed = sim.city.seed_value + 99
+	for sv in sim.safety.vehicles:
+		var sn := _make_vehicle_node("car", "white", Color.WHITE, false) if sv.kind == "polizei" else _make_vehicle_node("van", "", Color(0.95, 0.2, 0.2), true)
+		var siren := Sprite2D.new()
+		siren.name = "siren"
+		siren.texture = cv.tex("glow_small")
+		siren.material = cv._additive
+		siren.scale = Vector2(0.45, 0.45)
+		siren.position = Vector2(0, -34)
+		sn.add_child(siren)
+		add_child(sn)
+		service_nodes.append(sn)
 	for m in sim.traffic:
 		var n := _make_vehicle_node("car", CAR_NAMES[_ped_rng.randi() % CAR_NAMES.size()], Color.WHITE, false)
 		traffic_nodes.append(n)
@@ -326,6 +338,16 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			cs.texture = cv.tex(cname)
 			cs.offset = -cv.pivot_of(cname) + Vector2(0, -2.0 * float(MODEL_HEIGHT.get(v.model, 30)) - 6.0 + (1.0 if int(anim_time * 4) % 2 == 0 else 0.0))
 		n.get_node("warn").visible = v.state == "broken" and int(anim_time * 3) % 2 == 0
+	for i in mini(service_nodes.size(), sim.safety.vehicles.size()):
+		var sv: Dictionary = sim.safety.vehicles[i]
+		var sn: Node2D = service_nodes[i]
+		sn.position = Iso.to_screen(sv.mover.pos)
+		_set_vehicle_dir(sn, sv.mover.heading)
+		var on_duty: bool = not sv.task.is_empty() or (sv.kind == "polizei" and sv.mover.arrived() and sim.nav.roadworks.size() > 0)
+		var blink := int(anim_time * 6.0) % 2 == 0
+		var siren: Sprite2D = sn.get_node("siren")
+		siren.visible = on_duty
+		siren.modulate = (Color(0.3, 0.5, 1.0, 0.95) if blink else Color(1.0, 0.25, 0.25, 0.95)) if sv.kind == "krankenwagen" else (Color(0.3, 0.5, 1.0, 0.95) if blink else Color(0.6, 0.75, 1.0, 0.5))
 	for i in sim.traffic.size():
 		var m: Mover = sim.traffic[i]
 		var n: Node2D = traffic_nodes[i]

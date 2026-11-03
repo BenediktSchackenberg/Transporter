@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_population", "test_activity_feed", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_population", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -5251,4 +5251,57 @@ func test_activity_feed() -> void:
 	# Speichern und Laden
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.activity.items.size() == A.items.size(), "Aktivität nach Laden")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_public_safety() -> void:
+	var s := new_sim(2)
+	var S: PublicSafety = s.safety
+	ok(S.police >= 0 and S.prison >= 0 and S.doctors.size() >= 1 and S.hospital >= 0, "Polizeiwache, Gefängnis, Arztpraxen und Krankenhaus stehen in der Stadt")
+	ok(s.citizens.employed_count("polizei") > 0 and s.citizens.employed_count("gesundheit") > 0, "Polizei (%d) und Ärzte/Pflege (%d) sind Bürger mit Stelle" % [s.citizens.employed_count("polizei"), s.citizens.employed_count("gesundheit")])
+	var cops: Array = s.citizens.people.filter(func(p): return p.employer == "polizei")
+	ok(cops.all(func(p): return str(p.get("home", "")) != ""), "das Personal wohnt in der Stadt")
+	ok(S.vehicles.filter(func(v): return v.kind == "polizei").size() == 2 and S.vehicles.filter(func(v): return v.kind == "krankenwagen").size() == 1, "zwei Streifenwagen, ein Krankenwagen")
+	# Straftat
+	var day := S.today()
+	var p: Dictionary = s.citizens.people.filter(func(q): return q.employer != "" and str(q.get("home", "")) != "")[0]
+	var bal := float(p.balance)
+	S._crime(p, day)
+	ok(bool(p.wanted) and float(p.balance) > bal and absf(s.population.account_error()) < 0.01, "Diebstahl: Beute auf dem Konto des Täters, gesucht")
+	ok(s.activity.items.back().kind == "verbrechen", "Straftat erscheint auf der Karte (rot)")
+	# Festnahme mit langer Haft: Arbeit weg, Mieter verliert die Wohnung, Beute erstattet
+	var c := Population.cfg().duplicate(true)
+	c["sicherheit_gesundheit"] = {"haft_tage_min": 70, "haft_tage_max": 80}
+	Population.set_cfg(c)
+	var u: Dictionary = s.housing.units[str(p.home)]
+	var tenant := str(u.owner) != Population.OWNER_PREFIX + str(int(p.id))
+	S._arrest(p, day)
+	ok(PublicSafety.in_prison(p, day) and p.employer == "" and not bool(p.wanted) and float(p.loot) == 0.0, "Festnahme: Haft, Arbeit verloren, Beute erstattet")
+	ok(not tenant or str(p.home) == "", "Mieter verliert bei langer Haft die Wohnung")
+	ok(S.vehicles.any(func(v): return v.kind == "polizei" and not v.task.is_empty()), "Streifenwagen fährt zum Einsatz")
+	ok(s.activity.items.back().kind == "polizei", "Festnahme erscheint auf der Karte (blau)")
+	Population.set_cfg({})
+	# Haeftlinge werden weder eingestellt noch untergebracht
+	s.citizens._dynamics(1)
+	s.housing._house_homeless()
+	ok(p.employer == "" and str(p.get("home", "")) == "" if tenant else p.employer == "", "Häftlinge werden weder eingestellt noch untergebracht")
+	S.on_day(int(p.prison_until))
+	ok(not PublicSafety.in_prison(p, int(p.prison_until) + 1) and int(p.prison_until) == -1, "nach der Haft entlassen")
+	# Gesundheit ueber einen Monat: Erkrankungen, Arzt, Krankenhaus, Kosten aus der Stadtkasse
+	var p0 := float(s.economy.accounts.P0)
+	for d in range(day + 1, day + 40):
+		S.on_day(d)
+	ok(int(S.stats.erkrankt) > 0 and int(S.stats.arzt) > 0, "Bürger erkranken und gehen zum Arzt (%d Fälle, %d Arztbesuche, %d Krankenhaus)" % [int(S.stats.erkrankt), int(S.stats.arzt), int(S.stats.krankenhaus)])
+	ok(float(S.stats.kosten) > 0.0 and float(s.economy.accounts.P0) < p0, "Behandlungskosten trägt die Stadtkasse")
+	# Polizei sichert eine Sperrung ab
+	var rw: Vector2i = s._straight_road()
+	s.nav.add_roadwork(rw, s.game_min + 500.0)
+	for v in S.vehicles:
+		v.task = {}
+	S.update(0.1)
+	var guard: Array = S.vehicles.filter(func(v): return v.kind == "polizei" and (v.mover.goal - rw).length() <= 1.5)
+	ok(not guard.is_empty(), "ein Streifenwagen fährt zur Sperrung und sichert sie ab")
+	ok(s.mayor.indicators().has("sicherheit_gesundheit"), "Bürgermeister sieht Sicherheit und Gesundheit")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(int(s2.safety.stats.festnahmen) == int(S.stats.festnahmen) and s2.safety.vehicles.size() == S.vehicles.size(), "nach Laden")
 	ok(identity_ok(s), "Geld erhalten")

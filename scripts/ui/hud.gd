@@ -364,7 +364,7 @@ func _update_ticker() -> void:
 			b.tooltip_text = ""
 			continue
 		var e: Dictionary = items[i]
-		var hostile: bool = str(e.kind) in ["sabotage", "angriff"]
+		var hostile: bool = str(e.kind) in ["sabotage", "angriff", "verbrechen"]
 		b.text = "%s  %s%s" % [Catalog.game_time_short(float(e.t)), "⚠ " if hostile else "", str(e.text)]
 		b.tooltip_text = "%s\nWarum: %s\nKlicken: zur Stelle auf der Karte" % [str(e.text), str(e.why) if str(e.why) != "" else "–"]
 		var col: Color = Color("#ff6b5e") if hostile else (UITheme.ACCENT if str(e.actor) == "buergermeister" else (sim.company(int(e.company)).color.lightened(0.35) if sim.company(int(e.company)) != null else Color.WHITE))

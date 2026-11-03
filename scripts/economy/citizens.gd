@@ -18,8 +18,10 @@ const IMPORT_SHARE := 0.1          # Anteil fuer Importe (X0); der Rest wird ges
 const EMPLOYERS := {
 	"rathaus": {"label": "Rathaus", "share": 0.06, "wage": 15.0, "payer": "P0", "district": 0},
 	"schule_klinik": {"label": "Schulen und Klinik", "share": 0.10, "wage": 14.0, "payer": "P0", "district": 1},
+	"polizei": {"label": "Polizei", "share": 0.03, "wage": 16.0, "payer": "P0", "district": 0},
+	"gesundheit": {"label": "Ärzte und Pflege", "share": 0.04, "wage": 17.0, "payer": "P0", "district": 1},
 	"baufirma": {"label": "Baufirma", "share": 0.20, "wage": 15.0, "payer": "S0", "district": 5},
-	"handel": {"label": "Handel und Gastronomie", "share": 0.32, "wage": 11.0, "payer": "S0", "district": 0},
+	"handel": {"label": "Handel und Gastronomie", "share": 0.25, "wage": 11.0, "payer": "S0", "district": 0},
 	"industrie": {"label": "Industrie und Handwerk", "share": 0.32, "wage": 14.0, "payer": "S0", "district": 2},
 	"stadtlager": {"label": "Stadtlager", "share": 0.008, "wage": 13.0, "payer": "P0", "district": 3},
 }
@@ -50,7 +52,7 @@ func travel_plan(person: Dictionary, hour: float = -1.0) -> Dictionary:
 		return {"building": home, "purpose": "Nach Hause", "cell": sim.city.building(home).walk}
 	var kind := "work:" + employer
 	var purpose := "Zur Arbeit: " + str(EMPLOYERS.get(employer, {}).get("label", employer))
-	var types: Array = {"rathaus": ["townhall"] if sim.town_hall.building >= 0 else ["office", "bank"], "schule_klinik": ["school", "kindergarten", "clinic"], "baufirma": ["construction", "warehouse"],
+	var types: Array = {"rathaus": ["townhall"] if sim.town_hall.building >= 0 else ["office", "bank"], "schule_klinik": ["school", "kindergarten", "clinic"], "polizei": ["police"], "gesundheit": ["doctor", "clinic"], "baufirma": ["construction", "warehouse"],
 		"handel": ["shop", "restaurant"], "industrie": ["factory", "brewery", "bakery", "workshop"], "stadtlager": ["warehouse"]}.get(employer, ["office"])
 	if employer == "":
 		kind = "staffing"
@@ -244,7 +246,8 @@ func _dynamics(month: int) -> void:
 			p.wage = 0.0
 			stats.quits += 1
 	# Einstellungen: am laengsten Arbeitslose zuerst
-	var jobless: Array = people.filter(func(q): return q.employer == "")
+	var jail_day: int = GameCalendar.day_of(sim.game_min)
+	var jobless: Array = people.filter(func(q): return q.employer == "" and not PublicSafety.in_prison(q, jail_day))
 	jobless.sort_custom(func(a, b): return a.jobless_months > b.jobless_months or (a.jobless_months == b.jobless_months and a.id < b.id))
 	for p in jobless:
 		var best := ""
@@ -298,7 +301,7 @@ func _pay(month: int = 0) -> void:
 		stats.tax = gross - net
 	stats.wages = gross
 	# 2) Grundsicherung: Anteil des mittleren Nettolohns fuer jeden Arbeitslosen
-	var jobless: Array = people.filter(func(q): return q.employer == "")
+	var jobless: Array = people.filter(func(q): return q.employer == "" and not PublicSafety.in_prison(q, GameCalendar.day_of(sim.game_min)))
 	var benefit := 0.0
 	var benefit_each := 0.0
 	if employed > 0 and not jobless.is_empty():

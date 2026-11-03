@@ -55,6 +55,7 @@ var insolvency := Insolvency.new()
 var economy := Economy.new()        # Konten ausserhalb der Firmen, Geldkonservierung
 var world_events := WorldEvents.new()   # automatischer Ereignismanager
 var dispatcher = null   # DispatchAgent (Claude-Disponent), falls aktiv; untypisiert gegen Zyklen
+var safety := PublicSafety.new()   # Polizei, Gefaengnis, Aerzte, Krankenhaus, Kriminalitaet (Auftrag 10, Etappe 3)
 var activity := ActivityFeed.new()   # KI-Aktivitaet mit Ort (nur Anzeige)
 var population := Population.new()   # Bevoelkerungsmodell: Alter, Bildung, Konten R0, Eigentum, Grundsteuer (Auftrag 10)
 var town_hall := TownHall.new()   # Rathaus mit Personal (Auftrag 9)
@@ -114,6 +115,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	town_hall.setup(self)
 	population.setup(self)
 	activity.setup(self)
+	safety.setup(self)
 	banking.setup(self)
 	player_loans.setup(self)
 	central_bank.setup(self)
@@ -934,6 +936,7 @@ func step(dt: float) -> void:
 	_rebuild_hash()
 	for m in traffic:
 		_update_traffic_car(m, dt)
+	safety.update(dt)
 	for v in vehicles.values():
 		_update_vehicle(v, dt)
 	for a in avatars.values():
@@ -1123,7 +1126,7 @@ func to_dict() -> Dictionary:
 		owners[str(s)] = depot_owner[s]
 	return {"seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
-		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
+		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
@@ -1204,6 +1207,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.town_hall.from_dict(d.get("town_hall", {}))
 	s.population.from_dict(d.get("population", {}))
 	s.activity.from_dict(d.get("activity", {}))
+	s.safety.from_dict(d.get("safety", {}))
 	if d.has("residents"):
 		s.residents.from_dict(d.residents)
 	s.experiments.from_dict(d.get("experiments", {}))
