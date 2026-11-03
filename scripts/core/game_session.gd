@@ -133,6 +133,8 @@ func _mayor_config(keys: Dictionary) -> Dictionary:
 		if not m.has("api_key"):
 			m["api_key"] = keys.get(int(p.slot), "")
 	m["provider"] = str(m.get("provider", "demo"))
+	if m.provider == "anthropic" and not m.has("api_key"):
+		m["api_key"] = AnthropicAdapter.mayor_key()
 	return m
 
 

@@ -86,9 +86,9 @@ func _ready() -> void:
 	g.add_child(weather_opt)
 	g.add_child(UITheme.label("Bürgermeister:"))
 	mayor_opt = OptionButton.new()
-	for t in ["Regelbasiert (kein Sprachmodell)", "Sprachmodell von Spieler 1 (eigener Kontext)"]:
+	for t in ["Regelbasiert (kein Sprachmodell)", "Sprachmodell von Spieler 1 (eigener Kontext)", "Claude (Anthropic, Schlüssel aus ANTHROPIC_API_KEY)"]:
 		mayor_opt.add_item(t)
-	mayor_opt.tooltip_text = "Die Bürgermeister-KI entscheidet über Quartiere, Erschließung und große Bauanträge. Regelbasiert braucht keinen Zugang; sonst nutzt sie Anbieter, Modell und Schlüssel von Spieler 1, aber mit eigenem Gedächtnis und Budget."
+	mayor_opt.tooltip_text = "Die Bürgermeister-KI entscheidet über Quartiere, Erschließung und große Bauanträge. Regelbasiert braucht keinen Zugang; sonst nutzt sie Anbieter, Modell und Schlüssel von Spieler 1, aber mit eigenem Gedächtnis und Budget. Claude nutzt die Umgebungsvariable ANTHROPIC_API_KEY (oder den Windows-Tresor, Eintrag PixelTransportRivals/mayor); der Schlüssel wird nie im Menü eingegeben oder gespeichert."
 	g.add_child(mayor_opt)
 	carry_check = CheckBox.new()
 	carry_check.text = "Erfahrungen der vorigen Partie übernehmen (alle Spieler)"
@@ -283,7 +283,10 @@ func collect() -> Dictionary:
 
 func _mayor_config() -> Dictionary:
 	var m := _mayor_extra.duplicate()
-	m["provider"] = "global" if mayor_opt.selected == 1 else "demo"
+	m["provider"] = ["demo", "global", "anthropic"][clampi(mayor_opt.selected, 0, 2)]
+	if m.provider == "anthropic":
+		m["base_url"] = str(m.get("base_url", AnthropicAdapter.DEFAULT_BASE_URL))
+		m["model"] = str(m.get("model", AnthropicAdapter.DEFAULT_MODEL))
 	return m
 
 
@@ -298,7 +301,7 @@ func _apply_config(cfg: Dictionary) -> void:
 	fault_spin.value = float(cfg.get("demo_fault_rate", 0.1))
 	weather_opt.select(maxi(0, WEATHER_MODES.find(str(cfg.get("weather", "live")))))
 	_mayor_extra = cfg.get("mayor", {}).duplicate()
-	mayor_opt.select(1 if str(_mayor_extra.get("provider", "demo")) == "global" else 0)
+	mayor_opt.select({"global": 1, "anthropic": 2}.get(str(_mayor_extra.get("provider", "demo")), 0))
 	for r in rows:
 		r.enabled.button_pressed = false
 	for p in cfg.get("players", []):
@@ -376,6 +379,8 @@ static func validate(cfg: Dictionary) -> String:
 			return "%s: Externe API nur über HTTPS verbinden." % p.player_name
 	if int(cfg.duration_min) not in DURATIONS:
 		return "Ungültige Partiedauer."
+	if str(cfg.get("mayor", {}).get("provider", "")) == "anthropic" and AnthropicAdapter.mayor_key() == "":
+		return "Bürgermeister mit Claude: Es ist kein Schlüssel hinterlegt (Umgebungsvariable ANTHROPIC_API_KEY setzen und das Spiel neu starten)."
 	return ""
 
 

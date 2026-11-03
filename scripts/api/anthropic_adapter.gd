@@ -16,6 +16,15 @@ var http: HTTPRequest
 var _req_id := -1
 
 
+## Schluessel fuer Rollen ohne eigenes Eingabefeld (Buergermeister, Spielleitung): Umgebungsvariable, sonst Windows-Tresor.
+## Der Schluessel wird weder angezeigt noch in Einstellungen oder im Repo gespeichert.
+static func mayor_key() -> String:
+	var k := OS.get_environment("ANTHROPIC_API_KEY").strip_edges()
+	if k == "":
+		k = CredentialStore.read_key("mayor")
+	return k
+
+
 func _ready() -> void:
 	http = HTTPRequest.new()
 	http.use_threads = true

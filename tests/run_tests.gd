@@ -837,6 +837,27 @@ Du bist der Marktmacher.", "Systemnachrichten werden zu einem Feld")
 	ok(AnthropicAdapter.parse_response(401, JSON.stringify({"error": {"message": "invalid x-api-key"}})).error.contains("invalid x-api-key"), "Fehlermeldung der API")
 	ok(LLMAdapter.create("anthropic") is AnthropicAdapter, "Anbieter anthropic ist registriert")
 	ad.free()
+	# Buergermeister mit Claude: Schluessel nur aus der Umgebung, nie aus den Einstellungen
+	var prev_key := OS.get_environment("ANTHROPIC_API_KEY")
+	OS.set_environment("ANTHROPIC_API_KEY", "TEST_KEY_ENV")
+	ok(AnthropicAdapter.mayor_key() == "TEST_KEY_ENV", "Schluessel kommt aus ANTHROPIC_API_KEY")
+	var menu := SetupMenu.new()
+	menu._ready()
+	menu.mayor_opt.select(2)
+	var mc: Dictionary = menu.collect().mayor
+	ok(mc.provider == "anthropic" and mc.model == AnthropicAdapter.DEFAULT_MODEL and not mc.has("api_key"), "Buergermeister-Option Claude ohne Schluessel in der Konfiguration")
+	ok(SetupMenu.validate(menu.collect()) == "", "mit gesetztem Schluessel ist die Konfiguration gueltig")
+	menu.free()
+	if prev_key == "":
+		OS.unset_environment("ANTHROPIC_API_KEY")
+	else:
+		OS.set_environment("ANTHROPIC_API_KEY", prev_key)
+	var s := new_sim(2)
+	var ma := MayorAgent.new()
+	root.add_child(ma)
+	ma.setup(s, {"provider": "anthropic", "api_key": "TEST_KEY_ENV", "model": AnthropicAdapter.DEFAULT_MODEL}, null)
+	ok(ma.uses_model() and ma.adapter is AnthropicAdapter, "MayorAgent nutzt den Claude-Adapter")
+	ma.queue_free()
 
 
 func test_visit_dedupe() -> void:
