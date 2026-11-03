@@ -54,6 +54,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 				"personality": p.personality, "form": p.get("form", "einzel")})
 		sim = Simulation.new()
 		sim.setup(int(cfg.seed), players, int(cfg.get("map_size", Catalog.MAP_SIZE)))
+		sim.game_master.enabled = bool(cfg.get("game_master", true))   # Spielleitung im Spiel an; Konfiguration "game_master": false schaltet sie ab
 	else:
 		sim = Simulation.from_dict(loaded.sim)
 		active_seconds = float(loaded.active_seconds)

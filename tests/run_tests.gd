@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -4982,3 +4982,43 @@ func test_strategy_arena() -> void:
 	ok(rotated.rows.map(func(x): return x.profil) == ["wachstum", "effizient", "lernend", "konservativ"], "Strategien rotieren mit den Startplaetzen")
 	var base := Arena.run({"seed": 21, "map": 128, "steps": 2400, "brains": ["wachstum", "wachstum"], "max_actions": 4, "events": []})
 	ok(base.rows.all(func(x): return x.profil == ""), "ohne Plan bleibt die Arena unveraendert")
+
+
+func test_game_master() -> void:
+	# Regelkern: bedient Firmen mit Leerlauf ohne passende Auftraege, nicht den Marktfuehrer, begrenzt je Lauf und Tag
+	var obs := {"time": 0.0, "open_total": 10, "companies": [
+		{"id": 0, "name": "A", "vehicles": 3, "idle": 3, "open_fit": 0, "has_cold": false, "has_heavy": false, "max_cap": 8, "cash": 20000.0, "profit": -3000.0},
+		{"id": 1, "name": "B", "vehicles": 2, "idle": 0, "open_fit": 5, "has_cold": false, "has_heavy": false, "max_cap": 8, "cash": 90000.0, "profit": 9000.0},
+		{"id": 2, "name": "C", "vehicles": 2, "idle": 2, "open_fit": 1, "has_cold": true, "has_heavy": false, "max_cap": 14, "cash": 40000.0, "profit": 500.0},
+		{"id": 3, "name": "D", "vehicles": 1, "idle": 1, "open_fit": 0, "has_cold": false, "has_heavy": false, "max_cap": 8, "cash": 30000.0, "profit": 20000.0}]}
+	var d := GameMaster.decide(obs, 3, 8)
+	ok(d.actions.size() == 3 and d.actions.all(func(a): return int(a.company) in [0, 2]), "höchstens drei Zusatzaufträge, nur an Firmen mit Leerlauf (nicht an Marktführer D)")
+	ok(d.actions[0].company == 0, "dringendster Fall zuerst (A: 3 im Leerlauf, im Minus)")
+	ok(GameMaster.decide(obs, 3, 0).actions.is_empty(), "Tageslimit erreicht: nichts")
+	ok(GameMaster.decide({"companies": []}, 3, 8).actions.is_empty(), "ohne Firmen nichts zu tun")
+	# Spielleitung im Spiel
+	var s := new_sim(4)
+	var gm: GameMaster = s.game_master
+	ok(not gm.enabled, "standardmäßig aus (Wiederholbarkeit)")
+	var before: int = s.contracts.size()
+	gm.minute_tick(500.0)
+	ok(s.contracts.size() == before and gm.stats.runs == 0, "ausgeschaltet verändert sie nichts")
+	gm.enabled = true
+	var plan := gm.run(500.0)
+	var after: int = s.contracts.size()
+	ok(after - before <= GameMaster.MAX_PER_RUN, "ein Lauf erzeugt höchstens %d Aufträge (%d)" % [GameMaster.MAX_PER_RUN, after - before])
+	for e in gm.log[gm.log.size() - 1].actions:
+		var k: Contract = s.contracts.get(e.contract)
+		var specs: Array = s.company_vehicles(int(e.company)).map(func(v): return v.spec())
+		ok(k != null and k.status == "open" and GameMaster.fits(k, specs, float(s.company(int(e.company)).reputation)), "Zusatzauftrag %s passt zur Flotte von F%d" % [e.contract, int(e.company)])
+	# Wahl durch ein Modell: nur nummerierte Kandidaten sind erlaubt
+	s.contracts.clear()   # leerer Markt: alle Firmen mit Leerlauf haben keinen passenden Auftrag, es gibt Kandidaten
+	gm.chooser = func(_o, cands): return [999]
+	gm.last_run = 0.0
+	var before2: int = s.contracts.size()
+	gm.run(2000.0)
+	ok(s.contracts.size() == before2 and gm.log[gm.log.size() - 1].source == "Claude", "unbekannte Kandidatennummer erzeugt nichts")
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.game_master.enabled and s2.game_master.stats.runs == gm.stats.runs and s2.game_master.log.size() == gm.log.size(), "Spielleitung nach Laden")
+	ok(identity_ok(s), "Geld erhalten")

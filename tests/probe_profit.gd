@@ -8,16 +8,19 @@ func _initialize() -> void:
 	var seed_value := 21
 	var days := 20.0
 	var brains: Array = Catalog.PERSONALITIES.keys().slice(0, 4)
+	var gm := false
 	for a in OS.get_cmdline_user_args():
 		var s := str(a)
 		if s.begins_with("--seed="):
 			seed_value = int(s.trim_prefix("--seed="))
 		elif s.begins_with("--days="):
 			days = float(s.trim_prefix("--days="))
+		elif s == "--gm":
+			gm = true
 		elif s.begins_with("--brains="):
 			brains = s.trim_prefix("--brains=").split(",")
 	GameCalendar.configure(60.0)
-	var spec := {"seed": seed_value, "map": 128, "steps": int(days * 600.0), "brains": brains, "events": []}
+	var spec := {"seed": seed_value, "map": 128, "steps": int(days * 600.0), "brains": brains, "events": [], "game_master": gm}
 	var s: Simulation = Arena._setup(spec, 0)
 	var rngs: Array = []
 	for c in s.companies:
@@ -55,6 +58,7 @@ func _initialize() -> void:
 	for k in s.contracts.values():
 		var key := "%s%s" % [k.status, "" if k.owner < 0 else "(vergeben)"]
 		st[key] = int(st.get(key, 0)) + 1
+	print("Spielleitung: ", s.game_master.stats)
 	print("Auftraege gesamt %d: %s" % [s.contracts.size(), st])
 	for c in s.companies:
 		var l: Ledger = c.ledger

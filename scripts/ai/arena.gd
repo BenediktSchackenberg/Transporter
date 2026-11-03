@@ -27,6 +27,7 @@ static func _players(brains: Array, rotation: int) -> Array:
 static func _setup(spec: Dictionary, rotation: int) -> Simulation:
 	var s := Simulation.new()
 	s.setup(int(spec.get("seed", 21)), _players(spec.brains, rotation), int(spec.get("map", 128)), 0.5)
+	s.game_master.enabled = bool(spec.get("game_master", false))
 	return s
 
 
