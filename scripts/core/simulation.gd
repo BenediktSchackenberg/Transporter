@@ -54,6 +54,7 @@ var player_loans := PlayerLoans.new()   # Kredite zwischen Unternehmen (Auftrag 
 var insolvency := Insolvency.new()
 var economy := Economy.new()        # Konten ausserhalb der Firmen, Geldkonservierung
 var world_events := WorldEvents.new()   # automatischer Ereignismanager
+var dispatcher = null   # DispatchAgent (Claude-Disponent), falls aktiv; untypisiert gegen Zyklen
 var game_master := GameMaster.new()   # Spielleitung: gezielte Nachfragesteuerung (standardmaessig aus)
 var residents := Residents.new()        # Kundenfiguren mit Beduerfnissen
 var experiments := ExperimentBook.new()

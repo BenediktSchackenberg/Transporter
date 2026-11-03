@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -5022,3 +5022,66 @@ func test_game_master() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.game_master.enabled and s2.game_master.stats.runs == gm.stats.runs and s2.game_master.log.size() == gm.log.size(), "Spielleitung nach Laden")
 	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_dispatch_agent() -> void:
+	var s := new_sim(2)
+	for k in s.market.open_contracts():
+		s.companies[0].known[k.id] = true
+		s.companies[1].known[k.id] = true
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	var b: Dictionary = DispatchCandidates.build(obs)
+	ok(not b.candidates.is_empty(), "Kandidaten für das freie Fahrzeug vorhanden (%d)" % b.candidates.size())
+	var nrs: Array = b.candidates.map(func(c): return int(c.nr))
+	ok(nrs.size() == b.candidates.size() and nrs[0] == 1 and nrs.max() == nrs.size(), "Nummern laufen lückenlos ab 1")
+	ok(b.candidates.all(func(c): return s.contracts.has(c.contract_id) and s.contracts[c.contract_id].status == "open"), "Kandidaten sind offene, bekannte Aufträge")
+	var picks: Array = DispatchCandidates.rule_pick(b.candidates, 6)
+	ok(picks.size() == 1 and picks[0] in nrs, "Regelwahl: ein Fahrzeug, ein Auftrag")
+	# Antwortformate
+	ok(DispatchAgent.parse_choice("Hier: ```json\n{\"wahl\": [2, \"3\"], \"begruendung\": \"gut\"}\n```").choice == [2, 3], "Antwort mit Textrahmen und Textzahl wird gelesen")
+	ok(not DispatchAgent.parse_choice("keine Ahnung").ok and not DispatchAgent.parse_choice("{\"x\": 1}").ok, "Unbrauchbare Antworten werden erkannt")
+	# Agent mit Claude-Adapter (kein Netzwerkaufruf: Ergebnisse werden direkt eingespeist)
+	var ag := DispatchAgent.new()
+	root.add_child(ag)
+	ag.setup(s, {"provider": "anthropic", "api_key": "TEST_KEY_ENV", "model": "claude-sonnet-5-5"}, ApiLog.new(), [0, 1])
+	ok(ag.covers(0) and ag.covers(1) and not ag.covers(7), "versorgt nur die benannten Firmen")
+	ok(s.dispatcher == ag, "Simulation kennt den Disponenten")
+	var groups: Array = ag.gather()
+	ok(groups.size() >= 1 and groups[0].candidates.size() >= 1, "gather liefert Gruppen mit Kandidaten")
+	var all: Array = []
+	for g in groups:
+		for c in g.candidates:
+			var e: Dictionary = c.duplicate()
+			e["company"] = g.company
+			all.append(e)
+	var first: Dictionary = all[0]
+	ag._pending = all
+	ag._inflight = 1
+	ag.handle_result(1, {"ok": true, "content": "{\"wahl\": [%d, 999], \"begruendung\": \"Test\"}" % int(first.nr), "usage": {"total_tokens": 500}})
+	var kk: Contract = s.contracts[first.contract_id]
+	ok(kk.owner == int(first.company) and kk.vehicle_id == int(first.vehicle_id), "gewählte Zuweisung wurde ausgeführt (%s)" % kk.status)
+	ok(ag.stats.assigned == 1 and ag.stats.rejected >= 1 and ag.stats.tokens == 500, "unbekannte Nummer abgelehnt, Tokens gezählt")
+	# API-Fehler: Regeln übernehmen sofort
+	var s2 := new_sim(2)
+	for k in s2.market.open_contracts():
+		s2.companies[0].known[k.id] = true
+	var ag2 := DispatchAgent.new()
+	root.add_child(ag2)
+	ag2.setup(s2, {"provider": "anthropic", "api_key": "TEST_KEY_ENV"}, ApiLog.new(), [0])
+	var g2: Array = ag2.gather()
+	var all2: Array = []
+	for c in g2[0].candidates:
+		var e2: Dictionary = c.duplicate()
+		e2["company"] = 0
+		all2.append(e2)
+	ag2._pending = all2
+	ag2._inflight = 5
+	ag2.handle_result(5, {"ok": false, "error": "HTTP 500"})
+	ok(ag2.stats.errors == 1 and ag2.stats.by_rules == 1 and ag2.stats.assigned == 1, "bei API-Fehler wird sofort per Regeln zugewiesen")
+	for i in 3:
+		ag2._pending = []
+		ag2._inflight = 10 + i
+		ag2.handle_result(10 + i, {"ok": false, "error": "HTTP 500"})
+	ok(ag2.fallback_active and not ag2.covers(0), "nach wiederholten Fehlern Ersatzmodus: Spieler-Disposition übernimmt wieder")
+	ag.queue_free()
+	ag2.queue_free()

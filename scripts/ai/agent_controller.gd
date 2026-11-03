@@ -251,6 +251,8 @@ func _run_dispatch_help() -> void:
 	var obs := ObservationBuilder.build(sim, cid, [], _last_obs_min, remaining_real_min, goal, "")
 	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng, sim.strategy.params_of(cid))
 	d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) in DISPATCH)
+	if sim.dispatcher != null and sim.dispatcher.covers(cid):   # Auftragszuweisung macht der Claude-Disponent; die Regeln bleiben fuer Fahrer, Reparatur, Tanken und Hofaufbau
+		d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) not in ["accept_contract", "assign_transport"])
 	if d.actions.is_empty():
 		return
 	d["summary"] = ""

@@ -18,6 +18,7 @@ var cfg := {}                     # Spielkonfiguration OHNE API-Keys
 var sim: Simulation
 var controllers: Array[AgentController] = []
 var mayor_agent: MayorAgent
+var dispatch_agent: DispatchAgent
 var city_view: CityView
 var entity_view: EntityView
 var hud: HUD
@@ -94,6 +95,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	mayor_agent.setup(sim, _mayor_config(keys), api_log)
 	if not loaded.is_empty() and loaded.has("mayor_agent"):
 		mayor_agent.from_dict(loaded.mayor_agent)
+	_setup_dispatcher()
 	sim.insolvency.company_refounded.connect(_on_refounded)
 	_setup_weather()
 	_setup_fuel()
@@ -137,6 +139,27 @@ func _mayor_config(keys: Dictionary) -> Dictionary:
 	if m.provider == "anthropic" and not m.has("api_key"):
 		m["api_key"] = AnthropicAdapter.mayor_key()
 	return m
+
+
+## Claude-Disponent fuer die lokalen Modellspieler (Ollama): Konfiguration `dispatcher` {provider: "anthropic", model, ...}.
+## Schluessel wie beim Buergermeister nur aus ANTHROPIC_API_KEY bzw. Windows-Tresor, nie aus den Einstellungen.
+func _setup_dispatcher() -> void:
+	var dc: Dictionary = cfg.get("dispatcher", {}).duplicate()
+	if str(dc.get("provider", "demo")) != "anthropic":
+		return
+	var ids: Array = []
+	for i in cfg.players.size():
+		if str(cfg.players[i].get("provider", "demo")) == "ollama":
+			ids.append(i)
+	if ids.is_empty():
+		return
+	dc["base_url"] = str(dc.get("base_url", AnthropicAdapter.DEFAULT_BASE_URL))
+	dc["model"] = str(dc.get("model", AnthropicAdapter.DEFAULT_MODEL))
+	if not dc.has("api_key"):
+		dc["api_key"] = AnthropicAdapter.mayor_key()
+	dispatch_agent = DispatchAgent.new()
+	add_child(dispatch_agent)
+	dispatch_agent.setup(sim, dc, api_log, ids)
 
 
 ## Wetter: Live-Abruf (Standard), Wiederholung einer aufgezeichneten Partie oder nur simuliertes Ersatzwetter ("sim").

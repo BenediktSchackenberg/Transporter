@@ -22,6 +22,7 @@ var fault_spin: SpinBox
 var carry_check: CheckBox
 var weather_opt: OptionButton
 var mayor_opt: OptionButton
+var dispatch_opt: OptionButton
 var _mayor_extra := {}            # weitere Einstellungen des Buergermeisters aus einer geladenen Konfiguration (Modell, Adresse, Budget)
 const WEATHER_MODES := ["live", "sim", "replay"]
 var status_label: Label
@@ -90,6 +91,12 @@ func _ready() -> void:
 		mayor_opt.add_item(t)
 	mayor_opt.tooltip_text = "Die Bürgermeister-KI entscheidet über Quartiere, Erschließung und große Bauanträge. Regelbasiert braucht keinen Zugang; sonst nutzt sie Anbieter, Modell und Schlüssel von Spieler 1, aber mit eigenem Gedächtnis und Budget. Claude nutzt die Umgebungsvariable ANTHROPIC_API_KEY (oder den Windows-Tresor, Eintrag PixelTransportRivals/mayor); der Schlüssel wird nie im Menü eingegeben oder gespeichert."
 	g.add_child(mayor_opt)
+	g.add_child(UITheme.label("Disponent:"))
+	dispatch_opt = OptionButton.new()
+	for t in ["Aus (Regel-Disposition der Spieler)", "Claude (Anthropic) disponiert für lokale Modellspieler"]:
+		dispatch_opt.add_item(t)
+	dispatch_opt.tooltip_text = "Der Disponent nimmt lokalen Modellspielern (Ollama) die Auftragszuweisung ab: Die Regeln liefern gültige Zuweisungen, Claude wählt daraus. Fällt die API aus, übernehmen sofort die Regeln. Der Schlüssel kommt aus ANTHROPIC_API_KEY oder dem Windows-Tresor und wird nie im Menü gespeichert."
+	g.add_child(dispatch_opt)
 	carry_check = CheckBox.new()
 	carry_check.text = "Erfahrungen der vorigen Partie übernehmen (alle Spieler)"
 	carry_check.tooltip_text = "Gespeicherte Erfahrungen je Spieler-Platz werden als Vermutungen übernommen. Für Vergleiche: für alle gleich."
@@ -277,7 +284,7 @@ func collect() -> Dictionary:
 			"timeout": 90.0 if provider == "ollama" else 45.0})
 	return {"seed": seed_edit.text.to_int(), "duration_min": DURATIONS[duration_opt.selected],
 		"speed_idx": speed_opt.selected, "demo_fault_rate": fault_spin.value, "carry_memory": carry_check.button_pressed,
-		"mayor": _mayor_config(), "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
+		"mayor": _mayor_config(), "dispatcher": {"provider": "anthropic" if dispatch_opt.selected == 1 else "demo"}, "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
 		"players": players}
 
 
@@ -301,6 +308,7 @@ func _apply_config(cfg: Dictionary) -> void:
 	fault_spin.value = float(cfg.get("demo_fault_rate", 0.1))
 	weather_opt.select(maxi(0, WEATHER_MODES.find(str(cfg.get("weather", "live")))))
 	_mayor_extra = cfg.get("mayor", {}).duplicate()
+	dispatch_opt.select(1 if str(cfg.get("dispatcher", {}).get("provider", "demo")) == "anthropic" else 0)
 	mayor_opt.select({"global": 1, "anthropic": 2}.get(str(_mayor_extra.get("provider", "demo")), 0))
 	for r in rows:
 		r.enabled.button_pressed = false
@@ -379,8 +387,8 @@ static func validate(cfg: Dictionary) -> String:
 			return "%s: Externe API nur über HTTPS verbinden." % p.player_name
 	if int(cfg.duration_min) not in DURATIONS:
 		return "Ungültige Partiedauer."
-	if str(cfg.get("mayor", {}).get("provider", "")) == "anthropic" and AnthropicAdapter.mayor_key() == "":
-		return "Bürgermeister mit Claude: Es ist kein Schlüssel hinterlegt (Umgebungsvariable ANTHROPIC_API_KEY setzen und das Spiel neu starten)."
+	if (str(cfg.get("mayor", {}).get("provider", "")) == "anthropic" or str(cfg.get("dispatcher", {}).get("provider", "")) == "anthropic") and AnthropicAdapter.mayor_key() == "":
+		return "Claude (Bürgermeister/Disponent): Es ist kein Schlüssel hinterlegt (Umgebungsvariable ANTHROPIC_API_KEY setzen und das Spiel neu starten)."
 	return ""
 
 
