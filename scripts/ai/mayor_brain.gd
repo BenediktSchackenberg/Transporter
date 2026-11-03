@@ -58,6 +58,13 @@ static func decide(ind: Dictionary) -> Dictionary:
 			actions.append({"action": "improve_traffic", "kind": kind_t, "x": int(sp.x), "y": int(sp.y),
 				"reason": "Engpass auf (%d,%d) an %d Tagen überfüllt, %d Fahrzeugsekunden verloren." % [int(sp.x), int(sp.y), int(sp.tage_mit_stau), int(sp.verlorene_fahrzeugsekunden)]})
 			break
+	# 1e) Rathaus: lange Antragswarteschlange bei ausgelastetem Bauamt -> Stellen ausschreiben (nur mit Reserve in der Kasse)
+	var th: Dictionary = ind.get("rathaus", {})
+	if actions.size() < MAX_ACTIONS and not th.is_empty() and int(th.offene_stellen) == 0 and int(th.soll_gesamt) < int(th.grenzen.max_gesamt) - 2 \
+			and int(ind.bauantraege.warteschlange) > 6.0 * maxf(1.0, float(ind.bauantraege.kapazitaet_je_tag)) and float(ind.haushalt.verfuegbar) > 60000.0:
+		actions.append({"action": "hire_staff", "abteilung": "bauamt", "anzahl": 2,
+			"reason": "%d Anträge in der Warteschlange bei %.1f Bearbeitungspunkten je Tag; das Bauamt wird verstärkt." % [int(ind.bauantraege.warteschlange), float(ind.bauantraege.kapazitaet_je_tag)]})
+		notes.append("Bauamt verstärkt")
 	# 2) Bedarf bestimmen (Schwellen je Partei)
 	var need := waiting > 0
 	match party:

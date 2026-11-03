@@ -24,6 +24,10 @@ const SCHEMA := {
 		"desc": "Verkehrsmaßnahme auf einem wiederkehrenden Engpass (obs.verkehr.engpaesse mit wiederkehrend=true): kind ampel (Kreuzung, 12 000 EUR, 2 Tage), ladezone (Strecke neben einem Gebäude, 8 000 EUR, 3 Tage, Haltebucht für Lieferfahrzeuge, +1 Kapazität) oder ausbau (Straßenabschnitt, 40 000 EUR, 6 Tage, währenddessen eine Spur weniger). Ein einzelner Stau rechtfertigt keinen Ausbau."},
 	"reject_procurement": {"params": {"order_id": "string", "reason": "string"}, "desc": "Beschaffungsvorschlag ablehnen (Begründung nötig, z. B. Budget oder kein Bedarf)."},
 	"assess_financing": {"params": {"project_id": "string"}, "desc": "Finanzierungsbedarf eines Projekts oder Plans bewerten (nur Auskunft)."},
+	"hire_staff": {"params": {"abteilung": "string", "anzahl": "int", "reason": "string"},
+		"desc": "Im Rathaus Stellen ausschreiben (abteilung verwaltung | bauamt | strassen | pruefdienst; 1-5 je Aktion, höchstens 120 insgesamt). Besetzung zum Monatsende, Gehälter zahlt die Stadtkasse; nur wenn sie sechs Monatsgehälter der neuen Kräfte deckt. Siehe obs.rathaus."},
+	"dismiss_staff": {"params": {"abteilung": "string", "anzahl": "int", "reason": "string"},
+		"desc": "Im Rathaus Stellen streichen (mindestens eine Kraft je Abteilung bleibt). Wirkt zum Monatsende."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
 		"desc": "Bauantrag der Bürgermeisterebene entscheiden: decision genehmigen | bedingungen | ablehnen | rueckfrage. Ablehnung nur wegen benannter fehlender Voraussetzungen; ohne Mängel muss genehmigt werden."},
 }
@@ -155,6 +159,7 @@ func indicators() -> Dictionary:
 		"stadtlager": stadtlager_indicators(),
 		"entwicklungsvorschlaege": quarter_candidates(3),
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),
+		"rathaus": sim.town_hall.summary(),
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 	}
@@ -323,6 +328,10 @@ func execute(action: Dictionary) -> Dictionary:
 				res = _assess_financing(a)
 			"decide_application":
 				res = _decide_application(a)
+			"hire_staff":
+				res = sim.town_hall.hire(str(a.abteilung), int(a.anzahl), "Bürgermeister %s" % name)
+			"dismiss_staff":
+				res = sim.town_hall.dismiss(str(a.abteilung), int(a.anzahl))
 			_:
 				res = {"ok": false, "msg": "Unbekannte Aktion."}
 	if act != "wait":

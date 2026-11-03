@@ -1028,6 +1028,7 @@ static func mayor_state(sim: Simulation) -> String:
 	var M: Mayor = sim.mayor
 	var txt := "[b][color=#f2c14e]LAGE DER STADT[/color][/b]\n"
 	txt += _mayor_lage(M, M.indicators())
+	txt += _rathaus_text(sim)
 	txt += "\n[b]Wahlen[/b]\n"
 	for e in M.elections:
 		txt += "  Tag %d: %s (Zustimmung %.0f %%)%s\n" % [int(e.day), e.ergebnis, float(e.zustimmung), (", Nachfolger " + esc(str(e.nachfolger))) if e.has("nachfolger") else ""]
@@ -1057,6 +1058,28 @@ static func mayor_activity(sim: Simulation, agent: MayorAgent) -> String:
 	for d in M.decisions.slice(-10):
 		txt += "[b]Tag %d · %s[/b] [color=#%s]%s[/color]\n    Grund: %s\n    Ergebnis: %s\n" % [int(d.day), esc(str(d.action)), "6fd08c" if d.ok else "ff6b5e",
 			"ausgeführt" if d.ok else "abgelehnt", esc(str(d.reason)), esc(str(d.msg).left(160))]
+	return txt
+
+
+## Rathaus: Abteilungen mit Soll/Ist und Belegschaft (Auftrag 9).
+static func _rathaus_text(sim: Simulation) -> String:
+	var T: TownHall = sim.town_hall
+	var sm: Dictionary = T.summary()
+	var txt := "
+[b][color=#f2c14e]RATHAUS[/color][/b] %s
+" % ("(%s)" % esc(sm.gebaeude) if sm.gebaeude != "" else "(ohne Gebäude)")
+	txt += "Personal %d von %d Stellen · offene Stellen %d · Kosten %s je Monat · Bauanträge %.1f Punkte je Tag
+" % [int(sm.ist_gesamt), int(sm.soll_gesamt),
+		int(sm.offene_stellen), Catalog.money(float(sm.kosten_monat)), float(sm.bauantrag_kapazitaet_je_tag)]
+	var roster: Array = T.roster()
+	for d in sm.abteilungen:
+		var e: Dictionary = sm.abteilungen[d]
+		txt += "  [b]%s[/b] %d/%d · %s
+" % [esc(e.bezeichnung), int(e.ist), int(e.soll), esc(e.aufgabe)]
+		var names: Array = roster.filter(func(r): return r.dept == d).slice(0, 6).map(func(r): return esc(r.name))
+		if not names.is_empty():
+			txt += "    [color=#9a98a8]%s%s[/color]
+" % [", ".join(names), " …" if int(e.ist) > 6 else ""]
 	return txt
 
 

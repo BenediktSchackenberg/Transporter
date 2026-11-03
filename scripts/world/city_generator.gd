@@ -41,6 +41,7 @@ const TYPES := {
 	"job_board": [["job_board"], 3, 2, [], []],
 	"staffing": [["staffing"], 2, 2, [], []],
 	"office_site": [["office0", "office1"], 3, 3, [], []],
+	"townhall": [["office1"], 3, 3, [], []],   # Rathaus (Rolle town_hall): kein Marktteilnehmer
 }
 
 const LOTS := [
@@ -94,8 +95,17 @@ func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: 
 	_blocks_ground()
 	_specials()
 	_fill_lots()
+	_place_town_hall()
 	_finish()
 	return c
+
+
+## Rathaus nach allen anderen Gebaeuden (letzte ID) und mit wiederhergestelltem Zufallszustand: die uebrige Stadt,
+## ihre Gebaeude-IDs und Namen bleiben je Seed unveraendert. Ohne freien Platz entsteht kein Gebaeude (die Verwaltung arbeitet trotzdem).
+func _place_town_hall() -> void:
+	var rng_state := rng.state
+	_place_in_block("townhall", center, "town_hall", "Rathaus")
+	rng.state = rng_state
 
 
 func _coast_and_districts() -> void:

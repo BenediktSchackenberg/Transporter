@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -5089,3 +5089,51 @@ func test_dispatch_agent() -> void:
 	ok(ag2.fallback_active and not ag2.covers(0), "nach wiederholten Fehlern Ersatzmodus: Spieler-Disposition übernimmt wieder")
 	ag.queue_free()
 	ag2.queue_free()
+
+
+func test_town_hall() -> void:
+	var s := new_sim(2)
+	var T: TownHall = s.town_hall
+	ok(T.building >= 0 and s.city.building(T.building).name == "Rathaus" and s.city.building(T.building).role == "town_hall", "Rathaus steht als Gebäude in der Stadt")
+	var sm: Dictionary = T.summary()
+	var sum_is := 0
+	var sum_soll := 0
+	for d in sm.abteilungen:
+		sum_is += int(sm.abteilungen[d].ist)
+		sum_soll += int(sm.abteilungen[d].soll)
+		ok(int(sm.abteilungen[d].soll) >= TownHall.MIN_PER_DEPT, "Abteilung %s hat mindestens eine Stelle" % d)
+	ok(sum_is == T.staff_total() and sum_soll == T.total_target(), "Abteilungen summieren sich auf Ist (%d) und Soll (%d)" % [sum_is, sum_soll])
+	ok(T.roster().size() == T.staff_total() and T.roster().all(func(r): return r.dept in TownHall.DEPTS), "Belegschaft ist vollständig zugeordnet")
+	var old_cap := maxf(1.0, float(s.citizens.employed_count("rathaus")) / 8.0)
+	ok(absf(s.permits.capacity() - old_cap) <= 0.6, "Bauantrags-Kapazität entspricht bei Startverteilung dem früheren Wert (%.2f / %.2f)" % [s.permits.capacity(), old_cap])
+	# Einstellen und Entlassen
+	var before_target := T.total_target()
+	var before_staff := T.staff_total()
+	s.economy.transfer("X0", "P0", 500000.0)   # Einzahlung von aussen, die Geldkonservierung bleibt gewahrt
+	var h: Dictionary = T.hire("bauamt", 3)
+	ok(h.ok and T.total_target() == before_target + 3 and s.citizens.cap.rathaus == before_target + 3, "3 Stellen im Bauamt ausgeschrieben: " + h.msg.left(80))
+	ok(T.vacancies() == 3, "offene Stellen bis zum Monatsende (%d)" % T.vacancies())
+	s.citizens._dynamics(1)
+	ok(T.staff_total() > before_staff and T.staff_total() <= T.total_target(), "zum Monatsende besetzt (%d -> %d)" % [before_staff, T.staff_total()])
+	var d: Dictionary = T.dismiss("verwaltung", 2)
+	ok(d.ok and T.target.verwaltung >= TownHall.MIN_PER_DEPT, "2 Stellen in der Verwaltung gestrichen")
+	var cap_after: int = int(s.citizens.cap.rathaus)
+	s.citizens._dynamics(2)
+	ok(s.citizens.employed_count("rathaus") <= cap_after, "Entlassung wirkt zum Monatsende")
+	# Grenzen
+	ok(not T.hire("kantine", 1).ok, "unbekannte Abteilung abgelehnt")
+	ok(not T.hire("bauamt", 6).ok and not T.hire("bauamt", 0).ok, "Anzahl 1 bis 5")
+	ok(not T.dismiss("pruefdienst", 99).ok and not T.dismiss("pruefdienst", T.target.pruefdienst).ok, "mindestens eine Kraft je Abteilung")
+	s.economy.transfer("P0", "X0", float(s.economy.accounts.P0) - 1000.0)
+	var poor: Dictionary = T.hire("strassen", 2)
+	ok(not poor.ok and "Stadtkasse" in poor.msg, "ohne Geld in der Stadtkasse keine Einstellung: " + poor.msg.left(70))
+	# Aktionen des Buergermeisters und Beobachtung
+	s.economy.transfer("X0", "P0", 500000.0)
+	var r: Dictionary = s.mayor.execute({"action": "hire_staff", "abteilung": "pruefdienst", "anzahl": 1, "reason": "Prüfungen"})
+	ok(r.ok and s.mayor.decisions.back().action == "hire_staff", "Bürgermeister kann einstellen und es wird protokolliert")
+	ok(s.mayor.indicators().has("rathaus") and s.mayor.indicators().rathaus.abteilungen.has("bauamt"), "Beobachtung enthält das Rathaus")
+	ok("hire_staff" in Mayor.SCHEMA and "dismiss_staff" in Mayor.SCHEMA, "Aktionen stehen im Schema (und damit im Prompt)")
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.town_hall.target == T.target and s2.town_hall.building == T.building, "Rathaus nach Laden")
+	ok(identity_ok(s), "Geld erhalten")

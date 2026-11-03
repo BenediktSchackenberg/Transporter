@@ -50,6 +50,7 @@ func _run() -> void:
 	_check(not game.hud.entrepreneur_actions.visible, "Unternehmer-Schaltflächen sind im Bürgermeister-Fenster ausgeblendet")
 	_check(game.hud.entrepreneur_ai.text.contains("Wohnraum knapp") and game.hud.entrepreneur_ai.text.contains("Ich weise ein Wohnquartier aus."), "Entscheidungen mit Begründung im Fenster")
 	_check(game.hud.entrepreneur_business.text.contains("Stadtkasse"), "Lage der Stadt im Fenster")
+	_check(game.hud.entrepreneur_business.text.contains("RATHAUS") and game.hud.entrepreneur_business.text.contains("Bauamt"), "Rathaus mit Abteilungen im Fenster")
 	game.hud._close_entrepreneur()
 	game.hud._open_entrepreneur(game.hud.cards[0].cid)
 	_check(game.hud.entrepreneur_actions.visible, "Unternehmer-Fenster zeigt seine Schaltflächen wieder")

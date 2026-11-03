@@ -50,7 +50,7 @@ func travel_plan(person: Dictionary, hour: float = -1.0) -> Dictionary:
 		return {"building": home, "purpose": "Nach Hause", "cell": sim.city.building(home).walk}
 	var kind := "work:" + employer
 	var purpose := "Zur Arbeit: " + str(EMPLOYERS.get(employer, {}).get("label", employer))
-	var types: Array = {"rathaus": ["office", "bank"], "schule_klinik": ["school", "kindergarten", "clinic"], "baufirma": ["construction", "warehouse"],
+	var types: Array = {"rathaus": ["townhall"] if sim.town_hall.building >= 0 else ["office", "bank"], "schule_klinik": ["school", "kindergarten", "clinic"], "baufirma": ["construction", "warehouse"],
 		"handel": ["shop", "restaurant"], "industrie": ["factory", "brewery", "bakery", "workshop"], "stadtlager": ["warehouse"]}.get(employer, ["office"])
 	if employer == "":
 		kind = "staffing"
@@ -194,6 +194,8 @@ func _dynamics(month: int) -> void:
 	for i in keys.size():
 		var k: String = keys[i]
 		cap[k] = maxi(0, roundi(float(base_cap[k]) * (1.0 + DEMAND_SWING * (roll(i, month, 1) * 2.0 - 1.0))))
+		if k == "rathaus":
+			cap[k] = sim.town_hall.total_target()   # der Buergermeister legt den Bedarf fest, keine Zufallsschwankung
 	# Entlassungen bei sinkendem Bedarf (zuletzt Eingestellte zuerst)
 	var count := {}
 	for k in keys:

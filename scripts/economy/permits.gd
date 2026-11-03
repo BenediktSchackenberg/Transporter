@@ -162,7 +162,7 @@ func withdraw(app_id: String, applicant: String) -> Dictionary:
 # ------------------------------------------------------------------ Bearbeitung
 ## Verwaltungskapazitaet: Bearbeitungspunkte je Tag aus den Rathaus-Beschaeftigten.
 func capacity() -> float:
-	return maxf(1.0, float(sim.citizens.employed_count("rathaus")) / STAFF_PER_POINT)
+	return maxf(1.0, sim.town_hall.permit_points())
 
 
 ## Warteschlange in Bearbeitungsreihenfolge (aeltester Antrag zuerst).
