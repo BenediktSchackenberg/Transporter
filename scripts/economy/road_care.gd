@@ -158,6 +158,7 @@ func order(id: String, mode: String, by: String = "") -> Dictionary:
 func _finish(j: Dictionary) -> void:
 	j.status = "fertig"
 	cond[j.seg] = 100.0
+	sim.city_depot.add_materials(CityDepot.MATERIAL_ROAD, "Aufbruch Straßenabschnitt %s" % seg_id(j.seg))
 	works.erase(j.cell)
 	stats.repairs += 1
 	sim.log_event("Straßenabschnitt %s instand gesetzt (%s)." % [seg_id(j.seg), MODES[j.mode].label], "good")

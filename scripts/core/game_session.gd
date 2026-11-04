@@ -56,9 +56,11 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 				"personality": p.personality, "form": p.get("form", "einzel")})
 		sim = Simulation.new()
 		sim.setup(int(cfg.seed), players, int(cfg.get("map_size", Catalog.MAP_SIZE)))
-		sim.game_master.enabled = bool(cfg.get("game_master", true))   # Spielleitung im Spiel an; Konfiguration "game_master": false schaltet sie ab
+		sim.game_master.enabled = bool(cfg.get("game_master", true))
+		sim.yard.load_learning()   # gelernte Prognosefaktoren des Bauberaters aus frueheren Partien   # Spielleitung im Spiel an; Konfiguration "game_master": false schaltet sie ab
 	else:
 		sim = Simulation.from_dict(loaded.sim)
+		sim.yard.persist = true
 		active_seconds = float(loaded.active_seconds)
 		sim.executor.executed = loaded.get("executed", {})
 	duration_seconds = maxf(0.0, float(cfg.get("duration_min", 30))) * 60.0   # 0 = Endlosmodus

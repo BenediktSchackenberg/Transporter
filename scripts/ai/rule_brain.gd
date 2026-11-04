@@ -265,13 +265,34 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		growth.append({"action": "upgrade_office"})
 	elif int(office.internet) == 0 and not office.bueros.is_empty() and cash > Catalog.INTERNET_COST[0] + office_buffer and "install_internet" not in planned:
 		growth.append({"action": "install_internet"})
-	# 8b) Betriebshof: Lager, Werkstatt, vermietbare Bueros – nur mit Reserve
+	# 8b) Betriebshof: Vorschlag des Bauberaters (gemessene Engpaesse, Amortisation hoechstens 8 Monate), sonst feste Reihenfolge – nur mit Reserve.
+	#     Hoechstens eine Baustelle gleichzeitig; Eigenbau holt Restposten im Stadtlager mit eigenem Fahrzeug ab.
 	var fleet_n: int = obs.fahrzeuge.size()
-	if growth.is_empty():
+	var building_now: bool = yard.get("einrichtungen", []).any(func(f): return f.status == "im_bau")
+	if growth.is_empty() and not building_now:
+		for sug in yard.get("bauberater", {}).get("vorschlaege", []):
+			if float(sug.amortisation_monate) <= 8.0 and cash > float(sug.kosten) + buffer:
+				growth.append(sug.aktion.duplicate())
+				reasons.append("baue %s: %s, Nutzen ~%d EUR/Monat, amortisiert in %.1f Monaten" % [sug.name, sug.engpass, int(sug.nutzen_monat), float(sug.amortisation_monate)])
+				break
+	if growth.is_empty() and not building_now:
 		for want in [["lager", 3, 10000.0], ["werkstatt", 4, 12000.0], ["mietbuero", 4, 30000.0]]:
 			if fleet_n >= int(want[1]) and not _has_facility(yard, want[0], true) and yard_sug.has(want[0]) and cash > float(want[2]) + buffer:
 				growth.append(_place(plot_id, want[0], yard_sug))
 				break
+	# 8c) Eigenbau: freie Arbeiter (nicht am Steuer) der Baustelle zuteilen, sobald das Material da ist
+	for f in yard.get("einrichtungen", []):
+		if f.status != "im_bau" or str(f.get("modus", "")) != "eigen" or int(f.get("bautrupp", 0)) >= 2:
+			continue
+		var mat: PackedStringArray = str(f.material).split("/")
+		if mat.size() == 2 and int(mat[0]) < int(mat[1]):
+			continue   # Material ist noch unterwegs (eigener Transport vom Stadtlager/Bauhof)
+		var builders: Array = free_staff.filter(func(w): return str(w.aufgabe) == "" and int(w.fahrzeug) < 0).slice(0, 2 - int(f.get("bautrupp", 0)))
+		if not builders.is_empty():
+			actions.append({"action": "assign_building_staff", "building_id": f.id, "worker_ids": builders.map(func(w): return w.id)})
+			reasons.append("Bautrupp für %s: %s" % [f.id, ", ".join(builders.map(func(w): return w.name))])
+			for w in builders:
+				free_staff.erase(w)
 	var vermietung: Dictionary = yard.get("vermietung", {})
 	for f in yard.get("einrichtungen", []):
 		if f.typ == "mietbuero" and f.status == "fertig" and f.id not in vermietung.get("angebote", []):

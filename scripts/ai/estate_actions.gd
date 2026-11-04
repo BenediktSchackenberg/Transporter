@@ -5,8 +5,8 @@ extends RefCounted
 const SCHEMA := {
 	"inspect_plot": {"params": {"plot_id": "int?"}, "desc": "Grundstück, Einrichtungen, Kapazitäten, gültige Bauplätze und Erweiterungsflächen ansehen."},
 	"expand_plot": {"params": {"plot_id": "int", "art": "string?"}, "desc": "Angrenzende Fläche kaufen (art=kaufen, Grund und Boden) oder pachten (art=pachten)."},
-	"place_building": {"params": {"plot_id": "int", "typ": "string", "x": "int", "y": "int", "rot": "int?", "bau": "string?"},
-		"desc": "Einrichtung auf eigenem Grundstück errichten (rot 0|90; bau=extern: Baufirma +40 %, Material geliefert | eigen: günstiger, Material selbst anliefern, Arbeiter mit assign_building_staff). Bauvorschläge siehe betriebshof.bauvorschlaege_xy_rot ([x, y, rot])."},
+	"place_building": {"params": {"plot_id": "int", "typ": "string", "x": "int", "y": "int", "rot": "int?", "bau": "string?", "quelle": "string?", "erwartung_eur_monat": "number?"},
+		"desc": "Einrichtung auf eigenem Grundstück errichten (rot 0|90; bau=extern: Baufirma +40 %, Material geliefert | eigen: günstiger, Material selbst anliefern, Arbeiter mit assign_building_staff). Bauvorschläge siehe betriebshof.bauvorschlaege_xy_rot ([x, y, rot]); fertige Vorschläge mit Nutzenrechnung in betriebshof.bauberater.vorschlaege. Eigenbau holt Baustoffe zuerst als Restposten im Stadtlager (40 % billiger, quelle=bauhof schließt das aus). erwartung_eur_monat = dein erwarteter Nutzen; das Spiel misst nach Fertigstellung den echten."},
 	"upgrade_building": {"params": {"building_id": "string"}, "desc": "Einrichtung ausbauen (Büro bis Stufe 4, Werkstatt/Rampe/Mietbüro bis 2)."},
 	"remove_building": {"params": {"building_id": "string"}, "desc": "Einrichtung zurückbauen (Restbuchwert wird abgeschrieben, 15 % Abrisskosten)."},
 	"assign_parking": {"params": {"vehicle_id": "int", "building_id": "string"}, "desc": "Fahrzeug einem Stellplatz/einer Halle zuordnen (Halle schützt vor Sabotage)."},
@@ -44,7 +44,8 @@ func run(cid: int, name: String, a: Dictionary) -> Dictionary:
 			return E.expand(cid, ActionExecutor._i(a.plot_id), "pachten" if str(a.get("art", "kaufen")) == "pachten" else "kaufen")
 		"place_building":
 			return E.place(cid, ActionExecutor._i(a.plot_id), str(a.typ), ActionExecutor._i(a.x), ActionExecutor._i(a.y),
-				90 if ActionExecutor._i(a.get("rot", 0)) == 90 else 0, str(a.get("bau", "extern")))
+				90 if ActionExecutor._i(a.get("rot", 0)) == 90 else 0, str(a.get("bau", "extern")), str(a.get("quelle", "auto")),
+				ActionExecutor._f(a.erwartung_eur_monat) if a.get("erwartung_eur_monat") != null else -1.0)
 		"upgrade_building":
 			return E.upgrade(cid, str(a.building_id))
 		"remove_building":

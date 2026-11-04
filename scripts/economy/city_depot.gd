@@ -99,6 +99,53 @@ func setup(s) -> void:
 	if port < 0:
 		port = s.trader.bauhof
 	_seed_stock()
+	add_materials(MATERIAL_SEED, "Restposten der Stadt")
+
+
+# ------------------------------------------------------------------ Baustoffe fuer Firmen (Auftrag 11, Hof-Imperium)
+## Restposten aus Stadtprojekten und Strassenwartung liegen im Stadtlager und werden an Firmen verkauft: 40 % unter dem Bauhofpreis,
+## nur Selbstabholung (interner Transport der Firma). Der Erloes geht an die Stadtkasse.
+const MATERIAL_DISCOUNT := 0.6
+const MATERIAL_SEED := {"ziegel": 60, "holz": 30, "beton": 30, "verbindung": 60, "stahl": 15, "rohmaterial": 40, "glas": 8, "installation": 8}
+const MATERIAL_MONTHLY := {"ziegel": 12, "beton": 6, "rohmaterial": 10, "verbindung": 10, "holz": 4}
+const MATERIAL_ROAD := {"beton": 4, "rohmaterial": 8, "verbindung": 4}
+
+
+func add_materials(items: Dictionary, reason: String) -> void:
+	for it in items:
+		if int(items[it]) > 0:
+			sim.stock.add(it, int(items[it]), OWNER, building, reason, sim.game_min)
+
+
+func material_qty(item: String) -> int:
+	return sim.stock.qty(item, OWNER, building)
+
+
+func material_price(item: String) -> float:
+	return snappedf(sim.trader.price(item) * MATERIAL_DISCOUNT, 0.01)
+
+
+## Wie viel der Stueckliste (n Material-Einheiten) das Stadtlager decken kann.
+func material_offer(units: int) -> Dictionary:
+	var need: Dictionary = Trader.bom(units)
+	var have := 0
+	var total := 0
+	for it in need:
+		total += int(need[it])
+		have += mini(int(need[it]), material_qty(it))
+	return {"deckt": have, "von": total, "rabatt_prozent": roundi((1.0 - MATERIAL_DISCOUNT) * 100.0), "abholung": sim.city.building(building).name}
+
+
+## Verkauf an eine Firma: Eigentum geht ueber, die Ware bleibt bis zur Abholung im Stadtlager. Bezahlt wird im Aufrufer (Rueckgabe: Preis).
+func sell_material(cid: int, items: Dictionary) -> float:
+	var paid := 0.0
+	for it in items:
+		var n := mini(int(items[it]), material_qty(it))
+		if n > 0:
+			paid += material_price(it) * n
+			sim.stock.move(it, n, OWNER, building, "C%d" % cid, building, "Verkauf Restposten Stadtlager", sim.game_min)
+	stats["material_sales"] = float(stats.get("material_sales", 0.0)) + paid
+	return paid
 
 
 ## Anfangsbestand des Zentrallagers (70 % des Zielbestands, Geraete voll).
@@ -851,6 +898,7 @@ func issue_to_staff(item: String, qty: int, to: String, reason: String) -> Dicti
 # ------------------------------------------------------------------ Monat: Ueberschuesse verkaufen
 ## Transparente Regel: Bestand ueber dem 1,5-fachen Zielbestand wird zum halben Katalogpreis verkauft (Grosshaendler T0, sonst Ausland).
 func on_month(_month: int) -> void:
+	add_materials(MATERIAL_MONTHLY, "Restposten aus Stadtprojekten")
 	for id in CityGoods.items():
 		var it: Dictionary = CityGoods.get_item(id)
 		if it.class == "geraet":

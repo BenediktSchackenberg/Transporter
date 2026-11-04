@@ -266,7 +266,7 @@ func suggestions(cid: int, plot_id: int) -> Dictionary:
 
 
 # ------------------------------------------------------------------ Bauen
-func place(cid: int, plot_id: int, typ: String, x: int, y: int, rot: int, mode: String) -> Dictionary:
+func place(cid: int, plot_id: int, typ: String, x: int, y: int, rot: int, mode: String, source: String = "auto", expected: float = -1.0) -> Dictionary:
 	var err := validate_place(cid, plot_id, typ, x, y, rot)
 	if err != "":
 		return {"ok": false, "msg": err}
@@ -281,13 +281,20 @@ func place(cid: int, plot_id: int, typ: String, x: int, y: int, rot: int, mode: 
 	var local := {}
 	var ship := {}
 	var buy := {}
+	var city := {}            # Restposten aus dem Stadtlager (nur Eigenbau: Selbstabholung)
 	var plot_loc := _root(plot_id)
 	var owner_s := "C%d" % cid
+	var D: CityDepot = sim.city_depot
 	for it in need:
 		var use_local := mini(int(need[it]), sim.stock.qty(it, owner_s, plot_loc))
 		var rest: int = int(need[it]) - use_local
+		var use_city := 0
+		if not ext and source != "bauhof":
+			use_city = mini(rest, D.material_qty(it))
+		rest -= use_city
 		var use_bh := mini(rest, sim.stock.qty(it, owner_s, sim.trader.bauhof))
 		local[it] = use_local
+		city[it] = use_city
 		ship[it] = rest
 		buy[it] = rest - use_bh
 	for it in buy:
@@ -297,13 +304,17 @@ func place(cid: int, plot_id: int, typ: String, x: int, y: int, rot: int, mode: 
 	var share := minf(nominal, 0.45 * cost)
 	var bought_nominal: float = sim.trader.nominal_value(buy.duplicate())
 	var buy_paid: float = share * bought_nominal / maxf(nominal, 0.01)
-	var paid: float = cost - (share - buy_paid)   # eigenes Material wurde bereits als Aufwand gebucht
+	var city_paid: float = share * sim.trader.nominal_value(city.duplicate()) / maxf(nominal, 0.01) * CityDepot.MATERIAL_DISCOUNT
+	var paid: float = cost - (share - buy_paid - city_paid)   # eigenes Material wurde bereits als Aufwand gebucht; Stadtlager-Ware 40 % billiger
 	if c.ledger.cash < paid:
 		return {"ok": false, "msg": "Bau kostet %s (%s)." % [Catalog.money(paid), "Baufirma" if ext else "Eigenbau"]}
 	if buy_paid > 0.0:
 		c.ledger.invest(buy_paid, "T0")
 		sim.trader.transfer_for_build(cid, buy, buy_paid)
-	c.ledger.invest(paid - buy_paid, "S0")
+	if city_paid > 0.0:
+		D.sell_material(cid, city)
+		c.ledger.invest(city_paid, "P0")
+	c.ledger.invest(paid - buy_paid - city_paid, "S0")
 	cost = paid
 	c.property_cost += cost
 	c.property_book += cost
@@ -320,13 +331,24 @@ func place(cid: int, plot_id: int, typ: String, x: int, y: int, rot: int, mode: 
 	facilities[f.id] = f
 	if not ext:
 		var from_bauhof := 0
+		var from_city := 0
 		for it in ship:
 			from_bauhof += int(ship[it])
+			from_city += int(city[it])
+		var ids: Array = []
 		if from_bauhof > 0:
-			f.mat_contract = sim.trader.make_shipment(cid, ship, plot_loc, f.id, int(f.mat_needed))
-		else:
+			ids.append(sim.trader.make_shipment(cid, ship, plot_loc, f.id, maxi(1, int(ceil(float(f.mat_needed) * from_bauhof / maxf(1.0, from_bauhof + from_city))))))
+		if from_city > 0:
+			ids.append(sim.trader.make_shipment(cid, city, plot_loc, f.id + "/SL", maxi(1, int(ceil(float(f.mat_needed) * from_city / maxf(1.0, from_bauhof + from_city)))), D.building))
+		f["mat_pending"] = ids.size()
+		f["city_mat"] = from_city
+		if ids.is_empty():
 			f.mat = int(f.mat_needed)   # alles liegt schon am Grundstueck
+		else:
+			f.mat_contract = ids[0]
+			f["mat_contracts"] = ids
 	_cache.clear()
+	sim.yard.on_place(cid, f.id, typ, expected)
 	sim.log_event("%s beginnt Bau: %s (%s)." % [c.company_name, spec.name, f.mode], "info", cid)
 	return {"ok": true, "msg": "Baustelle %s (%s) bei (%d,%d)%s, Kosten %s. %s" % [f.id, spec.name, x, y, " gedreht" if rot == 90 else "",
 		Catalog.money(cost), "Material wird nach 60 min geliefert." if ext else "Material per eigenem Transport %s anliefern, Arbeiter mit assign_building_staff einteilen." % f.mat_contract], "building_id": f.id}
@@ -372,10 +394,14 @@ func material_delivered(k: Contract) -> void:
 	sim.trader.shipment_delivered(k.internal)   # Ware vom Bauhof an den Zielort (nichts zu tun bei reinen Baustellenauftraegen ohne Handel)
 	if k.internal.begins_with("S"):   # reiner Handelstransport ohne Baustelle
 		return
-	var f: Dictionary = facilities.get(k.internal, {})
+	var f: Dictionary = facilities.get(k.internal.trim_suffix("/SL"), {})
 	if not f.is_empty():
-		f.mat = int(f.mat_needed)
-		sim.notify(f.owner, "Material für Baustelle %s angeliefert." % f.id)
+		f["mat_pending"] = maxi(0, int(f.get("mat_pending", 1)) - 1)
+		if int(f.mat_pending) == 0:
+			f.mat = int(f.mat_needed)
+			sim.notify(f.owner, "Material für Baustelle %s angeliefert." % f.id)
+		else:
+			sim.notify(f.owner, "Teillieferung für Baustelle %s angekommen (%s)." % [f.id, "Stadtlager" if k.internal.ends_with("/SL") else "Bauhof"])
 
 
 func upgrade(cid: int, fid: String) -> Dictionary:
@@ -555,6 +581,7 @@ func minute_tick(now: float) -> void:
 				for it in f.get("mats", {}):   # Material wird beim Bau verbraucht
 					sim.stock.consume(it, int(f.mats[it]), "C%d" % f.owner, int(f.plot), "Bauverbrauch %s" % f.id, now)
 			f.status = "fertig"
+			sim.yard.on_complete(f.id)
 			_refresh_company(f.owner)
 			for t in sim.personnel.tasks.values():
 				if t.kind == "bauen" and str(t.target.get("facility", "")) == f.id and not t.is_final():
@@ -629,7 +656,8 @@ func summary(cid: int) -> Dictionary:
 		plots_out.append({"id": p.id, "art": p.mode, "flaeche": [p.x, p.y, p.w, p.h], "einfahrt": p.entrance})
 	var fac: Array = facilities.values().filter(func(f): return f.owner == cid).map(func(f): return {"id": f.id, "typ": f.typ,
 		"pos": [f.x, f.y], "rot": f.rot, "stufe": f.level, "status": f.status, "fortschritt": snappedf(float(f.progress), 0.01),
-		"material": "%d/%d" % [f.mat, f.mat_needed], "materialauftrag": f.mat_contract})
+		"material": "%d/%d" % [f.mat, f.mat_needed], "materialauftrag": f.mat_contract, "modus": f.mode,
+		"bautrupp": sim.personnel.tasks.values().filter(func(t): return t.kind == "bauen" and not t.is_final() and str(t.target.get("facility", "")) == f.id).size()})
 	var neighbours: Array = plots.values().filter(func(p): return p.owner < 0 and own.any(func(o): return o.id == int(p.parent))) \
 		.map(func(p): return {"id": p.id, "flaeche": [p.x, p.y, p.w, p.h], "kaufpreis": p.price, "pacht_tag": LAND_RENT_PER_TILE * p.w * p.h})
 	var root: int = sim.company(cid).depots[0]
@@ -638,6 +666,8 @@ func summary(cid: int) -> Dictionary:
 		"kapazitaet": {"stellplaetze": c.fleet_limit(), "laderampen": loading_bays(root), "lager": storage_cap(root) if is_plot(root) else 0,
 			"kuehllager": storage_cap(root, true) if is_plot(root) else 0, "werkstattplaetze": workshop_bays(cid), "tank_l": int(c.fuel_cap)},
 		"bauvorschlaege_xy_rot": suggestions(cid, root) if is_plot(root) else {},
+		"bauberater": sim.yard.summary(cid) if is_plot(root) else {},
+		"baustoffe_stadtlager": sim.city_depot.material_offer(10),
 		"vermietung": {"angebote": listings.keys().filter(func(id): return listings[id].owner == cid),
 			"interessenten": tenants.values().filter(func(t): return t.status == "interessiert" and facilities.get(t.office, {}).get("owner", -1) == cid),
 			"vertraege": leases.values().filter(func(l): return l.owner == cid and l.status == "aktiv")}}

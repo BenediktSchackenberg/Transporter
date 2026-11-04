@@ -65,6 +65,7 @@ var game_master := GameMaster.new()   # Spielleitung: gezielte Nachfragesteuerun
 var residents := Residents.new()        # Kundenfiguren mit Beduerfnissen
 var experiments := ExperimentBook.new()
 var estate := Estate.new()
+var yard := YardAdvisor.new()   # Bauberater und Investitionsakte (Auftrag 11)
 var remaining_real_min := 9999.0   # von der Spielsitzung gesetzt (fuer Abbruchbedingung restzeit_unter_min)
 var storage := {}              # Depotstandort -> {Auftrags-ID: Menge} (Zwischenlager)
 var step_count := 0            # feste Simulationsschritte (Grundlage fuer exakte Wiederholung)
@@ -132,6 +133,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	mayor.setup(self)
 	construction.setup(self)
 	city_depot.setup(self)
+	yard.setup(self)
 	traffic_flow.setup(self)
 	road_care.setup(self)
 	retail.setup(self)
@@ -1132,7 +1134,7 @@ func to_dict() -> Dictionary:
 		owners[str(s)] = depot_owner[s]
 	return {"seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
-		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
+		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
@@ -1220,6 +1222,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 		s.residents.from_dict(d.residents)
 	s.experiments.from_dict(d.get("experiments", {}))
 	s.estate.from_dict(d.get("estate", {}))
+	s.yard.from_dict(d.get("yard", {}))
 	for site in d.get("storage", {}):
 		s.storage[int(site)] = {}
 		for kid in d.storage[site]:

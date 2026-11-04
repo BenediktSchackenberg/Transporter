@@ -244,7 +244,7 @@ func _dispatch_tick() -> void:
 const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", "collect_contracts", "repair_vehicle", "buy_supplies",
 	"schedule_refueling", "assign_foreman",
 	# Aufbau des Betriebshofs (Plan aus der Regel-KI: Stellplatz, Büro, Lager, Werkstatt, Internet), damit der Hof nicht leer bleibt
-	"set_plan", "execute_plan_step", "place_building", "build_office", "upgrade_building", "upgrade_office", "install_internet"]
+	"set_plan", "execute_plan_step", "place_building", "build_office", "upgrade_building", "upgrade_office", "install_internet", "assign_building_staff"]
 
 
 ## Nur der Tagesbetrieb aus der Regel-KI: Auftraege annehmen und zuweisen, Fahrer einsetzen, reparieren, tanken.
@@ -253,7 +253,8 @@ func _run_dispatch_help() -> void:
 	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng, sim.strategy.params_of(cid))
 	d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) in DISPATCH)
 	if sim.dispatcher != null and sim.dispatcher.covers(cid):   # Auftragszuweisung macht der Claude-Disponent; die Regeln bleiben fuer Fahrer, Reparatur, Tanken und Hofaufbau
-		d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) not in ["accept_contract", "assign_transport"])
+		d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) not in ["accept_contract", "assign_transport"] \
+			or (str(a.get("action", "")) == "assign_transport" and sim.contracts.has(str(a.get("contract_id", ""))) and sim.contracts[str(a.contract_id)].internal != ""))   # eigene Materialtransporte bleiben bei den Regeln
 	if d.actions.is_empty():
 		return
 	d["summary"] = ""

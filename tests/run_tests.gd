@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1624,7 +1624,11 @@ func test_estate_acceptance() -> void:
 	ok(s.executor.execute(0, {"action": "assign_transport", "vehicle_id": van.id, "contract_id": k.id}).ok, "Transport disponiert")
 	until_done(s, func(): return k.status == "delivered")
 	ok(k.status == "delivered", "Transport vom Betriebshof ausgeführt")
-	# 5) Lagerhalle im Eigenbau: Material selbst anliefern, Arbeiter einteilen
+	# 5) Lagerhalle im Eigenbau: Material selbst anliefern, Arbeiter einteilen (hier nur vom Bauhof: Restposten im Stadtlager leeren)
+	for it in Trader.MATERIALS:
+		var q: int = s.city_depot.material_qty(it)
+		if q > 0:
+			s.stock.consume(it, q, "P0", s.city_depot.building, "Test", 0.0)
 	var lager := place_suggested(s, 0, "lager", "eigen")
 	ok(lager.ok, "Lagerhalle (Eigenbau) platziert: " + lager.msg)
 	var fl: Dictionary = E.facilities.get(lager.get("building_id", ""), {})
@@ -2437,6 +2441,67 @@ func test_trader_production() -> void:
 	ok(T.stats.wages > 0.0, "Bauhof zahlt Monatslöhne an Haushalte")
 	ok(T.cash() >= 0.0, "Bauhof-Konto bleibt positiv (%.0f)" % T.cash())
 	ok(identity_ok(s), "Geld und Waren nach einem Monat")
+
+
+func test_yard_empire_core() -> void:
+	var s := new_sim(2)
+	var c := s.companies[0]
+	var D: CityDepot = s.city_depot
+	var Y: YardAdvisor = s.yard
+	c.ledger.inject(80000.0)
+	# Baustoffe vom Stadtlager: Eigenbau nimmt Restposten, 40 % billiger, Erlös an die Stadtkasse, Abholung mit eigenem Transport
+	var z0 := D.material_qty("ziegel")
+	ok(z0 > 0 and D.material_offer(2).deckt > 0, "Stadtlager hat Restposten (%d Ziegel)" % z0)
+	var p0 := float(s.economy.accounts.P0)
+	var cash0 := c.ledger.cash
+	var r := place_suggested(s, 0, "stellplatz", "eigen")
+	ok(r.ok, "Eigenbau Stellplätze: " + str(r.msg).left(90))
+	var f: Dictionary = s.estate.facilities[r.building_id]
+	ok(D.material_qty("ziegel") < z0 and float(s.economy.accounts.P0) > p0, "Ziegel aus dem Stadtlager gekauft, Stadtkasse erhält den Erlös")
+	ok(cash0 - c.ledger.cash < 900.0 - 1.0, "Restposten machen den Bau billiger (%.0f statt 900)" % (cash0 - c.ledger.cash))
+	var ids: Array = f.get("mat_contracts", [f.mat_contract])
+	var from_depot: Array = ids.filter(func(id): return s.contracts[id].pickup == D.building and s.contracts[id].internal != "" and s.contracts[id].owner == 0)
+	ok(not from_depot.is_empty() and "Stadtlager" in s.contracts[from_depot[0]].label, "eigener Abholauftrag am Stadtlager: " + s.contracts[from_depot[0]].label)
+	ok(s.stock.qty("ziegel", "C0", D.building) > 0, "gekaufte Ware liegt bis zur Abholung im Stadtlager")
+	for id in ids:
+		s.estate.material_delivered(s.contracts[id])
+	ok(int(f.mat) == int(f.mat_needed) and s.stock.qty("ziegel", "C0", D.building) == 0 and s.stock.qty("ziegel", "C0", int(f.plot)) > 0, "nach allen Lieferungen liegt das Material auf dem Hof")
+	ok(identity_ok(s), "Geld erhalten nach Kauf im Stadtlager")
+	# Investitionsakte: Erwartung beim Bau, Messung 10 Tage nach Fertigstellung, Ergebnis im Gedächtnis, Prognosefaktor
+	var rec: Dictionary = Y.records.filter(func(x): return x.fid == f.id)[0]
+	ok(rec.status == "bau" and rec.has("erwartung"), "Investitionsakte angelegt (Erwartung %s)" % str(rec.erwartung))
+	f.progress = 1.0
+	f.status = "fertig"
+	Y.on_complete(f.id)
+	ok(rec.status == "messung", "Messung beginnt mit der Fertigstellung")
+	rec.beraterschaetzung = 500.0
+	Y.on_day(int(rec.done_day) + YardAdvisor.MEASURE_DAYS)
+	ok(rec.status == "gemessen" and rec.has("gemessen"), "nach 10 Tagen gemessen: %s EUR/Monat" % str(rec.gemessen))
+	ok(s.memory.books[0].experiences.any(func(e): return "stellplatz" in e.bereich and "gemessen" in str(e.inhalt)), "Ergebnis steht im Gedächtnis der Firma")
+	ok(Y.factors.has("stellplatz") and int(Y.factors.stellplatz.n) == 1, "Prognosefaktor für Stellplätze gelernt (%.2f)" % float(Y.factors.stellplatz.f))
+	# Bauberater: volle Stellplätze und offene Aufträge -> Vorschlag mit Nutzenrechnung und fertiger Aktion
+	for k in s.market.open_contracts():
+		c.known[k.id] = true
+	c.parking_slots = s.company_vehicles(0).size()
+	s.estate.facilities.erase(f.id)   # Testzweck: Fläche des kleinen Startgrundstücks wieder frei
+	s.estate._cache.clear()
+	var learned := Y.factor("stellplatz")
+	ok(learned < 1.0 and learned >= 0.5, "eine Messung ohne Nutzen senkt den Faktor gedämpft (%.2f)" % learned)
+	Y.factors.clear()
+	var cands: Array = Y.candidates(0)
+	var sp: Array = cands.filter(func(x): return x.typ == "stellplatz")
+	ok(not sp.is_empty() and float(sp[0].nutzen_monat) > 0.0 and float(sp[0].amortisation_monate) > 0.0 and sp[0].aktion.action == "place_building", "Bauberater schlägt Stellplätze vor: " + (str(sp[0].engpass) if not sp.is_empty() else "-"))
+	ok(cands.all(func(x): return int(x.nr) >= 1) and s.estate.summary(0).has("bauberater"), "Vorschläge sind nummeriert und stehen in der Beobachtung")
+	# Regel-KI folgt dem Bauberater
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	var dec := RuleBrain.decide(obs, c.personality, RandomNumberGenerator.new())
+	var planned_build: bool = dec.actions.any(func(x): return x.action == "place_building" or (x.action == "set_plan" and JSON.stringify(x).contains("place_building")))
+	ok(planned_build, "Regel-KI plant den Bau bei vollem Hof (Bauberater oder Stellplatzregel)")
+	# Speichern und Laden
+	Y.factors["stellplatz"] = {"f": 0.8, "n": 1}
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.yard.records.size() == Y.records.size() and s2.yard.factors.has("stellplatz"), "Investitionsakten und Faktoren nach dem Laden")
+	ok(identity_ok(s), "Geld erhalten")
 
 
 func test_build_materials() -> void:

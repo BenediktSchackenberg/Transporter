@@ -141,19 +141,20 @@ func sell(cid: int, items: Dictionary, mode: String, to_loc: int, note: String =
 
 
 ## Transportauftrag Bauhof -> Zielgebaeude (kein Umsatz, Ware gehoert bereits der Firma). Gibt die Auftrags-ID zurueck.
-func make_shipment(cid: int, items: Dictionary, to_loc: int, internal: String = "", qty: int = 0) -> String:
+func make_shipment(cid: int, items: Dictionary, to_loc: int, internal: String = "", qty: int = 0, from_loc: int = -1) -> String:
 	var plot_b: Dictionary = sim.city.building(to_loc)
-	var src: Dictionary = sim.city.building(bauhof)
+	var from := bauhof if from_loc < 0 else from_loc
+	var src: Dictionary = sim.city.building(from)
 	var units := 0
 	for it in items:
 		units += int(items[it])
 	var k := Contract.new()
 	k.id = "A%d" % sim.market.next_id
 	sim.market.next_id += 1
-	k.pickup = bauhof
+	k.pickup = from
 	k.dropoff = to_loc
 	k.cargo = "baustoffe"
-	k.label = "Material vom Bauhof (%s)" % _items_text(items)
+	k.label = "Material vom %s (%s)" % ["Bauhof" if from == bauhof else "Stadtlager", _items_text(items)]
 	k.qty = qty if qty > 0 else maxi(1, int(ceil(units / 20.0)))
 	k.reward = 0.0
 	var sid := internal
@@ -170,7 +171,7 @@ func make_shipment(cid: int, items: Dictionary, to_loc: int, internal: String = 
 	k.distance = absi(src.road.x - plot_b.road.x) + absi(src.road.y - plot_b.road.y)
 	sim.contracts[k.id] = k
 	sim.company(cid).known[k.id] = true
-	shipments[sid] = {"cid": cid, "items": items.duplicate(), "to_loc": to_loc, "contract": k.id}
+	shipments[sid] = {"cid": cid, "items": items.duplicate(), "to_loc": to_loc, "contract": k.id, "from": from}
 	return k.id
 
 
@@ -180,7 +181,7 @@ func shipment_delivered(sid: String) -> bool:
 	if s.is_empty():
 		return false
 	for it in s.items:
-		sim.stock.move(it, int(s.items[it]), "C%d" % s.cid, bauhof, "C%d" % s.cid, int(s.to_loc), "Transport zum Depot", sim.game_min)
+		sim.stock.move(it, int(s.items[it]), "C%d" % s.cid, int(s.get("from", bauhof)), "C%d" % s.cid, int(s.to_loc), "Transport zum Depot", sim.game_min)
 	shipments.erase(sid)
 	sim.notify(s.cid, "Material (%s) ist am Ziel angekommen." % _items_text(s.items))
 	return true
