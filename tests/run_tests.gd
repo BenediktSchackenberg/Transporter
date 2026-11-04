@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -48,6 +48,8 @@ func new_sim(n: int = 4, size: int = 128) -> Simulation:
 	var s := Simulation.new()
 	s.setup(4242, players(n), size, 0.5)
 	s.personnel.idle_routine = false   # Tests pruefen gezielt einzelne Aufgaben; die Leerlauf-Routine hat einen eigenen Test
+	s.estate.permits_enabled = false   # Hof-Bauantraege und Grundstuecksgebote haben eigene Tests (test_yard_permits_and_bids)
+	s.estate.auctions_enabled = false
 	return s
 
 
@@ -2582,6 +2584,74 @@ func test_yard_specializations() -> void:
 	var inc1: float = c0.ledger.totals.get("trade_income", 0.0)
 	s.tow_to_workshop(v1)
 	ok(absf(float(c0.ledger.totals.get("trade_income", 0.0)) - inc1 - Catalog.TOW_FEE) < 0.01, "Pannendienst: Abschleppgebühr der Konkurrenz als Erlös")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_yard_permits_and_bids() -> void:
+	var s := new_sim(2)
+	var E: Estate = s.estate
+	E.permits_enabled = true
+	E.auctions_enabled = true
+	var c0 := s.companies[0]
+	var c1 := s.companies[1]
+	c0.ledger.inject(200000.0)
+	c1.ledger.inject(200000.0)
+	# Bauantrag: Lager braucht eine Genehmigung des Bauamts
+	var cash0 := c0.ledger.cash
+	var r := place_suggested(s, 0, "lager", "extern")
+	ok(r.ok and r.has("permit_id") and absf(cash0 - c0.ledger.cash - Estate.PERMIT_FEE) < 0.01, "Lager: Bauantrag gestellt, nur die Gebühr bezahlt: " + str(r.msg).left(70))
+	var pm: Dictionary = E.permits[r.permit_id]
+	ok(E.facilities.has(pm.hold) and E.facilities[pm.hold].status == "antrag", "Fläche ist während des Antrags reserviert")
+	ok(E.summary(0).bauantraege.any(func(x): return x.id == pm.id), "Firma sieht ihren Antrag")
+	E._permits_day(int(pm.due))
+	ok(pm.status == "genehmigt" and E.facilities.has(pm.fid) and E.facilities[pm.fid].status == "im_bau" and not E.facilities.has(pm.hold), "nach der Frist genehmigt, Bau %s beginnt" % str(pm.get("fid", "")))
+	# Kran: Bürgermeister entscheidet, Auflagen kosten 5 %
+	var rk := place_suggested(s, 0, "kran", "extern")
+	ok(rk.ok and E.permits[rk.permit_id].status == "zur_entscheidung" and s.mayor.indicators().hof_bauantraege.any(func(x): return x.id == rk.permit_id), "Kran-Antrag liegt dem Bürgermeister vor")
+	var dec := MayorBrain.decide(s.mayor.indicators())
+	ok(dec.actions.any(func(x): return x.action == "decide_yard_permit" and x.antrag == rk.permit_id and x.decision == "auflagen"), "Regelbürgermeister: Kran mit Lärmschutz-Auflage")
+	var p0 := float(s.economy.accounts.P0)
+	var rr := s.mayor.execute({"action": "decide_yard_permit", "antrag": rk.permit_id, "decision": "auflagen", "reason": "Lärmschutz"})
+	ok(rr.ok and E.permits[rk.permit_id].status == "genehmigt" and float(s.economy.accounts.P0) > p0, "Genehmigung mit Auflagen, Gebühr an die Stadt: " + str(rr.msg).left(60))
+	# Ablehnung nur mit Begründung; Fläche wird frei
+	var ru := place_suggested(s, 0, "umschlaghalle", "extern")
+	if ru.ok:
+		ok(not E.decide_permit(ru.permit_id, "ablehnen", "", "Test").ok, "Ablehnung ohne Begründung nicht möglich")
+		var hold: String = E.permits[ru.permit_id].hold
+		ok(E.decide_permit(ru.permit_id, "ablehnen", "Grundstück zu klein für den Lkw-Verkehr", "Test").ok and not E.facilities.has(hold), "Ablehnung mit Begründung, Fläche frei")
+	else:
+		ok(true, "kein Platz mehr für eine Umschlaghalle: " + str(ru.msg).left(60))
+	# Grundstücksgebote: Nachbar überbietet, Sperrgrundstück, Rückkauf
+	var ext: Array = E.summary(0).erweiterbar
+	ok(not ext.is_empty(), "Erweiterungsfläche am Hof vorhanden")
+	var pid := int(ext[0].id)
+	var price := float(ext[0].kaufpreis)
+	var cash_before := c0.ledger.cash
+	var ra := s.executor.execute(0, {"action": "expand_plot", "plot_id": pid, "art": "kaufen"})
+	ok(ra.ok and E.auctions.has(pid) and is_equal_approx(c0.ledger.cash, cash_before), "Kauf startet ein Gebotsverfahren (noch nichts bezahlt)")
+	ok(not s.executor.execute(1, {"action": "bid_plot", "plot_id": pid, "gebot": price * 1.01}).ok, "Gebot unter +5 %% abgelehnt")
+	var rb := s.executor.execute(1, {"action": "bid_plot", "plot_id": pid, "gebot": price * 1.1})
+	ok(rb.ok and int(E.auctions[pid].leader) == 1, "Konkurrent überbietet: " + str(rb.msg).left(60))
+	var obs0 := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	var d0 := RuleBrain.decide(obs0, "wachstum", RandomNumberGenerator.new())
+	ok(d0.actions.any(func(x): return x.action == "bid_plot" and int(x.plot_id) == pid) or JSON.stringify(d0).contains("bid_plot"), "Regel-KI verteidigt die Fläche am eigenen Hof")
+	E._auctions_tick(float(E.auctions[pid].ends) + 1.0)
+	ok(int(E.plots[pid].owner) == 1 and not E.auctions.has(pid), "Zuschlag an den Höchstbietenden (Sperrgrundstück)")
+	var sug1: Dictionary = E.suggestions(1, c1.depots[0])
+	var foreign_rect := Rect2i(int(E.plots[pid].x), int(E.plots[pid].y), int(E.plots[pid].w), int(E.plots[pid].h))
+	ok(not sug1.values().any(func(xy): return foreign_rect.has_point(Vector2i(int(xy[0]), int(xy[1])))), "auf dem Sperrgrundstück darf der Käufer nicht bauen")
+	var obs1 := ObservationBuilder.build(s, 1, [], 0.0, 10.0)
+	var d1 := RuleBrain.decide(obs1, "risikospieler", RandomNumberGenerator.new())
+	ok(JSON.stringify(d1).contains("offer_plot"), "Regel-KI bietet das Sperrgrundstück dem Nachbarn an")
+	ok(s.executor.execute(1, {"action": "offer_plot", "plot_id": pid, "preis": price * 1.5}).ok, "Sperrgrundstück angeboten")
+	var cash1 := c1.ledger.cash
+	var rbuy := s.executor.execute(0, {"action": "buy_plot", "plot_id": pid})
+	ok(rbuy.ok and int(E.plots[pid].owner) == 0 and c1.ledger.cash > cash1, "Nachbar kauft zurück: " + str(rbuy.msg).left(60))
+	ok(identity_ok(s), "Bilanzen nach Gebot und Weiterverkauf")
+	var rrel := s.executor.execute(0, {"action": "release_plot", "plot_id": pid})
+	ok(rrel.ok and int(E.plots[pid].owner) == -1, "Grundstück an die Stadt zurückgegeben (80 %)")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.estate.permits.size() == E.permits.size(), "Bauanträge nach dem Laden")
 	ok(identity_ok(s), "Geld erhalten")
 
 

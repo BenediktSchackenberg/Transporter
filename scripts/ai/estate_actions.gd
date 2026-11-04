@@ -4,9 +4,13 @@ extends RefCounted
 
 const SCHEMA := {
 	"inspect_plot": {"params": {"plot_id": "int?"}, "desc": "Grundstück, Einrichtungen, Kapazitäten, gültige Bauplätze und Erweiterungsflächen ansehen."},
-	"expand_plot": {"params": {"plot_id": "int", "art": "string?"}, "desc": "Angrenzende Fläche kaufen (art=kaufen, Grund und Boden) oder pachten (art=pachten)."},
+	"expand_plot": {"params": {"plot_id": "int", "art": "string?"}, "desc": "Angrenzende Fläche kaufen (art=kaufen: Gebotsverfahren über einen Spieltag, Mitbewerber dürfen überbieten) oder pachten (art=pachten, sofort)."},
 	"place_building": {"params": {"plot_id": "int", "typ": "string", "x": "int", "y": "int", "rot": "int?", "bau": "string?", "quelle": "string?", "erwartung_eur_monat": "number?"},
-		"desc": "Einrichtung auf eigenem Grundstück errichten (rot 0|90; bau=extern: Baufirma +40 %, Material geliefert | eigen: günstiger, Material selbst anliefern, Arbeiter mit assign_building_staff). Bauvorschläge siehe betriebshof.bauvorschlaege_xy_rot ([x, y, rot]); fertige Vorschläge mit Nutzenrechnung in betriebshof.bauberater.vorschlaege. Eigenbau holt Baustoffe zuerst als Restposten im Stadtlager (40 % billiger, quelle=bauhof schließt das aus). erwartung_eur_monat = dein erwarteter Nutzen; das Spiel misst nach Fertigstellung den echten."},
+		"desc": "Einrichtung auf eigenem Grundstück errichten (rot 0|90; bau=extern: Baufirma +40 %, Material geliefert | eigen: günstiger, Material selbst anliefern, Arbeiter mit assign_building_staff). Bauvorschläge siehe betriebshof.bauvorschlaege_xy_rot ([x, y, rot]); fertige Vorschläge mit Nutzenrechnung in betriebshof.bauberater.vorschlaege. Eigenbau holt Baustoffe zuerst als Restposten im Stadtlager (40 % billiger, quelle=bauhof schließt das aus). erwartung_eur_monat = dein erwarteter Nutzen; das Spiel misst nach Fertigstellung den echten. Lager, Kühllager, Umschlaghalle, Kran und Mietbüros brauchen einen Bauantrag (150 EUR; Kran/Umschlaghalle entscheidet der Bürgermeister)."},
+	"bid_plot": {"params": {"plot_id": "int", "gebot": "number"}, "desc": "Im laufenden Gebotsverfahren für ein Grundstück überbieten (mindestens +5 %; siehe betriebshof.grundstuecksgebote). Wer eine Erweiterungsfläche am Hof eines Konkurrenten ersteigert, kann dort nicht bauen, sie ihm aber anbieten (Sperrgrundstück)."},
+	"offer_plot": {"params": {"plot_id": "int", "preis": "number"}, "desc": "Eigenes, unbebautes, gekauftes Grundstück zum Kauf anbieten (z. B. Sperrgrundstück dem Nachbarn)."},
+	"buy_plot": {"params": {"plot_id": "int"}, "desc": "Ein angebotenes Grundstück kaufen (betriebshof.grundstuecksangebote)."},
+	"release_plot": {"params": {"plot_id": "int"}, "desc": "Unbebautes gekauftes Grundstück an die Stadt zurückgeben (80 % des Buchwerts)."},
 	"upgrade_building": {"params": {"building_id": "string"}, "desc": "Einrichtung ausbauen (Büro bis Stufe 4, Werkstatt/Rampe/Mietbüro bis 2)."},
 	"remove_building": {"params": {"building_id": "string"}, "desc": "Einrichtung zurückbauen (Restbuchwert wird abgeschrieben, 15 % Abrisskosten)."},
 	"assign_parking": {"params": {"vehicle_id": "int", "building_id": "string"}, "desc": "Fahrzeug einem Stellplatz/einer Halle zuordnen (Halle schützt vor Sabotage)."},
@@ -42,7 +46,19 @@ func run(cid: int, name: String, a: Dictionary) -> Dictionary:
 				str(s.kapazitaet), s.einrichtungen.size(), ", ".join(s.bauvorschlaege_xy_rot.keys())]}
 		"expand_plot":
 			return E.expand(cid, ActionExecutor._i(a.plot_id), "pachten" if str(a.get("art", "kaufen")) == "pachten" else "kaufen")
+		"bid_plot":
+			return E.bid(cid, ActionExecutor._i(a.plot_id), ActionExecutor._f(a.gebot))
+		"offer_plot":
+			return E.offer_plot(cid, ActionExecutor._i(a.plot_id), ActionExecutor._f(a.preis))
+		"buy_plot":
+			return E.buy_offered_plot(cid, ActionExecutor._i(a.plot_id))
+		"release_plot":
+			return E.release_plot(cid, ActionExecutor._i(a.plot_id))
 		"place_building":
+			if E.needs_permit(str(a.typ)):
+				return E.apply_permit(cid, ActionExecutor._i(a.plot_id), str(a.typ), ActionExecutor._i(a.x), ActionExecutor._i(a.y),
+					90 if ActionExecutor._i(a.get("rot", 0)) == 90 else 0, str(a.get("bau", "extern")), str(a.get("quelle", "auto")),
+					ActionExecutor._f(a.erwartung_eur_monat) if a.get("erwartung_eur_monat") != null else -1.0)
 			return E.place(cid, ActionExecutor._i(a.plot_id), str(a.typ), ActionExecutor._i(a.x), ActionExecutor._i(a.y),
 				90 if ActionExecutor._i(a.get("rot", 0)) == 90 else 0, str(a.get("bau", "extern")), str(a.get("quelle", "auto")),
 				ActionExecutor._f(a.erwartung_eur_monat) if a.get("erwartung_eur_monat") != null else -1.0)

@@ -40,6 +40,8 @@ const SCHEMA := {
 		"desc": "Weiterbildung Arbeitsloser fördern (0–100 %): erhöht die Zahl der Kursbeginne bis auf das Dreifache; je Kursbeginn zahlt die Stadt 400 EUR × Förderanteil an den Bildungsträger. Siehe obs.bevoelkerungsmodell."},
 	"city_marketing": {"params": {"budget": "number", "reason": "string"},
 		"desc": "Stadtmarketing (5 000–30 000 EUR, einmalig): mehr Zuzug von Haushalten für 3 Monate (+1 % je 1 000 EUR). Nur sinnvoll bei freiem Wohnraum und offenen Stellen."},
+	"decide_yard_permit": {"params": {"antrag": "string", "decision": "string", "reason": "string"},
+		"desc": "Hof-Bauantrag einer Firma (obs.hof_bauantraege, Kran und Umschlaghalle) entscheiden: genehmigen | auflagen (+5 % der Baukosten, z. B. Lärmschutz) | ablehnen (nur mit Begründung). Ohne Entscheidung genehmigt das Amt nach 2 Tagen."},
 	"order_inspection": {"params": {"firma": "int", "art": "string", "reason": "string"},
 		"desc": "Prüfdienst zu einer Firma schicken (art lohnsteuer | arbeitssicherheit | fahrzeuge). Kapazität je Monat = 2 je Prüfer, Sperrfrist 10 Tage je Firma; Befunde kosten die Firma Bußgeld (an die Stadtkasse), eine Prüfung ohne Befund kostet Zustimmung. Siehe obs.pruefungen."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
@@ -179,6 +181,7 @@ func indicators() -> Dictionary:
 		"rathaus": sim.town_hall.summary(),
 		"pruefungen": sim.inspections.summary(),
 		"strassen": sim.road_care.summary(),
+		"hof_bauantraege": sim.estate.open_permits(),
 		"bevoelkerungsmodell": sim.population.summary(),
 		"sicherheit_gesundheit": sim.safety.summary(),
 		"gedaechtnis": notes.slice(-6),
@@ -367,6 +370,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.population.set_training_support(int(a.foerderung_prozent))
 			"city_marketing":
 				res = _city_marketing(float(a.budget))
+			"decide_yard_permit":
+				res = sim.estate.decide_permit(str(a.antrag), str(a.decision), str(a.get("reason", "")), "Bürgermeister %s" % name)
 			"order_inspection":
 				res = sim.inspections.order(int(a.firma), str(a.art), str(a.get("reason", "")))
 			_:

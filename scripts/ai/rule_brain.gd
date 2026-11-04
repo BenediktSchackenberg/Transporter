@@ -280,6 +280,28 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 			if fleet_n >= int(want[1]) and not _has_facility(yard, want[0], true) and yard_sug.has(want[0]) and cash > float(want[2]) + buffer:
 				growth.append(_place(plot_id, want[0], yard_sug))
 				break
+	# 8d) Grundstuecke: eigenes Gebot verteidigen (bis zum Doppelten des Grundpreises), Risikospieler blockieren Nachbarn mit Sperrgeboten,
+	#     Sperrgrundstuecke dem Nachbarn anbieten, angebotene Flaechen am eigenen Hof zurueckkaufen
+	var my_id := int(me.get("id", -1))
+	for au in yard.get("grundstuecksgebote", []):
+		var need := float(au.naechstes_mindestgebot)
+		var mine: bool = int(au.nachbar_von) == my_id
+		if int(au.fuehrend) == my_id:
+			continue
+		if mine and cash > need * 1.5 + buffer:
+			actions.append({"action": "bid_plot", "plot_id": int(au.grundstueck), "gebot": need})
+			reasons.append("verteidige Grundstück %d am eigenen Hof (%d EUR)" % [int(au.grundstueck), int(need)])
+		elif not mine and personality == "risikospieler" and int(au.nachbar_von) >= 0 and cash > need * 5.0 + buffer and rng.randf() < 0.3:
+			actions.append({"action": "bid_plot", "plot_id": int(au.grundstueck), "gebot": need})
+			reasons.append("Sperrgebot auf Grundstück %d am Hof eines Konkurrenten" % int(au.grundstueck))
+	for g in yard.get("grundstuecke", []):
+		if int(g.get("fremd_nachbar", -1)) >= 0 and not yard.get("grundstuecksangebote", []).any(func(o): return int(o.grundstueck) == int(g.id)):
+			actions.append({"action": "offer_plot", "plot_id": int(g.id), "preis": float(g.get("buchwert", 0.0)) * 1.5})
+			reasons.append("biete Sperrgrundstück %d dem Nachbarn an" % int(g.id))
+	for o in yard.get("grundstuecksangebote", []):
+		if int(o.verkaeufer) != my_id and int(o.get("fuer", -1)) == my_id and cash > float(o.preis) * 1.5 + buffer:
+			actions.append({"action": "buy_plot", "plot_id": int(o.grundstueck)})
+			reasons.append("kaufe Grundstück %d am eigenen Hof zurück" % int(o.grundstueck))
 	# 8c) Eigenbau: freie Arbeiter (nicht am Steuer) der Baustelle zuteilen, sobald das Material da ist
 	for f in yard.get("einrichtungen", []):
 		if f.status != "im_bau" or str(f.get("modus", "")) != "eigen" or int(f.get("bautrupp", 0)) >= 2:

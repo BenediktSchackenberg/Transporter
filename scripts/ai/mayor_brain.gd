@@ -133,6 +133,14 @@ static func decide(ind: Dictionary) -> Dictionary:
 	if actions.size() < MAX_ACTIONS and int(bv.get("monat", 0)) > int(bv.get("stadtmarketing_bis_monat", -1)) and float(housing.leerstand) > 0.06 \
 			and int(ind.arbeit.offene_stellen) > 20 and float(ind.haushalt.verfuegbar) > 80000.0:
 		actions.append({"action": "city_marketing", "budget": 10000.0, "reason": "Leerstand %.1f %% und %d offene Stellen: Zuzug werben." % [float(housing.leerstand) * 100.0, int(ind.arbeit.offene_stellen)]})
+	# 1l) Hof-Bauantraege der Firmen: Kran mit Laermschutz-Auflage, sonst genehmigen
+	for hp in ind.get("hof_bauantraege", []):
+		if actions.size() >= MAX_ACTIONS:
+			break
+		if hp.status == "zur_entscheidung":
+			var cond: bool = hp.typ == "kran"
+			actions.append({"action": "decide_yard_permit", "antrag": hp.id, "decision": "auflagen" if cond else "genehmigen",
+				"reason": "Lärmschutz zum Wohngebiet" if cond else "%s fügt sich in das Gewerbegebiet ein." % hp.gebaeude})
 	# 2) Bedarf bestimmen (Schwellen je Partei)
 	var need := waiting > 0
 	match party:

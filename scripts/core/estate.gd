@@ -65,11 +65,25 @@ const OPEN_STORAGE := 20             # offene Lagerflaeche
 const LAND_PRICE_PER_TILE := 120.0
 const LAND_RENT_PER_TILE := 2.5      # pro Spieltag
 const REF_RENT := 70.0               # Vergleichsmiete je Bueroeinheit und Tag (Innenstadt)
+# Bauantraege und Grundstuecksgebote (Auftrag 11, Etappe 4)
+const PERMIT_TYPES := ["lager", "kuehllager", "umschlaghalle", "kran", "mietbuero"]
+const MAYOR_TYPES := ["umschlaghalle", "kran"]   # entscheidet der Buergermeister
+const PERMIT_FEE := 150.0
+const MAYOR_DAYS := 2                # so lange hat der Buergermeister Zeit, danach genehmigt das Amt
+const CONDITION_SHARE := 0.05        # Auflagen: +5 % der Baukosten (an die Stadtkasse)
+const AUCTION_DAYS := 1.0
+const BID_STEP := 0.05
 
 var sim
 var plots := {}          # Grundstuecks-ID (= Gebaeude-ID der Flaeche) -> Grundstueck
 var facilities := {}     # "B<n>" -> Einrichtung
 var listings := {}       # Einrichtungs-ID -> {einheiten, miete, mindest_tage}
+var permits := {}        # "G<n>" -> Hof-Bauantrag
+var next_permit := 1
+var auctions := {}       # Grundstuecks-ID -> Gebotsverfahren {plot, ends, best, leader, bids}
+var plot_offers := {}    # Grundstuecks-ID -> {seller, price}
+var permits_enabled := true
+var auctions_enabled := true
 var tenants := {}        # "M<n>" -> Mietinteressent
 var leases := {}         # "L<n>" -> Mietvertrag
 var next_id := 1
@@ -78,6 +92,7 @@ var _cache := {}         # Grundstueck -> Bauvorschlaege
 
 func setup(simulation) -> void:
 	sim = simulation
+	sim.day_changed.connect(_permits_day)
 	for b in sim.city.buildings:
 		if b.role == "plot":
 			plots[b.id] = {"id": b.id, "owner": -1, "mode": "", "rent": 0.0, "price": LAND_PRICE_PER_TILE * b.w * b.h,
@@ -551,22 +566,240 @@ func expand(cid: int, plot_id: int, mode: String) -> Dictionary:
 	if int(p.parent) >= 0 and plots[int(p.parent)].owner != cid:
 		return {"ok": false, "msg": "Erweiterungsfläche %d grenzt nicht an dein Grundstück." % plot_id}
 	var c: Company = sim.company(cid)
-	if mode == "kaufen":
-		if c.ledger.cash < float(p.price):
-			return {"ok": false, "msg": "Kaufpreis %s." % Catalog.money(p.price)}
-		c.ledger.invest(float(p.price), "P0")
-		c.land_book += float(p.price)
-	else:
-		p.rent = LAND_RENT_PER_TILE * p.w * p.h
-	p.owner = cid
-	p.mode = "kauf" if mode == "kaufen" else "miete"
-	if int(p.parent) < 0:
-		sim.depot_owner[plot_id] = cid
-		c.depots.append(plot_id)
-	_cache.clear()
-	sim.log_event("%s %s Grundstück %d (%d×%d)." % [c.company_name, "kauft" if mode == "kaufen" else "pachtet", plot_id, p.w, p.h], "info", cid)
+	if mode == "kaufen" and auctions_enabled:
+		return start_auction(cid, plot_id)   # Kauf als Gebotsverfahren: Mitbewerber koennen ueberbieten
+	if mode == "kaufen" and c.ledger.cash < float(p.price):
+		return {"ok": false, "msg": "Kaufpreis %s." % Catalog.money(p.price)}
+	_acquire(c, plot_id, mode)
 	return {"ok": true, "msg": "Grundstück %d %s: %d×%d Tiles%s." % [plot_id, "gekauft" if mode == "kaufen" else "gepachtet", p.w, p.h,
 		"" if mode == "kaufen" else ", Pacht %s/Tag" % Catalog.money(p.rent)]}
+
+
+# ------------------------------------------------------------------ Bauantraege fuer grosse Hallen (Auftrag 11, Etappe 4)
+## Grosse Gebaeude brauchen eine Genehmigung. Der Antrag reserviert die Flaeche (Platzhalter, Status "antrag"), kostet eine Gebuehr
+## und wird nach der Bearbeitungszeit des Bauamts (Kapazitaet aus dem Rathaus) genehmigt – fuer Kran und Umschlaghalle entscheidet
+## der Buergermeister (Genehmigung, Auflagen +5 % der Baukosten, Ablehnung mit Grund); ohne Entscheidung nach MAYOR_DAYS genehmigt das Amt.
+## Erst mit der Genehmigung beginnt der Bau zu den normalen Bedingungen (Estate.place).
+func needs_permit(typ: String) -> bool:
+	return permits_enabled and typ in PERMIT_TYPES
+
+
+func apply_permit(cid: int, plot_id: int, typ: String, x: int, y: int, rot: int, mode: String, source: String, expected: float) -> Dictionary:
+	var err := validate_place(cid, plot_id, typ, x, y, rot)
+	if err != "":
+		return {"ok": false, "msg": err}
+	var spec: Dictionary = FACILITIES[typ]
+	var c: Company = sim.company(cid)
+	var cost: float = spec.cost * (1.0 + (EXTERNAL_SURCHARGE if mode != "eigen" else 0.0))
+	if c.ledger.cash < cost + PERMIT_FEE:
+		return {"ok": false, "msg": "Für den Bau sind %s nötig (plus Antragsgebühr %s)." % [Catalog.money(cost), Catalog.money(PERMIT_FEE)]}
+	c.ledger.book("admin", -PERMIT_FEE, true, "Bauantrag %s" % spec.name, sim.game_min)
+	var pending: int = permits.values().filter(func(p): return p.status in ["beantragt", "zur_entscheidung"]).size()
+	var days := maxi(1, ceili(float(pending + 1) / maxf(0.5, sim.town_hall.permit_points())))
+	var today := GameCalendar.day_of(sim.game_min)
+	var id := "G%d" % next_permit
+	next_permit += 1
+	var hold := {"id": "H" + id, "owner": cid, "plot": _root(plot_id), "typ": typ, "x": x, "y": y, "w": spec.w if rot == 0 else spec.h, "h": spec.h if rot == 0 else spec.w,
+		"rot": rot, "level": 0, "status": "antrag", "progress": 0.0, "work": 1.0, "mat_needed": 0, "mat": 0, "mode": mode, "invest": 0.0, "target_level": 1,
+		"mat_contract": "", "busy": [], "material_due": 0.0, "condition": 100.0}
+	facilities[hold.id] = hold
+	_cache.clear()
+	var big: bool = typ in MAYOR_TYPES
+	permits[id] = {"id": id, "cid": cid, "plot": plot_id, "typ": typ, "x": x, "y": y, "rot": rot, "mode": mode, "source": source, "expected": expected,
+		"day": today, "due": today + days + (MAYOR_DAYS if big else 0), "status": "zur_entscheidung" if big else "beantragt", "hold": hold.id, "conditions": [], "reason": ""}
+	sim.log_event("%s beantragt den Bau: %s (Antrag %s, %s)." % [c.company_name, spec.name, id, "Entscheidung des Bürgermeisters" if big else "Bauamt, etwa %d Tage" % days], "info", cid)
+	return {"ok": true, "msg": "Bauantrag %s für %s gestellt (Gebühr %s). %s Die Fläche ist reserviert; der Bau beginnt mit der Genehmigung." % [id, spec.name,
+		Catalog.money(PERMIT_FEE), "Der Bürgermeister entscheidet (spätestens Tag %d)." % permits[id].due if big else "Bearbeitung bis Tag %d." % permits[id].due], "permit_id": id}
+
+
+## Entscheidung (Buergermeister oder Bauamt). decision genehmigen | auflagen | ablehnen.
+func decide_permit(id: String, decision: String, reason: String, by: String) -> Dictionary:
+	var p: Dictionary = permits.get(id, {})
+	if p.is_empty() or p.status not in ["beantragt", "zur_entscheidung"]:
+		return {"ok": false, "msg": "Kein offener Hof-Bauantrag %s." % id}
+	if decision not in ["genehmigen", "auflagen", "ablehnen"]:
+		return {"ok": false, "msg": "decision muss genehmigen, auflagen oder ablehnen sein."}
+	if decision == "ablehnen" and reason.strip_edges().length() < 8:
+		return {"ok": false, "msg": "Eine Ablehnung braucht eine Begründung."}
+	facilities.erase(p.hold)
+	_cache.clear()
+	var c: Company = sim.company(int(p.cid))
+	var name: String = FACILITIES[p.typ].name
+	if decision == "ablehnen":
+		p.status = "abgelehnt"
+		p.reason = reason
+		sim.log_event("Hof-Bauantrag %s (%s, %s) abgelehnt von %s: %s" % [id, name, c.company_name, by, reason], "warn", c.id)
+		return {"ok": true, "msg": "Antrag %s abgelehnt." % id}
+	var r := place(int(p.cid), int(p.plot), str(p.typ), int(p.x), int(p.y), int(p.rot), str(p.mode), str(p.source), float(p.expected))
+	if not r.ok:
+		p.status = "verfallen"
+		p.reason = str(r.msg)
+		sim.log_event("Hof-Bauantrag %s genehmigt, Bau aber nicht möglich: %s" % [id, r.msg], "warn", c.id)
+		return {"ok": true, "msg": "Genehmigt, aber der Bau scheitert: %s" % r.msg}
+	p.status = "genehmigt"
+	p.fid = r.building_id
+	if decision == "auflagen":
+		var fee: float = float(FACILITIES[p.typ].cost) * CONDITION_SHARE
+		var pay := minf(fee, maxf(0.0, c.ledger.cash))
+		c.ledger.book("admin", -pay, true, "Auflagen Bauantrag %s (%s)" % [id, reason if reason != "" else "Lärmschutz"], sim.game_min)
+		p.conditions = [reason if reason != "" else "Lärmschutz"]
+	sim.log_event("Hof-Bauantrag %s (%s, %s) genehmigt von %s%s." % [id, name, c.company_name, by, " mit Auflagen" if decision == "auflagen" else ""], "good", c.id)
+	return {"ok": true, "msg": "Antrag %s genehmigt%s; Bau %s beginnt." % [id, " mit Auflagen (+%d %% der Baukosten)" % roundi(CONDITION_SHARE * 100.0) if decision == "auflagen" else "", r.building_id]}
+
+
+func _permits_day(day: int) -> void:
+	for p in permits.values():
+		if p.status in ["beantragt", "zur_entscheidung"] and day >= int(p.due):
+			decide_permit(p.id, "genehmigen", "Frist abgelaufen", "Bauamt")
+
+
+func open_permits() -> Array:
+	return permits.values().filter(func(p): return p.status in ["beantragt", "zur_entscheidung"]).map(func(p): return {"id": p.id, "firma": int(p.cid),
+		"name": sim.company(int(p.cid)).company_name, "gebaeude": FACILITIES[p.typ].name, "typ": p.typ, "status": p.status, "frist_tag": int(p.due)})
+
+
+# ------------------------------------------------------------------ Grundstuecksgebote
+## Kauf eines Grundstuecks laeuft als Gebotsverfahren (AUCTION_DAYS): jede Firma darf bieten, auch auf Erweiterungsflaechen der Nachbarn.
+## Wer eine fremde Erweiterungsflaeche ersteigert, kann dort nicht bauen, aber sie dem Nachbarn anbieten (offer_plot) oder an die Stadt
+## zurueckgeben (80 % des Preises).
+func start_auction(cid: int, plot_id: int) -> Dictionary:
+	var p: Dictionary = plots.get(plot_id, {})
+	if auctions.has(plot_id):
+		return bid(cid, plot_id, float(auctions[plot_id].best) * (1.0 + BID_STEP))
+	var c: Company = sim.company(cid)
+	if c.ledger.cash < float(p.price):
+		return {"ok": false, "msg": "Mindestgebot %s." % Catalog.money(p.price)}
+	auctions[plot_id] = {"plot": plot_id, "ends": sim.game_min + GameCalendar.days_to_min(AUCTION_DAYS), "best": float(p.price), "leader": cid, "bids": [[cid, float(p.price)]]}
+	sim.log_event("%s bietet %s für Grundstück %d – Gebote bis %s möglich." % [c.company_name, Catalog.money(p.price), plot_id, GameCalendar.short_text(auctions[plot_id].ends)], "info")
+	return {"ok": true, "msg": "Gebot %s für Grundstück %d abgegeben; Zuschlag nach einem Spieltag, wenn niemand überbietet." % [Catalog.money(p.price), plot_id]}
+
+
+func bid(cid: int, plot_id: int, amount: float) -> Dictionary:
+	var a: Dictionary = auctions.get(plot_id, {})
+	if a.is_empty():
+		return {"ok": false, "msg": "Für Grundstück %d läuft kein Gebotsverfahren (expand_plot mit art=kaufen startet eines)." % plot_id}
+	if int(a.leader) == cid:
+		return {"ok": false, "msg": "Du hältst schon das Höchstgebot (%s)." % Catalog.money(a.best)}
+	var need := float(a.best) * (1.0 + BID_STEP)
+	if amount < need - 0.01:
+		return {"ok": false, "msg": "Mindestens %s bieten (+%d %%)." % [Catalog.money(need), roundi(BID_STEP * 100.0)]}
+	if sim.company(cid).ledger.cash < amount:
+		return {"ok": false, "msg": "Nicht genug Bargeld für %s." % Catalog.money(amount)}
+	var prev := int(a.leader)
+	a.best = snappedf(amount, 1.0)
+	a.leader = cid
+	a.bids.append([cid, a.best])
+	a.ends = maxf(float(a.ends), sim.game_min + 120.0)   # spaete Gebote verlaengern um zwei Spielstunden
+	sim.notify(prev, "%s überbietet dich für Grundstück %d: %s." % [sim.company(cid).company_name, plot_id, Catalog.money(a.best)])
+	sim.log_event("%s überbietet %s für Grundstück %d: %s." % [sim.company(cid).company_name, sim.company(prev).company_name, plot_id, Catalog.money(a.best)], "warn")
+	return {"ok": true, "msg": "Höchstgebot %s für Grundstück %d." % [Catalog.money(a.best), plot_id]}
+
+
+func _auctions_tick(now: float) -> void:
+	for pid in auctions.keys():
+		var a: Dictionary = auctions[pid]
+		if now < float(a.ends):
+			continue
+		auctions.erase(pid)
+		var c: Company = sim.company(int(a.leader))
+		var price := float(a.best)
+		if c.ledger.cash < price:
+			sim.log_event("Zuschlag für Grundstück %d entfällt: %s kann %s nicht zahlen." % [pid, c.company_name, Catalog.money(price)], "warn", c.id)
+			continue
+		var p: Dictionary = plots[pid]
+		p.price = price
+		_acquire(c, int(pid), "kaufen")
+
+
+func _acquire(c: Company, plot_id: int, mode: String) -> void:
+	var p: Dictionary = plots[plot_id]
+	if mode == "kaufen":
+		c.ledger.invest(float(p.price), "P0")
+		c.land_book += float(p.price)
+		p["book"] = float(p.price)
+	else:
+		p.rent = LAND_RENT_PER_TILE * p.w * p.h
+	p.owner = c.id
+	p.mode = "kauf" if mode == "kaufen" else "miete"
+	if int(p.parent) < 0:
+		sim.depot_owner[plot_id] = c.id
+		c.depots.append(plot_id)
+	_cache.clear()
+	var foreign: bool = int(p.parent) >= 0 and plots[int(p.parent)].owner != c.id
+	sim.log_event("%s %s Grundstück %d (%d×%d)%s." % [c.company_name, "kauft" if mode == "kaufen" else "pachtet", plot_id, p.w, p.h,
+		" – Sperrgrundstück am Hof von %s" % sim.company(int(plots[int(p.parent)].owner)).company_name if foreign and plots[int(p.parent)].owner >= 0 else ""], "warn" if foreign else "info", c.id)
+
+
+## Eigenes Grundstueck (ohne Gebaeude) anbieten: an eine Firma zum Preis (offer_plot) oder an die Stadt (an_stadt: 80 %).
+func offer_plot(cid: int, plot_id: int, price: float) -> Dictionary:
+	var p: Dictionary = plots.get(plot_id, {})
+	if p.is_empty() or int(p.owner) != cid or str(p.mode) != "kauf" or c_root_of(cid) == plot_id:
+		return {"ok": false, "msg": "Grundstück %d gehört dir nicht (gekauft, nicht dein Hauptgrundstück)." % plot_id}
+	if facilities.values().any(func(f): return int(f.plot) == plot_id or (f.owner == cid and _in_plot(f, p))):
+		return {"ok": false, "msg": "Auf Grundstück %d stehen Gebäude." % plot_id}
+	plot_offers[plot_id] = {"seller": cid, "price": snappedf(maxf(1.0, price), 1.0)}
+	sim.log_event("%s bietet Grundstück %d für %s an." % [sim.company(cid).company_name, plot_id, Catalog.money(price)], "info")
+	return {"ok": true, "msg": "Grundstück %d für %s angeboten." % [plot_id, Catalog.money(price)]}
+
+
+func buy_offered_plot(cid: int, plot_id: int) -> Dictionary:
+	var o: Dictionary = plot_offers.get(plot_id, {})
+	if o.is_empty() or int(o.seller) == cid:
+		return {"ok": false, "msg": "Grundstück %d wird dir nicht angeboten." % plot_id}
+	var buyer: Company = sim.company(cid)
+	var seller: Company = sim.company(int(o.seller))
+	var price := float(o.price)
+	if buyer.ledger.cash < price:
+		return {"ok": false, "msg": "Nicht genug Bargeld (%s)." % Catalog.money(price)}
+	var p: Dictionary = plots[plot_id]
+	var bookv := float(p.get("book", p.price))
+	buyer.ledger.pay_to(seller.ledger, price)
+	seller.land_book -= bookv
+	seller.ledger.book("asset_result", price - bookv, false, "Verkauf Grundstück %d" % plot_id, sim.game_min)
+	buyer.land_book += price
+	p["book"] = price
+	p.owner = cid
+	plot_offers.erase(plot_id)
+	_cache.clear()
+	sim.log_event("%s kauft Grundstück %d von %s für %s." % [buyer.company_name, plot_id, seller.company_name, Catalog.money(price)], "info", cid)
+	return {"ok": true, "msg": "Grundstück %d gekauft (%s)." % [plot_id, Catalog.money(price)]}
+
+
+func release_plot(cid: int, plot_id: int) -> Dictionary:
+	var p: Dictionary = plots.get(plot_id, {})
+	if p.is_empty() or int(p.owner) != cid or str(p.mode) != "kauf" or c_root_of(cid) == plot_id:
+		return {"ok": false, "msg": "Grundstück %d kann nicht zurückgegeben werden." % plot_id}
+	if facilities.values().any(func(f): return int(f.plot) == plot_id):
+		return {"ok": false, "msg": "Auf Grundstück %d stehen Gebäude." % plot_id}
+	var c: Company = sim.company(cid)
+	var bookv := float(p.get("book", p.price))
+	var back := bookv * 0.8
+	c.ledger.divest(back, "P0")
+	c.land_book -= bookv
+	c.ledger.book("asset_result", back - bookv, false, "Rückgabe Grundstück %d an die Stadt" % plot_id, sim.game_min)
+	p.owner = -1
+	p.mode = ""
+	plot_offers.erase(plot_id)
+	if int(p.parent) < 0:
+		c.depots.erase(plot_id)
+		sim.depot_owner.erase(plot_id)
+	_cache.clear()
+	return {"ok": true, "msg": "Grundstück %d an die Stadt zurückgegeben (%s)." % [plot_id, Catalog.money(back)]}
+
+
+func c_root_of(cid: int) -> int:
+	var c: Company = sim.company(cid)
+	return int(c.depots[0]) if not c.depots.is_empty() else -1
+
+
+func _in_plot(f: Dictionary, p: Dictionary) -> bool:
+	return Rect2i(int(f.x), int(f.y), int(f.w), int(f.h)).intersects(Rect2i(int(p.x), int(p.y), int(p.w), int(p.h)))
+
+
+func auction_list() -> Array:
+	return auctions.values().map(func(a): return {"grundstueck": int(a.plot), "hoechstgebot": a.best, "fuehrend": int(a.leader),
+		"naechstes_mindestgebot": snappedf(float(a.best) * (1.0 + BID_STEP), 1.0), "ende_min": int(a.ends),
+		"nachbar_von": int(plots[int(a.plot)].get("parent", -1)) if int(plots[int(a.plot)].get("parent", -1)) < 0 else int(plots[int(plots[int(a.plot)].parent)].owner)})
 
 
 # ------------------------------------------------------------------ Vermietung
@@ -648,6 +881,8 @@ func _spawn_tenant_order(l: Dictionary, what: String) -> void:
 
 
 func minute_tick(now: float) -> void:
+	if not auctions.is_empty():
+		_auctions_tick(now)
 	# Bau
 	for f in facilities.values():
 		if f.status not in ["im_bau", "ausbau"]:
@@ -746,7 +981,8 @@ func summary(cid: int) -> Dictionary:
 	var own: Array = plot_of(cid)
 	var plots_out: Array = []
 	for p in own:
-		plots_out.append({"id": p.id, "art": p.mode, "flaeche": [p.x, p.y, p.w, p.h], "einfahrt": p.entrance})
+		var nb: int = int(plots[int(p.parent)].owner) if int(p.parent) >= 0 and int(plots[int(p.parent)].owner) != cid else -1
+		plots_out.append({"id": p.id, "art": p.mode, "flaeche": [p.x, p.y, p.w, p.h], "einfahrt": p.entrance, "fremd_nachbar": nb, "buchwert": float(p.get("book", p.price))})
 	var fac: Array = facilities.values().filter(func(f): return f.owner == cid).map(func(f): return {"id": f.id, "typ": f.typ,
 		"pos": [f.x, f.y], "rot": f.rot, "stufe": f.level, "status": f.status, "fortschritt": snappedf(float(f.progress), 0.01),
 		"material": "%d/%d" % [f.mat, f.mat_needed], "materialauftrag": f.mat_contract, "modus": f.mode,
@@ -761,6 +997,9 @@ func summary(cid: int) -> Dictionary:
 		"bauvorschlaege_xy_rot": suggestions(cid, root) if is_plot(root) else {},
 		"bauberater": sim.yard.summary(cid) if is_plot(root) else {},
 		"spezialisierungen": spec_overview(cid), "layout_boni": layout_bonuses(cid),
+		"bauantraege": permits.values().filter(func(p): return int(p.cid) == cid).slice(-5).map(func(p): return {"id": p.id, "typ": p.typ, "status": p.status, "frist_tag": p.due, "grund": p.reason}),
+		"grundstuecksgebote": auction_list(), "grundstuecksangebote": plot_offers.keys().map(func(id): return {"grundstueck": int(id), "verkaeufer": int(plot_offers[id].seller), "preis": plot_offers[id].price,
+			"fuer": int(plots[int(plots[int(id)].parent)].owner) if int(plots[int(id)].parent) >= 0 else -1}),
 		"layout_regeln": LAYOUT.map(func(r): return r.text),
 		"baustoffe_stadtlager": sim.city_depot.material_offer(10),
 		"vermietung": {"angebote": listings.keys().filter(func(id): return listings[id].owner == cid),
@@ -777,7 +1016,14 @@ func to_dict() -> Dictionary:
 	var ps := {}
 	for id in plots:
 		ps[str(id)] = plots[id]
-	return {"plots": ps, "facilities": facilities, "listings": listings, "tenants": tenants, "leases": leases, "next_id": next_id}
+	var au := {}
+	for id in auctions:
+		au[str(id)] = auctions[id]
+	var po := {}
+	for id in plot_offers:
+		po[str(id)] = plot_offers[id]
+	return {"plots": ps, "facilities": facilities, "listings": listings, "tenants": tenants, "leases": leases, "next_id": next_id,
+		"permits": permits, "next_permit": next_permit, "auctions": au, "plot_offers": po}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -797,5 +1043,21 @@ func from_dict(d: Dictionary) -> void:
 		l.owner = int(l.owner)
 		l.units = int(l.units)
 	next_id = int(d.get("next_id", 1))
+	permits = d.get("permits", {})
+	for p in permits.values():
+		for k in ["cid", "plot", "x", "y", "rot", "day", "due"]:
+			p[k] = int(p[k])
+	next_permit = int(d.get("next_permit", 1))
+	auctions = {}
+	for id in d.get("auctions", {}):
+		var a: Dictionary = d.auctions[id]
+		a.plot = int(a.plot)
+		a.leader = int(a.leader)
+		auctions[int(id)] = a
+	plot_offers = {}
+	for id in d.get("plot_offers", {}):
+		var o: Dictionary = d.plot_offers[id]
+		o.seller = int(o.seller)
+		plot_offers[int(id)] = o
 	for c in sim.companies:
 		_refresh_company(c.id)
