@@ -637,6 +637,8 @@ func _on_arrival(v: FleetVehicle) -> void:
 			if site >= 0 and estate.is_plot(site) and estate.has_ramp(site):
 				v.timer *= 0.6   # Laderampe statt offener Ladeflaeche
 			v.timer *= estate.yard_loading_factor(site, v)   # Kran, Umschlaghalle, Spezialisierung, Layout (Auftrag 11)
+			if site >= 0 and estate.is_plot(site) and int(estate.plots[estate._root(site)].owner) == v.owner:
+				yard.note_load(v.owner)   # Messgroesse fuer den Bauberater
 			v.timer *= wx.loading_factor(site >= 0 and estate.is_plot(site) and estate.is_covered(site))   # Wetter im Freien
 			if v.state == "loading":
 				bark(v.owner, "laden")

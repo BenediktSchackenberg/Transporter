@@ -23,6 +23,9 @@ var snaps := {}                          # cid -> Array der Momentaufnahmen {day
 var records: Array = []                  # Investitionsakten
 var factors := {}                        # Gebaeudetyp -> {f, n} gelernter Prognosefaktor
 var persist := false
+var loads := {}                          # cid -> Lade-/Entladevorgaenge am eigenen Hof (kumuliert, Messgroesse fuer Rampe/Halle/Kran)
+const LOAD_SAVING := {"laderampe": 0.4, "umschlaghalle": 0.3, "kran": 0.4}   # gesparter Anteil der Ladezeit
+const UTILIZATION := 0.5                 # Anteil der Zeit, in der ein Fahrzeug Erloes bringt (gesparte Minuten zaehlen so viel)
 var _day := -1
 
 
@@ -62,7 +65,7 @@ func _snapshot(c: Company) -> Dictionary:
 		fat += w.fatigue
 	return {"day": GameCalendar.day_of(sim.game_min), "transport": float(t.get("transport", 0.0)), "repairs": -float(t.get("repairs", 0.0)),
 		"fuel": -float(t.get("fuel", 0.0)) - float(t.get("supplies", 0.0)), "completed": int(c.stats.get("completed", 0)), "profit": c.ledger.profit(),
-		"vehicles": sim.company_vehicles(c.id).size(), "fatigue": fat / maxf(1.0, float(ws.size()))}
+		"vehicles": sim.company_vehicles(c.id).size(), "fatigue": fat / maxf(1.0, float(ws.size())), "yard_loads": int(loads.get(c.id, 0))}
 
 
 func on_day(day: int) -> void:
@@ -85,12 +88,24 @@ func window(cid: int, days: int = WINDOW) -> Dictionary:
 	var arr: Array = snaps.get(cid, [])
 	var now := _snapshot(sim.company(cid))
 	if arr.is_empty():
-		return {"tage": 0, "transport": 0.0, "repairs": 0.0, "fuel": 0.0, "completed": 0.0, "profit": 0.0}
+		return {"tage": 0, "transport": 0.0, "repairs": 0.0, "fuel": 0.0, "completed": 0.0, "profit": 0.0, "yard_loads": 0.0}
 	var first: Dictionary = arr[maxi(0, arr.size() - days)]
 	var span := maxf(1.0, float(now.day - int(first.day)))
 	var k := 30.0 / span
 	return {"tage": int(span), "transport": (now.transport - first.transport) * k, "repairs": (now.repairs - first.repairs) * k, "fuel": (now.fuel - first.fuel) * k,
-		"completed": float(now.completed - int(first.completed)) * k, "profit": (now.profit - float(first.profit)) * k}
+		"completed": float(now.completed - int(first.completed)) * k, "profit": (now.profit - float(first.profit)) * k,
+		"yard_loads": float(int(now.yard_loads) - int(first.get("yard_loads", 0))) * k}
+
+
+## Vom Simulationskern: ein Lade- oder Entladevorgang auf einem Firmengrundstueck.
+func note_load(cid: int) -> void:
+	loads[cid] = int(loads.get(cid, 0)) + 1
+
+
+## Wert gesparter Ladezeit je Monat: Vorgaenge am Hof × gesparte Minuten × Erloes je Fahrzeugminute.
+func _loading_value(cid: int, typ: String, yard_loads_month: float, rev_v: float) -> float:
+	var saved_min: float = yard_loads_month * Catalog.LOADING_MIN * float(LOAD_SAVING.get(typ, 0.0))
+	return saved_min * rev_v / (30.0 * 1440.0 * UTILIZATION)
 
 
 # ------------------------------------------------------------------ Bauberater
@@ -134,9 +149,9 @@ func estimate(cid: int, typ: String) -> Dictionary:
 				value = w.transport / maxf(1.0, float(cap)) * (3.0 if typ == "buero" else 2.0) * MARGIN
 				why = "Auftragskapazität voll (%d/%d)" % [active, cap]
 		"laderampe":
-			metric = "transport"
-			value = 0.03 * w.transport
-			why = "Ladezeit am Hof ×0,6 bei %s Erlösen je Monat" % Catalog.money(w.transport)
+			metric = "yard_loading"
+			value = _loading_value(cid, typ, w.yard_loads, rev_v)
+			why = "%.0f Lade-/Entladevorgänge je Monat am eigenen Hof, Ladezeit ×0,6" % w.yard_loads if w.yard_loads >= 1.0 else ""
 		"kuehllager":
 			metric = "transport"
 			if has_reefer and not cold_jobs.is_empty():
@@ -160,17 +175,16 @@ func estimate(cid: int, typ: String) -> Dictionary:
 			value = 2.0 * 60.0 * 30.0 * 0.6
 			why = "Mieteinnahmen (2 Einheiten, 60 EUR/Tag, 60 % belegt)"
 		"kran":
-			metric = "transport"
+			metric = "yard_loading"
 			var heavy: int = sim.company_vehicles(cid).filter(func(v): return bool(v.spec().get("heavy", false))).size()
 			if heavy > 0:
-				value = 0.04 * w.transport + (0.1 * w.transport * 0.3 if not sim.estate.has_spec(cid, "schwerlast") else 0.0)
+				value = _loading_value(cid, typ, w.yard_loads * float(heavy) / maxf(1.0, float(n_v)), rev_v) + 0.1 * w.transport * MARGIN * float(heavy) / maxf(1.0, float(n_v))
 				why = "%d schwere Fahrzeuge: Laden ×0,6, Spezialisierung Schwerlasthof" % heavy
 		"umschlaghalle":
-			metric = "transport"
-			var via: int = sim.operations.summary(cid).get("linien", []).filter(func(l): return bool(l.get("via_depot", false))).size()
-			if via > 0 or n_v >= 4:
-				value = 200.0 * float(via) + 0.02 * w.transport
-				why = "%d Linien über den Hof, %d Fahrzeuge: überdachter Umschlag ×0,7" % [via, n_v]
+			metric = "yard_loading"
+			if w.yard_loads >= 1.0:
+				value = _loading_value(cid, typ, w.yard_loads, rev_v)
+				why = "%.0f Lade-/Entladevorgänge je Monat am eigenen Hof: überdachter Umschlag ×0,7" % w.yard_loads
 		"lager":
 			metric = "transport"
 			var lines: int = sim.operations.summary(cid).get("linien", []).filter(func(l): return bool(l.get("via_depot", false))).size()
@@ -257,8 +271,15 @@ func _measure(r: Dictionary) -> void:
 			gained = (float(r.vorher_snap.fatigue) - float(now.fatigue)) * float(sim.personnel.employed(cid).size()) * 25.0 / 20.0
 		"rent":
 			gained = float(sim.estate.leased_units(r.fid)) * 60.0 * 30.0
+		"yard_loading":
+			gained = _loading_value(cid, str(r.typ), float(after.yard_loads), maxf(1500.0, float(after.transport) / maxf(1.0, float(now.vehicles))))
 		_:
-			gained = float(after.profit) - float(before.profit)
+			# Umsatz je Fahrzeug statt Gesamtgewinn: Fahrzeugkaeufe, Loehne und Abschreibungen sollen die Messung nicht ueberdecken
+			var per_before := float(before.transport) / maxf(1.0, float(r.vorher_snap.vehicles))
+			var per_after := float(after.transport) / maxf(1.0, float(now.vehicles))
+			gained = (per_after - per_before) * float(now.vehicles) * MARGIN
+	var cap := 3.0 * maxf(300.0, float(r.beraterschaetzung))
+	gained = clampf(gained, -cap, cap)   # Ausreisser (Einzelauftraege, Krisen) begrenzen
 	r.status = "gemessen"
 	r["gemessen"] = snappedf(gained, 1.0)
 	var est := float(r.beraterschaetzung)
@@ -288,7 +309,10 @@ func to_dict() -> Dictionary:
 	var s := {}
 	for cid in snaps:
 		s[str(cid)] = snaps[cid]
-	return {"snaps": s, "records": records, "factors": factors}
+	var ld := {}
+	for cid in loads:
+		ld[str(cid)] = loads[cid]
+	return {"snaps": s, "records": records, "factors": factors, "loads": ld}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -301,5 +325,7 @@ func from_dict(d: Dictionary) -> void:
 	for r in records:
 		r.cid = int(r.cid)
 		r.done_day = int(r.done_day)
+	for k in d.get("loads", {}):
+		loads[int(k)] = int(d.loads[k])
 	for k in d.get("factors", {}):
 		factors[str(k)] = {"f": float(d.factors[k].f), "n": int(d.factors[k].n)}
