@@ -19,6 +19,9 @@ const DEFAULTS := {
 	"grundsteuer_intervall": "monat", "immobilienwert_jahresmieten": 15.0, "eigennutzer_anteil_einfamilienhaus": 0.8,
 	"eigennutzer_anteil_wohnblock": 0.25, "vermieter_max_einheiten": 6,
 	"beduerfnis_gewichte_glueck": {"geld": 0.3, "arbeit": 0.25, "bildung": 0.15, "wohnen": 0.3},
+	"mindestbildung": {"rathaus": 2, "schule_klinik": 2, "gesundheit": 2, "polizei": 1}, "unglueck_schwelle": 40.0,
+	"weiterbildung_ab_monaten_arbeitslos": 2, "weiterbildung_chance": 0.15, "weiterbildung_monate": 6,
+	"umzug_chance_unglueck": 0.3, "wegzug_ab_monaten_arbeitslos": 6, "wegzug_chance": 0.2,
 }
 const CONFIG_PATH := "res://config/residents.json"
 const EDUCATION := ["Grundbildung", "Ausbildung", "Fachkraft", "Hochschule"]
@@ -33,6 +36,7 @@ var tax_rate := 1.0                      # Grundsteuer in Prozent des Immobilien
 var tax_total := 0.0
 var month_log: Array = []                # Monatsprotokoll der Summen (Statistik/Diagnose)
 var last_validation: Array = []
+var behavior := {}                       # Verhalten im letzten Monat (Etappe 2): Weiterbildung, Umzug, Wegzug
 
 
 ## Konfiguration: Standardwerte, ueberschrieben von config/residents.json (falls vorhanden).
@@ -345,6 +349,59 @@ func mean_need(key: String) -> float:
 	return sum / maxf(1.0, float(n))
 
 
+# ------------------------------------------------------------------ Verhalten aus Beduerfnissen (Etappe 2)
+## Mindestbildung fuer eine Stelle beim Arbeitgeber (Konfiguration `mindestbildung`, fehlender Eintrag = keine Anforderung).
+static func qualified(p: Dictionary, employer: String) -> bool:
+	return int(p.get("education", 0)) >= int(cfg().mindestbildung.get(employer, 0))
+
+
+## Monatliches Verhalten vor der Stellenvergabe, nach den Beduerfnissen des Vormonats:
+## - Arbeitslose ab `weiterbildung_ab_monaten_arbeitslos` beginnen eine Weiterbildung (Schule, `weiterbildung_monate`; danach Bildung +1);
+##   waehrend der Weiterbildung bewerben sie sich nicht.
+## - Unglueckliche Mieter mit zu hoher Miete oder Rueckstand ziehen in eine guenstigere freie Wohnung.
+## - Lange Arbeitslose ohne Wohneigentum, die ungluecklich sind, verlassen die Stadt (einzeln).
+## Unglueckliche Beschaeftigte wechseln oefter die Stelle (`Citizens._dynamics`).
+func behave(month: int) -> void:
+	var c := cfg()
+	var day: int = GameCalendar.day_of(sim.game_min)
+	var unhappy := float(c.unglueck_schwelle)
+	behavior = {"weiterbildung_beginn": 0, "weiterbildung_abschluss": 0, "umzug_unglueck": 0, "wegzug": 0}
+	var leaving: Array = []
+	for p in sim.citizens.people:
+		if not p.has("needs") or PublicSafety.in_prison(p, day):
+			continue
+		var pid := int(p.id)
+		if p.has("course_until") and int(p.course_until) <= day:
+			p.erase("course_until")
+			p.education = mini(3, int(p.education) + 1)
+			behavior.weiterbildung_abschluss += 1
+		var glueck := float(p.needs.glueck)
+		if p.employer == "" and not p.has("course_until"):
+			if int(p.education) < 3 and int(p.jobless_months) >= int(c.weiterbildung_ab_monaten_arbeitslos) and Citizens.roll(pid, month, 51) < float(c.weiterbildung_chance):
+				p["course_until"] = day + 30 * int(c.weiterbildung_monate)
+				behavior.weiterbildung_beginn += 1
+				continue
+			if int(p.jobless_months) >= int(c.wegzug_ab_monaten_arbeitslos) and glueck < unhappy and Citizens.roll(pid, month, 52) < float(c.wegzug_chance) \
+					and owned_units(pid).is_empty():
+				leaving.append(p)
+				continue
+		if glueck < unhappy and Citizens.roll(pid, month, 53) < float(c.umzug_chance_unglueck) and sim.housing.relocate_cheaper(p):
+			behavior.umzug_unglueck += 1
+	for p in leaving:
+		sim.citizens.emigrate_person(p)
+	behavior.wegzug = leaving.size()
+	if not leaving.is_empty():
+		sim.log_event("%d Bewohner verlassen die Stadt (lange arbeitslos und unglücklich)." % leaving.size(), "bad")
+
+
+func in_course_count() -> int:
+	var n := 0
+	for p in sim.citizens.people:
+		if p.has("course_until"):
+			n += 1
+	return n
+
+
 # ------------------------------------------------------------------ Status und Pruefung
 ## "eigentuemer": besitzt Wohnraum oder lebt im Wohnraum eines Haushaltsmitglieds, das ihn besitzt; sonst "mieter" (oder "ohne Wohnung").
 func status_of(p: Dictionary) -> String:
@@ -418,11 +475,12 @@ func summary() -> Dictionary:
 	return {"bewohner": people.size(), "eigentuemer": owners, "mieter": people.size() - owners, "bildung": edu,
 		"grundsteuer_satz": tax_rate, "grundsteuer_monat_geschaetzt": snappedf(estimated_monthly_tax(), 1.0), "grundsteuer_gesamt": snappedf(tax_total, 1.0),
 		"glueck": snappedf(mean_need("glueck"), 0.1), "geld": snappedf(mean_need("geld"), 0.1), "arbeit": snappedf(mean_need("arbeit"), 0.1),
-		"guthaben_gesamt": snappedf(float(sim.economy.accounts.get(ACCOUNT, 0.0)), 1.0), "monat_zuletzt": month_log.back() if not month_log.is_empty() else {}}
+		"guthaben_gesamt": snappedf(float(sim.economy.accounts.get(ACCOUNT, 0.0)), 1.0), "monat_zuletzt": month_log.back() if not month_log.is_empty() else {},
+		"in_weiterbildung": in_course_count(), "verhalten_letzter_monat": behavior}
 
 
 func to_dict() -> Dictionary:
-	return {"tax_rate": tax_rate, "tax_total": tax_total, "month_log": month_log.slice(-24)}
+	return {"tax_rate": tax_rate, "tax_total": tax_total, "month_log": month_log.slice(-24), "behavior": behavior}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -431,3 +489,4 @@ func from_dict(d: Dictionary) -> void:
 	tax_rate = float(d.get("tax_rate", tax_rate))
 	tax_total = float(d.get("tax_total", 0.0))
 	month_log = d.get("month_log", [])
+	behavior = d.get("behavior", {})

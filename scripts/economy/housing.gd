@@ -300,13 +300,43 @@ func relocate_for_job(p: Dictionary, district: int, month: int) -> bool:
 			best = u
 	if best.is_empty():
 		return false
+	_move_group(group, old, best)
+	stats.job_moves += 1
+	return true
+
+
+func _move_group(group: Array, old: Dictionary, best: Dictionary) -> void:
 	for q in group:
 		q.home = best.id
 	best.tenant = "B"
 	best.arrears = 0
 	old.tenant = ""
 	old.arrears = 0
-	stats.job_moves += 1
+
+
+## Umzug aus Geldnot (Etappe 2): Mieter, deren Miete ueber MAX_BURDEN des Haushaltsnettos liegt oder die im Rueckstand sind, ziehen in die
+## guenstigste freie Einheit, die bezahlbar ist, guenstiger als die alte und gross genug fuer die Gruppe (hoechstens 20 m2 je Person wie in der Startpruefung).
+func relocate_cheaper(p: Dictionary) -> bool:
+	var uid := str(p.get("home", ""))
+	var old: Dictionary = units.get(uid, {})
+	if old.is_empty() or old.tenant != "B" or bool(old.get("owner_occupied", false)):
+		return false
+	var group: Array = _citizen_occupants().get(uid, [])
+	var income := 0.0
+	for q in group:
+		income += float(q.get("net", 0.0))
+	if float(old.rent) <= MAX_BURDEN * income and int(old.arrears) == 0:
+		return false
+	var best: Dictionary = {}
+	for u in vacant_units():
+		if float(u.rent) > MAX_BURDEN * income or float(u.rent) >= float(old.rent) or maxi(1, ceili(float(u.area) / 20.0)) < group.size():
+			continue
+		if best.is_empty() or float(u.rent) < float(best.rent) or (float(u.rent) == float(best.rent) and u.id < best.id):
+			best = u
+	if best.is_empty():
+		return false
+	_move_group(group, old, best)
+	stats["cheap_moves"] = int(stats.get("cheap_moves", 0)) + 1
 	return true
 
 

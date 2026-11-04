@@ -250,7 +250,8 @@ func quarter_candidates(limit: int) -> Array:
 func on_month(month: int) -> void:
 	var Z: Citizens = sim.citizens
 	# neue Haushalte suchen eine Wohnung, Wartende ziehen bei freiem Wohnraum ein, lange Wartende wandern ab
-	waiting += int(round(float(Z.population()) / PERSONS_PER_UNIT * 0.008 * (0.5 + Z.employment_rate())))
+	# Zuzug nach Wirtschaftslage (Beschaeftigung) und Lebensqualitaet (mittleres Glueck der Bewohner, 50 = neutral)
+	waiting += int(round(float(Z.population()) / PERSONS_PER_UNIT * 0.008 * (0.5 + Z.employment_rate()) * (0.5 + sim.population.mean_need("glueck") / 100.0)))
 	var free_units := stock_units - occupied_units()
 	var moving := mini(waiting, maxi(0, free_units))
 	if moving > 0:

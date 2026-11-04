@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_population", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -5218,6 +5218,73 @@ func test_population() -> void:
 	# Speichern und Laden
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(absf(s2.population.account_error()) < 0.01 and absf(s2.population.tax_rate - 1.4) < 0.001, "Bevölkerungsmodell nach Laden")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_resident_behavior() -> void:
+	var s := new_sim(2)
+	var P: Population = s.population
+	var Z: Citizens = s.citizens
+	var people: Array = Z.people
+	var day: int = GameCalendar.day_of(s.game_min)
+	# Jobsuche nach Bildung: niemand ohne Mindestbildung in Rathaus, Schulen/Klinik, Gesundheit, Polizei
+	Z.on_month(1)
+	ok(people.all(func(p): return p.employer == "" or Population.qualified(p, p.employer)), "alle Beschäftigten erfüllen die Mindestbildung ihrer Stelle")
+	var low: Dictionary = people.filter(func(p): return p.employer == "" and int(p.education) == 0 and not p.has("course_until")).front()
+	ok(not Population.qualified(low, "rathaus") and Population.qualified(low, "handel"), "Grundbildung reicht für den Handel, nicht fürs Rathaus")
+	# Weiterbildung: lange Arbeitslose gehen zur Schule und steigen eine Bildungsstufe auf
+	var c := Population.cfg()
+	var learners: Array = people.filter(func(p): return p.employer == "" and int(p.education) < 3).slice(0, 40)
+	for p in learners:
+		p.erase("course_until")
+		p.jobless_months = int(c.weiterbildung_ab_monaten_arbeitslos)
+	P.behave(5)
+	var started: Array = learners.filter(func(p): return p.has("course_until"))
+	ok(not started.is_empty() and int(P.behavior.weiterbildung_beginn) >= started.size(), "Arbeitslose beginnen eine Weiterbildung (%d von %d)" % [started.size(), learners.size()])
+	var q: Dictionary = started[0]
+	ok(str(Z.travel_plan(q, 10.0).purpose) == "Zur Weiterbildung" and str(s.city.building(int(Z.travel_plan(q, 10.0).building)).type) == "school", "Weg führt tagsüber zur Schule")
+	var edu0 := int(q.education)
+	q.course_until = day
+	P.behave(6)
+	ok(int(q.education) == edu0 + 1 and not q.has("course_until") and int(P.behavior.weiterbildung_abschluss) >= 1, "nach der Weiterbildung Bildung %d -> %d" % [edu0, int(q.education)])
+	# Teilnehmer bewerben sich nicht
+	var in_course: Array = people.filter(func(p): return p.has("course_until"))
+	for k in Z.cap:
+		Z.cap[k] = Z.employed_count(k) + 30
+	Z._dynamics(7)
+	ok(in_course.all(func(p): return p.employer == "" or not p.has("course_until")) and in_course.all(func(p): return p.employer == ""), "während der Weiterbildung keine Einstellung")
+	# Umzug aus Geldnot: unglücklicher Mieter mit zu hoher Miete zieht in eine günstigere freie Wohnung
+	var occ: Dictionary = s.housing._citizen_occupants()
+	var mover: Dictionary = {}
+	for uid in occ:
+		var u: Dictionary = s.housing.units[uid]
+		if u.tenant == "B" and not bool(u.get("owner_occupied", false)) and occ[uid].size() == 1 and (mover.is_empty() or float(u.rent) > float(s.housing.units[mover.home].rent)):
+			mover = occ[uid][0]
+	ok(not mover.is_empty(), "Mieter mit teurer Wohnung gefunden")
+	var old_uid := str(mover.home)
+	var old_rent := float(s.housing.units[old_uid].rent)
+	mover.net = old_rent * 2.2   # Miete > 40 % des Nettos, guenstigere Einheiten bleiben bezahlbar
+	mover.needs.glueck = 10.0
+	ok(s.housing.relocate_cheaper(mover), "Umzug in eine günstigere Wohnung")
+	var nu: Dictionary = s.housing.units[str(mover.home)]
+	ok(str(mover.home) != old_uid and float(nu.rent) < old_rent and s.housing.units[old_uid].tenant == "", "neue Miete %.0f < alte %.0f, alte Wohnung frei" % [float(nu.rent), old_rent])
+	# Wegzug: lange arbeitslos und unglücklich, ohne Wohneigentum -> verlässt die Stadt einzeln, Guthaben gehen mit
+	var cand: Array = people.filter(func(p): return p.employer == "" and P.owned_units(int(p.id)).is_empty() and not p.has("course_until"))
+	for p in cand:
+		p.jobless_months = int(c.wegzug_ab_monaten_arbeitslos)
+		p.needs.glueck = 5.0
+	var n0 := people.size()
+	var homes := {}
+	for p in cand:
+		homes[str(p.get("home", ""))] = true
+	P.behave(8)
+	ok(Z.people.size() < n0 and int(P.behavior.wegzug) == n0 - Z.people.size(), "%d lange Arbeitslose ziehen weg" % (n0 - Z.people.size()))
+	ok(absf(P.account_error()) < 0.01, "nach Wegzug: Personenguthaben = R0")
+	var occ2: Dictionary = s.housing._citizen_occupants()
+	ok(homes.keys().all(func(uid): return not s.housing.units.has(uid) or occ2.has(uid) or s.housing.units[uid].tenant != "B"), "Wohnungen ohne verbleibende Bewohner werden frei")
+	ok(P.summary().has("verhalten_letzter_monat") and P.summary().has("in_weiterbildung"), "Zusammenfassung zeigt das Verhalten")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.citizens.people.filter(func(p): return p.has("course_until")).size() == Z.people.filter(func(p): return p.has("course_until")).size(), "Weiterbildungen bleiben nach dem Laden erhalten")
 	ok(identity_ok(s), "Geld erhalten")
 
 

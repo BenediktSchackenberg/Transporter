@@ -16,5 +16,13 @@
   "eigennutzer_anteil_einfamilienhaus": 0.8,
   "eigennutzer_anteil_wohnblock": 0.25,
   "vermieter_max_einheiten": 6,
-  "beduerfnis_gewichte_glueck": {"geld": 0.3, "arbeit": 0.25, "bildung": 0.15, "wohnen": 0.3}
+  "beduerfnis_gewichte_glueck": {"geld": 0.3, "arbeit": 0.25, "bildung": 0.15, "wohnen": 0.3},
+  "mindestbildung": {"rathaus": 2, "schule_klinik": 2, "gesundheit": 2, "polizei": 1},
+  "unglueck_schwelle": 40.0,
+  "weiterbildung_ab_monaten_arbeitslos": 2,
+  "weiterbildung_chance": 0.15,
+  "weiterbildung_monate": 6,
+  "umzug_chance_unglueck": 0.3,
+  "wegzug_ab_monaten_arbeitslos": 6,
+  "wegzug_chance": 0.2
 }

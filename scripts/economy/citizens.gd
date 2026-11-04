@@ -54,7 +54,11 @@ func travel_plan(person: Dictionary, hour: float = -1.0) -> Dictionary:
 	var purpose := "Zur Arbeit: " + str(EMPLOYERS.get(employer, {}).get("label", employer))
 	var types: Array = {"rathaus": ["townhall"] if sim.town_hall.building >= 0 else ["office", "bank"], "schule_klinik": ["school", "kindergarten", "clinic"], "polizei": ["police"], "gesundheit": ["doctor", "clinic"], "baufirma": ["construction", "warehouse"],
 		"handel": ["shop", "restaurant"], "industrie": ["factory", "brewery", "bakery", "workshop"], "stadtlager": ["warehouse"]}.get(employer, ["office"])
-	if employer == "":
+	if employer == "" and person.has("course_until"):
+		kind = "course"
+		types = ["school"]
+		purpose = "Zur Weiterbildung"
+	elif employer == "":
 		kind = "staffing"
 		types = ["office"]
 		purpose = "Zur Arbeitsvermittlung"
@@ -134,6 +138,17 @@ func emigrate(unit_id: String) -> int:
 	return before - people.size()
 
 
+## Wegzug einer einzelnen Person (Etappe 2). Bleibt niemand in der Wohneinheit, wird sie frei.
+func emigrate_person(p: Dictionary) -> void:
+	var uid := str(p.get("home", ""))
+	sim.population.on_emigrate([p])
+	people = people.filter(func(q): return int(q.id) != int(p.id))
+	var u: Dictionary = sim.housing.units.get(uid, {})
+	if not u.is_empty() and u.tenant == "B" and not people.any(func(q): return str(q.get("home", "")) == uid):
+		u.tenant = ""
+		u.arrears = 0
+
+
 func _employ(p: Dictionary, k: String, r: float) -> void:
 	p.employer = k
 	p.wage = snappedf(float(EMPLOYERS[k].wage) * (0.9 + 0.2 * r) * Population.wage_factor(p), 0.1)
@@ -190,6 +205,7 @@ static func roll(a: int, b: int, salt: int) -> float:
 
 func on_month(month: int) -> void:
 	stats = {"changes": 0, "layoffs": 0, "hires": 0, "quits": 0, "wages": 0.0, "tax": 0.0, "benefits": 0.0}
+	sim.population.behave(month)
 	_dynamics(month)
 	_pay(month)
 	last = summary()
@@ -222,16 +238,18 @@ func _dynamics(month: int) -> void:
 			stats.layoffs += 1
 	# freiwillige Wechsel und Kuendigungen
 	var vac := _vacancies()
+	var unhappy := float(Population.cfg().unglueck_schwelle)
 	for p in people:
 		if p.employer == "":
 			continue
 		var r := roll(int(p.id), month, 2)
-		if r < QUIT_CHANCE:
+		var change_chance := QUIT_CHANCE * (3.0 if float(p.get("needs", {}).get("glueck", 50.0)) < unhappy else 1.0)
+		if r < change_chance:
 			var target := ""
 			var start := int(roll(int(p.id), month, 3) * keys.size())
 			for j in keys.size():
 				var k2: String = keys[(start + j) % keys.size()]
-				if k2 != p.employer and int(vac[k2]) > 0:
+				if k2 != p.employer and int(vac[k2]) > 0 and Population.qualified(p, k2):
 					target = k2
 					break
 			if target != "":
@@ -247,15 +265,15 @@ func _dynamics(month: int) -> void:
 			stats.quits += 1
 	# Einstellungen: am laengsten Arbeitslose zuerst
 	var jail_day: int = GameCalendar.day_of(sim.game_min)
-	var jobless: Array = people.filter(func(q): return q.employer == "" and not PublicSafety.in_prison(q, jail_day))
+	var jobless: Array = people.filter(func(q): return q.employer == "" and not q.has("course_until") and not PublicSafety.in_prison(q, jail_day))
 	jobless.sort_custom(func(a, b): return a.jobless_months > b.jobless_months or (a.jobless_months == b.jobless_months and a.id < b.id))
 	for p in jobless:
-		var best := ""
+		var best := ""   # Jobsuche nach Bildung: die am besten bezahlte freie Stelle, fuer die die Bildung reicht
 		for k in keys:
-			if int(vac[k]) > 0 and (best == "" or int(vac[k]) > int(vac[best])):
+			if int(vac[k]) > 0 and Population.qualified(p, k) and (best == "" or float(EMPLOYERS[k].wage) > float(EMPLOYERS[best].wage)):
 				best = k
 		if best == "":
-			break
+			continue
 		vac[best] = int(vac[best]) - 1
 		_employ(p, best, roll(int(p.id), month, 5))
 		sim.housing.relocate_for_job(p, int(EMPLOYERS[best].district), month)
