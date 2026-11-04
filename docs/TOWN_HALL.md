@@ -16,7 +16,7 @@ Grundregeln: Alle Eingriffe haben **harte Grenzen** (Budget, Kapazität, Sperrfr
 |---|---|---|
 | 1 | **Rathaus mit Personal**: sichtbares Gebäude, Abteilungen (Verwaltung, Bauamt, Straßenmeisterei, Prüfdienst), Einstellen/Entlassen durch den Bürgermeister, Kapazität je Abteilung, Gehälter aus der Stadtkasse, Anzeige im HUD | fertig (03.11.2026) |
 | 2 | **Prüfungen**: Aktion `order_inspection {Firma, Art}` (Lohnsteuer, Arbeitssicherheit, Gewerbe, Fahrzeuge), Kapazität des Prüfdienstes, Sperrfrist je Firma, Befunde mit Auflagen und Bußgeld, Fehlverdacht kostet Zustimmung | fertig (04.11.2026): `scripts/economy/inspections.gd`, `test_inspections` |
-| 3 | **Städtischer Auftragspool**: Freigabe, Priorität, Preisrahmen und Vergabeart (Ausschreibung, Rahmenvertrag, Direktvergabe) für die Transportaufträge des Stadtlagers; Anteilsgrenze je Firma, Protokoll, Beschwerde; die Aufträge erscheinen in den Spielerbeobachtungen | offen |
+| 3 | **Städtischer Auftragspool**: Freigabe, Priorität, Preisrahmen und Vergabeart (Ausschreibung, Rahmenvertrag, Direktvergabe) für die Transportaufträge des Stadtlagers; Anteilsgrenze je Firma, Protokoll, Beschwerde; die Aufträge erscheinen in den Spielerbeobachtungen | fertig (04.11.2026): Pool im `CityDepot`, Aktion `set_city_freight`, `test_city_freight_pool` |
 | 4 | **Straßenwartung und Bautrupps**: Zustand je Straßenstück (Verkehr, Frost, Regen), Wirkung auf Tempo und Pannen, Eigenleistung der Straßenmeisterei oder Auftrag an eine Baufirma, sichtbare Bautrupps mit Absperrung | offen |
 
 ## Etappe 1: Entwurf
@@ -41,3 +41,13 @@ Grundregeln: Alle Eingriffe haben **harte Grenzen** (Budget, Kapazität, Sperrfr
 - **Sichtbarkeit**: Ereignisprotokoll der Firma, Kartenaktivität am Betriebshof, Liste der letzten Prüfungen in `obs.pruefungen`.
 - **Beobachtung** des Bürgermeisters: nur öffentlich sichtbare Auffälligkeiten je Firma (mittlerer Fahrzeugzustand, erschöpfte Beschäftigte, Tage seit der letzten Prüfung), keine Akteneinsicht. Die Regel-KI prüft bei Fahrzeugzustand unter 50 % oder mindestens zwei Erschöpften, höchstens eine Prüfung je Runde.
 - Die monatliche Zufallsprüfung der Ertragsteuer (15 %) bleibt unverändert.
+
+## Etappe 3: Städtischer Auftragspool (Umsetzung)
+
+- **Aktion** `set_city_freight {vergabe, firma?, tage?, preisfaktor?, eilig?, reason}` für die Transportaufträge des Stadtlagers. Die **Freigabe** der Beschaffung bleibt `approve_procurement`.
+- **Vergabearten**: `ausschreibung` (offen für alle, wie bisher), `rahmenvertrag` (für 5–60 Tage erhält die Firma bei jedem neuen Auftrag einen Tag Vorrecht, danach ist er offen), `direktvergabe` (nur der nächste Auftrag). Der Partner kennt den Auftrag sofort; die Bezeichnung nennt Vergabeart und Partner, die Exklusivität ist in den Spielerbeobachtungen sichtbar (`exklusiv_fuer_dich`).
+- **Preisrahmen** 0,8–1,3 auf die Vergütung; **eilig** (Priorität) = +15 % und Frist 4 statt 6 Tage.
+- **Grenzen**: Ruf mindestens 40; höchstens 50 % der Vergaben der letzten 30 Tage je Firma (ab 4 Vergaben). Wird die Grenze während eines Rahmenvertrags erreicht, geht der Auftrag offen raus und die Beschwerde der Mitbewerber steht im Protokoll. Nutzt der Partner sein Vorrecht zweimal nicht, wird der Rahmenvertrag gekündigt (Protokoll und Gedächtnis des Amtes).
+- **Beobachtung** `stadtlager.transportpool`: Vergabeart, Partner, Laufzeit, Preisfaktor, Einsätze des Stadtfuhrparks in 30 Tagen, je Firma Ruf, Pünktlichkeit, erledigte Aufträge und Anteil.
+- **Regel-KI**: frühestens 10 Tage nach der letzten Änderung; bei mindestens 4 Einsätzen des Stadtfuhrparks Rahmenvertrag (20 Tage) mit der pünktlichsten Firma (Ruf ≥ 60, mindestens 80 % pünktlich), bei 2 Einsätzen Vergütung +0,1, ohne Einsätze schrittweise zurück auf 1,0.
+- **Grenze**: Firmen bieten nicht selbst auf Stadtaufträge (späterer Ausbau laut Annahme 3).

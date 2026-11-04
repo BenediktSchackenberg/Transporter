@@ -52,6 +52,18 @@ var issues: Array = []                # Ausgaben und Ueberlassungen {day, item, 
 var shortages := {}                   # Artikel -> Tag der letzten Fehlmenge
 var carry := {}                       # Artikel -> Rest des Tagesverbrauchs
 var stats := {"purchases": 0.0, "freight": 0.0, "sold": 0.0, "scrapped": 0, "orders_done": 0, "fallback_trips": 0}
+# Staedtischer Auftragspool (Auftrag 9, Etappe 3): Vergabeart, Preisrahmen und Eile der Transportauftraege, vom Buergermeister gesteuert
+const POOL_MODES := ["ausschreibung", "rahmenvertrag", "direktvergabe"]
+const POOL_PRICE_MIN := 0.8
+const POOL_PRICE_MAX := 1.3
+const POOL_SHARE_MAX := 0.5          # hoechster Anteil einer Firma an den Vergaben der letzten 30 Tage (ab 4 Vergaben)
+const POOL_MIN_REP := 40.0           # Mindestruf fuer Rahmenvertrag/Direktvergabe
+const POOL_FRAME_DAYS := [5, 60]     # Laufzeit eines Rahmenvertrags
+const POOL_FIRST_RIGHT_DAYS := 1.0   # Vorrecht des Vertragspartners; danach ist der Auftrag fuer alle offen
+const POOL_URGENT_BONUS := 0.15
+var pool := {"mode": "ausschreibung", "partner": -1, "until": 0, "price": 1.0, "urgent": false, "misses": 0}
+var awards: Array = []               # {day, cid, contract} - wer hat welchen Stadtauftrag uebernommen
+var fallback_days: Array = []        # Tage, an denen der Stadtfuhrpark einspringen musste
 var ramps := RAMPS_START
 var crew := {}                        # Buerger-ID -> {fatigue, sick_until, rest_until}
 var waits := 0                        # Lkw, die auf eine freie Rampe warten mussten
@@ -384,14 +396,23 @@ func _issue_contract(o: Dictionary) -> void:
 	k.cargo = cargo_of(o.item)
 	k.label = "Stadtlager: %d × %s" % [int(o.qty), CityGoods.get_item(o.item).name]
 	k.qty = _cargo_qty(int(o.qty))
-	k.reward = float(o.freight)
+	k.reward = snappedf(float(o.freight) * float(pool.price) * (1.0 + POOL_URGENT_BONUS if bool(pool.urgent) else 1.0), 1.0)
 	k.status = "open"
 	k.payer = OWNER
 	k.order_ref = str(o.id)
 	k.created = sim.game_min
 	k.offer_until = sim.game_min + GameCalendar.days_to_min(float(FALLBACK_DAYS))
-	k.deadline = sim.game_min + GameCalendar.days_to_min(float(FALLBACK_DAYS + 3))
+	k.deadline = sim.game_min + GameCalendar.days_to_min(float(FALLBACK_DAYS + (1 if bool(pool.urgent) else 3)))
 	k.distance = absi(src.road.x - dst.road.x) + absi(src.road.y - dst.road.y)
+	var partner := pool_partner()
+	o["excl"] = partner
+	if partner >= 0:
+		k.exclusive_for = partner
+		k.exclusive_until = sim.game_min + GameCalendar.days_to_min(POOL_FIRST_RIGHT_DAYS)
+		sim.companies[partner].known[k.id] = true
+		k.label += " – %s %s" % ["Rahmenvertrag" if pool.mode == "rahmenvertrag" else "Direktvergabe", sim.companies[partner].company_name]
+		if pool.mode == "direktvergabe":
+			_pool_reset()      # Direktvergabe gilt nur fuer den naechsten Auftrag
 	sim.contracts[k.id] = k
 	o.contract = k.id
 	o.status = "transport"
@@ -404,11 +425,14 @@ func _watch_contract(o: Dictionary, day: int) -> void:
 		if o.status == "transport":
 			o.status = "unterwegs"
 			_log(o, "Transport übernommen von %s" % sim.company(k.owner).company_name)
+			awards.append({"day": day, "cid": k.owner, "contract": k.id})
+			_pool_miss(o, k.owner)
 		return
 	if k != null and k.status == "open":
 		if sim.game_min <= k.offer_until:
 			return
 		k.status = "expired"       # nicht uebernommen (der Markt markiert dies sonst erst zur naechsten Spielminute)
+		_pool_miss(o, -1)
 	if k != null and k.status == "delivered":
 		return              # Anlieferung wird ueber contract_delivered() gebucht
 	# abgelaufen, gescheitert, storniert oder aus dem Speicher entfernt
@@ -427,6 +451,7 @@ func _fallback_trip(o: Dictionary) -> void:
 	sim.economy.transfer(OWNER, "S0", pay)
 	stats.freight += pay
 	stats.fallback_trips += 1
+	fallback_days.append(_today())
 	o.freight_paid = pay
 	_log(o, "Stadtfuhrpark liefert (Kosten %s)" % Catalog.money(pay))
 	_receive(o, ref)
@@ -877,9 +902,98 @@ func summary() -> Dictionary:
 	return {"bestellungen": by, "kritisch": critical_items().size(), "zonen": zones, "einkauf": stats.purchases, "fracht": stats.freight, "verkauft": stats.sold}
 
 
+# ------------------------------------------------------------------ Staedtischer Auftragspool (Auftrag 9, Etappe 3)
+## Vertragspartner fuer den naechsten Auftrag (-1 = offene Ausschreibung). Laufzeit und Anteilsgrenze werden bei jeder Vergabe geprueft.
+func pool_partner() -> int:
+	if pool.mode == "ausschreibung" or int(pool.partner) < 0 or int(pool.partner) >= sim.companies.size():
+		return -1
+	if pool.mode == "rahmenvertrag" and _today() > int(pool.until):
+		sim.log_event("Rahmenvertrag des Stadtlagers mit %s ist ausgelaufen." % sim.companies[int(pool.partner)].company_name, "info", int(pool.partner))
+		_pool_reset()
+		return -1
+	var share := pool_shares()
+	if float(share.get(int(pool.partner), 0.0)) >= POOL_SHARE_MAX and _recent_awards().size() >= 4:
+		sim.log_event("Beschwerde der Mitbewerber: %s hält schon %d %% der Stadtaufträge – dieser Auftrag wird offen ausgeschrieben." % [
+			sim.companies[int(pool.partner)].company_name, roundi(float(share[int(pool.partner)]) * 100.0)], "warn")
+		return -1
+	return int(pool.partner)
+
+
+func _recent_awards() -> Array:
+	var from := _today() - 30
+	return awards.filter(func(a): return int(a.day) >= from)
+
+
+## Anteile der Firmen an den Vergaben der letzten 30 Tage.
+func pool_shares() -> Dictionary:
+	var rec := _recent_awards()
+	var out := {}
+	for a in rec:
+		out[int(a.cid)] = float(out.get(int(a.cid), 0.0)) + 1.0 / float(rec.size())
+	return out
+
+
+## Der Vertragspartner hat sein Vorrecht nicht genutzt (ein anderer uebernahm oder niemand): nach zwei Faellen endet der Rahmenvertrag.
+func _pool_miss(o: Dictionary, taker: int) -> void:
+	var excl := int(o.get("excl", -1))
+	if excl < 0 or taker == excl:
+		return
+	o["excl"] = -1
+	if pool.mode == "rahmenvertrag" and int(pool.partner) == excl:
+		pool.misses = int(pool.misses) + 1
+		if int(pool.misses) >= 2:
+			sim.log_event("Rahmenvertrag des Stadtlagers mit %s gekündigt: Aufträge zweimal nicht übernommen." % sim.companies[excl].company_name, "warn", excl)
+			sim.mayor.remember("Rahmenvertrag mit %s gekündigt (zweimal nicht übernommen)." % sim.companies[excl].company_name)
+			_pool_reset()
+
+
+func _pool_reset() -> void:
+	pool.mode = "ausschreibung"
+	pool.partner = -1
+	pool.until = 0
+	pool.misses = 0
+
+
+## Steuerung durch den Buergermeister. mode ausschreibung | rahmenvertrag | direktvergabe; price 0,8-1,3; days fuer den Rahmenvertrag.
+func set_pool(mode: String, cid: int, days: int, price: float, urgent: bool) -> Dictionary:
+	if mode not in POOL_MODES:
+		return {"ok": false, "msg": "Vergabeart muss %s sein." % " | ".join(POOL_MODES)}
+	if price < POOL_PRICE_MIN - 0.0001 or price > POOL_PRICE_MAX + 0.0001:
+		return {"ok": false, "msg": "Preisfaktor muss zwischen %.1f und %.1f liegen." % [POOL_PRICE_MIN, POOL_PRICE_MAX]}
+	if mode != "ausschreibung":
+		var c: Company = sim.company(cid)
+		if c == null:
+			return {"ok": false, "msg": "Für %s ist eine gültige Firma nötig." % mode}
+		if c.reputation < POOL_MIN_REP:
+			return {"ok": false, "msg": "%s hat zu wenig Ruf (%.0f, mindestens %.0f) für eine bevorzugte Vergabe." % [c.company_name, c.reputation, POOL_MIN_REP]}
+		if float(pool_shares().get(cid, 0.0)) >= POOL_SHARE_MAX and _recent_awards().size() >= 4:
+			return {"ok": false, "msg": "%s hält schon %d %% der Stadtaufträge der letzten 30 Tage (Grenze %d %%)." % [c.company_name, roundi(float(pool_shares()[cid]) * 100.0), roundi(POOL_SHARE_MAX * 100.0)]}
+		if mode == "rahmenvertrag" and (days < int(POOL_FRAME_DAYS[0]) or days > int(POOL_FRAME_DAYS[1])):
+			return {"ok": false, "msg": "Rahmenvertrag läuft %d bis %d Tage." % [int(POOL_FRAME_DAYS[0]), int(POOL_FRAME_DAYS[1])]}
+	pool = {"mode": mode, "partner": cid if mode != "ausschreibung" else -1, "until": _today() + days if mode == "rahmenvertrag" else 0,
+		"price": snappedf(price, 0.01), "urgent": urgent, "misses": 0, "changed": _today()}
+	var who := "" if mode == "ausschreibung" else " an %s" % sim.companies[cid].company_name
+	var msg := "Stadtaufträge: %s%s%s, Preisfaktor %.2f%s." % [mode, who, (" für %d Tage" % days) if mode == "rahmenvertrag" else "", price, ", eilig (+15 %, kürzere Frist)" if urgent else ""]
+	sim.log_event(msg, "info", cid if mode != "ausschreibung" else -1)
+	return {"ok": true, "msg": msg}
+
+
+func pool_summary() -> Dictionary:
+	var firms: Array = []
+	var shares := pool_shares()
+	for c in sim.companies:
+		var done := int(c.stats.get("completed", 0))
+		firms.append({"firma": c.id, "name": c.company_name, "ruf": snappedf(c.reputation, 1.0), "puenktlich_quote": snappedf(float(c.stats.get("on_time", 0)) / maxf(1.0, float(done)), 0.01),
+			"erledigt": done, "anteil_30_tage": snappedf(float(shares.get(c.id, 0.0)), 0.01)})
+	var from := _today() - 30
+	return {"vergabe": pool.mode, "partner": int(pool.partner), "bis_tag": int(pool.until), "preisfaktor": float(pool.price), "eilig": bool(pool.urgent),
+		"tage_seit_aenderung": _today() - int(pool.get("changed", -100)), "vergaben_30_tage": _recent_awards().size(), "stadtfuhrpark_einsaetze_30_tage": fallback_days.filter(func(x): return int(x) >= from).size(),
+		"grenzen": {"preisfaktor": [POOL_PRICE_MIN, POOL_PRICE_MAX], "anteil_max": POOL_SHARE_MAX, "mindestruf": POOL_MIN_REP, "rahmenvertrag_tage": POOL_FRAME_DAYS}, "firmen": firms}
+
+
 func to_dict() -> Dictionary:
 	return {"ramps": ramps, "crew": crew, "waits": waits, "wait_days": wait_days, "building": building, "port": port, "orders": orders, "offers": offers, "project_res": project_res, "issues": issues.slice(-80), "shortages": shortages, "carry": carry,
-		"stats": stats, "next": [_next_order, _next_offer]}
+		"stats": stats, "next": [_next_order, _next_offer], "pool": pool, "awards": awards.slice(-80), "fallback_days": fallback_days.slice(-40)}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -888,6 +1002,11 @@ func from_dict(d: Dictionary) -> void:
 			_seed_stock()          # Spielstand aus der Zeit vor dem Stadtlager
 		return
 	ramps = int(d.get("ramps", RAMPS_START))
+	var pl: Dictionary = d.get("pool", {})
+	if not pl.is_empty():
+		pool = {"mode": str(pl.mode), "partner": int(pl.partner), "until": int(pl.until), "price": float(pl.price), "urgent": bool(pl.urgent), "misses": int(pl.misses), "changed": int(pl.get("changed", -100))}
+	awards = d.get("awards", []).map(func(a): return {"day": int(a.day), "cid": int(a.cid), "contract": str(a.contract)})
+	fallback_days = d.get("fallback_days", []).map(func(x): return int(x))
 	crew = {}
 	for k in d.get("crew", {}):
 		var c: Dictionary = d.crew[k]

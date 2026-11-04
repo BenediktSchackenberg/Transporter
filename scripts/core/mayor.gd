@@ -30,6 +30,8 @@ const SCHEMA := {
 		"desc": "Im Rathaus Stellen ausschreiben (abteilung verwaltung | bauamt | strassen | pruefdienst; 1-5 je Aktion, höchstens 120 insgesamt). Besetzung zum Monatsende, Gehälter zahlt die Stadtkasse; nur wenn sie sechs Monatsgehälter der neuen Kräfte deckt. Siehe obs.rathaus."},
 	"dismiss_staff": {"params": {"abteilung": "string", "anzahl": "int", "reason": "string"},
 		"desc": "Im Rathaus Stellen streichen (mindestens eine Kraft je Abteilung bleibt). Wirkt zum Monatsende."},
+	"set_city_freight": {"params": {"vergabe": "string", "firma": "int?", "tage": "int?", "preisfaktor": "number?", "eilig": "bool?", "reason": "string"},
+		"desc": "Transportaufträge des Stadtlagers steuern: vergabe ausschreibung (offen für alle) | rahmenvertrag (firma erhält für tage 5–60 je Auftrag einen Tag Vorrecht) | direktvergabe (nur der nächste Auftrag). preisfaktor 0,8–1,3 auf die Vergütung, eilig = +15 % und kürzere Frist. Grenzen: Ruf mindestens 40, höchstens 50 % der Vergaben einer Firma in 30 Tagen. Siehe obs.stadtlager.transportpool."},
 	"order_inspection": {"params": {"firma": "int", "art": "string", "reason": "string"},
 		"desc": "Prüfdienst zu einer Firma schicken (art lohnsteuer | arbeitssicherheit | fahrzeuge). Kapazität je Monat = 2 je Prüfer, Sperrfrist 10 Tage je Firma; Befunde kosten die Firma Bußgeld (an die Stadtkasse), eine Prüfung ohne Befund kostet Zustimmung. Siehe obs.pruefungen."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
@@ -209,7 +211,7 @@ func stadtlager_indicators() -> Dictionary:
 		"personal_verfuegbar": D.available_staff(), "personal_gesamt": D.roster().size(), "kapazitaet_wareneingang_je_tag": D.dock_capacity(), "gabelstapler": D.forklifts(),
 		"laufende_kosten_monat": snappedf(float(D.running_costs().summe), 1.0), "blockaden": D.current_tasks().blockers.slice(0, 4),
 		"vorschlaege": props.slice(0, 8), "kritisch": D.critical_items().slice(0, 6).map(func(i): return {"artikel": i.name, "bestand": i.bestand, "mindestbestand": i.mindestbestand}),
-		"bestellungen_offen": D.open_orders().size() - props.size(), "einkauf_bisher": snappedf(float(D.stats.purchases), 1.0)}
+		"bestellungen_offen": D.open_orders().size() - props.size(), "einkauf_bisher": snappedf(float(D.stats.purchases), 1.0), "transportpool": D.pool_summary()}
 
 
 ## Gruppen staedtischer, freier Grundstuecke (je 32x32 Felder) als Vorschlaege fuer neue Quartiere.
@@ -342,6 +344,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.town_hall.hire(str(a.abteilung), int(a.anzahl), "Bürgermeister %s" % name)
 			"dismiss_staff":
 				res = sim.town_hall.dismiss(str(a.abteilung), int(a.anzahl))
+			"set_city_freight":
+				res = sim.city_depot.set_pool(str(a.vergabe), int(a.get("firma", -1)), int(a.get("tage", 0)), float(a.get("preisfaktor", sim.city_depot.pool.price)), bool(a.get("eilig", false)))
 			"order_inspection":
 				res = sim.inspections.order(int(a.firma), str(a.art), str(a.get("reason", "")))
 			_:

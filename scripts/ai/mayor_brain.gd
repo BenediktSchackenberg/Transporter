@@ -77,6 +77,23 @@ static func decide(ind: Dictionary) -> Dictionary:
 			if int(f.erschoepfte_beschaeftigte) >= 2:
 				actions.append({"action": "order_inspection", "firma": int(f.firma), "art": "arbeitssicherheit", "reason": "%d erschöpfte Beschäftigte bei %s im Einsatz." % [int(f.erschoepfte_beschaeftigte), f.name]})
 				break
+	# 1g) Staedtischer Auftragspool: musste der Stadtfuhrpark oft einspringen, Verguetung anheben (bei vielen Faellen Rahmenvertrag mit der
+	#     zuverlaessigsten Firma); laeuft alles, Verguetung schrittweise zurueck auf 1,0
+	var tp: Dictionary = ind.stadtlager.get("transportpool", {})
+	if actions.size() < MAX_ACTIONS and not tp.is_empty() and tp.vergabe == "ausschreibung" and int(tp.tage_seit_aenderung) >= 10:
+		var fb := int(tp.stadtfuhrpark_einsaetze_30_tage)
+		var price := float(tp.preisfaktor)
+		var best: Dictionary = {}
+		for f in tp.firmen:
+			if float(f.ruf) >= 60.0 and float(f.anteil_30_tage) < 0.4 and int(f.erledigt) >= 5 and (best.is_empty() or float(f.puenktlich_quote) > float(best.puenktlich_quote)):
+				best = f
+		if fb >= 4 and not best.is_empty() and float(best.puenktlich_quote) >= 0.8:
+			actions.append({"action": "set_city_freight", "vergabe": "rahmenvertrag", "firma": int(best.firma), "tage": 20, "preisfaktor": price,
+				"reason": "Stadtfuhrpark musste %d-mal einspringen; %s ist zu %.0f %% pünktlich (Ruf %.0f)." % [fb, best.name, float(best.puenktlich_quote) * 100.0, float(best.ruf)]})
+		elif fb >= 2 and price < 1.3 - 0.001:
+			actions.append({"action": "set_city_freight", "vergabe": "ausschreibung", "preisfaktor": minf(1.3, price + 0.1), "reason": "Stadtfuhrpark musste %d-mal einspringen; Vergütung wird angehoben." % fb})
+		elif fb == 0 and price > 1.0 + 0.001:
+			actions.append({"action": "set_city_freight", "vergabe": "ausschreibung", "preisfaktor": maxf(1.0, price - 0.1), "reason": "Alle Stadtaufträge wurden übernommen; Vergütung wird gesenkt."})
 	# 2) Bedarf bestimmen (Schwellen je Partei)
 	var need := waiting > 0
 	match party:

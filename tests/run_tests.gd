@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_inspections", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -5142,6 +5142,66 @@ func test_inspections() -> void:
 	ok(dec.actions.any(func(a): return a.action == "order_inspection" and int(a.firma) == c1.id and a.art == "fahrzeuge"), "Regelbürgermeister ordnet Fahrzeugprüfung an")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.inspections.records.size() == I.records.size() and s2.inspections.last_day(c.id) == I.last_day(c.id), "Prüfungen nach dem Laden")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_city_freight_pool() -> void:
+	var s := new_sim(2)
+	var D: CityDepot = s.city_depot
+	var c0: Company = s.companies[0]
+	var c1: Company = s.companies[1]
+	var supplier: int = s.city.buildings.filter(func(b): return b.type == "warehouse" and int(b.id) != D.building)[0].id
+	var mk := func() -> Contract:
+		var o: Dictionary = D._new_order(CityGoods.items().keys()[0], 40, "Test")
+		o.loc = supplier
+		o.freight = 200.0
+		o.status = "bestellt"
+		D.orders[o.id] = o
+		D._issue_contract(o)
+		return s.contracts[o.contract]
+	# offene Ausschreibung mit Preisfaktor 1,0
+	var k0: Contract = mk.call()
+	ok(k0.exclusive_for == -1 and absf(k0.reward - 200.0) < 0.01, "Ausschreibung: offen für alle, Vergütung 200")
+	ok(s.mayor.indicators().stadtlager.has("transportpool"), "Bürgermeister sieht den Transportpool")
+	# Preisrahmen und Eile
+	ok(not s.mayor.execute({"action": "set_city_freight", "vergabe": "ausschreibung", "preisfaktor": 1.5, "reason": "Test"}).ok, "Preisfaktor über 1,3 abgelehnt")
+	ok(s.mayor.execute({"action": "set_city_freight", "vergabe": "ausschreibung", "preisfaktor": 1.2, "eilig": true, "reason": "Test"}).ok, "Preisfaktor 1,2 eilig gesetzt")
+	var k1: Contract = mk.call()
+	ok(absf(k1.reward - 200.0 * 1.2 * 1.15) < 1.0 and k1.deadline - k1.created < k0.deadline - k0.created, "eilig: Vergütung %.0f, kürzere Frist" % k1.reward)
+	# Rahmenvertrag: Vorrecht für den Partner, Partner kennt den Auftrag
+	c0.reputation = 30.0
+	ok(not s.mayor.execute({"action": "set_city_freight", "vergabe": "rahmenvertrag", "firma": c0.id, "tage": 20, "preisfaktor": 1.0, "reason": "Test"}).ok, "zu wenig Ruf: kein Rahmenvertrag")
+	c0.reputation = 70.0
+	ok(not D.set_pool("rahmenvertrag", c0.id, 100, 1.0, false).ok, "Laufzeit über 60 Tage abgelehnt")
+	var r := s.mayor.execute({"action": "set_city_freight", "vergabe": "rahmenvertrag", "firma": c0.id, "tage": 20, "preisfaktor": 1.0, "reason": "Test"})
+	ok(r.ok, "Rahmenvertrag: " + str(r.msg).left(80))
+	var k2: Contract = mk.call()
+	ok(k2.exclusive_for == c0.id and k2.exclusive_until > s.game_min and c0.known.has(k2.id) and "Rahmenvertrag" in k2.label, "Partner erhält das Vorrecht: " + k2.label)
+	# Vorrecht zweimal nicht genutzt -> Kündigung
+	for i in 2:
+		var kx: Contract = mk.call()
+		kx.status = "accepted"
+		kx.owner = c1.id
+		D._watch_contract(D.orders[kx.order_ref], D._today())
+	ok(D.pool.mode == "ausschreibung" and s.log_entries.any(func(e): return "gekündigt" in str(e.text)), "nach zwei verpassten Aufträgen wird der Rahmenvertrag gekündigt")
+	# Anteilsgrenze: c1 hat alle Vergaben -> keine Direktvergabe an c1
+	c1.reputation = 80.0
+	for i in 3:
+		D.awards.append({"day": D._today(), "cid": c1.id, "contract": "X%d" % i})
+	ok(not D.set_pool("direktvergabe", c1.id, 0, 1.0, false).ok, "Anteilsgrenze 50 %% verhindert Direktvergabe (Anteil %.0f %%)" % (float(D.pool_shares()[c1.id]) * 100.0))
+	# Direktvergabe gilt nur für den nächsten Auftrag
+	ok(D.set_pool("direktvergabe", c0.id, 0, 1.0, false).ok, "Direktvergabe an Firma 0")
+	var k3: Contract = mk.call()
+	var k4: Contract = mk.call()
+	ok(k3.exclusive_for == c0.id and k4.exclusive_for == -1, "Direktvergabe nur für den nächsten Auftrag")
+	# Regelbürgermeister hebt die Vergütung, wenn der Stadtfuhrpark einspringen musste
+	D.set_pool("ausschreibung", -1, 0, 1.0, false)
+	D.pool.changed = -100
+	D.fallback_days = [D._today(), D._today()]
+	var dec := MayorBrain.decide(s.mayor.indicators())
+	ok(dec.actions.any(func(a): return a.action == "set_city_freight" and float(a.preisfaktor) > 1.0), "Regelbürgermeister hebt die Vergütung an")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.city_depot.awards.size() == D.awards.size() and s2.city_depot.fallback_days.size() == 2, "Pool nach dem Laden")
 	ok(identity_ok(s), "Geld erhalten")
 
 
