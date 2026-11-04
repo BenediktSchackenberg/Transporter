@@ -159,6 +159,18 @@ func estimate(cid: int, typ: String) -> Dictionary:
 			metric = "rent"
 			value = 2.0 * 60.0 * 30.0 * 0.6
 			why = "Mieteinnahmen (2 Einheiten, 60 EUR/Tag, 60 % belegt)"
+		"kran":
+			metric = "transport"
+			var heavy: int = sim.company_vehicles(cid).filter(func(v): return bool(v.spec().get("heavy", false))).size()
+			if heavy > 0:
+				value = 0.04 * w.transport + (0.1 * w.transport * 0.3 if not sim.estate.has_spec(cid, "schwerlast") else 0.0)
+				why = "%d schwere Fahrzeuge: Laden ×0,6, Spezialisierung Schwerlasthof" % heavy
+		"umschlaghalle":
+			metric = "transport"
+			var via: int = sim.operations.summary(cid).get("linien", []).filter(func(l): return bool(l.get("via_depot", false))).size()
+			if via > 0 or n_v >= 4:
+				value = 200.0 * float(via) + 0.02 * w.transport
+				why = "%d Linien über den Hof, %d Fahrzeuge: überdachter Umschlag ×0,7" % [via, n_v]
 		"lager":
 			metric = "transport"
 			var lines: int = sim.operations.summary(cid).get("linien", []).filter(func(l): return bool(l.get("via_depot", false))).size()

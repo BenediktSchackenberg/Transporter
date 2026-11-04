@@ -39,7 +39,26 @@ const FACILITIES := {
 		"drive": true, "nutzen": "Wäsche (wash_vehicle): +5 % Vergütung bei Büros, Restaurants, Villen, Hotels für 1 Tag"},
 	"mietbuero": {"name": "Vermietbare Büroflächen", "w": 3, "h": 2, "cost": 8000.0, "build": 180.0, "mat": 8, "upkeep": 40.0,
 		"max_level": 2, "upgrade": [0.0, 0.0, 6000.0], "drive": false, "nutzen": "2 vermietbare Einheiten je Stufe"},
+	"kran": {"name": "Schwerlastkran", "w": 2, "h": 2, "cost": 12000.0, "build": 150.0, "mat": 8, "upkeep": 60.0, "max_level": 1,
+		"drive": true, "nutzen": "Schwere Fahrzeuge laden am Hof ×0,6; mit Lkw/Sattelzug: Spezialisierung Schwerlasthof (+10 % auf schwere Fracht)"},
+	"umschlaghalle": {"name": "Umschlaghalle (Cross-Dock)", "w": 3, "h": 3, "cost": 14000.0, "build": 180.0, "mat": 12, "upkeep": 70.0, "max_level": 1,
+		"drive": true, "nutzen": "Überdachter Umschlag am Hof ×0,7; mit Laderampe: Spezialisierung Umschlagzentrum (Linien über den Hof)"},
 }
+
+# Spezialisierungen (Auftrag 11, Etappe 3): ergeben sich aus fertigen Gebaeuden und der Flotte; Boni wirken automatisch.
+const SPECIALIZATIONS := {
+	"kuehllogistik": {"name": "Kühllogistik-Hub", "needs": "Kühllager und mindestens 2 Kühltransporter", "bonus": "+10 % Vergütung auf Kühlfracht"},
+	"schwerlast": {"name": "Schwerlasthof", "needs": "Schwerlastkran und mindestens 1 schweres Fahrzeug", "bonus": "+10 % Vergütung auf schwere Fracht"},
+	"umschlag": {"name": "Umschlagzentrum", "needs": "Umschlaghalle und Laderampe", "bonus": "Laden/Entladen am Hof zusätzlich ×0,8"},
+	"tankhof": {"name": "Tankhof", "needs": "Betriebstankstelle und mindestens 5 Fahrzeuge", "bonus": "übernimmt die Notbetankungen der Konkurrenz (Aufpreis als Erlös)"},
+	"werkstatthof": {"name": "Werkstatthof", "needs": "Werkstatt Stufe 2 und ein Mechaniker (Reparieren ≥ 2)", "bonus": "Pannendienst: Abschleppgebühren der Konkurrenz als Erlös"},
+}
+const SPEC_BONUS := 1.10
+# Layout: Gebaeude, die sich beruehren, verstaerken sich (gilt auf dem jeweiligen Grundstueck).
+const LAYOUT := [
+	{"a": "laderampe", "b": ["lager", "kuehllager", "umschlaghalle"], "text": "Laderampe am Lager: Laden/Entladen am Hof ×0,85"},
+	{"a": "pausenraum", "b": ["werkstatt", "buero"], "text": "Pausenraum neben Werkstatt/Büro: Erholung ×2,5 statt ×2"},
+]
 const EXTERNAL_SURCHARGE := 0.4      # Baufirma: +40 % Kosten, Material wird geliefert
 const OPEN_SLOTS := 2                # offene Stellflaeche des leeren Startgrundstuecks
 const OPEN_STORAGE := 20             # offene Lagerflaeche
@@ -130,7 +149,7 @@ func loading_bays(site: int) -> int:
 
 ## Ueberdachte Ladeplaetze: Rampe, Lagerhalle, Kuehllager oder Fahrzeughalle auf dem eigenen Hof (fertig gebaut).
 func is_covered(site: int) -> bool:
-	return facilities.values().any(func(f): return f.plot == _root(site) and f.typ in ["laderampe", "lager", "kuehllager", "garage"] and f.status == "fertig")
+	return facilities.values().any(func(f): return f.plot == _root(site) and f.typ in ["laderampe", "lager", "kuehllager", "garage", "umschlaghalle"] and f.status == "fertig")
 
 
 func has_ramp(site: int) -> bool:
@@ -150,7 +169,81 @@ func on_plot(cid: int, pos: Vector2) -> int:
 
 
 func recovery_factor(w: Worker) -> float:
-	return 2.0 if w.employer >= 0 and on_plot(w.employer, w.pos) >= 0 and done(w.employer, "pausenraum").size() > 0 else 1.0
+	if w.employer < 0 or on_plot(w.employer, w.pos) < 0 or done(w.employer, "pausenraum").is_empty():
+		return 1.0
+	return 2.5 if layout_active(w.employer, 1) else 2.0
+
+
+# ------------------------------------------------------------------ Spezialisierungen und Layout (Auftrag 11, Etappe 3)
+func _touch(f: Dictionary, g: Dictionary) -> bool:
+	return f.plot == g.plot and Rect2i(int(f.x), int(f.y), int(f.w), int(f.h)).grow(1).intersects(Rect2i(int(g.x), int(g.y), int(g.w), int(g.h)))
+
+
+## Ist die Layout-Regel i bei dieser Firma erfuellt (zwei fertige, sich beruehrende Gebaeude)?
+func layout_active(cid: int, i: int, site: int = -1) -> bool:
+	var rule: Dictionary = LAYOUT[i]
+	for f in done(cid, rule.a):
+		if site >= 0 and f.plot != _root(site):
+			continue
+		for t in rule.b:
+			for g in done(cid, t):
+				if _touch(f, g):
+					return true
+	return false
+
+
+func layout_bonuses(cid: int) -> Array:
+	var out: Array = []
+	for i in LAYOUT.size():
+		if layout_active(cid, i):
+			out.append(LAYOUT[i].text)
+	return out
+
+
+func has_spec(cid: int, id: String) -> bool:
+	var fleet: Array = sim.company_vehicles(cid)
+	match id:
+		"kuehllogistik":
+			return not done(cid, "kuehllager").is_empty() and fleet.filter(func(v): return bool(v.spec().get("refrigerated", false))).size() >= 2
+		"schwerlast":
+			return not done(cid, "kran").is_empty() and fleet.any(func(v): return bool(v.spec().get("heavy", false)))
+		"umschlag":
+			return not done(cid, "umschlaghalle").is_empty() and not done(cid, "laderampe").is_empty()
+		"tankhof":
+			return not done(cid, "tankstelle").is_empty() and fleet.size() >= 5
+		"werkstatthof":
+			return done(cid, "werkstatt").any(func(f): return int(f.level) >= 2) and sim.personnel.employed(cid).any(func(w): return int(w.skills.get("reparieren", 0)) >= 2)
+	return false
+
+
+func specializations(cid: int) -> Array:
+	return SPECIALIZATIONS.keys().filter(func(id): return has_spec(cid, id))
+
+
+## Fortschritt je Spezialisierung fuer die Beobachtung: erreicht oder was noch fehlt.
+func spec_overview(cid: int) -> Array:
+	return SPECIALIZATIONS.keys().map(func(id): return {"id": id, "name": SPECIALIZATIONS[id].name, "erreicht": has_spec(cid, id),
+		"voraussetzung": SPECIALIZATIONS[id].needs, "bonus": SPECIALIZATIONS[id].bonus})
+
+
+## Ladezeitfaktor am eigenen Hof aus Kran, Umschlaghalle, Spezialisierung Umschlag und Layout.
+func yard_loading_factor(site: int, v: FleetVehicle) -> float:
+	if site < 0 or not is_plot(site):
+		return 1.0
+	var cid: int = plots[_root(site)].owner
+	if cid < 0:
+		return 1.0
+	var f := 1.0
+	var here := func(typ): return done(cid, typ).any(func(x): return x.plot == _root(site))
+	if bool(v.spec().get("heavy", false)) and here.call("kran"):
+		f *= 0.6
+	if here.call("umschlaghalle"):
+		f *= 0.7
+		if has_spec(cid, "umschlag"):
+			f *= 0.8
+	if layout_active(cid, 0, site):
+		f *= 0.85
+	return f
 
 
 func security_bonus(v: FleetVehicle) -> float:
@@ -667,6 +760,8 @@ func summary(cid: int) -> Dictionary:
 			"kuehllager": storage_cap(root, true) if is_plot(root) else 0, "werkstattplaetze": workshop_bays(cid), "tank_l": int(c.fuel_cap)},
 		"bauvorschlaege_xy_rot": suggestions(cid, root) if is_plot(root) else {},
 		"bauberater": sim.yard.summary(cid) if is_plot(root) else {},
+		"spezialisierungen": spec_overview(cid), "layout_boni": layout_bonuses(cid),
+		"layout_regeln": LAYOUT.map(func(r): return r.text),
 		"baustoffe_stadtlager": sim.city_depot.material_offer(10),
 		"vermietung": {"angebote": listings.keys().filter(func(id): return listings[id].owner == cid),
 			"interessenten": tenants.values().filter(func(t): return t.status == "interessiert" and facilities.get(t.office, {}).get("owner", -1) == cid),

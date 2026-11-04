@@ -553,11 +553,28 @@ func break_vehicle(v: FleetVehicle, reason: String) -> void:
 func _emergency_refuel(v: FleetVehicle, payer: Company) -> void:
 	var liters := 60.0
 	var cost := liters * resources.emergency_fuel_price() + 80.0
-	payer.ledger.book("fuel", -cost, true, "Notbetankung " + v.display_name(), game_min)
+	var hub := _service_company("tankhof", payer.id)
+	if hub != null:
+		# Tankhof eines Konkurrenten faehrt die Notbetankung: Treibstoff zum Grundpreis an den Markt, Aufpreis und Pauschale als Erloes des Tankhofs
+		var base := liters * ResourceMarket.FUEL_BASE_PRICE
+		payer.ledger.book("fuel", -base, true, "Notbetankung " + v.display_name(), game_min)
+		payer.ledger.book("trade_expense", -(cost - base), true, "Notbetankung durch %s" % hub.company_name, game_min, "C0")
+		hub.ledger.book("trade_income", cost - base, true, "Notbetankung für %s" % payer.company_name, game_min, "C0")
+		notify(hub.id, "Tankhof: Notbetankung für %s (%s Erlös)." % [payer.company_name, Catalog.money(cost - base)])
+	else:
+		payer.ledger.book("fuel", -cost, true, "Notbetankung " + v.display_name(), game_min)
 	payer.fuel = minf(payer.fuel_cap, payer.fuel + liters)
 	v.no_fuel = false
 	notify(payer.id, "Notbetankung für %s: %s (Tank war leer). Besser rechtzeitig Treibstoff bestellen (schedule_refueling)." % [v.display_name(), Catalog.money(cost)])
 	resume_vehicle(v)
+
+
+## Firma (nicht `except`) mit der Spezialisierung, die einen Dienst fuer andere anbietet (erste aktive nach ID).
+func _service_company(spec: String, except: int) -> Company:
+	for c in companies:
+		if c.id != except and c.is_active() and estate.has_spec(c.id, spec):
+			return c
+	return null
 
 
 ## Nach Reparatur vor Ort: unterbrochene Taetigkeit fortsetzen.
@@ -575,7 +592,14 @@ func resume_vehicle(v: FleetVehicle) -> void:
 
 func tow_to_workshop(v: FleetVehicle) -> void:
 	var c := companies[v.owner]
-	c.ledger.book("repairs", -Catalog.TOW_FEE, true, "Abschleppen " + v.display_name(), game_min)
+	var hof := _service_company("werkstatthof", c.id)
+	if hof != null:
+		# Pannendienst eines Konkurrenten mit Werkstatthof schleppt ab: Gebuehr als Erloes dieser Firma
+		c.ledger.book("trade_expense", -Catalog.TOW_FEE, true, "Abschleppen %s durch %s" % [v.display_name(), hof.company_name], game_min, "C0")
+		hof.ledger.book("trade_income", Catalog.TOW_FEE, true, "Pannendienst für %s" % c.company_name, game_min, "C0")
+		notify(hof.id, "Werkstatthof: Pannendienst für %s (%s)." % [c.company_name, Catalog.money(Catalog.TOW_FEE)])
+	else:
+		c.ledger.book("repairs", -Catalog.TOW_FEE, true, "Abschleppen " + v.display_name(), game_min)
 	var ws := nearest_building_of("workshop", v.tile())
 	v.state = "idle"   # Ladung und geplante Stopps bleiben erhalten
 	route(v, ws.road, "to_workshop")
@@ -612,6 +636,7 @@ func _on_arrival(v: FleetVehicle) -> void:
 			var site := Logistics.store_site(str(st.ort))
 			if site >= 0 and estate.is_plot(site) and estate.has_ramp(site):
 				v.timer *= 0.6   # Laderampe statt offener Ladeflaeche
+			v.timer *= estate.yard_loading_factor(site, v)   # Kran, Umschlaghalle, Spezialisierung, Layout (Auftrag 11)
 			v.timer *= wx.loading_factor(site >= 0 and estate.is_plot(site) and estate.is_covered(site))   # Wetter im Freien
 			if v.state == "loading":
 				bark(v.owner, "laden")
@@ -681,6 +706,8 @@ func deliver_contract(v: FleetVehicle, k: Contract) -> void:
 	var pay := k.reward * factor
 	if v.clean_until > game_min and city.building(k.dropoff).type in ["restaurant", "office", "villa", "hotel"]:
 		pay *= 1.05   # gepflegtes Fahrzeug
+	if (k.needs_cold and estate.has_spec(k.owner, "kuehllogistik")) or (k.needs_heavy and estate.has_spec(k.owner, "schwerlast")):
+		pay *= Estate.SPEC_BONUS   # Spezialisierung des Hofs (Auftrag 11)
 	c.ledger.book("transport", pay, true, "Auftrag %s geliefert" % k.id, game_min, k.payer)   # payer "" = Markt
 	k.status = "delivered"
 	k.paid = pay

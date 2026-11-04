@@ -2063,6 +2063,34 @@
    "mask": false,
    "w": 2,
    "h": 3
+  },
+  "fac_kran": {
+   "anchor": [
+    130,
+    88
+   ],
+   "size": [
+    260,
+    218
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2
+  },
+  "fac_umschlaghalle": {
+   "anchor": [
+    194,
+    58
+   ],
+   "size": [
+    388,
+    252
+   ],
+   "lit": false,
+   "mask": true,
+   "w": 3,
+   "h": 3
   }
  },
  "vehicles": {

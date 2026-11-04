@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -2501,6 +2501,87 @@ func test_yard_empire_core() -> void:
 	Y.factors["stellplatz"] = {"f": 0.8, "n": 1}
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.yard.records.size() == Y.records.size() and s2.yard.factors.has("stellplatz"), "Investitionsakten und Faktoren nach dem Laden")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_yard_specializations() -> void:
+	var s := new_sim(2)
+	var E: Estate = s.estate
+	var c0 := s.companies[0]
+	var c1 := s.companies[1]
+	c0.ledger.inject(200000.0)
+	var site: int = c0.depots[0]
+	var mk := func(typ: String, x: int, y: int) -> Dictionary:
+		var spec: Dictionary = Estate.FACILITIES[typ]
+		var f := {"id": "T%s%d" % [typ, x], "owner": 0, "plot": site, "typ": typ, "x": x, "y": y, "w": int(spec.w), "h": int(spec.h), "rot": 0, "level": 1,
+			"status": "fertig", "progress": 1.0, "work": 1.0, "mat_needed": 0, "mat": 0, "mode": "extern", "invest": 0.0, "target_level": 1, "mat_contract": "", "busy": [],
+			"material_due": 0.0, "condition": 100.0}
+		E.facilities[f.id] = f
+		return f
+	ok(Estate.FACILITIES.has("kran") and Estate.FACILITIES.has("umschlaghalle"), "neue Gebäude: Schwerlastkran, Umschlaghalle")
+	ok(E.specializations(0).is_empty(), "ohne Gebäude keine Spezialisierung")
+	# Kuehllogistik: Kuehllager + 2 Kuehltransporter -> +10 % auf Kuehlfracht
+	mk.call("kuehllager", 0, 0)
+	var cell: Vector2i = s.city.building(site).road
+	for i in 2:
+		s.add_vehicle(0, "reefer", 0.0, cell)
+	ok(E.has_spec(0, "kuehllogistik"), "Kühllogistik-Hub mit Kühllager und 2 Kühltransportern")
+	ok(E.spec_overview(0).size() == Estate.SPECIALIZATIONS.size(), "Übersicht aller Spezialisierungen für die Beobachtung")
+	# Schwerlast: Kran + schweres Fahrzeug
+	var v0: FleetVehicle = s.company_vehicles(0)[0]
+	v0.model = "truck"
+	mk.call("kran", 4, 0)
+	ok(E.has_spec(0, "schwerlast"), "Schwerlasthof mit Kran und Lkw")
+	ok(is_equal_approx(E.yard_loading_factor(site, v0), 0.6), "Kran: schwere Fahrzeuge laden am Hof ×0,6")
+	var k := Contract.new()
+	k.id = "TK1"
+	k.cargo = "maschinenteile"
+	k.qty = 2
+	k.owner = 0
+	k.reward = 1000.0
+	k.needs_heavy = true
+	k.pickup = s.city.buildings[1].id
+	k.dropoff = s.city.buildings[2].id
+	k.deadline = s.game_min + 10000.0
+	s.contracts[k.id] = k
+	var rev0: float = c0.ledger.totals.get("transport", 0.0)
+	s.deliver_contract(v0, k)
+	ok(absf(float(c0.ledger.totals.get("transport", 0.0)) - rev0 - 1100.0) < 0.01, "schwere Fracht +10 %% (%.0f)" % (float(c0.ledger.totals.get("transport", 0.0)) - rev0))
+	# Umschlag + Layout: Rampe am Lager
+	mk.call("umschlaghalle", 0, 4)
+	mk.call("laderampe", 3, 4)
+	ok(E.has_spec(0, "umschlag") and E.layout_active(0, 0, site), "Umschlagzentrum und Layout-Bonus Rampe an der Halle")
+	var lf := E.yard_loading_factor(site, v0)
+	ok(is_equal_approx(lf, 0.6 * 0.7 * 0.8 * 0.85), "Ladefaktor am Hof kombiniert (%.3f)" % lf)
+	ok(not E.layout_bonuses(0).is_empty() and E.summary(0).has("spezialisierungen"), "Layout-Boni und Spezialisierungen in der Beobachtung")
+	# Pausenraum neben Werkstatt: Erholung x2,5
+	mk.call("pausenraum", 8, 0)
+	mk.call("werkstatt", 10, 0)
+	ok(E.layout_active(0, 1), "Pausenraum berührt die Werkstatt")
+	# Tankhof: Notbetankung eines Konkurrenten bringt Erloes
+	while s.company_vehicles(0).size() < 5:
+		s.add_vehicle(0, "van", 0.0, cell)
+	mk.call("tankstelle", 12, 4)
+	var fleet_ok: bool = s.company_vehicles(0).size() >= 5
+	if fleet_ok:
+		ok(E.has_spec(0, "tankhof"), "Tankhof ab 5 Fahrzeugen")
+	var v1: FleetVehicle = s.company_vehicles(1)[0]
+	var hub := s._service_company("tankhof", 1)
+	if hub != null:
+		var inc0: float = c0.ledger.totals.get("trade_income", 0.0)
+		s._emergency_refuel(v1, c1)
+		ok(float(c0.ledger.totals.get("trade_income", 0.0)) > inc0, "Tankhof verdient an der Notbetankung der Konkurrenz")
+	else:
+		ok(not fleet_ok, "kein Tankhof ohne 5 Fahrzeuge")
+	# Werkstatthof: Pannendienst
+	for f in E.done(0, "werkstatt"):
+		f.level = 2
+	var mech: Worker = s.personnel.employed(0)[0]
+	mech.skills["reparieren"] = 2
+	ok(E.has_spec(0, "werkstatthof"), "Werkstatthof mit Werkstatt Stufe 2 und Mechaniker")
+	var inc1: float = c0.ledger.totals.get("trade_income", 0.0)
+	s.tow_to_workshop(v1)
+	ok(absf(float(c0.ledger.totals.get("trade_income", 0.0)) - inc1 - Catalog.TOW_FEE) < 0.01, "Pannendienst: Abschleppgebühr der Konkurrenz als Erlös")
 	ok(identity_ok(s), "Geld erhalten")
 
 

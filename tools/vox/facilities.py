@@ -1,4 +1,4 @@
-"""Betriebseinrichtungen des Firmengrundstuecks (15 Typen). Jede Funktion liefert ein Modell fuer die Grundflaeche
+"""Betriebseinrichtungen des Firmengrundstuecks (17 Typen). Jede Funktion liefert ein Modell fuer die Grundflaeche
 (w x h Felder) in der Ausrichtung 0; die gedrehte Variante entsteht in build_iso.py (Grundriss h x w)."""
 import random
 
@@ -10,7 +10,7 @@ from commercial import sign_board
 T = 32
 SIZES = {"buero": (2, 2), "disposition": (2, 2), "stellplatz": (2, 2), "garage": (2, 2), "werkstatt": (3, 2), "laderampe": (2, 1),
          "lager": (3, 3), "kuehllager": (3, 2), "tankstelle": (2, 2), "ladepunkt": (1, 2), "pausenraum": (2, 2),
-         "schulung": (2, 2), "sicherheit": (1, 1), "waschplatz": (2, 2), "mietbuero": (3, 2)}
+         "schulung": (2, 2), "sicherheit": (1, 1), "waschplatz": (2, 2), "mietbuero": (3, 2), "kran": (2, 2), "umschlaghalle": (3, 3)}
 
 
 def _floor(m, W, H, a="concrete", b="concrete2", size=8):
@@ -228,3 +228,43 @@ def _mietbuero(m, W, H, rng):
     tree(m, 10, 56, 1, kind="round", size=0.7, rng=rng)
     bench(m, 30, 58, 1)
     lamp_post(m, 86, 56, 1, h=14)
+
+
+def _kran(m, W, H, rng):
+    """Schwerlastkran: Portalkran auf Schienen ueber einem Lagerplatz mit Stahltraegern und Kiste am Haken."""
+    slab(m, 2, 2, W - 2, H - 2, paving_fn(6, "concrete", "concrete2"))
+    for y in (6, H - 8):                                   # Kranschienen
+        m.box(2, y, 1, W - 2, y + 2, 2, M("steel_dark"))
+    for x in (6, W - 10):                                  # Portalstuetzen
+        for y in (6, H - 8):
+            m.box(x, y, 2, x + 4, y + 2, 44, M("yellow"))
+            for z in range(6, 44, 8):
+                m.box(x, y, z, x + 4, y + 2, z + 1, M("black"))
+    for y in (6, H - 8):                                   # zwei Bruckentraeger ueber den Stuetzen
+        m.box(6, y, 44, W - 6, y + 2, 48, M("yellow"))
+        m.box(6, y, 48, W - 6, y + 2, 49, M("orange"))
+    for x in (28, 34):                                     # Katzbahn quer zwischen den Traegern
+        m.box(x, 8, 46, x + 2, H - 8, 48, M("yellow"))
+    m.box(26, 24, 40, 38, 38, 46, M("steel"))              # Laufkatze
+    m.box(31, 30, 18, 33, 32, 38, M("black"))              # Seil
+    m.box(26, 26, 10, 38, 36, 18, M("wood"))               # Kiste am Haken
+    for k in range(3):                                     # Stahltraeger am Boden
+        m.box(10, 40 + k * 4, 1, 54, 43 + k * 4, 3 + k, M("steel"))
+    m.box(W - 8, H - 8, 50, W - 4, H - 4, 53, M("lamp_red"))
+
+
+def _umschlaghalle(m, W, H, rng):
+    """Umschlaghalle (Cross-Dock): offene Halle auf Stuetzen mit Toren auf beiden Laengsseiten und Paletten im Umschlag."""
+    slab(m, 0, 0, W, H, paving_fn(8, "asph_a", "asph_b"))
+    m.box(10, 10, 1, W - 10, H - 10, 6, M("concrete2"))   # Rampenebene
+    for x in range(10, W - 9, 14):                         # Stuetzen
+        for y in (10, H - 12):
+            m.box(x, y, 6, x + 2, y + 2, 34, M("steel"))
+    gable_roof(m, 8, 8, W - 8, H - 8, 34, ridge="x", tile="zinc", tile2="steel_dark", pitch=0.25, overhang=1)
+    for k in range(4):                                     # Tore auf beiden Seiten
+        _roll(m, 14 + k * 18, 10, H - 10, 14, 6)
+        m.box(14 + k * 18, H - 8, 1, 24 + k * 18, H - 6, 6, M("yellow"))
+    for k in range(3):                                     # Paletten im Umschlag
+        pallet_stack(m, 20 + k * 22, 30, 6, h=1 + k % 2, goods="wood" if k % 2 else "fabric_w")
+        pallet_stack(m, 24 + k * 22, 52, 6, h=2, goods="fabric_w")
+    m.box(W - 18, 4, 1, W - 4, 8, 3, M("road_white"))
