@@ -14,8 +14,8 @@ Grundregeln: Alle Eingriffe haben **harte Grenzen** (Budget, Kapazität, Sperrfr
 
 | # | Inhalt | Stand |
 |---|---|---|
-| 1 | **Rathaus mit Personal**: sichtbares Gebäude, Abteilungen (Verwaltung, Bauamt, Straßenmeisterei, Prüfdienst), Einstellen/Entlassen durch den Bürgermeister, Kapazität je Abteilung, Gehälter aus der Stadtkasse, Anzeige im HUD | in Arbeit |
-| 2 | **Prüfungen**: Aktion `order_inspection {Firma, Art}` (Lohnsteuer, Arbeitssicherheit, Gewerbe, Fahrzeuge), Kapazität des Prüfdienstes, Sperrfrist je Firma, Befunde mit Auflagen und Bußgeld, Fehlverdacht kostet Zustimmung | offen |
+| 1 | **Rathaus mit Personal**: sichtbares Gebäude, Abteilungen (Verwaltung, Bauamt, Straßenmeisterei, Prüfdienst), Einstellen/Entlassen durch den Bürgermeister, Kapazität je Abteilung, Gehälter aus der Stadtkasse, Anzeige im HUD | fertig (03.11.2026) |
+| 2 | **Prüfungen**: Aktion `order_inspection {Firma, Art}` (Lohnsteuer, Arbeitssicherheit, Gewerbe, Fahrzeuge), Kapazität des Prüfdienstes, Sperrfrist je Firma, Befunde mit Auflagen und Bußgeld, Fehlverdacht kostet Zustimmung | fertig (04.11.2026): `scripts/economy/inspections.gd`, `test_inspections` |
 | 3 | **Städtischer Auftragspool**: Freigabe, Priorität, Preisrahmen und Vergabeart (Ausschreibung, Rahmenvertrag, Direktvergabe) für die Transportaufträge des Stadtlagers; Anteilsgrenze je Firma, Protokoll, Beschwerde; die Aufträge erscheinen in den Spielerbeobachtungen | offen |
 | 4 | **Straßenwartung und Bautrupps**: Zustand je Straßenstück (Verkehr, Frost, Regen), Wirkung auf Tempo und Pannen, Eigenleistung der Straßenmeisterei oder Auftrag an eine Baufirma, sichtbare Bautrupps mit Absperrung | offen |
 
@@ -33,3 +33,11 @@ Grundregeln: Alle Eingriffe haben **harte Grenzen** (Budget, Kapazität, Sperrfr
 
 - Das Rathaus erhält zunächst kein eigenes Sprite; Mitarbeiterfiguren am Gebäude und der Bautrupp kommen mit Etappe 4.
 - Keine Gehaltsverhandlung, keine Krankheit/Erschöpfung der Verwaltungskräfte.
+
+## Etappe 2: Prüfungen (Umsetzung)
+
+- **Aktion** `order_inspection {firma, art, reason}`; Arten `lohnsteuer` (offene Ertragsteuer über die vorhandene Steuerprüfung, dazu nicht gezahlte Löhne mit 10 % Zuschlag), `arbeitssicherheit` (Beschäftigte mit Ermüdung ab 90 oder Gesundheit unter 50: 300 EUR je Person), `fahrzeuge` (Zustand unter 40 %: 400 EUR je Fahrzeug). Eine eigene Art „Gewerbe“ gibt es nicht; Lohnrückstände gehören zur Lohnsteuerprüfung.
+- **Grenzen**: 2 Prüfungen je Prüfer und Monat, Sperrfrist 10 Spieltage je Firma, Bußgeld höchstens das Bargeld (Buchung `fines` an die Stadtkasse). Prüfung ohne Befund: −1,5 Punkte Zustimmung.
+- **Sichtbarkeit**: Ereignisprotokoll der Firma, Kartenaktivität am Betriebshof, Liste der letzten Prüfungen in `obs.pruefungen`.
+- **Beobachtung** des Bürgermeisters: nur öffentlich sichtbare Auffälligkeiten je Firma (mittlerer Fahrzeugzustand, erschöpfte Beschäftigte, Tage seit der letzten Prüfung), keine Akteneinsicht. Die Regel-KI prüft bei Fahrzeugzustand unter 50 % oder mindestens zwei Erschöpften, höchstens eine Prüfung je Runde.
+- Die monatliche Zufallsprüfung der Ertragsteuer (15 %) bleibt unverändert.

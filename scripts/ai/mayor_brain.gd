@@ -65,6 +65,18 @@ static func decide(ind: Dictionary) -> Dictionary:
 		actions.append({"action": "hire_staff", "abteilung": "bauamt", "anzahl": 2,
 			"reason": "%d Anträge in der Warteschlange bei %.1f Bearbeitungspunkten je Tag; das Bauamt wird verstärkt." % [int(ind.bauantraege.warteschlange), float(ind.bauantraege.kapazitaet_je_tag)]})
 		notes.append("Bauamt verstärkt")
+	# 1f) Pruefdienst: nur bei sichtbaren Auffaelligkeiten (schlechte Fahrzeuge, erschoepfte Beschaeftigte), hoechstens eine Pruefung je Runde
+	var insp: Dictionary = ind.get("pruefungen", {})
+	if actions.size() < MAX_ACTIONS and int(insp.get("frei_diesen_monat", 0)) > 0:
+		for f in insp.firmen:
+			if bool(f.gesperrt):
+				continue
+			if float(f.fahrzeugzustand_mittel) < 50.0:
+				actions.append({"action": "order_inspection", "firma": int(f.firma), "art": "fahrzeuge", "reason": "Fahrzeuge von %s im Mittel nur %.0f %% Zustand." % [f.name, float(f.fahrzeugzustand_mittel)]})
+				break
+			if int(f.erschoepfte_beschaeftigte) >= 2:
+				actions.append({"action": "order_inspection", "firma": int(f.firma), "art": "arbeitssicherheit", "reason": "%d erschöpfte Beschäftigte bei %s im Einsatz." % [int(f.erschoepfte_beschaeftigte), f.name]})
+				break
 	# 2) Bedarf bestimmen (Schwellen je Partei)
 	var need := waiting > 0
 	match party:

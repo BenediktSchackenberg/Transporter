@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_inspections", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -5092,6 +5092,57 @@ func test_dispatch_agent() -> void:
 	ok(ag2.fallback_active and not ag2.covers(0), "nach wiederholten Fehlern Ersatzmodus: Spieler-Disposition übernimmt wieder")
 	ag.queue_free()
 	ag2.queue_free()
+
+
+func test_inspections() -> void:
+	var s := new_sim(2)
+	var I: Inspections = s.inspections
+	var c: Company = s.companies[0]
+	var c1: Company = s.companies[1]
+	ok(I.capacity() >= 1 and I.capacity() == maxi(1, s.town_hall.staff("pruefdienst") * Inspections.PER_INSPECTOR), "Kapazität aus dem Prüfdienst (%d je Monat)" % I.capacity())
+	ok(s.mayor.indicators().has("pruefungen"), "Bürgermeister sieht die Prüfungen")
+	# Fahrzeugprüfung mit Befund: Bußgeld an die Stadtkasse, Firma sieht den Eintrag
+	var v = s.vehicles[c.vehicle_ids[0]]
+	v.condition = 20.0
+	var p0 := float(s.economy.accounts.P0)
+	var cash := c.ledger.cash
+	var r := s.mayor.execute({"action": "order_inspection", "firma": c.id, "art": "fahrzeuge", "reason": "Test"})
+	ok(r.ok and not r.befund.findings.is_empty() and absf(float(r.befund.fine) - Inspections.FINE_VEHICLE) < 0.01, "Befund mit Bußgeld: " + str(r.msg).left(90))
+	ok(absf(cash - c.ledger.cash - Inspections.FINE_VEHICLE) < 0.01 and float(s.economy.accounts.P0) >= p0 + Inspections.FINE_VEHICLE - 0.01, "Bußgeld geht an die Stadtkasse")
+	ok(s.log_entries.any(func(e): return int(e.company) == c.id and str(e.text).begins_with("Prüfung")), "Prüfung steht im Protokoll der Firma")
+	# Sperrfrist je Firma
+	var r2 := s.mayor.execute({"action": "order_inspection", "firma": c.id, "art": "arbeitssicherheit", "reason": "Test"})
+	ok(not r2.ok and "Sperrfrist" in str(r2.msg), "Sperrfrist: " + str(r2.msg).left(80))
+	# Fehlverdacht kostet Zustimmung
+	for vid in c1.vehicle_ids:
+		s.vehicles[vid].condition = 100.0
+	var appr: float = s.mayor.approval
+	var r3 := s.mayor.execute({"action": "order_inspection", "firma": c1.id, "art": "fahrzeuge", "reason": "Test"})
+	ok(r3.ok and r3.befund.findings.is_empty() and s.mayor.approval < appr, "Prüfung ohne Befund senkt die Zustimmung (%.1f -> %.1f)" % [appr, s.mayor.approval])
+	# Arbeitssicherheit
+	s.game_min += GameCalendar.days_to_min(float(Inspections.BLOCK_DAYS + 1))
+	var ws: Array = s.personnel.employed(c.id)
+	ws[0].fatigue = 95.0
+	var r4 := I.order(c.id, "arbeitssicherheit")
+	ok(r4.ok and not r4.befund.findings.is_empty(), "Arbeitssicherheit: " + str(r4.msg).left(90))
+	# Kapazität erschöpft
+	I.used[I._month()] = I.capacity()
+	s.game_min += GameCalendar.days_to_min(float(Inspections.BLOCK_DAYS + 1))
+	ok(not I.order(c1.id, "lohnsteuer").ok, "ohne freie Kapazität keine Prüfung")
+	ok(not I.order(c1.id, "unbekannt").ok and not I.order(99, "fahrzeuge").ok, "unbekannte Art/Firma abgelehnt")
+	# Regelbürgermeister prüft bei schlechten Fahrzeugen
+	I.used.clear()
+	for vid in c.vehicle_ids:
+		s.vehicles[vid].condition = 100.0
+	for w in ws:
+		w.fatigue = 0.0
+	for vid in c1.vehicle_ids:
+		s.vehicles[vid].condition = 30.0
+	var dec := MayorBrain.decide(s.mayor.indicators())
+	ok(dec.actions.any(func(a): return a.action == "order_inspection" and int(a.firma) == c1.id and a.art == "fahrzeuge"), "Regelbürgermeister ordnet Fahrzeugprüfung an")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.inspections.records.size() == I.records.size() and s2.inspections.last_day(c.id) == I.last_day(c.id), "Prüfungen nach dem Laden")
+	ok(identity_ok(s), "Geld erhalten")
 
 
 func test_town_hall() -> void:

@@ -30,6 +30,8 @@ const SCHEMA := {
 		"desc": "Im Rathaus Stellen ausschreiben (abteilung verwaltung | bauamt | strassen | pruefdienst; 1-5 je Aktion, höchstens 120 insgesamt). Besetzung zum Monatsende, Gehälter zahlt die Stadtkasse; nur wenn sie sechs Monatsgehälter der neuen Kräfte deckt. Siehe obs.rathaus."},
 	"dismiss_staff": {"params": {"abteilung": "string", "anzahl": "int", "reason": "string"},
 		"desc": "Im Rathaus Stellen streichen (mindestens eine Kraft je Abteilung bleibt). Wirkt zum Monatsende."},
+	"order_inspection": {"params": {"firma": "int", "art": "string", "reason": "string"},
+		"desc": "Prüfdienst zu einer Firma schicken (art lohnsteuer | arbeitssicherheit | fahrzeuge). Kapazität je Monat = 2 je Prüfer, Sperrfrist 10 Tage je Firma; Befunde kosten die Firma Bußgeld (an die Stadtkasse), eine Prüfung ohne Befund kostet Zustimmung. Siehe obs.pruefungen."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
 		"desc": "Bauantrag der Bürgermeisterebene entscheiden: decision genehmigen | bedingungen | ablehnen | rueckfrage. Ablehnung nur wegen benannter fehlender Voraussetzungen; ohne Mängel muss genehmigt werden."},
 }
@@ -162,6 +164,7 @@ func indicators() -> Dictionary:
 		"entwicklungsvorschlaege": quarter_candidates(3),
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),
 		"rathaus": sim.town_hall.summary(),
+		"pruefungen": sim.inspections.summary(),
 		"bevoelkerungsmodell": sim.population.summary(),
 		"sicherheit_gesundheit": sim.safety.summary(),
 		"gedaechtnis": notes.slice(-6),
@@ -339,6 +342,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.town_hall.hire(str(a.abteilung), int(a.anzahl), "Bürgermeister %s" % name)
 			"dismiss_staff":
 				res = sim.town_hall.dismiss(str(a.abteilung), int(a.anzahl))
+			"order_inspection":
+				res = sim.inspections.order(int(a.firma), str(a.art), str(a.get("reason", "")))
 			_:
 				res = {"ok": false, "msg": "Unbekannte Aktion."}
 	if act != "wait":
