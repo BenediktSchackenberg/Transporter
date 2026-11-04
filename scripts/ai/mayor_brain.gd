@@ -69,8 +69,8 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var insp: Dictionary = ind.get("pruefungen", {})
 	if actions.size() < MAX_ACTIONS and int(insp.get("frei_diesen_monat", 0)) > 0:
 		for f in insp.firmen:
-			if bool(f.gesperrt):
-				continue
+			if bool(f.gesperrt) or (int(f.tage_seit_pruefung) >= 0 and int(f.tage_seit_pruefung) < 30):
+				continue   # Regel: dieselbe Firma hoechstens alle 30 Tage
 			if float(f.fahrzeugzustand_mittel) < 50.0:
 				actions.append({"action": "order_inspection", "firma": int(f.firma), "art": "fahrzeuge", "reason": "Fahrzeuge von %s im Mittel nur %.0f %% Zustand." % [f.name, float(f.fahrzeugzustand_mittel)]})
 				break
@@ -94,6 +94,45 @@ static func decide(ind: Dictionary) -> Dictionary:
 			actions.append({"action": "set_city_freight", "vergabe": "ausschreibung", "preisfaktor": minf(1.3, price + 0.1), "reason": "Stadtfuhrpark musste %d-mal einspringen; Vergütung wird angehoben." % fb})
 		elif fb == 0 and price > 1.0 + 0.001:
 			actions.append({"action": "set_city_freight", "vergabe": "ausschreibung", "preisfaktor": maxf(1.0, price - 0.1), "reason": "Alle Stadtaufträge wurden übernommen; Vergütung wird gesenkt."})
+	# 1h) Strassenwartung: Abschnitte unter 45 % -> freie eigene Bautrupps, sonst Baufirma bei genug Mitteln (hoechstens zwei je Runde)
+	var st: Dictionary = ind.get("strassen", {})
+	if not st.is_empty():
+		var crews_free := int(st.bautrupps_frei)
+		var firms_free := int(st.baufirmen_frei)
+		var cash := float(ind.haushalt.verfuegbar)
+		var given := 0
+		for w in st.schlechteste:
+			if actions.size() >= MAX_ACTIONS or given >= 2 or float(w.zustand) >= 45.0:
+				break
+			if crews_free > 0 and cash > float(st.kosten.eigen) * 2.0:
+				actions.append({"action": "repair_road", "abschnitt": w.abschnitt, "ausfuehrung": "eigen", "reason": "Abschnitt %s nur noch %.0f %%; Bautrupp der Straßenmeisterei frei." % [w.abschnitt, float(w.zustand)]})
+				crews_free -= 1
+				cash -= float(st.kosten.eigen)
+			elif firms_free > 0 and float(w.zustand) < 30.0 and cash > float(st.kosten.firma) * 3.0:
+				actions.append({"action": "repair_road", "abschnitt": w.abschnitt, "ausfuehrung": "firma", "reason": "Abschnitt %s nur noch %.0f %%, alle eigenen Trupps im Einsatz; Baufirma beauftragt." % [w.abschnitt, float(w.zustand)]})
+				firms_free -= 1
+				cash -= float(st.kosten.firma)
+			else:
+				break
+			given += 1
+	# 1i) Polizei: viele unaufgeklaerte Diebstaehle -> zwei Stellen mehr (nur mit Reserve)
+	var sg: Dictionary = ind.get("sicherheit_gesundheit", {})
+	if actions.size() < MAX_ACTIONS and not sg.is_empty() and int(sg.get("gesucht", 0)) >= 6 and float(ind.haushalt.verfuegbar) > 80000.0 			and int(ind.arbeit.offene_stellen_nach_arbeitgeber.get("polizei", 0)) == 0:
+		actions.append({"action": "set_public_staff", "bereich": "polizei", "aenderung": 2, "reason": "%d Tatverdächtige auf freiem Fuß bei %d Polizeikräften." % [int(sg.gesucht), int(sg.polizei_personal)]})
+	# 1j) Weiterbildung foerdern, solange viele lange Arbeitslose und offene Stellen da sind; Foerderung beenden, wenn das Geld knapp wird
+	var bm: Dictionary = ind.get("bevoelkerungsmodell", {})
+	if actions.size() < MAX_ACTIONS and not bm.is_empty():
+		var support := int(bm.get("weiterbildung_foerderung_prozent", 0))
+		var jobless_share := 1.0 - float(ind.arbeit.quote)
+		if support == 0 and jobless_share > 0.12 and int(ind.arbeit.offene_stellen) > 10 and float(ind.haushalt.verfuegbar) > 100000.0:
+			actions.append({"action": "support_training", "foerderung_prozent": 50, "reason": "%.0f %% ohne Arbeit bei %d offenen Stellen; Weiterbildung öffnet Fachkraftstellen." % [jobless_share * 100.0, int(ind.arbeit.offene_stellen)]})
+		elif support > 0 and (float(ind.haushalt.verfuegbar) < 40000.0 or jobless_share < 0.07):
+			actions.append({"action": "support_training", "foerderung_prozent": 0, "reason": "Förderung beendet (Kasse %s, Arbeitslosenanteil %.0f %%)." % [Catalog.money(float(ind.haushalt.verfuegbar)), jobless_share * 100.0]})
+	# 1k) Stadtmarketing bei Leerstand und offenen Stellen, wenn keine Kampagne laeuft
+	var bv: Dictionary = ind.bevoelkerung
+	if actions.size() < MAX_ACTIONS and int(bv.get("monat", 0)) > int(bv.get("stadtmarketing_bis_monat", -1)) and float(housing.leerstand) > 0.06 \
+			and int(ind.arbeit.offene_stellen) > 20 and float(ind.haushalt.verfuegbar) > 80000.0:
+		actions.append({"action": "city_marketing", "budget": 10000.0, "reason": "Leerstand %.1f %% und %d offene Stellen: Zuzug werben." % [float(housing.leerstand) * 100.0, int(ind.arbeit.offene_stellen)]})
 	# 2) Bedarf bestimmen (Schwellen je Partei)
 	var need := waiting > 0
 	match party:

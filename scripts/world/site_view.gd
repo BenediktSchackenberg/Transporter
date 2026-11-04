@@ -43,6 +43,25 @@ func update_view(delta: float) -> void:
 		if e.sig != sig:
 			e.sig = sig
 			_configure(e.node, pr)
+	# Bautrupps der Strassenwartung (RoadCare): Absperrung um die Arbeitsstelle, Trupp mit Gerät
+	for j in sim.road_care.jobs.values():
+		if j.status != "laufend":
+			continue
+		var key := "road:" + str(j.id)
+		seen[key] = true
+		if not _nodes.has(key):
+			var n := SiteNode.new()
+			add_child(n)
+			_nodes[key] = {"node": n, "sig": "road"}
+			var r := Rect2(float(j.cell.x) * 32.0 - 16.0, float(j.cell.y) * 32.0 - 16.0, 64.0, 64.0)
+			n.position = Iso.to_screen(r.end)
+			n.parcel_rect = r
+			n.foot = Rect2(r.position, Vector2.ZERO)
+			n.origin = r.end
+			n.state = 0
+			n.crew = sim.road_care.crew_of(j)
+			n.seed_key = hash(j.id)
+			n.queue_redraw()
 	for id in _nodes.keys():
 		if not seen.has(id):
 			_nodes[id].node.queue_free()
@@ -115,6 +134,8 @@ func _height(pr: Dictionary) -> float:
 ## Baustelle unter dem Mauszeiger (Weltposition in Simulationskoordinaten) -> Bauvorhaben-ID oder "".
 func pick(world: Vector2) -> String:
 	for id in _nodes:
+		if str(id).begins_with("road:"):
+			continue
 		var pr: Dictionary = sim.construction.projects[id]
 		var p: Dictionary = sim.parcels.parcel(pr.parcel)
 		var r := Rect2(float(p.rect[0]) * 32.0, float(p.rect[1]) * 32.0, float(p.rect[2]) * 32.0, float(p.rect[3]) * 32.0)

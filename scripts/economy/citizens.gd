@@ -30,6 +30,7 @@ var sim: Simulation
 var people: Array = []             # {id, name, employer ("" = arbeitslos), wage, jobless_months}
 var base_cap := {}                 # Arbeitgeber -> Grundbedarf an Stellen
 var cap := {}                      # aktueller Bedarf
+var start_cap := {}                # Grundbedarf beim Start (Grenze fuer Stellenaenderungen des Buergermeisters)
 var stats := {"changes": 0, "layoffs": 0, "hires": 0, "quits": 0, "wages": 0.0, "tax": 0.0, "benefits": 0.0}
 var last := {}                     # Kennzahlen des letzten Monatsabschlusses
 var _next := 1
@@ -100,6 +101,7 @@ func generate() -> void:
 	for k in EMPLOYERS:
 		base_cap[k] = roundi(jobs * float(EMPLOYERS[k].share))
 	cap = base_cap.duplicate()
+	start_cap = base_cap.duplicate()
 	for i in total - real:
 		var first: Array = Residents.FEMALE if rng.randi() % 2 == 0 else Residents.MALE
 		people.append({"id": _next, "name": "%s %s" % [first[rng.randi() % first.size()],
@@ -381,7 +383,7 @@ func summary() -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"people": people, "base_cap": base_cap, "cap": cap, "stats": stats, "next": _next}
+	return {"people": people, "base_cap": base_cap, "cap": cap, "start_cap": start_cap, "stats": stats, "next": _next}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -395,5 +397,9 @@ func from_dict(d: Dictionary) -> void:
 		base_cap[k] = int(base_cap[k])
 	for k in cap:
 		cap[k] = int(cap[k])
+	start_cap = {}
+	var sc: Dictionary = d.get("start_cap", base_cap)
+	for k in sc:
+		start_cap[k] = int(sc[k])
 	stats = d.get("stats", stats)
 	_next = int(d.get("next", 1))

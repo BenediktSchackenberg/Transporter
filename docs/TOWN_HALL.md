@@ -17,7 +17,7 @@ Grundregeln: Alle Eingriffe haben **harte Grenzen** (Budget, Kapazität, Sperrfr
 | 1 | **Rathaus mit Personal**: sichtbares Gebäude, Abteilungen (Verwaltung, Bauamt, Straßenmeisterei, Prüfdienst), Einstellen/Entlassen durch den Bürgermeister, Kapazität je Abteilung, Gehälter aus der Stadtkasse, Anzeige im HUD | fertig (03.11.2026) |
 | 2 | **Prüfungen**: Aktion `order_inspection {Firma, Art}` (Lohnsteuer, Arbeitssicherheit, Gewerbe, Fahrzeuge), Kapazität des Prüfdienstes, Sperrfrist je Firma, Befunde mit Auflagen und Bußgeld, Fehlverdacht kostet Zustimmung | fertig (04.11.2026): `scripts/economy/inspections.gd`, `test_inspections` |
 | 3 | **Städtischer Auftragspool**: Freigabe, Priorität, Preisrahmen und Vergabeart (Ausschreibung, Rahmenvertrag, Direktvergabe) für die Transportaufträge des Stadtlagers; Anteilsgrenze je Firma, Protokoll, Beschwerde; die Aufträge erscheinen in den Spielerbeobachtungen | fertig (04.11.2026): Pool im `CityDepot`, Aktion `set_city_freight`, `test_city_freight_pool` |
-| 4 | **Straßenwartung und Bautrupps**: Zustand je Straßenstück (Verkehr, Frost, Regen), Wirkung auf Tempo und Pannen, Eigenleistung der Straßenmeisterei oder Auftrag an eine Baufirma, sichtbare Bautrupps mit Absperrung | offen |
+| 4 | **Straßenwartung und Bautrupps**: Zustand je Straßenstück (Verkehr, Frost, Regen), Wirkung auf Tempo und Pannen, Eigenleistung der Straßenmeisterei oder Auftrag an eine Baufirma, sichtbare Bautrupps mit Absperrung | fertig (04.11.2026): `scripts/economy/road_care.gd`, `test_road_care` |
 
 ## Etappe 1: Entwurf
 
@@ -51,3 +51,24 @@ Grundregeln: Alle Eingriffe haben **harte Grenzen** (Budget, Kapazität, Sperrfr
 - **Beobachtung** `stadtlager.transportpool`: Vergabeart, Partner, Laufzeit, Preisfaktor, Einsätze des Stadtfuhrparks in 30 Tagen, je Firma Ruf, Pünktlichkeit, erledigte Aufträge und Anteil.
 - **Regel-KI**: frühestens 10 Tage nach der letzten Änderung; bei mindestens 4 Einsätzen des Stadtfuhrparks Rahmenvertrag (20 Tage) mit der pünktlichsten Firma (Ruf ≥ 60, mindestens 80 % pünktlich), bei 2 Einsätzen Vergütung +0,1, ohne Einsätze schrittweise zurück auf 1,0.
 - **Grenze**: Firmen bieten nicht selbst auf Stadtaufträge (späterer Ausbau laut Annahme 3).
+
+## Etappe 4: Straßenwartung und Bautrupps (Umsetzung)
+
+- **Abschnitte** zu 16 × 16 Feldern (große Karte rund 1 000), Startzustand 70–100 %. Täglicher Verschleiß: 0,005 Punkte Grundverschleiß + 0,04 × Verkehr (Fahrzeugsekunden im Verhältnis zum Mittel, höchstens das Vierfache), bei Frost doppelt, bei Regen +0,05.
+- **Wirkung** (mild, Annahme 2): unter 50 % bis zu 30 % langsamer und bis zu doppelt so viele Pannen (bei Zustand 0).
+- **Aktion** `repair_road {abschnitt, ausfuehrung, reason}`: `eigen` = Straßenmeisterei (1 500 EUR Material, 3 Tage, je 4 Kräfte ein Bautrupp), `firma` = Baufirma (8 000 EUR, 2 Tage, höchstens 2 gleichzeitig). Kosten gehen von der Stadtkasse an die Wirtschaft (S0). Während der Arbeit hat die Arbeitsstelle eine Spur weniger (`TrafficFlow`); nach Abschluss 100 %.
+- **Karte**: Absperrung und Bautrupp mit Gerät (Lkw, bei der Baufirma auch Bagger) an der Arbeitsstelle (`SiteView`), Eintrag in der KI-Aktivität.
+- **Beobachtung** `strassen`: mittlerer Zustand, Zahl unter 50 %, die sechs schlechtesten Abschnitte, freie Trupps, laufende Arbeiten, Kosten.
+- **Regel-KI**: Abschnitte unter 45 % mit freien eigenen Trupps, unter 30 % auch mit einer Baufirma; höchstens zwei Aufträge je Runde.
+- **Messung** (`tests/probe_residents.gd`, Seed 21, Regel-Bürgermeister alle 2 Spieltage, 150 Tage): mittlerer Zustand 85 → 77 %, kein Abschnitt unter 50 %, daher noch keine Reparatur; der erste Entwurf (8 × 8, 0,03 + 0,25) verfiel viel zu schnell (1 618 Abschnitte unter 50 %) und wurde verworfen. Prüfungen: 18 in 150 Tagen bei vier Firmen.
+
+## Weitere Hebel des Bürgermeisters (04.11.2026)
+
+- `set_public_staff {bereich: polizei | gesundheit, aenderung: -5..+5}`: Stellen bei Polizei (Aufklärung) oder Ärzten/Pflege (Behandlungskapazität); mindestens 2, höchstens das Dreifache des Startbestands; mehr Stellen nur mit sechs Monatsgehältern Reserve. Regel-KI: +2 Polizei bei mindestens 6 Tatverdächtigen auf freiem Fuß, wenn keine Polizeistelle offen ist.
+- `support_training {foerderung_prozent: 0..100}`: bis zu dreimal so viele Kursbeginne der Weiterbildung, 400 EUR × Förderanteil je Kursbeginn an den Bildungsträger; endet von selbst, wenn die Kasse nicht reicht. Regel-KI: 50 % bei über 12 % ohne Arbeit und mehr als 10 offenen Stellen, Ende bei knapper Kasse oder unter 7 %.
+- `city_marketing {budget: 5 000..30 000}`: einmalige Ausgabe, drei Monate +1 % Zuzug je 1 000 EUR; keine zweite Kampagne während der Laufzeit. Regel-KI: 10 000 EUR bei über 6 % Leerstand und mehr als 20 offenen Stellen.
+- Test `test_mayor_levers`.
+
+## Beobachtung aus den Messläufen
+
+- Der Stadtfuhrpark muss oft einspringen (25-mal in 150 Tagen), auch wenn der Regel-Bürgermeister die Vergütung auf 1,3 anhebt: Die Firmen der Regel-KI nehmen Stadtaufträge kaum an. Das lag schon vor dem Auftragspool vor; Ursache noch nicht untersucht.

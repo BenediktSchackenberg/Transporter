@@ -1,6 +1,6 @@
 extends SceneTree
 ## Messung (kein Pass/Fail): Bevoelkerung ueber viele Spieltage (Auftrag 10, Etappe 2). Je 30 Tage: Einwohner, Beschaeftigung,
-## Glueck, Bildung, Weiterbildung, Verhalten des letzten Monats, Wohnungslose, Stadtkasse.
+## Glueck, Bildung, Weiterbildung, Verhalten des letzten Monats, Wohnungslose, Stadtkasse, Strassenzustand, Pruefungen, Transportpool.
 ##   Godot_console.exe --headless --path . -s tests/probe_residents.gd -- --days=360
 func _initialize() -> void:
 	var days := 360
@@ -16,6 +16,7 @@ func _initialize() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1
 	var last_day := -1
+	var mayor_day := -1
 	var step := 0
 	while GameCalendar.day_of(s.game_min) < days:
 		if step % 200 == 0:
@@ -26,13 +27,17 @@ func _initialize() -> void:
 		s.step(0.1)
 		step += 1
 		var day: int = GameCalendar.day_of(s.game_min)
+		if day != mayor_day and day % 2 == 0:   # Regel-Buergermeister wie MayorAgent (alle 45 Echtzeit-s, je nach Tempo 1-6 Spieltage)
+			mayor_day = day
+			for a in MayorBrain.decide(s.mayor.indicators()).actions:
+				s.mayor.execute(a)
 		if day != last_day and day % 30 == 0:
 			last_day = day
 			var P: Population = s.population
 			var edu := 0.0
 			for p in s.citizens.people:
 				edu += float(p.education)
-			print("Tag %d  Einw %d  Besch %.3f  Glueck %.1f  Bildung %.2f  Kurs %d  Verhalten %s  ohneWhg %d  P0 %d  Warteliste %d" % [day, s.citizens.population(),
+			print("Tag %d  Einw %d  Besch %.3f  Glueck %.1f  Bildung %.2f  Kurs %d  Verhalten %s  ohneWhg %d  P0 %d  Warteliste %d  Strassen %.1f/%d<50/%d Rep  Pruef %d  Pool %s" % [day, s.citizens.population(),
 				s.citizens.employment_rate(), P.mean_need("glueck"), edu / maxf(1.0, s.citizens.people.size()), P.in_course_count(), str(P.behavior),
-				s.housing.homeless_count(), int(s.economy.accounts.get("P0", 0.0)), int(s.mayor.waiting)])
+				s.housing.homeless_count(), int(s.economy.accounts.get("P0", 0.0)), int(s.mayor.waiting), s.road_care.mean_condition(), s.road_care.summary().unter_50_prozent, int(s.road_care.stats.repairs), s.inspections.records.size(), "%s/%.1f/%d" % [s.city_depot.pool.mode, float(s.city_depot.pool.price), s.city_depot.fallback_days.size()]])
 	quit()

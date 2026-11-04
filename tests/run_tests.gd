@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -5138,6 +5138,7 @@ func test_inspections() -> void:
 		w.fatigue = 0.0
 	for vid in c1.vehicle_ids:
 		s.vehicles[vid].condition = 30.0
+	s.game_min += GameCalendar.days_to_min(31.0)   # Regel: dieselbe Firma hoechstens alle 30 Tage
 	var dec := MayorBrain.decide(s.mayor.indicators())
 	ok(dec.actions.any(func(a): return a.action == "order_inspection" and int(a.firma) == c1.id and a.art == "fahrzeuge"), "Regelbürgermeister ordnet Fahrzeugprüfung an")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
@@ -5202,6 +5203,117 @@ func test_city_freight_pool() -> void:
 	ok(dec.actions.any(func(a): return a.action == "set_city_freight" and float(a.preisfaktor) > 1.0), "Regelbürgermeister hebt die Vergütung an")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.city_depot.awards.size() == D.awards.size() and s2.city_depot.fallback_days.size() == 2, "Pool nach dem Laden")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_road_care() -> void:
+	var s := new_sim(2)
+	var R: RoadCare = s.road_care
+	ok(R.cond.size() > 10 and R.cond.values().all(func(c): return float(c) >= 70.0 and float(c) <= 100.0), "%d Straßenabschnitte, Startzustand 70–100 %%" % R.cond.size())
+	ok(s.mayor.indicators().has("strassen"), "Bürgermeister sieht die Straßen")
+	var seg: Vector2i = R.cond.keys()[0]
+	var cell: Vector2i = R.cells[seg]
+	ok(s.city.is_road(cell) and RoadCare.seg_of(cell) == seg, "Arbeitsort liegt auf einer Straße im Abschnitt")
+	# Verschleiss: Verkehr und Frost
+	var other: Vector2i = R.cond.keys()[1]
+	R.cond[seg] = 80.0
+	R.cond[other] = 80.0
+	R.usage[seg] = 100.0
+	R.usage[other] = 1.0
+	s.wx.cur["temp"] = 5.0
+	R.on_day(R._day + 1)
+	var busy_loss := 80.0 - float(R.cond[seg])
+	ok(busy_loss > 80.0 - float(R.cond[other]) and busy_loss > 0.0, "viel befahrener Abschnitt verschleißt schneller (%.2f gegenüber %.2f)" % [busy_loss, 80.0 - float(R.cond[other])])
+	R.cond[other] = 80.0
+	s.wx.cur["temp"] = -3.0
+	R.on_day(R._day + 1)
+	ok(80.0 - float(R.cond[other]) >= RoadCare.DECAY_BASE * RoadCare.FROST - 0.0001, "Frost verdoppelt den Verschleiß")
+	s.wx.cur["temp"] = 5.0
+	# Wirkung auf Tempo und Pannen
+	R.cond[seg] = 20.0
+	ok(R.factor(cell) < 1.0 and R.factor(cell) >= 1.0 - RoadCare.SLOW_MAX and R.breakdown_factor(cell) > 1.0, "schlechte Straße: Tempo %.2f, Pannenfaktor %.2f" % [R.factor(cell), R.breakdown_factor(cell)])
+	R.cond[seg] = 90.0
+	ok(R.factor(cell) == 1.0 and R.breakdown_factor(cell) == 1.0, "gute Straße ohne Wirkung")
+	# Instandsetzung in Eigenleistung: Kosten an S0, Spur gesperrt, nach 3 Tagen 100 %
+	R.cond[seg] = 30.0
+	var p0 := float(s.economy.accounts.P0)
+	var cap0: int = s.traffic_flow.capacity_of(cell)
+	var r := s.mayor.execute({"action": "repair_road", "abschnitt": RoadCare.seg_id(seg), "ausfuehrung": "eigen", "reason": "Test"})
+	ok(r.ok and absf(p0 - float(s.economy.accounts.P0) - RoadCare.MODES.eigen.cost) < 0.01, "Auftrag an die Straßenmeisterei: " + str(r.msg).left(80))
+	ok(R.under_works(cell) and s.traffic_flow.capacity_of(cell) == maxi(1, cap0 - 1), "während der Arbeit eine Spur weniger (%d -> %d)" % [cap0, s.traffic_flow.capacity_of(cell)])
+	ok(not R.order(RoadCare.seg_id(seg), "firma").ok, "kein zweiter Auftrag am selben Abschnitt")
+	ok(not R.order("A999_999", "eigen").ok and not R.order(RoadCare.seg_id(other), "anders").ok, "unbekannter Abschnitt/Ausführung abgelehnt")
+	for i in R.crews() - 1:
+		R.order(RoadCare.seg_id(R.cond.keys()[2 + i]), "eigen")
+	ok(not R.order(RoadCare.seg_id(other), "eigen").ok and R.order(RoadCare.seg_id(other), "firma").ok, "alle Trupps im Einsatz -> Baufirma (%d Trupps)" % R.crews())
+	var crew := R.crew_of(R.jobs[r.ref])
+	ok(int(crew.workers) >= 3 and not crew.gear.is_empty(), "Bautrupp für die Karte: %d Personen" % int(crew.people))
+	var day: int = R._day
+	R.on_day(day + 3)
+	ok(float(R.cond[seg]) == 100.0 and not R.under_works(cell) and R.jobs[r.ref].status == "fertig", "nach 3 Tagen instand gesetzt, Spur wieder frei")
+	# Speichern und Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(absf(float(s2.road_care.cond[seg]) - 100.0) < 0.01 and s2.road_care.jobs.size() == R.jobs.size() and s2.road_care.works.size() == R.works.size(), "Straßenzustand und Arbeiten nach dem Laden")
+	# Regelbürgermeister lässt den schlechtesten Abschnitt instand setzen
+	var s3 := new_sim(2)
+	var seg3: Vector2i = s3.road_care.cond.keys()[5]
+	s3.road_care.cond[seg3] = 25.0
+	var dec := MayorBrain.decide(s3.mayor.indicators())
+	ok(dec.actions.any(func(a): return a.action == "repair_road" and a.abschnitt == RoadCare.seg_id(seg3)), "Regelbürgermeister setzt Abschnitt %s instand" % RoadCare.seg_id(seg3))
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_mayor_levers() -> void:
+	var s := new_sim(2)
+	var M: Mayor = s.mayor
+	var Z: Citizens = s.citizens
+	# Polizei- und Gesundheitspersonal
+	var pol0 := int(Z.base_cap.polizei)
+	var r := M.execute({"action": "set_public_staff", "bereich": "polizei", "aenderung": 3, "reason": "Test"})
+	ok(r.ok and int(Z.base_cap.polizei) == pol0 + 3 and int(Z.cap.polizei) == pol0 + 3, "Polizei %d -> %d: %s" % [pol0, pol0 + 3, str(r.msg).left(60)])
+	ok(not M.execute({"action": "set_public_staff", "bereich": "polizei", "aenderung": 9, "reason": "Test"}).ok, "höchstens ±5 je Beschluss")
+	ok(not M.execute({"action": "set_public_staff", "bereich": "rathaus", "aenderung": 1, "reason": "Test"}).ok, "nur Polizei und Gesundheit")
+	ok(not M.execute({"action": "set_public_staff", "bereich": "gesundheit", "aenderung": -int(Z.base_cap.gesundheit), "reason": "Test"}).ok, "mindestens 2 Stellen bleiben")
+	Z.on_month(1)
+	ok(Z.employed_count("polizei") > pol0, "neue Polizeikräfte zum Monatsende eingestellt (%d)" % Z.employed_count("polizei"))
+	# Weiterbildung fördern: mehr Kursbeginne, Zuschuss an den Bildungsträger
+	var P: Population = s.population
+	var learners: Array = Z.people.filter(func(p): return p.employer == "" and int(p.education) < 3)
+	for p in learners:
+		p.erase("course_until")
+		p.jobless_months = 3
+	P.behave(5)
+	var base_starts := int(P.behavior.weiterbildung_beginn)
+	for p in learners:
+		p.erase("course_until")
+	ok(M.execute({"action": "support_training", "foerderung_prozent": 100, "reason": "Test"}).ok and not P.set_training_support(150).ok, "Förderung 0–100 %")
+	var p0 := float(s.economy.accounts.P0)
+	P.behave(5)
+	var starts := int(P.behavior.weiterbildung_beginn)
+	ok(starts > base_starts, "Förderung: mehr Kursbeginne (%d statt %d)" % [starts, base_starts])
+	ok(absf(p0 - float(s.economy.accounts.P0) - starts * Population.TRAINING_COST) < 0.01, "Zuschuss %.0f EUR je Kursbeginn aus der Stadtkasse" % Population.TRAINING_COST)
+	# Stadtmarketing: Kosten, mehr Zuzug, keine zweite Kampagne
+	var m := GameCalendar.month_of(s.game_min)
+	p0 = float(s.economy.accounts.P0)
+	ok(not M.execute({"action": "city_marketing", "budget": 50000.0, "reason": "Test"}).ok, "Budget über 30 000 abgelehnt")
+	ok(M.execute({"action": "city_marketing", "budget": 20000.0, "reason": "Test"}).ok and absf(p0 - float(s.economy.accounts.P0) - 20000.0) < 0.01, "Kampagne kostet 20 000")
+	ok(not M.execute({"action": "city_marketing", "budget": 10000.0, "reason": "Test"}).ok, "keine zweite Kampagne während der Laufzeit")
+	var w0: int = M.waiting
+	M.stock_units = M.occupied_units()   # kein freier Wohnraum: Zuzug bleibt auf der Warteliste
+	M.on_month(m)
+	var with_boost: int = M.waiting - w0
+	M.marketing_until = -1
+	var w1: int = M.waiting
+	M.on_month(m)
+	ok(with_boost > M.waiting - w1, "Stadtmarketing erhöht den Zuzug (%d statt %d)" % [with_boost, M.waiting - w1])
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.population.training_support == 100 and int(s2.citizens.base_cap.polizei) == pol0 + 3 and int(s2.citizens.start_cap.polizei) == int(Z.start_cap.polizei), "Hebel nach dem Laden")
+	# Regelbürgermeister
+	var ind := M.indicators()
+	ind.sicherheit_gesundheit.gesucht = 10
+	ind.arbeit.offene_stellen_nach_arbeitgeber.polizei = 0
+	ind.haushalt.verfuegbar = 200000.0
+	ok(MayorBrain.decide(ind).actions.any(func(a): return a.action == "set_public_staff" and a.bereich == "polizei"), "Regelbürgermeister stockt die Polizei auf")
 	ok(identity_ok(s), "Geld erhalten")
 
 

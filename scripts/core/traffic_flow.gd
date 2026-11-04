@@ -66,6 +66,8 @@ func next_to_building(cell: Vector2i) -> bool:
 
 
 func _under_works(cell: Vector2i) -> bool:
+	if sim.road_care.under_works(cell):
+		return true   # Strassenwartung (RoadCare): Bautrupp belegt eine Spur
 	for m in measures.values():
 		if m.status == "im_bau" and m.kind == "ausbau" and m.cell == cell:
 			return true

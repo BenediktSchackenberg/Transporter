@@ -8,7 +8,7 @@ extends RefCounted
 const DEPTS := {
 	"verwaltung": {"label": "Verwaltung", "share": 0.45, "aufgabe": "Bauanträge und allgemeine Verwaltung"},
 	"bauamt": {"label": "Bauamt", "share": 0.20, "aufgabe": "Bauanträge und Baugenehmigungen"},
-	"strassen": {"label": "Straßenmeisterei", "share": 0.25, "aufgabe": "Straßenwartung (Etappe 4)"},
+	"strassen": {"label": "Straßenmeisterei", "share": 0.25, "aufgabe": "Straßenwartung (ein Bautrupp je 4 Kräfte)"},
 	"pruefdienst": {"label": "Prüfdienst", "share": 0.10, "aufgabe": "Prüfungen bei Firmen (2 je Prüfer und Monat)"},
 }
 const MAX_PER_ACTION := 5

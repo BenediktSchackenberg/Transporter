@@ -32,6 +32,14 @@ const SCHEMA := {
 		"desc": "Im Rathaus Stellen streichen (mindestens eine Kraft je Abteilung bleibt). Wirkt zum Monatsende."},
 	"set_city_freight": {"params": {"vergabe": "string", "firma": "int?", "tage": "int?", "preisfaktor": "number?", "eilig": "bool?", "reason": "string"},
 		"desc": "Transportaufträge des Stadtlagers steuern: vergabe ausschreibung (offen für alle) | rahmenvertrag (firma erhält für tage 5–60 je Auftrag einen Tag Vorrecht) | direktvergabe (nur der nächste Auftrag). preisfaktor 0,8–1,3 auf die Vergütung, eilig = +15 % und kürzere Frist. Grenzen: Ruf mindestens 40, höchstens 50 % der Vergaben einer Firma in 30 Tagen. Siehe obs.stadtlager.transportpool."},
+	"repair_road": {"params": {"abschnitt": "string", "ausfuehrung": "string", "reason": "string"},
+		"desc": "Straßenabschnitt instand setzen (abschnitt aus obs.strassen.schlechteste, z. B. A12_7). ausfuehrung eigen = Straßenmeisterei (1 500 EUR, 3 Tage, je 4 Kräfte ein Bautrupp) | firma = Baufirma (8 000 EUR, 2 Tage, höchstens 2 gleichzeitig). Unter 50 % Zustand fahren Fahrzeuge langsamer und haben mehr Pannen; während der Arbeit ist eine Spur gesperrt."},
+	"set_public_staff": {"params": {"bereich": "string", "aenderung": "int", "reason": "string"},
+		"desc": "Stellen bei bereich polizei (Aufklärung von Diebstählen) oder gesundheit (Ärzte und Pflege, Behandlungskapazität) ändern: aenderung -5..+5, mindestens 2 Stellen, höchstens das Dreifache des Startbestands. Mehr Stellen nur, wenn die verfügbare Stadtkasse sechs Monatsgehälter deckt; besetzt wird zum Monatsende. Siehe obs.sicherheit_gesundheit."},
+	"support_training": {"params": {"foerderung_prozent": "int", "reason": "string"},
+		"desc": "Weiterbildung Arbeitsloser fördern (0–100 %): erhöht die Zahl der Kursbeginne bis auf das Dreifache; je Kursbeginn zahlt die Stadt 400 EUR × Förderanteil an den Bildungsträger. Siehe obs.bevoelkerungsmodell."},
+	"city_marketing": {"params": {"budget": "number", "reason": "string"},
+		"desc": "Stadtmarketing (5 000–30 000 EUR, einmalig): mehr Zuzug von Haushalten für 3 Monate (+1 % je 1 000 EUR). Nur sinnvoll bei freiem Wohnraum und offenen Stellen."},
 	"order_inspection": {"params": {"firma": "int", "art": "string", "reason": "string"},
 		"desc": "Prüfdienst zu einer Firma schicken (art lohnsteuer | arbeitssicherheit | fahrzeuge). Kapazität je Monat = 2 je Prüfer, Sperrfrist 10 Tage je Firma; Befunde kosten die Firma Bußgeld (an die Stadtkasse), eine Prüfung ohne Befund kostet Zustimmung. Siehe obs.pruefungen."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
@@ -61,6 +69,8 @@ var notes: Array = []                  # Gedaechtnis des Amtes
 var commitments := 0.0                 # aus der Stadtkasse reservierte Mittel
 var elections: Array = []              # {day, approval, result, mayor}
 var pop_history: Array = []
+var marketing_boost := 0.0             # zusaetzlicher Zuzug durch Stadtmarketing (Anteil)
+var marketing_until := -1              # bis einschliesslich Monat
 var _next_plan := 1
 var _next_project := 1
 var _next_dec := 1
@@ -142,7 +152,8 @@ func indicators() -> Dictionary:
 		trend = int(pop_history[-1]) - int(pop_history[-2])
 	return {
 		"buergermeister": {"name": name, "partei": party, "zustimmung": snappedf(approval, 0.1), "amtszeit_seit_tag": term_start_day, "tag": _today()},
-		"bevoelkerung": {"einwohner": Z.population(), "veraenderung_letzter_monat": trend},
+		"bevoelkerung": {"einwohner": Z.population(), "veraenderung_letzter_monat": trend, "monat": GameCalendar.month_of(sim.game_min),
+			"stadtmarketing_bis_monat": marketing_until, "stadtmarketing_zuzug_plus": snappedf(marketing_boost, 0.01)},
 		"wohnen": {"bestand_einheiten": stock_units, "belegt": occupied_units(), "leerstand": snappedf(vacancy(), 0.001),
 			"wohnungssuchende_haushalte": waiting, "mietindex": snappedf(rent_index(), 0.1), "miete_monat": snappedf(rent, 1.0),
 			"bezahlbarkeit_miete_anteil_netto": snappedf(rent / maxf(1.0, net_wage), 0.01),
@@ -167,6 +178,7 @@ func indicators() -> Dictionary:
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),
 		"rathaus": sim.town_hall.summary(),
 		"pruefungen": sim.inspections.summary(),
+		"strassen": sim.road_care.summary(),
 		"bevoelkerungsmodell": sim.population.summary(),
 		"sicherheit_gesundheit": sim.safety.summary(),
 		"gedaechtnis": notes.slice(-6),
@@ -256,7 +268,8 @@ func on_month(month: int) -> void:
 	var Z: Citizens = sim.citizens
 	# neue Haushalte suchen eine Wohnung, Wartende ziehen bei freiem Wohnraum ein, lange Wartende wandern ab
 	# Zuzug nach Wirtschaftslage (Beschaeftigung) und Lebensqualitaet (mittleres Glueck der Bewohner, 50 = neutral)
-	waiting += int(round(float(Z.population()) / PERSONS_PER_UNIT * 0.008 * (0.5 + Z.employment_rate()) * (0.5 + sim.population.mean_need("glueck") / 100.0)))
+	var boost := marketing_boost if month <= marketing_until else 0.0
+	waiting += int(round(float(Z.population()) / PERSONS_PER_UNIT * 0.008 * (0.5 + Z.employment_rate()) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost)))
 	var free_units := stock_units - occupied_units()
 	var moving := mini(waiting, maxi(0, free_units))
 	if moving > 0:
@@ -346,6 +359,14 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.town_hall.dismiss(str(a.abteilung), int(a.anzahl))
 			"set_city_freight":
 				res = sim.city_depot.set_pool(str(a.vergabe), int(a.get("firma", -1)), int(a.get("tage", 0)), float(a.get("preisfaktor", sim.city_depot.pool.price)), bool(a.get("eilig", false)))
+			"repair_road":
+				res = sim.road_care.order(str(a.abschnitt), str(a.ausfuehrung), str(a.get("reason", "")))
+			"set_public_staff":
+				res = _set_public_staff(str(a.bereich), int(a.aenderung))
+			"support_training":
+				res = sim.population.set_training_support(int(a.foerderung_prozent))
+			"city_marketing":
+				res = _city_marketing(float(a.budget))
 			"order_inspection":
 				res = sim.inspections.order(int(a.firma), str(a.art), str(a.get("reason", "")))
 			_:
@@ -374,6 +395,42 @@ func _action_cell(a: Dictionary) -> Vector2i:
 	if sim.town_hall.building >= 0:
 		return sim.city.building(sim.town_hall.building).walk
 	return Vector2i(sim.city.size / 2, sim.city.size / 2)
+
+
+## Stellen bei Polizei oder Aerzten/Pflege (Arbeitgeber in Citizens, Loehne aus der Stadtkasse). Besetzung zum Monatsende.
+const PUBLIC_STAFF := ["polizei", "gesundheit"]
+func _set_public_staff(area: String, delta: int) -> Dictionary:
+	if area not in PUBLIC_STAFF:
+		return {"ok": false, "msg": "bereich muss polizei oder gesundheit sein."}
+	if delta == 0 or absi(delta) > 5:
+		return {"ok": false, "msg": "aenderung muss zwischen -5 und +5 liegen (nicht 0)."}
+	var Z: Citizens = sim.citizens
+	var start := int(Z.start_cap.get(area, Z.base_cap[area]))
+	var target := int(Z.base_cap[area]) + delta
+	if target < 2 or target > maxi(2, start * 3):
+		return {"ok": false, "msg": "Stellen bei %s müssen zwischen 2 und %d liegen (jetzt %d)." % [Citizens.EMPLOYERS[area].label, maxi(2, start * 3), int(Z.base_cap[area])]}
+	var monthly := float(delta) * float(Citizens.EMPLOYERS[area].wage) * Citizens.HOURS_PER_MONTH
+	if delta > 0 and available_budget() < monthly * 6.0:
+		return {"ok": false, "msg": "Die verfügbare Stadtkasse (%s) deckt keine sechs Monatsgehälter (%s)." % [Catalog.money(available_budget()), Catalog.money(monthly * 6.0)]}
+	Z.base_cap[area] = target
+	Z.cap[area] = target
+	return {"ok": true, "msg": "%s: Stellen %d -> %d (%s %s je Monat); %s zum Monatsende." % [Citizens.EMPLOYERS[area].label, target - delta, target,
+		"Mehrkosten" if delta > 0 else "Einsparung", Catalog.money(absf(monthly)), "Besetzung" if delta > 0 else "Abbau"]}
+
+
+## Stadtmarketing: einmalige Ausgabe (P0 -> S0), drei Monate mehr Zuzug.
+func _city_marketing(budget: float) -> Dictionary:
+	if budget < 5000.0 or budget > 30000.0:
+		return {"ok": false, "msg": "Budget muss zwischen 5 000 und 30 000 EUR liegen."}
+	var month := GameCalendar.month_of(sim.game_min)
+	if month <= marketing_until:
+		return {"ok": false, "msg": "Eine Kampagne läuft noch bis Monat %d." % marketing_until}
+	if available_budget() < budget:
+		return {"ok": false, "msg": "Verfügbare Stadtkasse (%s) reicht nicht." % Catalog.money(available_budget())}
+	sim.economy.transfer("P0", "S0", budget)
+	marketing_boost = budget / 100000.0
+	marketing_until = month + 2
+	return {"ok": true, "msg": "Stadtmarketing für %s: +%d %% Zuzug bis Monat %d." % [Catalog.money(budget), roundi(marketing_boost * 100.0), marketing_until]}
 
 
 func remember(text: String) -> void:
@@ -561,7 +618,7 @@ func _today() -> int:
 func to_dict() -> Dictionary:
 	return {"name": name, "party": party, "term_start_day": term_start_day, "approval": approval, "stock_units": stock_units, "waiting": waiting, "plans": plans,
 		"projects": projects, "decisions": decisions, "notes": notes, "commitments": commitments, "elections": elections, "pop_history": pop_history,
-		"next": [_next_plan, _next_project, _next_dec]}
+		"next": [_next_plan, _next_project, _next_dec], "marketing": [marketing_boost, marketing_until]}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -580,6 +637,9 @@ func from_dict(d: Dictionary) -> void:
 	commitments = float(d.get("commitments", 0.0))
 	elections = d.get("elections", [])
 	pop_history = d.get("pop_history", pop_history)
+	var mk: Array = d.get("marketing", [0.0, -1])
+	marketing_boost = float(mk[0])
+	marketing_until = int(mk[1])
 	var nx: Array = d.get("next", [1, 1, 1])
 	_next_plan = int(nx[0])
 	_next_project = int(nx[1])

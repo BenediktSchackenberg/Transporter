@@ -37,6 +37,8 @@ var tax_total := 0.0
 var month_log: Array = []                # Monatsprotokoll der Summen (Statistik/Diagnose)
 var last_validation: Array = []
 var behavior := {}                       # Verhalten im letzten Monat (Etappe 2): Weiterbildung, Umzug, Wegzug
+var training_support := 0                # Foerderung der Weiterbildung durch den Buergermeister (0-100 %)
+const TRAINING_COST := 400.0             # Zuschuss je Kursbeginn bei voller Foerderung (an den Bildungstraeger, S0)
 
 
 ## Konfiguration: Standardwerte, ueberschrieben von config/residents.json (falls vorhanden).
@@ -377,7 +379,16 @@ func behave(month: int) -> void:
 			behavior.weiterbildung_abschluss += 1
 		var glueck := float(p.needs.glueck)
 		if p.employer == "" and not p.has("course_until"):
-			if int(p.education) < 3 and int(p.jobless_months) >= int(c.weiterbildung_ab_monaten_arbeitslos) and Citizens.roll(pid, month, 51) < float(c.weiterbildung_chance):
+			var chance := float(c.weiterbildung_chance) * (1.0 + 2.0 * float(training_support) / 100.0)
+			if int(p.education) < 3 and int(p.jobless_months) >= int(c.weiterbildung_ab_monaten_arbeitslos) and Citizens.roll(pid, month, 51) < chance:
+				var grant := TRAINING_COST * float(training_support) / 100.0
+				if grant > 0.0 and sim.mayor.available_budget() < grant:
+					training_support = 0       # Kasse leer: Foerderung endet
+					sim.log_event("Weiterbildungsförderung eingestellt: Stadtkasse reicht nicht.", "warn")
+					grant = 0.0
+				if grant > 0.0:
+					sim.economy.transfer("P0", "S0", grant)
+					behavior["foerderung"] = float(behavior.get("foerderung", 0.0)) + grant
 				p["course_until"] = day + 30 * int(c.weiterbildung_monate)
 				behavior.weiterbildung_beginn += 1
 				continue
@@ -392,6 +403,14 @@ func behave(month: int) -> void:
 	behavior.wegzug = leaving.size()
 	if not leaving.is_empty():
 		sim.log_event("%d Bewohner verlassen die Stadt (lange arbeitslos und unglücklich)." % leaving.size(), "bad")
+
+
+func set_training_support(pct: int) -> Dictionary:
+	if pct < 0 or pct > 100:
+		return {"ok": false, "msg": "Förderung muss zwischen 0 und 100 % liegen."}
+	var old := training_support
+	training_support = pct
+	return {"ok": true, "msg": "Weiterbildungsförderung %d %% -> %d %% (bis zu %.1f-fach mehr Kursbeginne, %s je Kursbeginn)." % [old, pct, 1.0 + 2.0 * pct / 100.0, Catalog.money(TRAINING_COST * pct / 100.0)]}
 
 
 func in_course_count() -> int:
@@ -476,11 +495,11 @@ func summary() -> Dictionary:
 		"grundsteuer_satz": tax_rate, "grundsteuer_monat_geschaetzt": snappedf(estimated_monthly_tax(), 1.0), "grundsteuer_gesamt": snappedf(tax_total, 1.0),
 		"glueck": snappedf(mean_need("glueck"), 0.1), "geld": snappedf(mean_need("geld"), 0.1), "arbeit": snappedf(mean_need("arbeit"), 0.1),
 		"guthaben_gesamt": snappedf(float(sim.economy.accounts.get(ACCOUNT, 0.0)), 1.0), "monat_zuletzt": month_log.back() if not month_log.is_empty() else {},
-		"in_weiterbildung": in_course_count(), "verhalten_letzter_monat": behavior}
+		"in_weiterbildung": in_course_count(), "weiterbildung_foerderung_prozent": training_support, "verhalten_letzter_monat": behavior}
 
 
 func to_dict() -> Dictionary:
-	return {"tax_rate": tax_rate, "tax_total": tax_total, "month_log": month_log.slice(-24), "behavior": behavior}
+	return {"tax_rate": tax_rate, "tax_total": tax_total, "month_log": month_log.slice(-24), "behavior": behavior, "training_support": training_support}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -490,3 +509,4 @@ func from_dict(d: Dictionary) -> void:
 	tax_total = float(d.get("tax_total", 0.0))
 	month_log = d.get("month_log", [])
 	behavior = d.get("behavior", {})
+	training_support = int(d.get("training_support", 0))
