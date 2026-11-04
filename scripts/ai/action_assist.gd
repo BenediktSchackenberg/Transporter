@@ -40,6 +40,9 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 					break
 	match name:
 		"assign_worker_task":
+			if not out.has("kind") and out.has("task"):
+				out["kind"] = str(out.task)
+				added.append("kind aus task")
 			var kind_given := str(out.get("kind", ""))
 			var kl := kind_given.to_lower()
 			if kl.contains("fuel") or kl.contains("tank"):
@@ -101,6 +104,9 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 						out["vehicle_id"] = rv.id
 						added.append("kind=reparieren")
 						added.append("vehicle_id")
+				if str(out.get("kind", "")) == "" and w != null and w.employer == cid:
+					# Alle Fahrzeuge haben schon Fahrer und nichts ist zu reparieren: Arbeiter bleibt in Bereitschaft
+					return {"action": "wait", "_ergaenzt": ["%s bleibt in Bereitschaft: kein Fahrzeug ohne Fahrer, nichts zu reparieren" % w.id]}
 			elif str(out.get("kind", "")) == "fahren":
 				# Fahraufgabe mit fehlendem oder fremdem Fahrzeug / ohne Arbeiter: Luecken schliessen
 				var vv: FleetVehicle = sim.vehicles.get(ActionExecutor._i(out.get("vehicle_id", -1))) if out.get("vehicle_id") != null else null

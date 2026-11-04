@@ -14,6 +14,7 @@ const STALE_GAME_MIN_OLLAMA := 1440.0  # lokales Modell braucht fuer grosse Prom
 const FAIL_LIMIT := 3             # aufeinanderfolgende Fehler bis zum Ersatzmodus
 const API_RETRY_IN_FALLBACK := 60.0
 
+const DISPATCHER_OWNED := ["accept_contract", "assign_transport", "assign_vehicle", "plan_tour", "assign_transport/plan_tour"]   # bei aktivem Disponenten dessen Aufgabe
 var sim: Simulation
 var cid := 0
 var config := {}                  # provider, base_url, model, interval, max_requests, max_tokens, fallback, ...
@@ -314,6 +315,13 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 		var actual: Dictionary = _ground_action(a)
 		if str(actual.get("action", "")) == "set_plan" and _same_plan(actual):
 			continue
+		if source == "KI" and str(actual.get("action", "")) in DISPATCHER_OWNED and sim.dispatcher != null and sim.dispatcher.covers(cid):
+			# Auftragsannahme und -zuweisung macht der Claude-Disponent: nicht doppelt planen (frueher die haeufigste Ablehnung)
+			stats["left_to_dispatcher"] = int(stats.get("left_to_dispatcher", 0)) + 1
+			api_log.write({"type": "action", "player": cid, "key": "%s:a%d" % [key_prefix, i], "source": source, "action": actual, "ok": true,
+				"msg": "übergangen: Aufträge verteilt der Disponent"})
+			i += 1
+			continue
 		if config.get("provider", "") == "ollama" and bool(config.get("dispatch_help", true)):
 			sim.executor.auto_split[cid] = true
 		var res := sim.executor.execute(cid, actual, "p%d:%s:a%d" % [cid, key_prefix, i], origin)
@@ -322,6 +330,8 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 			stats.actions_ok += 1
 			if str(actual.get("action", "")) not in PASSIVE:
 				effective += 1
+		elif res.get("already", false):
+			stats["already_planned"] = int(stats.get("already_planned", 0)) + 1   # Besuch laeuft schon: kein Fehler, kein Wiederholungsanstoss
 		else:
 			stats.actions_rejected += 1
 			if config.get("provider", "") == "ollama":

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -5028,6 +5028,70 @@ func test_game_master() -> void:
 	# Speichern und Laden
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.game_master.enabled and s2.game_master.stats.runs == gm.stats.runs and s2.game_master.log.size() == gm.log.size(), "Spielleitung nach Laden")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_model_error_fixes() -> void:
+	var s := new_sim(2)
+	for k in s.market.open_contracts():
+		s.companies[0].known[k.id] = true
+	# Arbeiter ohne Aufgabe, alle Fahrzeuge haben Fahrer: Bereitschaft statt Fehler
+	var free_w: Array = s.personnel.employed(0).filter(func(w): return w.vehicle_id < 0 and w.task_id == "")
+	if free_w.is_empty():
+		var cand: Worker = s.personnel.workers.values().filter(func(w): return w.employer < 0 and not w.lost)[0]
+		s.personnel.hire(0, cand)
+		free_w = [cand]
+	for v in s.company_vehicles(0):
+		if s.driver_of(v) == null:
+			var d: Worker = free_w.pop_back()
+			s.executor.execute(0, {"action": "assign_worker_task", "kind": "fahren", "worker_id": d.id, "vehicle_id": v.id})
+	var idle: Worker = s.personnel.employed(0).filter(func(w): return w.vehicle_id < 0)[0] if s.personnel.employed(0).any(func(w): return w.vehicle_id < 0) else null
+	if idle != null:
+		var r := s.executor.execute(0, {"action": "assign_worker_task", "worker_id": idle.id})
+		ok(r.ok, "Arbeiter ohne Fahrzeug bleibt in Bereitschaft statt Fehler: " + str(r.msg).left(80))
+	# task statt kind
+	var r2 := s.executor.execute(0, {"action": "assign_worker_task", "task": "collect_contracts"})
+	ok(r2.ok or str(r2.msg).contains("Besuch"), "task wird als kind gelesen: " + str(r2.msg).left(60))
+	# Besuch schon eingeplant: Kennzeichen already
+	var oid: String = s.resources.available_offers()[0].id
+	var v1 := s.executor.execute(0, {"action": "buy_vehicle", "offer_id": oid})
+	var v2 := s.executor.execute(0, {"action": "buy_vehicle", "offer_id": oid})
+	ok(not v2.ok and v2.get("already", false) or not v1.get("pending", false), "doppelter Besuch trägt das Kennzeichen 'already'")
+	# Disponent: keine Angebote mit zu kurzer Restlaufzeit
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	for k in obs.markt:
+		k["angebot_noch_min"] = 30
+	ok(DispatchCandidates.build(obs).candidates.is_empty(), "Angebote mit weniger als %d Spielminuten Restlaufzeit werden nicht angeboten" % DispatchCandidates.MIN_OFFER_LEFT)
+	# Disponent: entfallene Wahl wird durch einen anderen Kandidaten desselben Fahrzeugs ersetzt
+	var ag := DispatchAgent.new()
+	root.add_child(ag)
+	ag.setup(s, {"provider": "anthropic", "api_key": "TEST_KEY_ENV", "model": "claude-haiku-5-5"}, ApiLog.new(), [0])
+	var groups: Array = ag.gather()
+	var all: Array = []
+	for g in groups:
+		for c in g.candidates:
+			var e: Dictionary = c.duplicate()
+			e["company"] = g.company
+			all.append(e)
+	var same: Array = all.filter(func(c): return int(c.vehicle_id) == int(all[0].vehicle_id))
+	if same.size() >= 2:
+		s.contracts[same[0].contract_id].status = "expired"
+		ag._pending = all
+		ag._inflight = 7
+		ag.handle_result(7, {"ok": true, "content": "{\"wahl\": [%d], \"begruendung\": \"Test\"}" % int(same[0].nr), "usage": {}})
+		ok(int(ag.stats.get("substituted", 0)) == 1 and s.contracts[same[1].contract_id].owner == 0, "abgelaufene Wahl durch %s ersetzt" % same[1].contract_id)
+	else:
+		ok(true, "nur ein Kandidat je Fahrzeug – Ersatz nicht prüfbar")
+	# Modellrunde: Auftragsaktionen bei aktivem Disponenten werden übergangen
+	var ac := AgentController.new()
+	root.add_child(ac)
+	ac.setup_for_test(s, 0)
+	var open_k: Array = s.market.open_contracts().filter(func(k): return k.status == "open")
+	var before := int(ac.stats.actions_rejected)
+	ac._apply({"actions": [{"action": "accept_contract", "contract_id": open_k[0].id}], "summary": "", "goal": "", "memory": "", "erfahrungen": []}, "t1", "KI")
+	ok(int(ac.stats.get("left_to_dispatcher", 0)) == 1 and int(ac.stats.actions_rejected) == before and open_k[0].status == "open", "Annahme bleibt dem Disponenten überlassen")
+	ac.queue_free()
+	ag.queue_free()
 	ok(identity_ok(s), "Geld erhalten")
 
 

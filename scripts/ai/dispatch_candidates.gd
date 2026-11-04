@@ -7,6 +7,7 @@ extends RefCounted
 const PER_VEHICLE := 3          # beste Kandidaten je Fahrzeug
 const MIN_MARGIN := 150.0       # Kandidaten mit weniger Marge (EUR) werden nicht angeboten
 const MIN_MARGIN_SHARE := 0.10  # ... oder weniger als 10 % der Verguetung
+const MIN_OFFER_LEFT := 120     # Spielminuten Restlaufzeit des Angebots (die API-Antwort dauert bei hohem Tempo bis zu ~2 Spielstunden)
 
 
 ## obs: Beobachtung der Firma (ObservationBuilder). first_nr: laufende Nummer, ab der gezaehlt wird.
@@ -29,7 +30,7 @@ static func build(obs: Dictionary, first_nr: int = 1) -> Dictionary:
 	for v in ready:
 		var spec: Dictionary = models[v.modell]
 		out.vehicles.append({"id": int(v.id), "modell": v.modell, "kapazitaet": int(spec.kapazitaet), "kuehlung": bool(spec.kuehlung), "schwer": bool(spec.schwer)})
-		var pool: Array = obs.markt.filter(func(k): return not taken.has(k.id))
+		var pool: Array = obs.markt.filter(func(k): return not taken.has(k.id) and (int(k.get("angebot_noch_min", -1)) < 0 or int(k.get("angebot_noch_min", -1)) >= MIN_OFFER_LEFT))
 		for i in PER_VEHICLE:
 			var best := RuleBrain._best_contract(pool, v, spec, float(me.reputation))
 			if best.is_empty():

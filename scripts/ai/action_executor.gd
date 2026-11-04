@@ -868,7 +868,7 @@ func _start_visit(cid: int, action: Dictionary, cell: Vector2i, follow: int, whe
 	var a: Avatar = sim.avatars[cid]
 	var visit := {"action": action.duplicate(), "follow": follow, "place": where, "cell": cell, "key": _cur_key, "origin": _cur_origin}
 	if _visit_planned(a, action):
-		return {"ok": false, "msg": "%s ist schon als Besuch eingeplant – erst abwarten, bevor du es erneut anforderst." % where}
+		return {"ok": false, "already": true, "msg": "%s ist schon als Besuch eingeplant – erst abwarten, bevor du es erneut anforderst." % where}
 	if a.pending.has("action"):
 		if a.queue.size() >= 3:
 			return {"ok": false, "msg": "Die Figur hat schon 4 Besuche geplant. Erst abarbeiten lassen."}

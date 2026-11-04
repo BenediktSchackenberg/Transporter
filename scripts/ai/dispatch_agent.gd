@@ -205,6 +205,18 @@ func _execute(cands: Array, picks: Array, source: String, reason: String) -> voi
 		if c == null or used_v.has(c.vehicle_id) or used_c.has(c.contract_id):
 			stats.rejected += 1
 			continue
+		var kc: Contract = sim.contracts.get(str(c.contract_id))
+		if kc == null or kc.status != "open":
+			# Auftrag waehrend der Antwortzeit vergeben oder abgelaufen: naechstbester Kandidat fuer dasselbe Fahrzeug
+			var alt = null
+			for c2 in cands:
+				var k2: Contract = sim.contracts.get(str(c2.contract_id))
+				if int(c2.vehicle_id) == int(c.vehicle_id) and not used_c.has(c2.contract_id) and k2 != null and k2.status == "open":
+					alt = c2
+					break
+			if alt != null:
+				c = alt
+				stats["substituted"] = int(stats.get("substituted", 0)) + 1
 		used_v[c.vehicle_id] = true
 		used_c[c.contract_id] = true
 		var a := {"action": "accept_contract", "contract_id": c.contract_id, "vehicle_id": c.vehicle_id}
