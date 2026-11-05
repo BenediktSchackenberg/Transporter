@@ -1000,6 +1000,7 @@ func _minute_tick() -> void:
 		_last_day = day
 		traffic_flow.on_day()
 		road_care.on_day(day)
+		rivalry.on_day()
 		day_changed.emit(day)
 		if new_month:
 			month_changed.emit(GameCalendar.month_of(now))

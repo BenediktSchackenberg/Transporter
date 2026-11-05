@@ -769,6 +769,11 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 	k.owner = cid
 	k.accepted_at = sim.game_min
 	sim.market.on_accepted(k)
+	for bid in [k.pickup, k.dropoff]:
+		var loyal: int = sim.loyal_company(bid)
+		if loyal >= 0 and loyal != cid:
+			sim.rivalry.add_tension(cid, loyal, "stammkunde_bedient", sim.city.building(bid).get("name", ""))
+			break
 	var msg := "Auftrag %s angenommen (%s, Frist %s)." % [kid, Catalog.money(k.reward), Catalog.game_minutes_to_text(k.deadline)]
 	if vid >= 0:
 		var r := _assign(cid, vid, kid)

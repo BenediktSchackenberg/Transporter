@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1102,6 +1102,46 @@ func test_report_rival() -> void:
 	RuleBrain._dominate(riv, "wachstum", me, 50000.0, 6000.0, rng, acts, rs)
 	ok(acts.size() == 1 and acts[0].action != "report_rival" and acts[0].target == 1, "ohne Verzug wirbt sie beim schwächsten Konkurrenten ab")
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten (Bußgelder und Nachforderungen laufen über Konten)")
+
+
+func test_rivalry_tension() -> void:
+	var s := new_sim(3)
+	ok(s.rivalry.get_tension(0, 1) == 0.0 and Rivalry.stage_of(0.0) == 0, "Ausgangslage: keine Spannung")
+	# Unbegruendete Anzeige erzeugt Spannung (symmetrisch) und einen Vorfall
+	s.rivalry.report_rival(0, 1, "test")
+	var t1 := s.rivalry.get_tension(1, 0)
+	ok(is_equal_approx(t1, Rivalry.TENSION.anzeige_unbegruendet) and s.rivalry.incidents.size() == 1, "Anzeige erhöht die Spannung des Paares in beide Richtungen")
+	# Ueberbieten beim Grundstueck
+	s.rivalry.add_tension(2, 1, "ueberboten", "Grundstück 1")
+	ok(s.rivalry.get_tension(1, 2) > 0.0 and s.rivalry.get_tension(0, 2) == 0.0, "Vorfälle zählen nur für das betroffene Paar")
+	# Stufen der Eskalationsleiter
+	for i in 4:
+		s.rivalry.add_tension(0, 1, "sabotage_entdeckt", "x")
+	ok(s.rivalry.get_tension(0, 1) == 100.0 and Rivalry.stage_of(100.0) == 5, "Spannung ist auf 100 begrenzt, Stufe 5 (Sabotage)")
+	ok(Rivalry.stage_of(16.0) == 1 and Rivalry.stage_of(55.0) == 3, "Stufen: 16 -> Stichelei, 55 -> Anzeige")
+	s.rivalry.add_tension(0, 0, "anzeige")
+	ok(s.rivalry.get_tension(0, 0) == 0.0, "keine Spannung mit sich selbst")
+	# Geschaeft senkt die Spannung
+	var before := s.rivalry.get_tension(1, 2)
+	s.rivalry.add_tension(1, 2, "geschaeft")
+	ok(s.rivalry.get_tension(1, 2) < before, "angenommenes Geschäft senkt die Spannung")
+	# Abbau je Tag; Paare ohne Spannung verschwinden
+	s.rivalry.on_day()
+	ok(is_equal_approx(s.rivalry.get_tension(0, 1), 100.0 - Rivalry.TENSION_DECAY_PER_DAY), "Spannung sinkt täglich")
+	for i in 30:
+		s.rivalry.on_day()
+	ok(not s.rivalry.tension.has(Social.pair_key(1, 2)), "abgeklungene Paare werden entfernt")
+	# Beobachtung fuer Firmen und Buergermeister
+	s.rivalry.add_tension(1, 0, "kunde_abgeworben", "Bäckerei")
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	ok(obs.konkurrenten.all(func(r): return r.has("spannung")) and obs.has("rivalitaet"), "Firmenbeobachtung zeigt Spannung je Konkurrent")
+	var row: Dictionary = obs.rivalitaet[0]
+	ok(row.firma == 1 and row.stufe != "" and row.vorfaelle.size() > 0, "Rivalität nennt Gegner, Stufe und letzte Vorfälle")
+	var ind := s.mayor.indicators()
+	ok(ind.rivalitaet.paare.size() >= 1 and ind.rivalitaet.vorfaelle_7_tage >= 1 and ind.rivalitaet.unruhe > 0.0, "Bürgermeister sieht angespannte Paare und Vorfälle")
+	# Speichern/Laden
+	var s2 := Simulation.from_dict(s.to_dict())
+	ok(is_equal_approx(s2.rivalry.get_tension(0, 1), s.rivalry.get_tension(0, 1)) and s2.rivalry.incidents.size() == s.rivalry.incidents.size(), "Spannung und Vorfälle überstehen Speichern/Laden")
 
 
 func test_dispatch_help() -> void:

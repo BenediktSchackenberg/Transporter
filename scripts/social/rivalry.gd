@@ -12,8 +12,29 @@ const REPORT_TARGET_COOLDOWN := 4320.0  # dieselbe Zielfirma wird nicht haeufige
 const REPORT_FALSE_FINE := 400.0        # unbegruendete Anzeige
 const REPORT_ARREARS_FINE := 600.0      # Zahlungsrueckstand wird festgestellt
 
+## Spannung je Firmenpaar (0-100) aus echten Vorfaellen; sinkt taeglich und durch Kooperation (Auftrag 12, docs/RIVALRY_DRAMA.md).
+const TENSION := {
+	"stammkunde_bedient": 4.0,      # Auftrag beim Stammkunden des anderen angenommen
+	"abwerbeversuch": 5.0,
+	"fahrer_abgeworben": 15.0,
+	"kunde_abgeworben": 15.0,
+	"ueberboten": 8.0,              # Grundstuecksgebot
+	"anzeige": 20.0,                # Anzeige mit Beanstandung
+	"anzeige_unbegruendet": 12.0,
+	"sabotage_entdeckt": 35.0,
+	"geschaeft": -6.0,              # angenommenes Angebot
+	"buendnis": -15.0,
+}
+const TENSION_DECAY_PER_DAY := 4.0
+## Eskalationsleiter: ab welchem Wert eine Stufe naheliegt (1 Stichelei, 2 Provokation, 3 Anzeige, 4 Blockade, 5 Sabotage).
+const STAGES := [15.0, 30.0, 50.0, 70.0, 85.0]
+const STAGE_NAMES := ["ruhig", "Stichelei", "Provokation", "Anzeige", "Blockade", "Sabotage"]
+const MAX_INCIDENTS := 80
+
 var sim
 var cooldowns := {}     # "art:firma" -> Spielminute
+var tension := {}       # Social.pair_key -> 0..100
+var incidents: Array = []   # {t, a, b, art, delta, text}; a = Verursacher, b = Betroffener
 
 
 func setup(simulation) -> void:
@@ -82,6 +103,7 @@ func execute_sabotage(cid: int, target: int, kind: String) -> Dictionary:
 			sim.social.break_pact(cid, target)
 			sim.social.add_trust(cid, target, -60.0)
 		c.stats.sabotage_caught += 1
+		add_tension(cid, target, "sabotage_entdeckt", s.name)
 		var txt := "%s wurde bei %s gegen %s erwischt: Bußgeld %s, Schadensersatz %s%s." % [c.company_name, s.name,
 			t.company_name, Catalog.money(s.fine), Catalog.money(s.compensation), ", Paktbruch!" if breach else ""]
 		sim.log_event(txt, "bad", cid)
@@ -116,6 +138,7 @@ func poach_worker(cid: int, target: int, wage: float) -> Dictionary:
 	var chance := clampf((wage - w.wage) / w.wage * 2.5 - (w.loyalty - 50.0) / 100.0, 0.0, 0.85)
 	if sim.rng.randf() >= chance:
 		w.loyalty = minf(100.0, w.loyalty + 5.0)
+		add_tension(cid, target, "abwerbeversuch", w.name)
 		sim.notify(target, "%s hat versucht, deinen Arbeiter %s abzuwerben." % [c.company_name, w.name])
 		return {"ok": true, "msg": "%s hat das Angebot abgelehnt (Chance war %d %%)." % [w.name, int(chance * 100)]}
 	for task in sim.personnel.tasks.values():
@@ -132,6 +155,7 @@ func poach_worker(cid: int, target: int, wage: float) -> Dictionary:
 		w.vehicle_id = -1
 		w.employer = cid
 	sim.log_event("%s wirbt %s von %s ab (%.0f EUR/h)." % [c.company_name, w.name, t.company_name, wage], "warn", cid)
+	add_tension(cid, target, "fahrer_abgeworben", w.name)
 	sim.notify(target, "%s hat deinen Arbeiter %s abgeworben%s." % [c.company_name, w.name, " (wechselt nach der aktuellen Fahrt)" if w.leaving else ""])
 	return {"ok": true, "msg": "%s (%s) wechselt zu dir." % [w.name, w.id]}
 
@@ -157,6 +181,7 @@ func poach_customer(cid: int, building_id: int) -> Dictionary:
 		sim.customers[building_id].streak = {}
 		sim.log_event("%s wirbt %s als Stammkunden von %s ab." % [c.company_name, b.name, t.company_name], "warn", cid)
 		sim.notify(loyal, "%s hat deinen Stammkunden %s abgeworben." % [c.company_name, b.name])
+		add_tension(cid, loyal, "kunde_abgeworben", b.name)
 		return {"ok": true, "msg": "%s ist jetzt dein Stammkunde." % b.name}
 	return {"ok": true, "msg": "%s bleibt bei %s (Reputation zu niedrig oder Pech)." % [b.name, t.company_name]}
 
@@ -197,10 +222,12 @@ func report_rival(cid: int, target: int, reason: String = "") -> Dictionary:
 			c.ledger.book("fines", -f2, true, "Unbegründete Anzeige gegen " + t.company_name, sim.game_min)
 		c.reputation = maxf(0.0, c.reputation - 3.0)
 		sim.social.add_trust(cid, target, -20.0)
+		add_tension(cid, target, "anzeige_unbegruendet", reason)
 		sim.log_event("Anzeige von %s gegen %s: ohne Beanstandung, der Anzeigende zahlt %s Bußgeld." % [c.company_name, t.company_name, Catalog.money(f2)], "warn", cid)
 		sim.notify(target, "Eine Anzeige gegen dich wurde geprüft und blieb ohne Beanstandung.")
 		return {"ok": true, "msg": "Das Amt fand nichts. Unbegründete Anzeige: %s Bußgeld, Ruf −3." % Catalog.money(f2)}
 	t.reputation = maxf(0.0, t.reputation - 3.0)
+	add_tension(cid, target, "anzeige", ", ".join(findings))
 	t.add_key_event("Nach Anzeige geprüft: " + ", ".join(findings), sim.game_min)
 	sim.log_event("Anzeige von %s: %s wird geprüft – %s." % [c.company_name, t.company_name, ", ".join(findings)], "bad", target)
 	sim.notify(target, "Nach einer Anzeige hat das Amt dich geprüft: %s." % ", ".join(findings))
@@ -222,9 +249,91 @@ func buy_security(cid: int, level: int) -> Dictionary:
 	return {"ok": true, "msg": "Sicherheitsstufe %d aktiv (laufend %s/Tag)." % [level, Catalog.money(Catalog.SECURITY_PER_DAY[level])]}
 
 
+# ------------------------------------------------------------------ Spannung
+func get_tension(a: int, b: int) -> float:
+	return float(tension.get(Social.pair_key(a, b), 0.0))
+
+
+static func stage_of(value: float) -> int:
+	var s := 0
+	for th in STAGES:
+		if value >= th:
+			s += 1
+	return s
+
+
+## Vorfall zwischen Verursacher a und Betroffenem b verbuchen (art aus TENSION).
+func add_tension(a: int, b: int, art: String, text: String = "") -> void:
+	if a == b or a < 0 or b < 0 or not TENSION.has(art):
+		return
+	var key := Social.pair_key(a, b)
+	var before := float(tension.get(key, 0.0))
+	var after := clampf(before + float(TENSION[art]), 0.0, 100.0)
+	tension[key] = after
+	incidents.append({"t": sim.game_min, "a": a, "b": b, "art": art, "delta": snappedf(after - before, 0.1), "text": text})
+	if incidents.size() > MAX_INCIDENTS:
+		incidents.pop_front()
+	var st := stage_of(after)
+	if st > stage_of(before):
+		sim.log_event("Spannung zwischen %s und %s steigt: %s (%d)." % [sim.company(a).company_name, sim.company(b).company_name, STAGE_NAMES[st], int(after)], "warn")
+
+
+func on_day() -> void:
+	for key in tension.keys():
+		var v := float(tension[key]) - TENSION_DECAY_PER_DAY
+		if v <= 0.0:
+			tension.erase(key)
+		else:
+			tension[key] = v
+
+
+func _incidents_of(a: int, b: int, n: int) -> Array:
+	return incidents.filter(func(i): return (int(i.a) == a and int(i.b) == b) or (int(i.a) == b and int(i.b) == a)).slice(-n)
+
+
+func _incident_view(i: Dictionary, cid: int) -> Dictionary:
+	return {"zeit": Catalog.game_minutes_to_text(float(i.t)), "art": i.art, "durch": "dich" if int(i.a) == cid else ("gegen dich" if int(i.b) == cid else int(i.a)), "text": i.text}
+
+
+## Beobachtung fuer eine Firma: Spannung zu jedem Konkurrenten mit Stufe und letzten Vorfaellen.
+func summary_of(cid: int) -> Array:
+	var out: Array = []
+	for o in sim.companies:
+		if o.id == cid:
+			continue
+		var v := get_tension(cid, o.id)
+		if v <= 0.0:
+			continue
+		out.append({"firma": o.id, "name": o.company_name, "spannung": int(v), "stufe": STAGE_NAMES[stage_of(v)],
+			"vorfaelle": _incidents_of(cid, o.id, 3).map(func(i): return _incident_view(i, cid))})
+	out.sort_custom(func(x, y): return x.spannung > y.spannung)
+	return out
+
+
+## Beobachtung fuer den Buergermeister: angespannteste Paare, Vorfaelle der letzten 7 Tage, mittlere Unruhe.
+func mayor_summary() -> Dictionary:
+	var pairs: Array = []
+	var total := 0.0
+	for key in tension:
+		var ids: PackedStringArray = str(key).split("-")
+		var a := int(ids[0])
+		var b := int(ids[1])
+		var v := float(tension[key])
+		total += v
+		pairs.append({"firmen": [a, b], "namen": [sim.company(a).company_name, sim.company(b).company_name], "spannung": int(v), "stufe": STAGE_NAMES[stage_of(v)]})
+	pairs.sort_custom(func(x, y): return x.spannung > y.spannung)
+	var week: Array = incidents.filter(func(i): return sim.game_min - float(i.t) < GameCalendar.days_to_min(7) and float(i.delta) > 0.0)
+	var n: int = sim.companies.size()
+	var pair_count := maxi(1, n * (n - 1) / 2)
+	return {"paare": pairs.slice(0, 5), "vorfaelle_7_tage": week.size(), "unruhe": snappedf(total / float(pair_count), 0.1),
+		"letzte": week.slice(-4).map(func(i): return {"zeit": Catalog.game_minutes_to_text(float(i.t)), "art": i.art, "verursacher": int(i.a), "betroffen": int(i.b)})}
+
+
 func to_dict() -> Dictionary:
-	return {"cooldowns": cooldowns}
+	return {"cooldowns": cooldowns, "tension": tension, "incidents": incidents}
 
 
 func from_dict(d: Dictionary) -> void:
 	cooldowns = d.cooldowns
+	tension = d.get("tension", {})
+	incidents = d.get("incidents", [])

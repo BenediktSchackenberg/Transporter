@@ -690,6 +690,7 @@ func bid(cid: int, plot_id: int, amount: float) -> Dictionary:
 	a.leader = cid
 	a.bids.append([cid, a.best])
 	a.ends = maxf(float(a.ends), sim.game_min + 120.0)   # spaete Gebote verlaengern um zwei Spielstunden
+	sim.rivalry.add_tension(cid, prev, "ueberboten", "Grundstück %d" % plot_id)
 	sim.notify(prev, "%s überbietet dich für Grundstück %d: %s." % [sim.company(cid).company_name, plot_id, Catalog.money(a.best)])
 	sim.log_event("%s überbietet %s für Grundstück %d: %s." % [sim.company(cid).company_name, sim.company(prev).company_name, plot_id, Catalog.money(a.best)], "warn")
 	return {"ok": true, "msg": "Höchstgebot %s für Grundstück %d." % [Catalog.money(a.best), plot_id]}

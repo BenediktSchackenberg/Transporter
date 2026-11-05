@@ -341,6 +341,7 @@ func accept_offer(by: int, offer_id: String) -> Dictionary:
 	a.stats.deals += 1
 	b.stats.deals += 1
 	add_trust(a.id, b.id, 8.0)
+	sim.rivalry.add_tension(a.id, b.id, "buendnis" if o.kind == "cooperation" else "geschaeft", describe(o))
 	var txt := "Geschäft abgeschlossen: %s %s an %s." % [a.company_name, describe(o), b.company_name]
 	sim.log_event(txt, "deal", by)
 	a.add_key_event("Geschäft mit %s: %s" % [b.company_name, describe(o)], sim.game_min)

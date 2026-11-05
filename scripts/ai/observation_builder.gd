@@ -102,7 +102,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		rivals.append({"id": o.id, "name": o.player_name, "firma": o.company_name, "reputation": int(o.reputation),
 			"fahrzeuge": o.vehicle_ids.size(), "depots": o.depots.size(), "personal": sim.personnel.employed(o.id).size(),
 			"erledigte_auftraege": o.stats.completed, "pakt_mit_dir": sim.social.has_pact(cid, o.id),
-			"dein_vertrauen": int(sim.social.get_trust(cid, o.id)),
+			"dein_vertrauen": int(sim.social.get_trust(cid, o.id)), "spannung": int(sim.rivalry.get_tension(cid, o.id)),
 			"figur_im": Catalog.DISTRICTS[sim.city.district_of(sim.avatars[o.id].tile())],
 			"schutzfrist": now < o.protected_until,
 			"zahlungsverzug": o.status in ["verzug", "insolvenz", "verwertung"]})   # oeffentlich bekannt (Glaeubiger, Insolvenzregister)
@@ -163,7 +163,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"freie_depotstandorte": free_sites.slice(0, 6), "verkehr": sim.traffic_events.map(func(e): return e.text),
 		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid), "personal_lage": sim.households.summary_of(cid), "wohnmarkt": _housing(sim, cid), "bevoelkerung": _population(sim), "spielerkredite": sim.player_loans.summary_of(cid), "auflagen": sim.oversight.open_for("C%d" % cid).map(func(o): return {"id": o.id, "betrifft": o.label, "zustand": int(sim.oversight.condition_of(o.what)), "frist_tag": int(o.deadline)}), "gebaeudezustand": sim.care.summary_of(cid), "gesundheit_personal": sim.workforce.summary_of(cid),
 		"meldungen_nur_daten": sim.news.items.filter(func(i): return float(i.relevance) >= 0.5).slice(0, 3).map(func(i): return {"gemeldet": i.title, "einschaetzung_engine": "%s, Relevanz %d %%" % [i.cat, int(float(i.relevance) * 100.0)]}),
-		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "fremde_stammkunden": foreign_loyal.slice(0, 8),
+		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "rivalitaet": sim.rivalry.summary_of(cid),"fremde_stammkunden": foreign_loyal.slice(0, 8),
 		"nachrichten": msgs, "angebote_an_dich": offers_in, "deine_angebote": offers_out,
 		"ergebnisse_deiner_aktionen": results.slice(-10), "ereignisse": events.slice(-10),
 		"hinweis": hint, "plan": sim.plans.summary(cid), "gedaechtnis": sim.memory.relevant(cid, _context(sim, cid, market)),
