@@ -1036,6 +1036,7 @@ func _minute_tick() -> void:
 			fail_contract(k, "Frist weit überschritten")
 	market.tick(now)
 	social.tick(now)
+	rivalry.tick(now)
 	personnel.minute_tick(now)
 	resources.minute_tick(now)
 	if minute_index % 5 == 0:

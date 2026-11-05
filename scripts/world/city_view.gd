@@ -550,7 +550,7 @@ func update_view(delta: float) -> void:
 	# Baustellen
 	for p in sim.nav.roadworks:
 		if not _roadwork_nodes.has(p):
-			_roadwork_nodes[p] = _prop("roadwork", Vector2(p.x * 32 + 16, p.y * 32 + 16), decor_node)
+			_roadwork_nodes[p] = _prop("blockade" if sim.rivalry.blockade_at(p) else "roadwork", Vector2(p.x * 32 + 16, p.y * 32 + 16), decor_node)
 	for p in _roadwork_nodes.keys():
 		if not sim.nav.roadworks.has(p):
 			_roadwork_nodes[p].queue_free()

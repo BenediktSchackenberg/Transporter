@@ -22,6 +22,7 @@ const TENSION := {
 	"anzeige": 20.0,                # Anzeige mit Beanstandung
 	"anzeige_unbegruendet": 12.0,
 	"sabotage_entdeckt": 35.0,
+	"blockade": 25.0,               # Strassenblockade, Taeter ermittelt
 	"geschaeft": -6.0,              # angenommenes Angebot
 	"buendnis": -15.0,
 }
@@ -30,11 +31,22 @@ const TENSION_DECAY_PER_DAY := 4.0
 const STAGES := [15.0, 30.0, 50.0, 70.0, 85.0]
 const STAGE_NAMES := ["ruhig", "Stichelei", "Provokation", "Anzeige", "Blockade", "Sabotage"]
 const MAX_INCIDENTS := 80
+## Strassenblockade (Stufe 4): Paletten auf eine Strasse nahe am Hof des Rivalen. Verboten: die Polizei raeumt, ermittelt meist den Taeter.
+const BLOCK_COST := 600.0               # Paletten, Ware, Helfer
+const BLOCK_CLEAR_MIN := Vector2(60.0, 150.0)   # Polizei raeumt nach so vielen Spielminuten
+const BLOCK_FINE := 2500.0
+const BLOCK_REP := 8.0
+const BLOCK_DETECT := 0.7               # + 0.1 je Sicherheitsstufe des Opfers (Kameras)
+const BLOCK_COOLDOWN := 1440.0          # hoechstens eine Blockade je Firma und Tag
+const BLOCK_TARGET_COOLDOWN := 1440.0   # dasselbe Opfer hoechstens einmal je Tag
+const BLOCK_DIST := Vector2i(2, 7)      # Strassenschritte vom Hof des Rivalen
+const BLOCK_KEEP_CLEAR := 5             # Abstand zu Polizei, Arztpraxen, Klinik
 
 var sim
 var cooldowns := {}     # "art:firma" -> Spielminute
 var tension := {}       # Social.pair_key -> 0..100
 var incidents: Array = []   # {t, a, b, art, delta, text}; a = Verursacher, b = Betroffener
+var blockades: Array = []   # {cell: [x, y], by, target, placed, clear_at}
 
 
 func setup(simulation) -> void:
@@ -249,6 +261,130 @@ func buy_security(cid: int, level: int) -> Dictionary:
 	return {"ok": true, "msg": "Sicherheitsstufe %d aktiv (laufend %s/Tag)." % [level, Catalog.money(Catalog.SECURITY_PER_DAY[level])]}
 
 
+# ------------------------------------------------------------------ Strassenblockade
+func check_block(cid: int, target: int) -> String:
+	var c: Company = sim.company(cid)
+	var t: Company = sim.company(target)
+	if t == null or target == cid or t.depots.is_empty():
+		return "Ungültiges Ziel."
+	var v := get_tension(cid, target)
+	if v < STAGES[3]:
+		return "Spannung mit %s erst %d – eine Blockade kommt erst ab %d (Stufe Blockade) in Frage." % [t.company_name, int(v), int(STAGES[3])]
+	if _cooldown_left("block:%d" % cid) > 0.0:
+		return "Nur eine Blockade je Tag: wieder in %d Spielminuten." % int(_cooldown_left("block:%d" % cid))
+	if _cooldown_left("blocked:%d" % target) > 0.0:
+		return "%s wurde heute schon blockiert." % t.company_name
+	if c.ledger.cash < BLOCK_COST:
+		return "Nicht genug Bargeld (%s für Paletten und Helfer)." % Catalog.money(BLOCK_COST)
+	if block_cell(target).x < 0:
+		return "Keine geeignete Straße nahe am Hof von %s (Umfahrung oder Abstand zu Polizei/Ärzten fehlt)." % t.company_name
+	return ""
+
+
+## Strassenzelle 2-7 Schritte vom Hof entfernt, die eine Umfahrung zulaesst und weit genug von Polizei, Aerzten und Klinik liegt.
+func block_cell(target: int) -> Vector2i:
+	var start: Vector2i = sim.depot_road(target)
+	var protected: Array = []
+	for b in sim.city.buildings:
+		if b.role in ["police", "doctor"] or b.type == "clinic":
+			protected.append(b.road)
+	var dist := {start: 0}
+	var queue: Array = [start]
+	while not queue.is_empty():
+		var p: Vector2i = queue.pop_front()
+		var d: int = dist[p]
+		if d >= BLOCK_DIST.x and _block_ok(p, start, protected):
+			return p
+		if d >= BLOCK_DIST.y:
+			continue
+		for q in _road_neighbors(p):
+			if not dist.has(q) and not sim.nav.is_blocked_road(q):
+				dist[q] = d + 1
+				queue.append(q)
+	return Vector2i(-1, -1)
+
+
+func _road_neighbors(p: Vector2i) -> Array:
+	var out: Array = []
+	for dv in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if sim.city.is_road(p + dv):
+			out.append(p + dv)
+	return out
+
+
+func _block_ok(p: Vector2i, start: Vector2i, protected: Array) -> bool:
+	if sim.nav.is_blocked_road(p) or sim.city.road_mask(p) not in [5, 10]:
+		return false   # nur gerade Strassenstuecke, keine Kreuzungen
+	for r in protected:
+		if absi(r.x - p.x) + absi(r.y - p.y) < BLOCK_KEEP_CLEAR:
+			return false
+	# Umfahrung: vom Hof aus muessen beide Enden des Stuecks weiter erreichbar sein
+	sim.nav.road.set_point_solid(p, true)
+	var ok := true
+	for q in _road_neighbors(p):
+		if q != start and sim.nav.road_path(start, q).is_empty():
+			ok = false
+	sim.nav.road.set_point_solid(p, false)
+	return ok
+
+
+func block_road(cid: int, target: int) -> Dictionary:
+	var err := check_block(cid, target)
+	if err != "":
+		return {"ok": false, "msg": err}
+	var now: float = sim.game_min
+	var c: Company = sim.company(cid)
+	var t: Company = sim.company(target)
+	var cell := block_cell(target)
+	var clear_at: float = now + sim.rng.randf_range(BLOCK_CLEAR_MIN.x, BLOCK_CLEAR_MIN.y)
+	c.ledger.book("sabotage", -BLOCK_COST, true, "Paletten-Blockade gegen " + t.company_name, now)
+	cooldowns["block:%d" % cid] = now + BLOCK_COOLDOWN
+	cooldowns["blocked:%d" % target] = now + BLOCK_TARGET_COOLDOWN
+	sim.nav.add_roadwork(cell, clear_at)
+	var txt := "Paletten blockieren eine Straße im %s nahe %s" % [Catalog.DISTRICTS[sim.city.district_of(cell)], t.company_name]
+	sim.traffic_events.append({"kind": "blockade", "cells": [cell], "until": clear_at, "text": txt})
+	blockades.append({"cell": [cell.x, cell.y], "by": cid, "target": target, "placed": now, "clear_at": clear_at})
+	sim.log_event("Verkehr: %s – die Polizei ist unterwegs." % txt, "bad", target)
+	sim.notify(target, "Jemand hat die Straße bei (%d,%d) nahe deinem Hof mit Paletten zugestellt. Deine Fahrzeuge fahren Umwege." % [cell.x, cell.y])
+	sim.bark(target, "sabotage")
+	return {"ok": true, "msg": "Paletten liegen bei (%d,%d) vor dem Hof von %s. Die Polizei räumt in ein bis zwei Stunden und ermittelt." % [cell.x, cell.y, t.company_name]}
+
+
+func blockade_at(p: Vector2i) -> bool:
+	return blockades.any(func(b): return int(b.cell[0]) == p.x and int(b.cell[1]) == p.y)
+
+
+## Polizei raeumt faellige Blockaden und ermittelt den Taeter.
+func tick(now: float) -> void:
+	for b in blockades.duplicate():
+		if now < float(b.clear_at):
+			continue
+		blockades.erase(b)
+		var cell := Vector2i(int(b.cell[0]), int(b.cell[1]))
+		if sim.nav.roadworks.has(cell):
+			sim.nav.roadworks.erase(cell)
+			sim.nav.road.set_point_solid(cell, false)
+		for e in sim.traffic_events.duplicate():
+			if e.kind == "blockade" and cell in e.cells:
+				sim.traffic_events.erase(e)
+		var c: Company = sim.company(int(b.by))
+		var t: Company = sim.company(int(b.target))
+		if sim.rng.randf() < BLOCK_DETECT + 0.1 * t.security_level:
+			var fine := minf(BLOCK_FINE, maxf(0.0, c.ledger.cash))
+			if fine > 0.01:
+				c.ledger.book("fines", -fine, true, "Bußgeld Straßenblockade", now)
+			c.reputation = maxf(0.0, c.reputation - BLOCK_REP)
+			sim.social.add_trust(c.id, t.id, -30.0)
+			add_tension(c.id, t.id, "blockade", "Straße (%d,%d)" % [cell.x, cell.y])
+			c.add_key_event("Blockade gegen %s ermittelt" % t.company_name, now)
+			sim.log_event("Polizei räumt die Paletten-Blockade: %s war es (Bußgeld %s, Ruf −%d)." % [c.company_name, Catalog.money(fine), int(BLOCK_REP)], "bad", c.id)
+			sim.notify(t.id, "Die Polizei hat die Blockade geräumt. Täter: %s." % c.company_name)
+			sim.notify(c.id, "Die Polizei hat deine Blockade geräumt und dich ermittelt: Bußgeld %s, Ruf −%d." % [Catalog.money(fine), int(BLOCK_REP)])
+		else:
+			sim.log_event("Polizei räumt die Paletten-Blockade vor dem Hof von %s; Täter unbekannt." % t.company_name, "warn", t.id)
+			sim.notify(t.id, "Die Polizei hat die Blockade geräumt; der Täter ist unbekannt.")
+
+
 # ------------------------------------------------------------------ Spannung
 func get_tension(a: int, b: int) -> float:
 	return float(tension.get(Social.pair_key(a, b), 0.0))
@@ -330,10 +466,13 @@ func mayor_summary() -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"cooldowns": cooldowns, "tension": tension, "incidents": incidents}
+	return {"cooldowns": cooldowns, "tension": tension, "incidents": incidents, "blockades": blockades}
 
 
 func from_dict(d: Dictionary) -> void:
 	cooldowns = d.cooldowns
 	tension = d.get("tension", {})
 	incidents = d.get("incidents", [])
+	blockades = d.get("blockades", [])
+	for b in blockades:
+		sim.nav.add_roadwork(Vector2i(int(b.cell[0]), int(b.cell[1])), float(b.clear_at))

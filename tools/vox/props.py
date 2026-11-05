@@ -91,6 +91,24 @@ def roadwork():
     return m
 
 
+def blockade():
+    """Strassenblockade aus Rivalitaet (Auftrag 12): quer gestellte Holzpaletten mit Kartons und Folie."""
+    m = _base(28)
+    for k, (x, y) in enumerate(((1, 10), (11, 12), (21, 9))):
+        m.box(x, y, 1, x + 10, y + 10, 2, M("wood"))
+        for i in range(3):
+            m.box(x + i * 4, y, 2, x + i * 4 + 2, y + 10, 3, M("frame_wood"))
+        m.box(x, y, 3, x + 10, y + 10, 4, M("wood"))
+        h = 10 + 4 * (k % 2)
+        m.box(x + 1, y + 1, 4, x + 9, y + 9, h, M("cardboard"))
+        m.box(x + 1, y + 4, h - 1, x + 9, y + 6, h, M("tape"))
+        if k != 1:
+            m.box(x + 2, y + 2, h, x + 8, y + 8, h + 5, M("cardboard"))
+    m.box(4, 23, 1, 7, 26, 6, M("cone"))
+    m.box(5, 24, 6, 6, 25, 8, M("cone"))
+    return m
+
+
 def flag():
     m = Model(16, 16, 50)
     m.box(7, 7, 1, 9, 9, 40, M("steel"))

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1142,6 +1142,59 @@ func test_rivalry_tension() -> void:
 	# Speichern/Laden
 	var s2 := Simulation.from_dict(s.to_dict())
 	ok(is_equal_approx(s2.rivalry.get_tension(0, 1), s.rivalry.get_tension(0, 1)) and s2.rivalry.incidents.size() == s.rivalry.incidents.size(), "Spannung und Vorfälle überstehen Speichern/Laden")
+
+
+func test_road_blockade() -> void:
+	var s := new_sim(3)
+	s.company(0).ledger.inject(10000.0)
+	var r0 := s.rivalry.block_road(0, 1)
+	ok(not r0.ok and str(r0.msg).contains("Spannung"), "ohne hohe Spannung keine Blockade")
+	for i in 3:
+		s.rivalry.add_tension(0, 1, "fahrer_abgeworben", "x")
+		s.rivalry.add_tension(1, 0, "kunde_abgeworben", "y")
+	ok(s.rivalry.get_tension(0, 1) >= Rivalry.STAGES[3], "Ausgangslage: Spannung auf Stufe Blockade")
+	var cash0 := s.company(0).ledger.cash
+	var rep0 := s.company(0).reputation
+	var r := s.rivalry.block_road(0, 1)
+	ok(r.ok, "Blockade gelegt: " + str(r.msg))
+	ok(s.rivalry.blockades.size() == 1, "eine Blockade aktiv")
+	var b: Dictionary = s.rivalry.blockades[0]
+	var cell := Vector2i(int(b.cell[0]), int(b.cell[1]))
+	var start := s.depot_road(1)
+	ok(s.city.is_road(cell) and s.nav.is_blocked_road(cell) and s.rivalry.blockade_at(cell), "Straßenzelle ist gesperrt und als Blockade erkennbar")
+	var d := absi(cell.x - start.x) + absi(cell.y - start.y)
+	ok(d >= 1 and d <= Rivalry.BLOCK_DIST.y, "Blockade liegt nahe am Hof des Rivalen (Abstand %d)" % d)
+	var reach := true
+	for q in s.rivalry._road_neighbors(cell):
+		if q != start and s.nav.road_path(start, q).is_empty():
+			reach = false
+	ok(reach, "Umfahrung möglich: beide Enden bleiben vom Hof erreichbar")
+	var far := true
+	for bb in s.city.buildings:
+		if bb.role in ["police", "doctor"] or bb.type == "clinic":
+			if absi(bb.road.x - cell.x) + absi(bb.road.y - cell.y) < Rivalry.BLOCK_KEEP_CLEAR:
+				far = false
+	ok(far, "nie vor Polizei, Arztpraxis oder Klinik")
+	ok(s.traffic_events.any(func(e): return e.kind == "blockade"), "Verkehrsmeldung für die Blockade")
+	ok(is_equal_approx(s.company(0).ledger.cash, cash0 - Rivalry.BLOCK_COST), "Paletten und Helfer kosten %s" % Catalog.money(Rivalry.BLOCK_COST))
+	ok(not s.rivalry.block_road(0, 1).ok and not s.rivalry.block_road(2, 1).ok, "höchstens eine Blockade je Firma und Opfer am Tag")
+	# Polizei raeumt
+	run(s, (Rivalry.BLOCK_CLEAR_MIN.y + 10.0) / 2.0)
+	ok(s.rivalry.blockades.is_empty() and not s.nav.is_blocked_road(cell), "Polizei räumt die Blockade spätestens nach %d Minuten" % int(Rivalry.BLOCK_CLEAR_MIN.y))
+	ok(not s.traffic_events.any(func(e): return e.kind == "blockade"), "Verkehrsmeldung verschwindet")
+	var caught := s.company(0).reputation < rep0
+	var arts: Array = s.rivalry.incidents.map(func(i): return i.art)
+	ok(caught == ("blockade" in arts), "ermittelter Täter: Ruf und Spannung steigen; unbekannter Täter: keine Spannung")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten (Bußgeld an die Stadtkasse)")
+	# Speichern/Laden einer aktiven Blockade
+	s.rivalry.cooldowns.clear()
+	s.company(0).ledger.inject(5000.0)
+	s.rivalry.add_tension(0, 1, "sabotage_entdeckt", "z")
+	ok(s.rivalry.block_road(0, 1).ok, "zweite Blockade nach Ablauf der Sperrfrist")
+	var s2 := Simulation.from_dict(s.to_dict())
+	ok(s2.rivalry.blockades.size() == 1 and s2.nav.is_blocked_road(Vector2i(int(s2.rivalry.blockades[0].cell[0]), int(s2.rivalry.blockades[0].cell[1]))), "aktive Blockade übersteht Speichern/Laden und sperrt weiter")
+	# Aktion fuer Modellspieler
+	ok(ActionExecutor.SCHEMA.has("block_road"), "Aktion block_road steht Modellspielern zur Verfügung")
 
 
 func test_dispatch_help() -> void:

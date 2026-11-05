@@ -26,7 +26,7 @@ const KINDS := {
 const ACTION_KIND := {
 	"accept_contract": "auftrag", "assign_transport": "auftrag", "assign_vehicle": "auftrag", "plan_tour": "auftrag", "request_transport_help": "auftrag",
 	"place_building": "bau", "upgrade_building": "bau", "build_office": "bau", "upgrade_office": "bau", "expand_plot": "bau", "rent_depot": "bau",
-	"attempt_vehicle_sabotage": "sabotage", "attempt_sabotage": "angriff", "report_rival": "angriff", "poach_worker": "angriff", "poach_customer": "angriff",
+	"attempt_vehicle_sabotage": "sabotage", "attempt_sabotage": "angriff", "report_rival": "angriff", "block_road": "angriff", "poach_worker": "angriff", "poach_customer": "angriff",
 	"buy_vehicle": "kauf", "buy_supplies": "kauf", "recruit_worker": "personal", "recruit_foreman": "personal", "dismiss_worker": "personal",
 	"repair_vehicle": "reparatur", "schedule_maintenance": "reparatur",
 }
@@ -78,7 +78,7 @@ func locate(cid: int, a: Dictionary) -> Vector2i:
 		var v = sim.vehicles.get(ActionExecutor._i(a.vehicle_id))
 		if v != null:
 			return v.tile()
-	if name in ["attempt_sabotage", "report_rival", "poach_worker"] and a.get("target") != null:
+	if name in ["attempt_sabotage", "report_rival", "poach_worker", "block_road"] and a.get("target") != null:
 		var t = sim.company(ActionExecutor._i(a.target))
 		if t != null and not t.depots.is_empty():
 			return sim.city.building(int(t.depots[0])).walk
@@ -107,6 +107,8 @@ static func describe(name: String, a: Dictionary, result: Dictionary) -> String:
 			return "Rufschädigung gegen Firma %s" % str(a.get("target", "?"))
 		"report_rival":
 			return "zeigt Firma %s beim Bürgermeister an" % str(a.get("target", "?"))
+		"block_road":
+			return "BLOCKIERT die Straße vor Firma %s mit Paletten" % str(a.get("target", "?"))
 		"poach_worker":
 			return "wirbt Personal von Firma %s ab" % str(a.get("target", "?"))
 		"place_building":

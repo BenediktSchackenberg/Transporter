@@ -89,6 +89,7 @@ const SCHEMA := {
 		"desc": "Wie propose_cooperation."},
 	"poach_customer": {"params": {"customer_id": "int"}, "desc": "Stammkunden eines Konkurrenten abwerben (legal, 800 EUR)."},
 	"report_rival": {"params": {"target": "int", "reason": "string?"}, "desc": "Konkurrenten beim Bürgermeister anzeigen: das Amt prüft sofort (Steuer, Zahlungsrückstand, Zustand der Einrichtungen). Ohne Beanstandung zahlst DU Bußgeld und verlierst Ruf."},
+	"block_road": {"params": {"target": "int"}, "desc": "Regelwidrig! Paletten auf eine Straße nahe am Hof des Konkurrenten stellen (600 EUR); seine Fahrzeuge fahren Umwege. Erst ab Spannung 70, je Tag eine. Die Polizei räumt und ermittelt meist: 2500 EUR Bußgeld, Ruf -8."},
 	"buy_security": {"params": {"level": "int"}, "desc": "Sicherheitsstufe 0-2 (schützt vor Sabotage)."},
 	"set_insurance": {"params": {"active": "bool"}, "desc": "Versicherung gegen Sabotageschäden (600 EUR/Tag)."},
 	"attempt_sabotage": {"params": {"target": "int", "kind": "string"},
@@ -711,6 +712,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.rivalry.poach_customer(cid, _i(a.customer_id))
 		"report_rival":
 			return sim.rivalry.report_rival(cid, _i(a.target), _s(a.get("reason", "")))
+		"block_road":
+			return sim.rivalry.block_road(cid, _i(a.target))
 		"buy_security":
 			return sim.rivalry.buy_security(cid, _i(a.level))
 		"set_insurance":

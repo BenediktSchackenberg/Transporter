@@ -3397,6 +3397,22 @@
     24,
     33
    ]
+  },
+  "blockade": {
+   "anchor": [
+    46,
+    17
+   ],
+   "size": [
+    92,
+    67
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    46,
+    49
+   ]
   }
  },
  "projection": {

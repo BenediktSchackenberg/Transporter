@@ -278,6 +278,7 @@ def build_props():
     prop("d_light_red", PR.traffic_light("red"))
     prop("d_light_green", PR.traffic_light("green"))
     prop("roadwork", PR.roadwork())
+    prop("blockade", PR.blockade())
     prop("flag", PR.flag(), (8, 8), keep_mask=True)
     prop("fac_site", PR.site_fence())
     for c in ("pakete", "lebensmittel", "medikamente", "getraenke", "elektronik", "moebel", "baustoffe", "maschinenteile", "container"):
