@@ -24,6 +24,7 @@ var cv: CityView
 var vehicle_nodes := {}
 var traffic_nodes: Array = []
 var service_nodes: Array = []         # Streifen- und Krankenwagen (PublicSafety.vehicles)
+var fleet_nodes := {}                 # CityFleet: Bautrupps und Umzugswagen (ID -> Node2D)
 var avatar_nodes := {}
 var _people_timer := 0.0
 var _people_cache: Array = []
@@ -54,14 +55,8 @@ func build(simulation: Simulation, city_view: CityView) -> void:
 	y_sort_enabled = true
 	_ped_rng.seed = sim.city.seed_value + 99
 	for sv in sim.safety.vehicles:
-		var sn := _make_vehicle_node("car", "white", Color.WHITE, false) if sv.kind == "polizei" else _make_vehicle_node("van", "", Color(0.95, 0.2, 0.2), true)
-		var siren := Sprite2D.new()
-		siren.name = "siren"
-		siren.texture = cv.tex("glow_small")
-		siren.material = cv._additive
-		siren.scale = Vector2(0.45, 0.45)
-		siren.position = Vector2(0, -34)
-		sn.add_child(siren)
+		var sn := _make_vehicle_node("police" if sv.kind == "polizei" else "ambulance", "", Color.WHITE, false)
+		_add_beacon(sn, -30.0 if sv.kind == "polizei" else -58.0)
 		add_child(sn)
 		service_nodes.append(sn)
 	for m in sim.traffic:
@@ -113,6 +108,43 @@ func _make_vehicle_node(model: String, car_color: String, color: Color, company:
 	cv.lights_layer.add_child(light)
 	headlights.append([light, n])
 	return n
+
+
+## Blinklicht (Blaulicht, Rundumleuchte) als additiver Lichtfleck ueber dem Dach.
+func _add_beacon(n: Node2D, height: float) -> void:
+	var siren := Sprite2D.new()
+	siren.name = "siren"
+	siren.texture = cv.tex("glow_small")
+	siren.material = cv._additive
+	siren.scale = Vector2(0.45, 0.45)
+	siren.position = Vector2(0, height)
+	n.add_child(siren)
+
+
+## Bautrupps und Umzugswagen des Stadtfuhrparks: Knoten anlegen, bewegen, entfernen; Rundumleuchte beim Bautrupp.
+func _update_fleet() -> void:
+	var seen := {}
+	for v in sim.fleet.vehicles:
+		var id := int(v.id)
+		seen[id] = true
+		var n: Node2D = fleet_nodes.get(id)
+		if n == null:
+			n = _make_vehicle_node("roadcrew" if v.kind == "bautrupp" else "moving", "", Color.WHITE, false)
+			if v.kind == "bautrupp":
+				_add_beacon(n, -50.0)
+			add_child(n)
+			fleet_nodes[id] = n
+		var m: Mover = v.mover
+		n.position = Iso.to_screen(m.pos)
+		_set_vehicle_dir(n, m.heading)
+		var siren: Sprite2D = n.get_node_or_null("siren")
+		if siren:
+			var on := int(anim_time * 4.0) % 2 == 0
+			siren.modulate = Color(1.0, 0.7, 0.2, 0.95) if on else Color(1.0, 0.55, 0.1, 0.25)
+	for id in fleet_nodes.keys():
+		if not seen.has(id):
+			fleet_nodes[id].queue_free()
+			fleet_nodes.erase(id)
 
 
 static func _dir_of(h: Vector2) -> int:
@@ -348,6 +380,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		var siren: Sprite2D = sn.get_node("siren")
 		siren.visible = on_duty
 		siren.modulate = (Color(0.3, 0.5, 1.0, 0.95) if blink else Color(1.0, 0.25, 0.25, 0.95)) if sv.kind == "krankenwagen" else (Color(0.3, 0.5, 1.0, 0.95) if blink else Color(0.6, 0.75, 1.0, 0.5))
+	_update_fleet()
 	for i in sim.traffic.size():
 		var m: Mover = sim.traffic[i]
 		var n: Node2D = traffic_nodes[i]

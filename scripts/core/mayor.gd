@@ -80,11 +80,13 @@ var marketing_until := -1              # bis einschliesslich Monat
 var _next_plan := 1
 var _next_project := 1
 var _next_dec := 1
+var _arrival_acc := 0.0                # Bruchteil zugezogener Haushalte (Zuzug wird taeglich verteilt)
 
 
 func setup(simulation) -> void:
 	sim = simulation
 	sim.month_changed.connect(on_month)
+	sim.day_changed.connect(on_day)
 
 
 ## Anfangszustand nach Erzeugung der Stadt: Wohnungsbestand passt zur Bevoelkerung (3 % Leerstand).
@@ -272,17 +274,28 @@ func quarter_candidates(limit: int) -> Array:
 
 
 # ------------------------------------------------------------------ Monatslauf, Wohnungsmarkt, Wahl
-func on_month(month: int) -> void:
+## Zuzug je Spieltag: neue Haushalte suchen eine Wohnung, Wartende ziehen bei freiem Wohnraum ein (Umzugswagen auf der Karte).
+## Menge nach Wirtschaftslage (Beschaeftigung) und Lebensqualitaet (mittleres Glueck, 50 = neutral); Grundrate je Monat aus
+## config/residents.json "zuzug_je_monat" (Anteil der Haushalte, Standard 0,04).
+func on_day(_day: int) -> void:
 	var Z: Citizens = sim.citizens
-	# neue Haushalte suchen eine Wohnung, Wartende ziehen bei freiem Wohnraum ein, lange Wartende wandern ab
-	# Zuzug nach Wirtschaftslage (Beschaeftigung) und Lebensqualitaet (mittleres Glueck der Bewohner, 50 = neutral)
+	var month := GameCalendar.month_of(sim.game_min)
 	var boost := marketing_boost if month <= marketing_until else 0.0
-	waiting += int(round(float(Z.population()) / PERSONS_PER_UNIT * 0.008 * (0.5 + Z.employment_rate()) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost)))
+	var rate := float(Population.cfg().get("zuzug_je_monat", 0.04)) / float(GameCalendar.DAYS_PER_MONTH)
+	_arrival_acc += float(Z.population()) / PERSONS_PER_UNIT * rate * (0.5 + Z.employment_rate()) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost)
+	var new_h := int(_arrival_acc)
+	_arrival_acc -= float(new_h)
+	waiting += new_h
 	var free_units := stock_units - occupied_units()
 	var moving := mini(waiting, maxi(0, free_units))
 	if moving > 0:
 		waiting -= moving
 		Z.immigrate(int(round(moving * PERSONS_PER_UNIT)), month)
+
+
+func on_month(month: int) -> void:
+	var Z: Citizens = sim.citizens
+	# lange Wartende wandern ab
 	waiting = maxi(0, waiting - int(round(float(waiting) * 0.08)))
 	pop_history.append(Z.population())
 	if pop_history.size() > 36:
@@ -634,7 +647,7 @@ func _today() -> int:
 func to_dict() -> Dictionary:
 	return {"name": name, "party": party, "term_start_day": term_start_day, "approval": approval, "stock_units": stock_units, "waiting": waiting, "plans": plans,
 		"projects": projects, "decisions": decisions, "notes": notes, "commitments": commitments, "elections": elections, "pop_history": pop_history,
-		"next": [_next_plan, _next_project, _next_dec], "marketing": [marketing_boost, marketing_until]}
+		"next": [_next_plan, _next_project, _next_dec], "marketing": [marketing_boost, marketing_until], "arrival_acc": _arrival_acc}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -653,6 +666,7 @@ func from_dict(d: Dictionary) -> void:
 	commitments = float(d.get("commitments", 0.0))
 	elections = d.get("elections", [])
 	pop_history = d.get("pop_history", pop_history)
+	_arrival_acc = float(d.get("arrival_acc", 0.0))
 	var mk: Array = d.get("marketing", [0.0, -1])
 	marketing_boost = float(mk[0])
 	marketing_until = int(mk[1])

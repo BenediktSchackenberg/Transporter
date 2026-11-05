@@ -5,7 +5,7 @@ import random
 
 from engine import Model, mat, M
 
-SIZES = {"car": 36, "cargobike": 26, "van": 56, "transporter": 66, "reefer": 66, "truck": 86, "semi": 126}
+SIZES = {"police": 40, "ambulance": 60, "roadcrew": 60, "moving": 66, "car": 36, "cargobike": 26, "van": 56, "transporter": 66, "reefer": 66, "truck": 86, "semi": 126}
 CAR_COLORS = {"car_silver": "#c0c4cc", "car_black": "#2f3239", "car_red": "#b03a36", "car_blue": "#3a5fa0", "car_gold": "#cdb060",
               "car_white": "#e4e4e0", "car_green": "#4f8a55", "car_violet": "#74559c"}
 
@@ -19,6 +19,16 @@ def init():
     mat("head_lamp", "#fff3c8", noise=0.0, emit="#ffe9a0", top=False)
     mat("cab_white", "#ecebe6", noise=0.03)
     mat("cargo_white", "#dcdbd6", noise=0.03)
+    mat("police_blue", "#2f5fb0", noise=0.03)
+    mat("police_silver", "#e8eaee", noise=0.03)
+    mat("beacon_blue", "#4a8cff", noise=0.0, emit="#5aa0ff", top=True)
+    mat("beacon_red", "#ff4a3a", noise=0.0, emit="#ff3a2a", top=True)
+    mat("beacon_amber", "#ffb030", noise=0.0, emit="#ffc040", top=True)
+    mat("signal_red", "#d0302a", noise=0.02)
+    mat("signal_orange", "#e8782a", noise=0.04)
+    mat("hazard_white", "#f2f0ea", noise=0.02)
+    mat("moving_blue", "#3a6fb8", noise=0.03)
+    mat("box_brown", "#b88a58", noise=0.06)
 
 
 def _wheel(m, cx, cy, r=4, z0=1, side=0):
@@ -57,6 +67,98 @@ def car(color="car_silver", seed=0):
     for yy in (y0 + 1, y0 + 10):
         m.box(x0 + 27, yy, 4, x0 + 28, yy + 2, 6, M("head_lamp"))
         m.box(x0, yy, 4, x0 + 1, yy + 2, 6, M("rear_lamp"))
+    return m
+
+
+def police():
+    """Streifenwagen: silber-weiss mit blauen Tueren und Lichtbalken (Stadtdienst, Auftrag 12 Darstellung)."""
+    S = SIZES["police"]
+    m = _square(S)
+    x0, y0 = (S - 30) // 2, (S - 14) // 2
+    m.box(x0, y0, 2, x0 + 30, y0 + 14, 7, M("police_silver"))
+    m.box(x0 + 8, y0, 3, x0 + 22, y0 + 1, 7, M("police_blue"))
+    m.box(x0 + 8, y0 + 13, 3, x0 + 22, y0 + 14, 7, M("police_blue"))
+    m.box(x0 + 7, y0 + 1, 7, x0 + 23, y0 + 13, 12, M("police_silver"))
+    m.box(x0 + 8, y0 + 1, 7, x0 + 22, y0 + 13, 11, M("glass_dark"))
+    m.box(x0 + 9, y0 + 2, 11, x0 + 21, y0 + 12, 12, M("police_silver"))
+    m.box(x0 + 13, y0 + 2, 12, x0 + 17, y0 + 7, 14, M("beacon_blue"))
+    m.box(x0 + 13, y0 + 7, 12, x0 + 17, y0 + 12, 14, M("beacon_blue"))
+    m.box(x0 + 28, y0, 2, x0 + 30, y0 + 14, 4, M("black"))
+    m.box(x0, y0, 2, x0 + 2, y0 + 14, 4, M("black"))
+    for wx in (x0 + 6, x0 + 23):
+        _wheel(m, wx, y0, 3, 1, 1)
+        _wheel(m, wx, y0 + 13, 3, 1, 0)
+    for yy in (y0 + 1, y0 + 11):
+        m.box(x0 + 29, yy, 4, x0 + 30, yy + 2, 6, M("head_lamp"))
+        m.box(x0, yy, 4, x0 + 1, yy + 2, 6, M("rear_lamp"))
+    return m
+
+
+def ambulance():
+    """Rettungswagen: weisser Kofferaufbau, rote Bauchbinde, Blaulicht vorn und hinten."""
+    S = SIZES["ambulance"]
+    m = _square(S)
+    L, W = 52, 20
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 3, x0 + 34, y0 + W, 26, M("cargo_white"))
+    m.box(x0, y0, 3, x0 + 34, y0 + W, 5, M("black"))
+    m.box(x0, y0 - 0, 12, x0 + 34, y0 + 1, 16, M("signal_red"))
+    m.box(x0, y0 + W - 1, 12, x0 + 34, y0 + W, 16, M("signal_red"))
+    m.box(x0 + 14, y0 - 0, 17, x0 + 20, y0 + 1, 23, M("signal_red"))
+    m.box(x0 + 14, y0 + W - 1, 17, x0 + 20, y0 + W, 23, M("signal_red"))
+    m.box(x0 + 1, y0 + 2, 26, x0 + 4, y0 + W - 2, 28, M("beacon_blue"))
+    _cab(m, x0 + 34, y0, W, 19, 16)
+    m.box(x0 + 34, y0 + 3, 19, x0 + 38, y0 + W - 3, 21, M("beacon_blue"))
+    for wx in (x0 + 8, x0 + 40):
+        _wheel(m, wx, y0, 4, 1, 1)
+        _wheel(m, wx, y0 + W - 1, 4, 1, 0)
+    _lights(m, x0 + L, x0, y0, W, 5)
+    return m
+
+
+def roadcrew():
+    """Fahrzeug der Strassenmeisterei: orange Pritsche mit Warnstreifen, Leitkegeln und Rundumleuchte."""
+    S = SIZES["roadcrew"]
+    m = _square(S)
+    L, W = 50, 20
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 3, x0 + 32, y0 + W, 8, M("signal_orange"))
+    m.box(x0, y0, 8, x0 + 32, y0 + 1, 12, M("signal_orange"))
+    m.box(x0, y0 + W - 1, 8, x0 + 32, y0 + W, 12, M("signal_orange"))
+    m.box(x0, y0, 8, x0 + 1, y0 + W, 12, M("signal_orange"))
+    for k, xx in enumerate(range(x0, x0 + 32, 4)):
+        m.box(xx, y0, 4, xx + 2, y0 + 1, 7, M("hazard_white" if k % 2 else "signal_red"))
+        m.box(xx, y0 + W - 1, 4, xx + 2, y0 + W, 7, M("hazard_white" if k % 2 else "signal_red"))
+    for cx, cy in ((x0 + 5, y0 + 5), (x0 + 12, y0 + 12), (x0 + 19, y0 + 5), (x0 + 26, y0 + 12)):
+        m.box(cx - 1, cy - 1, 8, cx + 2, cy + 2, 12, M("signal_orange"))
+        m.box(cx, cy, 12, cx + 1, cy + 1, 15, M("signal_orange"))
+        m.box(cx - 1, cy - 1, 10, cx + 2, cy + 2, 11, M("hazard_white"))
+    _cab(m, x0 + 32, y0, W, 19, 16, "signal_orange")
+    m.box(x0 + 37, y0 + 8, 19, x0 + 41, y0 + 12, 22, M("beacon_amber"))
+    for wx in (x0 + 8, x0 + 39):
+        _wheel(m, wx, y0, 4, 1, 1)
+        _wheel(m, wx, y0 + W - 1, 4, 1, 0)
+    _lights(m, x0 + L, x0, y0, W, 5)
+    return m
+
+
+def moving():
+    """Umzugswagen: weisser Koffer mit blauem Streifen, hinten offen mit Umzugskartons."""
+    S = SIZES["moving"]
+    m = _square(S)
+    L, W = 60, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 4, x0 + 42, y0 + W, 31, M("cargo_white"))
+    m.box(x0, y0, 4, x0 + 42, y0 + W, 6, M("black"))
+    m.box(x0 + 2, y0, 16, x0 + 40, y0 + 1, 21, M("moving_blue"))
+    m.box(x0 + 2, y0 + W - 1, 16, x0 + 40, y0 + W, 21, M("moving_blue"))
+    m.box(x0, y0 + 2, 6, x0 + 1, y0 + W - 2, 29, M("box_brown"))
+    m.box(x0 - 3, y0 + 4, 4, x0, y0 + 10, 10, M("box_brown"))
+    _cab(m, x0 + 42, y0, W, 22, 18)
+    for wx in (x0 + 9, x0 + 47):
+        _wheel(m, wx, y0, 5, 1, 1)
+        _wheel(m, wx, y0 + W - 1, 5, 1, 0)
+    _lights(m, x0 + L, x0, y0, W, 6)
     return m
 
 

@@ -2,6 +2,7 @@
   "_hinweis": "Bevölkerungsmodell (Auftrag 10, docs/RESIDENTS.md). Werte werden beim Spielstart gelesen; fehlende Schlüssel nehmen den Standard aus scripts/economy/population.gd.",
   "bevoelkerung": 1000,
   "beschaeftigungsquote": 0.9,
+  "zuzug_je_monat": 0.04,
   "eigentuemerquote": 0.35,
   "alter_min": 18,
   "alter_max": 67,

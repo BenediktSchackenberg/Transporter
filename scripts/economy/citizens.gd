@@ -123,13 +123,26 @@ func generate() -> void:
 ## Zuzug: neue, zunaechst arbeitslose Buerger (Haushalte, die eine Wohnung gefunden haben).
 func immigrate(n: int, month: int, home: String = "") -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = int(sim.city.seed_value) + 9100 + month
+	rng.seed = int(sim.city.seed_value) + 9100 + month * 1000 + _next   # Zuzug kommt taeglich: je Aufruf eigene Namen
 	for i in n:
 		var first: Array = Residents.FEMALE if rng.randi() % 2 == 0 else Residents.MALE
 		people.append({"id": _next, "name": "%s %s" % [first[rng.randi() % first.size()],
 			CityGenerator.SURNAMES[rng.randi() % CityGenerator.SURNAMES.size()]], "employer": "", "wage": 0.0, "jobless_months": 0, "home": home})
 		_next += 1
 	sim.population.init_people(people.slice(people.size() - n), month)
+	_show_arrival(n, home)
+
+
+## Umzugswagen je zugezogenem Haushalt (Darstellung): zur eigenen Wohneinheit oder, ohne Zuordnung, zu einem Wohnhaus der Stadt.
+func _show_arrival(n: int, home: String) -> void:
+	var units: Dictionary = sim.housing.units
+	if units.is_empty():
+		return
+	var keys: Array = units.keys()
+	for i in maxi(1, int(round(float(n) / Mayor.PERSONS_PER_UNIT))):
+		var u: Dictionary = units.get(home, {}) if home != "" else units[keys[(_next * 13 + i * 7) % keys.size()]]
+		if not u.is_empty():
+			sim.fleet.send_moving(int(u.building), "Zuzug")
 
 
 ## Wegzug: alle Buerger der Wohneinheit verlassen die Stadt. Gibt ihre Zahl zurueck.

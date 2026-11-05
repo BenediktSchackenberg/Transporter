@@ -56,6 +56,7 @@ var insolvency := Insolvency.new()
 var economy := Economy.new()        # Konten ausserhalb der Firmen, Geldkonservierung
 var world_events := WorldEvents.new()   # automatischer Ereignismanager
 var dispatcher = null   # DispatchAgent (Claude-Disponent), falls aktiv; untypisiert gegen Zyklen
+var fleet := CityFleet.new()      # sichtbare Bautrupps und Umzugswagen (nur Darstellung)
 var safety := PublicSafety.new()   # Polizei, Gefaengnis, Aerzte, Krankenhaus, Kriminalitaet (Auftrag 10, Etappe 3)
 var activity := ActivityFeed.new()   # KI-Aktivitaet mit Ort (nur Anzeige)
 var population := Population.new()   # Bevoelkerungsmodell: Alter, Bildung, Konten R0, Eigentum, Grundsteuer (Auftrag 10)
@@ -122,6 +123,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	population.setup(self)
 	activity.setup(self)
 	safety.setup(self)
+	fleet.setup(self)
 	banking.setup(self)
 	player_loans.setup(self)
 	central_bank.setup(self)
@@ -975,6 +977,7 @@ func step(dt: float) -> void:
 	for m in traffic:
 		_update_traffic_car(m, dt)
 	safety.update(dt)
+	fleet.update(dt)
 	for v in vehicles.values():
 		_update_vehicle(v, dt)
 	for a in avatars.values():
@@ -1080,6 +1083,7 @@ func _world_events(now: float) -> void:
 			nav.add_roadwork(p, until)
 			var txt := "Baustelle im %s (Straße gesperrt)" % Catalog.DISTRICTS[city.district_of(p)]
 			traffic_events.append({"kind": "baustelle", "cells": [p], "until": until, "text": txt})
+			fleet.send_crew(p, until, "Leitungsbau")
 			log_event("Verkehr: " + txt, "info")
 	var jams := traffic_events.filter(func(e): return e.kind == "stau").size()
 	if jams < 3 and rng.randf() < 0.015:

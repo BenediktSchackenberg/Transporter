@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1366,6 +1366,55 @@ func test_rivalry_mayor() -> void:
 static func _tick_at(sim: Simulation, t: float) -> void:
 	sim.game_min = maxf(sim.game_min, t)
 	sim.talk.minute_tick(sim.game_min)
+
+
+func test_city_fleet() -> void:
+	var s := new_sim(2)
+	var F: CityFleet = s.fleet
+	# Bautrupp: Rathaus -> Baustelle -> arbeiten -> zurueck
+	var site := s._straight_road()
+	var until := s.game_min + GameCalendar.days_to_min(0.5)
+	s.nav.add_roadwork(site, until)
+	F.send_crew(site, until, "Test")
+	F.send_crew(site, until, "Test")
+	ok(F.vehicles.size() == 1 and F.vehicles[0].kind == "bautrupp" and F.vehicles[0].phase == "anfahrt", "ein Bautrupp je Baustelle fährt los")
+	var v: Dictionary = F.vehicles[0]
+	var t := 0
+	while v.phase == "anfahrt" and t < 4000:
+		s.step(0.1)
+		t += 1
+	ok(v.phase == "arbeit" and v.mover.tile().distance_to(site) <= 1.5, "Bautrupp kommt an der Baustelle an und arbeitet (%d Schritte)" % t)
+	ok(F.crews_at_work().size() == 1, "arbeitender Trupp ist für die Baustellenanzeige sichtbar")
+	while F.vehicles.has(v) and t < 12000:
+		s.step(0.1)
+		t += 1
+	ok(not F.vehicles.has(v), "nach Ende der Baustelle fährt der Trupp zurück und verschwindet")
+	# zufaellige Strassenbaustellen und Instandsetzungen schicken Trupps
+	var before := int(F.stats.bautrupps)
+	var seg: Vector2i = s.road_care.cond.keys()[0]
+	var r := s.road_care.order(RoadCare.seg_id(seg), "eigen", "Test")
+	ok(not r.ok or int(F.stats.bautrupps) == before + 1, "Instandsetzung schickt einen Bautrupp der Straßenmeisterei")
+	# Zuzug: Umzugswagen vom Stadtrand zur Wohnung
+	s.mayor.stock_units = s.mayor.occupied_units() + 20
+	s.mayor.waiting = 5
+	var pop0 := s.citizens.population()
+	s.mayor.on_day(1)
+	ok(s.citizens.population() > pop0 and s.mayor.waiting == 0, "Wartende ziehen täglich ein, sobald Wohnungen frei sind")
+	var vans: Array = F.vehicles.filter(func(x): return x.kind == "umzug")
+	ok(vans.size() >= 1 and vans.size() <= CityFleet.MAX_MOVING, "Umzugswagen unterwegs (%d)" % vans.size())
+	var van: Dictionary = vans[0]
+	t = 0
+	while F.vehicles.has(van) and t < 20000:
+		s.step(0.1)
+		t += 1
+	ok(not F.vehicles.has(van), "Umzugswagen lädt ab und fährt wieder hinaus")
+	# taeglicher Zuzug summiert sich zur Monatsrate
+	var m := new_sim(2)
+	m.mayor.stock_units = m.mayor.occupied_units()   # keine freie Wohnung: Zuzug landet bei den Wohnungssuchenden
+	for d in 30:
+		m.mayor.on_day(d)
+	ok(m.mayor.waiting >= 1, "ohne freie Wohnungen wächst die Zahl der Wohnungssuchenden (%d nach 30 Tagen)" % m.mayor.waiting)
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
 
 
 static func KINDS_OK(k: Dictionary) -> bool:
@@ -4133,10 +4182,13 @@ func test_mayor() -> void:
 	ok(ind.wohnen.leerstand > 0.0 and ind.wohnen.leerstand < 0.06, "Anfangs knapper Leerstand (%.1f %%)" % (ind.wohnen.leerstand * 100.0))
 	# Wohnungsmarkt: ohne neue Einheiten wachsen die Wartenden, mit Einheiten ziehen Haushalte ein
 	for m in 4:
+		for d in GameCalendar.DAYS_PER_MONTH:
+			M.on_day(m * GameCalendar.DAYS_PER_MONTH + d)   # Zuzug kommt taeglich
 		M.on_month(m + 1)
 	ok(M.waiting > 0 and M.rent_index() > 100.0, "Wohnungssuchende steigen bei vollem Bestand (%d, Mietindex %.0f)" % [M.waiting, M.rent_index()])
 	var pop0: int = s.citizens.population()
 	M.stock_units += 40
+	M.on_day(150)
 	M.on_month(6)
 	ok(s.citizens.population() > pop0, "neue Wohneinheiten: Haushalte ziehen ein (+%d Einwohner)" % (s.citizens.population() - pop0))
 	M.waiting = 30

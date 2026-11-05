@@ -62,6 +62,27 @@ func update_view(delta: float) -> void:
 			n.crew = sim.road_care.crew_of(j)
 			n.seed_key = hash(j.id)
 			n.queue_redraw()
+	# Bautrupps des Stadtfuhrparks an den uebrigen Strassenbaustellen (Leitungsbau): Trupp mit Geraet, sobald der Wagen da ist
+	for v in sim.fleet.crews_at_work():
+		var site: Vector2i = v.site
+		if sim.road_care.under_works(site):
+			continue   # Instandsetzung zeichnet schon RoadCare
+		var key := "fleet:%d" % int(v.id)
+		seen[key] = true
+		if not _nodes.has(key):
+			var n := SiteNode.new()
+			add_child(n)
+			_nodes[key] = {"node": n, "sig": "fleet"}
+			var r := Rect2(float(site.x) * 32.0 - 16.0, float(site.y) * 32.0 - 16.0, 64.0, 64.0)
+			n.position = Iso.to_screen(r.end)
+			n.parcel_rect = r
+			n.foot = Rect2(r.position, Vector2.ZERO)
+			n.origin = r.end
+			n.state = 0
+			n.crew = {"phase": "strasse", "role": "Leitungsbau", "foreman": 1, "workers": 3, "operators": 0, "gear": ["lkw"],
+				"working": true, "people": 4, "builder": str(v.label)}
+			n.seed_key = int(v.id) * 7919
+			n.queue_redraw()
 	for id in _nodes.keys():
 		if not seen.has(id):
 			_nodes[id].node.queue_free()

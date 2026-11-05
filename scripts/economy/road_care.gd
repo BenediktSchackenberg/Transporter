@@ -152,6 +152,7 @@ func order(id: String, mode: String, by: String = "") -> Dictionary:
 	var msg := "Instandsetzung Straßenabschnitt %s (Zustand %.0f %%) durch %s, %d Tage, %s; eine Spur gesperrt." % [id, float(cond[seg]), MODES[mode].label, int(MODES[mode].days), Catalog.money(cost)]
 	sim.log_event(msg, "info")
 	sim.activity.add("buergermeister", -1, "stadt", "Bautrupp %s: Abschnitt %s" % [MODES[mode].label, id], by, j.cell)
+	sim.fleet.send_crew(j.cell, GameCalendar.day_start(int(j.end)), str(MODES[mode].label))
 	return {"ok": true, "msg": msg, "ref": j.id}
 
 
