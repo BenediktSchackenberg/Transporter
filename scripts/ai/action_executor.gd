@@ -89,6 +89,12 @@ const SCHEMA := {
 		"desc": "Wie propose_cooperation."},
 	"poach_customer": {"params": {"customer_id": "int"}, "desc": "Stammkunden eines Konkurrenten abwerben (legal, 800 EUR)."},
 	"report_rival": {"params": {"target": "int", "reason": "string?"}, "desc": "Konkurrenten beim Bürgermeister anzeigen: das Amt prüft sofort (Steuer, Zahlungsrückstand, Zustand der Einrichtungen). Ohne Beanstandung zahlst DU Bußgeld und verlierst Ruf."},
+	"found_business": {"params": {"branche": "string", "reason": "string?"},
+		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). Standort ist der Hauptsitz; Gründungskosten und Strombedarf siehe Branche. Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
+	"close_business": {"params": {"business_id": "string", "reason": "string?"},
+		"desc": "Eigenen Betrieb schließen (z. B. dauerhaft unrentabel). Sein Personal geht zurück an den Hauptsitz. Ein Transportbetrieb muss vorher ohne Fahrzeuge und laufende Aufträge sein."},
+	"assign_staff": {"params": {"worker_id": "string", "business_id": "string"},
+		"desc": "Eigenen Mitarbeiter einem eigenen laufenden Betrieb zuordnen (sein Lohn läuft dann auf dessen Kostenstelle)."},
 	"block_road": {"params": {"target": "int"}, "desc": "Regelwidrig! Paletten auf eine Straße nahe am Hof des Konkurrenten stellen (600 EUR); seine Fahrzeuge fahren Umwege. Erst ab Spannung 70, je Spieltag eine. Die Polizei räumt noch am selben Tag und ermittelt meist: 2500 EUR Bußgeld, Ruf -8."},
 	"buy_security": {"params": {"level": "int"}, "desc": "Sicherheitsstufe 0-2 (schützt vor Sabotage)."},
 	"set_insurance": {"params": {"active": "bool"}, "desc": "Versicherung gegen Sabotageschäden (600 EUR/Tag)."},
@@ -715,6 +721,12 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.rivalry.report_rival(cid, _i(a.target), _s(a.get("reason", "")))
 		"block_road":
 			return sim.rivalry.block_road(cid, _i(a.target))
+		"found_business":
+			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")))
+		"close_business":
+			return sim.biz.close(cid, _s(a.business_id), _s(a.get("reason", "")))
+		"assign_staff":
+			return sim.biz.assign(cid, _s(a.worker_id), _s(a.business_id))
 		"buy_security":
 			return sim.rivalry.buy_security(cid, _i(a.level))
 		"set_insurance":

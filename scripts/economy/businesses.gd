@@ -144,6 +144,84 @@ func ensure_transport(cid: int, source: String) -> Dictionary:
 	return b
 
 
+## KI-Aktion found_business: Branche muss konfiguriert sein; Standort = Hauptsitz; Gruendungskosten als Investition (Buchwert) bzw.
+## Verwaltungsaufwand. Transport: hoechstens ein Transportbetrieb je Unternehmer.
+func found(cid: int, branch: String, reason: String) -> Dictionary:
+	var spec: Dictionary = branches().get(branch, {})
+	if spec.is_empty():
+		return {"ok": false, "msg": "Unbekannte Branche '%s'. Verfügbar: %s" % [branch, ", ".join(branches().keys())]}
+	var c = sim.company(cid)
+	if c.depots.is_empty():
+		return {"ok": false, "msg": "Kein Hauptsitz vorhanden."}
+	if branch == "transport" and has_branch(cid, "transport"):
+		return {"ok": false, "msg": "Es gibt bereits einen Transportbetrieb (%s)." % find(cid, "transport").id}
+	var cost := float(spec.get("gruendungskosten", 0.0))
+	if c.ledger.cash < cost:
+		return {"ok": false, "msg": "Nicht genug Bargeld für die Gründung (%s)." % Catalog.money(cost)}
+	if cost > 0.0:
+		c.ledger.book("admin", -cost, true, "Gründung %s" % spec.label, sim.game_min)
+	var b := create(cid, branch, int(c.depots[0]), "", "aktiv")
+	if c.ledger.cost_center == "":
+		c.ledger.cost_center = b.id
+	note(b.id, "Gegründet: %s" % (reason if reason != "" else spec.label), "Unternehmer")
+	sim.log_event("%s gründet %s." % [c.company_name, b.name], "info", cid)
+	return {"ok": true, "msg": "%s gegründet (%s)." % [b.name, b.id], "ref": b.id}
+
+
+func close(cid: int, id: String, reason: String) -> Dictionary:
+	var b := get_b(id)
+	if b.is_empty() or int(b.owner) != cid:
+		return {"ok": false, "msg": "Betrieb %s gehört dir nicht." % id}
+	if b.status in ["geschlossen", "verwertung"]:
+		return {"ok": false, "msg": "Betrieb %s ist bereits %s." % [id, b.status]}
+	var c = sim.company(cid)
+	if b.branch == "transport":
+		if not c.vehicle_ids.is_empty():
+			return {"ok": false, "msg": "Erst alle Fahrzeuge verkaufen (noch %d)." % c.vehicle_ids.size()}
+		if sim.contracts.values().any(func(k): return k.owner == cid and k.status in ["accepted", "assigned", "loading", "in_transit"]):
+			return {"ok": false, "msg": "Es laufen noch Transportaufträge."}
+	for w in staff_of(id):
+		w.business = ""
+	set_status(id, "geschlossen", reason if reason != "" else "Geschlossen")
+	if c.ledger.cost_center == id:
+		c.ledger.cost_center = ""
+	sim.log_event("%s schließt %s." % [c.company_name, b.name], "warn", cid)
+	return {"ok": true, "msg": "%s geschlossen." % b.name}
+
+
+func assign(cid: int, worker_id: String, id: String) -> Dictionary:
+	var b := get_b(id)
+	if b.is_empty() or int(b.owner) != cid or b.status not in RUNNING:
+		return {"ok": false, "msg": "Betrieb %s ist kein laufender eigener Betrieb." % id}
+	var w = sim.personnel.workers.get(worker_id)
+	if w == null or int(w.employer) != cid:
+		return {"ok": false, "msg": "Mitarbeiter %s ist nicht bei dir angestellt." % worker_id}
+	w.business = id
+	return {"ok": true, "msg": "%s arbeitet jetzt für %s." % [w.name, b.name]}
+
+
+## Knappe Betriebsliste fuer die KI-Beobachtung (Tokenbudget); Blockaden nur, wenn vorhanden.
+func obs_of(cid: int) -> Array:
+	var L: Ledger = sim.company(cid).ledger
+	var out: Array = []
+	for b in of(cid):
+		var e := {"id": b.id, "branche": b.branch, "status": b.status, "personal": staff_of(b.id).size(), "ergebnis": int(L.cc_profit(b.id))}
+		if not b.blockers.is_empty():
+			e["blockaden"] = b.blockers.map(func(x): return x.text)
+		out.append(e)
+	return out
+
+
+## Fuer die KI-Beobachtung: Branchen, die gegruendet werden koennen.
+static func available() -> Array:
+	var out: Array = []
+	for k in branches():
+		var s: Dictionary = branches()[k]
+		out.append({"branche": k, "name": s.get("label", k), "gruendungskosten": float(s.get("gruendungskosten", 0.0)),
+			"strom_kw": float(s.get("strom_kw", 0.0))})
+	return out
+
+
 ## Alter Spielstand bzw. Speditionsstart: jede Company ohne Betrieb bekommt ihren bisherigen Transportbetrieb (Hof, Fahrzeuge,
 ## Personal, Auftraege bleiben unveraendert). Bisherige Summen der Kostenstelle "allgemein" gehoeren zu diesem Betrieb.
 func migrate() -> int:
