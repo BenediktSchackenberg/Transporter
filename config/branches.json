@@ -1,0 +1,12 @@
+{
+  "_hinweis": "Branchen der Unternehmer (Auftrag 14, docs/ENTREPRENEURS.md). Alle Mengen, Zeiten, Preise und Leistungen sind kalibrierbare Spielparameter. Neue Branchen kommen mit ihren Lieferketten hinzu (Etappen 2-5); eine Branche erscheint hier erst, wenn sie im Spiel funktioniert.",
+  "transport": {
+    "label": "Transportbetrieb",
+    "beschreibung": "Fahrzeuge, Fahrer, Treibstoff und Wartung; vergütete Transporte für beliebige Branchen.",
+    "standort": "hof",
+    "gruendungskosten": 0,
+    "strom_kw": 3.0,
+    "personal_min": 1,
+    "rollen": ["fahren", "verladen", "reparieren", "bewachen"]
+  }
+}

@@ -15,6 +15,8 @@ var rng := RandomNumberGenerator.new()
 var market := Market.new()
 var social := Social.new()
 var rivalry := Rivalry.new()
+var biz := Businesses.new()       # Betriebe der Unternehmer (Auftrag 14); Company bleibt die finanzielle Klammer
+const SAVE_VERSION := 2            # 2 = Betriebe und Kostenstellen (Auftrag 14)
 var talk := RivalryTalk.new()      # Gespraechsregie der Rivalitaet (standardmaessig aus)
 var executor := ActionExecutor.new()
 var personnel := Personnel.new()
@@ -109,6 +111,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	social.setup(self)
 	rivalry.setup(self)
 	talk.setup(self)
+	biz.setup(self)
 	executor.setup(self)
 	logistics.setup(self)
 	operations.setup(self)
@@ -177,6 +180,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 		a.pos = city.tile_center(city.building(site).walk)
 		avatars[i] = a
 	personnel.setup(self)
+	biz.migrate()   # Startprofil Spedition: jede Company beginnt mit ihrem Transportbetrieb
 	resources.setup(self)
 	memory.setup(self)
 	strategy.setup(self)   # braucht die angelegten Unternehmen
@@ -1013,7 +1017,10 @@ func _minute_tick() -> void:
 		if c.status in ["insolvenz", "verwertung", "geschlossen"]:
 			continue   # eingefroren: Verwalter fuehrt den Betrieb nicht weiter
 		var L := c.ledger
-		households.credit_company(c.id, L.accrue_wages(personnel.wages_per_hour(c.id) / 60.0, now))
+		var split := personnel.wages_by_business(c.id)
+		for k in split:
+			split[k] = float(split[k]) / 60.0
+		households.credit_company(c.id, L.accrue_wages(personnel.wages_per_hour(c.id) / 60.0, now, split))
 		var rent := Catalog.EXTRA_DEPOT_RENT * c.depots.filter(func(site): return not estate.is_plot(site)).size()   # Startgrundstueck ist frei
 		L.book("rent", -rent / 1440.0, true, "Miete", now)
 		L.book("security", -Catalog.SECURITY_PER_DAY[c.security_level] / 1440.0, true, "Sicherheitsdienst", now)
@@ -1175,7 +1182,7 @@ func to_dict() -> Dictionary:
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
-		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "action_results": action_results}
+		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
 
 
 func _storage_dict() -> Dictionary:
@@ -1286,6 +1293,10 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.social.from_dict(d.social)
 	s.rivalry.from_dict(d.rivalry)
 	s.talk.from_dict(d.get("talk", {}))
+	s.biz.from_dict(d.get("businesses", {}))
+	var migrated := s.biz.migrate()   # Spielstand vor Version 2: Speditionen werden Transportbetriebe ihrer Unternehmer
+	if migrated > 0:
+		s.log_event("Spielstand übernommen: %d Speditionen sind jetzt Transportbetriebe ihrer Unternehmer." % migrated, "system")
 	for cid in d.action_results:
 		s.action_results[int(cid)] = d.action_results[cid]
 	for cid in d.avatars:

@@ -29,6 +29,7 @@ var duty_carrying := false
 var duty_leg := 0
 var rest_until := 0.0             # Pause (Fahrerengpass): bis dahin keine neuen Aufgaben
 var household := ""               # Haushalt (siehe Households)
+var business := ""                # Betrieb "B<n>" des Arbeitgebers (leer = Standardbetrieb der Company)
 var motivation := 60.0            # 0..100, haengt an Lohn, Haushaltslage, Erschoepfung und verlaesslicher Bezahlung
 var health := 100.0
 # Vorarbeiter
@@ -95,7 +96,7 @@ func to_dict() -> Dictionary:
 		"fatigue": fatigue, "task_id": task_id, "vehicle_id": vehicle_id, "foreman": foreman,
 		"home": [home.x, home.y], "lost": lost, "leaving": leaving, "transfer_to": transfer_to, "supervised": supervised,
 		"station": [station.x, station.y], "orders": orders, "report_due": report_due, "spent": spent, "x": pos.x, "y": pos.y,
-		"household": household, "motivation": motivation, "health": health}
+		"household": household, "motivation": motivation, "health": health, "business": business}
 
 
 static func from_dict(d: Dictionary) -> Worker:
@@ -104,6 +105,7 @@ static func from_dict(d: Dictionary) -> Worker:
 			"task_id", "foreman", "lost", "leaving", "supervised", "orders", "report_due"]:
 		w.set(k, d[k])
 	w.employer = int(d.employer)
+	w.business = str(d.get("business", ""))
 	w.vehicle_id = int(d.vehicle_id)
 	w.transfer_to = int(d.get("transfer_to", -1))
 	w.spent = float(d.get("spent", 0.0))

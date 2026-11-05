@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1435,6 +1435,62 @@ func test_city_fleet() -> void:
 		m.mayor.on_day(d)
 	ok(m.mayor.waiting >= 1, "ohne freie Wohnungen wächst die Zahl der Wohnungssuchenden (%d nach 30 Tagen)" % m.mayor.waiting)
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
+
+
+func test_business_core() -> void:
+	var s := new_sim(2)
+	var c := s.company(0)
+	var bs: Array = s.biz.of(0)
+	ok(bs.size() == 1 and bs[0].branch == "transport" and bs[0].status == "aktiv" and c.ledger.cost_center == bs[0].id, "Speditionsstart: Transportbetrieb als Standard-Kostenstelle")
+	var bid: String = bs[0].id
+	ok(s.biz.staff_of(bid).size() == s.personnel.employed(0).size() and s.biz.staff_of(bid).size() > 0, "Personal ohne Zuordnung gehört zum Standardbetrieb")
+	ok(Businesses.branches().has("transport"), "Branchen aus config/branches.json")
+	# Kostenstellen: Summe aller Kostenstellen = Gesamtsummen, keine Doppelbuchung
+	run(s, 30.0)
+	c.ledger.book("transport", 500.0, true, "Test", s.game_min)
+	c.ledger.book("admin", -120.0, true, "Test anderer Betrieb", s.game_min, "", "B99")
+	var sum_ok := true
+	for cat in c.ledger.totals:
+		var t := 0.0
+		for cc in c.ledger.cc_totals:
+			t += float(c.ledger.cc_totals[cc].get(cat, 0.0))
+		if absf(t - float(c.ledger.totals[cat])) > 0.01:
+			sum_ok = false
+	ok(sum_ok, "jede Kategorie: Summe der Kostenstellen = Unternehmenssumme")
+	var cc_sum := 0.0
+	for cc in c.ledger.cc_totals:
+		cc_sum += c.ledger.cc_profit(cc)
+	ok(absf(cc_sum - c.ledger.profit()) < 0.01 and is_equal_approx(c.ledger.cc_profit("B99"), -120.0), "Ergebnisse je Kostenstelle ergeben konsolidiert den Gewinn")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
+	# Blockade mit konkretem Grund
+	s.biz.block(bid, "strom", "Kein Strom: Netz ausgelastet")
+	ok(s.biz.get_b(bid).status == "blockiert" and s.biz.summary_of(0)[0].blockaden == ["Kein Strom: Netz ausgelastet"], "Blockade setzt Status und nennt den Grund")
+	s.biz.unblock(bid, "strom")
+	ok(s.biz.get_b(bid).status == "aktiv", "Blockade aufgehoben: wieder aktiv")
+	var row: Dictionary = s.biz.summary_of(0)[0]
+	ok(row.has("umsatz") and row.has("ergebnis") and row.personal > 0 and not row.letzte_entscheidung.is_empty(), "Betriebsübersicht mit Umsatz, Ergebnis, Personal und letzter Entscheidung")
+	# Speichern/Laden
+	s.personnel.employed(0)[0].business = bid
+	var s2 := Simulation.from_dict(s.to_dict())
+	ok(s2.biz.of(0).size() == 1 and s2.company(0).ledger.cost_center == bid and s2.personnel.employed(0)[0].business == bid, "Betriebe, Kostenstelle und Zuordnung überstehen Speichern/Laden")
+	ok(absf(s2.company(0).ledger.cc_profit(bid) - c.ledger.cc_profit(bid)) < 0.01, "Kostenstellensummen überstehen Speichern/Laden")
+	# Migration eines alten Spielstands (ohne Betriebe und Kostenstellen)
+	var d := s.to_dict()
+	d.erase("businesses")
+	d.erase("save_version")
+	for cd in d.companies:
+		cd.ledger.erase("cost_center")
+		cd.ledger.erase("cc_totals")
+	var s3 := Simulation.from_dict(d)
+	var m: Array = s3.biz.of(1)
+	ok(m.size() == 1 and m[0].branch == "transport" and s3.company(1).ledger.cost_center == m[0].id, "alter Spielstand: Spedition wird Transportbetrieb ihres Unternehmers")
+	ok(absf(s3.company(1).ledger.cc_profit(m[0].id) - s.company(1).ledger.profit()) < 0.01, "alter Spielstand: bisherige Ergebnisse gehören zum Transportbetrieb")
+	ok(s3.company(1).vehicle_ids.size() == s.company(1).vehicle_ids.size() and is_equal_approx(s3.company(1).ledger.cash, s.company(1).ledger.cash), "Migration: Geld und Fahrzeuge unverändert")
+	# Neugruendung: alte Betriebe geschlossen, neuer Transportbetrieb
+	var site: int = s.company(1).depots[0]
+	s.insolvency.refound(1, site)
+	var open_b: Array = s.biz.of(1)
+	ok(open_b.size() == 1 and open_b[0].id != m[0].id and s.company(1).ledger.cost_center == open_b[0].id, "Neugründung: neuer Betrieb, Vorgängerbetriebe geschlossen")
 
 
 static func KINDS_OK(k: Dictionary) -> bool:

@@ -26,10 +26,41 @@ var deposits := 0.0       # Einlagen bei Banken (Vermoegen)
 var payables := 0.0       # aufgelaufene, noch nicht gezahlte Loehne (Verbindlichkeit)
 var receivables := 0.0    # Forderungen aus Krediten an andere Firmen (Vermoegen)
 var totals := {}          # Kategorie -> Summe (vorzeichenbehaftet)
+var cost_center := ""     # Standard-Kostenstelle (Betrieb "B<n>"), wenn eine Buchung keine nennt; "" = Unternehmen allgemein
+var cc_totals := {}       # Kostenstelle -> {Kategorie -> Summe}; Summe ueber alle Kostenstellen = totals (keine zweite Buchung)
 var entries: Array = []   # letzte Buchungen fuer die Anzeige
 var history: Array = []   # [Spielminute, Gewinn, Bargeld]
 var economy: Economy = null   # Gegenbuchungen (Geldkonservierung); null = unverbunden
 var account := ""
+
+
+const GENERAL := "allgemein"
+
+
+## Erfolgsbuchung in Gesamt- und Kostenstellensumme (einzige Stelle, die totals veraendert).
+func _add_total(category: String, amount: float, cc: String = "") -> void:
+	totals[category] = totals.get(category, 0.0) + amount
+	var center := cc if cc != "" else (cost_center if cost_center != "" else GENERAL)
+	var row: Dictionary = cc_totals.get(center, {})
+	row[category] = float(row.get(category, 0.0)) + amount
+	cc_totals[center] = row
+
+
+## Ergebnis einer Kostenstelle (Summe ihrer Buchungen).
+func cc_profit(center: String) -> float:
+	var p := 0.0
+	for k in cc_totals.get(center, {}):
+		p += float(cc_totals[center][k])
+	return p
+
+
+func cc_revenue(center: String) -> float:
+	var r := 0.0
+	var row: Dictionary = cc_totals.get(center, {})
+	for k in row:
+		if k in INCOME and float(row[k]) > 0.0:
+			r += float(row[k])
+	return r
 
 
 func _init(capital: float = Catalog.START_CAPITAL) -> void:
@@ -39,11 +70,12 @@ func _init(capital: float = Catalog.START_CAPITAL) -> void:
 
 ## Erfolgswirksame Buchung. amount > 0 = Ertrag, < 0 = Aufwand.
 ## affects_cash = false fuer unbare Posten (Abschreibung, Buchgewinn/-verlust).
-func book(category: String, amount: float, affects_cash: bool, note: String, time: float, counter: String = "") -> void:
+## cc: Kostenstelle (Betriebs-ID); leer = Standard-Kostenstelle der Company.
+func book(category: String, amount: float, affects_cash: bool, note: String, time: float, counter: String = "", cc: String = "") -> void:
 	if is_zero_approx(amount):
 		return
 	assert(LABELS.has(category), "Unbekannte Buchungskategorie: " + category)
-	totals[category] = totals.get(category, 0.0) + amount
+	_add_total(category, amount, cc)
 	if affects_cash:
 		_move(amount, counter if counter != "" else Economy.COUNTER[category])
 	# Laufende Kleinstbuchungen (Treibstoff, Loehne, ...) nicht einzeln protokollieren
@@ -102,9 +134,17 @@ func inject(amount: float) -> void:
 
 ## Lohn laeuft auf (Aufwand sofort) und wird bezahlt, soweit Bargeld da ist. Der Rest bleibt als Lohnrueckstand stehen und wird bei
 ## naechster Gelegenheit zuerst beglichen. Gibt den tatsaechlich gezahlten Betrag zurueck (laufender Lohn plus beglichene Rueckstaende).
-func accrue_wages(amount: float, time: float) -> float:
+## by_cc: optionale Aufteilung des Lohnaufwands auf Kostenstellen {cc: Betrag}; Summe = amount, Rest geht an die Standard-Kostenstelle.
+func accrue_wages(amount: float, time: float, by_cc: Dictionary = {}) -> float:
 	if amount > 0.0:
-		totals["wages"] = totals.get("wages", 0.0) - amount
+		var rest := amount
+		for cc in by_cc:
+			var part := minf(float(by_cc[cc]), rest)
+			if part > 0.0:
+				_add_total("wages", -part, str(cc))
+				rest -= part
+		if rest > 1e-9:
+			_add_total("wages", -rest)
 		payables += amount
 	var pay := minf(payables, maxf(cash, 0.0))
 	if pay > 0.0:
@@ -150,8 +190,8 @@ func receive_installment(from: Ledger, principal: float, interest: float, note: 
 	from.debt -= principal
 	receivables -= principal
 	if interest > 0.0:
-		from.totals["interest"] = from.totals.get("interest", 0.0) - interest
-		totals["interest_income"] = totals.get("interest_income", 0.0) + interest
+		from._add_total("interest", -interest)
+		_add_total("interest_income", interest)
 		if interest >= 50.0:
 			from.entries.append({"t": time, "cat": "interest", "amount": -interest, "note": note})
 			entries.append({"t": time, "cat": "interest_income", "amount": interest, "note": note})
@@ -206,7 +246,7 @@ func sample(time: float) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"start_capital": start_capital, "cash": cash, "debt": debt, "deposits": deposits, "payables": payables, "receivables": receivables, "totals": totals,
+	return {"start_capital": start_capital, "cash": cash, "debt": debt, "deposits": deposits, "payables": payables, "receivables": receivables, "totals": totals, "cost_center": cost_center, "cc_totals": cc_totals,
 		"entries": entries, "history": history}
 
 
@@ -218,5 +258,9 @@ func from_dict(d: Dictionary) -> void:
 	payables = float(d.get("payables", 0.0))
 	receivables = float(d.get("receivables", 0.0))
 	totals = d.totals
+	cost_center = str(d.get("cost_center", ""))
+	cc_totals = d.get("cc_totals", {})
+	if cc_totals.is_empty() and not totals.is_empty():
+		cc_totals[cost_center if cost_center != "" else GENERAL] = totals.duplicate()   # alter Spielstand: bisherige Summen der Standard-Kostenstelle
 	entries = d.entries
 	history = d.history

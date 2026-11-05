@@ -1021,6 +1021,15 @@ func wages_per_hour(cid: int) -> float:
 	return s
 
 
+## Lohn je Stunde nach Betrieb (Kostenstelle); Arbeiter ohne Zuordnung zaehlen zum Standardbetrieb (leerer Schluessel).
+func wages_by_business(cid: int) -> Dictionary:
+	var d := {}
+	for w in employed(cid):
+		if w.business != "":
+			d[w.business] = float(d.get(w.business, 0.0)) + w.wage
+	return d
+
+
 func to_dict() -> Dictionary:
 	var ws: Array = []
 	for w in workers.values():

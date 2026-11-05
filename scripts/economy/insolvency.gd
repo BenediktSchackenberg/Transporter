@@ -471,6 +471,8 @@ func _maybe_refound(c: Company) -> void:
 ## Neuer Unternehmer auf dem Platz der geschlossenen Firma (gleiche Nummer, neue Identitaet).
 func refound(cid: int, site: int) -> Company:
 	var old := sim.company(cid)
+	for b in sim.biz.of(cid):
+		sim.biz.set_status(b.id, "geschlossen", "Unternehmen aufgelöst, Platz neu vergeben")
 	var n := Company.new()
 	n.id = cid
 	n.generation = old.generation + 1
@@ -510,6 +512,7 @@ func refound(cid: int, site: int) -> Company:
 	sim.log_event("Neugründung: %s (%s) übernimmt den Platz von %s und startet am Standort %s." % [n.company_name, CompanyForms.name_of(n.form),
 		old.company_name, sim.city.building(site).name], "info", cid)
 	n.add_key_event("Gegründet als " + CompanyForms.name_of(n.form), sim.game_min)
+	sim.biz.migrate()   # Neugruendung startet mit eigenem Transportbetrieb
 	company_refounded.emit(cid)
 	return n
 
