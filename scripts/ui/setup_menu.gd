@@ -24,6 +24,7 @@ var weather_opt: OptionButton
 var mayor_opt: OptionButton
 var dispatch_opt: OptionButton
 var talk_opt: OptionButton
+var profile_opt: OptionButton
 var _mayor_extra := {}            # weitere Einstellungen des Buergermeisters aus einer geladenen Konfiguration (Modell, Adresse, Budget)
 const WEATHER_MODES := ["live", "sim", "replay"]
 var status_label: Label
@@ -104,6 +105,12 @@ func _ready() -> void:
 		talk_opt.add_item(t)
 	talk_opt.tooltip_text = "Unternehmer mit Streit sprechen sich an, sticheln, beschwichtigen, bieten Pakte an oder eskalieren (Abwerben, Anzeige, Straßenblockade). Claude wählt nur aus gültigen Reaktionen; fällt die API aus, sprechen die Regeln. Schlüssel aus ANTHROPIC_API_KEY oder dem Windows-Tresor."
 	g.add_child(talk_opt)
+	g.add_child(UITheme.label("Start:"))
+	profile_opt = OptionButton.new()
+	for t in ["Unternehmer (Hauptsitz, 2 Mitarbeiter, frei wählbare Branchen)", "Spedition (Transporter und 10 Mitarbeiter, wie bisher)"]:
+		profile_opt.add_item(t)
+	profile_opt.tooltip_text = "Unternehmer starten branchenneutral mit Hauptsitz und kleinem Team; ein Transportbetrieb entsteht mit dem ersten Fahrzeug. Spedition ist der bisherige Start mit Kleintransporter und Stammbelegschaft."
+	g.add_child(profile_opt)
 	carry_check = CheckBox.new()
 	carry_check.text = "Erfahrungen der vorigen Partie übernehmen (alle Spieler)"
 	carry_check.tooltip_text = "Gespeicherte Erfahrungen je Spieler-Platz werden als Vermutungen übernommen. Für Vergleiche: für alle gleich."
@@ -291,7 +298,7 @@ func collect() -> Dictionary:
 			"timeout": 90.0 if provider == "ollama" else 45.0})
 	return {"seed": seed_edit.text.to_int(), "duration_min": DURATIONS[duration_opt.selected],
 		"speed_idx": speed_opt.selected, "demo_fault_rate": fault_spin.value, "carry_memory": carry_check.button_pressed,
-		"mayor": _mayor_config(), "dispatcher": {"provider": "anthropic" if dispatch_opt.selected == 1 else "demo"}, "talk": {"provider": "anthropic" if talk_opt.selected == 1 else "demo"}, "rivalry_talk": talk_opt.selected != 2, "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
+		"mayor": _mayor_config(), "dispatcher": {"provider": "anthropic" if dispatch_opt.selected == 1 else "demo"}, "talk": {"provider": "anthropic" if talk_opt.selected == 1 else "demo"}, "rivalry_talk": talk_opt.selected != 2, "start_profil": "spedition" if profile_opt.selected == 1 else "unternehmer", "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
 		"players": players}
 
 
@@ -316,6 +323,7 @@ func _apply_config(cfg: Dictionary) -> void:
 	weather_opt.select(maxi(0, WEATHER_MODES.find(str(cfg.get("weather", "live")))))
 	_mayor_extra = cfg.get("mayor", {}).duplicate()
 	dispatch_opt.select(1 if str(cfg.get("dispatcher", {}).get("provider", "demo")) == "anthropic" else 0)
+	profile_opt.select(1 if str(cfg.get("start_profil", "unternehmer")) == "spedition" else 0)
 	talk_opt.select(2 if not bool(cfg.get("rivalry_talk", true)) else (1 if str(cfg.get("talk", {}).get("provider", "demo")) == "anthropic" else 0))
 	mayor_opt.select({"global": 1, "anthropic": 2}.get(str(_mayor_extra.get("provider", "demo")), 0))
 	for r in rows:

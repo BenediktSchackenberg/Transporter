@@ -767,6 +767,63 @@ static func central_bank(sim: Simulation) -> String:
 	return txt
 
 
+## Unternehmer mit ihren Betrieben (Auftrag 14). Ergebnisse sind Kostenstellen derselben Buchungen (keine zweite Rechnung).
+static func businesses(sim: Simulation) -> String:
+	var txt := "[b][color=#f2c14e]UNTERNEHMER UND BETRIEBE[/color][/b]
+"
+	for c in sim.companies:
+		var L: Ledger = c.ledger
+		txt += "
+[b][color=#%s]%s[/color][/b] (%s, %s) · Bargeld %s · Gewinn %s · Hauptsitz %s
+" % [c.color.to_html(false), c.company_name, c.player_name,
+			Catalog.PERSONALITIES.get(c.personality, {}).get("name", c.personality), Catalog.money(L.cash), Catalog.money(L.profit()),
+			sim.city.building(int(c.depots[0])).name if not c.depots.is_empty() else "–"]
+		if L.cc_totals.has(Ledger.GENERAL):
+			txt += "  Hauptsitz/Verwaltung: Ergebnis %s
+" % Catalog.money(L.cc_profit(Ledger.GENERAL))
+		var rows: Array = sim.biz.summary_of(c.id)
+		if rows.is_empty():
+			txt += "  [color=#9aa3ad]noch kein Betrieb[/color]
+"
+		for r in rows:
+			var col := "#8fd18f" if r.status == "aktiv" else ("#e0a040" if r.status == "blockiert" else "#9aa3ad")
+			txt += "  %s %s – [color=%s]%s[/color] · %d Personal · Umsatz %s · Kosten %s · Ergebnis %s · Strom %.0f kW
+" % [r.id, r.name, col, r.status,
+				int(r.personal), Catalog.money(float(r.umsatz)), Catalog.money(float(r.kosten)), Catalog.money(float(r.ergebnis)), float(r.strom_kw)]
+			for bl in r.blockaden:
+				txt += "    [color=#e0a040]Blockade: %s[/color]
+" % bl
+			if not r.letzte_entscheidung.is_empty():
+				txt += "    Zuletzt (%s): %s
+" % [r.letzte_entscheidung.source, r.letzte_entscheidung.text]
+	return txt
+
+
+## Stadtwerke: Leistung, Last, Abschaltungen, Tarif und Ausbau (Auftrag 14, Grundversorgung).
+static func power(sim: Simulation) -> String:
+	var g: Dictionary = sim.grid.summary()
+	var txt := "[b][color=#f2c14e]STROM (STADTWERKE)[/color][/b]
+"
+	txt += "Leistung %d kW · Bedarf %d kW (Grundlast der Bevölkerung %d kW, Betriebe %.0f kW) · Auslastung %d %%
+" % [int(g.leistung_kw), int(g.bedarf_kw),
+		int(g.grundlast_kw), float(g.betriebe_kw), int(float(g.auslastung) * 100.0)]
+	txt += "Tarif %.2f EUR/kWh · abgerechnet %s für %d kWh · Erzeugungskosten %s · Tage mit Abschaltung %d
+" % [float(g.tarif_eur_kwh),
+		Catalog.money(float(sim.grid.stats.erloes)), int(sim.grid.stats.kwh), Catalog.money(float(sim.grid.stats.erzeugung)), int(g.engpass_tage)]
+	if bool(g.ausbau_laeuft):
+		txt += "[color=#8fd18f]Netzausbau läuft: +%d kW[/color]
+" % int(g.ausbau.kw)
+	if int(g.abgeschaltete_betriebe) > 0:
+		txt += "[color=#e0a040]%d Betrieb(e) ohne Strom:[/color]
+" % int(g.abgeschaltete_betriebe)
+		for b in sim.biz.items.values():
+			for x in b.blockers:
+				if x.key == "strom":
+					txt += "  %s (%s): %s
+" % [b.name, sim.company(int(b.owner)).company_name, x.text]
+	return txt
+
+
 static func parcels(sim: Simulation) -> String:
 	var P: Parcels = sim.parcels
 	var sm: Dictionary = P.summary()

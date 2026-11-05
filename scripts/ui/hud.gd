@@ -75,7 +75,8 @@ const NAV := [
 		{"label": "Entscheidungen", "tab": "Entscheidungen", "hint": "Jede Aktion mit Begründung, Prüfergebnis und Folgen."},
 		{"label": "Dialoge", "tab": "Dialoge", "hint": "Nachrichten zwischen den Spielern."},
 		{"label": "Personal", "tab": "Personal", "hint": "Mitarbeiter, ihre Aufgaben, Motivation und Gesundheit."}]},
-	{"name": "Betrieb", "hint": "Aufträge, Fahrzeuge und Geld der Firmen", "pages": [
+	{"name": "Betrieb", "hint": "Betriebe, Aufträge, Fahrzeuge und Geld der Unternehmer", "pages": [
+		{"label": "Unternehmen", "tab": "Wirtschaft", "view": 14, "hint": "Alle Betriebe je Unternehmer: Status, Personal, Ergebnis je Kostenstelle, Blockaden und letzte Entscheidung."},
 		{"label": "Betriebsablauf", "tab": "Betriebsablauf", "hint": "Linien, Fahrer, Hofarbeit, Lagerumschlag und verbindliche Frachtgespraeche."},
 		{"label": "Aufträge", "tab": "Aufträge", "hint": "Offene und laufende Transportaufträge mit Frist und Vergütung."},
 		{"label": "Fahrzeuge", "tab": "Fahrzeuge", "hint": "Alle Fahrzeuge mit Zustand und aktuellem Auftrag."},
@@ -93,10 +94,11 @@ const NAV := [
 		{"label": "Bauvorhaben", "tab": "Wirtschaft", "view": 10, "hint": "Laufende Baustellen und ihr Fortschritt."},
 		{"label": "Bauanträge", "tab": "Wirtschaft", "view": 8, "hint": "Anträge und Genehmigungen."},
 		{"label": "Grundstücke", "tab": "Wirtschaft", "view": 7, "hint": "Flächen, Eigentümer und Preise."},
+		{"label": "Strom", "tab": "Wirtschaft", "view": 15, "hint": "Stadtwerke: Leistung, Last, abgeschaltete Betriebe, Tarif und Ausbau."},
 		{"label": "Stadtlager", "tab": "Wirtschaft", "view": 11, "hint": "Bestand, Bestellungen und Personal des Zentrallagers."},
 		{"label": "Bauhof", "tab": "Wirtschaft", "view": 3, "hint": "Großhändler: Material, Preise und Bestand."}]},
 ]
-const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat", "Bürger", "Grundstücke", "Bauanträge", "Bürgermeister", "Bauvorhaben", "Stadtlager", "Wohnen", "Zentralbank"]
+const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat", "Bürger", "Grundstücke", "Bauanträge", "Bürgermeister", "Bauvorhaben", "Stadtlager", "Wohnen", "Zentralbank", "Unternehmen", "Strom"]
 var decision_company := -1
 var decision_company_opt: OptionButton
 var sel_panel: PanelContainer
@@ -714,6 +716,8 @@ func _economy_text() -> String:
 		11: return LiveText.city_depot(sim)
 		12: return LiveText.housing(sim)
 		13: return LiveText.central_bank(sim)
+		14: return LiveText.businesses(sim)
+		15: return LiveText.power(sim)
 	return LiveText.standings(sim)
 
 

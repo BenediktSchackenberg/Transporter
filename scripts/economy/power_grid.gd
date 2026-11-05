@@ -67,7 +67,7 @@ func on_day(day: int) -> void:
 func _allocate() -> void:
 	var base := base_load()
 	var free := capacity - base
-	var consumers: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING and float(b.energy_kw) > 0.0)
+	var consumers: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING and float(b.energy_kw) > 0.0 and not sim.biz.frozen(int(b.owner)))
 	consumers.sort_custom(func(a, b): return float(a.founded) < float(b.founded) or (float(a.founded) == float(b.founded) and str(a.id) < str(b.id)))
 	var demand := 0.0
 	var given := 0.0
@@ -98,7 +98,7 @@ func _bill() -> void:
 	var gen := float(cfg().erzeugung_eur_kwh)
 	for id in supplied:
 		var b: Dictionary = sim.biz.get_b(id)
-		if b.is_empty() or b.status not in Businesses.RUNNING:
+		if b.is_empty() or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		var kwh := float(b.energy_kw) * hours
 		var cost := kwh * tariff

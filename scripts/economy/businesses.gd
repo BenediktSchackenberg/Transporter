@@ -60,6 +60,12 @@ func find(cid: int, branch: String) -> Dictionary:
 	return {}
 
 
+## Unternehmen eingefroren (Insolvenzverwaltung, Verwertung, geschlossen): seine Betriebe arbeiten nicht, verbrauchen und zahlen nichts.
+func frozen(cid: int) -> bool:
+	var c = sim.company(cid)
+	return c == null or c.status in ["insolvenz", "verwertung", "geschlossen"]
+
+
 func has_branch(cid: int, branch: String) -> bool:
 	return not find(cid, branch).is_empty()
 

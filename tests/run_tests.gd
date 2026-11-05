@@ -1587,6 +1587,10 @@ func test_business_actions() -> void:
 	r = E.execute(0, {"action": "close_business", "business_id": bid, "reason": "Test"})
 	ok(r.ok and s.biz.get_b(bid).status == "geschlossen" and mine.business == "" and s.company(0).ledger.cost_center == "", "geschlossen: Personal zurück an den Hauptsitz")
 	ok(ActionExecutor.SCHEMA.has("found_business") and ActionExecutor.SCHEMA.has("close_business") and ActionExecutor.SCHEMA.has("assign_staff"), "Aktionen im Schema")
+	s.grid.on_day(1)
+	var ut := LiveText.businesses(s)
+	ok(ut.contains(s.company(0).company_name) and ut.contains("geschlossen") and ut.contains("noch kein Betrieb") and ut.contains("Hauptsitz"), "Ansicht Unternehmen: Betriebe, Status, Hauptsitz")
+	ok(LiveText.power(s).contains("Leistung") and LiveText.power(s).contains("Tarif"), "Ansicht Strom")
 
 
 static func KINDS_OK(k: Dictionary) -> bool:
