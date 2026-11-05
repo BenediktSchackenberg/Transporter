@@ -1,12 +1,16 @@
 extends SceneTree
 ## Messung (kein Pass/Fail): Engpaesse der Regel-KI - Buchungen je Kategorie, Fahrzeugzustaende, Tempo in Fahrt,
-## Gruende fuer gescheiterte Auftraege, Tankbestand.  Godot_console.exe --headless --path . -s tests/probe_bottlenecks.gd -- --days=40
+## Gruende fuer gescheiterte Auftraege, Tankbestand.  Godot_console.exe --headless --path . -s tests/probe_bottlenecks.gd -- --days=40 [--profil=unternehmer]
 func _initialize() -> void:
 	var days := 40
+	var profile := "spedition"
 	for a in OS.get_cmdline_user_args():
 		if str(a).begins_with("--days="):
 			days = int(str(a).trim_prefix("--days="))
+		if str(a).begins_with("--profil="):
+			profile = str(a).trim_prefix("--profil=")
 	var s := Simulation.new()
+	s.start_profile = profile
 	var ps: Array = []
 	for i in 4:
 		ps.append({"player_name": "P%d" % i, "company_name": "F%d" % i, "color": Color.RED, "avatar_style": i,
@@ -71,7 +75,7 @@ func _initialize() -> void:
 			cats[k] = true
 	var keys: Array = cats.keys()
 	keys.sort_custom(func(a, b): return absf(_sum(s, a)) > absf(_sum(s, b)))
-	print("== Buchungen nach %d Spieltagen (%d Spielminuten)" % [days, int(s.game_min)])
+	print("== Profil %s: Buchungen nach %d Spieltagen (%d Spielminuten)" % [profile, days, int(s.game_min)])
 	print("%-22s %10s %10s %10s %10s" % ["Kategorie", "F0", "F1", "F2", "F3"])
 	for k in keys:
 		var row := "%-22s" % k

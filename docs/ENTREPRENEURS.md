@@ -518,8 +518,24 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 
 | Etappe | Inhalt | Stand |
 |---|---|---|
-| 1 | Unternehmer und Betriebskern, Kostenstellen, Startprofil, Migration, Grundversorgung, KI-Aktionen, Betriebsübersicht | in Arbeit |
+| 1 | Unternehmer und Betriebskern, Kostenstellen, Startprofil, Migration, Grundversorgung, KI-Aktionen, Betriebsübersicht | umgesetzt (05.11.2026), Prüfbericht unten |
 | 2 | Getreide-Mehl-Brot-Kette | offen |
 | 3 | Fleisch, Kühlung, Gastronomie, Bau, Immobilien | offen |
 | 4 | Gelände, Bergbau, Stahl, Kraftwerk und Netz | offen |
 | 5 | IT, weitere Verarbeiter, Dominanz, Langzeitbalance | offen |
+
+### Etappe 1 – Prüfbericht (05.11.2026, Branch `unternehmer`, bis `f878b8d`)
+
+**Umgesetzt (Dateien):**
+- Betriebsschicht `scripts/economy/businesses.gd` (`sim.biz`): Betriebe `B<n>` mit Eigentümer, Branche, Standort, Status (Liste aus Abschnitt 3), Personal (`Worker.business`), Strombedarf, Blockaden mit Grund, Entscheidungen mit Herkunft; `found`, `close`, `assign`, `ensure_transport`, `migrate`, `frozen`. Branchen datengetrieben in `config/branches.json` (vorerst nur `transport`; weitere kommen mit ihren Ketten).
+- Kostenstellen im vorhandenen Ledger (`scripts/economy/ledger.gd`): `book(..., cc)`, `cc_totals`, `cc_profit`; alle Erfolgsbuchungen laufen über `_add_total` (auch Lohnabgrenzung und Spielerkredit-Zinsen), Löhne je Betrieb (`Personnel.wages_by_business`). Summe der Kostenstellen = Unternehmenssumme.
+- Grundversorgung `scripts/economy/power_grid.gd` (`sim.grid`), `config/energy.json`: 1 600 kW, Grundlast 1,2 kW je Einwohner, Versorgung der Betriebe in Anschlussreihenfolge, Abschaltung mit Grund, Stromanschluss der Parzelle, Abrechnung je Betrieb (Kategorie `energy`, an P0), Erzeugungskosten P0→S0, Ausbau `expand_power` (+500 kW, 60 000 EUR, 10 Tage) mit Bürgermeister-Regel ab 85 % Last. Insolvente Unternehmen werden weder versorgt noch abgerechnet.
+- Startprofil (`Simulation.start_profile`): Spiel startet als Unternehmer (Hauptsitz auf dem Startgrundstück, zwei Allrounder, kein Fahrzeug); erstes Fahrzeug eröffnet den Transportbetrieb. Profil `spedition` (bisheriger Start) bleibt wählbar (Startmenü „Start“) und ist Standard der bestehenden Tests. Neugründung folgt dem Profil.
+- Spielstände: `save_version` 2, Migration alter Stände (Spedition → Transportbetrieb, bisherige Summen auf dessen Kostenstelle).
+- KI-Aktionen `found_business`, `close_business`, `assign_staff` (Regelprüfung im ActionExecutor); Beobachtung `betriebe` (knapp) und `verfuegbare_branchen`; Ansichten „Unternehmen“ und „Strom“ (Reiter Betrieb bzw. Stadt).
+
+**Prüfungen (tatsächlich ausgeführt):** neue Tests `test_business_core` (15), `test_power_grid` (13), `test_start_profile` (9), `test_business_actions` (14) grün; Regressionslauf über 35 bestehende Tests (u. a. Geldkonservierung, Banken, Insolvenz, Wirtschaftskreislauf, Abnahme Stadtentwicklung/Hof/Personal, Speichern/Laden, Strategie, Disponent, Prompt) grün, nachdem ein Fehler behoben war (Strom für insolvente Firmen). Autotest über die Spielsitzung (Unternehmerstart, 150 s, 16×) ohne Skriptfehler, Geld erhalten. Volltest aller Tests nicht ausgeführt (Speicherdruck; nur auf Wunsch).
+
+**Messung `tests/probe_bottlenecks.gd`, 40 Spieltage, vier Regel-KIs:** Löhne je Firma Spedition −9 600 bis −12 200, Unternehmer −2 500 bis −4 600; Gewinn Spedition −6 100 bis −24 900, Unternehmer −9 800 bis −18 300; gescheiterte Aufträge 31 bzw. 22, alle „Frist weit überschritten“.
+
+**Grenzen / offen:** Solange nur die Transportbranche existiert, bleiben die Firmen im Regelspiel im Verlust; Hauptursache ist die Auftragsannahme ohne Machbarkeitsprüfung (Fahrzeuge nehmen Aufträge an, die sie vor Fristende nicht erreichen). Treibstoff wird weiterhin beim Kauf als Aufwand gebucht. Die Betriebsansicht ist eine Textansicht (keine eigene Kartenebene). Das Kraftwerk ist noch eine pauschale Erzeugung (Etappe 4).
