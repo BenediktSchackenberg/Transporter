@@ -16,12 +16,30 @@ const LINES := {
 }
 const BUFFER := {"kostenoptimierer": 20000.0, "wachstum": 6000.0, "netzwerker": 12000.0, "risikospieler": 9000.0}
 const MAX_ACTIONS := 6
+## Investitionskredit: Anteil des freien Kreditrahmens, den die Persoenlichkeit fuer eine lohnende Anschaffung leiht.
+const LOAN_APPETITE := {"wachstum": 0.6, "risikospieler": 0.5, "netzwerker": 0.3, "kostenoptimierer": 0.0}
+const LOAN_MONTHS := 12
 const REFERENCE_RESERVE_FACTOR := 1.5   # Reservefaktor, bei dem der Puffer der Persoenlichkeit unveraendert gilt
 ## Dominanzstreben: Wahrscheinlichkeit je Entscheidung, den schwaechsten Konkurrenten gezielt unter Druck zu setzen (nur aus Gewinn heraus).
 const DOMINANCE := {"wachstum": 0.25, "risikospieler": 0.30, "kostenoptimierer": 0.12, "netzwerker": 0.04}
 
 
 ## strategy: optionale Parameter des StrategyLearner (cash_reserve_factor, min_expected_margin_ratio, fleet_purchase_utilization_min, utilization_now); leer = bisheriges Verhalten.
+## Bezahlbar aus Bargeld (ueber dem Puffer)? Sonst Investitionskredit, wenn die Firma schon Umsatz hat und der Betrag in den
+## Anteil des freien Kreditrahmens passt, den ihre Persoenlichkeit riskiert. Der Kredit kommt vor dem Kauf in die Aktionsliste.
+static func _finance(price: float, cash: float, buffer: float, me: Dictionary, personality: String, actions: Array, reasons: Array) -> bool:
+	if cash > price + buffer:
+		return true
+	if float(me.umsatz) <= 0.0 or actions.any(func(a): return a.action in ["take_loan", "request_loan"]):
+		return false
+	var need := maxf(5000.0, ceilf((price + buffer - cash) / 1000.0) * 1000.0)
+	if need > float(me.kreditrahmen_frei) * float(LOAN_APPETITE.get(personality, 0.0)):
+		return false
+	actions.insert(0, {"action": "take_loan", "amount": need, "monate": LOAN_MONTHS})
+	reasons.append("finanziere %d EUR per Kredit (%d Monate), weil sich die Anschaffung lohnt" % [int(need), LOAN_MONTHS])
+	return true
+
+
 static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenerator, strategy: Dictionary = {}) -> Dictionary:
 	if obs.is_empty():
 		return {"summary": "Ich warte ab.", "actions": [{"action": "wait"}], "memory": ""}
@@ -215,7 +233,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 				special = ["truck"]
 	if not special.is_empty() and _free_slots(me) > 0 and "buy_vehicle" not in planned and obs.fahrzeuge.size() >= 2:
 		var so := _cheapest_offer(res.fahrzeugangebote, special)
-		if not so.is_empty() and cash > float(so.preis) + buffer:
+		if not so.is_empty() and _finance(float(so.preis), cash, buffer, me, personality, actions, reasons):
 			growth.append({"action": "buy_vehicle", "offer_id": so.id})
 			if free_staff.filter(func(w): return int(w.faehigkeiten.get("fahren", 0)) > 0).is_empty() and "recruit_worker" not in planned:
 				var sc := _best_candidate(res.arbeitskraefte, "fahren")
@@ -230,7 +248,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		if personality == "wachstum" and good_jobs >= 6:
 			wanted = ["truck", "transporter", "van"]
 		var offer := _cheapest_offer(res.fahrzeugangebote, wanted)
-		if not offer.is_empty() and cash > float(offer.preis) + buffer:
+		if not offer.is_empty() and _finance(float(offer.preis), cash, buffer, me, personality, actions, reasons):
 			growth.append({"action": "buy_vehicle", "offer_id": offer.id})
 			if free_staff.filter(func(w): return int(w.faehigkeiten.get("fahren", 0)) > 0).is_empty() and "recruit_worker" not in planned:
 				var cand := _best_candidate(res.arbeitskraefte, "fahren")
@@ -404,7 +422,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		_dominate(rivals, personality, me, cash, buffer, rng, actions, reasons)
 	# 10b) Finanzierung und Personalabbau: Kredit bei knapper Kasse, Tilgung bei Überschuss, Entlassung bei Verlust
 	var debt := float(me.schulden)
-	if debt <= 0.0 and cash < buffer * 0.4 and float(me.umsatz) > 0.0 and float(me.kreditrahmen_frei) >= 5000.0 			and obs.fahrzeuge.size() > 0:
+	if debt <= 0.0 and cash < buffer * 0.4 and float(me.umsatz) > 0.0 and not actions.any(func(a): return a.action == "take_loan") and float(me.kreditrahmen_frei) >= 5000.0 			and obs.fahrzeuge.size() > 0:
 		var amount := minf(15000.0, floorf(float(me.kreditrahmen_frei) * 0.5 / 1000.0) * 1000.0)
 		actions.insert(0, {"action": "take_loan", "amount": amount, "monate": 6})
 		reasons.append("nehme %d EUR Kredit auf, weil die Kasse knapp ist" % int(amount))

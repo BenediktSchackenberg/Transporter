@@ -718,6 +718,26 @@ func test_rule_brain_finance() -> void:
 	names = RuleBrain.decide(obs, "kostenoptimierer", RandomNumberGenerator.new()).actions.map(func(a): return a.action)
 	ok("repay_loan" in names, "Überschuss: Kredit wird getilgt")
 	ok("take_loan" not in names and "dismiss_worker" not in names, "Gesunde Firma: weder Kredit noch Entlassung")
+	# Investitionskredit: lohnende Anschaffung, nur das Bargeld fehlt
+	var me := {"bargeld": 10000, "umsatz": 20000, "kreditrahmen_frei": 60000, "schulden": 0}
+	var acts: Array = []
+	var why: Array = []
+	ok(RuleBrain._finance(30000.0, 10000.0, 6000.0, me, "wachstum", acts, why) and acts.size() == 1 and acts[0].action == "take_loan" and float(acts[0].amount) >= 26000.0,
+		"Wachstumsstratege finanziert die Anschaffung per Kredit (%s)" % str(acts))
+	acts.clear()
+	ok(not RuleBrain._finance(30000.0, 10000.0, 20000.0, me, "kostenoptimierer", acts, why) and acts.is_empty(), "Kostenoptimierer leiht nicht für Anschaffungen")
+	ok(not RuleBrain._finance(30000.0, 10000.0, 12000.0, me, "netzwerker", acts, why), "Netzwerker leiht nur einen kleinen Teil des Rahmens (32 000 > 30 % von 60 000)")
+	me.umsatz = 0
+	ok(not RuleBrain._finance(30000.0, 10000.0, 6000.0, me, "wachstum", acts, why), "ohne Umsatz kein Investitionskredit")
+	me.umsatz = 20000
+	ok(RuleBrain._finance(5000.0, 20000.0, 6000.0, me, "kostenoptimierer", acts, why) and acts.is_empty(), "genug Bargeld: Kauf ohne Kredit")
+	# echter Kredit ueber die Bank
+	var c0 := s.company(0)
+	var debt0 := c0.ledger.debt
+	var cash0 := c0.ledger.cash
+	var lr: Dictionary = s.executor.execute(0, {"action": "take_loan", "amount": 20000.0, "monate": RuleBrain.LOAN_MONTHS}, "", "fallback")
+	ok(lr.ok and c0.ledger.debt > debt0 and c0.ledger.cash > cash0, "Bank zahlt den Investitionskredit aus: " + str(lr.msg))
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
 
 
 func test_local_agent_choices() -> void:
