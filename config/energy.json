@@ -1,0 +1,7 @@
+{
+  "_hinweis": "Kommunale Grundversorgung (Auftrag 14, Etappe 1). Stadtwerke = Stadtkasse P0. Begrenzte Leistung, Abrechnung je Betrieb nach Verbrauch. Etappe 4 ersetzt die Erzeugung durch das kommunale Kraftwerk mit Brennstoff, Wartung und Netz. Alle Werte sind Spielparameter.",
+  "leistung_kw": 1600.0,
+  "grundlast_kw_je_einwohner": 1.2,
+  "tarif_eur_kwh": 0.32,
+  "erzeugung_eur_kwh": 0.17
+}

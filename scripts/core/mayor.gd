@@ -46,6 +46,8 @@ const SCHEMA := {
 		"desc": "Prüfdienst zu einer Firma schicken (art lohnsteuer | arbeitssicherheit | fahrzeuge). Kapazität je Monat = 2 je Prüfer, Sperrfrist 10 Tage je Firma; Befunde kosten die Firma Bußgeld (an die Stadtkasse), eine Prüfung ohne Befund kostet Zustimmung. Siehe obs.pruefungen."},
 	"mediate_rivalry": {"params": {"firma_a": "int", "firma_b": "int", "tage": "int?", "reason": "string"},
 		"desc": "Zwischen zwei zerstrittenen Firmen schlichten (obs.rivalitaet.paare, ab Spannung 30): Spannung −25 und Stillhalteabkommen für 3–14 Tage (Standard 7). Wer es bricht (Abwerben, Anzeige, Blockade, Sabotage gegen den anderen), zahlt 3000 EUR und verliert 10 Ruf. Unruhe zwischen Firmen kostet Zustimmung."},
+	"expand_power": {"params": {"reason": "string"},
+		"desc": "Stromnetz der Stadtwerke ausbauen: +500 kW Leistung nach 10 Tagen für 60 000 EUR. Sinnvoll, wenn obs.strom.auslastung über 0,85 liegt oder Betriebe abgeschaltet sind."},
 	"warn_company": {"params": {"firma": "int", "reason": "string"},
 		"desc": "Firma öffentlich verwarnen (nur wenn sie in den letzten 7 Tagen eskaliert hat, siehe obs.rivalitaet.verursacher): Ruf −2, für 10 Tage kostet jede weitere Eskalation zusätzlich Ruf."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
@@ -191,6 +193,7 @@ func indicators() -> Dictionary:
 		"bevoelkerungsmodell": sim.population.summary(),
 		"sicherheit_gesundheit": sim.safety.summary(),
 		"rivalitaet": sim.rivalry.mayor_summary(),
+		"strom": sim.grid.summary(),
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 	}
@@ -398,6 +401,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.rivalry.mediate(int(a.firma_a), int(a.firma_b), int(a.get("tage", 7)), "Bürgermeister %s" % name)
 			"warn_company":
 				res = sim.rivalry.warn(int(a.firma), "Bürgermeister %s" % name)
+			"expand_power":
+				res = sim.grid.expand("Bürgermeister %s" % name)
 			_:
 				res = {"ok": false, "msg": "Unbekannte Aktion."}
 	if act != "wait":

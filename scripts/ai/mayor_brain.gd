@@ -115,6 +115,10 @@ static func decide(ind: Dictionary) -> Dictionary:
 			else:
 				break
 			given += 1
+	# 1h1) Strom: Netz ueber 85 % ausgelastet oder Betriebe abgeschaltet -> ausbauen (nur mit Reserve)
+	var pw: Dictionary = ind.get("strom", {})
+	if actions.size() < MAX_ACTIONS and not pw.is_empty() and not bool(pw.ausbau_laeuft) and (float(pw.auslastung) > 0.85 or int(pw.abgeschaltete_betriebe) > 0) 			and float(ind.haushalt.verfuegbar) > float(pw.ausbau.kosten) * 1.5:
+		actions.append({"action": "expand_power", "reason": "Stromnetz zu %.0f %% ausgelastet, %d Betriebe ohne Strom." % [float(pw.auslastung) * 100.0, int(pw.abgeschaltete_betriebe)]})
 	# 1h2) Rivalitaet: heftigsten Streit (ab 60) schlichten, sonst Dauer-Eskalierer (3+ Vorfaelle in 7 Tagen) verwarnen
 	var rv: Dictionary = ind.get("rivalitaet", {})
 	if actions.size() < MAX_ACTIONS and not rv.is_empty():

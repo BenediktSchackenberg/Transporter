@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1491,6 +1491,46 @@ func test_business_core() -> void:
 	s.insolvency.refound(1, site)
 	var open_b: Array = s.biz.of(1)
 	ok(open_b.size() == 1 and open_b[0].id != m[0].id and s.company(1).ledger.cost_center == open_b[0].id, "Neugründung: neuer Betrieb, Vorgängerbetriebe geschlossen")
+
+
+func test_power_grid() -> void:
+	var s := new_sim(2)
+	var G: PowerGrid = s.grid
+	var b0: Dictionary = s.biz.of(0)[0]
+	var b1: Dictionary = s.biz.of(1)[0]
+	G.on_day(1)
+	ok(G.supplied.has(b0.id) and G.supplied.has(b1.id) and float(G.last.grundlast) > 0.0, "Grundversorgung: beide Betriebe versorgt, Grundlast der Bevölkerung erfasst")
+	var e0 := float(s.company(0).ledger.totals.get("energy", 0.0))
+	var p0 := float(s.economy.accounts.P0)
+	G.on_day(2)
+	var e1 := float(s.company(0).ledger.totals.get("energy", 0.0))
+	var hours := GameCalendar.day_game_min / 60.0
+	ok(is_equal_approx(e1 - e0, -float(b0.energy_kw) * hours * G.tariff), "Abrechnung nach Verbrauch: kW × Stunden × Tarif (%.2f EUR)" % (e0 - e1))
+	ok(float(s.company(0).ledger.cc_totals[b0.id].get("energy", 0.0)) < 0.0, "Strom steht auf der Kostenstelle des Betriebs")
+	ok(float(s.economy.accounts.P0) > p0, "Stadtwerke (Stadtkasse) nehmen mehr ein als die Erzeugung kostet")
+	# Engpass: nur noch Leistung fuer einen Betrieb
+	G.capacity = G.base_load() + float(b0.energy_kw) + 0.5
+	G.on_day(3)
+	ok(G.supplied.has(b0.id) and not G.supplied.has(b1.id), "Engpass: Betriebe in Reihenfolge des Anschlusses versorgt")
+	ok(b1.status == "blockiert" and str(b1.blockers[0].text).contains("Netz ausgelastet"), "abgeschalteter Betrieb nennt den Grund: " + str(b1.blockers))
+	var e_b1 := float(s.company(1).ledger.totals.get("energy", 0.0))
+	G.on_day(4)
+	ok(is_equal_approx(float(s.company(1).ledger.totals.get("energy", 0.0)), e_b1), "ohne Strom keine Stromrechnung")
+	var acts: Array = MayorBrain.decide(s.mayor.indicators()).actions.filter(func(a): return a.action == "expand_power")
+	ok(acts.size() == 1, "Regel-Bürgermeister baut bei Engpass aus")
+	ok(s.mayor.execute(acts[0]).ok and G.summary().ausbau_laeuft, "Ausbau beauftragt")
+	G.on_day(4 + PowerGrid.EXPAND_DAYS)
+	ok(G.supplied.has(b1.id) and b1.status == "aktiv", "nach dem Ausbau wieder versorgt und aktiv")
+	# Grundstueck ohne Stromanschluss
+	var p: Dictionary = s.parcels.of_building(int(b0.site))
+	if not p.is_empty():
+		p.erschliessung["strom"] = false
+		G.on_day(30)
+		ok(b0.status == "blockiert" and b0.blockers.any(func(x): return str(x.text).contains("Stromanschluss")), "ohne Stromanschluss blockiert")
+		p.erschliessung["strom"] = true
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
+	var s2 := Simulation.from_dict(s.to_dict())
+	ok(is_equal_approx(s2.grid.capacity, G.capacity) and s2.grid.supplied.size() == G.supplied.size(), "Netz übersteht Speichern/Laden")
 
 
 static func KINDS_OK(k: Dictionary) -> bool:
@@ -5987,11 +6027,13 @@ func test_mayor_levers() -> void:
 	ok(not M.execute({"action": "city_marketing", "budget": 10000.0, "reason": "Test"}).ok, "keine zweite Kampagne während der Laufzeit")
 	var w0: int = M.waiting
 	M.stock_units = M.occupied_units()   # kein freier Wohnraum: Zuzug bleibt auf der Warteliste
-	M.on_month(m)
+	for d in GameCalendar.DAYS_PER_MONTH:
+		M.on_day(d)   # Zuzug kommt taeglich
 	var with_boost: int = M.waiting - w0
 	M.marketing_until = -1
 	var w1: int = M.waiting
-	M.on_month(m)
+	for d in GameCalendar.DAYS_PER_MONTH:
+		M.on_day(d)
 	ok(with_boost > M.waiting - w1, "Stadtmarketing erhöht den Zuzug (%d statt %d)" % [with_boost, M.waiting - w1])
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.population.training_support == 100 and int(s2.citizens.base_cap.polizei) == pol0 + 3 and int(s2.citizens.start_cap.polizei) == int(Z.start_cap.polizei), "Hebel nach dem Laden")
