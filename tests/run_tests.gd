@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1531,6 +1531,32 @@ func test_power_grid() -> void:
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
 	var s2 := Simulation.from_dict(s.to_dict())
 	ok(is_equal_approx(s2.grid.capacity, G.capacity) and s2.grid.supplied.size() == G.supplied.size(), "Netz übersteht Speichern/Laden")
+
+
+func test_start_profile() -> void:
+	var s := Simulation.new()
+	s.start_profile = "unternehmer"
+	s.setup(4242, players(3), 128, 0.5)
+	s.personnel.idle_routine = false
+	for c in s.companies:
+		ok(c.vehicle_ids.is_empty() and s.biz.of(c.id).is_empty() and s.personnel.employed(c.id).size() == 2 and not c.depots.is_empty(),
+			"Unternehmerstart %s: Hauptsitz, zwei Allrounder, kein Fahrzeug, keine Spedition" % c.company_name)
+	var c0 := s.company(0)
+	ok(is_equal_approx(c0.ledger.cash, Catalog.START_CAPITAL), "volles Startkapital ohne Zwangsinvestition")
+	run(s, 60.0)
+	ok(identity_ok(s), "Bilanzidentität und Geldkonservierung ohne Fahrzeuge")
+	ok(c0.ledger.cc_totals.has(Ledger.GENERAL) and float(c0.ledger.cc_totals[Ledger.GENERAL].get("wages", 0.0)) < 0.0, "Löhne des Hauptsitzes auf der allgemeinen Kostenstelle")
+	# erster Fahrzeugkauf eroeffnet den Transportbetrieb
+	var offer: Dictionary = s.resources.available_offers()[0]
+	var r := s.executor._do(0, "buy_vehicle", {"action": "buy_vehicle", "offer_id": offer.id}, true)   # Ausfuehrung vor Ort (Figur am Autohaus)
+	var tb := s.biz.find(0, "transport")
+	ok(c0.vehicle_ids.size() == 1 and not tb.is_empty() and c0.ledger.cost_center == tb.id, "erstes Fahrzeug eröffnet den Transportbetrieb: " + str(r.msg))
+	# Speichern/Laden: kein Migrationsbetrieb fuer Unternehmer ohne Spedition
+	var s2 := Simulation.from_dict(s.to_dict())
+	ok(s2.start_profile == "unternehmer" and s2.biz.of(1).is_empty() and s2.biz.of(0).size() == 1, "Laden legt keine Zwangsspedition an")
+	# Neugruendung im Unternehmerprofil
+	s.insolvency.refound(2, s.company(2).depots[0])
+	ok(s.company(2).vehicle_ids.is_empty() and s.personnel.employed(2).size() >= 2 and s.biz.of(2).is_empty(), "Neugründung startet ebenfalls branchenneutral")
 
 
 static func KINDS_OK(k: Dictionary) -> bool:

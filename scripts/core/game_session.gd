@@ -56,6 +56,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 				"color": Catalog.COMPANY_COLORS[int(p.color_idx)], "avatar_style": int(p.avatar_style),
 				"personality": p.personality, "form": p.get("form", "einzel")})
 		sim = Simulation.new()
+		sim.start_profile = str(cfg.get("start_profil", "unternehmer"))   # Auftrag 14: branchenneutraler Start; "spedition" = bisheriger Start
 		sim.setup(int(cfg.seed), players, int(cfg.get("map_size", Catalog.MAP_SIZE)))
 		sim.game_master.enabled = bool(cfg.get("game_master", true))
 		sim.yard.load_learning()   # gelernte Prognosefaktoren des Bauberaters aus frueheren Partien   # Spielleitung im Spiel an; Konfiguration "game_master": false schaltet sie ab

@@ -527,6 +527,7 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			L.invest(offer.price)
 			var nv: FleetVehicle = sim.add_vehicle(cid, offer.model, offer.price, dealer.road)
 			nv.condition = float(offer.condition)
+			sim.biz.ensure_transport(cid, "Unternehmer")   # Fahrzeuge gehoeren zum Transportbetrieb
 			sim.log_event("%s kauft %s %s (%s)." % [c.company_name, "gebrauchten" if offer.condition < 100 else "neuen", spec.name, Catalog.money(offer.price)], "info", cid)
 			c.add_key_event("Kauf: %s" % spec.name, sim.game_min)
 			sim.bark(cid, "kauf")

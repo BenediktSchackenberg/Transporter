@@ -129,6 +129,21 @@ func summary_of(cid: int) -> Array:
 	return out
 
 
+## Transportbetrieb der Company; existiert keiner (Unternehmerstart), wird er am Hauptsitz eroeffnet (z. B. beim ersten Fahrzeugkauf).
+## Ist noch keine Standard-Kostenstelle gesetzt, wird er es (dann gehoert das Personal ohne Zuordnung zu ihm).
+func ensure_transport(cid: int, source: String) -> Dictionary:
+	var b := find(cid, "transport")
+	if not b.is_empty():
+		return b
+	var c = sim.company(cid)
+	b = create(cid, "transport", int(c.depots[0]) if not c.depots.is_empty() else -1, "", "aktiv")
+	if c.ledger.cost_center == "":
+		c.ledger.cost_center = b.id
+	note(b.id, "Transportbetrieb eröffnet (erstes Fahrzeug)", source)
+	sim.log_event("%s eröffnet einen Transportbetrieb." % c.company_name, "info", cid)
+	return b
+
+
 ## Alter Spielstand bzw. Speditionsstart: jede Company ohne Betrieb bekommt ihren bisherigen Transportbetrieb (Hof, Fahrzeuge,
 ## Personal, Auftraege bleiben unveraendert). Bisherige Summen der Kostenstelle "allgemein" gehoeren zu diesem Betrieb.
 func migrate() -> int:

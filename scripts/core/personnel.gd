@@ -137,6 +137,15 @@ func start_staff(cid: int, vehicle_id: int) -> void:
 		x.pos = a.pos
 
 
+## Startprofil Unternehmer: zwei Allrounder am Hauptsitz (Verwaltung, Einkauf, notfalls fahren); weitere Fachkraefte stellt der Unternehmer
+## je nach Betrieb ein. Kein Fahrzeug, kein Transportbetrieb.
+func start_staff_small(cid: int) -> void:
+	var at: Vector2 = sim.city.tile_center(sim.city.building(sim.companies[cid].depots[0]).walk)
+	for e in [[{"fahren": 1, "verladen": 1, "reparieren": 1, "bewachen": 1}, 15.0], [{"fahren": 1, "verladen": 2}, 13.0]]:
+		var w := _new_employee(cid, e[0], e[1])
+		w.pos = at
+
+
 func _new_employee(cid: int, skills: Dictionary, wage: float) -> Worker:
 	var w := Worker.new()
 	w.id = "W%d" % next_worker
