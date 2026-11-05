@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1179,8 +1179,8 @@ func test_road_blockade() -> void:
 	ok(is_equal_approx(s.company(0).ledger.cash, cash0 - Rivalry.BLOCK_COST), "Paletten und Helfer kosten %s" % Catalog.money(Rivalry.BLOCK_COST))
 	ok(not s.rivalry.block_road(0, 1).ok and not s.rivalry.block_road(2, 1).ok, "höchstens eine Blockade je Firma und Opfer am Tag")
 	# Polizei raeumt
-	run(s, (Rivalry.BLOCK_CLEAR_MIN.y + 10.0) / 2.0)
-	ok(s.rivalry.blockades.is_empty() and not s.nav.is_blocked_road(cell), "Polizei räumt die Blockade spätestens nach %d Minuten" % int(Rivalry.BLOCK_CLEAR_MIN.y))
+	run(s, (GameCalendar.days_to_min(Rivalry.BLOCK_CLEAR_DAYS.y) + 4.0) / Catalog.GAME_MIN_PER_SIM_SEC)
+	ok(s.rivalry.blockades.is_empty() and not s.nav.is_blocked_road(cell), "Polizei räumt die Blockade spätestens nach %.2f Spieltagen" % Rivalry.BLOCK_CLEAR_DAYS.y)
 	ok(not s.traffic_events.any(func(e): return e.kind == "blockade"), "Verkehrsmeldung verschwindet")
 	var caught := s.company(0).reputation < rep0
 	var arts: Array = s.rivalry.incidents.map(func(i): return i.art)
@@ -1195,6 +1195,192 @@ func test_road_blockade() -> void:
 	ok(s2.rivalry.blockades.size() == 1 and s2.nav.is_blocked_road(Vector2i(int(s2.rivalry.blockades[0].cell[0]), int(s2.rivalry.blockades[0].cell[1]))), "aktive Blockade übersteht Speichern/Laden und sperrt weiter")
 	# Aktion fuer Modellspieler
 	ok(ActionExecutor.SCHEMA.has("block_road"), "Aktion block_road steht Modellspielern zur Verfügung")
+
+
+func test_rivalry_talk() -> void:
+	var s := new_sim(3)
+	var T: RivalryTalk = s.talk
+	s.rivalry.add_tension(0, 1, "kunde_abgeworben", "Bäckerei")
+	s.rivalry.add_tension(0, 1, "fahrer_abgeworben", "Max")
+	var D := GameCalendar.days_to_min(1.0)
+	_tick_at(s, s.game_min + D)
+	ok(T.lines.is_empty(), "standardmäßig aus: keine Zeilen")
+	T.enabled = true
+	T.last_provoke = 1.0e12   # Provokationen ohne Anlass prueft der Teil unten
+	ok(T.next_turn(s.game_min).from == 1, "es spricht zuerst der Betroffene des letzten Vorfalls")
+	# Kandidaten je Stufe
+	var k2: Array = T.candidates(1, 0, 35.0).map(func(k): return k.art)
+	ok("deeskalieren" in k2 and "sticheln" in k2 and not "anzeigen" in k2 and not "blockieren" in k2, "Stufe Provokation: Worte und legale Abwerbung, keine Anzeige/Blockade (%s)" % str(k2))
+	var k3: Array = T.candidates(1, 0, 55.0).map(func(k): return k.art)
+	ok("anzeigen" in k3 and not "blockieren" in k3, "ab Stufe Anzeige ist die Anzeige möglich")
+	ok(T.candidates(1, 0, 55.0).all(func(k): return KINDS_OK(k)), "jeder Kandidat hat Nummer, Richtung und Folgen")
+	# Regelwahl nach Persoenlichkeit
+	s.company(1).personality = "netzwerker"
+	var turn := T.next_turn(s.game_min)
+	ok(_art_of(turn, T.rule_choice(turn)) == "kooperation", "Netzwerker bietet Kooperation an")
+	s.company(1).personality = "wachstum"
+	ok(KIND_OF(turn, T.rule_choice(turn)) == "eskalation", "Wachstumsstratege eskaliert")
+	# Ein Zug mit Regeln: Zeile, Nachricht, Spannungsaenderung
+	s.company(1).personality = "kostenoptimierer"
+	var before := s.rivalry.get_tension(0, 1)
+	var msgs0 := s.social.messages.size()
+	_tick_at(s, s.game_min + D)
+	ok(T.lines.size() == 1 and int(T.lines[0].from) == 1 and str(T.lines[0].text).length() > 10, "Regelzug: eine Zeile von Firma 1")
+	ok(str(T.lines[0].art) == "deeskalieren" and s.rivalry.get_tension(0, 1) < before, "Kostenoptimierer ohne Provokation beschwichtigt, Spannung sinkt")
+	ok(s.social.messages.size() == msgs0 + 1, "Zeile erscheint als öffentliche Nachricht (Sprechblase)")
+	_tick_at(s, s.game_min + D * 0.3)
+	ok(T.lines.size() == 1, "dasselbe Paar spricht nicht sofort wieder")
+	# Modellwahl
+	T.use_model = true
+	T.last_pair.clear()
+	T.last_run = -1000.0
+	var got := []
+	T.turn_ready.connect(func(t): got.append(t))
+	_tick_at(s, s.game_min + D * 2.0)
+	ok(got.size() == 1 and not T.pending.is_empty() and int(got[0].from) == 0, "mit Modell: Zug wartet auf die Wahl, jetzt antwortet Firma 0")
+	var nr_st := -1
+	for k in got[0].kandidaten:
+		if k.art == "sticheln":
+			nr_st = int(k.nr)
+	ok(T.resolve(int(got[0].id), nr_st, "Ihr fahrt wie die Schnecken!", "Claude"), "gültige Modellwahl wird übernommen")
+	ok(T.lines[-1].text == "Ihr fahrt wie die Schnecken!" and T.lines[-1].source == "Claude" and T.lines[-1].art == "sticheln", "Satz und Wahl des Modells stehen in der Zeile")
+	T.last_pair.clear()
+	T.last_run = -1000.0
+	_tick_at(s, s.game_min + D * 3.0)
+	ok(not T.resolve(int(got[-1].id), 99, "Unsinn", "Claude") and T.lines[-1].source.begins_with("Regeln"), "ungültige Wahl: Regeln entscheiden")
+	T.last_pair.clear()
+	T.last_run = -1000.0
+	_tick_at(s, s.game_min + D * 4.0)
+	_tick_at(s, s.game_min + D * (4.0 + RivalryTalk.PENDING_MAX_DAYS) + 1.0)
+	ok(T.pending.is_empty() and str(T.lines[-1].source).contains("zu langsam"), "antwortet das Modell nicht, entscheiden die Regeln")
+	T.use_model = false
+	# Hohe Stufe: Risikospieler blockiert; Opfer ruft die Polizei
+	s.company(0).personality = "risikospieler"
+	s.company(0).ledger.inject(20000.0)
+	for i in 3:
+		s.rivalry.add_tension(1, 0, "sabotage_entdeckt", "x")
+	s.company(0).sabotage_ready_at = s.game_min + 99999.0
+	var t4 := {"id": 900, "t": s.game_min, "from": 0, "to": 1, "kandidaten": T.candidates(0, 1, s.rivalry.get_tension(0, 1))}
+	ok(_art_of(t4, T.rule_choice(t4)) == "blockieren", "Risikospieler wählt auf hoher Stufe die Blockade")
+	T._apply(t4, T.rule_choice(t4), "", "Regeln")
+	ok(s.rivalry.blockades.size() == 1 and T.lines[-1].ok, "Blockade wird als Tat zur Zeile ausgeführt")
+	var t5 := {"id": 901, "t": s.game_min, "from": 1, "to": 0, "kandidaten": T.candidates(1, 0, s.rivalry.get_tension(0, 1))}
+	ok(_art_of(t5, T.rule_choice(t5)) == "polizei_rufen", "Opfer ruft die Polizei")
+	T._apply(t5, T.rule_choice(t5), "", "Regeln")
+	run(s, 10.0)
+	ok(s.rivalry.blockades.is_empty(), "Polizei räumt nach dem Ruf binnen 15 Minuten")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
+	var s2 := Simulation.from_dict(s.to_dict())
+	ok(s2.talk.enabled and s2.talk.lines.size() == T.lines.size(), "Gespräche überstehen Speichern/Laden")
+	# Provokation ohne Anlass: ohne Streit stichelt ein Risikospieler gegen den umsatzstärksten Konkurrenten
+	var p := new_sim(3)
+	p.talk.enabled = true
+	p.company(1).personality = "risikospieler"
+	p.company(0).personality = "netzwerker"
+	p.company(2).personality = "kostenoptimierer"
+	p.company(2).ledger.book("transport", 5000.0, true, "Test-Erlös", p.game_min)
+	var D2 := GameCalendar.days_to_min(1.0)
+	_tick_at(p, D2 * RivalryTalk.PROVOKE_DAYS + 1.0)
+	ok(p.talk.lines.size() == 1 and int(p.talk.lines[0].from) == 1 and int(p.talk.lines[0].to) == 2 and p.talk.lines[0].richtung == "eskalation",
+		"Provokation: Risikospieler stichelt ohne Anlass gegen den Umsatzstärksten")
+	ok(p.rivalry.get_tension(1, 2) > 0.0, "Provokation erzeugt Spannung, auf die der andere reagieren kann")
+	_tick_at(p, D2 * (RivalryTalk.PROVOKE_DAYS + RivalryTalk.PAIR_GAP_DAYS) + 2.0)
+	ok(p.talk.lines.size() == 2 and int(p.talk.lines[1].from) == 2, "das Gegenüber antwortet")
+	# Antwort des Modells lesen
+	var pa := TalkAgent.parse("Klar: ```json\n{\"text\": \"Na warte!\", \"richtung\": \"eskalation\", \"wahl\": \"3\"}\n```")
+	ok(pa.ok and pa.wahl == 3 and pa.text == "Na warte!", "Modellantwort mit Codeblock und Zahl als Text wird gelesen")
+	ok(not TalkAgent.parse("{\"wahl\": 2}").ok and not TalkAgent.parse("keine Ahnung").ok, "Antwort ohne Satz oder JSON ist ungültig")
+
+
+func test_rivalry_mayor() -> void:
+	var s := new_sim(3)
+	var R: Rivalry = s.rivalry
+	s.rivalry.add_tension(0, 1, "kunde_abgeworben", "a")
+	ok(not R.mediate(0, 1, 7, "Test").ok, "Schlichtung erst ab Spannung 30")
+	for i in 3:
+		R.add_tension(0, 1, "fahrer_abgeworben", "b")
+	var ind := s.mayor.indicators()
+	var acts: Array = MayorBrain.decide(ind).actions.filter(func(a): return a.action == "mediate_rivalry")
+	ok(acts.size() == 1 and int(acts[0].firma_a) == 0 and int(acts[0].firma_b) == 1, "Regel-Bürgermeister schlichtet den heftigsten Streit")
+	var before := R.get_tension(0, 1)
+	var res := s.mayor.execute(acts[0])
+	ok(res.ok and R.has_truce(1, 0) and R.get_tension(0, 1) < before, "Schlichtung: Stillhalteabkommen, Spannung sinkt")
+	ok(s.mayor.indicators().rivalitaet.paare[0].stillhalteabkommen, "Bürgermeister sieht das Abkommen")
+	s.talk.enabled = true
+	var arts: Array = s.talk.candidates(0, 1, R.get_tension(0, 1)).map(func(k): return k.art)
+	ok(arts.all(func(a): return RivalryTalk.KINDS[a].richtung != "eskalation"), "unter Stillhalteabkommen nur beruhigende Reaktionen (%s)" % str(arts))
+	var cash0 := s.company(0).ledger.cash
+	var rep0 := s.company(0).reputation
+	R.add_tension(0, 1, "fahrer_abgeworben", "Bruch")
+	ok(not R.has_truce(0, 1) and s.company(0).ledger.cash < cash0 and s.company(0).reputation <= rep0 - Rivalry.TRUCE_BREACH_REP + 0.01, "Bruch des Abkommens: Bußgeld, Ruf −10, Abkommen endet")
+	# Verwarnung des Dauer-Eskalierers
+	var w := new_sim(3)
+	for i in 3:
+		w.rivalry.add_tension(2, i % 2, "stichelei", "x")
+	var wa: Array = MayorBrain.decide(w.mayor.indicators()).actions.filter(func(a): return a.action == "warn_company")
+	ok(wa.size() == 1 and int(wa[0].firma) == 2, "Regel-Bürgermeister verwarnt den Dauer-Eskalierer")
+	ok(w.mayor.execute(wa[0]).ok and w.rivalry.is_warned(2), "Verwarnung gilt")
+	ok(not w.rivalry.warn(0, "Test").ok, "keine Verwarnung ohne eigene Eskalation")
+	var r2 := w.company(2).reputation
+	w.rivalry.add_tension(2, 0, "stichelei", "y")
+	ok(w.company(2).reputation < r2, "weitere Eskalation trotz Verwarnung kostet Ruf")
+	# Zustimmung: Unruhe kostet
+	var calm := new_sim(3)
+	calm.mayor.approval = 55.0
+	w.mayor.approval = 55.0
+	for i in 3:
+		w.rivalry.add_tension(0, 1, "blockade", "z")
+	calm.mayor._update_approval()
+	w.mayor._update_approval()
+	ok(w.mayor.approval < calm.mayor.approval, "Unruhe und Blockaden senken die Zustimmung (%.1f < %.1f)" % [w.mayor.approval, calm.mayor.approval])
+	# Lernen aus Folgen: unbegruendete Anzeigen kosten Bussgeld und Ruf -> Regeln meiden sie
+	var L := new_sim(3)
+	L.talk.enabled = true
+	L.company(0).personality = "kostenoptimierer"
+	for k in 2:
+		L.rivalry.cooldowns.clear()
+		for i in 4:
+			L.rivalry.add_tension(1, 0, "fahrer_abgeworben", "x")
+		var t := {"id": 50 + k, "t": L.game_min, "from": 0, "to": 1, "kandidaten": L.talk.candidates(0, 1, L.rivalry.get_tension(0, 1))}
+		var nr := -1
+		for c in t.kandidaten:
+			if c.art == "anzeigen":
+				nr = int(c.nr)
+		L.talk._apply(t, nr, "", "Regeln")
+		L.talk._measure(L.game_min + GameCalendar.days_to_min(RivalryTalk.OUTCOME_DAYS) + 1.0)
+	var l: Dictionary = L.talk.learned.get("0:anzeigen", {})
+	ok(int(l.get("n", 0)) == 2 and float(l.summe) < 0.0, "Folgen der Anzeigen gemessen (Bilanz %s)" % str(l.get("summe")))
+	ok(L.talk.bad_experience(0, "anzeigen"), "schlechte Erfahrung wird erkannt")
+	ok(L.memory.books[0].events.any(func(e): return e.quelle == "erfahrung"), "Erfahrung steht im Gedächtnis der Firma")
+	L.rivalry.cooldowns.clear()
+	var t3 := {"id": 60, "t": L.game_min, "from": 0, "to": 1, "kandidaten": L.talk.candidates(0, 1, 60.0)}
+	ok(t3.kandidaten.any(func(c): return c.art == "anzeigen"), "Anzeige wäre möglich")
+	ok(_art_of(t3, L.talk.rule_choice(t3)) != "anzeigen", "Regeln meiden die gelernte Fehlentscheidung")
+	ok(t3.kandidaten.any(func(c): return c.has("erfahrung")), "Erfahrung steht an den Kandidaten (für das Modell)")
+	ok(absf(L.economy.conservation_error()) < 0.01 and absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
+	var s2 := Simulation.from_dict(L.to_dict())
+	ok(s2.talk.learned.has("0:anzeigen"), "Gelerntes übersteht Speichern/Laden")
+
+
+## Gespraechsregie zu einer Zeit ausloesen; die Simulationszeit laeuft mit (wie im Spiel).
+static func _tick_at(sim: Simulation, t: float) -> void:
+	sim.game_min = maxf(sim.game_min, t)
+	sim.talk.minute_tick(sim.game_min)
+
+
+static func KINDS_OK(k: Dictionary) -> bool:
+	return int(k.nr) > 0 and RivalryTalk.KINDS.has(k.art) and str(k.richtung) != "" and str(k.folgen) != ""
+
+
+static func _art_of(turn: Dictionary, nr: int) -> String:
+	for k in turn.kandidaten:
+		if int(k.nr) == nr:
+			return k.art
+	return ""
+
+
+static func KIND_OF(turn: Dictionary, nr: int) -> String:
+	return RivalryTalk.KINDS.get(_art_of(turn, nr), {}).get("richtung", "")
 
 
 func test_dispatch_help() -> void:

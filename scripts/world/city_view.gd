@@ -589,6 +589,7 @@ func _update_weather_fx(delta: float, wx: Weather) -> void:
 	if key != _roof_key:
 		_roof_key = key
 		var c := Color(1, 1, 1, snow * 0.92) if snow > 0.02 else Color(0.28, 0.4, 0.62, wet * 0.3)
+		_roofs = _roofs.filter(func(r): return is_instance_valid(r))   # Gebaeude koennen umgebaut worden sein
 		for o in _roofs:
 			o.modulate = c
 	# Pfuetzen auf Strassen und Gehwegen in Kamerarichtung

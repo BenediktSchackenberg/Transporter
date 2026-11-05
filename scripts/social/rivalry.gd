@@ -23,6 +23,9 @@ const TENSION := {
 	"anzeige_unbegruendet": 12.0,
 	"sabotage_entdeckt": 35.0,
 	"blockade": 25.0,               # Strassenblockade, Taeter ermittelt
+	"stichelei": 4.0,               # oeffentliche Stichelei (Gespraechsregie)
+	"beschwichtigt": -5.0,
+	"schlichtung": -25.0,           # Schlichtung durch den Buergermeister
 	"geschaeft": -6.0,              # angenommenes Angebot
 	"buendnis": -15.0,
 }
@@ -31,14 +34,26 @@ const TENSION_DECAY_PER_DAY := 4.0
 const STAGES := [15.0, 30.0, 50.0, 70.0, 85.0]
 const STAGE_NAMES := ["ruhig", "Stichelei", "Provokation", "Anzeige", "Blockade", "Sabotage"]
 const MAX_INCIDENTS := 80
+## Buergermeister (Etappe 4): Schlichtung = befristetes Stillhalteabkommen; wer es bricht, zahlt und verliert Ruf.
+## Oeffentliche Verwarnung: jede weitere Eskalation des Verwarnten kostet zusaetzlich Ruf.
+const TRUCE_DAYS := Vector2i(3, 14)
+const TRUCE_MIN_TENSION := 30.0
+const TRUCE_BREACH_FINE := 3000.0
+const TRUCE_BREACH_REP := 10.0
+const WARN_DAYS := 10
+const WARN_REP := 2.0
+const WARNED_EXTRA_REP := 3.0
+const HOSTILE := ["stammkunde_bedient", "abwerbeversuch", "fahrer_abgeworben", "kunde_abgeworben", "ueberboten", "anzeige", "anzeige_unbegruendet", "sabotage_entdeckt", "blockade", "stichelei"]
+const BREACH := ["fahrer_abgeworben", "kunde_abgeworben", "anzeige", "anzeige_unbegruendet", "sabotage_entdeckt", "blockade"]
 ## Strassenblockade (Stufe 4): Paletten auf eine Strasse nahe am Hof des Rivalen. Verboten: die Polizei raeumt, ermittelt meist den Taeter.
 const BLOCK_COST := 600.0               # Paletten, Ware, Helfer
-const BLOCK_CLEAR_MIN := Vector2(60.0, 150.0)   # Polizei raeumt nach so vielen Spielminuten
+const BLOCK_CLEAR_DAYS := Vector2(0.15, 0.4)    # Polizei raeumt nach so vielen Spieltagen (ein Spieltag = 24 Stadtstunden)
 const BLOCK_FINE := 2500.0
 const BLOCK_REP := 8.0
 const BLOCK_DETECT := 0.7               # + 0.1 je Sicherheitsstufe des Opfers (Kameras)
-const BLOCK_COOLDOWN := 1440.0          # hoechstens eine Blockade je Firma und Tag
-const BLOCK_TARGET_COOLDOWN := 1440.0   # dasselbe Opfer hoechstens einmal je Tag
+const BLOCK_COOLDOWN_DAYS := 1.0        # hoechstens eine Blockade je Firma und Spieltag
+const BLOCK_TARGET_COOLDOWN_DAYS := 1.0 # dasselbe Opfer hoechstens einmal je Spieltag
+const POLICE_CALL_DAYS := 0.05          # Polizei gerufen: geraeumt in gut einer Stadtstunde
 const BLOCK_DIST := Vector2i(2, 7)      # Strassenschritte vom Hof des Rivalen
 const BLOCK_KEEP_CLEAR := 5             # Abstand zu Polizei, Arztpraxen, Klinik
 
@@ -47,6 +62,8 @@ var cooldowns := {}     # "art:firma" -> Spielminute
 var tension := {}       # Social.pair_key -> 0..100
 var incidents: Array = []   # {t, a, b, art, delta, text}; a = Verursacher, b = Betroffener
 var blockades: Array = []   # {cell: [x, y], by, target, placed, clear_at}
+var truces := {}            # Social.pair_key -> Stillhalteabkommen bis Spielminute (Schlichtung des Buergermeisters)
+var warnings := {}          # "Firmen-ID" -> oeffentlich verwarnt bis Spielminute
 
 
 func setup(simulation) -> void:
@@ -336,10 +353,10 @@ func block_road(cid: int, target: int) -> Dictionary:
 	var c: Company = sim.company(cid)
 	var t: Company = sim.company(target)
 	var cell := block_cell(target)
-	var clear_at: float = now + sim.rng.randf_range(BLOCK_CLEAR_MIN.x, BLOCK_CLEAR_MIN.y)
+	var clear_at: float = now + GameCalendar.days_to_min(sim.rng.randf_range(BLOCK_CLEAR_DAYS.x, BLOCK_CLEAR_DAYS.y))
 	c.ledger.book("sabotage", -BLOCK_COST, true, "Paletten-Blockade gegen " + t.company_name, now)
-	cooldowns["block:%d" % cid] = now + BLOCK_COOLDOWN
-	cooldowns["blocked:%d" % target] = now + BLOCK_TARGET_COOLDOWN
+	cooldowns["block:%d" % cid] = now + GameCalendar.days_to_min(BLOCK_COOLDOWN_DAYS)
+	cooldowns["blocked:%d" % target] = now + GameCalendar.days_to_min(BLOCK_TARGET_COOLDOWN_DAYS)
 	sim.nav.add_roadwork(cell, clear_at)
 	var txt := "Paletten blockieren eine Straße im %s nahe %s" % [Catalog.DISTRICTS[sim.city.district_of(cell)], t.company_name]
 	sim.traffic_events.append({"kind": "blockade", "cells": [cell], "until": clear_at, "text": txt})
@@ -347,7 +364,7 @@ func block_road(cid: int, target: int) -> Dictionary:
 	sim.log_event("Verkehr: %s – die Polizei ist unterwegs." % txt, "bad", target)
 	sim.notify(target, "Jemand hat die Straße bei (%d,%d) nahe deinem Hof mit Paletten zugestellt. Deine Fahrzeuge fahren Umwege." % [cell.x, cell.y])
 	sim.bark(target, "sabotage")
-	return {"ok": true, "msg": "Paletten liegen bei (%d,%d) vor dem Hof von %s. Die Polizei räumt in ein bis zwei Stunden und ermittelt." % [cell.x, cell.y, t.company_name]}
+	return {"ok": true, "msg": "Paletten liegen bei (%d,%d) vor dem Hof von %s. Die Polizei räumt noch heute und ermittelt." % [cell.x, cell.y, t.company_name]}
 
 
 func blockade_at(p: Vector2i) -> bool:
@@ -402,16 +419,87 @@ static func stage_of(value: float) -> int:
 func add_tension(a: int, b: int, art: String, text: String = "") -> void:
 	if a == b or a < 0 or b < 0 or not TENSION.has(art):
 		return
+	if art in BREACH and has_truce(a, b):
+		_breach(a, b, art)
+	if art in HOSTILE and is_warned(a):
+		var w: Company = sim.company(a)
+		w.reputation = maxf(0.0, w.reputation - WARNED_EXTRA_REP)
+		sim.log_event("%s eskaliert trotz Verwarnung des Bürgermeisters (Ruf −%d)." % [w.company_name, int(WARNED_EXTRA_REP)], "warn", a)
 	var key := Social.pair_key(a, b)
 	var before := float(tension.get(key, 0.0))
 	var after := clampf(before + float(TENSION[art]), 0.0, 100.0)
-	tension[key] = after
+	if after > 0.0:
+		tension[key] = after
+	else:
+		tension.erase(key)
 	incidents.append({"t": sim.game_min, "a": a, "b": b, "art": art, "delta": snappedf(after - before, 0.1), "text": text})
 	if incidents.size() > MAX_INCIDENTS:
 		incidents.pop_front()
 	var st := stage_of(after)
 	if st > stage_of(before):
 		sim.log_event("Spannung zwischen %s und %s steigt: %s (%d)." % [sim.company(a).company_name, sim.company(b).company_name, STAGE_NAMES[st], int(after)], "warn")
+
+
+func has_truce(a: int, b: int) -> bool:
+	return float(truces.get(Social.pair_key(a, b), -1.0)) > sim.game_min
+
+
+func is_warned(cid: int) -> bool:
+	return float(warnings.get(str(cid), -1.0)) > sim.game_min
+
+
+func _breach(a: int, b: int, art: String) -> void:
+	truces.erase(Social.pair_key(a, b))
+	var c: Company = sim.company(a)
+	var fine := minf(TRUCE_BREACH_FINE, maxf(0.0, c.ledger.cash))
+	if fine > 0.01:
+		c.ledger.book("fines", -fine, true, "Bruch des Stillhalteabkommens", sim.game_min)
+	c.reputation = maxf(0.0, c.reputation - TRUCE_BREACH_REP)
+	c.add_key_event("Stillhalteabkommen mit %s gebrochen (%s)" % [sim.company(b).company_name, art], sim.game_min)
+	sim.log_event("%s bricht das Stillhalteabkommen mit %s (%s): Bußgeld %s, Ruf −%d." % [c.company_name, sim.company(b).company_name, art, Catalog.money(fine), int(TRUCE_BREACH_REP)], "bad", a)
+	sim.notify(b, "%s hat das Stillhalteabkommen gebrochen." % c.company_name)
+
+
+## Schlichtung des Buergermeisters: Spannung −25, Vertrauen +10, Stillhalteabkommen fuer `days` Tage.
+func mediate(a: int, b: int, days: int, by: String) -> Dictionary:
+	if sim.company(a) == null or sim.company(b) == null or a == b:
+		return {"ok": false, "msg": "Ungültiges Firmenpaar."}
+	if has_truce(a, b):
+		return {"ok": false, "msg": "Zwischen beiden gilt bereits ein Stillhalteabkommen."}
+	var v := get_tension(a, b)
+	if v < TRUCE_MIN_TENSION:
+		return {"ok": false, "msg": "Spannung nur %d – Schlichtung erst ab %d." % [int(v), int(TRUCE_MIN_TENSION)]}
+	days = clampi(days, TRUCE_DAYS.x, TRUCE_DAYS.y)
+	truces[Social.pair_key(a, b)] = sim.game_min + GameCalendar.days_to_min(days)
+	add_tension(a, b, "schlichtung", by)
+	sim.social.add_trust(a, b, 10.0)
+	var txt := "%s schlichtet zwischen %s und %s: Stillhalteabkommen für %d Tage." % [by, sim.company(a).company_name, sim.company(b).company_name, days]
+	sim.log_event(txt, "good")
+	for cid in [a, b]:
+		sim.notify(cid, txt + " Abwerben, Anzeigen, Blockaden und Sabotage gegeneinander kosten jetzt %s und Ruf −%d." % [Catalog.money(TRUCE_BREACH_FINE), int(TRUCE_BREACH_REP)])
+	return {"ok": true, "msg": txt}
+
+
+## Oeffentliche Verwarnung: nur bei eigener Eskalation in den letzten 7 Tagen.
+func warn(cid: int, by: String) -> Dictionary:
+	var c: Company = sim.company(cid)
+	if c == null:
+		return {"ok": false, "msg": "Unbekannte Firma."}
+	var n := caused_7d(cid)
+	if n == 0:
+		return {"ok": false, "msg": "%s hat in den letzten 7 Tagen nichts eskaliert – keine Grundlage für eine Verwarnung." % c.company_name}
+	if is_warned(cid):
+		return {"ok": false, "msg": "%s ist bereits verwarnt." % c.company_name}
+	warnings[str(cid)] = sim.game_min + GameCalendar.days_to_min(WARN_DAYS)
+	c.reputation = maxf(0.0, c.reputation - WARN_REP)
+	c.add_key_event("Öffentlich verwarnt (%d Vorfälle)" % n, sim.game_min)
+	sim.log_event("%s verwarnt %s öffentlich (%d Vorfälle in 7 Tagen)." % [by, c.company_name, n], "warn", cid)
+	sim.notify(cid, "Der Bürgermeister hat dich öffentlich verwarnt: jede weitere Eskalation in den nächsten %d Tagen kostet zusätzlich Ruf." % WARN_DAYS)
+	return {"ok": true, "msg": "%s verwarnt (Ruf −%d, %d Tage)." % [c.company_name, int(WARN_REP), WARN_DAYS]}
+
+
+func caused_7d(cid: int) -> int:
+	return incidents.filter(func(i): return int(i.a) == cid and float(i.delta) > 0.0 and str(i.art) in HOSTILE and sim.game_min - float(i.t) < GameCalendar.days_to_min(7)).size()
 
 
 func on_day() -> void:
@@ -461,12 +549,20 @@ func mayor_summary() -> Dictionary:
 	var week: Array = incidents.filter(func(i): return sim.game_min - float(i.t) < GameCalendar.days_to_min(7) and float(i.delta) > 0.0)
 	var n: int = sim.companies.size()
 	var pair_count := maxi(1, n * (n - 1) / 2)
-	return {"paare": pairs.slice(0, 5), "vorfaelle_7_tage": week.size(), "unruhe": snappedf(total / float(pair_count), 0.1),
+	for p in pairs:
+		p["stillhalteabkommen"] = has_truce(int(p.firmen[0]), int(p.firmen[1]))
+	var firms: Array = []
+	for c in sim.companies:
+		var k := caused_7d(c.id)
+		if k > 0 or is_warned(c.id):
+			firms.append({"firma": c.id, "name": c.company_name, "eskalationen_7_tage": k, "verwarnt": is_warned(c.id)})
+	return {"paare": pairs.slice(0, 5), "verursacher": firms, "vorfaelle_7_tage": week.size(), "unruhe": snappedf(total / float(pair_count), 0.1),
+		"schwere_vorfaelle_7_tage": week.filter(func(i): return str(i.art) in ["blockade", "sabotage_entdeckt"]).size(),
 		"letzte": week.slice(-4).map(func(i): return {"zeit": Catalog.game_minutes_to_text(float(i.t)), "art": i.art, "verursacher": int(i.a), "betroffen": int(i.b)})}
 
 
 func to_dict() -> Dictionary:
-	return {"cooldowns": cooldowns, "tension": tension, "incidents": incidents, "blockades": blockades}
+	return {"cooldowns": cooldowns, "tension": tension, "incidents": incidents, "blockades": blockades, "truces": truces, "warnings": warnings}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -474,5 +570,7 @@ func from_dict(d: Dictionary) -> void:
 	tension = d.get("tension", {})
 	incidents = d.get("incidents", [])
 	blockades = d.get("blockades", [])
+	truces = d.get("truces", {})
+	warnings = d.get("warnings", {})
 	for b in blockades:
 		sim.nav.add_roadwork(Vector2i(int(b.cell[0]), int(b.cell[1])), float(b.clear_at))

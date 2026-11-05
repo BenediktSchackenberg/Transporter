@@ -115,6 +115,21 @@ static func decide(ind: Dictionary) -> Dictionary:
 			else:
 				break
 			given += 1
+	# 1h2) Rivalitaet: heftigsten Streit (ab 60) schlichten, sonst Dauer-Eskalierer (3+ Vorfaelle in 7 Tagen) verwarnen
+	var rv: Dictionary = ind.get("rivalitaet", {})
+	if actions.size() < MAX_ACTIONS and not rv.is_empty():
+		var done := false
+		for p in rv.paare:
+			if int(p.spannung) >= 60 and not bool(p.stillhalteabkommen):
+				actions.append({"action": "mediate_rivalry", "firma_a": int(p.firmen[0]), "firma_b": int(p.firmen[1]), "tage": 7,
+					"reason": "Streit zwischen %s und %s auf Stufe %s (Spannung %d)." % [p.namen[0], p.namen[1], p.stufe, int(p.spannung)]})
+				done = true
+				break
+		if not done:
+			for f in rv.get("verursacher", []):
+				if int(f.eskalationen_7_tage) >= 3 and not bool(f.verwarnt):
+					actions.append({"action": "warn_company", "firma": int(f.firma), "reason": "%s hat in 7 Tagen %d-mal eskaliert." % [f.name, int(f.eskalationen_7_tage)]})
+					break
 	# 1i) Polizei: viele unaufgeklaerte Diebstaehle -> zwei Stellen mehr (nur mit Reserve)
 	var sg: Dictionary = ind.get("sicherheit_gesundheit", {})
 	if actions.size() < MAX_ACTIONS and not sg.is_empty() and int(sg.get("gesucht", 0)) >= 6 and float(ind.haushalt.verfuegbar) > 80000.0 			and int(ind.arbeit.offene_stellen_nach_arbeitgeber.get("polizei", 0)) == 0:

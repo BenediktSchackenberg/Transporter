@@ -44,6 +44,10 @@ const SCHEMA := {
 		"desc": "Hof-Bauantrag einer Firma (obs.hof_bauantraege, Kran und Umschlaghalle) entscheiden: genehmigen | auflagen (+5 % der Baukosten, z. B. Lärmschutz) | ablehnen (nur mit Begründung). Ohne Entscheidung genehmigt das Amt nach 2 Tagen."},
 	"order_inspection": {"params": {"firma": "int", "art": "string", "reason": "string"},
 		"desc": "Prüfdienst zu einer Firma schicken (art lohnsteuer | arbeitssicherheit | fahrzeuge). Kapazität je Monat = 2 je Prüfer, Sperrfrist 10 Tage je Firma; Befunde kosten die Firma Bußgeld (an die Stadtkasse), eine Prüfung ohne Befund kostet Zustimmung. Siehe obs.pruefungen."},
+	"mediate_rivalry": {"params": {"firma_a": "int", "firma_b": "int", "tage": "int?", "reason": "string"},
+		"desc": "Zwischen zwei zerstrittenen Firmen schlichten (obs.rivalitaet.paare, ab Spannung 30): Spannung −25 und Stillhalteabkommen für 3–14 Tage (Standard 7). Wer es bricht (Abwerben, Anzeige, Blockade, Sabotage gegen den anderen), zahlt 3000 EUR und verliert 10 Ruf. Unruhe zwischen Firmen kostet Zustimmung."},
+	"warn_company": {"params": {"firma": "int", "reason": "string"},
+		"desc": "Firma öffentlich verwarnen (nur wenn sie in den letzten 7 Tagen eskaliert hat, siehe obs.rivalitaet.verursacher): Ruf −2, für 10 Tage kostet jede weitere Eskalation zusätzlich Ruf."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
 		"desc": "Bauantrag der Bürgermeisterebene entscheiden: decision genehmigen | bedingungen | ablehnen | rueckfrage. Ablehnung nur wegen benannter fehlender Voraussetzungen; ohne Mängel muss genehmigt werden."},
 }
@@ -297,6 +301,8 @@ func _update_approval() -> void:
 		target -= 10.0
 	target -= 2.0 * maxf(0.0, float(sim.permits.queue().size()) - 3.0)
 	target += 1.5 * float(plans.values().filter(func(p): return p.status == "beschlossen").size())
+	var riv: Dictionary = sim.rivalry.mayor_summary()   # Unruhe zwischen Firmen (Blockaden, Sabotage) kostet Zustimmung
+	target -= minf(10.0, 0.2 * float(riv.unruhe) + 2.0 * float(riv.schwere_vorfaelle_7_tage))
 	approval = clampf(approval * 0.7 + clampf(target, 0.0, 100.0) * 0.3, 0.0, 100.0)
 
 
@@ -375,6 +381,10 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.estate.decide_permit(str(a.antrag), str(a.decision), str(a.get("reason", "")), "Bürgermeister %s" % name)
 			"order_inspection":
 				res = sim.inspections.order(int(a.firma), str(a.art), str(a.get("reason", "")))
+			"mediate_rivalry":
+				res = sim.rivalry.mediate(int(a.firma_a), int(a.firma_b), int(a.get("tage", 7)), "Bürgermeister %s" % name)
+			"warn_company":
+				res = sim.rivalry.warn(int(a.firma), "Bürgermeister %s" % name)
 			_:
 				res = {"ok": false, "msg": "Unbekannte Aktion."}
 	if act != "wait":

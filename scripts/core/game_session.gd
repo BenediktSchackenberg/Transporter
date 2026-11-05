@@ -19,6 +19,7 @@ var sim: Simulation
 var controllers: Array[AgentController] = []
 var mayor_agent: MayorAgent
 var dispatch_agent: DispatchAgent
+var talk_agent: TalkAgent
 var activity_layer: ActivityLayer
 var city_view: CityView
 var entity_view: EntityView
@@ -107,6 +108,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	if not loaded.is_empty() and loaded.has("mayor_agent"):
 		mayor_agent.from_dict(loaded.mayor_agent)
 	_setup_dispatcher()
+	_setup_talk(loaded.is_empty())
 	sim.insolvency.company_refounded.connect(_on_refounded)
 	_setup_weather()
 	_setup_fuel()
@@ -172,6 +174,24 @@ func _setup_dispatcher() -> void:
 	dispatch_agent = DispatchAgent.new()
 	add_child(dispatch_agent)
 	dispatch_agent.setup(sim, dc, api_log, ids)
+
+
+## Gespraechsregie der Rivalitaet (Auftrag 12): im Spiel an (Konfiguration "rivalry_talk": false schaltet ab). Mit
+## "talk": {provider: "anthropic"} formuliert und waehlt Claude (Haiku, wenig Denkaufwand); sonst sprechen die Regeln.
+func _setup_talk(new_game: bool) -> void:
+	if new_game:
+		sim.talk.enabled = bool(cfg.get("rivalry_talk", true))
+	var tc: Dictionary = cfg.get("talk", {}).duplicate()
+	if str(tc.get("provider", "demo")) != "anthropic" or not sim.talk.enabled:
+		return
+	tc["base_url"] = str(tc.get("base_url", AnthropicAdapter.DEFAULT_BASE_URL))
+	tc["model"] = str(tc.get("model", AnthropicAdapter.DISPATCH_MODEL))
+	tc["effort"] = str(tc.get("effort", "low"))
+	if not tc.has("api_key"):
+		tc["api_key"] = AnthropicAdapter.mayor_key()
+	talk_agent = TalkAgent.new()
+	add_child(talk_agent)
+	talk_agent.setup(sim, tc, api_log)
 
 
 ## Wetter: Live-Abruf (Standard), Wiederholung einer aufgezeichneten Partie oder nur simuliertes Ersatzwetter ("sim").

@@ -15,6 +15,7 @@ var rng := RandomNumberGenerator.new()
 var market := Market.new()
 var social := Social.new()
 var rivalry := Rivalry.new()
+var talk := RivalryTalk.new()      # Gespraechsregie der Rivalitaet (standardmaessig aus)
 var executor := ActionExecutor.new()
 var personnel := Personnel.new()
 var resources := ResourceMarket.new()
@@ -106,6 +107,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	market.setup(self)
 	social.setup(self)
 	rivalry.setup(self)
+	talk.setup(self)
 	executor.setup(self)
 	logistics.setup(self)
 	operations.setup(self)
@@ -1037,6 +1039,7 @@ func _minute_tick() -> void:
 	market.tick(now)
 	social.tick(now)
 	rivalry.tick(now)
+	talk.minute_tick(now)
 	personnel.minute_tick(now)
 	resources.minute_tick(now)
 	if minute_index % 5 == 0:
@@ -1168,7 +1171,7 @@ func to_dict() -> Dictionary:
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
-		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "action_results": action_results}
+		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "action_results": action_results}
 
 
 func _storage_dict() -> Dictionary:
@@ -1278,6 +1281,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.market.from_dict(d.market)
 	s.social.from_dict(d.social)
 	s.rivalry.from_dict(d.rivalry)
+	s.talk.from_dict(d.get("talk", {}))
 	for cid in d.action_results:
 		s.action_results[int(cid)] = d.action_results[cid]
 	for cid in d.avatars:
