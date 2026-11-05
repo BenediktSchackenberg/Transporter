@@ -5931,11 +5931,13 @@ func test_mayor_levers() -> void:
 	ok(not M.execute({"action": "city_marketing", "budget": 10000.0, "reason": "Test"}).ok, "keine zweite Kampagne während der Laufzeit")
 	var w0: int = M.waiting
 	M.stock_units = M.occupied_units()   # kein freier Wohnraum: Zuzug bleibt auf der Warteliste
-	M.on_month(m)
+	for d in GameCalendar.DAYS_PER_MONTH:
+		M.on_day(d)   # Zuzug kommt taeglich
 	var with_boost: int = M.waiting - w0
 	M.marketing_until = -1
 	var w1: int = M.waiting
-	M.on_month(m)
+	for d in GameCalendar.DAYS_PER_MONTH:
+		M.on_day(d)
 	ok(with_boost > M.waiting - w1, "Stadtmarketing erhöht den Zuzug (%d statt %d)" % [with_boost, M.waiting - w1])
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.population.training_support == 100 and int(s2.citizens.base_cap.polizei) == pol0 + 3 and int(s2.citizens.start_cap.polizei) == int(Z.start_cap.polizei), "Hebel nach dem Laden")
