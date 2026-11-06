@@ -7,6 +7,7 @@ extends Node2D
 ## bleibt der Flug bei Speichern/Laden nahtlos fortlaufend.
 
 const STEP := 32.0            # 1 Hoehe-Feld = 32 Bildschirm-Pixel (2*STEP*0.5 = 64, die y-Komponente von Iso)
+const SCALE := 0.62           # das Flugzeug wirkt in voller Modellgroesse zu klobig neben Huetten/Terminal
 var sim: Simulation
 var man: Dictionary
 var air_node := Node2D.new()
@@ -91,15 +92,17 @@ func update_view(_delta: float) -> void:
 	var body: Sprite2D = _plane.get_node("body")
 	var key := "air_%d" % dir
 	body.texture = tex(key)
-	body.offset = -pivot(dir) + Vector2(0, lift)
+	body.scale = Vector2(SCALE, SCALE)
+	body.offset = -pivot(dir) * SCALE + Vector2(0, lift)
 	var lit: Sprite2D = _plane.get_node("lit")
 	lit.texture = tex(key + "_lit")
+	lit.scale = Vector2(SCALE, SCALE)
 	lit.offset = body.offset
 	lit.modulate.a = _night
 	var shadow: Sprite2D = _plane.get_node("shadow")
-	shadow.offset = -pivot(dir)
+	shadow.offset = -pivot(dir) * SCALE
 	# Der Bodenschatten bleibt unten auf dem Boden; je hoeher der Flug, desto groesser und weicher (Tiefenillusion).
-	shadow.scale = Vector2(1.0, 1.0).lerp(Vector2(1.6, 1.35), clampf(float(st.h) / 12.0, 0.0, 1.0))
+	shadow.scale = Vector2(SCALE, SCALE).lerp(Vector2(SCALE * 1.6, SCALE * 1.35), clampf(float(st.h) / 12.0, 0.0, 1.0))
 	shadow.modulate.a = 0.42 * (1.0 - clampf(float(st.h) / 20.0, 0.0, 0.55))
 	_plane.visible = true
 
