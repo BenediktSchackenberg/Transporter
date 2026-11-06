@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_build_crews"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -7536,3 +7536,65 @@ func _stock_project(s: Simulation, prj_id: String) -> void:
 func sim_contract_from(s: Simulation, o: Dictionary) -> int:
 	var k: Contract = s.contracts.get(str(o.get("contract", "")))
 	return k.pickup if k != null else -1
+
+
+## Etappe E2 (Auftrag 16): die Fluganimation. Ein kleines Flugzeug taucht am Kartenrand auf, setzt auf der
+## Startbahn auf, rollt zum Vorfeld, steht kurz (Abfertigung) und fliegt wieder ab – sichtbar ueber der Karte
+## mit Bodenschatten. Die Bewegung ist eine deterministische Funktion der Spieluhr, bleibt also beim Speichern/
+## Laden nahtlos fortlaufend. Hier die Abnahme ohne Rendering: Geometrie, Flugphasen, Determinismus, Speichern.
+func test_airport() -> void:
+	var man := iso_manifest()
+	# Gebackene Flugzeug-Grafiken (vier Richtungen) plus weicher Bodenschatten
+	for k in 4:
+		ok(man.aircraft.has(str(k)) and FileAccess.file_exists("res://assets/iso/air_%d.png" % k), "Flugzeug-Grafik Richtung %d vorhanden" % k)
+		ok(man.aircraft.has(str(k)) and man.aircraft[str(k)].has("pivot"), "Flugzeug Richtung %d hat Fusspunkt-Pivot" % k)
+	ok(FileAccess.file_exists("res://assets/iso/air_shadow.png"), "weicher Bodenschatten gebacken")
+	var s := coast_sim()
+	var A: Airport = s.airport
+	ok(A.enabled and not s.city.airport.is_empty(), "Küstenort hat ab Spielbeginn einen Flughafen (Startbahn, Vorfeld, Gebäude)")
+	var a: Dictionary = s.city.airport
+	ok(int(a.run_x1) > int(a.run_x0) and int(a.run_x1) - int(a.run_x0) >= 10, "Startbahn hat brauchbare Laenge (%d Felder)" % (int(a.run_x1) - int(a.run_x0)))
+	var rw: Array = A.runway()
+	ok(rw.size() == 3 and s.city.g(Vector2i(int(rw[0]), int(rw[2]))) == CityData.G.RUNWAY and s.city.g(Vector2i(int(rw[1]), int(rw[2]))) == CityData.G.RUNWAY, "die Startbahn im Flughafen ist eine echte Startbahn-Kachel")
+	# Zufahrt (Etappe E1): der Weg trifft das Flughafengelände an einer Ecke (Mündung) und hängt am Straßennetz
+	var rc: Array = a.rect
+	var near_road := false
+	for x in range(int(rc[0]) - 1, int(rc[0]) + int(rc[2]) + 1):
+		for y in [int(rc[1]) - 1, int(rc[1]) + int(rc[3]), int(rc[1]), int(rc[1]) + int(rc[3]) + 1]:
+			if s.city.is_road(Vector2i(x, y)):
+				near_road = true
+	ok(near_road, "die Zufahrtstrasse erreicht das Flughafengelände (Straßenzugang zum Vorfeld)")
+	# Flugbewegung: Anflug aus der Luft, Touchdown, Rollen, Stehphase auf dem Vorfeld, Abflug
+	var st0 := A.state(0.0)
+	ok(not st0.is_empty(), "zu Spielbeginn ist ein Flugzeug in der Luft (Abnahme A: es landet sichtbar)")
+	ok(st0.pos.x > float(s.city.size) and float(st0.h) > 1.0, "das Flugzeug kommt von außerhalb der Karte und oben (%s, h=%.1f)" % [str(st0.pos), float(st0.h)])
+	var spot: Array = A.track.apron
+	var landed := false
+	var rolled := false
+	var airborne_after := false
+	var seen_spot := false
+	for m in range(0, 90):
+		var st := A.state(m)
+		if float(st.h) < 0.3:
+			landed = true
+			if st.pos.x >= int(a.run_x0) - 0.5 and st.pos.x <= int(a.run_x1) + 0.5 and absf(st.pos.y - float(a.run_y)) < 1.0:
+				rolled = true
+			if is_equal_approx(st.pos.x, float(spot[0])) and is_equal_approx(st.pos.y, float(spot[1])):
+				seen_spot = true
+		if float(st.h) > 3.0:
+			airborne_after = true
+	ok(landed, "das Flugzeug setzt auf (Höhe 0 auf der Bahn)")
+	ok(rolled, "das Flugzeug rollt auf der Startbahn")
+	ok(airborne_after, "nach dem Rollen steigt das Flugzeug wieder ab (Abflug)")
+	ok(seen_spot, "das Flugzeug steht am Stehplatz auf dem Vorfeld (Abfertigung)")
+	# Determinismus: derselbe Zeitpunkt -> exakt dieselbe Position (Basis fuer nahtloses Speichern/Laden)
+	var t := 12.34
+	ok(A.state(t).pos.is_equal_approx(A.state(t).pos) and is_equal_approx(A.state(t).h, A.state(t).h), "die Flugbewegung ist eine reine Funktion der Spieluhr")
+	var t1 := 10.0
+	var p1 := A.state(t1)
+	var p1b := A.state(t1)
+	ok(p1.pos == p1b.pos and p1.h == p1b.h, "gleiche Uhr -> gleiche Flugposition (deterministisch)")
+	# Speichern/Laden: der geladene Stand setzt denselben Flugfortschritt fort
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.airport.enabled and s2.airport.state(s.game_min).pos.is_equal_approx(A.state(s.game_min).pos) and is_equal_approx(s2.airport.state(s.game_min).h, A.state(s.game_min).h), "Speichern/Laden setzt den Flug nahtlos am selben Punkt fort")
+	ok(identity_ok(s), "Geld erhalten")

@@ -21,6 +21,42 @@ def init():
     mat("hangar_d", "#5a626c", noise=0.05)
     mat("fire_red", "#c0392f", noise=0.05)
     mat("fire_body", "#f0ece2", noise=0.04)
+    # Flugzeug (Etappe E2 Fluganimation): zentraler Anker = Mitte unten (z=0), Blickrichtung +x
+    mat("plane_livery", "#2f6fa8", noise=0.04)
+    mat("plane_red", "#c23b33", noise=0.0, emit="#ff4a3a", top=False)   # Positionslicht (Emission)
+    mat("plane_white_lamp", "#ffffff", noise=0.0, emit="#fff2c8", top=False)
+
+
+def plane(seed=1):
+    """Kleines Propellerflugzeug, blickt nach +x, mittig in einem quadratischen Grundriss (26,26), Boden z=0.
+    Fuer die Fluganimation (AirView): wird 90-Grad-gedreht je Fahrtrichtung; Pivot = Modellunterkante Mitte."""
+    S = 52
+    m = Model(S, S, 24)
+    W, GLASS, DARK, LIV = M("white"), M("glass_dark"), M("black"), M("plane_livery")
+    # Rumpf (Mittellinie x, zentriert um y=26)
+    m.box(10, 22, 1, 42, 30, 9, W)
+    m.box(10, 22, 3, 42, 30, 6, LIV)          # Farbband
+    # Leitwerk (Heck, kleines x)
+    m.box(6, 23, 8, 14, 29, 20, W)             # Flosse
+    m.box(6, 23, 13, 14, 29, 20, LIV)          # Flossenfarbband
+    m.put(9, 26, 19, M("plane_red"))           # Positionslicht am Heck (blinkt bei Nacht)
+    m.box(6, 14, 9, 16, 38, 12, W)             # Seitenleitwerk
+    m.put(7, 15, 10, M("plane_white_lamp"))
+    m.put(7, 37, 10, M("plane_red"))
+    # Nase und Propeller (vorne, grosses x)
+    m.box(40, 23, 2, 45, 29, 8, W)
+    m.box(43, 24, 4, 45, 28, 6, DARK)          # Propellerhub
+    # Cockpit
+    m.box(30, 22, 7, 38, 30, 11, GLASS)
+    # Tragfluegel (spannen ueber y, symmetrisch)
+    m.box(16, 6, 4, 30, 46, 7, W)
+    m.box(16, 6, 4, 17, 46, 7, LIV)            # Fluegeltipp West
+    m.box(29, 6, 4, 30, 46, 7, LIV)            # Fluegeltipp Ost
+    # Fahrwerk (bietet den Fusspunkt z=0)
+    for gx in (14, 32):
+        m.box(gx, 20, 0, gx + 4, 23, 2, DARK)
+        m.box(gx, 29, 0, gx + 4, 32, 2, DARK)
+    return m, {"height": 20}
 
 
 def terminal(seed=1):

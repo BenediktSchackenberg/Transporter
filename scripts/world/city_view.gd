@@ -36,6 +36,7 @@ var parcel_layer := ParcelLayer.new()
 var mountain_view := MountainView.new()   # Berge und Bergbau (Auftrag 14)
 var ship_view := ShipView.new()           # Linienschiff im Hafen (Kuestenort)
 var bridge_view := BridgeView.new()       # Bruecken im Bau und freigegeben (Kuestenort)
+var air_view := AirView.new()            # Fluganimation ueber der Karte (Kuestenort, Flughafen)
 var waste_view := WasteView.new()         # Deponie und Muellabfuhr
 var _lit_nodes: Array = []                 # Fensterlichter (Sprite2D)
 var _blink_nodes: Array = []
@@ -126,6 +127,8 @@ func build(simulation: Simulation) -> void:
 	ship_view.setup(sim)
 	buildings_node.add_child(bridge_view)
 	bridge_view.setup(sim)
+	add_child(air_view)
+	air_view.setup(sim, self)
 	_build_decor()
 	_build_weather_fx()
 	camera.position = Iso.to_screen(sim.city.tile_center(sim.city.building(sim.companies[0].depots[0]).road))
@@ -539,6 +542,8 @@ func update_view(delta: float) -> void:
 	waste_view.update_view(delta)
 	ship_view.update_view(delta)
 	bridge_view.update_view(delta)
+	air_view.set_night(night_factor)
+	air_view.update_view(delta)
 	parcel_layer.update_view(delta)
 	# Depots: Besitzerwechsel und Stoerungen
 	for site in _depot_marks:

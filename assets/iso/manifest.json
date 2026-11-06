@@ -3745,5 +3745,77 @@
    64
   ],
   "voxels_per_tile": 32
+ },
+ "aircraft": {
+  "0": {
+   "anchor": [
+    66,
+    13
+   ],
+   "size": [
+    116,
+    85
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    66,
+    65
+   ]
+  },
+  "1": {
+   "anchor": [
+    50,
+    13
+   ],
+   "size": [
+    116,
+    85
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    50,
+    65
+   ]
+  },
+  "2": {
+   "anchor": [
+    50,
+    -12
+   ],
+   "size": [
+    116,
+    64
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    50,
+    40
+   ]
+  },
+  "3": {
+   "anchor": [
+    66,
+    -12
+   ],
+   "size": [
+    116,
+    64
+   ],
+   "lit": true,
+   "mask": false,
+   "pivot": [
+    66,
+    40
+   ]
+  },
+  "shadow": {
+   "size": [
+    64,
+    32
+   ]
+  }
  }
 }

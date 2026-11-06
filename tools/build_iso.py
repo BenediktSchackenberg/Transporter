@@ -295,8 +295,34 @@ def build_props():
     print("Requisiten:", len(out))
 
 
+# ------------------------------------------------------------------ Flugzeuge (Auftrag 16, Etappe E2 Fluganimation)
+def build_aircraft():
+    """Flugzeuge fuer die Fluganimation (AirView): 90-Grad-Varianten, Pivot = Modellmittelpunkt unten (z=0).
+    Plus ein weicher Bodenschatten (air_shadow) – der im AirView unten auf dem Boden bleibt, waehrend das
+    Flugzeug ueber der Karte fliegt."""
+    from PIL import ImageDraw, ImageFilter
+    out = manifest.setdefault("aircraft", {})
+    base = A.plane(1)
+    model = base[0] if isinstance(base, tuple) else base
+    n = model.size[0]
+    for k in range(4):
+        r = engine.render(model.rotated(k), shadow_len=0, ground_shadow=False)
+        info = save_result("air_%d" % k, r, keep_mask=False, top=False)
+        info["pivot"] = [r["anchor"][0], r["anchor"][1] + n]   # Fusspunkt = Modell-Mitte unten (z=0)
+        out["%d" % k] = info
+    # Weicher Bodenschatten: dunkles Oval mit weicher Kante (dimetrische Raute ~32x16 px).
+    W, H = 64, 32
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(sh)
+    dr.ellipse((4, 3, W - 5, H - 3), fill=(10, 12, 24, 150))
+    sh = sh.filter(ImageFilter.GaussianBlur(3))
+    sh.save(os.path.join(OUT, "air_shadow.png"))
+    out["shadow"] = {"size": [W, H]}
+    print("Flugzeuge:", len(out) - 1, "+ Bodenschatten")
+
+
 def main():
-    what = sys.argv[1:] or ["ground", "buildings", "facilities", "vehicles", "figures", "props"]
+    what = sys.argv[1:] or ["ground", "buildings", "facilities", "vehicles", "figures", "props", "aircraft"]
     init()
     if "ground" in what:
         build_ground()
@@ -310,6 +336,8 @@ def main():
         build_figures()
     if "props" in what:
         build_props()
+    if "aircraft" in what:
+        build_aircraft()
     manifest["projection"] = {"tile_px": [128, 64], "voxels_per_tile": 32}
     json.dump(manifest, open(MANIFEST_PATH, "w", encoding="utf8"), indent=1)
     print("manifest:", MANIFEST_PATH)
