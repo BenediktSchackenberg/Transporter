@@ -181,5 +181,24 @@
     "rollen": [
       "verwaltung"
     ]
+  },
+  "baufirma": {
+    "label": "Baufirma",
+    "beschreibung": "Bietet bei Bauvorhaben von Haushalten, Bauträger und Stadt mit; Kapazität aus dem zugeordneten Personal (3 Personen je Baustelle). Erhält Abschläge nach Bauabschnitten, zahlt Material und Fracht selbst.",
+    "standort": "hauptsitz",
+    "gruendungskosten": 0,
+    "ausstattung": 25000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 2.0,
+    "personal_min": 3,
+    "rollen": [
+      "bauen"
+    ],
+    "bau": {
+      "preisfaktor": 0.93,
+      "qualitaet": 0.75,
+      "zuverlaessigkeit": 0.85,
+      "personen_je_baustelle": 3
+    }
   }
 }

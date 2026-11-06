@@ -156,7 +156,7 @@ func found(cid: int, branch: String, reason: String, params: Dictionary = {}) ->
 	var spec: Dictionary = branches().get(branch, {})
 	if spec.is_empty():
 		return {"ok": false, "msg": "Unbekannte Branche '%s'. Verfügbar: %s" % [branch, ", ".join(branches().keys())]}
-	if spec.has("feld") or spec.has("rezept") or spec.has("laden"):
+	if spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("bau"):
 		if recently_closed(cid, branch):
 			return {"ok": false, "msg": "Einen Betrieb der Branche %s hast du vor weniger als %d Tagen geschlossen; Neugründung erst danach." % [branch, REFOUND_DAYS]}
 		return sim.prod.found(cid, branch, params, reason)   # Produktionsbetriebe: Standort, Ausstattung, Feld (Etappe 2)
@@ -233,6 +233,9 @@ func obs_of(cid: int) -> Array:
 	for b in of(cid):
 		var e := {"id": b.id, "branche": b.branch, "status": b.status, "personal": staff_of(b.id).size(), "ergebnis": int(L.cc_profit(b.id))}
 		var spec: Dictionary = branches().get(b.branch, {})
+		if spec.has("bau"):
+			e["personal_min"] = int(spec.personal_min)
+			e.merge(sim.construction.company_builder_detail(b))
 		if spec.has("feld") or spec.has("rezept") or spec.has("laden"):
 			e["personal_min"] = int(spec.get("personal_min", 1))
 			if spec.has("laden"):

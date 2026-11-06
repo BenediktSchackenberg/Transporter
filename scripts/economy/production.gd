@@ -176,9 +176,12 @@ func _place_field(p: Dictionary, name: String, btype: String = "farm") -> Dictio
 func on_day(day: int) -> void:
 	for b in sim.biz.items.values():
 		var spec: Dictionary = Businesses.branches().get(b.branch, {})
-		if not (spec.has("feld") or spec.has("rezept") or spec.has("laden")) or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
+		if not (spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("bau")) or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		_costs(b)
+		if spec.has("bau"):
+			_staff_ok(b, spec)
+			continue   # Baufirma arbeitet im Bausystem (Construction)
 		b["sales_avg"] = float(b.get("sales_avg", 0.0)) * 0.7 + float(b.get("sold_today", 0)) * 0.3
 		b["sold_today"] = 0
 		if spec.has("feld"):
@@ -851,13 +854,11 @@ func detail(b: Dictionary) -> Dictionary:
 
 ## Lage der Kette fuer die KI-Beobachtung: Betriebe je Stufe und bisherige Importe (= Chance fuer lokale Erzeuger).
 func market_obs() -> Dictionary:
-	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0}
+	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0, "baufirma": 0}
 	for b in sim.biz.items.values():
 		if n.has(b.branch) and b.status in Businesses.RUNNING:
 			n[b.branch] = int(n[b.branch]) + 1
-	return {"felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "brot_import": int(sim.retail.stats.get("bread_import", 0)),
-		"mehl_import": int(stats.imported.get("mehl", 0)), "getreide_import": int(stats.imported.get("getreide", 0)),
-		"basispreise": {"getreide": art("getreide").basispreis, "mehl": art("mehl").basispreis, "brot": art("brot").basispreis, "schlachttier": art("schlachttier").basispreis, "fleisch": art("fleisch").basispreis}}
+	return {"felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
 
 
 ## Marktchancen fuer die KI: wie viel einer Stufe wird importiert statt lokal erzeugt (Brot: Grosshandelsimport).

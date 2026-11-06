@@ -520,7 +520,7 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 |---|---|---|
 | 1 | Unternehmer und Betriebskern, Kostenstellen, Startprofil, Migration, Grundversorgung, KI-Aktionen, Betriebsübersicht | umgesetzt (05.11.2026), Prüfbericht unten |
 | 2 | Getreide-Mehl-Brot-Kette | umgesetzt (06.11.2026), Prüfbericht unten; alle Stufen laufen 60 Tage, Bäckereien um die Gewinnschwelle, Mühle/Feld mit kleinem Verlust |
-| 3 | Fleisch, Kühlung, Gastronomie, Bau, Immobilien | offen |
+| 3 | Fleisch, Kühlung, Gastronomie, Bau, Immobilien | umgesetzt (06.11.2026, verkleinert), Prüfbericht unten |
 | 4 | Gelände, Bergbau, Stahl, Kraftwerk und Netz | offen |
 | 5 | IT, weitere Verarbeiter, Dominanz, Langzeitbalance | offen |
 
@@ -594,3 +594,18 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 - Test `test_internal_transfer_and_export`.
 
 **Messung 60 Spieltage, Spedition (vorher → nachher):** Mühle −18 865 → −3 831 EUR (kein Importgetreide mehr, wartet auf lokales), Feld F2 Erlös 0 → 1 471 EUR, Ergebnis −3 612 → −2 620 EUR, drei Ernten bis 99 dt; Bäckereien −692 / +365 EUR; Getreideimport 384 dt → 0. Ein kleines Feld (77 Felder) wurde nach Regel geschlossen. Firmen gesamt +4 187, −3 633, −7 194, −13 576 EUR (Transport bleibt der größere Einfluss).
+
+### Etappe 3 – Prüfbericht (06.11.2026, Branch `unternehmer`)
+
+Verkleinert nach Abschnitt 17 („lieber eine vollständige Kette als viele scheinbare“): Futtermittelbetrieb, Molkerei, Metzgerei und Wurstrezepte fehlen noch; Tierhaltung füttert direkt Getreide.
+
+**Umgesetzt:**
+- **Fleisch und Kühlkette** (`config/branches.json`: `tierhaltung`, `schlachthof`; Artikel `jungtier`, `schlachttier`, `fleisch`): Stall auf eigener Parzelle, Jungtiere (Import) + 3 dt Getreide → Schlachttier nach 12 Tagen Mast, begrenzte Stallplätze; Schlachthof (Strom) → 80 Portionen Fleisch. Fleisch ist derselbe Artikel wie in den Restaurants und im Großhandel, wird nur gekühlt transportiert und verdirbt im Kühlraum mit Strom 8 %/Tag, ohne Strom 50 %/Tag (Blockade „Kühlraum ohne Strom“).
+- **Restaurant** als Unternehmerbetrieb: Küche + Service, Gerichte und Zutaten wie die Stadtgastronomie, Zutateneinkauf nach gleitender Gästezahl (lokal, z. B. Fleisch vom Schlachthof, sonst Import über den Großhandel), gemeinsamer Kundentopf mit den NPC-Restaurants (`Retail.kind_share`).
+- **Immobilien** (`scripts/economy/real_estate.gd`, `sim.realty`): Wohnungen des Vermietermarkts in einem Gebäude kaufen (12 Jahresmieten; die übrigen Wohnungen gehören meist Bürgern) und verkaufen (95 %); Miete nach den bestehenden Mietregeln genau einmal auf die Kostenstelle des Immobilienbetriebs; monatlich Instandhaltung 20 % und Grundsteuer 10 % der Sollmiete, auch bei Leerstand; Gebäudeanteil schreibt ab. Korrektur: Bürgergruppen zahlten die Miete für Firmenwohnungen bisher an V0.
+- **Baufirma** als Unternehmerbetrieb: bietet im vorhandenen Bausystem mit (Kapazität = Personal ÷ 3, Preisfaktor 0,93, Qualität 0,75, Zuverlässigkeit 0,85); Abschläge von Haushalten, Bauträger, Baukredit und Stadt gehen über K0 sofort als `bau` (Bauleistungen) an die Firma; Material und Fracht zahlt die Firma.
+- KI: Aktionen `buy_property`, `sell_property`; Beobachtung `immobilien_angebote` (ab 80 000 EUR Bargeld), Kettenlage mit Schlachthöfen, Tierhaltungen, Restaurants, Baufirmen, Bauvorhaben; Regel-KI gründet Schlachthof, Tierhaltung, Restaurant, Baufirma (Wachstum/Risiko bei offenen Bauvorhaben) und kauft als Kostenoptimierer/Netzwerker gut vermietete Wohnungen.
+
+**Prüfungen:** `test_meat_chain` (Mast erst nach 12 Tagen, Schlachthof kauft bei A, gekühlter Transport, Kühlraum ohne Strom), `test_restaurant_business`, `test_real_estate` (Kauf, Miete genau einmal und auf der Kostenstelle, Instandhaltung/Grundsteuer, Verkauf, Geldbilanz), `test_company_builder` (Angebot, Vertrag, Haus fertig, alle Abschläge an die Firma, Material zulasten der Firma, K0 unberührt), dazu Regressionen über Bau, Stadtentwicklung, Wohnen, Bevölkerung, Einzelhandel, Geld, Speichern, Insolvenz. Volltest nicht ausgeführt (Speicherdruck).
+
+**Grenzen:** Wohnungen des Vermietermarkts sind zu Spielbeginn leer (Reserve für Zuzug) – Mieten fließen erst mit Einzug; Insolvenz behandelt Immobilien, Baustellen und Produktionsbetriebe noch nicht gesondert (Abnahme 11 offen); keine eigenen Fachrollen; Grafik nur über vorhandene Gebäudebilder (farm, factory, workshop, restaurant).

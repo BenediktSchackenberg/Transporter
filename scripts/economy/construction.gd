@@ -101,6 +101,7 @@ func load_of(bid: String) -> int:
 
 ## Angebote aller handlungsfaehigen Baufirmen fuer ein Vorhaben mit Basispreis `base` und Basis-Bauzeit `days`.
 func make_offers(base: float, days: int, seed_key: String, remaining: float = 1.0) -> Array:
+	sync_company_builders()
 	var offers: Array = []
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(seed_key) + _today()
@@ -310,6 +311,7 @@ func take_delivery(delivery_id: String, company_id: int) -> Dictionary:
 		return res
 	d.carrier = "C%d" % company_id
 	sim.economy.transfer("K0", "H0", float(d.freight))
+	_charge(str(projects.get(d.project, {}).get("builder", "")), float(d.freight), "Fracht Baustoffe %s" % d.id)
 	c.ledger.book("transport", float(d.freight), true, "Frachtlohn Baustoffe %s" % d.id, sim.game_min)
 	return {"ok": true, "msg": "Lieferung %s ausgeführt, Frachtlohn %s." % [d.id, Catalog.money(float(d.freight))]}
 
@@ -323,11 +325,13 @@ func _deliver(d: Dictionary, with_carrier: bool) -> Dictionary:
 		if sim.stock.available(it, "T0", sim.trader.bauhof) < int(d.need[it]):
 			return {"ok": false, "msg": "Der Bauhof hat nicht genug %s (%d benötigt)." % [Trader.MATERIALS[it].name, int(d.need[it])]}
 	var cost := float(d.value) + (float(d.freight) if with_carrier else 0.0)
-	if float(sim.economy.accounts.K0) < cost:
+	var cb = _builder_company(str(pr.get("builder", "")))   # Unternehmer-Baufirma zahlt aus der eigenen Kasse
+	if (cb.ledger.cash if cb != null else float(sim.economy.accounts.K0)) < cost:
 		return {"ok": false, "msg": "Baufirma ist nicht liquide genug für die Materialbestellung."}
 	for it in d.need:
 		sim.stock.consume(it, int(d.need[it]), "T0", sim.trader.bauhof, "Baustelle %s" % pr.id, sim.game_min)
 	sim.economy.transfer("K0", "T0", float(d.value))
+	_charge(str(pr.get("builder", "")), float(d.value), "Material %s" % pr.id)
 	d.status = "geliefert"
 	d.delivered_day = _today()
 	var m: Dictionary = pr.mats[d.phase]
@@ -340,6 +344,7 @@ func _deliver(d: Dictionary, with_carrier: bool) -> Dictionary:
 
 # ------------------------------------------------------------------ Tageslauf
 func on_day(day: int) -> void:
+	sync_company_builders()
 	for pr in projects.values():
 		match pr.status:
 			"angebote":
@@ -881,6 +886,7 @@ func _finish_public(e: Dictionary) -> void:
 	var prj: Dictionary = M.projects[e.project]
 	var pay := minf(float(e.price), maxf(0.0, float(sim.economy.accounts.P0)))
 	sim.economy.transfer("P0", "K0", pay)
+	_forward(str(e.builder), pay, "Stadtprojekt %s" % e.project)
 	e.paid = pay
 	e["material_used"] = sim.city_depot.consume_project(str(e.project), builders[e.builder].name)
 	M.commitments = maxf(0.0, M.commitments - float(prj.cost))
@@ -972,12 +978,63 @@ func _pay(pr: Dictionary, amount: float, _note: String) -> bool:
 		reserved_co[pr.client] = maxf(0.0, float(reserved_co.get(pr.client, 0.0)) - amount)
 		c.ledger.book("supplies", -amount, true, "Bauvorhaben %s: %s" % [pr.id, _note], sim.game_min)
 		sim.economy.transfer("S0", "K0", amount)
+		_forward(str(pr.get("builder", "")), amount + draw, "%s: %s" % [pr.id, _note])
 		return true
 	var from_acct := "H0" if str(pr.client).begins_with("H") else DEVELOPER
 	if from_acct == DEVELOPER:
 		reserved_dev = maxf(0.0, reserved_dev - amount)
 	sim.economy.transfer(from_acct, "K0", amount)
+	_forward(str(pr.get("builder", "")), amount + draw, "%s: %s" % [pr.id, _note])
 	return true
+
+
+# ------------------------------------------------------------------ Baufirmen der Unternehmer (Auftrag 14, Etappe 3)
+## Laufende Baufirma-Betriebe bieten als "C<n>" mit; Kapazitaet = zugeordnetes Personal / personen_je_baustelle. Ohne genug Personal
+## oder bei eingefrorenem Unternehmen pausiert die Firma (keine neuen Angebote; laufende Baustellen werden fertiggestellt).
+func sync_company_builders() -> void:
+	for b in sim.biz.items.values():
+		var spec: Dictionary = Businesses.branches().get(b.branch, {})
+		if not spec.has("bau"):
+			continue
+		var id := "C%d" % int(b.owner)
+		var cap: int = sim.biz.staff_of(b.id).size() / int(spec.bau.personen_je_baustelle)
+		var active: bool = b.status in Businesses.RUNNING and not sim.biz.frozen(int(b.owner)) and cap > 0
+		if not builders.has(id):
+			builders[id] = {"name": "%s Bau" % sim.company(int(b.owner)).company_name, "price": float(spec.bau.preisfaktor), "days": 1.0,
+				"quality": float(spec.bau.qualitaet), "reliability": float(spec.bau.zuverlaessigkeit), "capacity": 1, "status": "aktiv",
+				"history": {"fertig": 0, "verzoegert": 0, "maengel": 0}}
+		var bd: Dictionary = builders[id]
+		bd["company"] = int(b.owner)
+		bd["biz"] = b.id
+		bd.capacity = maxi(1, cap)
+		bd.price = float(b.get("bau_faktor", spec.bau.preisfaktor))
+		bd.status = "aktiv" if active else "pausiert"
+
+
+func _builder_company(bid: String):
+	var bd: Dictionary = builders.get(bid, {})
+	return sim.company(int(bd.company)) if bd.has("company") else null
+
+
+## Zahlung an eine Unternehmer-Baufirma: das Sammelkonto der Baufirmen (K0) reicht sie sofort als Bauleistung an die Firma weiter.
+func _forward(bid: String, amount: float, note: String) -> void:
+	var c = _builder_company(bid)
+	if c != null and amount > 0.0:
+		c.ledger.book("bau", amount, true, "Bauleistung %s" % note, sim.game_min, "K0", str(builders[bid].biz))
+
+
+## Kosten einer Unternehmer-Baufirma (Material, Fracht): K0 hat bezahlt, die Firma erstattet.
+func _charge(bid: String, amount: float, note: String) -> void:
+	var c = _builder_company(bid)
+	if c != null and amount > 0.0:
+		c.ledger.book("supplies", -amount, true, note, sim.game_min, "K0", str(builders[bid].biz))
+
+
+## Fuer Beobachtung und Ansicht.
+func company_builder_detail(b: Dictionary) -> Dictionary:
+	var id := "C%d" % int(b.owner)
+	var bd: Dictionary = builders.get(id, {})
+	return {"baustellen": load_of(id), "kapazitaet": int(bd.get("capacity", 0)), "bieterstatus": str(bd.get("status", "noch nicht")), "fertig": int(bd.get("history", {}).get("fertig", 0))}
 
 
 ## Nicht verbrauchte Rueckstellung (Rundungen, entfallene Zufahrt) geht an den Auftraggeber zurueck.

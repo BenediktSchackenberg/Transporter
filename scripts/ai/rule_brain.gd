@@ -476,7 +476,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	return {"summary": summary, "goal": goal, "actions": actions.slice(0, MAX_ACTIONS), "memory": "Strategie: %s" % personality}
 
 
-const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant"]
+const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant", "baufirma"]
 const PROD_MAX := {"wachstum": 2, "netzwerker": 1, "kostenoptimierer": 1, "risikospieler": 1}
 const PROD_RESERVE := 10000.0   # Bargeld fuer Einkauf und Loehne nach der Gruendung
 
@@ -492,7 +492,6 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	var own_ids: Array = own.map(func(b): return b.id)
 	# Preisregel (hoechstens alle 3 Tage): liegt Ware ohne Absatz, Preis senken (nicht unter 75 % des Basispreises, darunter deckt er
 	# Zutaten und Fracht nicht); verkauft sich taeglich mindestens der halbe Bestand, vorsichtig erhoehen (bis 150 %).
-	var base: Dictionary = obs.get("produktion_markt", {}).get("basispreise", {})
 	for b in own:
 		if int(b.get("preis_seit_tagen", 0)) < 3:
 			continue
@@ -500,7 +499,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 			var p := float(b.preise[item])
 			var stock := int(b.get("bestand", {}).get(item, 0))
 			var sold := int(b.get("absatz_tag", 0))
-			var bp := float(base.get(item, p))
+			var bp := float(Production.art(item).get("basispreis", p))   # Basispreis aus den Artikeldaten (config/articles.json)
 			if stock > 0 and sold == 0 and p > bp * 0.75:
 				actions.append({"action": "set_business_price", "business_id": b.id, "item": item, "price": snappedf(maxf(bp * 0.75, p * 0.9), 0.01)})
 				reasons.append("senke den Preis für %s, weil nichts verkauft wird" % item)
@@ -541,6 +540,8 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "tierhaltung"
 	elif int(mk.get("restaurants", 0)) == 0:
 		branch = "restaurant"
+	elif int(mk.get("baufirmen", 0)) == 0 and int(mk.get("bauvorhaben", 0)) > 0 and personality in ["wachstum", "risikospieler"]:
+		branch = "baufirma"
 	elif int(mk.felder) < 2 * int(mk.muehlen) + int(mk.get("tierhaltungen", 0)):
 		branch = "feld"
 	elif personality == "wachstum" and int(mk.brot_import) > 0:
