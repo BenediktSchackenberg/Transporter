@@ -84,7 +84,8 @@ func update_view(_delta: float) -> void:
 		_plane.visible = false
 		return
 	var dir := _dir_of(sim.airport.state(sim.game_min - 0.5).pos, sim.airport.state(sim.game_min + 0.5).pos)
-	var ground := Iso.to_screen(st.pos)
+	# st.pos steht in Feldern; to_screen erwartet Welt-Einheiten (1 Feld = 32), wie in ShipView.
+	var ground := Iso.to_screen(Vector2(float(st.pos.x) * 32.0, float(st.pos.y) * 32.0))
 	var lift := -2.0 * float(st.h) * STEP * 0.5
 	_plane.position = ground
 	var body: Sprite2D = _plane.get_node("body")
