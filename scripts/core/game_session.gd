@@ -109,6 +109,9 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	mayor_agent.setup(sim, _mayor_config(keys), api_log)
 	if not loaded.is_empty() and loaded.has("mayor_agent"):
 		mayor_agent.from_dict(loaded.mayor_agent)
+	if mayor_agent.uses_model():   # Buergermeister fragt zuerst: bei einem gemeinsamen lokalen Modell steht er vorn in der Warteschlange
+		for ctl in controllers:
+			ctl._startup_at += 2.0
 	_setup_dispatcher()
 	_setup_talk(loaded.is_empty())
 	sim.insolvency.company_refounded.connect(_on_refounded)

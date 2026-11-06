@@ -339,8 +339,14 @@ func _mayor_config() -> Dictionary:
 		m["base_url"] = str(m.get("base_url", AnthropicAdapter.DEFAULT_BASE_URL))
 		m["model"] = str(m.get("model", AnthropicAdapter.DEFAULT_MODEL))
 	elif m.provider == "ollama":
-		m["base_url"] = str(m.get("base_url", MAYOR_LOCAL_URL))
-		m["model"] = str(m.get("model", MAYOR_LOCAL_MODEL))
+		# immer dasselbe lokale Modell wie die Spieler (erster Ollama-Spieler), sonst laedt Ollama zwischen zwei Modellen hin und her
+		m["base_url"] = MAYOR_LOCAL_URL
+		m["model"] = MAYOR_LOCAL_MODEL
+		for r in rows:
+			if r.enabled.button_pressed and PROVIDERS[r.provider.selected] == "ollama" and r.model.text.strip_edges() != "":
+				m["base_url"] = r.base_url.text.strip_edges()
+				m["model"] = r.model.text.strip_edges()
+				break
 		m["timeout"] = float(m.get("timeout", 300.0))
 		m["interval"] = float(m.get("interval", 120.0))
 		m["num_ctx"] = OLLAMA_CTX

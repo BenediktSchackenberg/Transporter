@@ -45,6 +45,7 @@ func setup(simulation: Simulation, cfg: Dictionary, logger: ApiLog) -> void:
 		adapter.completed.connect(handle_result)
 		ApiLog.register_secret(str(cfg.get("api_key", "")))
 	sim.permits.mayor_attached = true
+	_since = float(cfg.get("interval", 45.0))   # erste Entscheidung sofort beim Start, nicht erst nach einem Intervall
 	status = "regelbasiert" if adapter == null else "bereit"
 
 
