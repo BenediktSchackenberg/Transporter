@@ -155,6 +155,20 @@ func _process(_delta: float) -> void:
 			var staff: Array = session.sim.personnel.employed(0)
 			for i in mini(3, staff.size()):
 				session.sim.biz.assign(0, staff[staff.size() - 1 - i].id, str(r.ref))
+	if session and args.has("demo-access") and not args.has("_access"):   # Sichtpruefung Zufahrt: Firma 0 laesst eine Zufahrt bauen, 3 Bautage sofort
+		args["_access"] = true
+		var sim: Simulation = session.sim
+		sim.companies[0].ledger.inject(120000.0)
+		var far: Dictionary = sim.prod.remote_deposit("")
+		var r: Dictionary = sim.executor.execute(0, {"action": "build_access", "grundstueck": str(far.get("grundstueck", ""))})
+		print("AUTOTEST: Zufahrt ", r.get("msg", ""))
+		if r.get("ok", false):
+			var day := GameCalendar.day_of(sim.game_min)
+			for k in 3:
+				sim.access.on_day(day + 1 + k)
+			var j: Dictionary = sim.access.jobs[str(r.ref)]
+			var at: Array = j.cells[j.cells.size() - int(j.built)]
+			args["shot-tile"] = "%d,%d" % [int(at[0]), int(at[1])]
 	if session and args.has("save-at") and not args.has("_saved") and session.active_seconds >= float(args["save-at"]):
 		args["_saved"] = true
 		session.save_game()

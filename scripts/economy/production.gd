@@ -89,6 +89,9 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 	if spec.has("abbau"):
 		var dep := best_deposit(str(params.get("rohstoff", "")), where if where.begins_with("G") else "")
 		if dep.is_empty():
+			var far := remote_deposit(str(params.get("rohstoff", "")))
+			if not far.is_empty():
+				return {"ok": false, "msg": "Keine Lagerstätte mit Straßenanschluss%s. Zufahrt zu %s bauen (build_access, %s, %d Tage)." % [(" für " + str(params.get("rohstoff", ""))) if str(params.get("rohstoff", "")) != "" else "", far.grundstueck, Catalog.money(float(far.kosten)), int(far.tage)]}
 			return {"ok": false, "msg": "Keine freie Lagerstätte%s gefunden (deposits: %s)." % [(" für " + str(params.get("rohstoff", ""))) if str(params.get("rohstoff", "")) != "" else "", ", ".join(DEPOSIT_KINDS)]}
 		mode = "kaufen"   # Abbaurecht nur auf eigenem Grund
 		cands = [sim.parcels.parcel(str(dep.grundstueck))]
@@ -331,12 +334,13 @@ func _build_deposits() -> void:
 			continue
 		_deposits[p.id] = {"art": DEPOSIT_KINDS[(h / 1000) % DEPOSIT_KINDS.size()], "menge": 3000 + (h / 7) % 9000, "qualitaet": snappedf(0.6 + float((h / 13) % 41) / 100.0, 0.01)}
 	# Jeder Rohstoff mindestens einmal auf einer erreichbaren Parzelle am Stadtrand (die aeussersten zuerst)
-	var reach: Array = cands.filter(func(p): return bool(sim.parcels.utilities_of(p).strasse))
+	var coast: bool = sim.city.world == "kueste"   # Kuestenort: Lagerstaetten duerfen abgelegen sein (Zufahrt per build_access)
+	var reach: Array = cands if coast else cands.filter(func(p): return bool(sim.parcels.utilities_of(p).strasse))
 	reach.sort_custom(func(a, b): return _center_dist(a) > _center_dist(b))
 	for kind in DEPOSIT_KINDS:
 		var have := false
 		for k in _deposits:
-			if _deposits[k].art == kind and bool(sim.parcels.utilities_of(sim.parcels.parcel(k)).strasse):
+			if _deposits[k].art == kind and (coast or bool(sim.parcels.utilities_of(sim.parcels.parcel(k)).strasse)):
 				have = true
 				break
 		if have:
@@ -499,6 +503,25 @@ func best_deposit(kind: String, pid: String = "") -> Dictionary:
 		if sc > best_s:
 			best_s = sc
 			best = {"grundstueck": id, "art": d.art, "menge": d.menge, "qualitaet": d.qualitaet, "preis": int(p.price)}
+	return best
+
+
+## Guenstigste freie Lagerstaette ohne Strassenanschluss, zu der eine Zufahrt ueber Land moeglich ist (Kuestenort, Etappe B).
+## {grundstueck, art, kosten, tage} oder {}; Zufahrten im Bau zaehlen als schon beauftragt.
+func remote_deposit(kind: String) -> Dictionary:
+	if _deposits.is_empty():
+		_build_deposits()
+	var best := {}
+	for id in _deposits:
+		var p: Dictionary = sim.parcels.parcel(id)
+		var d := deposit_of(id)
+		if p.is_empty() or p.get("state", "") != "frei" or p.owner != Parcels.CITY or int(d.menge) <= 0 or (kind != "" and d.art != kind):
+			continue
+		if bool(sim.parcels.utilities_of(p).strasse) or sim.access.jobs.values().any(func(j): return j.parcel == id and j.status == "im_bau"):
+			continue
+		var pl: Dictionary = sim.access.plan(id)
+		if pl.ok and (best.is_empty() or float(pl.kosten) < float(best.kosten)):
+			best = {"grundstueck": id, "art": d.art, "kosten": int(pl.kosten), "tage": int(pl.tage)}
 	return best
 
 
@@ -1167,7 +1190,13 @@ func market_obs() -> Dictionary:
 	for b in sim.biz.items.values():
 		if b.status in Businesses.RUNNING and b.has("waiting_for") and UPSTREAM.has(str(b.waiting_for)):
 			waiting[b.waiting_for] = int(waiting.get(b.waiting_for, 0)) + 1
-	return {"engpaesse": waiting, "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "brauereien": n.brauerei, "moebelwerke": n.moebelwerk, "it_betriebe": n.it, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
+	var access := {}   # Rohstoffe mit Engpass ohne erreichbare Lagerstaette: wohin eine Zufahrt fuehren muesste
+	for item in waiting:
+		if str(UPSTREAM.get(item, "")) == "bergwerk" and best_deposit(str(item)).is_empty():
+			var far := remote_deposit(str(item))
+			if not far.is_empty():
+				access[item] = far
+	return {"engpaesse": waiting, "zufahrt_noetig": access, "zufahrten_im_bau": sim.access.running(), "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "brauereien": n.brauerei, "moebelwerke": n.moebelwerk, "it_betriebe": n.it, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
 
 
 ## Marktchancen fuer die KI: wie viel einer Stufe wird importiert statt lokal erzeugt (Brot: Grosshandelsimport).

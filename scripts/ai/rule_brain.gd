@@ -594,6 +594,14 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "baeckerei"
 	if branch == "" or own.any(func(b): return b.branche == branch):
 		return
+	# Lagerstaette ohne Strassenanschluss (Kuestenort): erst die Zufahrt bauen lassen, dann gruenden
+	var far: Dictionary = mk.get("zufahrt_noetig", {}).get(rohstoff, {}) if branch == "bergwerk" else {}
+	if not far.is_empty():
+		if int(mk.get("zufahrten_im_bau", 0)) == 0 and cash > float(far.kosten) + buffer + PROD_RESERVE:
+			actions.append({"action": "build_access", "grundstueck": far.grundstueck, "reason": "%s fehlt, die Lagerstätte %s hat keine Zufahrt" % [rohstoff, far.grundstueck]})
+			planned.append("found_business")
+			reasons.append("lasse eine Zufahrt zur Lagerstätte %s bauen, weil %s fehlt" % [far.grundstueck, rohstoff])
+		return
 	var avail: Dictionary = obs.get("verfuegbare_branchen", {})
 	if not avail.has(branch):
 		return

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -7134,6 +7134,8 @@ func test_coast_world() -> void:
 		if not f.is_empty():
 			first.append(f[0].branche)
 	ok(first.size() >= 2 and first.size() == ({} if first.is_empty() else _set_of(first)).size(), "erste Gründungen unterscheiden sich je Persönlichkeit (%s)" % str(first))
+	var fr: Dictionary = s.executor.execute(1, {"action": "found_business", "branche": "feld"})
+	ok(fr.ok, "Feld am Feldweg gründbar (Ackerland mit Wegeanschluss außerhalb des Wohngebiets): %s" % fr.get("msg", ""))
 	run(s, 60.0)
 	ok(identity_ok(s), "Küstenort: Geld erhalten nach einer Spielstunde")
 
@@ -7143,3 +7145,65 @@ func _set_of(arr: Array) -> Dictionary:
 	for x in arr:
 		d[x] = true
 	return d
+
+
+func coast_sim(seed_v: int = 4242) -> Simulation:
+	var s := Simulation.new()
+	s.world_mode = "kueste"
+	s.start_profile = "unternehmer"
+	s.setup(seed_v, players(4), Catalog.MAP_SIZE, 0.5)
+	s.estate.permits_enabled = false
+	s.estate.auctions_enabled = false
+	return s
+
+
+## Etappe B: Lagerstaetten liegen abseits; Zufahrt planen, bezahlen, sichtbar bauen, danach Bergwerk; Speichern/Laden.
+func test_access_road() -> void:
+	var s := coast_sim()
+	var P: Production = s.prod
+	var kinds := {}
+	for pid in P._deposits if not P._deposits.is_empty() else (func(): P.deposit_of("x"); return P._deposits).call():
+		kinds[P._deposits[pid].art] = true
+	ok(Production.DEPOSIT_KINDS.all(func(k): return kinds.has(k)), "jeder Rohstoff kommt im Küstenort vor (%s)" % str(kinds.keys()))
+	ok(P.best_deposit("").is_empty(), "anfangs hat keine Lagerstätte Straßenanschluss (Berge unerschlossen)")
+	var far := P.remote_deposit("")
+	ok(not far.is_empty() and int(far.kosten) > int(AccessRoads.BASE_COST), "erreichbare Lagerstätte mit Zufahrtsplan (%s)" % str(far))
+	if far.is_empty():
+		return
+	var pid := str(far.grundstueck)
+	var pl: Dictionary = s.access.plan(pid)
+	ok(pl.cells.all(func(c): return s.city.height[s.city.idx(c)] == 0 and s.city.g(c) != CityData.G.WATER and s.city.building_at[s.city.idx(c)] < 0), "Weg führt nur über Land, nicht durch Berg, Wasser oder Gebäude (%d Felder)" % pl.cells.size())
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "bergwerk", "rohstoff": str(far.art)})
+	ok(not r.ok and str(r.msg).contains("build_access"), "Bergwerk ohne Zufahrt abgelehnt mit Hinweis auf die Zufahrt")
+	var cash0: float = s.companies[0].ledger.cash
+	r = s.executor.execute(0, {"action": "build_access", "grundstueck": pid})
+	ok(r.ok and is_equal_approx(s.companies[0].ledger.cash, cash0 - float(far.kosten)), "Zufahrt beauftragt und bezahlt (%s)" % r.get("msg", ""))
+	ok(not s.executor.execute(1, {"action": "build_access", "grundstueck": pid}).ok, "keine doppelte Zufahrt zum selben Grundstück")
+	var day := GameCalendar.day_of(s.game_min)
+	s.access.on_day(day + 1)
+	var j: Dictionary = s.access.jobs.values()[0]
+	var first: Array = j.cells[j.cells.size() - 1]
+	ok(j.status == "im_bau" or j.cells.size() <= AccessRoads.CELLS_PER_DAY, "Bau wächst täglich (%d/%d Felder)" % [int(j.built), j.cells.size()])
+	ok(s.city.is_road(Vector2i(int(first[0]), int(first[1]))) and not s.nav.road.is_point_solid(Vector2i(int(first[0]), int(first[1]))), "erste Zelle an der Einmündung ist befahrbar")
+	# Zwischenstand speichern und laden: gebaute Zellen bleiben erhalten
+	var mid := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(mid.city.is_road(Vector2i(int(first[0]), int(first[1]))) and mid.access.jobs.size() == 1, "Laden: gebaute Wegzellen werden wieder angelegt")
+	for k in 40:
+		s.access.on_day(day + 2 + k)
+	ok(j.status == "fertig" and bool(s.parcels.utilities_of(s.parcels.parcel(pid)).strasse), "Zufahrt fertig: Lagerstätte hat Straßenanschluss")
+	var start: Vector2i = s.city.building(s.companies[0].depots[0]).road
+	var end: Array = j.cells[0]
+	ok(s.nav.road_path(start, Vector2i(int(end[0]), int(end[1]))).size() > 1, "Fahrzeuge finden den Weg vom Hauptsitz zur Lagerstätte")
+	s.companies[0].ledger.inject(200000.0)
+	r = s.executor.execute(0, {"action": "found_business", "branche": "bergwerk", "rohstoff": str(far.art)})
+	ok(r.ok, "Bergwerk nach der Zufahrt gegründet (%s)" % r.get("msg", ""))
+	ok(identity_ok(s), "Geld erhalten")
+	# Regel-KI: Engpass ohne erreichbare Lagerstaette -> Zufahrt statt Gruendung
+	var obs := ObservationBuilder.build(mid, 2, [], 0.0, 10.0)
+	obs.ich.bargeld = 1000000
+	mid.access.jobs.clear()
+	obs.produktion_markt.zufahrten_im_bau = 0
+	obs.produktion_markt.engpaesse = {"kohle": 1}
+	obs.produktion_markt.zufahrt_noetig = {"kohle": {"grundstueck": "G1", "art": "kohle", "kosten": 9000, "tage": 3}}
+	var acts: Array = RuleBrain.decide(obs, "risikospieler", RandomNumberGenerator.new()).actions
+	ok(acts.any(func(a): return a.action == "build_access" and a.grundstueck == "G1") and not acts.any(func(a): return a.action == "found_business"), "Regel-KI lässt bei Kohle-Engpass zuerst die Zufahrt bauen")

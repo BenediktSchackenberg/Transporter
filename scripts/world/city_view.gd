@@ -53,6 +53,7 @@ var _sway_mat := ShaderMaterial.new()
 var _fog_mat := ShaderMaterial.new()
 var _heat_mat := ShaderMaterial.new()
 var _filter_zoom := -1.0
+var _tree_sprites := {}              # Zelle -> Baum-Sprite (Rodung fuer Zufahrten)
 var _detail_nodes: Array = []        # kleine Requisiten (Baenke, Laternen): erst ab Detailzoom sichtbar
 const DETAIL_ZOOM := 0.4
 
@@ -359,11 +360,30 @@ func _prop(name: String, world: Vector2, parent: Node2D, sway := false) -> Sprit
 	return s
 
 
+## Neue Wegzellen (Zufahrten): Strassenkacheln samt Nachbarn neu setzen (Einmuendungen), gerodete Baeume entfernen.
+func _on_roads_built(cells: Array) -> void:
+	var tiles: Dictionary = man.ground.tiles
+	var todo := {}
+	for q in cells:
+		todo[q] = true
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			todo[q + d] = true
+		if _tree_sprites.has(q):
+			_tree_sprites[q].queue_free()
+			_tree_sprites.erase(q)
+	for q in todo:
+		if sim.city.is_road(q):
+			var at: Array = tiles["road%d" % sim.city.road_mask(q)]
+			ground.set_cell(q, 0, Vector2i(int(at[0]), int(at[1])))
+
+
 func _build_decor() -> void:
 	var c := sim.city
 	for t in c.trees:
 		var s := _prop("d_tree%d" % t[1], Vector2(t[0].x * 32 + 16, t[0].y * 32 + 16), buildings_node)
 		s.material = _sway_mat
+		_tree_sprites[t[0]] = s
+	sim.access.roads_built.connect(_on_roads_built)
 	for b in c.benches:
 		_detail_nodes.append(_prop("d_bench", Vector2(b.x * 32 + 16, b.y * 32 + 16), decor_node))
 	for p in c.lamps:

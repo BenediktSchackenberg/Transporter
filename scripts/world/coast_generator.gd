@@ -341,6 +341,7 @@ func _town() -> void:
 			_plot_building(r2, "Erweiterungsfläche %d" % (k + 1), id)
 			c.start_depots.append(id)
 			_road(Vector2i(t.x - 31, y0 + 2), Vector2i(t.x - 30, y0 + 2))
+	_farm_lane()
 	# Huetten und kleine Haeuser bis zur Obergrenze
 	var budget := MAX_BUILDINGS - _counted()
 	var k2 := 0
@@ -352,6 +353,26 @@ func _town() -> void:
 		if id2 >= 0:
 			budget -= 1
 			k2 += 1
+
+
+## Feldweg vom Ort nach Westen ins Ackerland (zwischen den Startgrundstuecken hindurch, endet an Wasser oder Berg). Beiderseits
+## wird das Land Gewerbe-/Ackerland (Bezirk 4): dort finden Felder und Betriebe Platz mit Wegeanschluss, ohne das Wohngebiet zu belegen.
+const LANE_LEN := 44
+const LANE_BAND := 14
+func _farm_lane() -> void:
+	var x0 := town.x - 31
+	var p := Vector2i(x0, town.y)
+	var made := 0
+	while made < LANE_LEN and c.inside(p) and c.ground[c.idx(p)] != G.WATER and heights[c.idx(p)] == 0 and c.building_at[c.idx(p)] == -1:
+		c.ground[c.idx(p)] = G.ROAD
+		c.district[c.idx(p)] = 4
+		p.x -= 1
+		made += 1
+	for y in range(town.y - LANE_BAND, town.y + LANE_BAND + 1):
+		for x in range(x0 - made, x0 + 1):
+			var q := Vector2i(x, y)
+			if c.inside(q) and not town_rect.has_point(q) and heights[c.idx(q)] == 0:
+				c.district[c.idx(q)] = 4
 
 
 ## Gezaehlte Gebaeude (Startgrundstuecke als je ein Gruendungsbuero, Erweiterungsflaechen nicht).
