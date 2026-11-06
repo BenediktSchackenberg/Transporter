@@ -609,3 +609,14 @@ Verkleinert nach Abschnitt 17 („lieber eine vollständige Kette als viele sche
 **Prüfungen:** `test_meat_chain` (Mast erst nach 12 Tagen, Schlachthof kauft bei A, gekühlter Transport, Kühlraum ohne Strom), `test_restaurant_business`, `test_real_estate` (Kauf, Miete genau einmal und auf der Kostenstelle, Instandhaltung/Grundsteuer, Verkauf, Geldbilanz), `test_company_builder` (Angebot, Vertrag, Haus fertig, alle Abschläge an die Firma, Material zulasten der Firma, K0 unberührt), dazu Regressionen über Bau, Stadtentwicklung, Wohnen, Bevölkerung, Einzelhandel, Geld, Speichern, Insolvenz. Volltest nicht ausgeführt (Speicherdruck).
 
 **Grenzen:** Wohnungen des Vermietermarkts sind zu Spielbeginn leer (Reserve für Zuzug) – Mieten fließen erst mit Einzug; Insolvenz behandelt Immobilien, Baustellen und Produktionsbetriebe noch nicht gesondert (Abnahme 11 offen); keine eigenen Fachrollen; Grafik nur über vorhandene Gebäudebilder (farm, factory, workshop, restaurant).
+
+### Nachtrag Etappe 3 – Kalibrierung im Praxislauf (06.11.2026)
+
+- **Einheitlicher Stadtliefertarif:** Alle Lieferverträge (Erzeuger, Import über den Großhandel, Ausfuhr) kosten den Tarif des Großhandels-Lieferdiensts (`Retail._freight`). Vorher reiste Ware lokaler Erzeuger zur dreifach teureren Marktfracht, Importware günstig – lokale Ware verlor systematisch. Transportfirmen übernehmen diese kurzen Stadtfahrten ohnehin kaum (gemessen 0–2 von über 100).
+- **Stall/Betrieb mit Strombedarf** nur auf erschlossenen Parzellen (eine Tierhaltung stand ohne Anschluss).
+- **Rückzugsregel:** erst 20 Tage nach der ersten eigenen Herstellung (spätestens nach 50 Tagen); Restaurant und Baufirma ausgenommen. Vorher wurde der Schlachthof geschlossen, bevor die ersten Tiere ausgemästet waren.
+- **Tierhaltung nach Absatz:** höchstens 1,2 × gleitender Tagesabsatz neu einstallen, mindestens 1 Tier/Tag; Meldung „Stall voll“.
+
+**Messung 60 Spieltage, Unternehmerstart, vier Regel-KIs (Endstand):** Bäckerei +2 803 EUR, Immobilien +71/+84 EUR (Vermieterwohnungen anfangs leer), Restaurant −2 091 EUR bei 12 184 EUR Umsatz, Schlachthof −5 162 EUR bei 4 198 EUR Umsatz (wartet auf Tiere), Tierhaltung −7 701 EUR (geschlossen) bzw. neu gegründet, Mühlen ohne lokales Getreide (in diesem Lauf gründete niemand ein Feld). Firmen gesamt −2 468, −16 291, +7 201, −14 902 EUR. Zum Vergleich vor der Kalibrierung: Restaurant −16 258, Tierhaltung −10 363, Schlachthof ohne Absatz.
+
+**Offen:** Fleischkette noch nicht tragfähig (der Fleischbedarf der Stadt trägt etwa ein Tier pro Tag; Futter wird importiert, wenn kein Feld liegt); Regel-KI gründet Kettenstufen nacheinander, nicht abgestimmt (Mühle ohne Feld); Insolvenzbehandlung der neuen Betriebsarten (Abnahme 11); Volltest.

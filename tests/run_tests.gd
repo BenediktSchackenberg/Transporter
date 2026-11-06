@@ -6546,6 +6546,7 @@ func test_rule_brain_production() -> void:
 	var fake: Dictionary = obs.betriebe.filter(func(b): return b.branche == "baeckerei")[0]
 	fake.personal = 1
 	fake.alter_tage = 30
+	fake.produziert_seit_tagen = 25
 	fake.absatz_tag = 0
 	fake.ergebnis = -5000
 	d = RuleBrain.decide(obs, "wachstum", rng)

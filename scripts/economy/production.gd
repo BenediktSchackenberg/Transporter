@@ -14,8 +14,6 @@ extends RefCounted
 
 const ARTICLES_PATH := "res://config/articles.json"
 const IMPORT := "X0"
-const FREIGHT_BASE := 80.0         # Frachtpreis wie auf dem Transportmarkt (Market): 80 + Strecke x 3,2 x (1 + Einheiten/8) x Warenwert
-const FREIGHT_PER_TILE := 3.2
 const OFFER_DAYS := 1
 const FALLBACK_SHARE := 0.7          # Lieferdienst, wenn niemand den Transport uebernimmt (wie im Einzelhandel)
 const SPOIL_SHARE := 0.25            # Anteil verderblicher Ware am Produktionsstandort, der taeglich verdirbt
@@ -79,7 +77,7 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 	if spec.has("feld") or where != "hauptsitz":
 		var pid := where if where.begins_with("G") else ""
 		var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4
-		cands = _parcel_candidates(pid, min_area) if spec.has("feld") or pid != "" or where == "parzelle" else _market_candidates(min_area)
+		cands = _parcel_candidates(pid, min_area, float(spec.get("strom_kw", 0.0)) > 0.0) if spec.has("feld") or pid != "" or where == "parzelle" else _market_candidates(min_area)
 		if cands.is_empty():
 			return {"ok": false, "msg": "Kein freies Grundstück mit Straßenzugang und mindestens %d Feldern verfügbar." % min_area}
 		parcel = cands[0]
@@ -132,13 +130,13 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 
 ## Grundstuecke fuer ein Feld: das genannte oder freie Grundstuecke mit Strassenanschluss, Aecker bevorzugt ausserhalb von Wohn-
 ## und Mischgebiet, dann nach Preis je Feld.
-func _parcel_candidates(pid: String, min_area: int) -> Array:
+func _parcel_candidates(pid: String, min_area: int, need_power: bool = false) -> Array:
 	if pid != "":
 		var p: Dictionary = sim.parcels.parcel(pid)
 		return [p] if not p.is_empty() and p.state == "frei" and p.owner == Parcels.CITY and int(p.area) >= min_area and sim.parcels.is_buildable(p) else []
 	var t: Dictionary = sim.city.building(import_point())
 	var near := func(p) -> int: return absi(int(p.rect[0]) - int(t.x)) + absi(int(p.rect[1]) - int(t.y))
-	var out: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse) and p.zone not in ["wohnen", "mischgebiet"])
+	var out: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse) and p.zone not in ["wohnen", "mischgebiet"] 		and (not need_power or bool(p.get("erschliessung", {}).get("strom", true))))   # Stall/Betrieb mit Strombedarf braucht Anschluss
 	# kurze Wege zur Muehle/Verladestelle zaehlen mehr als billiges Land am Rand (Fracht je dt sonst hoeher als der Ertrag)
 	out.sort_custom(func(a, b): return near.call(a) < near.call(b))
 	return out.slice(0, 40)
@@ -275,6 +273,7 @@ func _field_day(b: Dictionary, spec: Dictionary) -> void:
 				if y > 0:
 					sim.stock.add("getreide", y, acct, site, "Ernte %s" % b.id, sim.game_min)
 					_count("produced", "getreide", y)
+					_first_output(b)
 				f.last_yield = y
 				f.cycles = int(f.cycles) + 1
 				f.phase = "brache"
@@ -315,6 +314,7 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 				var nq := int(m.n) * int(R.aus.values()[0])
 				sim.stock.add(str(R.aus.keys()[0]), nq, acct, site, "Mast %s" % b.id, sim.game_min)
 				_count("produced", str(R.aus.keys()[0]), nq)
+				_first_output(b)
 			else:
 				keep.append(m)
 		b["pipeline"] = keep
@@ -353,7 +353,12 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 		for m in b.get("pipeline", []):
 			used += int(m.n)
 		used += sim.stock.qty(str(R.aus.keys()[0]), acct, site)
-		batches = mini(batches, maxi(0, int(R.plaetze) - used))
+		# nach Absatz einstallen: hoechstens 1,2 x gleitender Tagesabsatz, mindestens ein Tier je Tag
+		batches = mini(batches, maxi(1, int(ceil(float(b.get("sales_avg", 0.0)) * 1.2))))
+		if used >= int(R.plaetze):
+			sim.biz.block(b.id, "material", "Stall voll (%d Plätze belegt)" % used)
+			return
+		batches = mini(batches, int(R.plaetze) - used)
 	var short := ""
 	if out_cap == 0:
 		sim.biz.unblock(b.id, "material")
@@ -385,6 +390,7 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 			var q := batches * int(R.aus[item])
 			sim.stock.add(item, q, acct, site, "Produktion %s" % b.id, sim.game_min)
 			_count("produced", item, q)
+			_first_output(b)
 	b.today = batches
 	b["total"] = int(b.get("total", 0)) + batches
 
@@ -463,6 +469,12 @@ func _count(key: String, item: String, n: int) -> void:
 	stats[key][item] = int(stats[key].get(item, 0)) + n
 
 
+## Erste eigene Herstellung eines Betriebs (Ernte, Charge, Mastende) fuer die Rueckzugsregel der KI.
+func _first_output(b: Dictionary) -> void:
+	if not b.has("first_output_day"):
+		b["first_output_day"] = GameCalendar.day_of(sim.game_min)
+
+
 # ------------------------------------------------------------------ Beschaffung
 ## Bestand + Unterwegs unter `reorder` -> bis `target` nachbestellen.
 func _ensure_input(b: Dictionary, item: String, target: int, reorder: int, max_unit: float = INF) -> void:
@@ -529,8 +541,14 @@ func freight(from_loc: int, to_loc: int, item: String, qty: int) -> float:
 	var a: Dictionary = sim.city.building(from_loc)
 	var z: Dictionary = sim.city.building(to_loc)
 	var dist: int = absi(a.road.x - z.road.x) + absi(a.road.y - z.road.y)
-	var value := float(Catalog.CARGO[str(art(item).get("ladung", "pakete"))].value)
-	return snappedf(FREIGHT_BASE + float(dist) * FREIGHT_PER_TILE * (1.0 + float(units(item, qty)) / 8.0) * value, 1.0)
+	# Einheitlicher Stadtliefertarif wie beim Grosshandel (Retail._freight): kurze Stadtfahrten uebernehmen Transportfirmen kaum
+	# (Messung probe_bottlenecks: 0-2 von ueber 100), sonst der Lieferdienst; Erzeuger und Grosshandel liefern zu gleichen Bedingungen.
+	return snappedf(Retail.FREIGHT_BASE + float(dist) * (1.0 + float(units(item, qty)) / 8.0), 1.0)
+
+
+## Fracht fuer eine Lieferung (alle Quellen zu gleichen Bedingungen, siehe freight).
+func _freight_from(_src_acct: String, from_loc: int, to_loc: int, item: String, qty: int) -> float:
+	return freight(from_loc, to_loc, item, qty)
 
 
 func units(item: String, qty: int) -> int:
@@ -552,7 +570,7 @@ func order(buyer: String, loc: int, buyer_biz: String, item: String, qty: int, m
 	var ip = art(item).get("importpreis")
 	var port := import_point()
 	if allow_import and ip != null and port >= 0 and port != loc:
-		cands.append({"s": {"biz": "", "acct": IMPORT, "cid": -1, "loc": port, "avail": qty, "price": float(ip)}, "unit": float(ip) + freight(port, loc, item, qty) / float(qty), "q": qty, "own": false})
+		cands.append({"s": {"biz": "", "acct": IMPORT, "cid": -1, "loc": port, "avail": qty, "price": float(ip)}, "unit": float(ip) + _freight_from(IMPORT, port, loc, item, qty) / float(qty), "q": qty, "own": false})
 	cands.sort_custom(func(a, b2): return float(a.unit) < float(b2.unit))
 	var left := qty
 	for cd in cands:
@@ -565,12 +583,12 @@ func order(buyer: String, loc: int, buyer_biz: String, item: String, qty: int, m
 			continue
 		var s: Dictionary = cd.s
 		var price := 0.0 if bool(cd.own) else float(s.price)
-		var fr := freight(int(s.loc), loc, item, q)
+		var fr := _freight_from(str(s.acct), int(s.loc), loc, item, q)
 		# Liquiditaet des Kaeufers (Ware + Fracht werden bei Anlieferung faellig)
 		var cash := _cash(buyer)
 		while q > 0 and float(q) * price + fr > cash:
 			q = q / 2
-			fr = freight(int(s.loc), loc, item, maxi(1, q))
+			fr = _freight_from(str(s.acct), int(s.loc), loc, item, maxi(1, q))
 		if q <= 0:
 			continue
 		if _deal(buyer, loc, buyer_biz, s, item, q, price, fr):
@@ -839,6 +857,8 @@ func detail(b: Dictionary) -> Dictionary:
 		if spec.has("laden"):
 			e["laden"] = ("offen, %d Kunden gestern" % int(b.get("counter_customers", 0))) if bool(b.get("counter", false)) else "geschlossen (Verkaufskraft fehlt)"
 	e["alter_tage"] = GameCalendar.day_of(sim.game_min) - GameCalendar.day_of(float(b.founded))
+	if b.has("first_output_day"):
+		e["produziert_seit_tagen"] = GameCalendar.day_of(sim.game_min) - int(b.first_output_day)
 	if b.has("parcel"):
 		e["grundstueck"] = b.parcel
 	if e.has("preise"):

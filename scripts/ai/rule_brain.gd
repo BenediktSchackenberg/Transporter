@@ -506,9 +506,11 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 			elif sold > 0 and sold * 2 >= stock and p < bp * 1.5:
 				actions.append({"action": "set_business_price", "business_id": b.id, "item": item, "price": snappedf(minf(bp * 1.5, p * 1.05), 0.01)})
 				reasons.append("erhöhe den Preis für %s, weil die Ware gut abfließt" % item)
-	# Rueckzug: nach 25 Tagen ohne Absatz und mit mehr als 4000 EUR Verlust wird der Betrieb geschlossen (Kosten stoppen)
+	# Rueckzug: ohne Absatz und mit mehr als 4000 EUR Verlust schliessen - 20 Tage nach der ersten eigenen Herstellung (Ketten mit
+	# Vorlauf wie Mast oder Wachstum bekommen ihre Chance), spaetestens nach 50 Tagen, wenn nie etwas hergestellt wurde.
 	for b in own:
-		if int(b.get("alter_tage", 0)) >= 25 and int(b.get("absatz_tag", 0)) == 0 and int(b.ergebnis) < -4000:
+		var tried: bool = int(b.get("produziert_seit_tagen", -1)) >= 20 or int(b.get("alter_tage", 0)) >= 50
+		if b.branche not in ["restaurant", "baufirma"] and tried and int(b.get("absatz_tag", 0)) == 0 and int(b.ergebnis) < -4000:
 			actions.append({"action": "close_business", "business_id": b.id, "reason": "seit %d Tagen ohne Absatz, Ergebnis %d EUR" % [int(b.alter_tage), int(b.ergebnis)]})
 			reasons.append("schließe %s, weil er seit Wochen nichts verkauft und Verlust macht" % b.id)
 			return
