@@ -316,6 +316,13 @@ static func retail_block(sim: Simulation) -> String:
 	txt += "[b]Müllabfuhr[/b] %.1f t gesamt · Recyclingquote %d %% · Mehrwegquote %d %% · %d Flaschen wiederbefüllt · Gebühren %s, Kosten %s
 " % [float(W.total.tons), roundi(W.rate * 100.0),
 		roundi(W.mehrweg_share() * 100.0), int(R.stats.bottles_reused), Catalog.money(float(W.total.fees)), Catalog.money(float(W.total.cost))]
+	var H: Harbor = sim.harbor
+	if H.enabled:
+		var hs := H.summary()
+		txt += "[b]Hafen[/b] %d Schiffe · %d Ladeeinheiten gelöscht, %d geladen · %d Einfuhren warten (%d LE) · nächstes Schiff in %d Tag(en)%s
+" % [
+			int(H.stats.schiffe), int(H.stats.einheiten_ein), int(H.stats.einheiten_aus), H.manifest.size(), H.waiting_units(), int(hs.naechstes_in_tagen),
+			(" · am Kai: „%s“" % H.ship.name) if not H.ship.is_empty() and H.ship.status == "am_kai" else ""]
 	return txt
 
 

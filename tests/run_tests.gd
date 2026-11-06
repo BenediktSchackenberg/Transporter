@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -7207,3 +7207,60 @@ func test_access_road() -> void:
 	obs.produktion_markt.zufahrt_noetig = {"kohle": {"grundstueck": "G1", "art": "kohle", "kosten": 9000, "tage": 3}}
 	var acts: Array = RuleBrain.decide(obs, "risikospieler", RandomNumberGenerator.new()).actions
 	ok(acts.any(func(a): return a.action == "build_access" and a.grundstueck == "G1") and not acts.any(func(a): return a.action == "found_business"), "Regel-KI lässt bei Kohle-Engpass zuerst die Zufahrt bauen")
+
+
+## Etappe C: Linienschiff koppelt Einfuhren und Ausfuhren an echte Bestaende im Hafenlager.
+func test_harbor() -> void:
+	var s := coast_sim()
+	var H: Harbor = s.harbor
+	ok(H.enabled and s.city.building(H.building).name == "Hafenlager" and s.city_depot.port == H.building and s.prod.import_point() == H.building, "Hafenlager ist Anlieferpunkt für Stadtlager und Betriebe")
+	ok(not s.harbor.enabled or not Harbor.new().enabled, "Rasterstadt ohne Hafenmodul (Harbor erst nach setup aktiv)")
+	var day := GameCalendar.day_of(s.game_min)
+	var even := day + 2 - day % 2   # naechster Schiffstag
+	# Betrieb kauft Importware: anfangs liegt nichts im Hafen -> Fehlmenge wird fuer das Schiff vorgemerkt
+	s.companies[0].ledger.inject(100000.0)
+	var loc: int = s.companies[0].depots[0]
+	var got: int = s.prod.order("C0", loc, "", "mehl", 80, 1000.0, true)
+	ok(got == 0 and H.manifest.any(func(m): return m.item == "mehl" and int(m.qty) == 80), "ohne Schiff keine Importware; Fehlmenge 80 Mehl für das Schiff vorgemerkt")
+	# Stadtlager-Import (Baustoff) wartet auf See bis zum Schiff
+	var D: CityDepot = s.city_depot
+	var o := {"id": "BTEST", "item": "leitkegel", "qty": 12, "status": "bestellt", "supplier": "X0", "ordered": day - 60, "day": day - 60, "loc": D.port, "freight": 40.0, "history": []}
+	D.orders[o.id] = o
+	D._advance_orders(day)
+	ok(o.status == "auf_see" and s.stock.qty("leitkegel", "X0", H.building) == 0, "Stadtlager-Import liegt auf See, noch kein Bestand im Hafen")
+	# Bauhof-Nachschub
+	s.trader.orders.append({"id": "ITEST", "item": "stahl", "qty": 30, "due": s.game_min - 1.0, "cost": 0.0})
+	var steel_before: int = s.trader.stock_of("stahl")
+	s.trader.on_day(day)
+	var steel0: int = s.trader.stock_of("stahl")   # nach Tagesablauf (Ueberschuss geht zum Kai)
+	ok(steel0 <= steel_before and H.manifest.any(func(m): return m.kind == "trader"), "Bauhof-Nachschub wartet auf das Schiff (%d -> %d)" % [steel_before, steel0])
+	var bal0: int = s.stock.balance_error()
+	H.on_day(even)
+	ok(H.ship.status == "am_kai" and H.manifest.is_empty(), "Schiff %s löscht alle wartenden Einfuhren" % H.ship.get("name", ""))
+	ok(H.available("mehl") >= 80, "Mehl liegt jetzt im Hafenlager (%d)" % H.available("mehl"))
+	ok(o.status == "transport" and sim_contract_from(s, o) == H.building, "Stadtlager-Import: Transportauftrag vom Hafen zum Stadtlager")
+	ok(s.trader.stock_of("stahl") == steel0 + 30, "Bauhof hat den Stahl erhalten")
+	got = s.prod.order("C0", loc, "", "mehl", 80, 1000.0, true)
+	ok(got == 80, "Betrieb kauft die gelöschte Importware (%d)" % got)
+	ok(s.stock.balance_error() == bal0, "Warenbilanz bleibt stimmig")
+	# Kapazitaet: zu viel Ladung wartet auf das naechste Schiff
+	H.ship_in("stock", "", "saatgut", 40 * (Harbor.CAPACITY + 10))
+	H.ship_in("stock", "", "getreide", 10)
+	H.on_day(even + 1)
+	ok(H.ship.status == "abgefahren", "Schiff legt am Folgetag ab")
+	H.on_day(even + 2)
+	ok(H.manifest.size() == 1 and H.manifest[0].item == "saatgut" and H.available("getreide") >= 10, "Übergroße Ladung wartet, kleinere Posten fahren mit")
+	# Ausfuhr: Ware am Kai bleibt Bestand, bis das Schiff sie laedt
+	s.stock.add("schlacke", 50, "X0", H.building, "Test-Anlieferung")
+	H.export_ready("schlacke", 50)
+	ok(H.available("schlacke") == 0, "Ausfuhrware am Kai ist nicht als Import verkäuflich")
+	H.on_day(even + 4)
+	ok(s.stock.qty("schlacke", "X0", H.building) == 0 and not H.export_wait.has("schlacke"), "Schiff lädt die Ausfuhrware")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.harbor.enabled and s2.harbor.manifest.size() == H.manifest.size() and int(s2.harbor.stats.schiffe) == int(H.stats.schiffe), "Speichern/Laden erhält Hafenstand")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func sim_contract_from(s: Simulation, o: Dictionary) -> int:
+	var k: Contract = s.contracts.get(str(o.get("contract", "")))
+	return k.pickup if k != null else -1

@@ -855,7 +855,12 @@ func order(buyer: String, loc: int, buyer_biz: String, item: String, qty: int, m
 	var ip = art(item).get("importpreis")
 	var port := import_point()
 	if allow_import and ip != null and port >= 0 and port != loc:
-		cands.append({"s": {"biz": "", "acct": IMPORT, "cid": -1, "loc": port, "avail": qty, "price": float(ip)}, "unit": float(ip) + _freight_from(IMPORT, port, loc, item, qty) / float(qty), "q": qty, "own": false})
+		var avail := qty
+		if sim.harbor.enabled:   # Kuestenort: nur was das Schiff gebracht hat; die Fehlmenge bringt das naechste Schiff
+			avail = sim.harbor.available(item)
+			if avail < qty:
+				sim.harbor.demand(item, qty - avail)
+		cands.append({"s": {"biz": "", "acct": IMPORT, "cid": -1, "loc": port, "avail": avail, "price": float(ip)}, "unit": float(ip) + _freight_from(IMPORT, port, loc, item, qty) / float(qty), "q": qty, "own": false})
 	cands.sort_custom(func(a, b2): return float(a.unit) < float(b2.unit))
 	var left := qty
 	for cd in cands:
@@ -883,7 +888,7 @@ func order(buyer: String, loc: int, buyer_biz: String, item: String, qty: int, m
 
 ## Importware (Saatgut, Getreide, Mehl, Backzutaten) wird ueber das Lager des Lebensmittelgrosshandels bezogen.
 func import_point() -> int:
-	return int(sim.retail.wholesale_building)
+	return sim.harbor.building if sim.harbor.enabled else int(sim.retail.wholesale_building)   # Kuestenort: Hafenlager
 
 
 func _cash(acct: String) -> float:
@@ -897,7 +902,8 @@ func _deal(buyer: String, loc: int, buyer_biz: String, s: Dictionary, item: Stri
 	_next += 1
 	var ref := "deal:" + id
 	if s.acct == IMPORT:
-		sim.stock.add(item, q, IMPORT, int(s.loc), "Import %s" % id, sim.game_min)
+		if not sim.harbor.enabled:   # Kuestenort: die Ware liegt schon (per Schiff) im Hafenlager
+			sim.stock.add(item, q, IMPORT, int(s.loc), "Import %s" % id, sim.game_min)
 		_count("imported", item, q)
 	if not sim.stock.reserve(ref, item, q, s.acct, int(s.loc)):
 		return false
@@ -1018,7 +1024,10 @@ func _receive(d: Dictionary) -> void:
 		L.book("internal", tp, false, "Interne Lieferung %s" % d.id, sim.game_min, "", d.seller_biz)
 		L.book("internal", -tp, false, "Interne Lieferung %s" % d.id, sim.game_min, "", d.buyer_biz)
 	if d.buyer == IMPORT and moved > 0:
-		sim.stock.consume(d.item, moved, IMPORT, int(d.buyer_loc), "Ausfuhr %s" % d.id, sim.game_min)
+		if sim.harbor.enabled:
+			sim.harbor.export_ready(d.item, moved)   # wartet am Kai auf das Schiff
+		else:
+			sim.stock.consume(d.item, moved, IMPORT, int(d.buyer_loc), "Ausfuhr %s" % d.id, sim.game_min)
 		_count("exported", d.item, moved)
 	if d.seller_biz != "":   # auch interne Lieferungen zaehlen als Absatz des liefernden Betriebs
 		var sb: Dictionary = sim.biz.get_b(d.seller_biz)
@@ -1063,7 +1072,7 @@ func cancel_deals_of(acct: String) -> void:
 		if k != null:
 			k.status = "cancelled"
 		sim.stock.release("deal:" + str(d.id))
-		if d.seller == IMPORT:
+		if d.seller == IMPORT and not sim.harbor.enabled:   # Kuestenort: die Ware bleibt im Hafenlager
 			sim.stock.consume(d.item, int(d.qty), IMPORT, int(d.seller_loc), "Storno %s" % d.id, sim.game_min)
 		d.status = "storniert"
 

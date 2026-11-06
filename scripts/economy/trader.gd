@@ -240,6 +240,14 @@ func _items_text(items: Dictionary) -> String:
 	return ", ".join(parts)
 
 
+## Kuestenort: das Schiff hat den Nachschub geloescht; er geht vom Hafen in den Bauhof.
+func on_ship(order_id: String) -> void:
+	for o in orders.duplicate():
+		if str(o.id) == order_id:
+			sim.stock.add(o.item, int(o.qty), "T0", bauhof, "Import per Schiff", sim.game_min)
+			orders.erase(o)
+
+
 # ------------------------------------------------------------------ Tagesablauf
 func on_day(_day: int) -> void:
 	if bauhof < 0:
@@ -254,7 +262,11 @@ func on_day(_day: int) -> void:
 			deliveries.erase(d)
 	# Importlieferungen
 	for o in orders.duplicate():
-		if now >= float(o.due):
+		if now >= float(o.due) and sim.harbor.enabled:
+			if not o.get("auf_see", false):   # Kuestenort: kommt mit dem naechsten Schiff (on_ship)
+				o["auf_see"] = true
+				sim.harbor.ship_in("trader", str(o.id), str(o.item), int(o.qty))
+		elif now >= float(o.due):
 			sim.stock.add(o.item, int(o.qty), "T0", bauhof, "Import", now)
 			orders.erase(o)
 	# Produktion
@@ -287,7 +299,11 @@ func on_day(_day: int) -> void:
 		var over := stock_of(it) - int(m2.max)
 		if over > 0:
 			var qty2 := int(ceil(over * 0.5))
-			sim.stock.consume(it, qty2, "T0", bauhof, "Export", now)
+			if sim.harbor.enabled:   # Kuestenort: Ueberschuss geht zum Kai und faehrt mit dem naechsten Schiff
+				qty2 = sim.stock.move(it, qty2, "T0", bauhof, "X0", sim.harbor.building, "Export zum Hafen", now)
+				sim.harbor.export_ready(it, qty2)
+			else:
+				sim.stock.consume(it, qty2, "T0", bauhof, "Export", now)
 			var rev := float(m2.base) * EXPORT_FACTOR * qty2
 			sim.economy.transfer("X0", "T0", rev)
 			stats.exports += rev

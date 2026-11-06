@@ -167,7 +167,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"nachrichten": msgs, "angebote_an_dich": offers_in, "deine_angebote": offers_out,
 		"ergebnisse_deiner_aktionen": results.slice(-10), "ereignisse": events.slice(-10),
 		"hinweis": hint, "plan": sim.plans.summary(cid), "gedaechtnis": sim.memory.relevant(cid, _context(sim, cid, market)),
-		"betriebsablauf": sim.operations.summary(cid), "experimente": sim.experiments.summary(cid), "strategie_lernen": sim.strategy.summary_of(cid), "betriebshof": sim.estate.summary(cid), "vertraege": sim.social.agreements_of(cid),
+		"betriebsablauf": sim.operations.summary(cid), "experimente": sim.experiments.summary(cid), "strategie_lernen": sim.strategy.summary_of(cid), "betriebshof": sim.estate.summary(cid), "hafen": sim.harbor.summary() if sim.harbor.enabled else {}, "vertraege": sim.social.agreements_of(cid),
 		"gemietete_fahrzeuge": sim.vehicles.values().filter(func(v): return v.operator == cid).map(func(v): return {"id": v.id,
 			"modell": v.model, "status": FleetVehicle.STATE_TEXT.get(v.state, v.state), "stopps": v.stops.slice(0, 6), "ladung": v.load}), "lager": _storage(sim, cid),
 		"verfuegbare_aktionen": _available(sim, cid),

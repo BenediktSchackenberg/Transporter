@@ -169,6 +169,12 @@ func _process(_delta: float) -> void:
 			var j: Dictionary = sim.access.jobs[str(r.ref)]
 			var at: Array = j.cells[j.cells.size() - int(j.built)]
 			args["shot-tile"] = "%d,%d" % [int(at[0]), int(at[1])]
+	if session and args.has("demo-ship") and not args.has("_ship") and session.sim.harbor.enabled:   # Sichtpruefung Hafen: Schiff legt sofort an
+		args["_ship"] = true
+		var H: Harbor = session.sim.harbor
+		for it in ["mehl", "saatgut", "stahl"]:
+			H.ship_in("stock", "", it, 40)
+		H._arrive(GameCalendar.day_of(session.sim.game_min))
 	if session and args.has("save-at") and not args.has("_saved") and session.active_seconds >= float(args["save-at"]):
 		args["_saved"] = true
 		session.save_game()
@@ -207,6 +213,9 @@ func _process(_delta: float) -> void:
 					focus = (Vector2(mn.face) + Vector2(mn.halde_cell)) * 16.0 + Vector2(16, 16)   # zwischen Abbaufront und Halde
 				session.city_view.set_camera_world(focus)
 				session.follow({"kind": "mountain", "id": pid})   # Kamera bleibt am Abbau
+		if args.has("shot-ship"):   # Kamera auf den Liegeplatz des Linienschiffs
+			session.set_follow(false)
+			session.city_view.set_camera_world(session.city_view.ship_view.berth + Vector2(110, -110))   # nach rechts versetzt: Seitenleiste verdeckt den rechten Bildrand
 		if args.has("shot-tile"):
 			var xy: PackedStringArray = str(args["shot-tile"]).split(",")
 			session.set_follow(false)

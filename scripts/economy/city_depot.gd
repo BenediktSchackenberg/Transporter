@@ -100,6 +100,8 @@ func setup(s) -> void:
 				port = b.id
 	if port < 0:
 		port = s.trader.bauhof
+	if s.harbor.enabled:
+		port = s.harbor.building   # Kuestenort: Importware kommt per Schiff ins Hafenlager
 	_seed_stock()
 	add_materials(MATERIAL_SEED, "Restposten der Stadt")
 
@@ -423,7 +425,10 @@ func _advance_orders(day: int) -> void:
 		match o.status:
 			"bestellt":
 				if o.supplier == "X0":
-					if day >= int(o.get("ordered", o.day)) + int(CityGoods.get_item(o.item).lead) + CityGoods.IMPORT_LEAD:
+					if day >= int(o.get("ordered", o.day)) + int(CityGoods.get_item(o.item).lead) + CityGoods.IMPORT_LEAD and sim.harbor.enabled:
+						o.status = "auf_see"   # wartet auf das naechste Schiff (on_ship)
+						sim.harbor.ship_in("depot", str(o.id), str(o.item), int(o.qty))
+					elif day >= int(o.get("ordered", o.day)) + int(CityGoods.get_item(o.item).lead) + CityGoods.IMPORT_LEAD:
 						# Importware trifft am Anlieferpunkt ein und gehoert bis zur Anlieferung dem Ausland
 						sim.stock.add(o.item, int(o.qty), "X0", port, "Import Stadtlager")
 						sim.stock.reserve("order:" + str(o.id), o.item, int(o.qty), "X0", port)
@@ -432,6 +437,17 @@ func _advance_orders(day: int) -> void:
 					_issue_contract(o)
 			"transport", "unterwegs":
 				_watch_contract(o, day)
+
+
+## Kuestenort: das Schiff hat die Importware im Hafenlager geloescht; ab hier wie bisher (Auftrag an Transporteure zum Stadtlager).
+func on_ship(order_id: String) -> void:
+	var o: Dictionary = orders.get(order_id, {})
+	if o.is_empty() or o.status != "auf_see":
+		return
+	sim.stock.add(o.item, int(o.qty), "X0", port, "Import Stadtlager (Schiff)")
+	sim.stock.reserve("order:" + str(o.id), o.item, int(o.qty), "X0", port)
+	o.status = "bestellt"
+	_issue_contract(o)
 
 
 func _issue_contract(o: Dictionary) -> void:

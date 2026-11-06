@@ -96,8 +96,7 @@ func on_day(day: int) -> void:
 	stats.crew = float(stats.crew) + CREW_PER_DAY
 	# Ankunft bestellter Elemente am Importterminal -> Spezialtransport zum Kraftwerk (echter Transportauftrag, Zahler P0)
 	for p in pending.duplicate():
-		if day >= int(p.due):
-			_ship(int(p.n))
+		if day >= int(p.due) and _ship(int(p.n)):
 			pending.erase(p)
 	if fuel_elements() + ordered() <= REORDER_AT:
 		pending.append({"due": day + LEAD_DAYS, "n": ORDER_QTY})
@@ -114,11 +113,15 @@ func on_day(day: int) -> void:
 			sim.log_event("Kraftwerk gewartet (%d Einheiten Stahl, %s)." % [MAINT_STEEL, Catalog.money(price)], "info")
 
 
-func _ship(n: int) -> void:
+func _ship(n: int) -> bool:
 	var port: int = int(sim.city_depot.port)
 	var ip := float(Production.art(ITEM).get("importpreis", 0.0))
+	if sim.harbor.enabled and sim.harbor.available(ITEM) < n:   # Kuestenort: Brennstoff kommt mit dem naechsten Schiff
+		sim.harbor.demand(ITEM, n - sim.harbor.available(ITEM))
+		return false
 	sim.prod._deal("P0", building, "", {"biz": "", "acct": "X0", "cid": -1, "loc": port, "avail": n, "price": ip}, ITEM, n, ip, sim.prod.freight(port, building, ITEM, n))
 	stats.fuel_cost = float(stats.fuel_cost) + ip * float(n)
+	return true
 
 
 ## Reststoffe: monatlich ein Teil kostenpflichtig zur externen Entsorgung (dokumentierter Abfallstrom).
