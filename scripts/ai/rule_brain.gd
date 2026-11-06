@@ -449,6 +449,15 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 					actions.append({"action": "bid_auction", "auction_id": au.id, "amount": int(ceil(offer))})
 					reasons.append("biete %d EUR auf %s" % [int(ceil(offer)), au.bezeichnung])
 					break
+	# Betriebspakete aus Insolvenzen: Wachstum/Netzwerker uebernehmen laufende Betriebe deutlich unter Buchwert
+	if personality in ["wachstum", "netzwerker"] and "bid_auction" not in actions.map(func(a): return a.action):
+		for au in obs.get("auktionen", []):
+			if au.art == "Betrieb" and int(au.wert) > 0:
+				var offer := maxf(float(au.hoechstgebot) * 1.06, maxf(float(au.mindestpreis), float(au.wert) * 0.4))
+				if offer < float(au.wert) * 0.7 and cash > offer + 2.0 * buffer + PROD_RESERVE:
+					actions.append({"action": "bid_auction", "auction_id": au.id, "amount": int(ceil(offer))})
+					reasons.append("biete %d EUR auf den Betrieb %s, um ihn weiterzuführen" % [int(ceil(offer)), au.bezeichnung])
+					break
 	# 11b) Produktion (Auftrag 14, Etappe 2): eigene Produktionsbetriebe besetzen, eine fehlende Kettenstufe gruenden
 	_production(obs, me, cash, buffer, personality, free_staff, planned, actions, reasons)
 	# 11c) Immobilien (Etappe 3): vorsichtige Persoenlichkeiten legen Ueberschuss in ein gut vermietetes Wohngebaeude an
@@ -531,15 +540,25 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		return
 	if own.size() >= int(PROD_MAX.get(personality, 1)) or "found_business" in planned:
 		return
+	# Abgestimmt: zuerst die Vorstufe, auf die ein bestehender Betrieb wartet; Muehle erst mit Feld, Schlachthof erst mit Tierhaltung
 	var branch := ""
-	if int(mk.baeckereien) == 0:
+	var waiting: Dictionary = mk.get("engpaesse", {})
+	for item in waiting:
+		if Production.UPSTREAM.has(item):
+			branch = str(Production.UPSTREAM[item])
+			break
+	if branch != "":
+		pass
+	elif int(mk.baeckereien) == 0:
 		branch = "baeckerei"
+	elif int(mk.felder) == 0:
+		branch = "feld"
 	elif int(mk.muehlen) < maxi(1, int(mk.baeckereien) / 2):
 		branch = "muehle"
+	elif int(mk.get("tierhaltungen", 0)) == 0:
+		branch = "tierhaltung"
 	elif int(mk.get("schlachthoefe", 0)) == 0:
 		branch = "schlachthof"
-	elif int(mk.get("tierhaltungen", 0)) < int(mk.get("schlachthoefe", 0)):
-		branch = "tierhaltung"
 	elif int(mk.get("restaurants", 0)) == 0:
 		branch = "restaurant"
 	elif int(mk.get("baufirmen", 0)) == 0 and int(mk.get("bauvorhaben", 0)) > 0 and personality in ["wachstum", "risikospieler"]:

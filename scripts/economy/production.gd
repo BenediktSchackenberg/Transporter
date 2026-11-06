@@ -20,7 +20,8 @@ const SPOIL_SHARE := 0.25            # Anteil verderblicher Ware am Produktionss
 const MAX_DEALS_KEPT := 300
 const COLD_SPOIL := 0.08             # Kuehlware je Tag im gekuehlten Lager
 const WARM_SPOIL := 0.5              # Kuehlware je Tag ohne Strom
-const START_BATCHES := 4             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
+const START_BATCHES := 4
+const UPSTREAM := {"getreide": "feld", "mehl": "muehle", "schlachttier": "tierhaltung"}   # Rohware -> Branche, die sie in der Stadt erzeugt             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
 
 static var _articles := {}
 
@@ -378,8 +379,10 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 			sim.biz.block(b.id, "material", "Lager voll: %s wird nicht abgeholt" % item_name(short.trim_prefix("lager:")))
 		else:
 			sim.biz.block(b.id, "material", "Wartet auf %s" % item_name(short))
+			b["waiting_for"] = short
 		return
 	sim.biz.unblock(b.id, "material")
+	b.erase("waiting_for")
 	for item in R.ein:
 		_use(b, item, batches * int(R.ein[item]), acct, site)
 	if R.has("mast_tage"):
@@ -486,6 +489,8 @@ func _ensure_input(b: Dictionary, item: String, target: int, reorder: int, max_u
 	if want <= 0:
 		return
 	var got := order(acct, int(b.site), b.id, item, want, max_unit, true)
+	if got <= 0:
+		b["waiting_for"] = item   # Engpass fuer die Kettenlage (Regel-KI gruendet die fehlende Vorstufe)
 	if got <= 0 and max_unit < INF:
 		sim.biz.block(b.id, "einkauf", "Kein Einkauf von %s unter %s je %s (sonst Verlust)" % [item_name(item), Catalog.money(max_unit), art(item).get("einheit", "Stk")])
 	elif got <= 0:
@@ -766,6 +771,23 @@ func _prune() -> void:
 		deals.erase(d.id)
 
 
+## Insolvenz: noch nicht abgeholte Liefervertraege eines Kontos stornieren (Reservierung frei, Ausschreibung zurueckgezogen).
+## Bereits angenommene Transporte laufen zu Ende und werden aus der Masse bezahlt.
+func cancel_deals_of(acct: String) -> void:
+	for d in deals.values():
+		if d.status != "transport" or (d.buyer != acct and d.seller != acct):
+			continue
+		var k: Contract = sim.contracts.get(str(d.contract))
+		if k != null and k.status != "open":
+			continue
+		if k != null:
+			k.status = "cancelled"
+		sim.stock.release("deal:" + str(d.id))
+		if d.seller == IMPORT:
+			sim.stock.consume(d.item, int(d.qty), IMPORT, int(d.seller_loc), "Storno %s" % d.id, sim.game_min)
+		d.status = "storniert"
+
+
 # ------------------------------------------------------------------ Ausfuhr
 ## Ueberschuesse (Artikel mit Exportpreis) gehen zum Exportpreis frei Verladestelle (Grosshandelslager) hinaus; die Fracht dorthin
 ## zahlt der Verkaeufer. Nur wenn mindestens EXPORT_MIN_UNITS Ladeeinheiten frei sind und nach Fracht mindestens die Haelfte des
@@ -878,7 +900,11 @@ func market_obs() -> Dictionary:
 	for b in sim.biz.items.values():
 		if n.has(b.branch) and b.status in Businesses.RUNNING:
 			n[b.branch] = int(n[b.branch]) + 1
-	return {"felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
+	var waiting := {}
+	for b in sim.biz.items.values():
+		if b.status in Businesses.RUNNING and b.has("waiting_for") and UPSTREAM.has(str(b.waiting_for)):
+			waiting[b.waiting_for] = int(waiting.get(b.waiting_for, 0)) + 1
+	return {"engpaesse": waiting, "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
 
 
 ## Marktchancen fuer die KI: wie viel einer Stufe wird importiert statt lokal erzeugt (Brot: Grosshandelsimport).

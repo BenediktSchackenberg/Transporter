@@ -157,6 +157,12 @@ func _start_liquidation(c: Company) -> void:
 		var lid := sim.banking.pledged_to(v.id)
 		if lid != "":
 			a.loan = lid
+	sim.prod.cancel_deals_of("C%d" % c.id)
+	for pk in business_packages(c.id):   # Unternehmerbetriebe (Auftrag 14): je Betrieb ein Paket, wird weitergefuehrt oder stillgelegt
+		var ab := _new_auction(c.id, "business", 0, "%s (%s)" % [pk.name, pk.branch], float(pk.value), end)
+		ab["biz"] = pk.id
+		ab.min_price = snappedf(float(pk.value) * 0.2, 0.01)
+		sim.biz.set_status(pk.id, "verwertung", "Insolvenz: Betrieb wird als Paket versteigert")
 	var plots := sim.estate.plot_of(c.id)
 	if not plots.is_empty():
 		var root := -1
@@ -164,7 +170,7 @@ func _start_liquidation(c: Company) -> void:
 			if int(p.parent) < 0:
 				root = int(p.id)
 				break
-		var value := c.property_book + c.land_book
+		var value := _yard_book(c)
 		var a2 := _new_auction(c.id, "site", maxi(root, int(plots[0].id)), "Standort %s mit Gebäuden" % sim.city.building(maxi(root, int(plots[0].id))).name, value, end)
 		a2.min_price = snappedf(value * 0.2, 0.01)
 
@@ -256,11 +262,15 @@ func _close_auction(a: Dictionary) -> void:
 			if buyer.vehicle_ids.size() >= buyer.fleet_limit():
 				continue
 			_sell_vehicle(c, a, buyer, float(b.amount))
+		elif a.kind == "business":
+			_sell_business(c, a, buyer, float(b.amount))
 		else:
 			_sell_site(c, a, buyer, float(b.amount))
 		return
 	a.status = "ohne_gebot"
-	if a.kind == "site":
+	if a.kind == "business":
+		_shutdown_business(c, a)
+	elif a.kind == "site":
 		_clear_site(c, a)
 	else:
 		_sell_to_dealer(c, a, snappedf(float(a.value) * 0.4, 0.01))   # Notverkauf an den Haendler
@@ -334,17 +344,170 @@ func _sell_site(c: Company, a: Dictionary, buyer: Company, price: float) -> void
 			f.owner = buyer.id
 	buyer.property_cost += c.property_cost
 	buyer.property_book += price
-	c.ledger.book("asset_result", price - (c.property_book + c.land_book), false, "Auktion %s" % a.id, sim.game_min)
+	c.ledger.book("asset_result", price - _yard_book(c), false, "Auktion %s" % a.id, sim.game_min)
 	_zero_property(c)
 	est._refresh_company(buyer.id)
 	_record_sale(c, a, price, buyer.id)
 	buyer.add_key_event("Ersteigert: %s" % a.title, sim.game_min)
 
 
+## Hof und Bueros werden ausgebucht; der Buchwert der Unternehmerbetriebe (eigene Pakete) bleibt bis zu deren Verwertung stehen.
 func _zero_property(c: Company) -> void:
-	c.property_book = 0.0
+	var bb := business_book(c.id)
+	c.property_book = minf(c.property_book, float(bb.prop))
 	c.property_cost = 0.0
-	c.land_book = 0.0
+	c.land_book = minf(c.land_book, float(bb.land))
+
+
+# ------------------------------------------------------------------ Unternehmerbetriebe (Auftrag 14, Abnahme 11)
+## Buchwerte der noch nicht verwerteten Unternehmerbetriebe: Ausstattung, gekaufte Parzelle, Immobilien (Grund und Gebaeude).
+func business_book(cid: int) -> Dictionary:
+	var prop := 0.0
+	var land := 0.0
+	for b in sim.biz.of(cid):
+		if b.branch == "transport":
+			continue
+		prop += float(b.get("book", 0.0))
+		if str(b.get("land_mode", "")) == "kauf":
+			land += float(sim.parcels.parcel(str(b.get("parcel", ""))).get("book", 0.0))
+		for key in b.get("props", {}):
+			prop += float(b.props[key].book)
+			land += float(b.props[key].land)
+	return {"prop": prop, "land": land}
+
+
+func _yard_book(c: Company) -> float:
+	var bb := business_book(c.id)
+	return maxf(0.0, c.property_book - float(bb.prop)) + maxf(0.0, c.land_book - float(bb.land))
+
+
+func _package_book(b: Dictionary) -> Dictionary:
+	var prop := float(b.get("book", 0.0))
+	var land := 0.0
+	if str(b.get("land_mode", "")) == "kauf":
+		land += float(sim.parcels.parcel(str(b.get("parcel", ""))).get("book", 0.0))
+	for key in b.get("props", {}):
+		prop += float(b.props[key].book)
+		land += float(b.props[key].land)
+	return {"prop": prop, "land": land}
+
+
+## Pakete fuer die Verwertung: Buchwert + Lagerwert (halber Basispreis) je Betrieb (ohne Transportbetrieb: Fahrzeuge und Hof haben eigene Auktionen).
+func business_packages(cid: int) -> Array:
+	var out: Array = []
+	for b in sim.biz.of(cid):
+		if b.branch == "transport" or b.status in ["geschlossen", "verwertung"]:
+			continue
+		var bk := _package_book(b)
+		out.append({"id": b.id, "name": b.name, "branch": b.branch, "value": snappedf(float(bk.prop) + float(bk.land) + _stock_value(cid, b), 0.01)})
+	return out
+
+
+func _stock_value(cid: int, b: Dictionary) -> float:
+	var v := 0.0
+	for l in sim.stock.of_owner("C%d" % cid):
+		if int(l.loc) == int(b.site):
+			v += float(l.qty) * float(Production.art(str(l.item)).get("basispreis", 0.0)) * 0.5
+	return v
+
+
+## Zuschlag: Der Kaeufer uebernimmt den Betrieb mit Parzelle, Lager, Tieren, Immobilien und Baustellen und fuehrt ihn weiter.
+func _sell_business(c: Company, a: Dictionary, buyer: Company, price: float) -> void:
+	var b: Dictionary = sim.biz.get_b(str(a.biz))
+	var bk := _package_book(b)
+	var book := float(bk.prop) + float(bk.land)
+	buyer.ledger.pay_to(c.ledger, price)
+	c.ledger.book("asset_result", price - book, false, "Auktion %s" % a.id, sim.game_min)
+	c.property_book = maxf(0.0, c.property_book - float(bk.prop))
+	c.land_book = maxf(0.0, c.land_book - float(bk.land))
+	# Kaeufer aktiviert den Kaufpreis im Verhaeltnis der bisherigen Buchwerte (ohne Buchwert: alles als Ausstattung)
+	var f_land := float(bk.land) / book if book > 0.0 else 0.0
+	buyer.land_book += price * f_land
+	buyer.property_book += price * (1.0 - f_land)
+	var scale := price / book if book > 0.0 else 0.0
+	b.book = float(b.get("book", 0.0)) * scale if book > 0.0 else price
+	b.equip = float(b.book)   # Abschreibung ab dem Kaufpreis
+	for key in b.get("props", {}):
+		b.props[key].book = float(b.props[key].book) * scale
+		b.props[key].land = float(b.props[key].land) * scale
+		b.props[key].price = float(b.props[key].land) + float(b.props[key].book)
+	var p: Dictionary = sim.parcels.parcel(str(b.get("parcel", "")))
+	if not p.is_empty():
+		p.owner = "C%d" % buyer.id
+		if p.has("book"):
+			p.book = float(p.book) * scale
+		sim.parcels.touch(p.id)
+	for w in sim.biz.staff_of(b.id):
+		w.business = ""
+	_move_business_assets(c.id, buyer.id, b)
+	b.owner = buyer.id
+	b.name = "%s %s" % [Businesses.branches().get(b.branch, {}).get("label", b.branch), buyer.company_name]
+	sim.biz.set_status(b.id, "aktiv", "Übernommen von %s (Auktion %s)" % [buyer.company_name, a.id])
+	_record_sale(c, a, price, buyer.id)
+	buyer.add_key_event("Ersteigert: %s" % a.title, sim.game_min)
+
+
+## Lager am Betriebsstandort, Wohnungen und Baustellen wechseln den Eigentuemer.
+func _move_business_assets(from_cid: int, to_cid: int, b: Dictionary) -> void:
+	var src := "C%d" % from_cid
+	var dst := "C%d" % to_cid
+	for l in sim.stock.of_owner(src).duplicate():
+		if int(l.loc) == int(b.site):
+			sim.stock.move(str(l.item), int(l.qty), src, int(b.site), dst, int(b.site), "Übernahme %s" % b.id, sim.game_min, str(l.get("state", "ok")))
+	for key in b.get("props", {}):
+		for u in sim.realty.units_of(int(key), src):
+			u.owner = dst
+	if b.branch == "baufirma":
+		for pr in sim.construction.projects.values():
+			if str(pr.get("builder", "")) == src:
+				pr.builder = dst
+
+
+## Kein Gebot: Stilllegung. Gekauftes Land kauft die Stadt zu 80 % zurueck, Pacht endet, Wohnungen gehen an den Vermietermarkt
+## (95 % des Werts), Waren in die Ausfuhr (Export- bzw. halber Basispreis), Ausstattung wird verschrottet, Baustellen uebernimmt
+## eine Baufirma der Stadt.
+func _shutdown_business(c: Company, a: Dictionary) -> void:
+	var b: Dictionary = sim.biz.get_b(str(a.biz))
+	var bk := _package_book(b)
+	var proceeds := 0.0
+	var p: Dictionary = sim.parcels.parcel(str(b.get("parcel", "")))
+	if not p.is_empty():
+		if str(b.get("land_mode", "")) == "kauf":
+			var x := float(p.get("book", 0.0)) * 0.8
+			c.ledger.divest(x, "P0")
+			proceeds += x
+		p.owner = Parcels.CITY
+		sim.parcels.touch(p.id)
+	for key in b.get("props", {}).keys():
+		var us: Array = sim.realty.units_of(int(key), "C%d" % c.id)
+		var x2 := roundf(sim.realty.value_of(us) * RealEstate.SELL_FACTOR)
+		c.ledger.divest(x2, "H0")
+		proceeds += x2
+		for u in us:
+			u.owner = Housing.LANDLORD
+	b["props"] = {}
+	var acct := "C%d" % c.id
+	for l in sim.stock.of_owner(acct).duplicate():
+		if int(l.loc) != int(b.site):
+			continue
+		var ar := Production.art(str(l.item))
+		var unit := float(ar.get("exportpreis")) if ar.get("exportpreis") != null else float(ar.get("basispreis", 0.0)) * 0.5
+		var n := sim.stock.consume(str(l.item), int(l.qty), acct, int(b.site), "Verwertung %s" % a.id, sim.game_min)
+		if n > 0 and unit > 0.0:
+			c.ledger.book("trade_income", float(n) * unit, true, "Verwertung Lager %s" % b.id, sim.game_min, "X0", b.id)
+	c.ledger.book("asset_result", proceeds - (float(bk.prop) + float(bk.land)), false, "Stilllegung %s" % b.id, sim.game_min, "", b.id)
+	c.property_book = maxf(0.0, c.property_book - float(bk.prop))
+	c.land_book = maxf(0.0, c.land_book - float(bk.land))
+	b.book = 0.0
+	if b.branch == "baufirma":
+		for pr in sim.construction.projects.values():
+			if str(pr.get("builder", "")) == acct:
+				pr.builder = "BF1"
+	for w in sim.biz.staff_of(b.id):
+		w.business = ""
+	sim.biz.set_status(b.id, "geschlossen", "Stillgelegt: kein Gebot in Auktion %s" % a.id)
+	_record_sale(c, a, proceeds, -1)
+	a.status = "stillgelegt"
 
 
 ## Kein Bieter: Gebaeude werden geraeumt (kostet Geld), die Flaeche wird als freies Baufeld angeboten.
@@ -540,7 +703,7 @@ func auction_list(limit: int = 6) -> Array:
 	var out: Array = []
 	for a in open_auctions().slice(0, limit):
 		var t := top_bid(a)
-		out.append({"id": a.id, "art": "Fahrzeug" if a.kind == "vehicle" else "Standort", "bezeichnung": a.title, "wert": int(a.value),
+		out.append({"id": a.id, "art": {"vehicle": "Fahrzeug", "business": "Betrieb"}.get(a.kind, "Standort"), "bezeichnung": a.title, "wert": int(a.value),
 			"hoechstgebot": int(t.amount), "mindestpreis": int(a.min_price), "endet": GameCalendar.short_text(a.end), "aus_masse_von": sim.company(a.cid).company_name})
 	return out
 

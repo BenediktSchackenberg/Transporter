@@ -218,6 +218,8 @@ func liquidate_stock(cid: int) -> float:
 	var total := 0.0
 	for l in sim.stock.of_owner("C%d" % cid):
 		var item: String = l.item
+		if not MATERIALS.has(item):
+			continue   # Produktionsware (Auftrag 14) gehoert zum Betriebspaket der Insolvenz
 		var amount: int = int(l.qty)
 		var pay := snappedf(float(MATERIALS[item].base) * 0.4 * amount, 0.01)
 		if cash() >= pay:
