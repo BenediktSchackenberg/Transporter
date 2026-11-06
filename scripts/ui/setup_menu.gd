@@ -59,8 +59,13 @@ func _ready() -> void:
 	g.add_child(UITheme.label("Seed:"))
 	seed_edit = LineEdit.new()
 	seed_edit.custom_minimum_size.x = 110
-	seed_edit.text = str(randi() % 100000)
+	seed_edit.text = str(randi() % 100000)   # jede Partie eine neue Karte (der gespeicherte Seed wird nicht uebernommen)
 	g.add_child(seed_edit)
+	var dice := Button.new()
+	dice.text = "Neue Karte"
+	dice.tooltip_text = "Neuen zufälligen Seed würfeln – jede Partie bekommt eine andere Stadt"
+	dice.pressed.connect(func(): seed_edit.text = str(randi() % 100000))
+	g.add_child(dice)
 	g.add_child(UITheme.label("Partiedauer (aktive Echtzeit):"))
 	duration_opt = OptionButton.new()
 	for d in DURATIONS:
@@ -152,7 +157,7 @@ func _ready() -> void:
 	root.add_child(status_label)
 	var saved := _read_json(setup_path)
 	if not saved.is_empty():
-		_apply_config(saved)
+		_apply_config(saved, true)   # Einstellungen der letzten Partie, aber neue Karte
 
 
 func _player_panel(i: int) -> Control:
@@ -311,11 +316,12 @@ func _mayor_config() -> Dictionary:
 	return m
 
 
-func _apply_config(cfg: Dictionary) -> void:
+func _apply_config(cfg: Dictionary, keep_seed: bool = false) -> void:
 	if cfg.is_empty():
 		status_label.text = "Konfiguration nicht gefunden."
 		return
-	seed_edit.text = str(int(cfg.get("seed", 1234)))
+	if not keep_seed:
+		seed_edit.text = str(int(cfg.get("seed", 1234)))
 	var di := DURATIONS.find(int(cfg.get("duration_min", 30)))
 	duration_opt.select(maxi(0, di))
 	speed_opt.select(int(cfg.get("speed_idx", 1)))
