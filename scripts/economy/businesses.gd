@@ -233,6 +233,8 @@ func obs_of(cid: int) -> Array:
 		var spec: Dictionary = branches().get(b.branch, {})
 		if spec.has("feld") or spec.has("rezept"):
 			e["personal_min"] = int(spec.get("personal_min", 1))
+			if spec.has("laden"):
+				e["personal_soll"] = int(spec.personal_min) + int(spec.laden.personal)   # mit Verkaufskraft fuer die Theke
 			e.merge(sim.prod.detail(b))
 		if not b.blockers.is_empty():
 			e["blockaden"] = b.blockers.map(func(x): return x.text)

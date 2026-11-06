@@ -512,7 +512,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 			reasons.append("schließe %s, weil er seit Wochen nichts verkauft und Verlust macht" % b.id)
 			return
 	for b in own:
-		if int(b.personal) >= int(b.get("personal_min", 1)):
+		if int(b.personal) >= int(b.get("personal_soll", b.get("personal_min", 1))):
 			continue
 		var pool: Array = free_staff.filter(func(w): return str(w.get("betrieb", "")) not in own_ids)
 		if not pool.is_empty():

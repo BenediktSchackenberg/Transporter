@@ -67,7 +67,7 @@
   },
   "baeckerei": {
     "label": "Bäckerei",
-    "beschreibung": "Backt aus Mehl und Backzutaten Brot und Brötchen; verkauft an den Lebensmittelgroßhandel, der die Läden beliefert.",
+    "beschreibung": "Backt aus Mehl und Backzutaten Brot und Brötchen. Mit Verkaufskraft öffnet die Theke: Verkauf an Haushalte zum Ladenpreis (teilt sich die Kundschaft mit den anderen Bäckereien der Stadt); Rest an Läden und Großhandel.",
     "standort": "markt",
     "gruendungskosten": 0,
     "ausstattung": 18000,
@@ -89,6 +89,11 @@
       "lager_tage": 10,
       "lager_max": 800
     },
-    "gebaeude": "workshop"
+    "gebaeude": "workshop",
+    "laden": {
+      "personal": 1,
+      "artikel": "brot",
+      "kundschaft": "baeckerei"
+    }
   }
 }

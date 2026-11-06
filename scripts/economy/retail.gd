@@ -76,6 +76,7 @@ var stats := {"sales": 0.0, "units": 0, "lost": 0, "orders": 0, "delivered": 0, 
 var month_sales := 0.0               # Kassenumsatz im laufenden Monat (mindert den pauschalen Konsum, siehe Citizens)
 var _next_order := 1
 var _day := 0
+var _bakery_share := 1.0             # Anteil der Baeckerei-Kundschaft bei den bisherigen Baeckereien (Theken der Unternehmer teilen den Topf)
 
 
 func setup(s: Simulation) -> void:
@@ -264,6 +265,8 @@ func incoming(s: Dictionary, item: String) -> int:
 func on_day(day: int) -> void:
 	_day = day
 	_stock_wholesale(day)
+	var counters := counters()
+	_bakery_share = bakery_share(counters)
 	for s in shops.values():
 		if s.status == "geschlossen":
 			continue
@@ -271,7 +274,71 @@ func on_day(day: int) -> void:
 		_serve(s, day)
 		_returns(s)
 		_reorder(s)
+	for ct in counters:
+		_serve_counter(ct, day)
 	_advance_orders(day)
+
+
+# ------------------------------------------------------------------ Theken der Unternehmer (Auftrag 14, Etappe 2)
+## Offene Theken: Unternehmer-Baeckereien mit Verkaufskraft. Sie verkaufen aus dem eigenen Bestand am Betriebsstandort.
+func counters() -> Array:
+	var out: Array = []
+	for b in sim.biz.items.values():
+		var spec: Dictionary = Businesses.branches().get(b.branch, {})
+		if not spec.has("laden") or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)) or not bool(b.get("counter", false)):
+			continue
+		out.append({"id": b.id, "kind": str(spec.laden.kundschaft), "item": str(spec.laden.artikel), "building": int(b.site), "owner": int(b.owner),
+			"price_factor": float(b.get("laden_faktor", 1.0))})
+	return out
+
+
+func _weight(s: Dictionary) -> float:
+	return pow(1.0 / maxf(0.5, float(s.price_factor)), 1.6) * sim.contentment.building_factor(int(s.building))
+
+
+## Anteil, den die Baeckerei-Kundschaft der Stadt bei den bisherigen Baeckereien behaelt: Die Kundschaft ist ein gemeinsamer Topf
+## (Groesse wie bisher); Theken teilen ihn nach Preis und Lage. Ohne Theke 1.0.
+func bakery_share(cts: Array) -> float:
+	var npc := 0.0
+	for s in shops.values():
+		if s.kind == "baeckerei" and s.status != "geschlossen":
+			npc += _weight(s)
+	var extra := 0.0
+	for ct in cts:
+		extra += _weight(ct)
+	if extra <= 0.0:
+		return 1.0
+	return maxf(npc, 1.0) / (npc + extra)
+
+
+func _serve_counter(ct: Dictionary, day: int) -> void:
+	var b: Dictionary = sim.biz.get_b(ct.id)
+	var c = sim.company(int(ct.owner))
+	var acct := "C%d" % int(ct.owner)
+	var r := _rng(ct, day)
+	var n := int(round(float(customers(ct, r)) * _bakery_share))
+	var g: Dictionary = GOODS[ct.item]
+	var sold := 0
+	var lost := 0
+	var amount := 0.0
+	for i in n:
+		var want := 1 + r.randi() % int(g.get("basket", 1))
+		var have: int = sim.stock.available(ct.item, acct, int(ct.building))
+		if have <= 0:
+			lost += 1
+			continue
+		var q := mini(want, have)
+		sim.stock.consume(ct.item, q, acct, int(ct.building), "Ladenverkauf %s" % ct.id, sim.game_min)
+		sold += q
+		amount += float(g.price) * float(ct.price_factor) * float(q)
+	if amount > 0.0:
+		c.ledger.book("sales", amount, true, "Ladenverkauf %s" % b.name, sim.game_min, "H0", ct.id)   # Haushalte zahlen an der Theke
+		stats.sales += amount
+		stats.units += sold
+		month_sales += amount   # Citizens rechnet Kassenumsaetze vom pauschalen Konsum ab (keine Doppelzahlung)
+	b["sold_today"] = int(b.get("sold_today", 0)) + sold
+	b["counter_customers"] = n
+	b["counter_lost"] = lost
 
 
 func _rng(s: Dictionary, day: int) -> RandomNumberGenerator:
@@ -299,6 +366,8 @@ func customers(s: Dictionary, r: RandomNumberGenerator) -> int:
 func _serve(s: Dictionary, day: int) -> void:
 	var r := _rng(s, day)
 	var n := customers(s, r)
+	if s.kind == "baeckerei":
+		n = int(round(float(n) * _bakery_share))
 	var spec: Dictionary = spec_of(s)
 	s.day_sales = 0.0
 	s.day_lost = 0

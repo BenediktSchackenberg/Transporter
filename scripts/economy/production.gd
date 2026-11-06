@@ -20,6 +20,7 @@ const OFFER_DAYS := 1
 const FALLBACK_SHARE := 0.7          # Lieferdienst, wenn niemand den Transport uebernimmt (wie im Einzelhandel)
 const SPOIL_SHARE := 0.25            # Anteil verderblicher Ware am Produktionsstandort, der taeglich verdirbt
 const MAX_DEALS_KEPT := 300
+const START_BATCHES := 4             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
 
 static var _articles := {}
 
@@ -295,17 +296,21 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 	var acct := "C%d" % cid
 	var site := int(b.site)
 	var staff := _staff_ok(b, spec)
-	var cap := staff * int(R.chargen_je_person_tag)
-	# Verderbliche Ware nach Absatz: Zielbestand = 1,5 Tagesabsaetze (mindestens eine Personentagesleistung zum Anlaufen);
+	# Theke (Laden): oeffnet, wenn ueber dem Mindestpersonal eine Verkaufskraft da ist; diese backt dann nicht mit
+	var shop: Dictionary = spec.get("laden", {})
+	b["counter"] = not shop.is_empty() and staff >= int(spec.get("personal_min", 1)) + int(shop.personal)
+	var cap := (staff - (int(shop.personal) if b.counter else 0)) * int(R.chargen_je_person_tag)
+	# Verderbliche Ware nach Absatz: Zielbestand = 1,5 Tagesabsaetze (mindestens START_BATCHES Chargen zum Anlaufen);
 	# Einkauf und Produktion richten sich danach statt nach der vollen Kapazitaet.
 	var out_cap := -1
 	var plan := maxi(cap, int(R.chargen_je_person_tag))
+	var start := START_BATCHES if bool(b.counter) else int(R.chargen_je_person_tag)   # ohne Theke: Lose fuer Laeden muessen die Fracht tragen
 	for item in R.aus:
 		if int(art(item).get("haltbar_tage", 0)) > 0:
 			var per_batch := int(R.aus[item])
-			var target := maxf(float(b.get("sales_avg", 0.0)) * 1.5, float(per_batch * int(R.chargen_je_person_tag)))
+			var target := maxf(float(b.get("sales_avg", 0.0)) * 1.5, float(per_batch * start))
 			out_cap = maxi(0, int(ceil((target - float(sim.stock.qty(item, acct, site))) / float(per_batch))))
-			plan = mini(plan, maxi(1, int(ceil(maxf(float(b.get("sales_avg", 0.0)), float(per_batch * int(R.chargen_je_person_tag))) / float(per_batch)))))
+			plan = mini(plan, maxi(1, int(ceil(maxf(float(b.get("sales_avg", 0.0)), float(per_batch * start)) / float(per_batch)))))
 	# Ausgangslager fast voll: keine Rohware nachkaufen, bis wieder Ware abfliesst
 	for item in R.aus:
 		if sim.stock.qty(item, acct, site) >= int(R.lager_max) * 4 / 5:
@@ -683,6 +688,8 @@ func detail(b: Dictionary) -> Dictionary:
 		for item in spec.rezept.aus:
 			pr[item] = price_of(b, item)
 		e = {"chargen_heute": int(b.get("today", 0)), "chargen_gesamt": int(b.get("total", 0)), "bestand": bs, "preise": pr, "absatz_tag": int(b.get("sales_avg", 0.0))}
+		if spec.has("laden"):
+			e["laden"] = ("offen, %d Kunden gestern" % int(b.get("counter_customers", 0))) if bool(b.get("counter", false)) else "geschlossen (Verkaufskraft fehlt)"
 	e["alter_tage"] = GameCalendar.day_of(sim.game_min) - GameCalendar.day_of(float(b.founded))
 	if b.has("parcel"):
 		e["grundstueck"] = b.parcel

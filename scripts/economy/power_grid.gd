@@ -79,6 +79,9 @@ func _allocate() -> void:
 		if not connected(b):
 			sim.biz.block(b.id, "strom", "Kein Stromanschluss: Grundstück nicht erschlossen")
 			continue
+		if sim.company(int(b.owner)).ledger.cash < kw * GameCalendar.day_game_min / 60.0 * tariff:
+			sim.biz.block(b.id, "strom", "Kein Strom: Stromrechnung kann nicht bezahlt werden (Kasse leer)")
+			continue
 		if kw <= free + 1e-6:
 			free -= kw
 			given += kw
@@ -101,7 +104,7 @@ func _bill() -> void:
 		if b.is_empty() or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		var kwh := float(b.energy_kw) * hours
-		var cost := kwh * tariff
+		var cost := minf(kwh * tariff, maxf(0.0, sim.company(int(b.owner)).ledger.cash))   # nie ins Minus; Versorgung endet dann (siehe _allocate)
 		sim.company(int(b.owner)).ledger.book("energy", -cost, true, "Strom %s (%.0f kWh)" % [b.name, kwh], sim.game_min, "", id)
 		var gcost := kwh * gen
 		sim.economy.transfer("P0", "S0", gcost)   # Erzeugung (Brennstoff, Betrieb) bis zum Kraftwerk in Etappe 4

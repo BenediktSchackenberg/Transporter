@@ -519,7 +519,7 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 | Etappe | Inhalt | Stand |
 |---|---|---|
 | 1 | Unternehmer und Betriebskern, Kostenstellen, Startprofil, Migration, Grundversorgung, KI-Aktionen, Betriebsübersicht | umgesetzt (05.11.2026), Prüfbericht unten |
-| 2 | Getreide-Mehl-Brot-Kette | umgesetzt (06.11.2026), Prüfbericht unten; wirtschaftlich noch nicht tragfähig |
+| 2 | Getreide-Mehl-Brot-Kette | umgesetzt (06.11.2026), Prüfbericht unten; Bäckerei mit Theke nahe Gewinnschwelle, Mühle/Feld noch nicht tragfähig |
 | 3 | Fleisch, Kühlung, Gastronomie, Bau, Immobilien | offen |
 | 4 | Gelände, Bergbau, Stahl, Kraftwerk und Netz | offen |
 | 5 | IT, weitere Verarbeiter, Dominanz, Langzeitbalance | offen |
@@ -565,7 +565,22 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 **Messung `tests/probe_bottlenecks.gd`, vier Regel-KIs, Startprofil Spedition, 60 Spieltage:** Die Kette entsteht von selbst (zwei Bäckereien, eine Mühle, zwei Felder mit je zwei Ernten à 60–69 dt). Lieferverträge laufen fast vollständig über den Lieferdienst: Die Höfe der Firmen liegen am Kartenrand, für kurze Stadtlieferungen frisst die Anfahrt die Marge (gilt ebenso für die Ladenbelieferung: 0 von 124 Aufträgen gefahren). Die Bäckereien verkaufen wenig, weil Brot ein billiges Massengut ist (Import 0,90 EUR frei Großhandel) und kleine Lose bei Marktfracht teuer sind. Alle Produktionsbetriebe schließen nach etwa 25 Tagen mit 4 000–8 600 EUR Verlust (`tests/probe_bread.gd` misst Abstände und Stückkosten frei Laden).
 
 **Grenzen / offen:**
-- Wirtschaftlich trägt die Kette in dieser Kalibrierung nicht (Abnahmeszenario 15 ist für Produktion nicht erfüllt). Wirksamster nächster Schritt: Bäckerei mit eigenem Laden (Direktverkauf an Haushalte zum Ladenpreis über die vorhandene Kundschaft des Einzelhandels) statt Großhandelspreis.
+- Wirtschaftlich trug die Kette ohne Direktverkauf nicht; siehe Nachtrag „Bäckerladen“.
 - Keine eigenen Fachrollen (Landarbeit, Müller, Bäcker): jeder Mitarbeiter zählt als Arbeitskraft; Wachstumsstufen des Feldes sind auf der Karte noch nicht sichtbar (Hofgebäude „farm“).
 - Kühlung/Verderb nur als Tagesanteil am Produktionsstandort (Kühlkette kommt mit Etappe 3).
 - Das Token-Budget im Test `test_prompt_builds` wurde von 5 500 auf 5 700 angehoben (Betriebe, Branchen, Kettenlage; Messung `tests/probe_obs_size.gd`).
+
+### Nachtrag Etappe 2 – Bäckerladen (06.11.2026)
+
+- Bäckereien haben eine Theke (`laden` in `config/branches.json`): Sie öffnet, wenn über dem Mindestpersonal eine Verkaufskraft zugeordnet ist (diese backt nicht mit), und verkauft aus dem eigenen Brotbestand zum Ladenpreis an Haushalte. Neue Erlöskategorie `sales` („Ladenverkauf an Haushalte“, Gegenkonto H0); der Betrag zählt in den Monatskassenumsatz des Einzelhandels, den die Bürgerkonten vom pauschalen Konsum abziehen (keine Doppelzahlung).
+- Gemeinsamer Kundentopf: Die Bäckerei-Kundschaft der Stadt bleibt so groß wie bisher; Theken und NPC-Bäckereien teilen sie nach Preis und Lage (`Retail.bakery_share`). Eine weitere Bäckerei erzeugt keine zusätzliche Nachfrage.
+- Verderbliche Ware mit offener Theke: Anlaufbestand 4 Chargen statt einer Personentagesleistung; ohne Theke bleiben die Lose groß genug für Ladenlieferungen.
+- Regel-KI besetzt Bäckereien mit Sollpersonal (Bäcker + Verkaufskraft); die Betriebsansicht zeigt den Thekenstatus mit Kundenzahl oder Grund.
+- Test `test_bakery_counter` (Theke zu ohne Verkaufskraft, Kundentopf bleibt gleich groß, Verkauf an Haushalte, Kassenumsatz, Kostenstelle, Geld- und Warenbilanz).
+
+**Messung 60 Spieltage, Spedition, vier Regel-KIs (vorher → nachher):** Bäckereien Ergebnis −4 000 … −4 300 (geschlossen) → −1 129 und −366 (laufend, inkl. Anlauf; je ~10 800 EUR Ladenumsatz, ~100 Brote/Tag; die KI hob den Brotpreis auf 1,20 EUR). Verderb 5 300 → 5 100 Stk (Zwischenstand ohne kleinen Anlaufbestand: 9 400). Firma F0 gesamt +4 580 EUR. Mühlen und Felder schließen weiterhin nach ~25 Tagen: Die Bäckereien beziehen Mehl über den Großhandel günstiger, und die Felder liegen weit draußen.
+
+- Fehlerbehebung aus Etappe 1 (seit `a6f059a`): Die Stromabrechnung drückte bei leerer Kasse das Bargeld ins Minus (Test `test_households_wages` rot). Jetzt versorgen die Stadtwerke nur Betriebe, die die Tagesrechnung bezahlen können (Blockade „Stromrechnung kann nicht bezahlt werden“), und rechnen höchstens das vorhandene Bargeld ab.
+- Volltest aller Tests: zweimal gestartet, beide Male wegen Speicherdruck vom System abgebrochen; geprüft sind die gezielten Tests und Regressionen oben.
+
+**Offen:** Mühle und Feld wirtschaftlich (z. B. Liefervertrag über mehrere Wochen mit festem Preis, Feld nahe der Mühle), eigene Fachrollen, sichtbare Wachstumsstufen.

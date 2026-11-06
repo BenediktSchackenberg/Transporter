@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -6554,3 +6554,37 @@ func test_rule_brain_production() -> void:
 	ok(s.executor.execute(0, cl[0] if not cl.is_empty() else {"action": "wait"}).ok, "Schließung ausgeführt")
 	ok(not s.executor.execute(0, {"action": "found_business", "branche": "baeckerei"}).ok and 		not ObservationBuilder.build(s, 0, [], 0.0, 10.0).verfuegbare_branchen.any(func(b): return b.get("branche", "") == "baeckerei"), "Sperrfrist: keine sofortige Neugründung derselben Branche")
 	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_bakery_counter() -> void:
+	var s := new_sim(2)
+	var R: Retail = s.retail
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "baeckerei"})
+	var b: Dictionary = s.biz.get_b(str(r.ref))
+	var site := int(b.site)
+	var staff: Array = s.personnel.employed(0)
+	s.biz.assign(0, staff[staff.size() - 1].id, b.id)
+	s.grid.capacity = 100000.0
+	next_day(s)
+	ok(not bool(b.counter) and R.counters().is_empty() and is_equal_approx(R.bakery_share(R.counters()), 1.0), "eine Person backt, die Theke bleibt zu (Verkaufskraft fehlt)")
+	ok(str(s.prod.detail(b).laden).begins_with("geschlossen"), "Ansicht nennt den Grund")
+	# zweite Person: Theke oeffnet; Brot liegt bereit
+	s.biz.assign(0, staff[staff.size() - 2].id, b.id)
+	s.stock.add("brot", 400, "C0", site, "Test: Backwaren", s.game_min)
+	var h0: float = s.economy.accounts.H0
+	var sales0 := float(s.companies[0].ledger.totals.get("sales", 0.0))
+	var month0 := R.month_sales
+	var npc_w := 0.0
+	for sh in R.shops.values():
+		if sh.kind == "baeckerei":
+			npc_w += R._weight(sh)
+	next_day(s)
+	var cts := R.counters()
+	var share := R.bakery_share(cts)
+	ok(cts.size() == 1 and share < 1.0, "Theke offen, bisherige Bäckereien behalten nur einen Teil der Kundschaft (%.2f)" % share)
+	ok(is_equal_approx(share * (npc_w + R._weight(cts[0])), maxf(npc_w, 1.0)), "gemeinsamer Kundentopf: die Theke schafft keine zusätzliche Nachfrage")
+	var got := float(s.companies[0].ledger.totals.get("sales", 0.0)) - sales0
+	ok(got > 0.0 and int(b.counter_customers) > 0 and s.stock.qty("brot", "C0", site) < 400 + int(b.get("today", 0)) * 40, "Theke verkauft Brot an Haushalte (%s, %d Kunden)" % [Catalog.money(got), int(b.counter_customers)])
+	ok(R.month_sales - month0 >= got - 0.01, "Kassenumsatz zählt für die Bürgerkonten (keine Doppelzahlung)")
+	ok(float(s.companies[0].ledger.cc_revenue(b.id)) >= got - 0.01, "Erlös auf der Kostenstelle der Bäckerei")
+	ok(identity_ok(s), "Geld und Waren erhalten")
