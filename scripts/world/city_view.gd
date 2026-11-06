@@ -195,6 +195,8 @@ func _build_ground() -> void:
 				G.RAIL: name = "rail_h"
 				G.ROAD: name = "water0" if sim.bridges.is_bridge(p) else "road%d" % c.road_mask(p)   # Bruecke: Wasser darunter, Fahrbahn zeichnet BridgeView
 				G.PARKING: name = "parking"
+				G.RUNWAY: name = "runway"
+				G.APRON: name = "apron"
 			var at: Array = tiles[name]
 			ground.set_cell(p, 0, Vector2i(int(at[0]), int(at[1])))
 

@@ -15,6 +15,7 @@ const NAME_B := ["bucht", "hafen", "fels", "wiek", "holm", "strand", "haven", "s
 var heights := PackedByteArray()
 var town := Vector2i.ZERO          # Hafenkreuzung (Ortsmitte)
 var town_rect := Rect2i()          # Ortsbereich (freigehalten von Bergen, Fluss, Seen)
+var airport_rect := Rect2i()       # Flughafenareal (freigehalten von Waeldern/Feldern und Erweiterungen)
 var report := {}                   # Ergebnis der Pruefung (fuer Tests und Fehlersuche)
 
 
@@ -342,6 +343,7 @@ func _town() -> void:
 			c.start_depots.append(id)
 			_road(Vector2i(t.x - 31, y0 + 2), Vector2i(t.x - 30, y0 + 2))
 	_farm_lane()
+	_airport()   # Flughafen vor den Huetten: seine Gebaeude zahlen mit ins Gebaeudelimit ein
 	# Huetten und kleine Haeuser bis zur Obergrenze
 	var budget := MAX_BUILDINGS - _counted()
 	var k2 := 0
@@ -380,13 +382,156 @@ func _counted() -> int:
 	return c.buildings.filter(func(b): return b.type != "plot" or int(b.get("parent", -1)) < 0).size()
 
 
+# ------------------------------------------------------------------ Flughafen (Auftrag 16, Etappe E1)
+## Kleiner Flughafen Stufe 1 (Auftrag 16): Startbahn, Vorfeld, Terminal, Tower, Hangar, Flughafenfeuerwehr,
+## Frachtterminal, Parkplatz und Zufahrt zum Straßennetz. Er liegt außerhalb des Ortskerns, auf flachem Land im
+## Hinterland (weg vom Meer, Bergen und den Siedlungsgebäuden), damit er schön in die Landschaft eingebettet ist.
+## Die Platzierung ist deterministisch (gleicher Seed -> gleicher Ort) und passiert vor den Hütten, damit die
+## Flughafen-Gebäude ins ≤40-Gebäudelimit einfliessen. Kann die Zufahrt zum Straßennetz nicht sauber anbinden,
+## wird nichts gebaut und validate() laest die Welt mit dem naechsten Seed neu erzeugen.
+
+const AIR_W := 16
+const AIR_H := 13
+
+func _airport() -> void:
+	if c.airport != {}:
+		return
+	# Kandidate westlich des Ortes, nah an dessen Mitte – deterministisch nach der Distanz zum Anker durchsucht.
+	var anchor := Vector2(town.x - 52.0, town.y)
+	var cands: Array = []
+	for oy in range(maxi(3, town.y - 44), mini(n - 1, town.y + 44)):
+		for ox in range(2, maxi(3, town.x - 30)):
+			cands.append(Vector2i(ox, oy))
+	cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return Vector2(a).distance_squared_to(anchor) < Vector2(b).distance_squared_to(anchor))
+	for o in cands:
+		var r := Rect2i(o, Vector2i(AIR_W, AIR_H))
+		if not _free(r) or not _airfield_on_land(r):
+			continue
+		if _build_airport_at(o):
+			return
+
+
+## Das ganze Rechteck liegt auf Land und nicht zu dicht am Meer (Osten) oder am Kartenrand.
+func _airfield_on_land(r: Rect2i) -> bool:
+	for y in range(r.position.y, r.end.y):
+		if not c.inside(Vector2i(r.position.x, y)):
+			return false
+		if r.end.x >= coast[y] - 2:
+			return false   # Startbahn duerfte nicht ins Meer ragen
+		for x in range(r.position.x, r.end.x):
+			if heights[c.idx(Vector2i(x, y))] > 0:
+				return false
+	return true
+
+
+## Naechste Strassenzelle zu einem Punkt (Höchstsuchtiefte begrenzt).
+func _nearest_road(p: Vector2i) -> Vector2i:
+	var best := Vector2i(p.x, p.y)
+	var best_d := INF
+	for rad in range(1, 60):
+		var found := false
+		for dy in range(-rad, rad + 1):
+			for dx in range(-rad, rad + 1):
+				if absi(dx) != rad and absi(dy) != rad:
+					continue   # nur den Ring
+				var q := p + Vector2i(dx, dy)
+				if c.inside(q) and c.is_road(q):
+					var d := Vector2(q).distance_squared_to(Vector2(p))
+					if d < best_d:
+						best_d = d
+						best = q
+						found = true
+		if found:
+			break
+	return best
+
+
+## Ist die L-Verbindung (waagerecht, dann senkrecht) von a nach b duerchweg ueber freie Zellen oeffentlich befahrbar?
+func _path_clear(a: Vector2i, b: Vector2i) -> bool:
+	var cells := []
+	var p := a
+	while p.x != b.x:
+		p += Vector2i(signi(b.x - p.x), 0)
+		cells.append(p)
+	while p.y != b.y:
+		p += Vector2i(0, signi(b.y - p.y))
+		cells.append(p)
+	for q in cells:
+		if not c.inside(q) or heights[c.idx(q)] > 0 or c.building_at[c.idx(q)] != -1:
+			return false
+		if not (c.is_road(q) or c.ground[c.idx(q)] == G.GRASS):
+			return false
+	return true
+
+
+## Bauet den Flughafen an Ort o und verbindet ihn mit dem Straßennetz. Gibt true, wenn alles klappte (sonst bleibt
+## die Karte unveraendert, damit der Generator einen anderen Standort/Seed versuchen kann).
+func _build_airport_at(o: Vector2i) -> bool:
+	var run_y := o.y + 1
+	airport_rect = Rect2i(o, Vector2i(AIR_W, AIR_H))   # fuer _land_cover: keine Baeume/Felder auf dem Areal
+	# Startbahn (eine Zeile)
+	for xx in range(o.x + 1, o.x + 15):
+		c.ground[c.idx(Vector2i(xx, run_y))] = G.RUNWAY
+	# Vorfeld (Beton) und Parkplatzstreifen davor
+	for yy in range(o.y + 3, o.y + 9):
+		for xx in range(o.x + 1, o.x + 15):
+			if c.building_at[c.idx(Vector2i(xx, yy))] == -1:
+				c.ground[c.idx(Vector2i(xx, yy))] = G.APRON
+	for xx in range(o.x + 1, o.x + 9):
+		c.ground[c.idx(Vector2i(xx, o.y + 2))] = G.PARKING
+	# Zufahrt: die dem naechsten Straßennetz-Punkt naechste Ecke des Vorfelds wird zur Strassenmündung.
+	var nearest := _nearest_road(Vector2i(o.x + AIR_W / 2, o.y + AIR_H / 2))
+	if not c.is_road(nearest):
+		return false
+	var corners := [Vector2i(o.x, o.y), Vector2i(o.x + AIR_W - 1, o.y), Vector2i(o.x, o.y + AIR_H - 1), Vector2i(o.x + AIR_W - 1, o.y + AIR_H - 1)]
+	var junction: Vector2i = corners[0]
+	var best_d := Vector2(corners[0]).distance_squared_to(Vector2(nearest))
+	for cc in corners:
+		var d := Vector2(cc).distance_squared_to(Vector2(nearest))
+		if d < best_d:
+			best_d = d
+			junction = cc
+	if not _path_clear(junction, nearest):
+		return false
+	# Gebaeude (werden erst gesetzt, wenn die Zufahrt steht)
+	var term := _place("airport_terminal", Rect2i(o.x + 1, o.y + 3, 4, 3))
+	var twr := _place("airport_tower", Rect2i(o.x + 5, o.y + 3, 2, 2))
+	var fir := _place("airport_fire", Rect2i(o.x + 8, o.y + 3, 3, 2))
+	var hgr := _place("airport_hangar", Rect2i(o.x + 1, o.y + 6, 4, 3))
+	var carg := _place("airport_cargo", Rect2i(o.x + 6, o.y + 6, 6, 4))
+	if term < 0 or twr < 0 or fir < 0 or hgr < 0 or carg < 0:
+		return false
+	# Zufahrtstrasse ziehen (nur ueber freie Zellen) und Erreichbarkeit des Ortes pruefen
+	c.ground[c.idx(junction)] = G.ROAD
+	var p := junction
+	while p.x != nearest.x:
+		p += Vector2i(signi(nearest.x - p.x), 0)
+		if c.ground[c.idx(p)] == G.GRASS:
+			c.ground[c.idx(p)] = G.ROAD
+	while p.y != nearest.y:
+		p += Vector2i(0, signi(nearest.y - p.y))
+		if c.ground[c.idx(p)] == G.GRASS:
+			c.ground[c.idx(p)] = G.ROAD
+	if not _road_path_exists(junction, town):
+		return false
+	c.airport = {
+		"rect": [o.x, o.y, AIR_W, AIR_H],
+		"run_y": run_y, "run_x0": o.x + 1, "run_x1": o.x + 14, "dir": 1,
+		"apron": [[o.x + 2, o.y + 3], [o.x + 3, o.y + 3], [o.x + 5, o.y + 4]],
+		"terminal": term, "tower": twr, "hangar": hgr, "fire": fir, "cargo": carg,
+		"name": "Flughafen %s" % c.town_name,
+	}
+	return true
+
+
 ## Waelder, Wiesen und Felder ausserhalb des Ortes.
 func _land_cover() -> void:
 	for y in range(1, n - 1):
 		for x in range(1, n - 1):
 			var p := Vector2i(x, y)
 			var i := c.idx(p)
-			if c.ground[i] != G.GRASS or heights[i] > 0 or town_rect.has_point(p) or c.building_at[i] != -1:
+			if c.ground[i] != G.GRASS or heights[i] > 0 or town_rect.has_point(p) or airport_rect.has_point(p) or c.building_at[i] != -1:
 				continue
 			var f := noise.get_noise_2d(x * 1.5 + 1000, y * 1.5)
 			if f > 0.25 and rng.randf() < 0.55:

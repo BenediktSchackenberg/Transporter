@@ -22,6 +22,7 @@ import residential as R
 import buildings as B
 import commercial as C
 import industrial as I
+import airport as A
 
 OUT = os.path.join(HERE, "..", "assets", "iso")
 os.makedirs(OUT, exist_ok=True)
@@ -39,6 +40,7 @@ def init():
     V.init()
     F.init()
     PR.init()
+    A.init()
 
 
 def bake(im, mask, tint):
@@ -79,8 +81,8 @@ def build_ground():
     for f in range(4):
         names.append("water%d" % f)
         models.append(G.water(f))
-    names += ["rail_h", "rail_v", "parking"]
-    models += [G.rail(True), G.rail(False), G.parking()]
+    names += ["rail_h", "rail_v", "parking", "runway", "apron"]
+    models += [G.rail(True), G.rail(False), G.parking(), G.runway(), G.apron()]
     for mask in range(16):
         names.append("road%d" % mask)
         models.append(G.road(mask))
@@ -155,6 +157,10 @@ def building_specs():
     s["construction"] = lambda: I.construction(1)
     s["airport_cargo"] = lambda: I.airport_cargo(1)
     s["workshop"] = lambda: FA.make("werkstatt", 4)
+    s["airport_terminal"] = lambda: A.terminal(1)
+    s["airport_tower"] = lambda: A.tower(1)
+    s["airport_hangar"] = lambda: A.hangar(1)
+    s["airport_fire"] = lambda: A.fire(1)
     return s
 
 

@@ -167,6 +167,35 @@ def water(frame=0):
     return m
 
 
+def runway():
+    """Startbahnkachel (Auftrag 16): dunkler Asphalt, ohne Mittellinie. Die Bahn-Achse (Pfeile, Schwelle,
+    Seitenbaken) zeichnet AirView als zusammenhaengende Linie ueber die ganze Bahn; so bleibt die Kachel nahtlos
+    ueber mehrere Zellen, und die Geometrie bleibt in der Simulation statt im Bild."""
+    r = random.Random(1)
+    m = _model()
+    for x in range(T):
+        for y in range(T):
+            m.put(x, y, 0, M("asph_a") if r.random() < 0.7 else M("asph_b"))
+    return m
+
+
+def apron():
+    """Vorfeld (Standplaetze, Rollwege): hellerer Beton mit Fugen und gelben Rollwegkennungen an den Rändern."""
+    r = random.Random(2)
+    m = _model()
+    for x in range(T):
+        for y in range(T):
+            joint = x % 16 == 0 or y % 16 == 0
+            m.put(x, y, 0, M("concrete2") if joint else M("concrete"))
+    for k in range(0, T, 16):
+        m.put(k, 2, 1, M("road_yellow"))
+        m.put(k, T - 3, 1, M("road_yellow"))
+    for k in range(0, T, 16):
+        m.put(2, k, 1, M("road_yellow"))
+        m.put(T - 3, k, 1, M("road_yellow"))
+    return m
+
+
 def rail(horizontal=True):
     m = _model()
     for x in range(T):

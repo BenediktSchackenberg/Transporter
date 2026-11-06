@@ -40,6 +40,10 @@ const TYPES := {
 	"airport_cargo": [["airport_cargo"], 6, 4, ["container", "pakete", "elektronik"], ["container", "elektronik", "pakete"]],
 	"job_board": [["job_board"], 3, 2, [], []],
 	"staffing": [["staffing"], 2, 2, [], []],
+	"airport_terminal": [["airport_terminal"], 4, 3, [], []],
+	"airport_tower": [["airport_tower"], 2, 2, [], []],
+	"airport_hangar": [["airport_hangar"], 4, 3, [], []],
+	"airport_fire": [["airport_fire"], 3, 2, [], []],
 	"office_site": [["office0", "office1"], 3, 3, [], []],
 	"townhall": [["office1"], 3, 3, [], []],   # Rathaus (Rolle town_hall): kein Marktteilnehmer
 	"police": [["office0"], 3, 3, [], []],     # Polizeiwache (Rolle police)

@@ -2,7 +2,7 @@ class_name CityData
 extends RefCounted
 ## Reine Kartendaten (ohne Rendering). Wird deterministisch aus dem Seed erzeugt.
 
-enum G { GRASS, PARK, GRAVEL, SIDEWALK, PLAZA, CONCRETE, QUAY, SAND, FIELD, CROP, WATER, RAIL, ROAD, PARKING }
+enum G { GRASS, PARK, GRAVEL, SIDEWALK, PLAZA, CONCRETE, QUAY, SAND, FIELD, CROP, WATER, RAIL, ROAD, PARKING, RUNWAY, APRON }
 
 var size: int
 var seed_value: int
@@ -24,6 +24,9 @@ var height := PackedByteArray()     # Gelaendehoehe je Zelle (0 = Flachland; >0 
 var lakes: Array = []               # Seemittelpunkte
 var river: Array = []               # Flusszellen
 var road_count := 0
+# Flughafen (Auftrag 16): Startbahn und Vorfeld liegen außerhalb der Baublöcke; die Geometrie ist für die
+# Flugbewegung (FlightOps) und die Darstellung (AirView) relevant und wird deterministisch aus dem Seed erzeugt.
+var airport: Dictionary = {}        # {rect, run_x0, run_x1, run_y, dir, apron: [[x,y],...], road, walk} (leer, wenn kein Flughafen)
 
 
 func setup(n: int, s: int) -> void:
