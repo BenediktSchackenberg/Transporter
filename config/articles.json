@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS). exportpreis = Preis frei Verladestelle (Großhandelslager) für Überschüsse; die Fracht dorthin zahlt der Verkäufer. kuehlung = Kühlware: verdirbt am Standort mit Strom langsam, ohne Strom schnell; Transport nur gekühlt. 'fleisch' ist derselbe Artikel wie in den Restaurants (Retail.GOODS). Restaurantzutaten (gemuese, teigwaren, milch_zutat, fassgetraenk, fleisch) sind dieselben Artikel wie im Einzelhandel; Importpreis = Großhandelspreis für Gewerbekunden.",
+  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS). exportpreis = Preis frei Verladestelle (Großhandelslager) für Überschüsse; die Fracht dorthin zahlt der Verkäufer. kuehlung = Kühlware: verdirbt am Standort mit Strom langsam, ohne Strom schnell; Transport nur gekühlt. 'fleisch' ist derselbe Artikel wie in den Restaurants (Retail.GOODS). Restaurantzutaten (gemuese, teigwaren, milch_zutat, fassgetraenk, fleisch) sind dieselben Artikel wie im Einzelhandel; Importpreis = Großhandelspreis für Gewerbekunden. Montanartikel in Einheiten zu 100 kg; 'stahl' und 'rohmaterial' sind dieselben Artikel wie beim Bauhof (Trader.MATERIALS). Schlacke ist Nebenprodukt des Hochofens und geht als Hüttensand in die Ausfuhr.",
   "saatgut": {
     "name": "Saatgut",
     "einheit": "Sack",
@@ -112,5 +112,85 @@
     "haltbar_tage": 0,
     "basispreis": 0.91,
     "importpreis": 0.91
+  },
+  "eisenerz": {
+    "name": "Eisenerz",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 9.0,
+    "importpreis": 13.0,
+    "exportpreis": 6.0
+  },
+  "kohle": {
+    "name": "Kohle",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 12.0,
+    "importpreis": 17.0,
+    "exportpreis": 8.0
+  },
+  "kalkstein": {
+    "name": "Kalkstein",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 3.0,
+    "importpreis": 5.0,
+    "exportpreis": 2.0
+  },
+  "rohmaterial": {
+    "name": "Rohmaterial (Kies, Sand)",
+    "einheit": "Einheit",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 6.0,
+    "importpreis": null,
+    "exportpreis": 4.0
+  },
+  "koks": {
+    "name": "Koks",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 26.0,
+    "importpreis": 36.0,
+    "exportpreis": 18.0
+  },
+  "schrott": {
+    "name": "Stahlschrott",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 22.0,
+    "importpreis": 26.0,
+    "exportpreis": 15.0
+  },
+  "stahl": {
+    "name": "Stahl",
+    "einheit": "Einheit",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 36.0,
+    "importpreis": null,
+    "exportpreis": 30.0
+  },
+  "schlacke": {
+    "name": "Schlacke (Hüttensand)",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 1.0,
+    "importpreis": null,
+    "exportpreis": 0.5
   }
 }

@@ -265,6 +265,10 @@ func on_day(_day: int) -> void:
 		for o in orders:
 			if o.item == it:
 				pending += int(o.qty)
+		pending += sim.prod.incoming("T0", it, bauhof)   # bei Unternehmern bestellt (Auftrag 14)
+		if not Production.art(it).is_empty() and stock_of(it) + pending < int(m.target):
+			# Lokale Erzeuger (Stahlwerk, Steinbruch) liefern bis zum Zielbestand, wenn sie frei Bauhof guenstiger sind als der Import
+			pending += sim.prod.order("T0", bauhof, "", it, int(m.target) - stock_of(it) - pending, float(m.base) * IMPORT_FACTOR, false)
 		if stock_of(it) + pending < int(m.min) + (int(m.target) - int(m.min)) / 3:   # Meldebestand
 			var want: int = int(m.target) - stock_of(it) - pending
 			var unit := float(m.base) * IMPORT_FACTOR

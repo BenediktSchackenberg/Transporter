@@ -89,8 +89,8 @@ const SCHEMA := {
 		"desc": "Wie propose_cooperation."},
 	"poach_customer": {"params": {"customer_id": "int"}, "desc": "Stammkunden eines Konkurrenten abwerben (legal, 800 EUR)."},
 	"report_rival": {"params": {"target": "int", "reason": "string?"}, "desc": "Konkurrenten beim Bürgermeister anzeigen: das Amt prüft sofort (Steuer, Zahlungsrückstand, Zustand der Einrichtungen). Ohne Beanstandung zahlst DU Bußgeld und verlierst Ruf."},
-	"found_business": {"params": {"branche": "string", "reason": "string?", "standort": "string?", "modus": "string?"},
-		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). standort: hauptsitz | markt (freie Parzelle nahe dem Großhandel, kurze Lieferwege) | G<n>; Feld: ohne Angabe das günstigste passende Grundstück. modus pachten|kaufen (Grundstück). kosten (Gründung inkl. Ausstattung) und kw (Strombedarf) siehe Liste. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
+	"found_business": {"params": {"branche": "string", "reason": "string?", "standort": "string?", "modus": "string?", "rohstoff": "string?"},
+		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). standort: hauptsitz | markt (freie Parzelle nahe dem Großhandel, kurze Lieferwege) | G<n>; Feld: ohne Angabe das günstigste passende Grundstück. modus pachten|kaufen (Grundstück). Bergwerk: rohstoff eisenerz|kohle|kalkstein|rohmaterial, die beste freie Lagerstätte wird gekauft. Kosten (Gründung inkl. Ausstattung) siehe Liste. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
 	"buy_property": {"params": {"gebaeude": "int", "reason": "string?"},
 		"desc": "Wohngebäude kaufen (immobilien_angebote: Preis = 12 Jahresmieten). Mieter zahlen monatlich an dich; Instandhaltung und Grundsteuer (30 % der Sollmiete) laufen auch bei Leerstand. Finanzierung über take_loan möglich."},
 	"sell_property": {"params": {"gebaeude": "int"}, "desc": "Eigenes Wohngebäude an den privaten Vermietermarkt verkaufen (95 % des Werts)."},
@@ -727,7 +727,7 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 		"block_road":
 			return sim.rivalry.block_road(cid, _i(a.target))
 		"found_business":
-			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")), {"standort": _s(a.get("standort", a.get("grundstueck", ""))), "modus": _s(a.get("modus", "pachten"))})
+			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")), {"standort": _s(a.get("standort", a.get("grundstueck", ""))), "modus": _s(a.get("modus", "pachten")), "rohstoff": _s(a.get("rohstoff", ""))})
 		"set_business_price":
 			return sim.prod.set_price(cid, _s(a.business_id), _s(a.item), float(a.price))
 		"buy_property":

@@ -485,7 +485,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	return {"summary": summary, "goal": goal, "actions": actions.slice(0, MAX_ACTIONS), "memory": "Strategie: %s" % personality}
 
 
-const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant", "baufirma"]
+const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant", "baufirma", "bergwerk", "kokerei", "stahlwerk", "elektrostahlwerk"]
 const PROD_MAX := {"wachstum": 2, "netzwerker": 1, "kostenoptimierer": 1, "risikospieler": 1}
 const PROD_RESERVE := 10000.0   # Bargeld fuer Einkauf und Loehne nach der Gruendung
 
@@ -543,9 +543,12 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	# Abgestimmt: zuerst die Vorstufe, auf die ein bestehender Betrieb wartet; Muehle erst mit Feld, Schlachthof erst mit Tierhaltung
 	var branch := ""
 	var waiting: Dictionary = mk.get("engpaesse", {})
+	var rohstoff := ""
 	for item in waiting:
 		if Production.UPSTREAM.has(item):
 			branch = str(Production.UPSTREAM[item])
+			if branch == "bergwerk":
+				rohstoff = str(item)
 			break
 	if branch != "":
 		pass
@@ -563,20 +566,22 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "restaurant"
 	elif int(mk.get("baufirmen", 0)) == 0 and int(mk.get("bauvorhaben", 0)) > 0 and personality in ["wachstum", "risikospieler"]:
 		branch = "baufirma"
+	elif int(mk.get("stahlwerke", 0)) == 0 and personality in ["wachstum", "kostenoptimierer"]:
+		branch = "stahlwerk"
 	elif int(mk.felder) < 2 * int(mk.muehlen) + int(mk.get("tierhaltungen", 0)):
 		branch = "feld"
 	elif personality == "wachstum" and int(mk.brot_import) > 0:
 		branch = "baeckerei"
 	if branch == "" or own.any(func(b): return b.branche == branch):
 		return
-	var spec: Array = obs.get("verfuegbare_branchen", []).filter(func(x): return x.get("branche", "") == branch)
-	if spec.is_empty():
+	var avail: Dictionary = obs.get("verfuegbare_branchen", {})
+	if not avail.has(branch):
 		return
-	var cost := float(spec[0].kosten)
+	var cost := float(avail[branch])
 	var need := cost + buffer * (2.0 if personality == "kostenoptimierer" else 1.0) + PROD_RESERVE
 	if cash < need:
 		return
-	actions.append({"action": "found_business", "branche": branch, "reason": "Kettenstufe fehlt in der Stadt (Bäckereien %d, Mühlen %d, Felder %d)" % [int(mk.baeckereien), int(mk.muehlen), int(mk.felder)]})
+	actions.append({"action": "found_business", "branche": branch, "rohstoff": rohstoff, "reason": "Kettenstufe fehlt in der Stadt (Bäckereien %d, Mühlen %d, Felder %d)" % [int(mk.baeckereien), int(mk.muehlen), int(mk.felder)]})
 	planned.append("found_business")
 	reasons.append("gründe %s, weil diese Stufe der Brotkette in der Stadt fehlt" % Businesses.branches()[branch].label)
 

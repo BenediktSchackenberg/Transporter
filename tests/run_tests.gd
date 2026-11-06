@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1578,7 +1578,7 @@ func test_business_actions() -> void:
 	var mine: Worker = s.personnel.employed(0)[0]
 	ok(E.execute(0, {"action": "assign_staff", "worker_id": mine.id, "business_id": bid}).ok and mine.business == bid, "eigenen Mitarbeiter zuordnen")
 	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
-	ok(obs.betriebe.size() == 1 and obs.betriebe[0].id == bid and obs.verfuegbare_branchen.all(func(x): return x.get("branche", "") != "transport"),
+	ok(obs.betriebe.size() == 1 and obs.betriebe[0].id == bid and not obs.verfuegbare_branchen.has("transport"),
 		"Beobachtung: eigene Betriebe; schon vorhandener Transportbetrieb nicht erneut als gründbar")
 	ok(not ObservationBuilder.build(s, 1, [], 0.0, 10.0).betriebe.any(func(x): return x.id == bid), "fremde Betriebe nicht in der eigenen Übersicht")
 	var offer: Dictionary = s.resources.available_offers()[0]
@@ -6528,7 +6528,7 @@ func test_rule_brain_production() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3
 	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
-	ok(obs.produktion_markt.baeckereien == 0 and obs.verfuegbare_branchen.any(func(b): return b.get("branche", "") == "baeckerei"), "Beobachtung zeigt Kettenlage und gründbare Bäckerei")
+	ok(obs.produktion_markt.baeckereien == 0 and obs.verfuegbare_branchen.has("baeckerei"), "Beobachtung zeigt Kettenlage und gründbare Bäckerei")
 	var d: Dictionary = RuleBrain.decide(obs, "wachstum", rng)
 	var f: Array = d.actions.filter(func(a): return a.action == "found_business")
 	ok(not f.is_empty() and f[0].branche == "baeckerei", "Regel-KI gründet die fehlende Stufe Bäckerei")
@@ -6553,7 +6553,7 @@ func test_rule_brain_production() -> void:
 	var cl: Array = d.actions.filter(func(a): return a.action == "close_business")
 	ok(not cl.is_empty() and cl[0].business_id == fake.id, "Regel-KI schließt den dauerhaft unrentablen Betrieb")
 	ok(s.executor.execute(0, cl[0] if not cl.is_empty() else {"action": "wait"}).ok, "Schließung ausgeführt")
-	ok(not s.executor.execute(0, {"action": "found_business", "branche": "baeckerei"}).ok and 		not ObservationBuilder.build(s, 0, [], 0.0, 10.0).verfuegbare_branchen.any(func(b): return b.get("branche", "") == "baeckerei"), "Sperrfrist: keine sofortige Neugründung derselben Branche")
+	ok(not s.executor.execute(0, {"action": "found_business", "branche": "baeckerei"}).ok and 		not ObservationBuilder.build(s, 0, [], 0.0, 10.0).verfuegbare_branchen.has("baeckerei"), "Sperrfrist: keine sofortige Neugründung derselben Branche")
 	ok(identity_ok(s), "Geld erhalten")
 
 
@@ -6839,3 +6839,49 @@ func test_chain_coordination() -> void:
 	next_day(s)
 	ok(s.prod.market_obs().engpaesse.has("getreide"), "wartende Mühle erscheint als Engpass Getreide")
 	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_steel_chain() -> void:
+	var s := new_sim(2)
+	var P: Production = s.prod
+	s.grid.capacity = 100000.0
+	for c in s.companies:
+		c.ledger.inject(150000.0)
+	# Bergwerk von A auf eigener Lagerstaette (Eisenerz)
+	var dep := P.best_deposit("eisenerz")
+	ok(not dep.is_empty(), "Eisenerz-Lagerstätte vorhanden (%s, %d Einheiten, Qualität %.2f)" % [dep.get("grundstueck", "-"), int(dep.get("menge", 0)), float(dep.get("qualitaet", 0.0))])
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "bergwerk", "rohstoff": "eisenerz"})
+	ok(r.ok, "Bergwerk gegründet (%s)" % r.get("msg", ""))
+	var mine: Dictionary = s.biz.get_b(str(r.ref))
+	ok(s.parcels.parcel(mine.parcel).owner == "C0" and str(mine.land_mode) == "kauf", "Abbaurecht nur auf gekauftem Grund")
+	var staff0: Array = s.personnel.employed(0)
+	for i in 2:
+		s.biz.assign(0, staff0[staff0.size() - 1 - i].id, mine.id)
+	var left0 := int(P.deposit_of(mine.parcel).menge)
+	next_day(s)
+	ok(s.stock.qty("eisenerz", "C0", int(mine.site)) > 0 and int(P.deposit_of(mine.parcel).menge) < left0, "Förderung verringert den Vorrat")
+	# Stahlwerk von B (Erzroute): Erz von A, Koks und Kalk als Import
+	var sw: Dictionary = s.biz.get_b(str(s.executor.execute(1, {"action": "found_business", "branche": "stahlwerk"}).ref))
+	var staff1: Array = s.personnel.employed(1)
+	for i in 2:
+		s.biz.assign(1, staff1[staff1.size() - 1 - i].id, sw.id)
+	ok(s.executor.execute(0, {"action": "set_business_price", "business_id": mine.id, "item": "eisenerz", "price": 4.0}).ok, "A bietet Erz günstig an")
+	s.stock.consume("stahl", s.trader.stock_of("stahl"), "T0", s.trader.bauhof, "Test: auf Baustellen verbaut", s.game_min)
+	for i in 8:
+		next_day(s)
+	ok(P.deals.values().any(func(d): return d.item == "eisenerz" and d.seller == "C0" and d.buyer == "C1"), "Stahlwerk kauft Erz beim Bergwerk von A")
+	ok(int(P.stats.produced.get("stahl", 0)) > 0 and int(P.stats.produced.get("schlacke", 0)) > 0, "Hochofen erzeugt Stahl und Schlacke (Nebenprodukt)")
+	ok(P.deals.values().any(func(d): return d.item == "stahl" and d.buyer == "T0"), "Bauhof kauft lokalen Stahl (für Baustellen)")
+	ok(s.stock.lots.values().any(func(l): return l.item == "stahl" and l.owner == "T0" and str(l.source).begins_with("Produktion")), "lokaler Stahl liegt im Bauhof bereit")
+	# Recyclingroute: Elektrostahlwerk mit Schrott
+	var es: Dictionary = s.biz.get_b(str(s.executor.execute(0, {"action": "found_business", "branche": "elektrostahlwerk"}).ref))
+	s.biz.assign(0, staff0[staff0.size() - 3].id, es.id)
+	var st0 := int(P.stats.produced.get("stahl", 0))
+	for i in 4:
+		next_day(s)
+	ok(int(P.stats.consumed.get("schrott", 0)) > 0 and int(P.stats.produced.get("stahl", 0)) > st0, "Elektrostahl aus Schrott")
+	# Erschoepfung
+	P.mined[mine.parcel] = 1000000
+	next_day(s)
+	ok(mine.blockers.any(func(x): return x.text == "Lagerstätte erschöpft"), "erschöpfte Lagerstätte liefert nichts mehr")
+	ok(identity_ok(s), "Geld und Waren erhalten")

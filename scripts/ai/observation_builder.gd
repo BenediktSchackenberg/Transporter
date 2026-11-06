@@ -178,11 +178,15 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 
 
 ## Gruendbare Branchen ohne die einmaligen, die schon bestehen (Tokenbudget); Strom erst bei knappem Netz als Hinweis.
-static func _branches(sim: Simulation, cid: int) -> Array:
-	var out: Array = Businesses.available().filter(func(b): return not (b.branche == "transport" and sim.biz.has_branch(cid, "transport")) and not sim.biz.recently_closed(cid, b.branche))
+static func _branches(sim: Simulation, cid: int) -> Dictionary:
+	# Kompakt (Tokenbudget): Branche -> Gruendungskosten inkl. Ausstattung; Details in der Aktionsbeschreibung und config/branches.json
+	var out := {}
+	for b in Businesses.available():
+		if not (b.branche == "transport" and sim.biz.has_branch(cid, "transport")) and not sim.biz.recently_closed(cid, b.branche) and b.branche != "immobilien":
+			out[b.branche] = int(b.kosten)
 	var load: float = sim.grid.summary().auslastung
 	if load > 0.85:
-		out.append({"hinweis_strom": "Netz zu %d %% ausgelastet: neue Betriebe können ohne Strom bleiben" % int(load * 100.0)})
+		out["hinweis_strom"] = "Netz zu %d %% ausgelastet: neue Betriebe können ohne Strom bleiben" % int(load * 100.0)
 	return out
 
 

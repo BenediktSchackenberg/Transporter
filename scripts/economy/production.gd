@@ -21,12 +21,18 @@ const MAX_DEALS_KEPT := 300
 const COLD_SPOIL := 0.08             # Kuehlware je Tag im gekuehlten Lager
 const WARM_SPOIL := 0.5              # Kuehlware je Tag ohne Strom
 const START_BATCHES := 4
-const UPSTREAM := {"getreide": "feld", "mehl": "muehle", "schlachttier": "tierhaltung"}   # Rohware -> Branche, die sie in der Stadt erzeugt             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
+const UPSTREAM := {"getreide": "feld", "mehl": "muehle", "schlachttier": "tierhaltung", "koks": "kokerei", "eisenerz": "bergwerk", "kohle": "bergwerk", "kalkstein": "bergwerk"}
+## Lagerstaetten (Abschnitt 5, vereinfacht): ausgewaehlte freie Parzellen ausserhalb von Wohn- und Mischgebiet tragen ein Vorkommen.
+## Deterministisch aus Stadtsamen und Parzellen-ID; Menge in Einheiten (100 kg), Qualitaet 0,6-1,0 (Foerderung je Person).
+const DEPOSIT_KINDS := ["eisenerz", "kohle", "kalkstein", "rohmaterial"]
+const DEPOSIT_SHARE := 0.25   # Rohware -> Branche, die sie in der Stadt erzeugt             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
 
 static var _articles := {}
 
 var sim
 var deals := {}                      # "D<n>" -> Liefervertrag
+var mined := {}                      # Parzelle -> bereits gefoerderte Menge (Lagerstaette bleibt beim Besitzerwechsel erschoepft)
+var _deposits := {}
 var stats := {"produced": {}, "consumed": {}, "imported": {}, "exported": {}, "sold": 0.0, "deals": 0, "fallback": 0, "spoiled": 0}
 var _next := 1
 
@@ -75,10 +81,19 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 		where = str(spec.get("standort", "hauptsitz"))
 	var btype := str(spec.get("gebaeude", "farm"))
 	var bsize: Array = CityGenerator.TYPES[btype]
-	if spec.has("feld") or where != "hauptsitz":
+	if spec.has("abbau"):
+		var dep := best_deposit(str(params.get("rohstoff", "")), where if where.begins_with("G") else "")
+		if dep.is_empty():
+			return {"ok": false, "msg": "Keine freie Lagerstätte%s gefunden (deposits: %s)." % [(" für " + str(params.get("rohstoff", ""))) if str(params.get("rohstoff", "")) != "" else "", ", ".join(DEPOSIT_KINDS)]}
+		mode = "kaufen"   # Abbaurecht nur auf eigenem Grund
+		cands = [sim.parcels.parcel(str(dep.grundstueck))]
+		parcel = cands[0]
+		land = float(parcel.price)
+	elif spec.has("feld") or where != "hauptsitz":
 		var pid := where if where.begins_with("G") else ""
 		var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4
-		cands = _parcel_candidates(pid, min_area, float(spec.get("strom_kw", 0.0)) > 0.0) if spec.has("feld") or pid != "" or where == "parzelle" else _market_candidates(min_area)
+		var near_to: int = int(sim.trader.bauhof) if str(spec.get("naehe", "")) == "bauhof" else int(sim.retail.wholesale_building)
+		cands = _parcel_candidates(pid, min_area, float(spec.get("strom_kw", 0.0)) > 0.0) if spec.has("feld") or pid != "" or where == "parzelle" else _market_candidates(min_area, near_to)
 		if cands.is_empty():
 			return {"ok": false, "msg": "Kein freies Grundstück mit Straßenzugang und mindestens %d Feldern verfügbar." % min_area}
 		parcel = cands[0]
@@ -122,6 +137,9 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 		b["parcel"] = parcel.id
 		b["land_mode"] = "kauf" if mode == "kaufen" else "pacht"
 		b["lease_day"] = float(parcel.lease_month) / 30.0 if mode != "kaufen" else 0.0
+	if spec.has("abbau"):
+		var dp := deposit_of(str(parcel.id))
+		b["deposit"] = {"art": dp.art, "qualitaet": dp.qualitaet}
 	if spec.has("feld"):
 		b["field"] = {"area": int(parcel.area), "phase": "brache", "day": 0, "growth": 0.0, "grow_days": 0, "cycles": 0, "last_yield": 0}
 	sim.biz.note(b.id, "Gegründet: %s" % (reason if reason != "" else spec.label), "Unternehmer")
@@ -143,9 +161,9 @@ func _parcel_candidates(pid: String, min_area: int, need_power: bool = false) ->
 	return out.slice(0, 40)
 
 
-## Freie Parzellen mit Strassenzugang fuer einen marktnahen Betrieb, nach Abstand zum Lebensmittelgrosshandel.
-func _market_candidates(min_area: int) -> Array:
-	var target: Dictionary = sim.city.building(sim.retail.wholesale_building)
+## Freie Parzellen mit Strassenzugang fuer einen marktnahen Betrieb, nach Abstand zum Hauptabnehmer (Standard: Lebensmittelgrosshandel).
+func _market_candidates(min_area: int, near_to: int = -1) -> Array:
+	var target: Dictionary = sim.city.building(near_to if near_to >= 0 else sim.retail.wholesale_building)
 	var t := Vector2i(int(target.x), int(target.y))
 	var out: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse) 		and bool(p.get("erschliessung", {}).get("strom", true)))   # Strom fuer Muehle/Baeckerei (PowerGrid.connected)
 	out.sort_custom(func(a, b): return absi(int(a.rect[0]) - t.x) + absi(int(a.rect[1]) - t.y) < absi(int(b.rect[0]) - t.x) + absi(int(b.rect[1]) - t.y))
@@ -175,7 +193,7 @@ func _place_field(p: Dictionary, name: String, btype: String = "farm") -> Dictio
 func on_day(day: int) -> void:
 	for b in sim.biz.items.values():
 		var spec: Dictionary = Businesses.branches().get(b.branch, {})
-		if not (spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("bau")) or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
+		if not (spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("bau") or spec.has("abbau")) or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		_costs(b)
 		if spec.has("bau"):
@@ -185,6 +203,8 @@ func on_day(day: int) -> void:
 		b["sold_today"] = 0
 		if spec.has("feld"):
 			_field_day(b, spec)
+		elif spec.has("abbau"):
+			_mine_day(b, spec)
 		elif spec.has("rezept"):
 			_recipe_day(b, spec)
 		else:
@@ -281,6 +301,97 @@ func _field_day(b: Dictionary, spec: Dictionary) -> void:
 				f.day = 0
 				sim.biz.note(b.id, "Ernte: %d dt Getreide (Wachstum %.0f %%) liegen am Feld zum Abtransport" % [y, avg * 100.0], "Betrieb")
 				sim.log_event("%s erntet %d dt Getreide." % [b.name, y], "good", cid)
+
+
+# ------------------------------------------------------------------ Lagerstaetten und Bergwerk
+func deposit_of(pid: String) -> Dictionary:
+	if _deposits.is_empty():
+		_build_deposits()
+	var d: Dictionary = _deposits.get(pid, {})
+	if d.is_empty():
+		return {}
+	var out := d.duplicate()
+	out.menge = maxi(0, int(d.menge) - int(mined.get(pid, 0)))
+	return out
+
+
+func _build_deposits() -> void:
+	var seed_v: int = int(sim.city.seed_value)
+	for p in sim.parcels.items.values():
+		if p.zone in ["wohnen", "mischgebiet", "gruen", "korridor"] or not sim.parcels.is_buildable(p) or int(p.area) < 30:
+			continue
+		var h := absi(hash([seed_v, p.id, "vorkommen"]))
+		if float(h % 1000) / 1000.0 >= DEPOSIT_SHARE:
+			continue
+		_deposits[p.id] = {"art": DEPOSIT_KINDS[(h / 1000) % DEPOSIT_KINDS.size()], "menge": 3000 + (h / 7) % 9000, "qualitaet": snappedf(0.6 + float((h / 13) % 41) / 100.0, 0.01)}
+	# Jeder Rohstoff mindestens einmal auf einer erreichbaren Parzelle (kein Start ohne Zugang zu einer Rohstoffart)
+	var reach: Array = sim.parcels.items.values().filter(func(p): return p.zone not in ["wohnen", "mischgebiet", "gruen", "korridor"] and sim.parcels.is_buildable(p) 		and int(p.area) >= 20 and p.state == "frei" and bool(sim.parcels.utilities_of(p).strasse))
+	reach.sort_custom(func(a, b): return str(a.id) < str(b.id))
+	for kind in DEPOSIT_KINDS:
+		var have := false
+		for k in _deposits:
+			if _deposits[k].art == kind and bool(sim.parcels.utilities_of(sim.parcels.parcel(k)).strasse):
+				have = true
+				break
+		if have:
+			continue
+		for p in reach:
+			if not _deposits.has(p.id):
+				_deposits[p.id] = {"art": kind, "menge": 5000, "qualitaet": 0.8}
+				break
+
+
+## Beste freie Lagerstaette (Art optional; ein Grundstueck "G<n>" optional): viel Vorrat x Qualitaet je Kaufpreis, mit Strassen- und Stromanschluss.
+func best_deposit(kind: String, pid: String = "") -> Dictionary:
+	if _deposits.is_empty():
+		_build_deposits()
+	var best := {}
+	var best_s := -1.0
+	for id in _deposits:
+		if pid != "" and id != pid:
+			continue
+		var p: Dictionary = sim.parcels.parcel(id)
+		var d := deposit_of(id)
+		if p.is_empty() or p.state != "frei" or p.owner != Parcels.CITY or int(d.menge) <= 0 or (kind != "" and d.art != kind):
+			continue
+		if not bool(sim.parcels.utilities_of(p).strasse):
+			continue
+		var sc := float(d.menge) * float(d.qualitaet) / maxf(1.0, float(p.price))
+		if sc > best_s:
+			best_s = sc
+			best = {"grundstueck": id, "art": d.art, "menge": d.menge, "qualitaet": d.qualitaet, "preis": int(p.price)}
+	return best
+
+
+## Foerderung: Personal x je_person_tag x Qualitaet, begrenzt durch Restvorrat, Ausgangslager und Strom.
+func _mine_day(b: Dictionary, spec: Dictionary) -> void:
+	var A: Dictionary = spec.abbau
+	var acct := "C%d" % int(b.owner)
+	var site := int(b.site)
+	var staff := _staff_ok(b, spec)
+	var item := str(b.deposit.art)
+	b["today"] = 0
+	if staff < int(spec.personal_min):
+		return
+	sim.company(int(b.owner)).ledger.book("supplies", -float(A.get("diesel_tag", 0.0)), true, "Diesel %s" % b.id, sim.game_min, "S0", b.id)
+	if float(b.energy_kw) > 0.0 and not sim.grid.supplied.has(b.id):
+		return
+	var left: int = int(deposit_of(str(b.parcel)).get("menge", 0))
+	if left <= 0:
+		sim.biz.block(b.id, "material", "Lagerstätte erschöpft")
+		return
+	var room: int = int(A.lager_max) - sim.stock.qty(item, acct, site)
+	var q := mini(mini(int(round(float(staff * int(A.je_person_tag)) * float(b.deposit.qualitaet))), left), room)
+	if q <= 0:
+		sim.biz.block(b.id, "material", "Lager voll: %s wird nicht abgeholt" % item_name(item))
+		return
+	sim.biz.unblock(b.id, "material")
+	mined[str(b.parcel)] = int(mined.get(str(b.parcel), 0)) + q
+	sim.stock.add(item, q, acct, site, "Förderung %s" % b.id, sim.game_min)
+	_count("produced", item, q)
+	_first_output(b)
+	b.today = q
+	b["total"] = int(b.get("total", 0)) + q
 
 
 func _seed_need(b: Dictionary, F: Dictionary) -> int:
@@ -514,7 +625,7 @@ func sellers(item: String) -> Array:
 		if b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		var spec: Dictionary = Businesses.branches().get(b.branch, {})
-		var makes: bool = spec.get("rezept", {}).get("aus", {}).has(item) or (spec.has("feld") and item == "getreide")
+		var makes: bool = spec.get("rezept", {}).get("aus", {}).has(item) or (spec.has("feld") and item == "getreide") or (spec.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
 		if not makes:
 			continue
 		var acct := "C%d" % int(b.owner)
@@ -855,6 +966,10 @@ func detail(b: Dictionary) -> Dictionary:
 		e["bestand"] = {"saatgut": sim.stock.qty("saatgut", acct, int(b.site)), "getreide": sim.stock.qty("getreide", acct, int(b.site))}
 		e["preise"] = {"getreide": price_of(b, "getreide")}
 		e["absatz_tag"] = int(b.get("sales_avg", 0.0))
+	elif spec.has("abbau"):
+		var dp := deposit_of(str(b.get("parcel", "")))
+		e = {"rohstoff": str(b.deposit.art), "vorrat": int(dp.get("menge", 0)), "qualitaet": float(b.deposit.qualitaet), "foerderung_heute": int(b.get("today", 0)),
+			"bestand": {str(b.deposit.art): sim.stock.qty(str(b.deposit.art), acct, int(b.site))}, "preise": {str(b.deposit.art): price_of(b, str(b.deposit.art))}, "absatz_tag": int(b.get("sales_avg", 0.0))}
 	elif spec.get("laden", {}).get("gerichte", false):
 		var ks := {}
 		for item in kitchen_items():
@@ -896,7 +1011,7 @@ func detail(b: Dictionary) -> Dictionary:
 
 ## Lage der Kette fuer die KI-Beobachtung: Betriebe je Stufe und bisherige Importe (= Chance fuer lokale Erzeuger).
 func market_obs() -> Dictionary:
-	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0, "baufirma": 0}
+	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0, "baufirma": 0, "stahlwerk": 0, "elektrostahlwerk": 0, "kokerei": 0, "bergwerk": 0}
 	for b in sim.biz.items.values():
 		if n.has(b.branch) and b.status in Businesses.RUNNING:
 			n[b.branch] = int(n[b.branch]) + 1
@@ -904,7 +1019,7 @@ func market_obs() -> Dictionary:
 	for b in sim.biz.items.values():
 		if b.status in Businesses.RUNNING and b.has("waiting_for") and UPSTREAM.has(str(b.waiting_for)):
 			waiting[b.waiting_for] = int(waiting.get(b.waiting_for, 0)) + 1
-	return {"engpaesse": waiting, "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
+	return {"engpaesse": waiting, "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
 
 
 ## Marktchancen fuer die KI: wie viel einer Stufe wird importiert statt lokal erzeugt (Brot: Grosshandelsimport).
@@ -921,7 +1036,7 @@ func opportunities() -> Array:
 
 
 func to_dict() -> Dictionary:
-	return {"deals": deals, "stats": stats, "next": _next}
+	return {"deals": deals, "stats": stats, "next": _next, "mined": mined}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -933,3 +1048,6 @@ func from_dict(d: Dictionary) -> void:
 	for k in st:
 		stats[k] = st[k]
 	_next = int(d.get("next", 1))
+	mined = {}
+	for k in d.get("mined", {}):
+		mined[k] = int(d.mined[k])

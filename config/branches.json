@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Branchen der Unternehmer (Auftrag 14, docs/ENTREPRENEURS.md). Alle Mengen, Zeiten, Preise und Leistungen sind kalibrierbare Spielparameter. Neue Branchen kommen mit ihren Lieferketten hinzu (Etappen 2-5); eine Branche erscheint hier erst, wenn sie im Spiel funktioniert. standort: hauptsitz | markt (freie Parzelle nahe dem Lebensmittelgroßhandel, gepachtet oder gekauft) | parzelle (Feld); gebaeude = Kartenbild des neuen Betriebsgebäudes.",
+  "_hinweis": "Branchen der Unternehmer (Auftrag 14, docs/ENTREPRENEURS.md). Alle Mengen, Zeiten, Preise und Leistungen sind kalibrierbare Spielparameter. Neue Branchen kommen mit ihren Lieferketten hinzu (Etappen 2-5); eine Branche erscheint hier erst, wenn sie im Spiel funktioniert. standort: hauptsitz | markt (freie Parzelle nahe dem Lebensmittelgroßhandel, gepachtet oder gekauft) | parzelle (Feld); gebaeude = Kartenbild des neuen Betriebsgebäudes. naehe: Bezugspunkt des Standorts 'markt' (grosshandel = Lebensmittelgroßhandel, Standard; bauhof = Bauhof als Hauptabnehmer).",
   "transport": {
     "label": "Transportbetrieb",
     "beschreibung": "Fahrzeuge, Fahrer, Treibstoff und Wartung; vergütete Transporte für beliebige Branchen.",
@@ -200,5 +200,105 @@
       "zuverlaessigkeit": 0.85,
       "personen_je_baustelle": 3
     }
+  },
+  "bergwerk": {
+    "label": "Bergwerk/Steinbruch",
+    "beschreibung": "Fördert aus einer Lagerstätte auf eigenem (gekauftem) Grund: Eisenerz, Kohle, Kalkstein oder Kies/Sand. Der Vorrat nimmt ab; erschöpfte Lagerstätten liefern nichts mehr. Geräte laufen mit Diesel (kein Netzanschluss nötig, Betriebskosten je Tag).",
+    "standort": "vorkommen",
+    "gebaeude": "construction",
+    "gruendungskosten": 0,
+    "ausstattung": 30000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 2,
+    "rollen": [
+      "foerdern"
+    ],
+    "abbau": {
+      "je_person_tag": 12,
+      "lager_max": 600,
+      "diesel_tag": 40.0
+    }
+  },
+  "kokerei": {
+    "label": "Kokerei",
+    "beschreibung": "Verkokt Kohle zu Koks für den Hochofen.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 25000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 15.0,
+    "personal_min": 1,
+    "rollen": [
+      "verkoken"
+    ],
+    "rezept": {
+      "ein": {
+        "kohle": 3
+      },
+      "aus": {
+        "koks": 2
+      },
+      "chargen_je_person_tag": 8,
+      "lager_tage": 6,
+      "lager_max": 400
+    },
+    "naehe": "bauhof"
+  },
+  "stahlwerk": {
+    "label": "Stahlwerk (Hochofen)",
+    "beschreibung": "Erzroute: Eisenerz, Koks und Kalkstein werden zu Roheisen und Stahl; Schlacke ist Nebenprodukt. Stahl geht an den Bauhof (Baustellen) oder in die Ausfuhr.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 45000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 30.0,
+    "personal_min": 2,
+    "rollen": [
+      "huettenwerk"
+    ],
+    "rezept": {
+      "ein": {
+        "eisenerz": 3,
+        "koks": 1,
+        "kalkstein": 1
+      },
+      "aus": {
+        "stahl": 2,
+        "schlacke": 1
+      },
+      "chargen_je_person_tag": 5,
+      "lager_tage": 6,
+      "lager_max": 400
+    },
+    "naehe": "bauhof"
+  },
+  "elektrostahlwerk": {
+    "label": "Elektrostahlwerk",
+    "beschreibung": "Recyclingroute: Stahlschrott wird mit hohem Strombedarf zu Stahl umgeschmolzen.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 30000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 80.0,
+    "personal_min": 1,
+    "rollen": [
+      "schmelzen"
+    ],
+    "rezept": {
+      "ein": {
+        "schrott": 1
+      },
+      "aus": {
+        "stahl": 1
+      },
+      "chargen_je_person_tag": 10,
+      "lager_tage": 6,
+      "lager_max": 400
+    },
+    "naehe": "bauhof"
   }
 }
