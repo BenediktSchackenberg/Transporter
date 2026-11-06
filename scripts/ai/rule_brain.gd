@@ -474,7 +474,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	return {"summary": summary, "goal": goal, "actions": actions.slice(0, MAX_ACTIONS), "memory": "Strategie: %s" % personality}
 
 
-const PROD_BRANCHES := ["feld", "muehle", "baeckerei"]
+const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof"]
 const PROD_MAX := {"wachstum": 2, "netzwerker": 1, "kostenoptimierer": 1, "risikospieler": 1}
 const PROD_RESERVE := 10000.0   # Bargeld fuer Einkauf und Loehne nach der Gruendung
 
@@ -533,7 +533,11 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "baeckerei"
 	elif int(mk.muehlen) < maxi(1, int(mk.baeckereien) / 2):
 		branch = "muehle"
-	elif int(mk.felder) < 2 * int(mk.muehlen):
+	elif int(mk.get("schlachthoefe", 0)) == 0:
+		branch = "schlachthof"
+	elif int(mk.get("tierhaltungen", 0)) < int(mk.get("schlachthoefe", 0)):
+		branch = "tierhaltung"
+	elif int(mk.felder) < 2 * int(mk.muehlen) + int(mk.get("tierhaltungen", 0)):
 		branch = "feld"
 	elif personality == "wachstum" and int(mk.brot_import) > 0:
 		branch = "baeckerei"

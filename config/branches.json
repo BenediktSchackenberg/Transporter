@@ -95,5 +95,58 @@
       "artikel": "brot",
       "kundschaft": "baeckerei"
     }
+  },
+  "tierhaltung": {
+    "label": "Tierhaltung",
+    "beschreibung": "Stall auf eigener Parzelle: Jungtiere werden mit Getreide gemästet und nach der Mastzeit als Schlachttiere verkauft.",
+    "standort": "parzelle",
+    "gebaeude": "farm",
+    "gruendungskosten": 0,
+    "ausstattung": 12000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 2.0,
+    "personal_min": 1,
+    "rollen": [
+      "tierpflege"
+    ],
+    "rezept": {
+      "ein": {
+        "jungtier": 1,
+        "getreide": 3
+      },
+      "aus": {
+        "schlachttier": 1
+      },
+      "chargen_je_person_tag": 3,
+      "mast_tage": 12,
+      "plaetze": 40,
+      "lager_tage": 6,
+      "lager_max": 40
+    }
+  },
+  "schlachthof": {
+    "label": "Schlachthof",
+    "beschreibung": "Schlachtet angelieferte Tiere; Fleisch kommt in den Kühlraum und geht gekühlt an Restaurants, Großhandel oder in die Ausfuhr.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 22000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 15.0,
+    "personal_min": 1,
+    "rollen": [
+      "schlachten"
+    ],
+    "rezept": {
+      "ein": {
+        "schlachttier": 1
+      },
+      "aus": {
+        "fleisch": 80
+      },
+      "chargen_je_person_tag": 2,
+      "lager_tage": 8,
+      "lager_max": 1200
+    }
   }
 }

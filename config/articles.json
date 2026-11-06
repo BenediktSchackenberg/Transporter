@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS). exportpreis = Preis frei Verladestelle (Großhandelslager) für Überschüsse; die Fracht dorthin zahlt der Verkäufer.",
+  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS). exportpreis = Preis frei Verladestelle (Großhandelslager) für Überschüsse; die Fracht dorthin zahlt der Verkäufer. kuehlung = Kühlware: verdirbt am Standort mit Strom langsam, ohne Strom schnell; Transport nur gekühlt. 'fleisch' ist derselbe Artikel wie in den Restaurants (Retail.GOODS).",
   "saatgut": {
     "name": "Saatgut",
     "einheit": "Sack",
@@ -46,5 +46,35 @@
     "haltbar_tage": 3,
     "basispreis": 0.8,
     "importpreis": null
+  },
+  "jungtier": {
+    "name": "Jungtiere (Ferkel)",
+    "einheit": "Stk",
+    "ladung": "pakete",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 60.0,
+    "importpreis": 60.0
+  },
+  "schlachttier": {
+    "name": "Schlachttiere",
+    "einheit": "Stk",
+    "ladung": "pakete",
+    "je_ladeeinheit": 8,
+    "haltbar_tage": 0,
+    "basispreis": 220.0,
+    "importpreis": 280.0,
+    "exportpreis": 170.0
+  },
+  "fleisch": {
+    "name": "Fleisch",
+    "einheit": "Port.",
+    "ladung": "lebensmittel",
+    "je_ladeeinheit": 300,
+    "haltbar_tage": 4,
+    "kuehlung": true,
+    "basispreis": 3.4,
+    "importpreis": null,
+    "exportpreis": 2.2
   }
 }

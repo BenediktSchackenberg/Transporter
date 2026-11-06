@@ -20,6 +20,8 @@ const OFFER_DAYS := 1
 const FALLBACK_SHARE := 0.7          # Lieferdienst, wenn niemand den Transport uebernimmt (wie im Einzelhandel)
 const SPOIL_SHARE := 0.25            # Anteil verderblicher Ware am Produktionsstandort, der taeglich verdirbt
 const MAX_DEALS_KEPT := 300
+const COLD_SPOIL := 0.08             # Kuehlware je Tag im gekuehlten Lager
+const WARM_SPOIL := 0.5              # Kuehlware je Tag ohne Strom
 const START_BATCHES := 4             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
 
 static var _articles := {}
@@ -77,7 +79,7 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 	if spec.has("feld") or where != "hauptsitz":
 		var pid := where if where.begins_with("G") else ""
 		var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4
-		cands = _parcel_candidates(pid, min_area) if spec.has("feld") or pid != "" else _market_candidates(min_area)
+		cands = _parcel_candidates(pid, min_area) if spec.has("feld") or pid != "" or where == "parzelle" else _market_candidates(min_area)
 		if cands.is_empty():
 			return {"ok": false, "msg": "Kein freies Grundstück mit Straßenzugang und mindestens %d Feldern verfügbar." % min_area}
 		parcel = cands[0]
@@ -300,6 +302,17 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 	var acct := "C%d" % cid
 	var site := int(b.site)
 	var staff := _staff_ok(b, spec)
+	var today := GameCalendar.day_of(sim.game_min)
+	if R.has("mast_tage"):   # fertig gemaestete Tiere verlassen den Stall
+		var keep: Array = []
+		for m in b.get("pipeline", []):
+			if int(m.due) <= today:
+				var nq := int(m.n) * int(R.aus.values()[0])
+				sim.stock.add(str(R.aus.keys()[0]), nq, acct, site, "Mast %s" % b.id, sim.game_min)
+				_count("produced", str(R.aus.keys()[0]), nq)
+			else:
+				keep.append(m)
+		b["pipeline"] = keep
 	# Theke (Laden): oeffnet, wenn ueber dem Mindestpersonal eine Verkaufskraft da ist; diese backt dann nicht mit
 	var shop: Dictionary = spec.get("laden", {})
 	b["counter"] = not shop.is_empty() and staff >= int(spec.get("personal_min", 1)) + int(shop.personal)
@@ -330,6 +343,12 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 	if float(b.energy_kw) > 0.0 and not sim.grid.supplied.has(b.id):
 		return   # Blockade "strom" setzt PowerGrid mit konkretem Grund
 	var batches := cap if out_cap < 0 else mini(cap, out_cap)
+	if R.has("plaetze"):   # Stallplaetze: Tiere in der Mast und fertige Tiere im Stall
+		var used := 0
+		for m in b.get("pipeline", []):
+			used += int(m.n)
+		used += sim.stock.qty(str(R.aus.keys()[0]), acct, site)
+		batches = mini(batches, maxi(0, int(R.plaetze) - used))
 	var short := ""
 	if out_cap == 0:
 		sim.biz.unblock(b.id, "material")
@@ -353,10 +372,14 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 	sim.biz.unblock(b.id, "material")
 	for item in R.ein:
 		_use(b, item, batches * int(R.ein[item]), acct, site)
-	for item in R.aus:
-		var q := batches * int(R.aus[item])
-		sim.stock.add(item, q, acct, site, "Produktion %s" % b.id, sim.game_min)
-		_count("produced", item, q)
+	if R.has("mast_tage"):
+		b.pipeline.append({"due": today + int(R.mast_tage), "n": batches})
+		sim.biz.note(b.id, "%d Tiere eingestallt, fertig an Tag %d" % [batches, today + int(R.mast_tage)], "Betrieb")
+	else:
+		for item in R.aus:
+			var q := batches * int(R.aus[item])
+			sim.stock.add(item, q, acct, site, "Produktion %s" % b.id, sim.game_min)
+			_count("produced", item, q)
 	b.today = batches
 	b["total"] = int(b.get("total", 0)) + batches
 
@@ -389,7 +412,15 @@ func _spoil(b: Dictionary, spec: Dictionary) -> void:
 		if int(art(item).get("haltbar_tage", 0)) <= 0:
 			continue
 		var acct := "C%d" % int(b.owner)
-		var n := int(floor(float(sim.stock.available(item, acct, int(b.site))) * SPOIL_SHARE))
+		var rate := SPOIL_SHARE
+		if bool(art(item).get("kuehlung", false)):   # Kuehlraum: mit Strom langsam, ohne Strom schnell (Kuehlkette)
+			var cold: bool = sim.grid.supplied.has(b.id)
+			rate = COLD_SPOIL if cold else WARM_SPOIL
+			if not cold and sim.stock.qty(item, acct, int(b.site)) > 0:
+				sim.biz.block(b.id, "kuehlung", "Kühlraum ohne Strom: %s verdirbt" % item_name(item))
+			else:
+				sim.biz.unblock(b.id, "kuehlung")
+		var n := int(floor(float(sim.stock.available(item, acct, int(b.site))) * rate))
 		if n > 0:
 			sim.stock.consume(item, n, acct, int(b.site), "Verdorben %s" % b.id, sim.game_min)
 			stats.spoiled = int(stats.spoiled) + n
@@ -761,6 +792,11 @@ func detail(b: Dictionary) -> Dictionary:
 		for item in spec.rezept.aus:
 			pr[item] = price_of(b, item)
 		e = {"chargen_heute": int(b.get("today", 0)), "chargen_gesamt": int(b.get("total", 0)), "bestand": bs, "preise": pr, "absatz_tag": int(b.get("sales_avg", 0.0))}
+		if spec.rezept.has("mast_tage"):
+			var n_in := 0
+			for m in b.get("pipeline", []):
+				n_in += int(m.n)
+			e["in_mast"] = n_in
 		if spec.has("laden"):
 			e["laden"] = ("offen, %d Kunden gestern" % int(b.get("counter_customers", 0))) if bool(b.get("counter", false)) else "geschlossen (Verkaufskraft fehlt)"
 	e["alter_tage"] = GameCalendar.day_of(sim.game_min) - GameCalendar.day_of(float(b.founded))
@@ -779,13 +815,13 @@ func detail(b: Dictionary) -> Dictionary:
 
 ## Lage der Kette fuer die KI-Beobachtung: Betriebe je Stufe und bisherige Importe (= Chance fuer lokale Erzeuger).
 func market_obs() -> Dictionary:
-	var n := {"feld": 0, "muehle": 0, "baeckerei": 0}
+	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0}
 	for b in sim.biz.items.values():
 		if n.has(b.branch) and b.status in Businesses.RUNNING:
 			n[b.branch] = int(n[b.branch]) + 1
-	return {"felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "brot_import": int(sim.retail.stats.get("bread_import", 0)),
+	return {"felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "brot_import": int(sim.retail.stats.get("bread_import", 0)),
 		"mehl_import": int(stats.imported.get("mehl", 0)), "getreide_import": int(stats.imported.get("getreide", 0)),
-		"basispreise": {"getreide": art("getreide").basispreis, "mehl": art("mehl").basispreis, "brot": art("brot").basispreis}}
+		"basispreise": {"getreide": art("getreide").basispreis, "mehl": art("mehl").basispreis, "brot": art("brot").basispreis, "schlachttier": art("schlachttier").basispreis, "fleisch": art("fleisch").basispreis}}
 
 
 ## Marktchancen fuer die KI: wie viel einer Stufe wird importiert statt lokal erzeugt (Brot: Grosshandelsimport).
