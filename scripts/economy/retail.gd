@@ -76,7 +76,7 @@ var stats := {"sales": 0.0, "units": 0, "lost": 0, "orders": 0, "delivered": 0, 
 var month_sales := 0.0               # Kassenumsatz im laufenden Monat (mindert den pauschalen Konsum, siehe Citizens)
 var _next_order := 1
 var _day := 0
-var _bakery_share := 1.0             # Anteil der Baeckerei-Kundschaft bei den bisherigen Baeckereien (Theken der Unternehmer teilen den Topf)
+var _share := {}                     # Geschaeftsart -> Anteil der Kundschaft bei den bisherigen Betrieben (Theken der Unternehmer teilen den Topf)
 
 
 func setup(s: Simulation) -> void:
@@ -266,7 +266,9 @@ func on_day(day: int) -> void:
 	_day = day
 	_stock_wholesale(day)
 	var counters := counters()
-	_bakery_share = bakery_share(counters)
+	_share = {}
+	for kind in ["baeckerei", "restaurant"]:
+		_share[kind] = kind_share(kind, counters)
 	for s in shops.values():
 		if s.status == "geschlossen":
 			continue
@@ -287,7 +289,7 @@ func counters() -> Array:
 		var spec: Dictionary = Businesses.branches().get(b.branch, {})
 		if not spec.has("laden") or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)) or not bool(b.get("counter", false)):
 			continue
-		out.append({"id": b.id, "kind": str(spec.laden.kundschaft), "item": str(spec.laden.artikel), "building": int(b.site), "owner": int(b.owner),
+		out.append({"id": b.id, "kind": str(spec.laden.kundschaft), "item": str(spec.laden.get("artikel", "")), "building": int(b.site), "owner": int(b.owner),
 			"price_factor": float(b.get("laden_faktor", 1.0))})
 	return out
 
@@ -296,19 +298,25 @@ func _weight(s: Dictionary) -> float:
 	return pow(1.0 / maxf(0.5, float(s.price_factor)), 1.6) * sim.contentment.building_factor(int(s.building))
 
 
-## Anteil, den die Baeckerei-Kundschaft der Stadt bei den bisherigen Baeckereien behaelt: Die Kundschaft ist ein gemeinsamer Topf
-## (Groesse wie bisher); Theken teilen ihn nach Preis und Lage. Ohne Theke 1.0.
-func bakery_share(cts: Array) -> float:
+## Anteil, den die Kundschaft einer Geschaeftsart bei den bisherigen Betrieben behaelt: Die Kundschaft ist ein gemeinsamer Topf
+## (Groesse wie bisher); Theken der Unternehmer teilen ihn nach Preis und Lage. Ohne Theke 1.0.
+func kind_share(kind: String, cts: Array) -> float:
 	var npc := 0.0
 	for s in shops.values():
-		if s.kind == "baeckerei" and s.status != "geschlossen":
+		if s.kind == kind and s.status != "geschlossen":
 			npc += _weight(s)
 	var extra := 0.0
 	for ct in cts:
-		extra += _weight(ct)
+		if ct.kind == kind:
+			extra += _weight(ct)
 	if extra <= 0.0:
 		return 1.0
 	return maxf(npc, 1.0) / (npc + extra)
+
+
+## Fuer Tests und Uebersicht: Anteil der bisherigen Baeckereien.
+func bakery_share(cts: Array) -> float:
+	return kind_share("baeckerei", cts)
 
 
 func _serve_counter(ct: Dictionary, day: int) -> void:
@@ -316,12 +324,27 @@ func _serve_counter(ct: Dictionary, day: int) -> void:
 	var c = sim.company(int(ct.owner))
 	var acct := "C%d" % int(ct.owner)
 	var r := _rng(ct, day)
-	var n := int(round(float(customers(ct, r)) * _bakery_share))
-	var g: Dictionary = GOODS[ct.item]
+	var n := int(round(float(customers(ct, r)) * float(_share.get(ct.kind, 1.0))))
 	var sold := 0
 	var lost := 0
 	var amount := 0.0
-	for i in n:
+	if ct.kind == "restaurant":   # Gaeste waehlen ein Gericht; fehlt eine Zutat, gehen sie leer aus
+		var spec: Dictionary = KINDS.restaurant
+		for i in n:
+			var d: Dictionary = DISHES[spec.dishes[r.randi() % spec.dishes.size()]]
+			var can := true
+			for it in d.uses:
+				if sim.stock.available(it, acct, int(ct.building)) < int(d.uses[it]):
+					can = false
+			if not can:
+				lost += 1
+				continue
+			for it in d.uses:
+				sim.stock.consume(it, int(d.uses[it]), acct, int(ct.building), "Küche %s: %s" % [ct.id, d.name], sim.game_min)
+			amount += float(d.price) * float(ct.price_factor)
+			sold += 1
+	var g: Dictionary = GOODS.get(ct.item, {})
+	for i in (n if ct.kind != "restaurant" else 0):
 		var want := 1 + r.randi() % int(g.get("basket", 1))
 		var have: int = sim.stock.available(ct.item, acct, int(ct.building))
 		if have <= 0:
@@ -366,8 +389,8 @@ func customers(s: Dictionary, r: RandomNumberGenerator) -> int:
 func _serve(s: Dictionary, day: int) -> void:
 	var r := _rng(s, day)
 	var n := customers(s, r)
-	if s.kind == "baeckerei":
-		n = int(round(float(n) * _bakery_share))
+	if _share.has(s.kind):
+		n = int(round(float(n) * float(_share[s.kind])))
 	var spec: Dictionary = spec_of(s)
 	s.day_sales = 0.0
 	s.day_lost = 0

@@ -171,7 +171,7 @@ func _pay_owner(u: Dictionary, amount: float) -> void:
 	if owner.begins_with("H") and sim.households.homes.has(owner):
 		sim.households.homes[owner].balance = float(sim.households.homes[owner].balance) + amount
 	elif owner.begins_with("C") and sim.company(int(owner.substr(1))) != null:
-		sim.company(int(owner.substr(1))).ledger.book("rent_income", amount, true, "Mieteinnahmen %s" % u.id, sim.game_min)
+		sim.company(int(owner.substr(1))).ledger.book("rent_income", amount, true, "Mieteinnahmen %s" % u.id, sim.game_min, "", sim.realty.cc_of(int(owner.substr(1))))
 	elif owner == "D0":
 		sim.economy.transfer("H0", "D0", amount)
 	elif sim.population.credit_owner(owner, amount, "H0"):
@@ -196,13 +196,18 @@ func collect_citizen_rent() -> float:
 		if owner.begins_with(Population.OWNER_PREFIX) and owner.substr(1).is_valid_int():
 			lord = idx.get(int(owner.substr(1)), {})
 		var paid := 0.0
+		var firm = sim.company(int(owner.substr(1))) if owner.begins_with("C") and owner.substr(1).is_valid_int() else null   # Unternehmen als Vermieter (Auftrag 14)
 		for p in occ[uid]:
 			if left <= 0.0:
 				break
 			var amt := minf(left, maxf(0.0, float(p.get("balance", 0.0))))
 			if amt <= 0.0:
 				continue
-			if not lord.is_empty():
+			if firm != null:
+				p.balance = float(p.balance) - amt
+				firm.ledger.book("rent_income", amt, true, "Mieteinnahmen %s" % uid, sim.game_min, Population.ACCOUNT, sim.realty.cc_of(firm.id))
+				paid += amt
+			elif not lord.is_empty():
 				paid += Population.move(p, lord, amt)
 			else:
 				p.balance = float(p.balance) - amt

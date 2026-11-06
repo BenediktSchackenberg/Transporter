@@ -148,5 +148,38 @@
       "lager_tage": 8,
       "lager_max": 1200
     }
+  },
+  "restaurant": {
+    "label": "Restaurant",
+    "beschreibung": "Küche und Gastraum: kocht die Gerichte der Stadtgastronomie aus eingekauften Zutaten (Fleisch gern vom Schlachthof der Stadt) und teilt sich die Restaurantkundschaft mit den anderen Restaurants.",
+    "standort": "markt",
+    "gebaeude": "restaurant",
+    "gruendungskosten": 0,
+    "ausstattung": 20000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 8.0,
+    "personal_min": 1,
+    "rollen": [
+      "kochen",
+      "service"
+    ],
+    "laden": {
+      "personal": 1,
+      "kundschaft": "restaurant",
+      "gerichte": true,
+      "lager_tage": 4,
+      "start_gaeste": 30
+    }
+  },
+  "immobilien": {
+    "label": "Immobilienbetrieb",
+    "beschreibung": "Kauft Wohngebäude vom privaten Vermietersektor (buy_property) und vermietet sie nach dem Mietspiegel; Instandhaltung und Grundsteuer laufen monatlich, auch bei Leerstand. Entsteht mit dem ersten Kauf.",
+    "standort": "hauptsitz",
+    "gruendungskosten": 0,
+    "strom_kw": 0.0,
+    "personal_min": 0,
+    "rollen": [
+      "verwaltung"
+    ]
   }
 }

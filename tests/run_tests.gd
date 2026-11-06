@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -6656,3 +6656,75 @@ func test_meat_chain() -> void:
 	var warm_loss := int(P.stats.spoiled) - sp0
 	ok(warm_loss > cold_loss * 3 and sb.blockers.any(func(x): return x.key == "kuehlung"), "Stromausfall: Kühlware verdirbt deutlich schneller (%d statt %d), Blockade 'Kühlraum ohne Strom'" % [warm_loss, cold_loss])
 	ok(before > 0 and identity_ok(s), "Geld und Waren erhalten")
+
+
+func test_restaurant_business() -> void:
+	var s := new_sim(2)
+	var R: Retail = s.retail
+	s.grid.capacity = 100000.0
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "restaurant"})
+	ok(r.ok, "Restaurant gegründet (%s)" % r.get("msg", ""))
+	var b: Dictionary = s.biz.get_b(str(r.ref))
+	ok(s.city.building(int(b.site)).type == "restaurant", "Gastraum auf einer Parzelle nahe dem Markt")
+	var staff: Array = s.personnel.employed(0)
+	s.biz.assign(0, staff[staff.size() - 1].id, b.id)
+	next_day(s)
+	ok(not bool(b.counter) and s.prod.deals.values().any(func(d): return d.buyer_biz == b.id and d.item == "teigwaren"), "Küche bestellt Zutaten; ohne Servicekraft bleibt der Gastraum zu")
+	s.biz.assign(0, staff[staff.size() - 2].id, b.id)
+	var sales0 := float(s.companies[0].ledger.totals.get("sales", 0.0))
+	for i in 4:
+		next_day(s)
+	var got := float(s.companies[0].ledger.totals.get("sales", 0.0)) - sales0
+	ok(bool(b.counter) and got > 0.0, "Gäste essen und zahlen (%s)" % Catalog.money(got))
+	ok(R.kind_share("restaurant", R.counters()) < 1.0, "Restaurant teilt sich die Kundschaft mit den anderen Restaurants")
+	ok(int(s.prod.stats.consumed.get("teigwaren", 0)) >= 0 and str(s.prod.detail(b).laden).begins_with("offen"), "Ansicht: Gastraum offen mit Gästezahl")
+	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+## Spielmonat vorspulen (Monatslauf aller Systeme).
+func next_month(s: Simulation) -> void:
+	s.game_min += GameCalendar.days_to_min(float(GameCalendar.DAYS_PER_MONTH)) if "DAYS_PER_MONTH" in GameCalendar else GameCalendar.days_to_min(30.0)
+	s.month_changed.emit(GameCalendar.month_of(s.game_min))
+
+
+func test_real_estate() -> void:
+	var s := new_sim(2)
+	var c: Company = s.companies[0]
+	var offers: Array = s.realty.offers(10)
+	ok(not offers.is_empty(), "Wohngebäude zum Kauf angeboten (%d)" % offers.size())
+	# Gebaeude mit vermieteter Wohnung des Vermietermarkts waehlen (Mieter: Haushalt eines Mitarbeiters), sonst das erste Angebot
+	var o: Dictionary = offers[0]
+	for u in s.housing.units.values():
+		if u.owner == Housing.LANDLORD and str(u.tenant).begins_with("H"):
+			var hit: Array = s.realty.offers(500).filter(func(x): return int(x.gebaeude) == int(u.building))
+			if not hit.is_empty():
+				o = hit[0]
+				break
+	c.ledger.inject(maxf(0.0, float(o.preis) + 50000.0 - c.ledger.cash))
+	var r: Dictionary = s.executor.execute(0, {"action": "buy_property", "gebaeude": int(o.gebaeude)})
+	ok(r.ok, "Gebäude gekauft (%s)" % r.msg)
+	ok(s.realty.units_of(int(o.gebaeude), "C0").size() == int(o.einheiten) and s.realty.units_of(int(o.gebaeude), Housing.LANDLORD).is_empty(), "die Wohnungen des Vermietermarkts gehören jetzt der Firma")
+	var b: Dictionary = s.realty.business_of(0, false)
+	ok(not b.is_empty() and c.ledger.cost_center != b.id, "Immobilienbetrieb entsteht, ist nicht Standard-Kostenstelle")
+	# Ein Buerger mit Guthaben zieht in eine der gekauften Wohnungen (Umzug wie bei relocate_cheaper)
+	var mover: Array = s.citizens.people.filter(func(p): return float(p.get("balance", 0.0)) > 2000.0 and str(p.get("home", "")) != "")
+	if not mover.is_empty() and occ_before_zero(s, o):
+		mover[0].home = s.realty.units_of(int(o.gebaeude), "C0")[0].id
+	var v0: float = s.economy.accounts.V0
+	var rent0 := float(c.ledger.totals.get("rent_income", 0.0))
+	next_month(s)
+	var got := float(c.ledger.totals.get("rent_income", 0.0)) - rent0
+	var occ := int(s.realty.detail(b).gebaeude[str(o.gebaeude)].belegt)
+	ok(occ > 0 and got > 0.0, "Mieter zahlen an die Firma (%s, %d Wohnungen belegt)" % [Catalog.money(got), occ])
+	ok(got <= float(o.miete_monat) * 1.05 + 0.01, "Miete höchstens einmal je Wohnung und Monat")
+	ok(float(c.ledger.cc_totals.get(b.id, {}).get("rent_income", 0.0)) >= got - 0.01, "Mieteinnahmen auf der Kostenstelle des Immobilienbetriebs")
+	ok(float(c.ledger.cc_totals.get(b.id, {}).get("property_costs", 0.0)) < 0.0, "Instandhaltung und Grundsteuer belasten den Betrieb")
+	ok(identity_ok(s), "Geld erhalten nach Kauf und Monatslauf")
+	var r2: Dictionary = s.executor.execute(0, {"action": "sell_property", "gebaeude": int(o.gebaeude)})
+	ok(r2.ok and s.realty.units_of(int(o.gebaeude), "C0").is_empty(), "Verkauf zurück an den Vermietermarkt")
+	ok(identity_ok(s), "Geld erhalten nach Verkauf")
+
+
+func occ_before_zero(s: Simulation, o: Dictionary) -> bool:
+	return s.realty.detail(s.realty.business_of(0, false)).gebaeude[str(o.gebaeude)].belegt == 0
+

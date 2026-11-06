@@ -451,6 +451,8 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 					break
 	# 11b) Produktion (Auftrag 14, Etappe 2): eigene Produktionsbetriebe besetzen, eine fehlende Kettenstufe gruenden
 	_production(obs, me, cash, buffer, personality, free_staff, planned, actions, reasons)
+	# 11c) Immobilien (Etappe 3): vorsichtige Persoenlichkeiten legen Ueberschuss in ein gut vermietetes Wohngebaeude an
+	_realty(obs, cash, buffer, personality, planned, actions, reasons)
 	# 12) Gespraeche (kurz, mit Anlass)
 	if rng.randf() < 0.2 and actions.size() < MAX_ACTIONS:
 		var pool: Array = LINES.get(personality, LINES.kostenoptimierer)
@@ -474,7 +476,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	return {"summary": summary, "goal": goal, "actions": actions.slice(0, MAX_ACTIONS), "memory": "Strategie: %s" % personality}
 
 
-const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof"]
+const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant"]
 const PROD_MAX := {"wachstum": 2, "netzwerker": 1, "kostenoptimierer": 1, "risikospieler": 1}
 const PROD_RESERVE := 10000.0   # Bargeld fuer Einkauf und Loehne nach der Gruendung
 
@@ -537,6 +539,8 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "schlachthof"
 	elif int(mk.get("tierhaltungen", 0)) < int(mk.get("schlachthoefe", 0)):
 		branch = "tierhaltung"
+	elif int(mk.get("restaurants", 0)) == 0:
+		branch = "restaurant"
 	elif int(mk.felder) < 2 * int(mk.muehlen) + int(mk.get("tierhaltungen", 0)):
 		branch = "feld"
 	elif personality == "wachstum" and int(mk.brot_import) > 0:
@@ -553,6 +557,21 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	actions.append({"action": "found_business", "branche": branch, "reason": "Kettenstufe fehlt in der Stadt (Bäckereien %d, Mühlen %d, Felder %d)" % [int(mk.baeckereien), int(mk.muehlen), int(mk.felder)]})
 	planned.append("found_business")
 	reasons.append("gründe %s, weil diese Stufe der Brotkette in der Stadt fehlt" % Businesses.branches()[branch].label)
+
+
+const REALTY_PERSONALITIES := ["kostenoptimierer", "netzwerker"]
+const REALTY_MIN_OCCUPANCY := 0.8
+static func _realty(obs: Dictionary, cash: float, buffer: float, personality: String, planned: Array, actions: Array, reasons: Array) -> void:
+	if personality not in REALTY_PERSONALITIES or "buy_property" in planned:
+		return
+	if obs.get("betriebe", []).any(func(b): return b.branche == "immobilien" and not b.get("gebaeude", {}).is_empty()):
+		return   # vorerst ein Gebaeude je Unternehmen
+	for o in obs.get("immobilien_angebote", []):
+		if float(o.belegt) / maxf(1.0, float(o.einheiten)) >= REALTY_MIN_OCCUPANCY and cash > float(o.preis) + 2.0 * buffer + PROD_RESERVE:
+			actions.append({"action": "buy_property", "gebaeude": int(o.gebaeude), "reason": "gut vermietet (%d/%d), Sollmiete %d EUR/Monat" % [int(o.belegt), int(o.einheiten), int(o.miete_monat)]})
+			planned.append("buy_property")
+			reasons.append("lege Rücklagen in ein vermietetes Wohngebäude an")
+			return
 
 
 ## Risikospieler: erst auskundschaften, dann mit dem entbehrlichsten Arbeiter ein stehendes Fremdfahrzeug angreifen.

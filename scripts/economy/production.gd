@@ -176,15 +176,17 @@ func _place_field(p: Dictionary, name: String, btype: String = "farm") -> Dictio
 func on_day(day: int) -> void:
 	for b in sim.biz.items.values():
 		var spec: Dictionary = Businesses.branches().get(b.branch, {})
-		if not (spec.has("feld") or spec.has("rezept")) or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
+		if not (spec.has("feld") or spec.has("rezept") or spec.has("laden")) or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		_costs(b)
 		b["sales_avg"] = float(b.get("sales_avg", 0.0)) * 0.7 + float(b.get("sold_today", 0)) * 0.3
 		b["sold_today"] = 0
 		if spec.has("feld"):
 			_field_day(b, spec)
-		else:
+		elif spec.has("rezept"):
 			_recipe_day(b, spec)
+		else:
+			_kitchen_day(b, spec)
 		_spoil(b, spec)
 	_export_surplus()
 	_advance_deals()
@@ -407,12 +409,14 @@ func _use(b: Dictionary, item: String, qty: int, acct: String, site: int) -> voi
 
 
 func _spoil(b: Dictionary, spec: Dictionary) -> void:
-	var out: Dictionary = spec.get("rezept", {}).get("aus", {})
+	var out: Array = spec.get("rezept", {}).get("aus", {}).keys()
+	if spec.get("laden", {}).get("gerichte", false):
+		out = kitchen_items()
 	for item in out:
 		if int(art(item).get("haltbar_tage", 0)) <= 0:
 			continue
 		var acct := "C%d" % int(b.owner)
-		var rate := SPOIL_SHARE
+		var rate := minf(SPOIL_SHARE, 0.75 / float(art(item).haltbar_tage))   # Brot (3 Tage) 25 %, Gemuese (5 Tage) 15 % je Tag
 		if bool(art(item).get("kuehlung", false)):   # Kuehlraum: mit Strom langsam, ohne Strom schnell (Kuehlkette)
 			var cold: bool = sim.grid.supplied.has(b.id)
 			rate = COLD_SPOIL if cold else WARM_SPOIL
@@ -424,6 +428,32 @@ func _spoil(b: Dictionary, spec: Dictionary) -> void:
 		if n > 0:
 			sim.stock.consume(item, n, acct, int(b.site), "Verdorben %s" % b.id, sim.game_min)
 			stats.spoiled = int(stats.spoiled) + n
+
+
+# ------------------------------------------------------------------ Kueche (Restaurant)
+## Zutaten der Gerichte des Restaurants (Retail.KINDS.restaurant).
+static func kitchen_items() -> Array:
+	return Retail.KINDS.restaurant.goods.duplicate()
+
+
+## Erwarteter Tagesverbrauch einer Zutat bei `guests` Gaesten (Gerichte gleich verteilt, wie in Retail._kitchen_use).
+static func kitchen_use(item: String, guests: float) -> float:
+	var dishes: Array = Retail.KINDS.restaurant.dishes
+	var per := 0.0
+	for dn in dishes:
+		per += float(Retail.DISHES[dn].uses.get(item, 0))
+	return per / float(dishes.size()) * guests
+
+
+## Restaurant: Theke (Service) nur mit Servicekraft ueber der Kueche; Zutaten nach erwarteter Gaestezahl (gleitender Durchschnitt).
+func _kitchen_day(b: Dictionary, spec: Dictionary) -> void:
+	var L: Dictionary = spec.laden
+	var staff := _staff_ok(b, spec)
+	b["counter"] = staff >= int(spec.get("personal_min", 1)) + int(L.personal) and (float(b.energy_kw) <= 0.0 or sim.grid.supplied.has(b.id))
+	b["guests_avg"] = float(b.get("guests_avg", float(L.start_gaeste))) * 0.7 + float(b.get("counter_customers", L.start_gaeste)) * 0.3
+	for item in kitchen_items():
+		var per_day := maxf(1.0, kitchen_use(item, float(b.guests_avg)))
+		_ensure_input(b, item, int(ceil(per_day * float(L.lager_tage))), int(ceil(per_day * float(L.lager_tage) / 2.0)))
 
 
 func _count(key: String, item: String, n: int) -> void:
@@ -782,6 +812,12 @@ func detail(b: Dictionary) -> Dictionary:
 		e["bestand"] = {"saatgut": sim.stock.qty("saatgut", acct, int(b.site)), "getreide": sim.stock.qty("getreide", acct, int(b.site))}
 		e["preise"] = {"getreide": price_of(b, "getreide")}
 		e["absatz_tag"] = int(b.get("sales_avg", 0.0))
+	elif spec.get("laden", {}).get("gerichte", false):
+		var ks := {}
+		for item in kitchen_items():
+			ks[item] = sim.stock.qty(item, acct, int(b.site))
+		e = {"bestand": ks, "gaeste_tag": int(b.get("guests_avg", 0.0)), "absatz_tag": int(b.get("sales_avg", 0.0)),
+			"laden": ("offen, %d Gäste gestern" % int(b.get("counter_customers", 0))) if bool(b.get("counter", false)) else "geschlossen (Servicekraft oder Strom fehlt)"}
 	elif spec.has("rezept"):
 		var bs := {}
 		for item in spec.rezept.ein:
@@ -815,11 +851,11 @@ func detail(b: Dictionary) -> Dictionary:
 
 ## Lage der Kette fuer die KI-Beobachtung: Betriebe je Stufe und bisherige Importe (= Chance fuer lokale Erzeuger).
 func market_obs() -> Dictionary:
-	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0}
+	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0}
 	for b in sim.biz.items.values():
 		if n.has(b.branch) and b.status in Businesses.RUNNING:
 			n[b.branch] = int(n[b.branch]) + 1
-	return {"felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "brot_import": int(sim.retail.stats.get("bread_import", 0)),
+	return {"felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "brot_import": int(sim.retail.stats.get("bread_import", 0)),
 		"mehl_import": int(stats.imported.get("mehl", 0)), "getreide_import": int(stats.imported.get("getreide", 0)),
 		"basispreise": {"getreide": art("getreide").basispreis, "mehl": art("mehl").basispreis, "brot": art("brot").basispreis, "schlachttier": art("schlachttier").basispreis, "fleisch": art("fleisch").basispreis}}
 

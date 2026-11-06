@@ -156,7 +156,7 @@ func found(cid: int, branch: String, reason: String, params: Dictionary = {}) ->
 	var spec: Dictionary = branches().get(branch, {})
 	if spec.is_empty():
 		return {"ok": false, "msg": "Unbekannte Branche '%s'. Verfügbar: %s" % [branch, ", ".join(branches().keys())]}
-	if spec.has("feld") or spec.has("rezept"):
+	if spec.has("feld") or spec.has("rezept") or spec.has("laden"):
 		if recently_closed(cid, branch):
 			return {"ok": false, "msg": "Einen Betrieb der Branche %s hast du vor weniger als %d Tagen geschlossen; Neugründung erst danach." % [branch, REFOUND_DAYS]}
 		return sim.prod.found(cid, branch, params, reason)   # Produktionsbetriebe: Standort, Ausstattung, Feld (Etappe 2)
@@ -165,6 +165,8 @@ func found(cid: int, branch: String, reason: String, params: Dictionary = {}) ->
 	var c = sim.company(cid)
 	if c.depots.is_empty():
 		return {"ok": false, "msg": "Kein Hauptsitz vorhanden."}
+	if branch == "immobilien":
+		return {"ok": false, "msg": "Der Immobilienbetrieb entsteht mit dem ersten Gebäudekauf (buy_property)."}
 	if branch == "transport" and has_branch(cid, "transport"):
 		return {"ok": false, "msg": "Es gibt bereits einen Transportbetrieb (%s)." % find(cid, "transport").id}
 	var cost := float(spec.get("gruendungskosten", 0.0))
@@ -231,11 +233,13 @@ func obs_of(cid: int) -> Array:
 	for b in of(cid):
 		var e := {"id": b.id, "branche": b.branch, "status": b.status, "personal": staff_of(b.id).size(), "ergebnis": int(L.cc_profit(b.id))}
 		var spec: Dictionary = branches().get(b.branch, {})
-		if spec.has("feld") or spec.has("rezept"):
+		if spec.has("feld") or spec.has("rezept") or spec.has("laden"):
 			e["personal_min"] = int(spec.get("personal_min", 1))
 			if spec.has("laden"):
 				e["personal_soll"] = int(spec.personal_min) + int(spec.laden.personal)   # mit Verkaufskraft fuer die Theke
 			e.merge(sim.prod.detail(b))
+		if b.branch == "immobilien":
+			e.merge(sim.realty.detail(b))
 		if not b.blockers.is_empty():
 			e["blockaden"] = b.blockers.map(func(x): return x.text)
 		out.append(e)

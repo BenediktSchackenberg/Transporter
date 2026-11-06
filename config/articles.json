@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS). exportpreis = Preis frei Verladestelle (Großhandelslager) für Überschüsse; die Fracht dorthin zahlt der Verkäufer. kuehlung = Kühlware: verdirbt am Standort mit Strom langsam, ohne Strom schnell; Transport nur gekühlt. 'fleisch' ist derselbe Artikel wie in den Restaurants (Retail.GOODS).",
+  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS). exportpreis = Preis frei Verladestelle (Großhandelslager) für Überschüsse; die Fracht dorthin zahlt der Verkäufer. kuehlung = Kühlware: verdirbt am Standort mit Strom langsam, ohne Strom schnell; Transport nur gekühlt. 'fleisch' ist derselbe Artikel wie in den Restaurants (Retail.GOODS). Restaurantzutaten (gemuese, teigwaren, milch_zutat, fassgetraenk, fleisch) sind dieselben Artikel wie im Einzelhandel; Importpreis = Großhandelspreis für Gewerbekunden.",
   "saatgut": {
     "name": "Saatgut",
     "einheit": "Sack",
@@ -74,7 +74,43 @@
     "haltbar_tage": 4,
     "kuehlung": true,
     "basispreis": 3.4,
-    "importpreis": null,
+    "importpreis": 4.68,
     "exportpreis": 2.2
+  },
+  "gemuese": {
+    "name": "Gemüse",
+    "einheit": "Port.",
+    "ladung": "lebensmittel",
+    "je_ladeeinheit": 300,
+    "haltbar_tage": 5,
+    "basispreis": 1.56,
+    "importpreis": 1.56
+  },
+  "teigwaren": {
+    "name": "Nudeln und Reis",
+    "einheit": "Port.",
+    "ladung": "lebensmittel",
+    "je_ladeeinheit": 300,
+    "haltbar_tage": 0,
+    "basispreis": 0.78,
+    "importpreis": 0.78
+  },
+  "milch_zutat": {
+    "name": "Milchprodukte",
+    "einheit": "Port.",
+    "ladung": "lebensmittel",
+    "je_ladeeinheit": 300,
+    "haltbar_tage": 6,
+    "basispreis": 1.3,
+    "importpreis": 1.3
+  },
+  "fassgetraenk": {
+    "name": "Fassgetränke",
+    "einheit": "Port.",
+    "ladung": "getraenke",
+    "je_ladeeinheit": 300,
+    "haltbar_tage": 0,
+    "basispreis": 0.91,
+    "importpreis": 0.91
   }
 }

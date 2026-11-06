@@ -810,6 +810,12 @@ static func businesses(sim: Simulation) -> String:
 					parts.append("Preis %s %s" % [Production.item_name(it), Catalog.money(float(pd.preise[it]))])
 				txt += "    %s
 " % " · ".join(parts)
+			var rb: Dictionary = sim.biz.get_b(r.id)
+			if rb.get("branch", "") == "immobilien":
+				for key in rb.get("props", {}):
+					var dd: Dictionary = sim.realty.detail(rb).gebaeude[key]
+					txt += "    Gebäude %s: %d Wohnungen, %d belegt · Sollmiete %s/Monat · Buchwert %s
+" % [key, int(dd.einheiten), int(dd.belegt), Catalog.money(float(dd.miete_monat)), Catalog.money(float(dd.buchwert))]
 			if not r.letzte_entscheidung.is_empty():
 				txt += "    Zuletzt (%s): %s
 " % [r.letzte_entscheidung.source, r.letzte_entscheidung.text]
