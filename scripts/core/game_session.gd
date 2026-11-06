@@ -415,6 +415,25 @@ func follow(sel: Dictionary) -> void:
 	following = true
 
 
+## Taste B: Kamera springt reihum zu den laufenden Bergwerken (sonst zu den Bergen).
+var _mine_idx := -1
+func _next_mine() -> void:
+	var targets: Array = city_view.mountain_view.mine_targets()
+	var label := "Bergwerk"
+	if targets.is_empty():
+		label = "Berg"
+		for pid in sim.prod.terrain:
+			var mp: Dictionary = sim.parcels.parcel(pid)
+			targets.append(Iso.to_screen(Vector2((float(mp.rect[0]) + float(mp.rect[2]) * 0.5) * 32.0, (float(mp.rect[1]) + float(mp.rect[3]) * 0.5) * 32.0)))
+	if targets.is_empty():
+		return
+	_mine_idx = (_mine_idx + 1) % targets.size()
+	following = false
+	city_view.camera.position = targets[_mine_idx]
+	city_view.camera.zoom = Vector2(0.8, 0.8)
+	hud.show_toast("%s %d von %d (Taste B: nächstes)" % [label, _mine_idx + 1, targets.size()])
+
+
 func set_follow(on: bool) -> void:
 	following = on and not entity_view.selected.is_empty()
 
@@ -477,3 +496,4 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_F5: save_game()
 			KEY_TAB: hud.toggle_panels()
 			KEY_L: sim.log_event(city_view.parcel_layer.cycle(), "info")
+			KEY_B: _next_mine()

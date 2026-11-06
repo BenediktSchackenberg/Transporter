@@ -1355,6 +1355,11 @@ func _update_selection() -> void:
 				return
 			sel_title.text = "Warenposten %s – %d × %s" % [lot.id, int(lot.qty), CityGoods.get_item(lot.item).get("name", lot.item)]
 			sel_text.text = LiveText.lot(sim, lot)
+		"mountain":
+			var dep: Dictionary = sim.prod.deposit_of(str(sel.id))
+			var mb: Dictionary = sim.prod.mine_on(str(sel.id))
+			sel_title.text = ("Bergwerk – %s" % mb.name) if not mb.is_empty() else ("Berg mit Lagerstätte (%s)" % Production.item_name(str(dep.get("art", ""))))
+			sel_text.text = LiveText.mountain(sim, str(sel.id))
 		"site":
 			var pr: Dictionary = sim.construction.projects.get(sel.id, {})
 			if pr.is_empty():

@@ -875,6 +875,46 @@ static func parcels(sim: Simulation) -> String:
 	return txt
 
 
+## Berg mit Lagerstaette bzw. Bergwerk (Klick auf den Berg): Vorkommen, Abbau, Betreiber, Foerderung, Halde, Lage.
+static func mountain(sim: Simulation, pid: String) -> String:
+	var P: Production = sim.prod
+	var dep := P.deposit_of(pid)
+	var ex := P.excavated(pid)
+	var p: Dictionary = sim.parcels.parcel(pid)
+	var item := str(dep.get("art", ""))
+	var start := int(P.terrain.get(pid, {}).get("start", 0))
+	var txt := "[b]Lagerstätte[/b] %s · Grundstück %s (%d Felder)\n" % [Production.item_name(item), pid, int(p.get("area", 0))]
+	txt += "Restvorrat %d von %d Einheiten · Qualität %.0f %% · abgebaut %.1f %%\n" % [int(dep.get("menge", 0)), start, float(dep.get("qualitaet", 0.0)) * 100.0, float(ex.get("anteil", 0.0)) * 100.0]
+	var mb := P.mine_on(pid)
+	if mb.is_empty():
+		txt += "\n[color=#9aa3ad]Noch kein Bergwerk. Kaufpreis des Grundstücks %s. Abbau über die Unternehmer-Aktion found_business (branche bergwerk, rohstoff %s); Abbau nur auf eigenem Grund.[/color]\n" % [Catalog.money(float(p.get("price", 0.0))), item]
+		return txt
+	var c = sim.company(int(mb.owner))
+	var d := P.detail(mb)
+	txt += "\n[b]Betreiber[/b] [color=#%s]%s[/color] · Status %s · Personal %d · Förderung heute %d · gesamt %d\n" % [c.color.to_html(false), c.company_name, mb.status,
+		sim.biz.staff_of(mb.id).size(), int(d.get("foerderung_heute", 0)), int(mb.get("total", 0))]
+	txt += "Halde %d Einheiten · Preis %s je Einheit · Absatz ~%d/Tag\n" % [sim.stock.qty(item, "C%d" % int(mb.owner), int(mb.site)), Catalog.money(P.price_of(mb, item)), int(d.get("absatz_tag", 0))]
+	for bl in mb.blockers:
+		txt += "[color=#e0a040]Blockade: %s[/color]\n" % bl.text
+	var bt: float = float(P.blasts.get(mb.id, -1.0))
+	if bt >= 0.0:
+		txt += "Letzte Sprengung: %s\n" % GameCalendar.short_text(bt)
+	var buyers := {}
+	for dl in P.deals.values():
+		if dl.seller_biz == mb.id:
+			buyers[P._who(dl.buyer)] = int(buyers.get(P._who(dl.buyer), 0)) + int(dl.qty)
+	if not buyers.is_empty():
+		var parts: Array = []
+		for k in buyers:
+			parts.append("%s %d" % [k, int(buyers[k])])
+		txt += "Lieferungen an: %s\n" % ", ".join(parts)
+	var L: Ledger = c.ledger
+	txt += "Ergebnis des Betriebs: %s (Umsatz %s)\n" % [Catalog.money(L.cc_profit(mb.id)), Catalog.money(L.cc_revenue(mb.id))]
+	if not mb.decisions.is_empty():
+		txt += "Zuletzt: %s\n" % mb.decisions.back().text
+	return txt
+
+
 static func site(sim: Simulation, pr: Dictionary) -> String:
 	var C: Construction = sim.construction
 	var txt := "Bauherr: %s · Baufirma: %s · Genehmigung: %s · Status: %s

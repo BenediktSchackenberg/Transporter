@@ -673,6 +673,12 @@ func selected_position() -> Vector2:
 		"lot":
 			var bd: Dictionary = sim.city.building(sim.city_depot.building)
 			return Vector2(bd.x * 32 + bd.w * 16, bd.y * 32 + bd.h * 16)
+		"mountain":
+			var mn = cv.mountain_view._nodes.get(str(selected.id))
+			if mn != null and mn.active:   # laufendes Bergwerk: zwischen Abbaufront und Halde
+				return (Vector2(mn.face) + Vector2(mn.halde_cell)) * 16.0 + Vector2(16, 16)
+			var mp: Dictionary = sim.parcels.parcel(str(selected.id))
+			return Vector2((float(mp.rect[0]) + float(mp.rect[2]) * 0.5) * 32.0, (float(mp.rect[1]) + float(mp.rect[3]) * 0.5) * 32.0)
 	return Vector2(-9999, -9999)
 
 
@@ -726,6 +732,9 @@ func pick(click: Vector2) -> Dictionary:
 	var site_id: String = cv.site_view.pick(Iso.to_world(click))
 	if site_id != "":
 		return {"kind": "site", "id": site_id}
+	var mountain: String = cv.mountain_view.pick(Iso.to_world(click))
+	if mountain != "":
+		return {"kind": "mountain", "id": mountain}
 	var found := -1
 	var found_depth := -INF
 	for b in sim.city.buildings:

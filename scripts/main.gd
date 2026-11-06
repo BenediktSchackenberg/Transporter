@@ -145,6 +145,16 @@ func _start_autotest() -> void:
 
 
 func _process(_delta: float) -> void:
+	if session and args.has("demo-mine") and not args.has("_mine"):   # Sichtpruefung Bergbau: Firma 0 eroeffnet ein Bergwerk mit Personal
+		args["_mine"] = true
+		var c0: Company = session.sim.companies[0]
+		c0.ledger.inject(120000.0)
+		var r: Dictionary = session.sim.executor.execute(0, {"action": "found_business", "branche": "bergwerk", "rohstoff": str(args["demo-mine"]) if str(args["demo-mine"]) != "true" else ""})
+		print("AUTOTEST: Bergwerk ", r.get("msg", ""))
+		if r.get("ok", false):
+			var staff: Array = session.sim.personnel.employed(0)
+			for i in mini(3, staff.size()):
+				session.sim.biz.assign(0, staff[staff.size() - 1 - i].id, str(r.ref))
 	if session and args.has("save-at") and not args.has("_saved") and session.active_seconds >= float(args["save-at"]):
 		args["_saved"] = true
 		session.save_game()
@@ -158,6 +168,23 @@ func _process(_delta: float) -> void:
 			var e: Dictionary = session.sim.activity.items.back()
 			session.set_follow(false)
 			session.city_view.set_camera_world(Vector2(float(e.x) * 32.0 + 16.0, float(e.y) * 32.0 + 16.0))
+		if args.has("shot-mine"):   # Kamera auf ein Bergwerk (sonst einen Berg), Detailkarte offen
+			var mv: MountainView = session.city_view.mountain_view
+			var pid := ""
+			for k in session.sim.prod.terrain:
+				if pid == "" or not session.sim.prod.mine_on(k).is_empty():
+					pid = k
+					if not session.sim.prod.mine_on(k).is_empty():
+						break
+			if pid != "":
+				var mp: Dictionary = session.sim.parcels.parcel(pid)
+				session.set_follow(false)
+				var mn = mv._nodes.get(pid)
+				var focus := Vector2((float(mp.rect[0]) + float(mp.rect[2]) * 0.5) * 32.0, (float(mp.rect[1]) + float(mp.rect[3]) * 0.5) * 32.0)
+				if mn != null and mn.active:
+					focus = (Vector2(mn.face) + Vector2(mn.halde_cell)) * 16.0 + Vector2(16, 16)   # zwischen Abbaufront und Halde
+				session.city_view.set_camera_world(focus)
+				session.follow({"kind": "mountain", "id": pid})   # Kamera bleibt am Abbau
 		if args.has("shot-tile"):
 			var xy: PackedStringArray = str(args["shot-tile"]).split(",")
 			session.set_follow(false)

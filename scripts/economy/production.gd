@@ -25,13 +25,16 @@ const UPSTREAM := {"getreide": "feld", "holz": "forst", "mehl": "muehle", "schla
 ## Lagerstaetten (Abschnitt 5, vereinfacht): ausgewaehlte freie Parzellen ausserhalb von Wohn- und Mischgebiet tragen ein Vorkommen.
 ## Deterministisch aus Stadtsamen und Parzellen-ID; Menge in Einheiten (100 kg), Qualitaet 0,6-1,0 (Foerderung je Person).
 const DEPOSIT_KINDS := ["eisenerz", "kohle", "kalkstein", "rohmaterial"]
-const DEPOSIT_SHARE := 0.25   # Rohware -> Branche, die sie in der Stadt erzeugt             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
+const DEPOSIT_SHARE := 0.35
+const OUTSKIRTS := 0.62           # Anteil des Kartenhalbmessers, ab dem der Aussenbereich beginnt   # Rohware -> Branche, die sie in der Stadt erzeugt             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
 
 static var _articles := {}
 
 var sim
 var deals := {}                      # "D<n>" -> Liefervertrag
 var mined := {}                      # Parzelle -> bereits gefoerderte Menge (Lagerstaette bleibt beim Besitzerwechsel erschoepft)
+var terrain := {}                    # Parzelle -> Bergmassiv {cells: {Vector2i: Hoehe in Stufen}, order: [Zellen ab der Abbaufront], art}
+var blasts := {}                     # Betrieb -> Spielminute der letzten Sprengung (fuer Darstellung und Protokoll)
 var _deposits := {}
 var stats := {"produced": {}, "consumed": {}, "imported": {}, "exported": {}, "sold": 0.0, "deals": 0, "fallback": 0, "spoiled": 0}
 var _next := 1
@@ -58,6 +61,8 @@ static func item_name(item: String) -> String:
 func setup(simulation) -> void:
 	sim = simulation
 	sim.day_changed.connect(on_day)
+	_build_deposits()
+	_build_terrain()
 
 
 # ------------------------------------------------------------------ Gruendung
@@ -319,16 +324,15 @@ func deposit_of(pid: String) -> Dictionary:
 
 func _build_deposits() -> void:
 	var seed_v: int = int(sim.city.seed_value)
-	for p in sim.parcels.items.values():
-		if p.zone in ["wohnen", "mischgebiet", "gruen", "korridor"] or not sim.parcels.is_buildable(p) or int(p.area) < 30:
-			continue
+	var cands: Array = sim.parcels.items.values().filter(func(p): return _outskirts(p) and p.zone not in ["gruen", "korridor"] and sim.parcels.is_buildable(p) 		and int(p.area) >= 40 and p.state == "frei")
+	for p in cands:
 		var h := absi(hash([seed_v, p.id, "vorkommen"]))
 		if float(h % 1000) / 1000.0 >= DEPOSIT_SHARE:
 			continue
 		_deposits[p.id] = {"art": DEPOSIT_KINDS[(h / 1000) % DEPOSIT_KINDS.size()], "menge": 3000 + (h / 7) % 9000, "qualitaet": snappedf(0.6 + float((h / 13) % 41) / 100.0, 0.01)}
-	# Jeder Rohstoff mindestens einmal auf einer erreichbaren Parzelle (kein Start ohne Zugang zu einer Rohstoffart)
-	var reach: Array = sim.parcels.items.values().filter(func(p): return p.zone not in ["wohnen", "mischgebiet", "gruen", "korridor"] and sim.parcels.is_buildable(p) 		and int(p.area) >= 20 and p.state == "frei" and bool(sim.parcels.utilities_of(p).strasse))
-	reach.sort_custom(func(a, b): return str(a.id) < str(b.id))
+	# Jeder Rohstoff mindestens einmal auf einer erreichbaren Parzelle am Stadtrand (die aeussersten zuerst)
+	var reach: Array = cands.filter(func(p): return bool(sim.parcels.utilities_of(p).strasse))
+	reach.sort_custom(func(a, b): return _center_dist(a) > _center_dist(b))
 	for kind in DEPOSIT_KINDS:
 		var have := false
 		for k in _deposits:
@@ -343,6 +347,125 @@ func _build_deposits() -> void:
 				break
 
 
+## Abstand des Parzellenmittelpunkts vom Kartenmittelpunkt (Felder, groesste Achse).
+func _center_dist(p: Dictionary) -> float:
+	var c := Vector2(float(p.rect[0]) + float(p.rect[2]) * 0.5, float(p.rect[1]) + float(p.rect[3]) * 0.5)
+	var m := float(sim.city.size) * 0.5
+	return maxf(absf(c.x - m), absf(c.y - m))
+
+
+## Berge und Lagerstaetten nur im Aussenbereich (aeusserer Ring der Karte), nicht in der Stadt.
+func _outskirts(p: Dictionary) -> bool:
+	return _center_dist(p) >= float(sim.city.size) * 0.5 * OUTSKIRTS
+
+
+# ------------------------------------------------------------------ Gelaende: Berge auf den Lagerstaetten (Abschnitt 5)
+const MOUNTAIN_FROM := 3             # ab diesem Strassenabstand (Felder) beginnt der Berg
+const YARD_RADIUS := 3               # Vorplatz fuer das Bergwerk an der strassennaechsten Stelle (Quadrat mit diesem Radius)
+const MOUNTAIN_MAX := 11.0           # hoechste Stufe
+const MOUNTAIN_MIN_CELLS := 6
+
+## Bergmassive: Hoehe je Zelle waechst mit dem Abstand zur Strasse (plus Rauschen). Bergzellen sind nicht begehbar und tragen keine
+## Baeume; die Parzelle wird Bergland (nicht mehr frei bebaubar). Deterministisch aus Stadtsamen und Parzelle, beim Laden neu erzeugt.
+func _build_terrain() -> void:
+	var city: CityData = sim.city
+	var tree_cells := {}
+	for pid in _deposits:
+		var p: Dictionary = sim.parcels.parcel(pid)
+		if p.is_empty() or p.state != "frei":
+			continue
+		var r := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
+		var roads: Array = []
+		for y in range(r.position.y - 3, r.end.y + 3):
+			for x in range(r.position.x - 3, r.end.x + 3):
+				var q := Vector2i(x, y)
+				if city.inside(q) and city.is_road(q):
+					roads.append(q)
+		if roads.is_empty():
+			continue
+		var cells := {}
+		var dist := {}
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				var c := Vector2i(x, y)
+				if city.building_at[city.idx(c)] >= 0 or city.is_road(c) or city.g(c) == CityData.G.WATER:
+					continue
+				var d := 999
+				for q in roads:
+					d = mini(d, absi(q.x - c.x) + absi(q.y - c.y))
+				if d < MOUNTAIN_FROM:
+					continue
+				cells[c] = 1.0
+				dist[c] = d
+		# Vorplatz: an der strassennaechsten Stelle (nahe der Parzellenmitte) bleibt Platz fuer Foerderanlage und Halde
+		var entry := Vector2i(-1, -1)
+		var best := INF
+		var mid := Vector2(r.position) + Vector2(r.size) * 0.5
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				var c := Vector2i(x, y)
+				var d := 999
+				for q in roads:
+					d = mini(d, absi(q.x - c.x) + absi(q.y - c.y))
+				var sc := float(d) * 10.0 + Vector2(c).distance_to(mid)
+				if sc < best:
+					best = sc
+					entry = c
+		for c in cells.keys():
+			if absi(c.x - entry.x) <= YARD_RADIUS and absi(c.y - entry.y) <= YARD_RADIUS:
+				cells.erase(c)
+				dist.erase(c)
+		if cells.size() < MOUNTAIN_MIN_CELLS:
+			continue
+		# Gipfelform: Hoehe waechst mit dem Abstand zum Bergrand (naechste Zelle ohne Berg), dazu Rauschen
+		for c in cells.keys():
+			var edge := 99
+			for rr in range(1, 12):
+				var hit := false
+				for k in [Vector2i(rr, 0), Vector2i(-rr, 0), Vector2i(0, rr), Vector2i(0, -rr)]:
+					if not cells.has(c + k):
+						hit = true
+						break
+				if hit:
+					edge = rr
+					break
+			var n := float(absi(hash([city.seed_value, pid, c])) % 100) / 100.0
+			cells[c] = clampf(float(edge) * 2.4 - 0.8 + n * 1.6, 1.0, MOUNTAIN_MAX)
+		# Abbaufront beginnt am Vorplatz (Foerderhaus) und frisst sich von dort in den Berg
+		var order: Array = cells.keys()
+		order.sort_custom(func(a, b): return [absi(a.x - entry.x) + absi(a.y - entry.y), -(a.x + a.y)] < [absi(b.x - entry.x) + absi(b.y - entry.y), -(b.x + b.y)])
+		terrain[pid] = {"cells": cells, "order": order, "art": _deposits[pid].art, "start": int(_deposits[pid].menge)}
+		p.state = "privat_gehalten"
+		p.use = "berg"
+		for c in cells:
+			city.blocked[city.idx(c)] = 1
+			sim.nav.walk.set_point_solid(c, true)
+			tree_cells[c] = true
+	if not tree_cells.is_empty():
+		city.trees = city.trees.filter(func(t): return not tree_cells.has(t[0]))
+
+
+## Abgebauter Anteil eines Bergs (0..1) und Zellen, die als Grube erscheinen (von der Abbaufront her).
+func excavated(pid: String) -> Dictionary:
+	var t: Dictionary = terrain.get(pid, {})
+	if t.is_empty():
+		return {}
+	var f := clampf(float(mined.get(pid, 0)) / maxf(1.0, float(t.start)), 0.0, 1.0)
+	var n := int(ceil(f * float(t.order.size()) * 1.2)) if f > 0.0 else 0
+	var pit := {}
+	for c in t.order.slice(0, mini(n, t.order.size())):
+		pit[c] = true
+	return {"anteil": f, "grube": pit}
+
+
+## Bergwerk auf einer Parzelle (oder leeres Dictionary).
+func mine_on(pid: String) -> Dictionary:
+	for b in sim.biz.items.values():
+		if b.branch == "bergwerk" and str(b.get("parcel", "")) == pid and b.status not in ["geschlossen"]:
+			return b
+	return {}
+
+
 ## Beste freie Lagerstaette (Art optional; ein Grundstueck "G<n>" optional): viel Vorrat x Qualitaet je Kaufpreis, mit Strassen- und Stromanschluss.
 func best_deposit(kind: String, pid: String = "") -> Dictionary:
 	if _deposits.is_empty():
@@ -354,7 +477,8 @@ func best_deposit(kind: String, pid: String = "") -> Dictionary:
 			continue
 		var p: Dictionary = sim.parcels.parcel(id)
 		var d := deposit_of(id)
-		if p.is_empty() or p.state != "frei" or p.owner != Parcels.CITY or int(d.menge) <= 0 or (kind != "" and d.art != kind):
+		var free_land: bool = p.get("state", "") == "frei" or (p.get("state", "") == "privat_gehalten" and str(p.get("use", "")) == "berg")
+		if p.is_empty() or not free_land or p.owner != Parcels.CITY or int(d.menge) <= 0 or (kind != "" and d.art != kind):
 			continue
 		if not bool(sim.parcels.utilities_of(p).strasse):
 			continue
@@ -394,6 +518,13 @@ func _mine_day(b: Dictionary, spec: Dictionary) -> void:
 	_first_output(b)
 	b.today = q
 	b["total"] = int(b.get("total", 0)) + q
+	# Sprengung etwa jeden dritten Foerdertag: sichtbar am Berg und im Protokoll
+	var day := GameCalendar.day_of(sim.game_min)
+	if absi(hash([b.id, day])) % 3 == 0:
+		blasts[b.id] = sim.game_min
+		var cell: Vector2i = terrain.get(str(b.parcel), {}).get("order", [sim.city.building(site).road])[0] if terrain.has(str(b.parcel)) else sim.city.building(site).road
+		sim.activity.add(b.name, int(b.owner), "sonstiges", "Sprengung: %s gelöst" % item_name(item), "Abbaufront im %s" % b.name, cell, "Betrieb")
+		sim.log_event("Sprengung im %s – %d Einheiten %s gefördert." % [b.name, q, item_name(item)], "info", int(b.owner))
 
 
 func _seed_need(b: Dictionary, F: Dictionary) -> int:

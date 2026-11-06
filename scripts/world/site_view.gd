@@ -155,7 +155,7 @@ func _height(pr: Dictionary) -> float:
 ## Baustelle unter dem Mauszeiger (Weltposition in Simulationskoordinaten) -> Bauvorhaben-ID oder "".
 func pick(world: Vector2) -> String:
 	for id in _nodes:
-		if str(id).begins_with("road:"):
+		if not sim.construction.projects.has(id):   # Bautrupps (road:, fleet:) sind keine Bauvorhaben
 			continue
 		var pr: Dictionary = sim.construction.projects[id]
 		var p: Dictionary = sim.parcels.parcel(pr.parcel)
