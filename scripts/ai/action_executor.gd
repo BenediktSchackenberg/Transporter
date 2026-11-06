@@ -92,7 +92,7 @@ const SCHEMA := {
 	"found_business": {"params": {"branche": "string", "reason": "string?", "standort": "string?", "modus": "string?", "rohstoff": "string?"},
 		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). standort: hauptsitz | markt (freie Parzelle nahe dem Großhandel, kurze Lieferwege) | G<n>; Feld: ohne Angabe das günstigste passende Grundstück. modus pachten|kaufen (Grundstück). Bergwerk: rohstoff eisenerz|kohle|kalkstein|rohmaterial, die beste freie Lagerstätte wird gekauft. Kosten (Gründung inkl. Ausstattung) siehe Liste. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
 	"build_access": {"params": {"grundstueck": "string", "reason": "string?"},
-		"desc": "Zufahrt (Schotterweg) zu einer abgelegenen Lagerstätte bauen lassen (produktion_markt.zufahrt_noetig: Grundstück, Kosten, Tage). Du zahlst den Erschließungsbeitrag, die Straßenmeisterei baut; liegt ein Fluss oder See günstiger im Weg, ist eine Brücke enthalten (Baufirma, gesperrt bis zur Abnahme). Danach ist ein Bergwerk dort möglich."},
+		"desc": "Zufahrt (Schotterweg) zu einer abgelegenen Lagerstätte bauen lassen (produktion_markt.zufahrt_noetig: Grundstück, Kosten, Tage). Das ist ein Erschließungsantrag: der Bürgermeister entscheidet; genehmigt zahlst du den Beitrag für den Weg, die Stadt trägt eine nötige Brücke, Baufirmen bauen (eigene Baufirma kann den Auftrag bekommen). Danach ist ein Bergwerk dort möglich."},
 	"buy_property": {"params": {"gebaeude": "int", "reason": "string?"},
 		"desc": "Wohngebäude kaufen (immobilien_angebote: Preis = 12 Jahresmieten). Mieter zahlen monatlich an dich; Instandhaltung und Grundsteuer (30 % der Sollmiete) laufen auch bei Leerstand. Finanzierung über take_loan möglich."},
 	"sell_property": {"params": {"gebaeude": "int"}, "desc": "Eigenes Wohngebäude an den privaten Vermietermarkt verkaufen (95 % des Werts)."},
@@ -731,7 +731,7 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 		"block_road":
 			return sim.rivalry.block_road(cid, _i(a.target))
 		"build_access":
-			return sim.access.order(cid, _s(a.grundstueck))
+			return sim.access.request(cid, _s(a.grundstueck), str(a.get("reason", "")))
 		"found_business":
 			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")), {"standort": _s(a.get("standort", a.get("grundstueck", ""))), "modus": _s(a.get("modus", "pachten")), "rohstoff": _s(a.get("rohstoff", ""))})
 		"set_business_price":

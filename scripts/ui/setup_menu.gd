@@ -106,7 +106,8 @@ func _ready() -> void:
 	g.add_child(weather_opt)
 	g.add_child(UITheme.label("Bürgermeister:"))
 	mayor_opt = OptionButton.new()
-	for t in ["Regelbasiert (kein Sprachmodell)", "Sprachmodell von Spieler 1 (eigener Kontext)", "Claude (Anthropic, Schlüssel aus ANTHROPIC_API_KEY)"]:
+	for t in ["Regelbasiert (kein Sprachmodell)", "Sprachmodell von Spieler 1 (eigener Kontext)", "Claude (Anthropic, Schlüssel aus ANTHROPIC_API_KEY)",
+			"Lokales Modell (Ollama, %s)" % MAYOR_LOCAL_MODEL.get_file()]:
 		mayor_opt.add_item(t)
 	mayor_opt.tooltip_text = "Die Bürgermeister-KI entscheidet über Quartiere, Erschließung und große Bauanträge. Regelbasiert braucht keinen Zugang; sonst nutzt sie Anbieter, Modell und Schlüssel von Spieler 1, aber mit eigenem Gedächtnis und Budget. Claude nutzt die Umgebungsvariable ANTHROPIC_API_KEY (oder den Windows-Tresor, Eintrag PixelTransportRivals/mayor); der Schlüssel wird nie im Menü eingegeben oder gespeichert."
 	g.add_child(mayor_opt)
@@ -319,12 +320,28 @@ func collect() -> Dictionary:
 		"players": players}
 
 
+## Lokaler Buergermeister: groesseres Modell auf dem eigenen Ollama (langsamer, daher lange Wartezeit und seltener).
+const MAYOR_LOCAL_MODEL := "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M"
+const MAYOR_LOCAL_URL := "http://127.0.0.1:11435"
+
+
 func _mayor_config() -> Dictionary:
 	var m := _mayor_extra.duplicate()
-	m["provider"] = ["demo", "global", "anthropic"][clampi(mayor_opt.selected, 0, 2)]
+	var before := str(m.get("provider", "demo"))
+	m["provider"] = ["demo", "global", "anthropic", "ollama"][clampi(mayor_opt.selected, 0, 3)]
+	if m.provider != before:   # Anbieter gewechselt: Modell und Adresse des alten Anbieters nicht mitnehmen
+		for k in ["base_url", "model"]:
+			m.erase(k)
 	if m.provider == "anthropic":
 		m["base_url"] = str(m.get("base_url", AnthropicAdapter.DEFAULT_BASE_URL))
 		m["model"] = str(m.get("model", AnthropicAdapter.DEFAULT_MODEL))
+	elif m.provider == "ollama":
+		m["base_url"] = str(m.get("base_url", MAYOR_LOCAL_URL))
+		m["model"] = str(m.get("model", MAYOR_LOCAL_MODEL))
+		m["timeout"] = float(m.get("timeout", 300.0))
+		m["interval"] = float(m.get("interval", 120.0))
+		m["num_ctx"] = int(m.get("num_ctx", 24576))
+		m["max_tokens_per_request"] = int(m.get("max_tokens_per_request", 2000))
 	return m
 
 
@@ -345,7 +362,7 @@ func _apply_config(cfg: Dictionary, keep_seed: bool = false) -> void:
 	world_opt.select(1 if str(cfg.get("welt", "kueste")) == "stadt" else 0)
 	_update_town_name()
 	talk_opt.select(2 if not bool(cfg.get("rivalry_talk", true)) else (1 if str(cfg.get("talk", {}).get("provider", "demo")) == "anthropic" else 0))
-	mayor_opt.select({"global": 1, "anthropic": 2}.get(str(_mayor_extra.get("provider", "demo")), 0))
+	mayor_opt.select({"global": 1, "anthropic": 2, "ollama": 3}.get(str(_mayor_extra.get("provider", "demo")), 0))
 	for r in rows:
 		r.enabled.button_pressed = false
 	for p in cfg.get("players", []):

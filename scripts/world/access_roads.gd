@@ -1,23 +1,26 @@
 class_name AccessRoads
 extends RefCounted
-## Zufahrten (Auftrag 15, Etappe B): Schotterweg von einer abgelegenen Lagerstaette zur naechsten Strasse. Ein Unternehmer
-## bezahlt die Zufahrt an die Stadt (Erschliessungsbeitrag), die Strassenmeisterei baut sie Tag fuer Tag sichtbar; jede fertige
-## Zelle wird Strasse (Wegfindung, Grundstuecksanschluss). Gesucht wird nur ueber Land: Berge, Wasser und Gebaeude sind
-## Hindernisse, Wald wird gerodet. Liegt ein Fluss oder See im Weg, plant die Zufahrt Bruecken mit (Etappe D, `Bridges`): die
-## Strassenmeisterei baut bis ans Ufer und wartet dort, bis die Bruecke abgenommen ist. Ueber das Meer fuehrt keine Zufahrt.
+## Zufahrten (Auftrag 15, Etappen B und D): Schotterweg von einer abgelegenen Lagerstaette zur naechsten Strasse, bei Bedarf mit
+## Bruecken ueber Fluss oder See (nie ueber das Meer). Ablauf: der Unternehmer stellt einen Erschliessungsantrag (`request`), der
+## Buergermeister entscheidet (`decide`; ohne Entscheidung nach ANTRAG_FRIST Tagen das Bauamt). Genehmigt: der Unternehmer zahlt den
+## Erschliessungsbeitrag fuer den Weg, die Stadt traegt die Bruecken; Weg und Bruecken werden als Stadtprojekte an Baufirmen vergeben
+## (Unternehmer-Baufirmen bevorzugt). Der Weg waechst mit dem Baufortschritt der Firma von der Strasse her; jede fertige Zelle wird
+## Strasse. Der Buergermeister kann auch selbst erschliessen (`order_city`, alles aus der Stadtkasse).
 
 signal roads_built(cells: Array)   # neue Strassenzellen (Darstellung)
 
 const BASE_COST := 3000.0          # Planung, Vermessung, Anschluss
 const CELL_COST := 80.0            # Schotterweg je Feld
 const CLEAR_COST := 60.0           # Rodung je Baumfeld
-const CELLS_PER_DAY := 15          # Baufortschritt der Strassenmeisterei
+const CELLS_PER_DAY := 15          # Baufortschritt einer Wegebau-Kolonne
 const MAX_RUNNING := 2
+const ANTRAG_FRIST := 3            # Tage bis das Bauamt ohne Buergermeister entscheidet
+const ROAD_MATERIAL := {"schotter": 2, "kies": 1}   # je Feld Schotterweg
 const DETOUR_MIN := 40             # Bruecke lohnt, wenn sie mindestens so viele Felder Umweg spart ...
 const DETOUR_FACTOR := 2.0         # ... und der Landweg mindestens doppelt so lang ist
 
 var sim
-var jobs := {}                     # "Z<n>" -> {id, parcel, company, cells: [[x, y]], built, cost, start, status}
+var jobs := {}                     # "Z<n>" -> {id, parcel, company, cells: [[x, y]], built, cost, beitrag, stadtanteil, spans, bridges, project, status (antrag|im_bau|fertig|abgelehnt)}
 var _next := 1
 var _cache := {}                   # Grundstueck -> Plan (gueltig bis eine Zufahrt fertig wird)
 var _fields := {}                  # "land"/"wasser" -> Entfernungsfeld zur Strasse
@@ -184,85 +187,239 @@ func _passable(q: Vector2i, allow_water: bool, start: bool) -> bool:
 	return true
 
 
-## Zufahrt beauftragen: der Unternehmer zahlt den Erschliessungsbeitrag an die Stadt (samt Bruecken), die Strassenmeisterei baut den Weg,
-## Bruecken gehen als Stadtprojekt an eine Baufirma. cid -1: Buergermeister, Bruecken aus der Stadtkasse, Weg von der eigenen Strassenmeisterei.
-func order(cid: int, pid: String, by: String = "") -> Dictionary:
-	if jobs.values().any(func(j): return j.parcel == pid and j.status == "im_bau"):
-		return {"ok": false, "msg": "Zur Lagerstätte %s wird schon eine Zufahrt gebaut." % pid}
-	if running() >= MAX_RUNNING:
-		return {"ok": false, "msg": "Die Straßenmeisterei baut schon %d Zufahrten; später erneut beauftragen." % MAX_RUNNING}
-	var pl := plan(pid, Bridges.LOAD_MINE if cid >= 0 else Bridges.LOAD_TOWN)
+## Erschliessungsantrag eines Unternehmers: Plan, Beitrag (Weg) und Stadtanteil (Bruecken) liegen dem Buergermeister zur Entscheidung vor.
+func request(cid: int, pid: String, reason: String = "") -> Dictionary:
+	var chk := _check_new(pid)
+	if not chk.ok:
+		return chk
+	var pl := plan(pid, Bridges.LOAD_MINE)
 	if not pl.ok:
 		return {"ok": false, "msg": str(pl.msg)}
 	if pl.cells.is_empty():
 		return {"ok": false, "msg": "Grundstück %s hat schon Straßenanschluss." % pid}
-	var who := ""
-	if cid >= 0:
-		var c: Company = sim.company(cid)
-		if c.ledger.cash < float(pl.kosten):
-			return {"ok": false, "msg": "Nicht genug Bargeld für die Zufahrt (%s)." % Catalog.money(float(pl.kosten))}
-		var note := "Zufahrt zu %s (%d Felder%s)" % [pid, pl.cells.size(), (", %d Brücke(n)" % pl.bruecken.size()) if not pl.bruecken.is_empty() else ""]
-		c.ledger.book("property_costs", -float(pl.kosten), true, note, sim.game_min)
-		who = c.company_name
-	else:
-		if sim.mayor.available_budget() < float(pl.kosten_bruecken):
-			return {"ok": false, "msg": "Verfügbare Stadtkasse reicht nicht für die Brücke (%s nötig)." % Catalog.money(float(pl.kosten_bruecken))}
-		who = by if by != "" else "Stadt"
-	var j := {"id": "Z%d" % _next, "parcel": pid, "company": cid, "cells": pl.cells.map(func(v): return [v.x, v.y]), "built": 0,
-		"cost": float(pl.kosten), "start": GameCalendar.day_of(sim.game_min), "status": "im_bau", "bridges": []}
-	_next += 1
-	jobs[j.id] = j
-	for sp in pl.bruecken:
-		j.bridges.append(sim.bridges.create(sp, cid, j.id, who).id)
-	var extra := (", %d Brücke(n) %s" % [j.bridges.size(), ", ".join(j.bridges)]) if not j.bridges.is_empty() else ""
-	var msg := "%s lässt eine Zufahrt zu %s bauen: %d Felder Schotterweg%s%s, %s, etwa %d Tage." % [who, pid, pl.cells.size(),
-		(" mit Rodung von %d Bäumen" % int(pl.baeume)) if int(pl.baeume) > 0 else "", extra, Catalog.money(float(pl.kosten)), int(pl.tage)]
+	var c: Company = sim.company(cid)
+	var share := float(pl.kosten) - float(pl.kosten_bruecken)
+	if c.ledger.cash < share:
+		return {"ok": false, "msg": "Nicht genug Bargeld für den Erschließungsbeitrag (%s)." % Catalog.money(share)}
+	var j := _new_job(pid, cid, pl)
+	j.reason = reason.left(200)
+	var msg := "%s beantragt die Erschließung von %s: %d Felder Schotterweg%s; Beitrag der Firma %s, Anteil der Stadt %s. Der Bürgermeister entscheidet (spätestens nach %d Tagen das Bauamt)." % [
+		c.company_name, pid, _land(j), (", %d Brücke(n)" % pl.bruecken.size()) if not pl.bruecken.is_empty() else "", Catalog.money(share),
+		Catalog.money(float(pl.kosten_bruecken)), ANTRAG_FRIST]
 	sim.log_event(msg, "info", cid)
-	sim.activity.add("stadt", cid, "bau", "Zufahrt %s zu %s: Baubeginn" % [j.id, pid], "bezahlt von %s" % who, _head(j))
-	_send_crew(j)
+	sim.activity.add("unternehmen", cid, "bau", "Erschließungsantrag %s für %s" % [j.id, pid], reason, _head(j))
 	return {"ok": true, "msg": msg, "ref": j.id}
 
 
+## Erschliessung auf Initiative der Stadt (Buergermeister): Weg und Bruecken aus der Stadtkasse, sofort beschlossen.
+func order_city(pid: String, by: String, choice: Dictionary = {}) -> Dictionary:
+	var chk := _check_new(pid)
+	if not chk.ok:
+		return chk
+	var pl := plan(pid, Bridges.LOAD_TOWN)
+	if not pl.ok:
+		return {"ok": false, "msg": str(pl.msg)}
+	if pl.cells.is_empty():
+		return {"ok": false, "msg": "Grundstück %s hat schon Straßenanschluss." % pid}
+	var j := _new_job(pid, -1, pl)
+	j.need_t = Bridges.LOAD_TOWN
+	j.beitrag = 0.0
+	var chosen := _apply_choice(j, choice)
+	if chosen.ok and sim.mayor.available_budget() < float(j.stadtanteil):
+		chosen = {"ok": false, "msg": "Verfügbare Stadtkasse reicht nicht (%s nötig)." % Catalog.money(float(j.stadtanteil))}
+	if not chosen.ok:
+		jobs.erase(j.id)
+		return chosen
+	return _start(j, by)
+
+
+## Entscheidung ueber einen Antrag. approve: Beitrag wird faellig, Projekte werden ausgeschrieben.
+func decide(id: String, approve: bool, reason: String, by: String, choice: Dictionary = {}) -> Dictionary:
+	var j: Dictionary = jobs.get(id, {})
+	if j.is_empty() or j.status != "antrag":
+		return {"ok": false, "msg": "Kein offener Erschließungsantrag %s." % id}
+	var c: Company = sim.company(int(j.company))
+	if approve:
+		var chosen := _apply_choice(j, choice)
+		if not chosen.ok:
+			return chosen
+	j.decision = {"by": by, "reason": reason.left(200), "day": GameCalendar.day_of(sim.game_min), "approve": approve, "wahl": choice}
+	if approve and sim.mayor.available_budget() < float(j.stadtanteil):
+		return {"ok": false, "msg": "Die verfügbare Stadtkasse reicht nicht für den Anteil der Stadt (%s)." % Catalog.money(float(j.stadtanteil))}
+	if approve and c.ledger.cash < float(j.beitrag):
+		approve = false
+		reason = "%s kann den Erschließungsbeitrag (%s) nicht mehr zahlen." % [c.company_name, Catalog.money(float(j.beitrag))]
+	if not approve:
+		j.status = "abgelehnt"
+		sim.log_event("%s lehnt den Erschließungsantrag %s von %s ab: %s" % [by, id, c.company_name, reason], "warn", int(j.company))
+		return {"ok": true, "msg": "Antrag %s abgelehnt." % id, "ref": id}
+	c.ledger.book("property_costs", -float(j.beitrag), true, "Erschließungsbeitrag %s (%s)" % [id, j.parcel], sim.game_min)
+	return _start(j, by)
+
+
+## Bauweise des Entscheiders: Brueckenart (muss Spannweite und Last schaffen) und Vergabe (Direktvergabe an eine Unternehmer-Baufirma).
+## Aktualisiert Kosten, Stadtanteil und Bauzeit.
+func _apply_choice(j: Dictionary, choice: Dictionary) -> Dictionary:
+	var v := str(choice.get("variant", ""))
+	if v != "":
+		for sp in j.spans:
+			if not Bridges.valid_variant(v, sp.cells.size(), int(j.get("need_t", Bridges.LOAD_MINE))):
+				return {"ok": false, "msg": "%s schafft die Brücke über %d Felder bei %d t Last nicht (siehe brueckenarten)." % [v, sp.cells.size(), int(j.get("need_t", Bridges.LOAD_MINE))]}
+		for sp in j.spans:
+			var old := float(sp.cost)
+			sp.variant = v
+			sp.cost = Bridges.cost_of(v, sp.cells.size())
+			sp.days = Bridges.days_of(v, sp.cells.size())
+			j.cost = float(j.cost) + float(sp.cost) - old
+	var award := str(choice.get("award", ""))
+	if award != "":
+		sim.construction.sync_company_builders()
+		var bd: Dictionary = sim.construction.builders.get(award, {})
+		if bd.is_empty() or not bd.has("company") or bd.status != "aktiv":
+			return {"ok": false, "msg": "Direktvergabe nicht möglich: Firma %s hat keine aktive Baufirma (siehe erschliessung.baufirmen)." % award.substr(1)}
+		j.award = award
+	var bridges := float(j.spans.reduce(func(s, x): return s + float(x.cost), 0.0))
+	j.stadtanteil = float(j.cost) if int(j.company) < 0 else bridges
+	j.beitrag = 0.0 if int(j.company) < 0 else float(j.cost) - bridges
+	var days := 0
+	for sp in j.spans:
+		days = maxi(days, int(sp.days))
+	j.tage = maxi(ceili(float(_land(j)) / CELLS_PER_DAY), days)
+	return {"ok": true}
+
+
+func _check_new(pid: String) -> Dictionary:
+	if jobs.values().any(func(j): return j.parcel == pid and j.status in ["antrag", "im_bau"]):
+		return {"ok": false, "msg": "Für %s läuft schon ein Erschließungsantrag oder Bau." % pid}
+	if running() >= MAX_RUNNING:
+		return {"ok": false, "msg": "Es laufen schon %d Erschließungen; später erneut beantragen." % MAX_RUNNING}
+	return {"ok": true}
+
+
+func _new_job(pid: String, cid: int, pl: Dictionary) -> Dictionary:
+	var j := {"id": "Z%d" % _next, "parcel": pid, "company": cid, "cells": pl.cells.map(func(v): return [v.x, v.y]), "built": 0,
+		"cost": float(pl.kosten), "beitrag": float(pl.kosten) - float(pl.kosten_bruecken), "stadtanteil": float(pl.kosten_bruecken),
+		"spans": pl.bruecken.map(func(s): return {"cells": s.cells.map(func(v): return [v.x, v.y]), "ends": s.ends.map(func(v): return [v.x, v.y]),
+			"variant": s.variant, "cost": s.cost, "days": s.days}),
+		"ersparnis": int(pl.get("ersparnis_felder", 0)), "tage": int(pl.tage), "day": GameCalendar.day_of(sim.game_min),
+		"status": "antrag", "bridges": [], "project": "", "reason": "", "need_t": Bridges.LOAD_MINE, "award": ""}
+	_next += 1
+	jobs[j.id] = j
+	return j
+
+
+## Beschlossen: Wegebau und Bruecken als Stadtprojekte ausschreiben (Baufirmen bieten; Material aus dem Stadtlager).
+func _start(j: Dictionary, by: String) -> Dictionary:
+	j.status = "im_bau"
+	j.start = GameCalendar.day_of(sim.game_min)
+	var land := _land(j)
+	var mat := {}
+	for it in ROAD_MATERIAL:
+		mat[it] = int(ROAD_MATERIAL[it]) * land
+	var road_cost := float(j.cost) - float(j.spans.reduce(func(s, x): return s + float(x.cost), 0.0))
+	var prj: Dictionary = sim.mayor.add_works_project("zufahrt", j.id, road_cost, maxi(2, ceili(float(land) / CELLS_PER_DAY)), mat,
+		"Zufahrt %s zu %s (%s)" % [j.id, j.parcel, by], str(j.get("award", "")))
+	j.project = prj.id
+	for sp in j.spans:
+		var span := {"cells": sp.cells.map(func(a): return Vector2i(int(a[0]), int(a[1]))), "ends": sp.ends.map(func(a): return Vector2i(int(a[0]), int(a[1]))),
+			"variant": sp.variant, "cost": float(sp.cost), "days": int(sp.days), "award": str(j.get("award", ""))}
+		j.bridges.append(sim.bridges.create(span, -1, j.id, by).id)
+	var who: String = "der Stadt" if int(j.company) < 0 else sim.company(int(j.company)).company_name
+	var msg := "%s beschließt die Erschließung von %s für %s: Wegebau %s%s ausgeschrieben, %s, etwa %d Tage." % [by, j.parcel, who, prj.id,
+		(" und Brücke(n) %s" % ", ".join(j.bridges)) if not j.bridges.is_empty() else "", Catalog.money(float(j.cost)), int(j.tage)]
+	sim.log_event(msg, "info", int(j.company))
+	sim.activity.add("buergermeister", -1, "stadt", "Erschließung %s beschlossen" % j.id, "Stadt wächst, Auftrag für die Baufirmen", _head(j))
+	return {"ok": true, "msg": msg, "ref": j.id}
+
+
+func _land(j: Dictionary) -> int:
+	return j.cells.size() - int(j.spans.reduce(func(s, x): return s + x.cells.size(), 0))
+
+
 func running() -> int:
-	return jobs.values().filter(func(j): return j.status == "im_bau").size()
+	return jobs.values().filter(func(j): return j.status in ["antrag", "im_bau"]).size()
 
 
-## Tagesfortschritt: von der Strasse her wachsen (letzte Zelle zuerst), damit jede fertige Zelle sofort angeschlossen ist.
-## Am Ufer wartet der Trupp, bis die Bruecke abgenommen ist (Wasserfelder werden erst dann Fahrbahn).
-func on_day(_day: int) -> void:
+## Offene Antraege fuer den Buergermeister.
+func pending() -> Array:
+	return jobs.values().filter(func(j): return j.status == "antrag").map(func(j): return {"id": j.id, "firma": int(j.company),
+		"name": sim.company(int(j.company)).company_name, "grundstueck": j.parcel, "art": sim.prod.deposit_of(j.parcel).get("art", ""),
+		"beitrag_firma": int(j.beitrag), "anteil_stadt": int(j.stadtanteil), "bruecken": j.spans.size(), "felder": j.cells.size(),
+		"ersparnis_felder": int(j.ersparnis), "tage": int(j.tage), "eingereicht_tag": int(j.day), "begruendung": str(j.reason)})
+
+
+## Bauordnung: Indizes von der Strasse her (letzte Zelle zuerst); Wasserfelder schliesst die Bruecke.
+func _order(j: Dictionary) -> Array:
+	var out: Array = []
+	var n: int = j.cells.size()
+	for k in n:
+		var a: Array = j.cells[n - 1 - k]
+		if not sim.bridges.is_bridge(Vector2i(int(a[0]), int(a[1]))):
+			out.append(n - 1 - k)
+	return out
+
+
+## Fortschritt der Wegebaufirma (0..1).
+func road_progress(j: Dictionary) -> float:
+	if bool(j.get("road_done", false)):
+		return 1.0
+	return sim.construction.public_progress(str(j.project))
+
+
+## Tagesfortschritt: Antraege nach Frist entscheiden; Weg waechst mit dem Fortschritt der Baufirma; fertig, wenn Weg und Bruecken stehen.
+func on_day(day: int) -> void:
 	for j in jobs.values():
+		if j.status == "antrag" and day - int(j.day) >= ANTRAG_FRIST:
+			var ok: bool = sim.mayor.available_budget() >= float(j.stadtanteil)
+			decide(j.id, ok, "Frist abgelaufen, Bauamt entscheidet: %s" % ("Mittel vorhanden" if ok else "Stadtkasse reicht nicht"), "Bauamt")
 		if j.status != "im_bau":
 			continue
-		var from := int(j.built)
-		var n: int = j.cells.size()
-		var to := from
-		while to < mini(n, from + CELLS_PER_DAY):
-			var a: Array = j.cells[n - 1 - to]
-			if sim.city.g(Vector2i(int(a[0]), int(a[1]))) == CityData.G.WATER:
-				break
-			to += 1
-		j.built = to
-		j["waiting"] = "Brücke" if to < n and to == from else ""
-		_apply(j, from, int(j.built))
-		if int(j.built) >= j.cells.size():
-			j.status = "fertig"
-			_cache.clear()
-			_fields.clear()
-			sim.log_event("Zufahrt %s zu %s ist fertig – die Lagerstätte hat jetzt Straßenanschluss." % [j.id, j.parcel], "good", int(j.company))
-		else:
+		var order := _order(j)
+		var target := int(floor(float(order.size()) * road_progress(j)))
+		_build_to(j, order, target)
+		_maybe_finish(j)
+		if j.status == "im_bau" and sim.construction.public.has(str(j.project)):
 			_send_crew(j)
 
 
-## Zellen [from, to) in Bauordnung (vom Strassenende her) zu Strasse machen.
-func _apply(j: Dictionary, from: int, to: int) -> void:
-	if to <= from:
+func _build_to(j: Dictionary, order: Array, target: int) -> void:
+	var from := int(j.built)
+	if target <= from:
 		return
+	var idx: Array = order.slice(from, target)
+	j.built = target
+	_apply_cells(idx.map(func(k): return Vector2i(int(j.cells[k][0]), int(j.cells[k][1]))))
+
+
+## Vom Bausystem bei Fertigstellung des Wegebaus aufgerufen.
+func road_done(id: String) -> void:
+	var j: Dictionary = jobs.get(id, {})
+	if j.is_empty():
+		return
+	j.road_done = true
+	var order := _order(j)
+	_build_to(j, order, order.size())
+	_maybe_finish(j)
+
+
+func _maybe_finish(j: Dictionary) -> void:
+	if j.status != "im_bau" or not bool(j.get("road_done", false)):
+		return
+	if j.bridges.any(func(b): return sim.bridges.items[b].status != "freigegeben"):
+		j.waiting = "Brücke"
+		return
+	j.status = "fertig"
+	j.waiting = ""
+	_cache.clear()
+	_fields.clear()
+	sim.log_event("Zufahrt %s zu %s ist fertig – die Lagerstätte hat jetzt Straßenanschluss." % [j.id, j.parcel], "good", int(j.company))
+
+
+## Zellen zu Strasse machen (Rodung, Wegfindung, Darstellung).
+func _apply_cells(cells: Array) -> void:
 	var city: CityData = sim.city
 	var made: Array = []
-	var n: int = j.cells.size()
-	for k in range(from, to):
-		var a: Array = j.cells[n - 1 - k]
-		var q := Vector2i(int(a[0]), int(a[1]))
+	for q in cells:
 		var i := city.idx(q)
 		if city.ground[i] == CityData.G.ROAD:
 			continue   # Bruecke (bei der Abnahme schon freigegeben)
@@ -278,37 +435,50 @@ func _apply(j: Dictionary, from: int, to: int) -> void:
 	roads_built.emit(made)
 
 
-## Eine Bruecke wurde abgenommen: Plaene neu rechnen (neue Wege); wartende Trupps bauen am naechsten Tag weiter.
+## Eine Bruecke wurde abgenommen: Plaene neu rechnen (neue Wege); Zufahrt fertig, wenn auch der Weg steht.
 func on_bridge_opened() -> void:
 	_cache.clear()
 	_fields.clear()
+	for j in jobs.values():
+		_maybe_finish(j)
 
 
 func _head(j: Dictionary) -> Vector2i:
-	var n: int = j.cells.size()
-	var a: Array = j.cells[clampi(n - 1 - int(j.built), 0, n - 1)]
+	var order := _order(j)
+	if order.is_empty():
+		return Vector2i(int(j.cells[0][0]), int(j.cells[0][1]))
+	var a: Array = j.cells[order[clampi(int(j.built), 0, order.size() - 1)]]
 	return Vector2i(int(a[0]), int(a[1]))
 
 
-## Bautrupp faehrt zur zuletzt gebauten Zelle (bzw. zur Einmuendung), denn Fahrzeuge brauchen ein Strassenziel.
+## Arbeitsfront fuer die Darstellung: Zellen in Bauordnung, Anzahl fertig, Tagesziel.
+func front(j: Dictionary) -> Dictionary:
+	var order := _order(j)
+	return {"cells": order.map(func(k): return Vector2(float(j.cells[k][0]), float(j.cells[k][1]))), "built": int(j.built),
+		"rate": float(CELLS_PER_DAY), "running": sim.construction.public_running(str(j.project))}
+
+
+## Kolonnenwagen der Baufirma faehrt zur zuletzt gebauten Zelle (bzw. zur Einmuendung), denn Fahrzeuge brauchen ein Strassenziel.
 func _send_crew(j: Dictionary) -> void:
-	var n: int = j.cells.size()
 	var at := _head(j)
-	if int(j.built) > 0:
-		var a: Array = j.cells[n - int(j.built)]
+	var order := _order(j)
+	if int(j.built) > 0 and int(j.built) <= order.size():
+		var a: Array = j.cells[order[int(j.built) - 1]]
 		at = Vector2i(int(a[0]), int(a[1]))
 	else:
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			if sim.city.is_road(at + d):
 				at += d
 				break
-	sim.fleet.send_crew(at, GameCalendar.day_start(GameCalendar.day_of(sim.game_min) + 1), "Straßenmeisterei")
+	if sim.city.is_road(at):
+		sim.fleet.send_crew(at, GameCalendar.day_start(GameCalendar.day_of(sim.game_min) + 1), sim.construction.public_builder_name(str(j.project)))
 
 
 ## Fuer Beobachtung und Anzeige.
 func summary() -> Array:
 	return jobs.values().map(func(j): return {"id": j.id, "grundstueck": j.parcel, "unternehmen": int(j.company), "status": j.status,
-		"fortschritt": snappedf(float(j.built) / maxf(1.0, float(j.cells.size())), 0.01), "felder": j.cells.size(), "kosten": int(j.cost),
+		"fortschritt": snappedf(road_progress(j) if j.status == "im_bau" else (1.0 if j.status == "fertig" else 0.0), 0.01), "felder": j.cells.size(), "kosten": int(j.cost),
+		"beitrag_firma": int(j.get("beitrag", 0.0)), "anteil_stadt": int(j.get("stadtanteil", 0.0)),
 		"bruecken": j.get("bridges", []), "wartet_auf": str(j.get("waiting", ""))})
 
 
@@ -322,4 +492,6 @@ func from_dict(d: Dictionary) -> void:
 	_next = int(d.get("next", 1))
 	for j in jobs.values():
 		j.built = int(j.built)
-		_apply(j, 0, int(j.built))
+		j.company = int(j.company)
+		var order := _order(j)
+		_apply_cells(order.slice(0, int(j.built)).map(func(k): return Vector2i(int(j.cells[k][0]), int(j.cells[k][1]))))

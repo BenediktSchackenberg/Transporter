@@ -859,6 +859,8 @@ func _public_day(day: int) -> void:
 			var offers := make_offers(float(prj.cost), days, str(prj.id))
 			prj.tender["bids"] = offers
 			var o := best_offer(offers, float(prj.cost))
+			if prj.kind in ["zufahrt", "bruecke"]:
+				o = _works_offer(prj, offers, o)
 			if o.is_empty() or float(o.price) > float(prj.cost) * 1.2:
 				prj.status = "beschlossen"      # kein tragfaehiges Angebot: neu planen oder ausschreiben
 				prj.tender["note"] = "kein Angebot innerhalb des Budgets"
@@ -903,9 +905,51 @@ func _finish_public(e: Dictionary) -> void:
 		sim.grid.finish_expansion(float(prj.get("kw", PowerGrid.EXPAND_KW)))
 	if prj.kind == "bruecke":
 		sim.bridges.finish(str(prj.bridge))
+	if prj.kind == "zufahrt":
+		sim.access.road_done(str(prj.ref))
 	e.status = "fertig"
 	prj.status = "fertig"
 	sim.log_event("Erschließungsprojekt %s fertiggestellt (%s, %s)." % [prj.id, ", ".join(prj.parts), builders[e.builder].name], "info")
+
+
+## Vergabe bei Erschliessungsbauten: Direktvergabe des Buergermeisters an eine Unternehmer-Baufirma, sonst ortsansaessige
+## Unternehmer-Baufirma bevorzugt, wenn ihr Angebot hoechstens 15 % ueber dem besten liegt (die Stadt gibt den Unternehmen Arbeit).
+func _works_offer(prj: Dictionary, offers: Array, best: Dictionary) -> Dictionary:
+	var award := str(prj.get("award", ""))
+	if award != "":
+		for o in offers:
+			if o.builder == award:
+				prj.tender["note"] = "Direktvergabe an %s" % o.name
+				return o
+		prj.tender["note"] = "Direktvergabe nicht möglich (%s nicht aktiv), Ausschreibung" % award
+	var local := {}
+	for o in offers:
+		if str(o.builder).begins_with("C") and builders[o.builder].has("company") and (local.is_empty() or float(o.price) < float(local.price)):
+			local = o
+	if not local.is_empty() and not best.is_empty() and float(local.price) <= float(best.price) * 1.15:
+		return local
+	return best
+
+
+## Fortschritt (0..1) eines ausgefuehrten Stadtprojekts; 0 vor Baubeginn, 1 wenn fertig.
+func public_progress(prj_id: String) -> float:
+	var e: Dictionary = public.get(prj_id, {})
+	if e.is_empty() or _today() < int(e.start):
+		return 0.0
+	if e.status == "fertig":
+		return 1.0
+	return clampf(1.0 - float(e.days_left) / maxf(1.0, float(e.days)), 0.0, 1.0)
+
+
+## Arbeitet die Firma heute (begonnen, Material da, nicht fertig)?
+func public_running(prj_id: String) -> bool:
+	var e: Dictionary = public.get(prj_id, {})
+	return not e.is_empty() and e.status == "laufend" and _today() >= int(e.start) and str(e.get("waiting", "")) == ""
+
+
+func public_builder_name(prj_id: String) -> String:
+	var e: Dictionary = public.get(prj_id, {})
+	return str(builders[e.builder].name) if not e.is_empty() and builders.has(e.builder) else "Baufirma"
 
 
 # ------------------------------------------------------------------ Ausfall einer Baufirma

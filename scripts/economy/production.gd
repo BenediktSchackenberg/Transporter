@@ -517,7 +517,7 @@ func remote_deposit(kind: String) -> Dictionary:
 		var d := deposit_of(id)
 		if p.is_empty() or p.get("state", "") != "frei" or p.owner != Parcels.CITY or int(d.menge) <= 0 or (kind != "" and d.art != kind):
 			continue
-		if bool(sim.parcels.utilities_of(p).strasse) or sim.access.jobs.values().any(func(j): return j.parcel == id and j.status == "im_bau"):
+		if bool(sim.parcels.utilities_of(p).strasse) or sim.access.jobs.values().any(func(j): return j.parcel == id and j.status in ["antrag", "im_bau"]):
 			continue
 		var pl: Dictionary = sim.access.plan(id)
 		if pl.ok and (best.is_empty() or float(pl.kosten) < float(best.kosten)):

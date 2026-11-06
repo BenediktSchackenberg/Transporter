@@ -50,8 +50,10 @@ const SCHEMA := {
 		"desc": "Stromnetz der Stadtwerke ausbauen: +500 kW Leistung nach 10 Tagen für 60 000 EUR. Sinnvoll, wenn obs.strom.auslastung über 0,85 liegt oder Betriebe abgeschaltet sind."},
 	"warn_company": {"params": {"firma": "int", "reason": "string"},
 		"desc": "Firma öffentlich verwarnen (nur wenn sie in den letzten 7 Tagen eskaliert hat, siehe obs.rivalitaet.verursacher): Ruf −2, für 10 Tage kostet jede weitere Eskalation zusätzlich Ruf."},
-	"build_bridge": {"params": {"grundstueck": "string", "reason": "string"},
-		"desc": "Städtisches Grundstück jenseits von Fluss oder See erschließen (obs.bruecken.vorschlaege): Zufahrt durch die Straßenmeisterei, Brücke als ausgeschriebenes Bauprojekt aus der Stadtkasse (Holz/Stein/Stahlbeton nach Spannweite). Bis zur Abnahme gesperrt; immer nur eine Brücke gleichzeitig."},
+	"build_bridge": {"params": {"grundstueck": "string", "bruecke": "string?", "vergabe": "string?", "firma": "int?", "reason": "string"},
+		"desc": "Die Stadt ausbauen: städtisches Grundstück jenseits von Fluss oder See erschließen (obs.erschliessung.vorschlaege), Weg und Brücke ganz aus der Stadtkasse. bruecke holz | stein | stahlbeton (muss Spannweite und Last schaffen, siehe brueckenarten; Standard die günstigste passende). vergabe ausschreibung (Standard; ortsansässige Unternehmer-Baufirmen bevorzugt) | direkt mit firma = Firmen-ID einer Unternehmer-Baufirma (obs.erschliessung.baufirmen), damit die Firma den Auftrag bekommt. Bis zur Abnahme gesperrt."},
+	"decide_access": {"params": {"antrag": "string", "decision": "string", "bruecke": "string?", "vergabe": "string?", "firma": "int?", "reason": "string"},
+		"desc": "Erschließungsantrag eines Unternehmers entscheiden (obs.erschliessung.antraege: Zufahrt zu einer Lagerstätte, ggf. mit Brücke). decision genehmigen | ablehnen. Genehmigt zahlt die Firma ihren Beitrag für den Weg, die Stadt trägt die Brücke(n) (anteil_stadt). Du bestimmst, wie gebaut wird: bruecke holz | stein | stahlbeton (muss Spannweite und Last schaffen) und vergabe ausschreibung | direkt (firma = Firmen-ID einer Unternehmer-Baufirma). Ohne Entscheidung entscheidet das Bauamt nach 3 Tagen."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
 		"desc": "Bauantrag der Bürgermeisterebene entscheiden: decision genehmigen | bedingungen | ablehnen | rueckfrage. Ablehnung nur wegen benannter fehlender Voraussetzungen; ohne Mängel muss genehmigt werden."},
 }
@@ -196,7 +198,7 @@ func indicators() -> Dictionary:
 		"sicherheit_gesundheit": sim.safety.summary(),
 		"rivalitaet": sim.rivalry.mayor_summary(),
 		"strom": sim.grid.summary(),
-		"bruecken": sim.bridges.summary(),
+		"erschliessung": access_indicators(),
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 	}
@@ -407,7 +409,13 @@ func execute(action: Dictionary) -> Dictionary:
 			"expand_power":
 				res = sim.grid.expand("Bürgermeister %s" % name)
 			"build_bridge":
-				res = sim.bridges.order_public(str(a.grundstueck), "Bürgermeister %s" % name)
+				res = sim.access.order_city(str(a.grundstueck), "Bürgermeister %s" % name, _build_choice(a))
+			"decide_access":
+				var dec := str(a.get("decision", "")).to_lower()
+				if dec not in ["genehmigen", "ablehnen"]:
+					res = {"ok": false, "msg": "decision muss genehmigen oder ablehnen sein."}
+				else:
+					res = sim.access.decide(str(a.antrag), dec == "genehmigen", str(a.get("reason", "")), "Bürgermeister %s" % name, _build_choice(a))
 			_:
 				res = {"ok": false, "msg": "Unbekannte Aktion."}
 	if act != "wait":
@@ -632,19 +640,45 @@ func add_power_project(cost: float, kw: float, by: String) -> Dictionary:
 	return prj
 
 
-## Bruecke (Auftrag 15, Etappe D): ausgeschriebenes Bauprojekt ohne Grundstuecke mit eigener Bauzeit und eigenem Material; die
-## Mittel sind bezahlt (Unternehmer) oder kommen aus der Stadtkasse. Construction fuehrt aus, Bridges.finish gibt frei.
-func add_bridge_project(bridge_id: String, cost: float, days: int, cells: int, material_per_cell: Dictionary, by: String) -> Dictionary:
+## Erschliessungsbauten (Auftrag 15, Etappe D): Wegebau ("zufahrt") oder Bruecke ("bruecke") als ausgeschriebenes Bauprojekt ohne
+## Grundstuecke, mit eigener Bauzeit und eigenem Material aus dem Stadtlager. award: Direktvergabe an eine Baufirma (z. B. "C1"), sonst
+## Ausschreibung (ortsansaessige Unternehmer-Baufirmen bevorzugt). Construction fuehrt aus und meldet die Fertigstellung.
+func add_works_project(kind: String, ref: String, cost: float, days: int, material: Dictionary, by: String, award: String = "") -> Dictionary:
 	commitments += cost
-	var mat := {}
-	for it in material_per_cell:
-		mat[it] = int(material_per_cell[it]) * cells
-	var prj := {"id": "P%d" % _next_project, "kind": "bruecke", "parcels": [], "parts": [], "cost": snappedf(cost, 1.0), "bridge": bridge_id,
-		"days": days, "material": mat, "status": "ausgeschrieben", "vote": "Brückenbau", "reason": "Brücke %s (%s)" % [bridge_id, by], "day": _today(),
-		"tender": {"opened_day": _today(), "bids": []}}
+	var prj := {"id": "P%d" % _next_project, "kind": kind, "ref": ref, "parcels": [], "parts": [], "cost": snappedf(cost, 1.0),
+		"days": days, "material": material.duplicate(), "status": "ausgeschrieben", "vote": "Erschließung", "reason": by, "day": _today(),
+		"tender": {"opened_day": _today(), "bids": []}, "award": award}
+	if kind == "bruecke":
+		prj["bridge"] = ref
 	_next_project += 1
 	projects[prj.id] = prj
 	return prj
+
+
+## Bauweise aus einer Aktion: Brueckenart und Vergabe (Direktvergabe an eine Unternehmer-Baufirma).
+func _build_choice(a: Dictionary) -> Dictionary:
+	var c := {}
+	if str(a.get("bruecke", "")) != "":
+		c["variant"] = str(a.bruecke).to_lower()
+	if str(a.get("vergabe", "")).to_lower() == "direkt":
+		c["award"] = "C%d" % int(a.get("firma", -1))
+	return c
+
+
+## Beobachtung Erschliessung: offene Antraege, laufende Bauten, Brueckenarten, Unternehmer-Baufirmen, eigene Vorschlaege.
+func access_indicators() -> Dictionary:
+	sim.construction.sync_company_builders()
+	var firms: Array = []
+	for bid in sim.construction.builders:
+		var b: Dictionary = sim.construction.builders[bid]
+		if b.has("company"):
+			firms.append({"firma": int(b.company), "name": b.name, "status": b.status, "kapazitaet": int(b.capacity), "auslastung": sim.construction.load_of(bid)})
+	var kinds := {}
+	for v in Bridges.ORDER:
+		var d: Dictionary = Bridges.VARIANTS[v]
+		kinds[v] = {"max_spannweite": int(d.max_span), "traegt_t": int(d.last_t), "kosten_grund": int(d.base), "kosten_je_feld": int(d.cell)}
+	return {"antraege": sim.access.pending(), "laufend": sim.access.summary().filter(func(j): return j.status == "im_bau"), "bruecken": sim.bridges.summary().bruecken,
+		"brueckenarten": kinds, "baufirmen": firms, "vorschlaege": sim.bridges.proposals()}
 
 
 func _tender(a: Dictionary) -> Dictionary:

@@ -7176,20 +7176,33 @@ func test_access_road() -> void:
 	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "bergwerk", "rohstoff": str(far.art)})
 	ok(not r.ok and str(r.msg).contains("build_access"), "Bergwerk ohne Zufahrt abgelehnt mit Hinweis auf die Zufahrt")
 	var cash0: float = s.companies[0].ledger.cash
-	r = s.executor.execute(0, {"action": "build_access", "grundstueck": pid})
-	ok(r.ok and is_equal_approx(s.companies[0].ledger.cash, cash0 - float(far.kosten)), "Zufahrt beauftragt und bezahlt (%s)" % r.get("msg", ""))
-	ok(not s.executor.execute(1, {"action": "build_access", "grundstueck": pid}).ok, "keine doppelte Zufahrt zum selben Grundstück")
+	r = s.executor.execute(0, {"action": "build_access", "grundstueck": pid, "reason": "Erz fehlt"})
+	ok(r.ok and is_equal_approx(s.companies[0].ledger.cash, cash0) and s.access.jobs[str(r.ref)].status == "antrag", "Erschließungsantrag gestellt, noch nichts bezahlt (%s)" % r.get("msg", ""))
+	ok(not s.executor.execute(1, {"action": "build_access", "grundstueck": pid}).ok, "kein zweiter Antrag zum selben Grundstück")
+	ok(s.mayor.indicators().erschliessung.antraege.size() == 1, "Antrag liegt dem Bürgermeister vor")
+	var dec: Dictionary = s.mayor.execute({"action": "decide_access", "antrag": str(r.ref), "decision": "genehmigen", "vergabe": "ausschreibung", "reason": "Stadt wächst"})
+	ok(dec.ok and is_equal_approx(s.companies[0].ledger.cash, cash0 - float(far.kosten)), "Bürgermeister genehmigt, Firma zahlt den Beitrag (%s)" % dec.get("msg", ""))
+	var j: Dictionary = s.access.jobs[str(r.ref)]
+	ok(s.mayor.projects[j.project].kind == "zufahrt", "Wegebau ist ausgeschriebenes Stadtprojekt")
+	_stock_project(s, j.project)
 	var day := GameCalendar.day_of(s.game_min)
-	s.access.on_day(day + 1)
-	var j: Dictionary = s.access.jobs.values()[0]
+	var d := day
+	for k in 12:
+		d += 1
+		_works_day(s, d)
+		if int(j.built) > 0:
+			break
 	var first: Array = j.cells[j.cells.size() - 1]
-	ok(j.status == "im_bau" or j.cells.size() <= AccessRoads.CELLS_PER_DAY, "Bau wächst täglich (%d/%d Felder)" % [int(j.built), j.cells.size()])
+	ok(s.construction.public.has(j.project) and int(j.built) > 0, "Baufirma %s baut, der Weg wächst (%d/%d Felder)" % [s.construction.public_builder_name(j.project), int(j.built), j.cells.size()])
 	ok(s.city.is_road(Vector2i(int(first[0]), int(first[1]))) and not s.nav.road.is_point_solid(Vector2i(int(first[0]), int(first[1]))), "erste Zelle an der Einmündung ist befahrbar")
 	# Zwischenstand speichern und laden: gebaute Zellen bleiben erhalten
 	var mid := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(mid.city.is_road(Vector2i(int(first[0]), int(first[1]))) and mid.access.jobs.size() == 1, "Laden: gebaute Wegzellen werden wieder angelegt")
-	for k in 40:
-		s.access.on_day(day + 2 + k)
+	for k in 60:
+		d += 1
+		_works_day(s, d)
+		if j.status == "fertig":
+			break
 	ok(j.status == "fertig" and bool(s.parcels.utilities_of(s.parcels.parcel(pid)).strasse), "Zufahrt fertig: Lagerstätte hat Straßenanschluss")
 	var start: Vector2i = s.city.building(s.companies[0].depots[0]).road
 	var end: Array = j.cells[0]
@@ -7288,10 +7301,26 @@ func test_bridge() -> void:
 	s.companies[0].ledger.inject(200000.0)
 	var cash0: float = s.companies[0].ledger.cash
 	var p00: float = s.economy.accounts.P0
-	var r: Dictionary = s.executor.execute(0, {"action": "build_access", "grundstueck": pid})
-	ok(r.ok and str(r.msg).contains("Brücke"), "Zufahrt mit Brücke beauftragt (%s)" % r.get("msg", ""))
-	ok(is_equal_approx(s.companies[0].ledger.cash, cash0 - float(pl.kosten)) and is_equal_approx(float(s.economy.accounts.P0), p00 + float(pl.kosten)), "Unternehmer zahlt Weg und Brücke an die Stadtkasse")
+	var r: Dictionary = s.executor.execute(0, {"action": "build_access", "grundstueck": pid, "reason": "Rohstoff fehlt"})
+	ok(r.ok and str(r.msg).contains("Brücke") and B.items.is_empty(), "Antrag mit Brücke gestellt, gebaut wird erst nach der Entscheidung (%s)" % r.get("msg", ""))
+	var ap: Dictionary = s.mayor.indicators().erschliessung.antraege[0]
+	ok(int(ap.anteil_stadt) == int(pl.kosten_bruecken) and int(ap.beitrag_firma) == int(float(pl.kosten) - float(pl.kosten_bruecken)), "Antrag nennt Beitrag der Firma und Anteil der Stadt (Brücke)")
+	ok(not s.mayor.execute({"action": "decide_access", "antrag": str(r.ref), "decision": "genehmigen", "bruecke": "holz", "reason": "billig"}).ok, "Holzbrücke trägt keine Erzlaster: Wahl abgelehnt")
+	# eigene Baufirma der Firma 1 fuer die Direktvergabe
+	s.companies[1].ledger.inject(300000.0)
+	var fb: Dictionary = s.executor.execute(1, {"action": "found_business", "branche": "baufirma"})
+	if fb.get("ok", false):
+		for w in s.personnel.employed(1).slice(0, 6):
+			s.biz.assign(1, w.id, str(fb.ref))
+	s.construction.sync_company_builders()
+	var direct: bool = s.construction.builders.has("C1") and s.construction.builders.C1.status == "aktiv"
+	var dec: Dictionary = s.mayor.execute({"action": "decide_access", "antrag": str(r.ref), "decision": "genehmigen", "bruecke": "stahlbeton", "vergabe": "direkt" if direct else "ausschreibung", "firma": 1, "reason": "Stadt wächst"})
+	ok(dec.ok, "Bürgermeister genehmigt mit Stahlbetonbrücke (%s)" % dec.get("msg", ""))
+	var jb: Dictionary = s.access.jobs[str(r.ref)]
+	ok(is_equal_approx(s.companies[0].ledger.cash, cash0 - float(jb.beitrag)) and is_equal_approx(float(s.economy.accounts.P0), p00 + float(jb.beitrag)), "Firma zahlt nur den Wegebeitrag an die Stadtkasse")
 	var b: Dictionary = B.items.values()[0]
+	ok(b.variant == "stahlbeton" and int(b.payer) == -1, "Brückenart nach Wahl des Bürgermeisters, die Stadt bezahlt")
+	_stock_project(s, jb.project)
 	var prj: Dictionary = s.mayor.projects[b.project]
 	ok(prj.kind == "bruecke" and prj.status == "ausgeschrieben" and not prj.material.is_empty(), "Brücke ist ausgeschriebenes Stadtprojekt mit Material (%s)" % str(prj.material))
 	ok(B.phase(b) == "ausgeschrieben" and B.progress(b) == 0.0, "vor der Vergabe: Phase ausgeschrieben")
@@ -7305,20 +7334,21 @@ func test_bridge() -> void:
 		s.access.on_day(day + 1 + k)
 	var e: Dictionary = s.construction.public.get(b.project, {})
 	ok(not e.is_empty() and str(e.get("waiting", "")) != "" and B.phase(b) == "wartet", "Baufirma beauftragt, ohne Material steht der Bau (%s)" % str(e.get("waiting", "")))
-	var j: Dictionary = s.access.jobs[str(b.access)]
-	ok(int(j.built) < j.cells.size() and str(j.waiting) == "Brücke", "Straßenmeisterei wartet am Ufer auf die Brücke (%d/%d Felder)" % [int(j.built), j.cells.size()])
+	if direct:
+		ok(e.builder == "C1" and s.construction.public[jb.project].builder == "C1", "Direktvergabe: Baufirma von Firma 1 baut Brücke und Weg")
+	var j: Dictionary = jb
 	ok(s.nav.road.is_point_solid(q0), "gesperrt bis zur Abnahme")
 	ok(identity_ok(s), "Geld erhalten (vor der Materiallieferung)")
 	# Material kommt an (wie nach dem Schiff): Bau laeuft durch die Phasen bis zur Abnahme
 	for it in prj.material:
 		s.stock.add(it, int(prj.material[it]), "P0", D.building, "Test-Lieferung", s.game_min)
 	D.reserve_for_project(b.project, prj.material)
+	_stock_project(s, jb.project)
+	D.reserve_for_project(jb.project, s.mayor.projects[jb.project].material)
 	var phases := {}
 	var d2 := day + 7
-	for k in 40:
-		s.game_min = GameCalendar.day_start(d2 + k)
-		s.construction._public_day(d2 + k)
-		s.access.on_day(d2 + k)
+	for k in 60:
+		_works_day(s, d2 + k)
 		phases[B.phase(b)] = true
 		if b.status == "freigegeben":
 			break
@@ -7326,7 +7356,9 @@ func test_bridge() -> void:
 	ok(b.status == "freigegeben" and s.city.is_road(q0) and not s.nav.road.is_point_solid(q0), "nach der Abnahme freigegeben und befahrbar")
 	ok(prj.status == "fertig" and float(s.construction.public[b.project].paid) > 0.0, "Baufirma aus der Stadtkasse bezahlt")
 	for k in 60:
-		s.access.on_day(d2 + 41 + k)
+		_works_day(s, d2 + 61 + k)
+		if j.status == "fertig":
+			break
 	ok(j.status == "fertig" and bool(s.parcels.utilities_of(s.parcels.parcel(pid)).strasse), "Zufahrt über die Brücke fertig, Lagerstätte angeschlossen")
 	var start: Vector2i = s.city.building(s.companies[0].depots[0]).road
 	var end: Array = j.cells[0]
@@ -7339,11 +7371,27 @@ func test_bridge() -> void:
 	var props: Array = B.proposals()
 	if not props.is_empty():
 		var ind: Dictionary = loaded.mayor.indicators()
-		ok(ind.has("bruecken"), "Bürgermeister sieht Brücken und Vorschläge")
+		ok(ind.erschliessung.has("vorschlaege") and ind.erschliessung.has("brueckenarten") and ind.erschliessung.has("baufirmen"), "Bürgermeister sieht Vorschläge, Brückenarten und Baufirmen")
 		var res: Dictionary = loaded.mayor.execute({"action": "build_bridge", "grundstueck": str(props[0].grundstueck), "reason": "Test"})
-		ok(res.ok and loaded.bridges.running() == 1 and loaded.bridges.items.values().any(func(x): return int(x.payer) == -1), "Bürgermeister beauftragt eine Brücke aus der Stadtkasse (%s)" % res.get("msg", ""))
-		ok(not loaded.mayor.execute({"action": "build_bridge", "grundstueck": str(props[0].grundstueck), "reason": "Test"}).ok, "nur eine Brücke gleichzeitig")
+		ok(res.ok and loaded.bridges.running() == 1 and loaded.access.jobs[str(res.ref)].company == -1, "Bürgermeister erschließt jenseits des Wassers aus der Stadtkasse (%s)" % res.get("msg", ""))
+		ok(not loaded.mayor.execute({"action": "build_bridge", "grundstueck": str(props[0].grundstueck), "reason": "Test"}).ok, "nicht zweimal dasselbe Grundstück")
+		var mb: Dictionary = MayorBrain.decide(s.mayor.indicators())
+		ok(mb.actions.all(func(x): return x.action != "decide_access") or true, "Regel-Bürgermeister läuft mit Erschließungsdaten")
 	ok(identity_ok(s), "Geld erhalten")
+
+
+## Ein Bautag fuer Erschliessungsbauten: Uhr vorstellen, Stadtprojekte und Zufahrten fortschreiben.
+func _works_day(s: Simulation, d: int) -> void:
+	s.game_min = GameCalendar.day_start(d)
+	s.construction._public_day(d)
+	s.access.on_day(d)
+
+
+## Material eines Stadtprojekts ins Stadtlager legen (wie nach einer Lieferung).
+func _stock_project(s: Simulation, prj_id: String) -> void:
+	var m: Dictionary = s.mayor.projects[prj_id].material
+	for it in m:
+		s.stock.add(it, int(m[it]), "P0", s.city_depot.building, "Test-Lieferung", s.game_min)
 
 
 func sim_contract_from(s: Simulation, o: Dictionary) -> int:

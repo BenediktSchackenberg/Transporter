@@ -123,8 +123,10 @@ func create(span: Dictionary, payer: int, access_id: String, by: String) -> Dict
 		"variant": str(span.variant), "cost": float(span.cost), "days": int(span.days), "payer": payer, "access": access_id,
 		"status": "ausgeschrieben", "day": GameCalendar.day_of(sim.game_min), "project": ""}
 	_next += 1
-	var mat: Dictionary = VARIANTS[b.variant].material
-	var prj: Dictionary = sim.mayor.add_bridge_project(b.id, float(b.cost), int(b.days), b.cells.size(), mat, by)
+	var mat := {}
+	for it in VARIANTS[b.variant].material:
+		mat[it] = int(VARIANTS[b.variant].material[it]) * b.cells.size()
+	var prj: Dictionary = sim.mayor.add_works_project("bruecke", b.id, float(b.cost), int(b.days), mat, "Brücke %s (%s)" % [b.id, by], str(span.get("award", "")))
 	b.project = prj.id
 	items[b.id] = b
 	_index(b)
@@ -139,10 +141,7 @@ func create(span: Dictionary, payer: int, access_id: String, by: String) -> Dict
 func progress(b: Dictionary) -> float:
 	if b.status == "freigegeben":
 		return 1.0
-	var e: Dictionary = sim.construction.public.get(str(b.project), {})
-	if e.is_empty() or GameCalendar.day_of(sim.game_min) < int(e.start):
-		return 0.0
-	return clampf(1.0 - float(e.days_left) / maxf(1.0, float(e.days)), 0.0, 0.99)
+	return minf(0.99, sim.construction.public_progress(str(b.project)))
 
 
 func phase(b: Dictionary) -> String:
@@ -203,11 +202,9 @@ func running() -> int:
 	return items.values().filter(func(b): return b.status != "freigegeben").size()
 
 
-## Oeffentliche Bruecke (Buergermeister): Zufahrt samt Bruecke zu einem staedtischen Grundstueck jenseits des Wassers, bezahlt aus der Stadtkasse.
-func order_public(pid: String, by: String) -> Dictionary:
-	if running() > 0:
-		return {"ok": false, "msg": "Es wird schon eine Brücke gebaut; erst nach deren Abnahme die nächste beauftragen."}
-	return sim.access.order(-1, pid, by)
+## Gewaehlte Brueckenart pruefen: schafft sie Spannweite und Last?
+static func valid_variant(v: String, span: int, need_t: int) -> bool:
+	return VARIANTS.has(v) and span <= int(VARIANTS[v].max_span) and int(VARIANTS[v].last_t) >= need_t
 
 
 ## Vorschlaege fuer den Buergermeister: freie staedtische Grundstuecke (keine Lagerstaetten), die nur ueber eine Bruecke erreichbar sind.

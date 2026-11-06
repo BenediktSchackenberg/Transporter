@@ -119,13 +119,40 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var pw: Dictionary = ind.get("strom", {})
 	if actions.size() < MAX_ACTIONS and not pw.is_empty() and not bool(pw.ausbau_laeuft) and (float(pw.auslastung) > 0.85 or int(pw.abgeschaltete_betriebe) > 0) 			and float(ind.haushalt.verfuegbar) > float(pw.ausbau.kosten) * 1.5:
 		actions.append({"action": "expand_power", "reason": "Stromnetz zu %.0f %% ausgelastet, %d Betriebe ohne Strom." % [float(pw.auslastung) * 100.0, int(pw.abgeschaltete_betriebe)]})
-	# 1h1b) Bruecke: Wohnungssuchende, kaum noch erschlossenes Bauland diesseits, Brueckenvorschlag bezahlbar -> Land jenseits des Wassers erschliessen
-	var brg: Dictionary = ind.get("bruecken", {})
-	if actions.size() < MAX_ACTIONS and not brg.is_empty() and int(brg.im_bau) == 0 and not brg.vorschlaege.is_empty() and party != "haushalt" 			and waiting > 0 and int(ind.versorgung.davon_voll_erschlossen) < 3:
-		var bv: Dictionary = brg.vorschlaege[0]
-		if float(ind.haushalt.verfuegbar) > float(bv.kosten) * 3.0:
-			actions.append({"action": "build_bridge", "grundstueck": bv.grundstueck, "reason": "%d Haushalte suchen Wohnraum, diesseits kaum erschlossenes Bauland; %s zu %s (%s, etwa %d Tage)." % [waiting,
-				bv.art, bv.grundstueck, Catalog.money(float(bv.kosten)), int(bv.tage)]})
+	# 1h1b) Erschliessung (Ersatz fuer die KI): Antraege genehmigen, wenn die Stadt ihren Anteil tragen kann; Auftrag direkt an eine freie
+	# Unternehmer-Baufirma (die Stadt gibt den Unternehmen Arbeit), sonst Ausschreibung. Eigene Bruecke nur bei Wohnungsnot.
+	var er: Dictionary = ind.get("erschliessung", {})
+	if not er.is_empty():
+		var free_firm := -1
+		for f in er.baufirmen:
+			if str(f.status) == "aktiv" and int(f.auslastung) < int(f.kapazitaet):
+				free_firm = int(f.firma)
+				break
+		var cash_left := float(ind.haushalt.verfuegbar)
+		for ap in er.antraege:
+			if actions.size() >= MAX_ACTIONS:
+				break
+			if cash_left >= float(ap.anteil_stadt) * 1.5:
+				var act := {"action": "decide_access", "antrag": ap.id, "decision": "genehmigen", "vergabe": "ausschreibung",
+					"reason": "%s erschließt %s (%s); die Stadt trägt %s für Brücken und gewinnt eine neue Zufahrt." % [ap.name, ap.grundstueck, ap.art, Catalog.money(float(ap.anteil_stadt))]}
+				if free_firm >= 0:
+					act.vergabe = "direkt"
+					act.firma = free_firm
+					act.reason += " Bauauftrag direkt an eine ortsansässige Baufirma."
+				actions.append(act)
+				cash_left -= float(ap.anteil_stadt)
+			else:
+				actions.append({"action": "decide_access", "antrag": ap.id, "decision": "ablehnen", "reason": "Stadtkasse kann den Anteil von %s derzeit nicht tragen." % Catalog.money(float(ap.anteil_stadt))})
+		var mine: int = er.laufend.filter(func(j): return int(j.unternehmen) < 0).size()
+		if actions.size() < MAX_ACTIONS and mine == 0 and not er.vorschlaege.is_empty() and party != "haushalt" and waiting > 0 and int(ind.versorgung.davon_voll_erschlossen) < 3:
+			var bv: Dictionary = er.vorschlaege[0]
+			if cash_left > float(bv.kosten) * 3.0:
+				var act2 := {"action": "build_bridge", "grundstueck": bv.grundstueck, "reason": "%d Haushalte suchen Wohnraum, diesseits kaum erschlossenes Bauland; %s zu %s (%s, etwa %d Tage)." % [waiting,
+					bv.art, bv.grundstueck, Catalog.money(float(bv.kosten)), int(bv.tage)]}
+				if free_firm >= 0:
+					act2.vergabe = "direkt"
+					act2.firma = free_firm
+				actions.append(act2)
 	# 1h2) Rivalitaet: heftigsten Streit (ab 60) schlichten, sonst Dauer-Eskalierer (3+ Vorfaelle in 7 Tagen) verwarnen
 	var rv: Dictionary = ind.get("rivalitaet", {})
 	if actions.size() < MAX_ACTIONS and not rv.is_empty():

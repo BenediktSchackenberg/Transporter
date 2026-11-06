@@ -298,14 +298,20 @@ func _demo_bridge(sim: Simulation, target: String) -> void:
 		if pl.ok and not pl.bruecken.is_empty():
 			pid = id
 			break
-	var r: Dictionary = sim.executor.execute(0, {"action": "build_access", "grundstueck": pid})
-	print("AUTOTEST: Brücke ", r.get("msg", "keine Lagerstätte jenseits des Flusses"))
-	if not r.get("ok", false) or sim.bridges.items.is_empty():
+	var r: Dictionary = sim.executor.execute(0, {"action": "build_access", "grundstueck": pid, "reason": "Sichtprüfung"})
+	print("AUTOTEST: Antrag ", r.get("msg", "keine Lagerstätte jenseits des Flusses"))
+	if not r.get("ok", false):
+		return
+	var dec: Dictionary = sim.mayor.execute({"action": "decide_access", "antrag": str(r.ref), "decision": "genehmigen", "bruecke": "stein", "reason": "Sichtprüfung"})
+	print("AUTOTEST: Entscheidung ", dec.get("msg", ""))
+	if sim.bridges.items.is_empty():
 		return
 	var b: Dictionary = sim.bridges.items.values()[0]
-	var prj: Dictionary = sim.mayor.projects[b.project]
-	for it in prj.material:
-		sim.stock.add(it, int(prj.material[it]), "P0", sim.city_depot.building, "Szenario")
+	var j: Dictionary = sim.access.jobs[str(r.ref)]
+	for pid2 in [b.project, j.project]:
+		var prj: Dictionary = sim.mayor.projects[pid2]
+		for it in prj.material:
+			sim.stock.add(it, int(prj.material[it]), "P0", sim.city_depot.building, "Szenario")
 	var stop := 1.0 if target == "open" else clampf(float(target), 0.0, 0.99)
 	var day := GameCalendar.day_of(sim.game_min)
 	for k in 60:
@@ -315,7 +321,11 @@ func _demo_bridge(sim: Simulation, target: String) -> void:
 		sim.access.on_day(day)
 		if b.status == "freigegeben" or sim.bridges.progress(b) >= stop:
 			break
+	sim.game_min = GameCalendar.day_start(day) + GameCalendar.days_to_min(0.4)   # mitten im Arbeitstag: Wegebau-Front rueckt sichtbar vor
 	var c: Array = b.cells[b.cells.size() / 2]
+	if str(args.get("shot-works", "")) == "road":   # Kamera auf die Arbeitsfront des Wegebaus
+		var fr: Dictionary = sim.access.front(j)
+		c = [int(fr.cells[mini(int(fr.built) + 2, fr.cells.size() - 1)].x), int(fr.cells[mini(int(fr.built) + 2, fr.cells.size() - 1)].y)]
 	args["shot-tile"] = "%d,%d" % [int(c[0]), int(c[1])]
 	print("AUTOTEST: Brücke %s Phase %s, Fortschritt %.2f" % [b.id, sim.bridges.phase(b), sim.bridges.progress(b)])
 
