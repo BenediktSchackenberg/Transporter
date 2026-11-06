@@ -854,6 +854,8 @@ func _public_day(day: int) -> void:
 			days *= maxi(1, int(ceil(float(prj.parcels.size()) / 3.0)))
 			if prj.kind == "netzausbau":
 				days = PowerGrid.EXPAND_DAYS
+			if prj.has("days"):
+				days = int(prj.days)   # Bruecke: Bauzeit aus Variante und Spannweite
 			var offers := make_offers(float(prj.cost), days, str(prj.id))
 			prj.tender["bids"] = offers
 			var o := best_offer(offers, float(prj.cost))
@@ -862,7 +864,7 @@ func _public_day(day: int) -> void:
 				prj.tender["note"] = "kein Angebot innerhalb des Budgets"
 				continue
 			# Material kommt aus dem Stadtlager (Auftragsmaterial): wird reserviert und vom Angebotspreis abgezogen, nicht nochmals abgerechnet
-			var mats := CityDepot.material_need(prj.parts, prj.parcels.size())
+			var mats: Dictionary = prj.get("material", {}).duplicate() if prj.has("material") else CityDepot.material_need(prj.parts, prj.parcels.size())
 			sim.city_depot.reserve_for_project(str(prj.id), mats, "ueberlassen")
 			var mval := minf(sim.city_depot.value_of(mats), float(o.price) * 0.6)
 			public[prj.id] = {"project": prj.id, "builder": o.builder, "price": float(o.price) - mval, "days_left": int(o.days), "days": int(o.days), "status": "laufend", "start": int(o.start), "paid": 0.0,
@@ -899,6 +901,8 @@ func _finish_public(e: Dictionary) -> void:
 		sim.parcels.touch(pid)
 	if prj.kind == "netzausbau":
 		sim.grid.finish_expansion(float(prj.get("kw", PowerGrid.EXPAND_KW)))
+	if prj.kind == "bruecke":
+		sim.bridges.finish(str(prj.bridge))
 	e.status = "fertig"
 	prj.status = "fertig"
 	sim.log_event("Erschließungsprojekt %s fertiggestellt (%s, %s)." % [prj.id, ", ".join(prj.parts), builders[e.builder].name], "info")

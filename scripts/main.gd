@@ -175,6 +175,9 @@ func _process(_delta: float) -> void:
 		for it in ["mehl", "saatgut", "stahl"]:
 			H.ship_in("stock", "", it, 40)
 		H._arrive(GameCalendar.day_of(session.sim.game_min))
+	if session and args.has("demo-bridge") and not args.has("_bridge"):   # Sichtpruefung Bruecke: Zufahrt mit Bruecke, Bau bis zum Fortschritt (Zahl 0..1, "open" = freigegeben)
+		args["_bridge"] = true
+		_demo_bridge(session.sim, str(args["demo-bridge"]))
 	if session and args.has("save-at") and not args.has("_saved") and session.active_seconds >= float(args["save-at"]):
 		args["_saved"] = true
 		session.save_game()
@@ -283,6 +286,38 @@ func _scenario_site(sim: Simulation, phase: int) -> void:
 	var pc: Dictionary = sim.parcels.parcel(pid)
 	args["shot-tile"] = "%d,%d" % [int(pc.rect[0]) + int(pc.rect[2]) / 2 + 2, int(pc.rect[1]) + int(pc.rect[3]) / 2 - 2]
 	print("SZENARIO site: Phase %s, Fortschritt %.2f, Status %s" % [pr.get("phase"), pr.get("progress", 0.0), pr.get("status")])
+
+
+## Sichtpruefung der Bruecke: Firma 0 laesst eine Zufahrt ueber den Fluss bauen, Material liegt bereit, die Zeit laeuft bis zum Fortschritt.
+func _demo_bridge(sim: Simulation, target: String) -> void:
+	sim.companies[0].ledger.inject(250000.0)
+	sim.prod.deposit_of("x")
+	var pid := ""
+	for id in sim.prod._deposits:
+		var pl: Dictionary = sim.access.plan(id)
+		if pl.ok and not pl.bruecken.is_empty():
+			pid = id
+			break
+	var r: Dictionary = sim.executor.execute(0, {"action": "build_access", "grundstueck": pid})
+	print("AUTOTEST: Brücke ", r.get("msg", "keine Lagerstätte jenseits des Flusses"))
+	if not r.get("ok", false) or sim.bridges.items.is_empty():
+		return
+	var b: Dictionary = sim.bridges.items.values()[0]
+	var prj: Dictionary = sim.mayor.projects[b.project]
+	for it in prj.material:
+		sim.stock.add(it, int(prj.material[it]), "P0", sim.city_depot.building, "Szenario")
+	var stop := 1.0 if target == "open" else clampf(float(target), 0.0, 0.99)
+	var day := GameCalendar.day_of(sim.game_min)
+	for k in 60:
+		day += 1
+		sim.game_min = GameCalendar.day_start(day)
+		sim.construction._public_day(day)
+		sim.access.on_day(day)
+		if b.status == "freigegeben" or sim.bridges.progress(b) >= stop:
+			break
+	var c: Array = b.cells[b.cells.size() / 2]
+	args["shot-tile"] = "%d,%d" % [int(c[0]), int(c[1])]
+	print("AUTOTEST: Brücke %s Phase %s, Fortschritt %.2f" % [b.id, sim.bridges.phase(b), sim.bridges.progress(b)])
 
 
 ## Sichtpruefung des Zentrallagers: Lieferungen im Wareneingang, Ausgabe fuer ein Projekt, Lkw an der Rampe und in der Warteschlange; das Lager ist ausgewaehlt.

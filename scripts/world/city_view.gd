@@ -35,6 +35,7 @@ var depot_view := DepotView.new()
 var parcel_layer := ParcelLayer.new()
 var mountain_view := MountainView.new()   # Berge und Bergbau (Auftrag 14)
 var ship_view := ShipView.new()           # Linienschiff im Hafen (Kuestenort)
+var bridge_view := BridgeView.new()       # Bruecken im Bau und freigegeben (Kuestenort)
 var waste_view := WasteView.new()         # Deponie und Muellabfuhr
 var _lit_nodes: Array = []                 # Fensterlichter (Sprite2D)
 var _blink_nodes: Array = []
@@ -123,6 +124,8 @@ func build(simulation: Simulation) -> void:
 	waste_view.setup(sim)
 	buildings_node.add_child(ship_view)
 	ship_view.setup(sim)
+	buildings_node.add_child(bridge_view)
+	bridge_view.setup(sim)
 	_build_decor()
 	_build_weather_fx()
 	camera.position = Iso.to_screen(sim.city.tile_center(sim.city.building(sim.companies[0].depots[0]).road))
@@ -190,7 +193,7 @@ func _build_ground() -> void:
 				G.CROP: name = "crop"
 				G.WATER: name = "water0"
 				G.RAIL: name = "rail_h"
-				G.ROAD: name = "road%d" % c.road_mask(p)
+				G.ROAD: name = "water0" if sim.bridges.is_bridge(p) else "road%d" % c.road_mask(p)   # Bruecke: Wasser darunter, Fahrbahn zeichnet BridgeView
 				G.PARKING: name = "parking"
 			var at: Array = tiles[name]
 			ground.set_cell(p, 0, Vector2i(int(at[0]), int(at[1])))
@@ -375,7 +378,7 @@ func _on_roads_built(cells: Array) -> void:
 			_tree_sprites[q].queue_free()
 			_tree_sprites.erase(q)
 	for q in todo:
-		if sim.city.is_road(q):
+		if sim.city.is_road(q) and not sim.bridges.is_bridge(q):
 			var at: Array = tiles["road%d" % sim.city.road_mask(q)]
 			ground.set_cell(q, 0, Vector2i(int(at[0]), int(at[1])))
 
@@ -533,6 +536,7 @@ func update_view(delta: float) -> void:
 	mountain_view.update_view(delta)
 	waste_view.update_view(delta)
 	ship_view.update_view(delta)
+	bridge_view.update_view(delta)
 	parcel_layer.update_view(delta)
 	# Depots: Besitzerwechsel und Stoerungen
 	for site in _depot_marks:

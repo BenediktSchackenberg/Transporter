@@ -1365,6 +1365,13 @@ func _update_selection() -> void:
 				return
 			sel_title.text = "Müllwagen – %s" % fv.label
 			sel_text.text = LiveText.garbage_truck(sim, fv)
+		"bruecke":
+			var br: Dictionary = sim.bridges.items.get(str(sel.id), {})
+			if br.is_empty():
+				session.entity_view.selected = {}
+				return
+			sel_title.text = "%s %s" % [Bridges.VARIANTS[br.variant].label, br.id]
+			sel_text.text = LiveText.bridge(sim, br)
 		"deponie":
 			sel_title.text = "Deponie der Stadt (Grundstück %s)" % sim.waste.landfill_pid
 			sel_text.text = LiveText.landfill(sim)

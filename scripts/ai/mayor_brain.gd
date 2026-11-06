@@ -119,6 +119,13 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var pw: Dictionary = ind.get("strom", {})
 	if actions.size() < MAX_ACTIONS and not pw.is_empty() and not bool(pw.ausbau_laeuft) and (float(pw.auslastung) > 0.85 or int(pw.abgeschaltete_betriebe) > 0) 			and float(ind.haushalt.verfuegbar) > float(pw.ausbau.kosten) * 1.5:
 		actions.append({"action": "expand_power", "reason": "Stromnetz zu %.0f %% ausgelastet, %d Betriebe ohne Strom." % [float(pw.auslastung) * 100.0, int(pw.abgeschaltete_betriebe)]})
+	# 1h1b) Bruecke: Wohnungssuchende, kaum noch erschlossenes Bauland diesseits, Brueckenvorschlag bezahlbar -> Land jenseits des Wassers erschliessen
+	var brg: Dictionary = ind.get("bruecken", {})
+	if actions.size() < MAX_ACTIONS and not brg.is_empty() and int(brg.im_bau) == 0 and not brg.vorschlaege.is_empty() and party != "haushalt" 			and waiting > 0 and int(ind.versorgung.davon_voll_erschlossen) < 3:
+		var bv: Dictionary = brg.vorschlaege[0]
+		if float(ind.haushalt.verfuegbar) > float(bv.kosten) * 3.0:
+			actions.append({"action": "build_bridge", "grundstueck": bv.grundstueck, "reason": "%d Haushalte suchen Wohnraum, diesseits kaum erschlossenes Bauland; %s zu %s (%s, etwa %d Tage)." % [waiting,
+				bv.art, bv.grundstueck, Catalog.money(float(bv.kosten)), int(bv.tage)]})
 	# 1h2) Rivalitaet: heftigsten Streit (ab 60) schlichten, sonst Dauer-Eskalierer (3+ Vorfaelle in 7 Tagen) verwarnen
 	var rv: Dictionary = ind.get("rivalitaet", {})
 	if actions.size() < MAX_ACTIONS and not rv.is_empty():

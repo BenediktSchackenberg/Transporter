@@ -683,6 +683,8 @@ func selected_position() -> Vector2:
 					return fv.mover.pos
 		"deponie":
 			return cv.waste_view.landfill_center()
+		"bruecke":
+			return cv.bridge_view.center_of(str(selected.id))
 		"mountain":
 			var mn = cv.mountain_view._nodes.get(str(selected.id))
 			if mn != null and mn.active:   # laufendes Bergwerk: zwischen Abbaufront und Halde
@@ -748,6 +750,9 @@ func pick(click: Vector2) -> Dictionary:
 	var mountain: String = cv.mountain_view.pick(Iso.to_world(click))
 	if mountain != "":
 		return {"kind": "mountain", "id": mountain}
+	var bridge_id: String = cv.bridge_view.pick(Iso.to_world(click))
+	if bridge_id != "":
+		return {"kind": "bruecke", "id": bridge_id}
 	if cv.waste_view.pick_landfill(Iso.to_world(click)):
 		return {"kind": "deponie", "id": sim.waste.landfill_pid}
 	var found := -1

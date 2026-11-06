@@ -893,6 +893,40 @@ static func garbage_truck(sim: Simulation, v: Dictionary) -> String:
 	return txt
 
 
+## Bruecke: Variante, Phase, Fortschritt, Baufirma, Material, Kosten, Tragfaehigkeit, Sperrung.
+static func bridge(sim: Simulation, b: Dictionary) -> String:
+	var B: Bridges = sim.bridges
+	var v: Dictionary = Bridges.VARIANTS[b.variant]
+	var names := {"ausgeschrieben": "ausgeschrieben, Baufirma wird gesucht", "widerlager": "Widerlager an den Ufern", "pfeiler": "Pfeiler im Wasser",
+		"fahrbahn": "Fahrbahn wird verlegt", "gelaender": "Geländer und Ausstattung", "abnahme": "Abnahme durch das Bauamt", "wartet": "wartet auf Material", "freigegeben": "freigegeben"}
+	var txt := "Phase: [b]%s[/b] · Fortschritt %d %%\n" % [names.get(B.phase(b), B.phase(b)), int(B.progress(b) * 100.0)]
+	txt += "Spannweite %d Felder · trägt %d t · Kosten %s · bezahlt von %s\n" % [b.cells.size(), int(v.last_t), Catalog.money(float(b.cost)),
+		"der Stadtkasse" if int(b.payer) < 0 else sim.company(int(b.payer)).company_name]
+	var prj: Dictionary = sim.mayor.projects.get(str(b.project), {})
+	var e: Dictionary = sim.construction.public.get(str(b.project), {})
+	if not e.is_empty():
+		txt += "Baufirma: %s · Bauzeit %d Tage, noch %d\n" % [sim.construction.builders[e.builder].name, int(e.days), maxi(0, int(e.days_left))]
+		if str(e.get("waiting", "")) != "":
+			txt += "[color=#e0a040]Blockiert: %s (kommt per Schiff ins Stadtlager).[/color]\n" % e.waiting
+	elif not prj.is_empty():
+		txt += "Projekt %s: %s%s\n" % [prj.id, prj.status, (" – " + str(prj.tender.get("note", ""))) if str(prj.get("tender", {}).get("note", "")) != "" else ""]
+	var mats: Array = []
+	for it in prj.get("material", {}):
+		mats.append("%d %s" % [int(prj.material[it]), CityGoods.get_item(it).get("name", it)])
+	if not mats.is_empty():
+		txt += "Material aus dem Stadtlager: %s\n" % ", ".join(mats)
+	if b.status != "freigegeben":
+		txt += "[color=#e07060]Gesperrt bis zur Abnahme – Fahrzeuge fahren noch nicht darüber.[/color]\n"
+	else:
+		txt += "Freigegeben seit Tag %d, Teil des Straßennetzes.\n" % int(b.get("opened", 0))
+	if str(b.get("access", "")) != "":
+		var j: Dictionary = sim.access.jobs.get(str(b.access), {})
+		if not j.is_empty():
+			txt += "Gehört zur Zufahrt %s nach %s (%d %% gebaut%s).\n" % [j.id, j.parcel, int(100.0 * float(j.built) / maxf(1.0, float(j.cells.size()))),
+				", Trupp wartet am Ufer" if str(j.get("waiting", "")) != "" else ""]
+	return txt
+
+
 ## Deponie: Fuellstand, Mengen, Recycling, Kosten und Gebuehren.
 static func landfill(sim: Simulation) -> String:
 	var W: Waste = sim.waste

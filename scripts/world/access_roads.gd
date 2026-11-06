@@ -3,7 +3,8 @@ extends RefCounted
 ## Zufahrten (Auftrag 15, Etappe B): Schotterweg von einer abgelegenen Lagerstaette zur naechsten Strasse. Ein Unternehmer
 ## bezahlt die Zufahrt an die Stadt (Erschliessungsbeitrag), die Strassenmeisterei baut sie Tag fuer Tag sichtbar; jede fertige
 ## Zelle wird Strasse (Wegfindung, Grundstuecksanschluss). Gesucht wird nur ueber Land: Berge, Wasser und Gebaeude sind
-## Hindernisse, Wald wird gerodet. Liegt Wasser im Weg, ist eine Bruecke noetig (Etappe D).
+## Hindernisse, Wald wird gerodet. Liegt ein Fluss oder See im Weg, plant die Zufahrt Bruecken mit (Etappe D, `Bridges`): die
+## Strassenmeisterei baut bis ans Ufer und wartet dort, bis die Bruecke abgenommen ist. Ueber das Meer fuehrt keine Zufahrt.
 
 signal roads_built(cells: Array)   # neue Strassenzellen (Darstellung)
 
@@ -12,6 +13,8 @@ const CELL_COST := 80.0            # Schotterweg je Feld
 const CLEAR_COST := 60.0           # Rodung je Baumfeld
 const CELLS_PER_DAY := 15          # Baufortschritt der Strassenmeisterei
 const MAX_RUNNING := 2
+const DETOUR_MIN := 40             # Bruecke lohnt, wenn sie mindestens so viele Felder Umweg spart ...
+const DETOUR_FACTOR := 2.0         # ... und der Landweg mindestens doppelt so lang ist
 
 var sim
 var jobs := {}                     # "Z<n>" -> {id, parcel, company, cells: [[x, y]], built, cost, start, status}
@@ -24,26 +27,50 @@ func setup(simulation) -> void:
 	sim = simulation
 
 
-## Weg vom Grundstueck zur naechsten Strasse (Breitensuche ueber Land). Ergebnis: {ok, cells, kosten, tage, baeume} oder {ok: false, msg}.
-func plan(pid: String) -> Dictionary:
-	if _cache.has(pid):
-		return _cache[pid]
+## Weg vom Grundstueck zur naechsten Strasse (Breitensuche ueber Land, sonst ueber Fluss/See mit Bruecken).
+## Ergebnis: {ok, cells, kosten, tage, baeume, bruecken: [Brueckenplan]} oder {ok: false, msg}. need_t: noetige Tragfaehigkeit.
+func plan(pid: String, need_t: int = Bridges.LOAD_MINE) -> Dictionary:
+	var key := "%s:%d" % [pid, need_t]
+	if _cache.has(key):
+		return _cache[key]
 	var p: Dictionary = sim.parcels.parcel(pid)
 	if p.is_empty():
 		return {"ok": false, "msg": "Unbekanntes Grundstück %s." % pid}
 	var res := _search(p, false)
-	if not res.ok and _search(p, true).ok:
-		res = {"ok": false, "msg": "Kein Landweg zu %s: Fluss, See oder Meer im Weg – dafür ist eine Brücke nötig." % pid, "bruecke": true}
-	elif res.ok:
-		var trees := 0
-		for c in res.cells:
-			if sim.city.blocked[sim.city.idx(c)] == 1:
-				trees += 1
-		res.baeume = trees
-		res.kosten = snappedf(BASE_COST + CELL_COST * res.cells.size() + CLEAR_COST * trees, 1.0)
-		res.tage = ceili(float(res.cells.size()) / CELLS_PER_DAY)
-	_cache[pid] = res
+	if res.ok:
+		_price(res, {"spans": [], "kosten": 0.0, "tage": 0})
+	if not res.ok or res.cells.size() > DETOUR_MIN:
+		# Weg ueber Fluss/See: noetig, wenn kein Landweg besteht; sonst nur, wenn er billiger ist oder einen langen Umweg spart
+		var wet := _search(p, true)
+		var spans: Dictionary = sim.bridges.plan_spans(wet.cells, need_t) if wet.ok else {}
+		if wet.ok and spans.ok and not spans.spans.is_empty():
+			_price(wet, spans)
+			var saved: int = res.cells.size() - wet.cells.size() if res.ok else 0
+			if not res.ok or float(wet.kosten) < float(res.kosten) or (saved >= DETOUR_MIN and float(res.cells.size()) >= DETOUR_FACTOR * wet.cells.size()):
+				wet.ersparnis_felder = saved
+				res = wet
+		elif not res.ok and wet.ok:
+			res = {"ok": false, "msg": "Kein Landweg zu %s: %s" % [pid, spans.msg], "bruecke": true}
+	_cache[key] = res
 	return res
+
+
+## Kosten und Dauer eines Weges: Schotterweg und Rodung je Landfeld, dazu die Bruecken (Bauzeit laeuft parallel).
+func _price(res: Dictionary, spans: Dictionary) -> void:
+	var trees := 0
+	var land := 0
+	for c in res.cells:
+		if sim.city.g(c) == CityData.G.WATER:
+			continue
+		land += 1
+		if sim.city.blocked[sim.city.idx(c)] == 1:
+			trees += 1
+	res.baeume = trees
+	res.bruecken = spans.spans
+	res.kosten_bruecken = float(spans.kosten)
+	res.ersparnis_felder = 0
+	res.kosten = snappedf(BASE_COST + CELL_COST * land + CLEAR_COST * trees + float(spans.kosten), 1.0)
+	res.tage = maxi(ceili(float(land) / CELLS_PER_DAY), int(spans.tage))
 
 
 func _search(p: Dictionary, allow_water: bool) -> Dictionary:
@@ -144,7 +171,7 @@ func _lots(p: Dictionary) -> Array:
 	return out
 
 
-## Land ohne Berg und ohne Gebaeude; Baeume werden gerodet. Strassen sind Ziel, nie Durchgang.
+## Land ohne Berg und ohne Gebaeude; Baeume werden gerodet; Fluss und See nur mit Bruecke, Meer nie. Strassen sind Ziel, nie Durchgang.
 func _passable(q: Vector2i, allow_water: bool, start: bool) -> bool:
 	var city: CityData = sim.city
 	var i := city.idx(q)
@@ -153,33 +180,45 @@ func _passable(q: Vector2i, allow_water: bool, start: bool) -> bool:
 	if city.building_at[i] >= 0:
 		return false
 	if city.ground[i] == CityData.G.WATER:
-		return allow_water and not start
+		return allow_water and not start and not sim.bridges.is_sea(q)
 	return true
 
 
-## Zufahrt beauftragen: der Unternehmer zahlt den Erschliessungsbeitrag an die Stadt, die Strassenmeisterei baut.
-func order(cid: int, pid: String) -> Dictionary:
+## Zufahrt beauftragen: der Unternehmer zahlt den Erschliessungsbeitrag an die Stadt (samt Bruecken), die Strassenmeisterei baut den Weg,
+## Bruecken gehen als Stadtprojekt an eine Baufirma. cid -1: Buergermeister, Bruecken aus der Stadtkasse, Weg von der eigenen Strassenmeisterei.
+func order(cid: int, pid: String, by: String = "") -> Dictionary:
 	if jobs.values().any(func(j): return j.parcel == pid and j.status == "im_bau"):
 		return {"ok": false, "msg": "Zur Lagerstätte %s wird schon eine Zufahrt gebaut." % pid}
 	if running() >= MAX_RUNNING:
 		return {"ok": false, "msg": "Die Straßenmeisterei baut schon %d Zufahrten; später erneut beauftragen." % MAX_RUNNING}
-	var pl := plan(pid)
+	var pl := plan(pid, Bridges.LOAD_MINE if cid >= 0 else Bridges.LOAD_TOWN)
 	if not pl.ok:
 		return {"ok": false, "msg": str(pl.msg)}
 	if pl.cells.is_empty():
 		return {"ok": false, "msg": "Grundstück %s hat schon Straßenanschluss." % pid}
-	var c: Company = sim.company(cid)
-	if c.ledger.cash < float(pl.kosten):
-		return {"ok": false, "msg": "Nicht genug Bargeld für die Zufahrt (%s)." % Catalog.money(float(pl.kosten))}
-	c.ledger.book("property_costs", -float(pl.kosten), true, "Zufahrt zu %s (%d Felder)" % [pid, pl.cells.size()], sim.game_min)
+	var who := ""
+	if cid >= 0:
+		var c: Company = sim.company(cid)
+		if c.ledger.cash < float(pl.kosten):
+			return {"ok": false, "msg": "Nicht genug Bargeld für die Zufahrt (%s)." % Catalog.money(float(pl.kosten))}
+		var note := "Zufahrt zu %s (%d Felder%s)" % [pid, pl.cells.size(), (", %d Brücke(n)" % pl.bruecken.size()) if not pl.bruecken.is_empty() else ""]
+		c.ledger.book("property_costs", -float(pl.kosten), true, note, sim.game_min)
+		who = c.company_name
+	else:
+		if sim.mayor.available_budget() < float(pl.kosten_bruecken):
+			return {"ok": false, "msg": "Verfügbare Stadtkasse reicht nicht für die Brücke (%s nötig)." % Catalog.money(float(pl.kosten_bruecken))}
+		who = by if by != "" else "Stadt"
 	var j := {"id": "Z%d" % _next, "parcel": pid, "company": cid, "cells": pl.cells.map(func(v): return [v.x, v.y]), "built": 0,
-		"cost": float(pl.kosten), "start": GameCalendar.day_of(sim.game_min), "status": "im_bau"}
+		"cost": float(pl.kosten), "start": GameCalendar.day_of(sim.game_min), "status": "im_bau", "bridges": []}
 	_next += 1
 	jobs[j.id] = j
-	var msg := "%s lässt eine Zufahrt zu %s bauen: %d Felder Schotterweg%s, %s, etwa %d Tage." % [c.company_name, pid, pl.cells.size(),
-		" mit Rodung von %d Bäumen" % int(pl.baeume) if int(pl.baeume) > 0 else "", Catalog.money(float(pl.kosten)), int(pl.tage)]
+	for sp in pl.bruecken:
+		j.bridges.append(sim.bridges.create(sp, cid, j.id, who).id)
+	var extra := (", %d Brücke(n) %s" % [j.bridges.size(), ", ".join(j.bridges)]) if not j.bridges.is_empty() else ""
+	var msg := "%s lässt eine Zufahrt zu %s bauen: %d Felder Schotterweg%s%s, %s, etwa %d Tage." % [who, pid, pl.cells.size(),
+		(" mit Rodung von %d Bäumen" % int(pl.baeume)) if int(pl.baeume) > 0 else "", extra, Catalog.money(float(pl.kosten)), int(pl.tage)]
 	sim.log_event(msg, "info", cid)
-	sim.activity.add("stadt", cid, "bau", "Zufahrt %s zu %s: Baubeginn" % [j.id, pid], "bezahlt von %s" % c.company_name, _head(j))
+	sim.activity.add("stadt", cid, "bau", "Zufahrt %s zu %s: Baubeginn" % [j.id, pid], "bezahlt von %s" % who, _head(j))
 	_send_crew(j)
 	return {"ok": true, "msg": msg, "ref": j.id}
 
@@ -189,12 +228,21 @@ func running() -> int:
 
 
 ## Tagesfortschritt: von der Strasse her wachsen (letzte Zelle zuerst), damit jede fertige Zelle sofort angeschlossen ist.
+## Am Ufer wartet der Trupp, bis die Bruecke abgenommen ist (Wasserfelder werden erst dann Fahrbahn).
 func on_day(_day: int) -> void:
 	for j in jobs.values():
 		if j.status != "im_bau":
 			continue
 		var from := int(j.built)
-		j.built = mini(j.cells.size(), from + CELLS_PER_DAY)
+		var n: int = j.cells.size()
+		var to := from
+		while to < mini(n, from + CELLS_PER_DAY):
+			var a: Array = j.cells[n - 1 - to]
+			if sim.city.g(Vector2i(int(a[0]), int(a[1]))) == CityData.G.WATER:
+				break
+			to += 1
+		j.built = to
+		j["waiting"] = "Brücke" if to < n and to == from else ""
 		_apply(j, from, int(j.built))
 		if int(j.built) >= j.cells.size():
 			j.status = "fertig"
@@ -216,6 +264,8 @@ func _apply(j: Dictionary, from: int, to: int) -> void:
 		var a: Array = j.cells[n - 1 - k]
 		var q := Vector2i(int(a[0]), int(a[1]))
 		var i := city.idx(q)
+		if city.ground[i] == CityData.G.ROAD:
+			continue   # Bruecke (bei der Abnahme schon freigegeben)
 		city.ground[i] = CityData.G.ROAD
 		if city.blocked[i] == 1:
 			city.blocked[i] = 0
@@ -226,6 +276,12 @@ func _apply(j: Dictionary, from: int, to: int) -> void:
 		made.append(q)
 	city.road_count += made.size()
 	roads_built.emit(made)
+
+
+## Eine Bruecke wurde abgenommen: Plaene neu rechnen (neue Wege); wartende Trupps bauen am naechsten Tag weiter.
+func on_bridge_opened() -> void:
+	_cache.clear()
+	_fields.clear()
 
 
 func _head(j: Dictionary) -> Vector2i:
@@ -252,7 +308,8 @@ func _send_crew(j: Dictionary) -> void:
 ## Fuer Beobachtung und Anzeige.
 func summary() -> Array:
 	return jobs.values().map(func(j): return {"id": j.id, "grundstueck": j.parcel, "unternehmen": int(j.company), "status": j.status,
-		"fortschritt": snappedf(float(j.built) / maxf(1.0, float(j.cells.size())), 0.01), "felder": j.cells.size(), "kosten": int(j.cost)})
+		"fortschritt": snappedf(float(j.built) / maxf(1.0, float(j.cells.size())), 0.01), "felder": j.cells.size(), "kosten": int(j.cost),
+		"bruecken": j.get("bridges", []), "wartet_auf": str(j.get("waiting", ""))})
 
 
 func to_dict() -> Dictionary:
