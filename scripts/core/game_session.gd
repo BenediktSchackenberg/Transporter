@@ -415,6 +415,21 @@ func follow(sel: Dictionary) -> void:
 	following = true
 
 
+## Taste M: Kamera folgt reihum den Muellwagen (sonst zur Deponie).
+var _garbage_idx := -1
+func _next_garbage() -> void:
+	var trucks: Array = sim.fleet.vehicles.filter(func(v): return v.kind == "muell")
+	if trucks.is_empty():
+		if sim.waste.landfill_pid != "":
+			follow({"kind": "deponie", "id": sim.waste.landfill_pid})
+			hud.show_toast("Deponie (gerade kein Müllwagen unterwegs)")
+		return
+	_garbage_idx = (_garbage_idx + 1) % trucks.size()
+	follow({"kind": "muell", "id": int(trucks[_garbage_idx].id)})
+	city_view.camera.zoom = Vector2(1.2, 1.2)
+	hud.show_toast("Müllwagen %d von %d (Taste M: nächster)" % [_garbage_idx + 1, trucks.size()])
+
+
 ## Taste B: Kamera springt reihum zu den laufenden Bergwerken (sonst zu den Bergen).
 var _mine_idx := -1
 func _next_mine() -> void:
@@ -497,3 +512,4 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_TAB: hud.toggle_panels()
 			KEY_L: sim.log_event(city_view.parcel_layer.cycle(), "info")
 			KEY_B: _next_mine()
+			KEY_M: _next_garbage()

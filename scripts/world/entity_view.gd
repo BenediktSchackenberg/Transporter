@@ -129,7 +129,11 @@ func _update_fleet() -> void:
 		seen[id] = true
 		var n: Node2D = fleet_nodes.get(id)
 		if n == null:
-			n = _make_vehicle_node("roadcrew" if v.kind == "bautrupp" else "moving", "", Color.WHITE, false)
+			if v.kind == "muell":   # Muellwagen: orange Lackierung, gelbe Rundumleuchte
+				n = _make_vehicle_node("truck", "", WasteView.ORANGE, true)
+				_add_beacon(n, -56.0)
+			else:
+				n = _make_vehicle_node("roadcrew" if v.kind == "bautrupp" else "moving", "", Color.WHITE, false)
 			if v.kind == "bautrupp":
 				_add_beacon(n, -50.0)
 			add_child(n)
@@ -673,6 +677,12 @@ func selected_position() -> Vector2:
 		"lot":
 			var bd: Dictionary = sim.city.building(sim.city_depot.building)
 			return Vector2(bd.x * 32 + bd.w * 16, bd.y * 32 + bd.h * 16)
+		"muell":
+			for fv in sim.fleet.vehicles:
+				if int(fv.id) == int(selected.id):
+					return fv.mover.pos
+		"deponie":
+			return cv.waste_view.landfill_center()
 		"mountain":
 			var mn = cv.mountain_view._nodes.get(str(selected.id))
 			if mn != null and mn.active:   # laufendes Bergwerk: zwischen Abbaufront und Halde
@@ -724,6 +734,9 @@ func pick(click: Vector2) -> Dictionary:
 			if _sprite_hit(n.position, piv, Vector2(info.size[0], info.size[1]), click) and d < best_d:
 				best = {"kind": "vehicle", "id": v.id}
 				best_d = d
+	for fv in sim.fleet.vehicles:   # Muellwagen anklicken
+		if fv.kind == "muell" and (Iso.to_screen(fv.mover.pos) + Vector2(0, -20)).distance_to(click) < 34.0:
+			return {"kind": "muell", "id": int(fv.id)}
 	if not best.is_empty():
 		return best
 	var lot_id: String = cv.depot_view.pick_lot(click)
@@ -735,6 +748,8 @@ func pick(click: Vector2) -> Dictionary:
 	var mountain: String = cv.mountain_view.pick(Iso.to_world(click))
 	if mountain != "":
 		return {"kind": "mountain", "id": mountain}
+	if cv.waste_view.pick_landfill(Iso.to_world(click)):
+		return {"kind": "deponie", "id": sim.waste.landfill_pid}
 	var found := -1
 	var found_depth := -INF
 	for b in sim.city.buildings:

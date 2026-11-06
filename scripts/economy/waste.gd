@@ -12,6 +12,12 @@ const RECYCLE_INCOME := 30.0            # EUR je Tonne Wertstoff
 const BASE_RECYCLING := 0.35
 const MEHRWEG_BONUS := 0.25             # zusaetzliche Quote bei vollstaendiger Mehrwegnutzung
 const FEE_MARKUP := 1.1                 # Gebuehr = erwartete Kosten + 10 %
+## Deponie und Muellabfuhr (sichtbar): Restmuell geht auf die Deponie am Stadtrand, Muellwagen fahren taeglich Touren.
+const LANDFILL_CAPACITY := 800.0        # Tonnen bis zur vollen Deponie (Spielwert)
+const START_FILL := 0.25                # bestehende Deponie beim Start
+const TRUCK_TONS := 0.5                 # Tonnen je Tour
+const MAX_TRUCKS := 4
+const STOPS := 8                        # Halte je Tour
 
 var sim: Simulation
 var month := {"tons": 0.0, "recycled": 0.0, "cost": 0.0, "income": 0.0}
@@ -20,12 +26,84 @@ var rate := BASE_RECYCLING
 var last_month := {}
 var _units_seen := 0
 var _unpaid := 0.0                      # aufgelaufene Kosten, die der Stadtkasse noch zu begleichen sind (nur bei leerer Kasse)
+var landfill_pid := ""                  # Parzelle der Deponie
+var landfill_cells := {}                # Zelle -> Formfaktor 0..1 (Rand niedrig, Mitte hoch)
+var landfill_road := Vector2i(-1, -1)   # Zufahrt (Abladestelle)
+var deposited := 0.0                    # abgeladener Restmuell (t), bestimmt die Hoehe des Muellbergs
+var tours := 0
 
 
 func setup(s: Simulation) -> void:
 	sim = s
 	s.day_changed.connect(on_day)
 	s.month_changed.connect(on_month)
+	deposited = LANDFILL_CAPACITY * START_FILL
+	_build_landfill()
+
+
+## Deponie auf einer freien Parzelle am Stadtrand (nicht auf Lagerstaetten), deterministisch aus dem Stadtsamen. Die Flaeche ist nicht
+## begehbar und nicht bebaubar; die Zufahrt ist die naechste Strassenzelle.
+func _build_landfill() -> void:
+	var city: CityData = sim.city
+	var best := {}
+	var best_h := INF
+	for p in sim.parcels.items.values():
+		if p.state != "frei" or not sim.parcels.is_buildable(p) or int(p.area) < 60 or sim.prod._deposits.has(p.id) or not sim.prod._outskirts(p):
+			continue
+		if not bool(sim.parcels.utilities_of(p).strasse):
+			continue
+		var h := float(absi(hash([city.seed_value, p.id, "deponie"])) % 100000)
+		if h < best_h:
+			best_h = h
+			best = p
+	if best.is_empty():
+		return
+	landfill_pid = best.id
+	var r := Rect2i(int(best.rect[0]), int(best.rect[1]), int(best.rect[2]), int(best.rect[3]))
+	var mid := Vector2(r.position) + Vector2(r.size) * 0.5
+	var far := Vector2(r.size).length() * 0.5
+	var bestd := 999
+	for y in range(r.position.y - 3, r.end.y + 3):
+		for x in range(r.position.x - 3, r.end.x + 3):
+			var q := Vector2i(x, y)
+			if city.inside(q) and city.is_road(q):
+				var d := int(Vector2(q).distance_to(mid))
+				if d < bestd:
+					bestd = d
+					landfill_road = q
+	for y in range(r.position.y + 1, r.end.y - 1):
+		for x in range(r.position.x + 1, r.end.x - 1):
+			var c := Vector2i(x, y)
+			if city.building_at[city.idx(c)] >= 0 or city.is_road(c) or city.g(c) == CityData.G.WATER:
+				continue
+			landfill_cells[c] = clampf(1.0 - Vector2(c).distance_to(mid) / far, 0.15, 1.0)
+	best.state = "privat_gehalten"
+	best.use = "deponie"
+	for c in landfill_cells:
+		city.blocked[city.idx(c)] = 1
+		sim.nav.walk.set_point_solid(c, true)
+	city.trees = city.trees.filter(func(t): return not landfill_cells.has(t[0]))
+
+
+func fill_share() -> float:
+	return clampf(deposited / LANDFILL_CAPACITY, 0.0, 1.0)
+
+
+## Muellwagen auf Touren schicken: je Tour STOPS Wohn- und Geschaeftshaeuser eines Viertels, dann zur Deponie.
+func _dispatch(tons: float) -> void:
+	if landfill_road.x < 0:
+		return
+	var n := clampi(int(ceil(tons / TRUCK_TONS)), 1, MAX_TRUCKS)
+	var homes: Array = sim.city.buildings.filter(func(b): return b.get("role", "") != "plot" and b.type in ["house", "semi", "villa", "apartment", "highrise", "shop", "restaurant"])
+	if homes.is_empty():
+		return
+	for i in n:
+		var seed_b: Dictionary = homes[absi(hash([GameCalendar.day_of(sim.game_min), i, "tour"])) % homes.size()]
+		var near := homes.duplicate()
+		near.sort_custom(func(a, b): return absi(a.x - seed_b.x) + absi(a.y - seed_b.y) < absi(b.x - seed_b.x) + absi(b.y - seed_b.y))
+		var stops: Array = near.slice(0, STOPS).map(func(b): return {"road": b.road, "building": int(b.id)})
+		sim.fleet.send_garbage(stops, landfill_road, tons / float(n), "Müllabfuhr Tour %d" % (tours + 1))
+		tours += 1
 
 
 ## Anteil der Getraenkeflaschen, die als Mehrweg zurueckkommen (0..1).
@@ -41,6 +119,8 @@ func on_day(_day: int) -> void:
 	rate = BASE_RECYCLING + MEHRWEG_BONUS * mehrweg_share()
 	var recycled := tons * rate
 	var residual := tons - recycled
+	deposited += residual            # Restmuell kommt auf die Deponie (die Wagen fahren ihn sichtbar dorthin)
+	_dispatch(tons)
 	var cost := tons * COLLECT_COST + residual * DISPOSAL_COST
 	var income := recycled * RECYCLE_INCOME
 	var pay := minf(cost, maxf(0.0, float(sim.economy.accounts.P0)))
@@ -69,7 +149,7 @@ func on_month(_m: int) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"month": month, "total": total, "rate": rate, "last": last_month, "units_seen": _units_seen, "unpaid": _unpaid}
+	return {"month": month, "total": total, "rate": rate, "last": last_month, "units_seen": _units_seen, "unpaid": _unpaid, "deposited": deposited, "tours": tours}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -83,3 +163,5 @@ func from_dict(d: Dictionary) -> void:
 	last_month = d.get("last", {})
 	_units_seen = int(d.get("units_seen", 0))
 	_unpaid = float(d.get("unpaid", 0.0))
+	deposited = float(d.get("deposited", deposited))
+	tours = int(d.get("tours", 0))

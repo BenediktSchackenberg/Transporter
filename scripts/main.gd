@@ -168,6 +168,14 @@ func _process(_delta: float) -> void:
 			var e: Dictionary = session.sim.activity.items.back()
 			session.set_follow(false)
 			session.city_view.set_camera_world(Vector2(float(e.x) * 32.0 + 16.0, float(e.y) * 32.0 + 16.0))
+		if args.has("shot-garbage"):   # Sichtpruefung Muellabfuhr: einem leerenden Muellwagen folgen, sonst der Deponie
+			var target := {}
+			for fv in session.sim.fleet.vehicles:
+				if fv.kind == "muell" and (target.is_empty() or fv.phase == "leeren"):
+					target = {"kind": "muell", "id": int(fv.id)}
+			if str(args["shot-garbage"]) == "deponie" or target.is_empty():
+				target = {"kind": "deponie", "id": session.sim.waste.landfill_pid}
+			session.follow(target)
 		if args.has("shot-mine"):   # Kamera auf ein Bergwerk (sonst einen Berg), Detailkarte offen
 			var mv: MountainView = session.city_view.mountain_view
 			var pid := ""

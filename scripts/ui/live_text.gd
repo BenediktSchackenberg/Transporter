@@ -875,6 +875,29 @@ static func parcels(sim: Simulation) -> String:
 	return txt
 
 
+## Muellwagen: Tour, Halte, Ladung, naechstes Ziel.
+static func garbage_truck(sim: Simulation, v: Dictionary) -> String:
+	var phase := {"tour": "fährt zum nächsten Halt", "leeren": "Müllwerker leeren die Tonnen", "zur_deponie": "fährt zur Deponie", "abladen": "lädt auf der Deponie ab", "rueckfahrt": "fährt zum Betriebshof"}
+	var txt := "Status: %s\n" % phase.get(str(v.phase), str(v.phase))
+	txt += "Halt %d von %d · Ladung %.2f t von %.2f t\n" % [mini(int(v.get("stop", 0)) + 1, v.get("stops", []).size()), v.get("stops", []).size(), float(v.get("load", 0.0)), float(v.get("tons", 0.0))]
+	if str(v.phase) in ["tour", "leeren"] and int(v.stop) < v.stops.size():
+		txt += "Haus: %s\n" % sim.city.building(int(v.stops[int(v.stop)].building)).name
+	txt += "Besatzung: Fahrer und zwei Müllwerker · Auftraggeber: Stadt (Müllabfuhr)\n"
+	return txt
+
+
+## Deponie: Fuellstand, Mengen, Recycling, Kosten und Gebuehren.
+static func landfill(sim: Simulation) -> String:
+	var W: Waste = sim.waste
+	var txt := "Füllstand %.0f %% (%.0f von %.0f t Restmüll)\n" % [W.fill_share() * 100.0, W.deposited, Waste.LANDFILL_CAPACITY]
+	txt += "Diesen Monat gesammelt %.1f t · Recyclingquote %.0f %% (Mehrweg %.0f %%)\n" % [float(W.month.tons), W.rate * 100.0, W.mehrweg_share() * 100.0]
+	txt += "Müllwagen unterwegs: %d · Touren bisher %d · Halte %d\n" % [sim.fleet.vehicles.filter(func(v): return v.kind == "muell").size(), W.tours, int(sim.fleet.stats.halte)]
+	txt += "Kosten bisher %s · Wertstofferlöse %s · Gebühren der Haushalte %s\n" % [Catalog.money(float(W.total.cost)), Catalog.money(float(W.total.income)), Catalog.money(float(W.total.fees))]
+	if W.fill_share() > 0.85:
+		txt += "[color=#e0a040]Die Deponie ist fast voll.[/color]\n"
+	return txt
+
+
 ## Berg mit Lagerstaette bzw. Bergwerk (Klick auf den Berg): Vorkommen, Abbau, Betreiber, Foerderung, Halde, Lage.
 static func mountain(sim: Simulation, pid: String) -> String:
 	var P: Production = sim.prod

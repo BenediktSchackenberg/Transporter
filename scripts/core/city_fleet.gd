@@ -8,12 +8,15 @@ extends RefCounted
 
 const MAX_CREWS := 6
 const MAX_MOVING := 6
+const MAX_GARBAGE := 4
+const EMPTY_MIN := 12.0           # Spielminuten je Halt (Tonnen leeren)
+const DUMP_MIN := 30.0            # Abladen auf der Deponie
 const UNLOAD_DAYS := 0.1          # Umzugswagen steht so lange vor dem Haus
 const SPEED := 3.0
 
 var sim
 var vehicles: Array = []          # {id, kind (bautrupp|umzug), mover, phase (anfahrt|arbeit|abladen|rueckfahrt), site, until, back, label}
-var stats := {"bautrupps": 0, "umzuege": 0}
+var stats := {"bautrupps": 0, "umzuege": 0, "muelltouren": 0, "halte": 0}
 var _next := 1
 var _edges: Array = []
 
@@ -99,6 +102,9 @@ func update(dt: float) -> void:
 			else:
 				m.advance(dt, 1.0)
 			continue
+		if v.kind == "muell":
+			_garbage(v, now)
+			continue
 		match str(v.phase):
 			"anfahrt":
 				if v.kind == "umzug":
@@ -113,6 +119,54 @@ func update(dt: float) -> void:
 						vehicles.erase(v)
 			"rueckfahrt":
 				vehicles.erase(v)
+
+
+## Muellwagen: vom Betriebshof (Rathaus) ueber die Halte der Tour zur Deponie und zurueck. Zwei Muellwerker leeren an jedem Halt.
+func send_garbage(stops: Array, landfill: Vector2i, tons: float, label: String) -> void:
+	if stops.is_empty() or vehicles.filter(func(v): return v.kind == "muell").size() >= MAX_GARBAGE:
+		return
+	var home := depot_road()
+	var v := _spawn("muell", home, stops[0].road, 0.0, home, label)
+	v["stops"] = stops
+	v["stop"] = 0
+	v["landfill"] = landfill
+	v["tons"] = tons
+	v["load"] = 0.0
+	v["phase"] = "tour"
+	stats.muelltouren += 1
+
+
+func _garbage(v: Dictionary, now: float) -> void:
+	var m: Mover = v.mover
+	match str(v.phase):
+		"tour":
+			v.phase = "leeren"
+			v.until = now + EMPTY_MIN
+		"leeren":
+			if now < float(v.until):
+				return
+			v.load = float(v.load) + float(v.tons) / float(v.stops.size())
+			stats.halte += 1
+			v.stop = int(v.stop) + 1
+			if int(v.stop) < v.stops.size():
+				v.phase = "tour"
+				if not sim.route(m, _free_neighbor(v.stops[int(v.stop)].road)):
+					m.pos = sim.city.tile_center(v.stops[int(v.stop)].road)
+			else:
+				v.phase = "zur_deponie"
+				if not sim.route(m, _free_neighbor(v.landfill)):
+					m.pos = sim.city.tile_center(v.landfill)
+		"zur_deponie":
+			v.phase = "abladen"
+			v.until = now + DUMP_MIN
+		"abladen":
+			if now >= float(v.until):
+				v.load = 0.0
+				v.phase = "rueckfahrt"
+				if not sim.route(m, v.back):
+					vehicles.erase(v)
+		"rueckfahrt":
+			vehicles.erase(v)
 
 
 ## Arbeitende Bautrupps (fuer die Baustellenanzeige).

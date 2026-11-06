@@ -1355,6 +1355,19 @@ func _update_selection() -> void:
 				return
 			sel_title.text = "Warenposten %s – %d × %s" % [lot.id, int(lot.qty), CityGoods.get_item(lot.item).get("name", lot.item)]
 			sel_text.text = LiveText.lot(sim, lot)
+		"muell":
+			var fv := {}
+			for x in sim.fleet.vehicles:
+				if int(x.id) == int(sel.id):
+					fv = x
+			if fv.is_empty():
+				session.entity_view.selected = {}
+				return
+			sel_title.text = "Müllwagen – %s" % fv.label
+			sel_text.text = LiveText.garbage_truck(sim, fv)
+		"deponie":
+			sel_title.text = "Deponie der Stadt (Grundstück %s)" % sim.waste.landfill_pid
+			sel_text.text = LiveText.landfill(sim)
 		"mountain":
 			var dep: Dictionary = sim.prod.deposit_of(str(sel.id))
 			var mb: Dictionary = sim.prod.mine_on(str(sel.id))
