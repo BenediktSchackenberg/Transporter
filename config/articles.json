@@ -192,5 +192,23 @@
     "basispreis": 1.0,
     "importpreis": null,
     "exportpreis": 0.5
+  },
+  "brennelement": {
+    "name": "Brennelemente",
+    "einheit": "Stk",
+    "ladung": "container",
+    "je_ladeeinheit": 1,
+    "haltbar_tage": 0,
+    "basispreis": 18000.0,
+    "importpreis": 18000.0
+  },
+  "reststoff_brennelement": {
+    "name": "Abgebrannte Brennelemente (Reststoff)",
+    "einheit": "Stk",
+    "ladung": "container",
+    "je_ladeeinheit": 1,
+    "haltbar_tage": 0,
+    "basispreis": 0.0,
+    "importpreis": null
   }
 }

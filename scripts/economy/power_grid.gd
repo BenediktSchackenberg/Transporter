@@ -66,7 +66,8 @@ func on_day(day: int) -> void:
 
 func _allocate() -> void:
 	var base := base_load()
-	var free := capacity - base
+	var plant_kw: float = sim.plant.available_kw(capacity)
+	var free := plant_kw + PowerPlant.EMERGENCY_KW - base   # Notstrom von aussen deckt begrenzt die Luecke
 	var consumers: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING and float(b.energy_kw) > 0.0 and not sim.biz.frozen(int(b.owner)))
 	consumers.sort_custom(func(a, b): return float(a.founded) < float(b.founded) or (float(a.founded) == float(b.founded) and str(a.id) < str(b.id)))
 	var demand := 0.0
@@ -92,13 +93,18 @@ func _allocate() -> void:
 			sim.biz.block(b.id, "strom", "Kein Strom: Netz ausgelastet (Bedarf %.0f kW, frei %.0f kW)" % [kw, maxf(0.0, free)])
 	if off > 0:
 		stats.engpass_tage += 1
-	last = {"grundlast": snappedf(base, 1.0), "betriebe": snappedf(demand, 0.1), "bedarf": snappedf(base + demand, 1.0), "versorgt": snappedf(given, 0.1), "abgeschaltet": off}
+	var emergency := clampf(base + given - plant_kw, 0.0, PowerPlant.EMERGENCY_KW)
+	last = {"grundlast": snappedf(base, 1.0), "betriebe": snappedf(demand, 0.1), "bedarf": snappedf(base + demand, 1.0), "versorgt": snappedf(given, 0.1), "abgeschaltet": off,
+		"kraftwerk_kw": snappedf(plant_kw, 1.0), "notstrom_kw": snappedf(emergency, 1.0)}
 
 
 ## Verbrauch der versorgten Betriebe fuer einen Spieltag (Stunden des Logistiktakts) an die Stadtwerke; Erzeugungskosten zahlt die Stadt.
 func _bill() -> void:
 	var hours := GameCalendar.day_game_min / 60.0
-	var gen := float(cfg().erzeugung_eur_kwh)
+	# Erzeugung des abgelaufenen Tages: Kraftwerk (Brennstoff) und Notstrom von aussen; ersetzt die fruehere Pauschale je kWh
+	var total_kwh := (float(last.get("grundlast", 0.0)) + float(last.get("versorgt", 0.0))) * hours
+	var emerg_kwh := float(last.get("notstrom_kw", 0.0)) * hours
+	sim.plant.generate(maxf(0.0, total_kwh - emerg_kwh), emerg_kwh)
 	for id in supplied:
 		var b: Dictionary = sim.biz.get_b(id)
 		if b.is_empty() or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
@@ -106,30 +112,36 @@ func _bill() -> void:
 		var kwh := float(b.energy_kw) * hours
 		var cost := minf(kwh * tariff, maxf(0.0, sim.company(int(b.owner)).ledger.cash))   # nie ins Minus; Versorgung endet dann (siehe _allocate)
 		sim.company(int(b.owner)).ledger.book("energy", -cost, true, "Strom %s (%.0f kWh)" % [b.name, kwh], sim.game_min, "", id)
-		var gcost := kwh * gen
-		sim.economy.transfer("P0", "S0", gcost)   # Erzeugung (Brennstoff, Betrieb) bis zum Kraftwerk in Etappe 4
 		stats.kwh += kwh
 		stats.erloes += cost
-		stats.erzeugung += gcost
 
 
-## Ausbau durch den Buergermeister: +500 kW nach 10 Tagen, Kosten aus der verfuegbaren Stadtkasse.
+## Ausbau durch den Buergermeister: staedtisches Bauprojekt (Ausschreibung an Baufirmen, auch Unternehmer-Baufirmen); die Leistung
+## steigt erst mit der Fertigstellung, bezahlt wird die ausfuehrende Baufirma.
 func expand(by: String) -> Dictionary:
 	if sim.mayor.available_budget() < EXPAND_COST:
 		return {"ok": false, "msg": "Verfügbare Stadtkasse reicht nicht (%s nötig)." % Catalog.money(EXPAND_COST)}
-	if not expansions.is_empty():
+	if expansion_running():
 		return {"ok": false, "msg": "Ein Netzausbau läuft bereits."}
-	sim.economy.transfer("P0", "S0", EXPAND_COST)
-	var day := GameCalendar.day_of(sim.game_min)
-	expansions.append({"kw": EXPAND_KW, "fertig_tag": day + EXPAND_DAYS, "kosten": EXPAND_COST})
-	sim.log_event("%s lässt das Stromnetz ausbauen: +%d kW in %d Tagen (%s)." % [by, int(EXPAND_KW), EXPAND_DAYS, Catalog.money(EXPAND_COST)], "info")
-	return {"ok": true, "msg": "Netzausbau +%d kW, fertig an Tag %d." % [int(EXPAND_KW), day + EXPAND_DAYS]}
+	var prj: Dictionary = sim.mayor.add_power_project(EXPAND_COST, EXPAND_KW, by)
+	sim.log_event("%s lässt Kraftwerk und Netz ausbauen: +%d kW, ausgeschrieben als %s (%s)." % [by, int(EXPAND_KW), prj.id, Catalog.money(EXPAND_COST)], "info")
+	return {"ok": true, "msg": "Netzausbau +%d kW als Projekt %s ausgeschrieben (Bauzeit etwa %d Tage)." % [int(EXPAND_KW), prj.id, EXPAND_DAYS], "ref": prj.id}
+
+
+func expansion_running() -> bool:
+	return sim.mayor.projects.values().any(func(p): return p.kind == "netzausbau" and p.status != "fertig")
+
+
+## Vom Bausystem bei Fertigstellung des Projekts aufgerufen.
+func finish_expansion(kw: float) -> void:
+	capacity += kw
+	sim.log_event("Stadtwerke: Netzausbau fertig, Leistung jetzt %d kW." % int(capacity), "good")
 
 
 func summary() -> Dictionary:
 	return {"leistung_kw": snappedf(capacity, 1.0), "grundlast_kw": last.grundlast, "betriebe_kw": last.betriebe, "bedarf_kw": last.bedarf,
 		"auslastung": snappedf(float(last.bedarf) / maxf(1.0, capacity), 0.01), "abgeschaltete_betriebe": int(last.abgeschaltet),
-		"tarif_eur_kwh": tariff, "ausbau_laeuft": not expansions.is_empty(), "engpass_tage": int(stats.engpass_tage),
+		"tarif_eur_kwh": tariff, "ausbau_laeuft": expansion_running(), "engpass_tage": int(stats.engpass_tage), "kraftwerk": sim.plant.summary(), "notstrom_kw": float(last.get("notstrom_kw", 0.0)),
 		"ausbau": {"kw": EXPAND_KW, "kosten": EXPAND_COST, "tage": EXPAND_DAYS}}
 
 

@@ -617,6 +617,16 @@ func _improve_traffic(a: Dictionary) -> Dictionary:
 	return r
 
 
+## Netzausbau (Auftrag 14, Etappe 4): beschlossenes und sofort ausgeschriebenes Bauprojekt ohne Grundstuecke; Construction fuehrt es aus.
+func add_power_project(cost: float, kw: float, by: String) -> Dictionary:
+	commitments += cost
+	var prj := {"id": "P%d" % _next_project, "kind": "netzausbau", "parcels": [], "parts": [], "cost": snappedf(cost, 1.0), "kw": kw,
+		"status": "ausgeschrieben", "vote": "Stadtwerke", "reason": "Netzausbau (%s)" % by, "day": _today(), "tender": {"opened_day": _today(), "bids": []}}
+	_next_project += 1
+	projects[prj.id] = prj
+	return prj
+
+
 func _tender(a: Dictionary) -> Dictionary:
 	var prj: Dictionary = projects.get(str(a.project_id), {})
 	if prj.is_empty():

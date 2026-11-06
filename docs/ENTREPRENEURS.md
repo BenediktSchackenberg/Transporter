@@ -521,7 +521,7 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 | 1 | Unternehmer und Betriebskern, Kostenstellen, Startprofil, Migration, Grundversorgung, KI-Aktionen, Betriebsübersicht | umgesetzt (05.11.2026), Prüfbericht unten |
 | 2 | Getreide-Mehl-Brot-Kette | umgesetzt (06.11.2026), Prüfbericht unten; alle Stufen laufen 60 Tage, Bäckereien um die Gewinnschwelle, Mühle/Feld mit kleinem Verlust |
 | 3 | Fleisch, Kühlung, Gastronomie, Bau, Immobilien | umgesetzt (06.11.2026, verkleinert), Prüfbericht unten |
-| 4 | Gelände, Bergbau, Stahl, Kraftwerk und Netz | offen |
+| 4 | Gelände, Bergbau, Stahl, Kraftwerk und Netz | umgesetzt ohne Höhenrelief (06.11.2026), Prüfbericht unten |
 | 5 | IT, weitere Verarbeiter, Dominanz, Langzeitbalance | offen |
 
 ### Etappe 1 – Prüfbericht (05.11.2026, Branch `unternehmer`, bis `f878b8d`)
@@ -626,3 +626,19 @@ Verkleinert nach Abschnitt 17 („lieber eine vollständige Kette als viele sche
 - **Insolvenz der Unternehmerbetriebe (Abnahme 11):** Bei der Verwertung wird jeder Betrieb (außer dem Transportbetrieb) als eigenes Paket versteigert: Ausstattung, gepachtete oder gekaufte Parzelle, Lager am Standort, Tiere im Stall, Wohnungen, laufende Baustellen. Der Käufer übernimmt und führt weiter (Kaufpreis als neuer Buchwert, Abschreibung ab dort). Ohne Gebot Stilllegung: gekauftes Land kauft die Stadt zu 80 % zurück, Pacht endet, Wohnungen gehen zu 95 % an den Vermietermarkt, Waren in die Ausfuhr, Ausstattung wird verschrottet, Baustellen übernimmt eine Baufirma der Stadt. Der Hof wird nur noch mit seinem eigenen Buchwert versteigert (vorher hätte der Käufer des Hofs Felder, Öfen und Wohnungen mitbezahlt, ohne sie zu bekommen). Offene, noch nicht übernommene Lieferverträge werden storniert. Die Neugründung auf demselben Platz erbt nichts. Behoben: Die Bauhof-Verwertung bei Insolvenz brach bei Produktionswaren ab. Regel-KI (Wachstum, Netzwerker) bietet auf Betriebspakete unter 70 % des Werts.
 - **Abgestimmte Kettengründung:** Betriebe melden die Rohware, auf die sie warten (`engpaesse` in der Kettenlage); die Regel-KI gründet zuerst diese Vorstufe. Mühle erst, wenn es ein Feld gibt; Schlachthof erst nach einer Tierhaltung.
 - Tests `test_business_insolvency`, `test_chain_coordination`.
+
+### Etappe 4 – Prüfbericht (06.11.2026, Branch `unternehmer`)
+
+**Umgesetzt:**
+- **Lagerstätten** (`Production.deposit_of`, `best_deposit`): Ein Viertel der freien Parzellen außerhalb von Wohn- und Mischgebiet trägt ein Vorkommen (Eisenerz, Kohle, Kalkstein, Kies/Sand = Bauhof-Artikel `rohmaterial`) mit Menge und Qualität, deterministisch aus Stadtsamen und Parzelle; jeder Rohstoff ist auf jeder Karte mindestens einmal auf einer Parzelle mit Straßenzugang vorhanden. Gefördertes wird je Parzelle gezählt (`mined`, gespeichert), die Lagerstätte bleibt auch nach Besitzerwechsel erschöpft.
+- **Bergwerk/Steinbruch**: nur auf gekauftem Grund (Abbaurecht), Dieselgerät (kein Netzanschluss nötig, 40 EUR/Tag), Förderung = Personal × 12 × Qualität, begrenzt durch Restvorrat und Lager; „Lagerstätte erschöpft“.
+- **Kokerei** (3 Kohle → 2 Koks), **Stahlwerk/Hochofen** (3 Erz + 1 Koks + 1 Kalk → 2 Stahl + 1 Schlacke als Nebenprodukt, Ausfuhr als Hüttensand), **Elektrostahlwerk** (Schrott → Stahl, 80 kW). Montanbetriebe stehen nahe dem Bauhof; der **Bauhof kauft Stahl und Kies zuerst lokal**, wenn frei Bauhof günstiger als Import – von dort gehen sie in Baustellen.
+- **Kernkraftwerk** (`scripts/economy/power_plant.gd`, `sim.plant`): städtisch, Startvorrat 2 Brennelemente + 1 geladenes (250 MWh je Element); Verbrauch aus der tatsächlichen Last (Grundlast + versorgte Betriebe); Nachbestellung mit 5 Tagen Lieferzeit und Spezialtransport (Container) als Transportauftrag mit Zahler Stadt; Betriebsmannschaft 300 EUR/Tag; Wartung alle 30 Tage mit 10 Einheiten Stahl vom Bauhof, sonst halbe Leistung; abgebrannte Elemente ins Abklinglager (max. 6), monatlich 2 zur kostenpflichtigen externen Entsorgung; ohne Brennstoff bis 800 kW Notstrom von außen zu 0,45 EUR/kWh. Die frühere Pauschale je kWh (P0→S0) entfällt.
+- **Netzausbau** ist ein städtisches Bauprojekt (`Mayor.add_power_project`), ausgeschrieben an Baufirmen – auch Unternehmer-Baufirmen –, bezahlt bei Fertigstellung; erst dann steigt die Leistung.
+- Kompakte Branchenliste in der KI-Beobachtung (`{branche: Gründungskosten}`); Regel-KI gründet Stahlwerk (Wachstum/Kostenoptimierer) und Bergwerk/Kokerei nach gemeldeten Engpässen.
+
+**Prüfungen:** `test_steel_chain` (Lagerstätte, Abbaurecht, Förderung senkt Vorrat, Stahlwerk kauft Erz bei A, Stahl + Schlacke, Bauhof kauft lokalen Stahl, Elektrostahl aus Schrott, Erschöpfung), `test_power_plant` (Brennstoffverbrauch, Nachbestellung mit Spezialtransport, Notstrom, Wartung mit Stahl, Reststoff-Entsorgung, Netzausbau durch Unternehmer-Baufirma, Speichern/Laden), dazu Regressionen.
+
+Angepasst: `test_power_grid` (Engpass erst unter Kraftwerk + Notstrom; Ausbau braucht Bautage durch eine Baufirma).
+
+**Nicht umgesetzt / offen:** Höhenrelief und Berge in Karte, Iso-Darstellung und Wegfindung (Abschnitt 5) – großer Eingriff in Kartengenerator, Grafik und Navigation; Lagerstätten liegen derzeit auf ebenen Randparzellen. Brennstoffindustrie bewusst nicht (Import laut Auftrag zulässig). Wasser als eigener Versorgungsstrom fehlt. Kein Altmetall-Kreislauf für Schrott (Import).

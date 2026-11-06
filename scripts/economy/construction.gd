@@ -852,6 +852,8 @@ func _public_day(day: int) -> void:
 			for part in prj.parts:
 				days = maxi(days, int(Planning.UTILITY_DAYS.get(part, 6)))
 			days *= maxi(1, int(ceil(float(prj.parcels.size()) / 3.0)))
+			if prj.kind == "netzausbau":
+				days = PowerGrid.EXPAND_DAYS
 			var offers := make_offers(float(prj.cost), days, str(prj.id))
 			prj.tender["bids"] = offers
 			var o := best_offer(offers, float(prj.cost))
@@ -895,6 +897,8 @@ func _finish_public(e: Dictionary) -> void:
 		for part in prj.parts:
 			p.erschliessung[part] = true
 		sim.parcels.touch(pid)
+	if prj.kind == "netzausbau":
+		sim.grid.finish_expansion(float(prj.get("kw", PowerGrid.EXPAND_KW)))
 	e.status = "fertig"
 	prj.status = "fertig"
 	sim.log_event("Erschließungsprojekt %s fertiggestellt (%s, %s)." % [prj.id, ", ".join(prj.parts), builders[e.builder].name], "info")
