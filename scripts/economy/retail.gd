@@ -174,9 +174,17 @@ func _stock_wholesale(day: int) -> void:
 		for s in shops.values():
 			demand += float(s.use.get(item, 0.0))
 		target = maxi(target, int(ceil(demand * float(STOCK_DAYS) * 1.2)))   # genug fuer alle Betriebe, die den Artikel fuehren
-		if have >= target / 2:
+		var local_in: int = sim.prod.incoming(WHOLESALER, item, wholesale_building)   # lokale Ware unterwegs (Auftrag 14, Etappe 2)
+		if have + local_in >= target / 2:
 			continue
-		var need := target - have
+		var need := target - have - local_in
+		if not Production.art(item).is_empty():
+			# Vergleich frei Grosshandelslager: Importware traegt die Fracht vom Importterminal, lokale Ware die Fracht vom Erzeuger
+			var landed := float(GOODS[item].cost) + sim.prod.freight(sim.city_depot.port, wholesale_building, item, need) / float(need)
+			var local: int = sim.prod.wholesale_order(item, need, wholesale_building, landed)
+			need -= local
+			if need <= 0:
+				continue
 		var unit_cost: float = GOODS[item].cost
 		var buy := need
 		var refill := 0
@@ -197,7 +205,9 @@ func _stock_wholesale(day: int) -> void:
 			continue
 		sim.economy.transfer(WHOLESALER, PRODUCER, cost)
 		stats.wholesale_buys += cost
-		sim.stock.add(item, buy + refill, WHOLESALER, wholesale_building, "Einkauf beim Produzenten" if refill == 0 else "Produzent und Wiederbefüllung", sim.game_min)
+		if item == "brot":
+			stats.bread_import = int(stats.get("bread_import", 0)) + buy + refill   # Import (Brotfabrik ausserhalb der Stadt)
+		sim.stock.add(item, buy + refill, WHOLESALER, wholesale_building, ("Import (Brotfabrik außerhalb)" if item == "brot" else "Einkauf beim Produzenten") if refill == 0 else "Produzent und Wiederbefüllung", sim.game_min)
 
 
 func _today() -> int:

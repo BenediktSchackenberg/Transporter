@@ -152,10 +152,12 @@ func ensure_transport(cid: int, source: String) -> Dictionary:
 
 ## KI-Aktion found_business: Branche muss konfiguriert sein; Standort = Hauptsitz; Gruendungskosten als Investition (Buchwert) bzw.
 ## Verwaltungsaufwand. Transport: hoechstens ein Transportbetrieb je Unternehmer.
-func found(cid: int, branch: String, reason: String) -> Dictionary:
+func found(cid: int, branch: String, reason: String, params: Dictionary = {}) -> Dictionary:
 	var spec: Dictionary = branches().get(branch, {})
 	if spec.is_empty():
 		return {"ok": false, "msg": "Unbekannte Branche '%s'. Verfügbar: %s" % [branch, ", ".join(branches().keys())]}
+	if spec.has("feld") or spec.has("rezept"):
+		return sim.prod.found(cid, branch, params, reason)   # Produktionsbetriebe: Standort, Ausstattung, Feld (Etappe 2)
 	var c = sim.company(cid)
 	if c.depots.is_empty():
 		return {"ok": false, "msg": "Kein Hauptsitz vorhanden."}
@@ -189,6 +191,11 @@ func close(cid: int, id: String, reason: String) -> Dictionary:
 	for w in staff_of(id):
 		w.business = ""
 	set_status(id, "geschlossen", reason if reason != "" else "Geschlossen")
+	if b.has("field") and str(b.field.get("mode", "")) == "pacht":
+		var p: Dictionary = sim.parcels.parcel(str(b.get("parcel", "")))
+		if not p.is_empty():
+			p.owner = Parcels.CITY   # Pacht endet; das Hofgebaeude bleibt stehen
+			sim.parcels.touch(p.id)
 	if c.ledger.cost_center == id:
 		c.ledger.cost_center = ""
 	sim.log_event("%s schließt %s." % [c.company_name, b.name], "warn", cid)
@@ -223,8 +230,8 @@ static func available() -> Array:
 	var out: Array = []
 	for k in branches():
 		var s: Dictionary = branches()[k]
-		out.append({"branche": k, "name": s.get("label", k), "gruendungskosten": float(s.get("gruendungskosten", 0.0)),
-			"strom_kw": float(s.get("strom_kw", 0.0))})
+		out.append({"branche": k, "name": s.get("label", k), "gruendungskosten": float(s.get("gruendungskosten", 0.0)) + float(s.get("ausstattung", 0.0)),
+			"strom_kw": float(s.get("strom_kw", 0.0)), "standort": s.get("standort", "hauptsitz")})
 	return out
 
 

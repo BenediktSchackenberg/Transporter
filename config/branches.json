@@ -7,6 +7,85 @@
     "gruendungskosten": 0,
     "strom_kw": 3.0,
     "personal_min": 1,
-    "rollen": ["fahren", "verladen", "reparieren", "bewachen"]
+    "rollen": [
+      "fahren",
+      "verladen",
+      "reparieren",
+      "bewachen"
+    ]
+  },
+  "feld": {
+    "label": "Ackerbau",
+    "beschreibung": "Gepachtetes oder gekauftes Feld: Vorbereitung, Aussaat, Wachstum (Wetter, Pflege), Ernte. Erntegut liegt am Feld und muss abtransportiert werden.",
+    "standort": "parzelle",
+    "gruendungskosten": 0,
+    "ausstattung": 8000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 1,
+    "rollen": [
+      "feldarbeit"
+    ],
+    "feld": {
+      "min_flaeche": 40,
+      "saatgut_je_10_felder": 1,
+      "ertrag_dt_je_feld": 0.6,
+      "tage": {
+        "vorbereitung": 1,
+        "aussaat": 1,
+        "wachstum": 14,
+        "ernte": 2
+      },
+      "ohne_pflege": 0.5
+    }
+  },
+  "muehle": {
+    "label": "Mühle",
+    "beschreibung": "Mahlt angeliefertes Getreide zu Mehl für Bäckereien.",
+    "standort": "hauptsitz",
+    "gruendungskosten": 0,
+    "ausstattung": 30000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 20.0,
+    "personal_min": 1,
+    "rollen": [
+      "mahlen"
+    ],
+    "rezept": {
+      "ein": {
+        "getreide": 1
+      },
+      "aus": {
+        "mehl": 3
+      },
+      "chargen_je_person_tag": 8,
+      "lager_tage": 6,
+      "lager_max": 400
+    }
+  },
+  "baeckerei": {
+    "label": "Bäckerei",
+    "beschreibung": "Backt aus Mehl und Backzutaten Brot und Brötchen; verkauft an den Lebensmittelgroßhandel, der die Läden beliefert.",
+    "standort": "hauptsitz",
+    "gruendungskosten": 0,
+    "ausstattung": 18000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 12.0,
+    "personal_min": 1,
+    "rollen": [
+      "backen"
+    ],
+    "rezept": {
+      "ein": {
+        "mehl": 1,
+        "backzutaten": 1
+      },
+      "aus": {
+        "brot": 40
+      },
+      "chargen_je_person_tag": 8,
+      "lager_tage": 4,
+      "lager_max": 1200
+    }
   }
 }
