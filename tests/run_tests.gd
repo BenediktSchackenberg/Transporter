@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -6946,3 +6946,103 @@ func test_power_plant() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(is_equal_approx(s2.plant.loaded_mwh, K.loaded_mwh) and s2.plant.fuel_elements() == K.fuel_elements(), "Kraftwerk nach Laden gleich")
 	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+func test_wood_and_beverages() -> void:
+	var s := new_sim(2)
+	var P: Production = s.prod
+	s.grid.capacity = 100000.0
+	for c in s.companies:
+		c.ledger.inject(100000.0)
+	# Forst: Setzlinge, lange Wuchszeit, Holz geht an den Bauhof (lokal statt Import)
+	var fo: Dictionary = s.biz.get_b(str(s.executor.execute(0, {"action": "found_business", "branche": "forst"}).ref))
+	s.biz.assign(0, s.personnel.employed(0).back().id, fo.id)
+	var harvest_day := -1
+	for i in 45:
+		next_day(s)
+		if harvest_day < 0 and s.stock.qty("holz", "C0", int(fo.site)) > 0:
+			harvest_day = i
+	ok(harvest_day >= 30, "Holz erst nach langer Wuchszeit (Tag %d)" % harvest_day)
+	ok(int(P.stats.consumed.get("setzlinge", 0)) > 0, "Pflanzung verbraucht Setzlinge")
+	# Moebelwerk von B: Holz + Beschlaege -> Moebel fuer den Handel
+	var mw: Dictionary = s.biz.get_b(str(s.executor.execute(1, {"action": "found_business", "branche": "moebelwerk"}).ref))
+	s.biz.assign(1, s.personnel.employed(1).back().id, mw.id)
+	ok(s.executor.execute(0, {"action": "set_business_price", "business_id": fo.id, "item": "holz", "price": 6.0}).ok, "Forst bietet Holz an")
+	for i in 10:
+		next_day(s)
+	ok(P.deals.values().any(func(d): return d.item == "holz" and d.seller == "C0" and (d.buyer == "C1" or d.buyer == "T0")), "Holz geht an Möbelwerk oder Bauhof")
+	ok(int(P.stats.produced.get("moebelstueck", 0)) > 0, "Möbelwerk fertigt Möbel")
+	# Brauerei: Getreide -> Fassgetraenke fuer Restaurants
+	s.stock.add("getreide", 40, "C1", int(mw.site), "Test", s.game_min)
+	var br: Dictionary = s.biz.get_b(str(s.executor.execute(1, {"action": "found_business", "branche": "brauerei"}).ref))
+	s.biz.assign(1, s.personnel.employed(1)[0].id, br.id)
+	for i in 6:
+		next_day(s)
+	ok(int(P.stats.produced.get("fassgetraenk", 0)) > 0, "Brauerei braut Fassgetränke")
+	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+func test_it_services() -> void:
+	var s := new_sim(2)
+	var I: ItServices = s.it
+	s.grid.capacity = 100000.0
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "it"})
+	ok(r.ok, "IT-Dienstleister gegründet (%s)" % r.get("msg", ""))
+	var itb: Dictionary = s.biz.get_b(str(r.ref))
+	ok(not s.executor.execute(1, {"action": "buy_it_service", "leistung": "buero_it"}).ok, "ohne Personal und Hardware kein Vertrag")
+	s.biz.assign(0, s.personnel.employed(0).back().id, itb.id)
+	s.stock.add("computer", 12, "C0", int(itb.site), "Test: geliefert", s.game_min)
+	ok(I.offers().has("buero_it"), "Angebot sichtbar (%s)" % str(I.offers()))
+	var k: Dictionary = s.executor.execute(1, {"action": "buy_it_service", "leistung": "buero_it"})
+	ok(k.ok, "B bucht Büro-IT (%s)" % k.msg)
+	ok(s.prod.deals.values().any(func(d): return d.item == "computer" and d.buyer == "C1"), "Hardware wird physisch geliefert (Liefervertrag)")
+	# Kapazitaet: eine Person, vier Vertraege
+	var bak: Dictionary = s.biz.get_b(str(s.executor.execute(1, {"action": "found_business", "branche": "baeckerei"}).ref))
+	ok(s.executor.execute(1, {"action": "buy_it_service", "leistung": "lagerverwaltung", "business_id": bak.id}).ok, "Lagerverwaltung für die Bäckerei")
+	for i in 2:
+		I.contracts["X%d" % i] = {"id": "X%d" % i, "provider": itb.id, "provider_cid": 0, "client": 1, "client_biz": "", "product": "buero_it", "fee": 0.0, "start": 0, "end": 999, "status": "aktiv", "disrupted": 0, "paid": 0.0}
+	ok(I.active_of(itb.id).size() == 4 and not s.executor.execute(1, {"action": "buy_it_service", "leistung": "lagerverwaltung", "business_id": s.biz.of(1)[0].id}).ok, "fünfter Vertrag abgelehnt: Kapazität einer Person = 4")
+	for i in 2:
+		I.contracts.erase("X%d" % i)
+	# Wirkung messbar und begrenzt
+	next_day(s)
+	ok(is_equal_approx(I.office_factor(1), 0.85) and is_equal_approx(I.spoil_factor(bak.id), 0.75), "Vorteile begrenzt: Büro −15 %, Verderb −25 %")
+	# Bezahlt wird nur erbrachte Leistung
+	var inc0 := float(s.companies[0].ledger.totals.get("trade_income", 0.0))
+	s.month_changed.emit(1)
+	var paid := float(s.companies[0].ledger.totals.get("trade_income", 0.0)) - inc0
+	ok(paid > 0.0, "Monat mit Leistung bezahlt (%s)" % Catalog.money(paid))
+	for w in s.biz.staff_of(itb.id):
+		w.business = ""
+	next_day(s)
+	inc0 = float(s.companies[0].ledger.totals.get("trade_income", 0.0))
+	s.month_changed.emit(2)
+	ok(is_equal_approx(float(s.companies[0].ledger.totals.get("trade_income", 0.0)), inc0) and I.contracts.values().all(func(x): return x.status == "gestoert"), "ohne Personal gestört: keine Zahlung")
+	ok(is_equal_approx(I.office_factor(1), 1.0), "gestörter Vertrag ohne Vorteil")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.it.contracts.size() == I.contracts.size(), "Verträge nach Laden erhalten")
+	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+func test_dominance() -> void:
+	var s := new_sim(2)
+	s.grid.capacity = 100000.0
+	var c0: Company = s.companies[0]
+	c0.ledger.inject(100000.0)
+	var f: Dictionary = s.biz.get_b(str(s.executor.execute(0, {"action": "found_business", "branche": "feld", "modus": "kaufen"}).ref))
+	var bk: Dictionary = s.biz.get_b(str(s.executor.execute(0, {"action": "found_business", "branche": "baeckerei"}).ref))
+	s.biz.assign(0, s.personnel.employed(0).back().id, bk.id)
+	s.biz.assign(0, s.personnel.employed(0)[0].id, bk.id)
+	s.stock.add("brot", 300, "C0", int(bk.site), "Test", s.game_min)
+	next_day(s)
+	next_day(s)
+	var d: Array = s.biz.dominance()
+	var me: Dictionary = d.filter(func(x): return x.id == 0)[0]
+	ok(me.marktanteile.has("baeckerei") and float(me.marktanteile.baeckerei) == 1.0, "Marktanteil Bäckerei 100 %% (%s)" % str(me.marktanteile))
+	ok(int(me.flaeche_eigentum) >= int(s.parcels.parcel(f.parcel).area) and int(me.flaeche_pacht) > 0, "Fläche getrennt: gekauft (Feld) und gepachtet (Bäckerei)")
+	ok(int(me.beschaeftigte) > 0 and int(me.kapazitaet_chargen_tag) > 0 and int(me.betriebe) >= 3, "Beschäftigte, Kapazität und Betriebe ausgewiesen")
+	var tax0 := float(c0.ledger.cc_totals.get(f.id, {}).get("property_costs", 0.0))
+	s.month_changed.emit(1)
+	ok(float(c0.ledger.cc_totals.get(f.id, {}).get("property_costs", 0.0)) < tax0, "Grundsteuer auf gekauftes Land (Hortung kostet)")
+	ok(LiveText.businesses(s).contains("Marktmacht"), "Ansicht zeigt die Marktmacht")
+	ok(identity_ok(s), "Geld erhalten")

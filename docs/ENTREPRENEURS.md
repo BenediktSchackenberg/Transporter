@@ -522,7 +522,7 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 | 2 | Getreide-Mehl-Brot-Kette | umgesetzt (06.11.2026), Prüfbericht unten; alle Stufen laufen 60 Tage, Bäckereien um die Gewinnschwelle, Mühle/Feld mit kleinem Verlust |
 | 3 | Fleisch, Kühlung, Gastronomie, Bau, Immobilien | umgesetzt (06.11.2026, verkleinert), Prüfbericht unten |
 | 4 | Gelände, Bergbau, Stahl, Kraftwerk und Netz | umgesetzt ohne Höhenrelief (06.11.2026), Prüfbericht unten |
-| 5 | IT, weitere Verarbeiter, Dominanz, Langzeitbalance | offen |
+| 5 | IT, weitere Verarbeiter, Dominanz, Langzeitbalance | umgesetzt (06.11.2026, Auswahl der Verarbeiter), Prüfbericht unten; Langzeitbalance offen |
 
 ### Etappe 1 – Prüfbericht (05.11.2026, Branch `unternehmer`, bis `f878b8d`)
 
@@ -642,3 +642,16 @@ Verkleinert nach Abschnitt 17 („lieber eine vollständige Kette als viele sche
 Angepasst: `test_power_grid` (Engpass erst unter Kraftwerk + Notstrom; Ausbau braucht Bautage durch eine Baufirma).
 
 **Nicht umgesetzt / offen:** Höhenrelief und Berge in Karte, Iso-Darstellung und Wegfindung (Abschnitt 5) – großer Eingriff in Kartengenerator, Grafik und Navigation; Lagerstätten liegen derzeit auf ebenen Randparzellen. Brennstoffindustrie bewusst nicht (Import laut Auftrag zulässig). Wasser als eigener Versorgungsstrom fehlt. Kein Altmetall-Kreislauf für Schrott (Import).
+
+### Etappe 5 – Prüfbericht (06.11.2026, Branch `unternehmer`)
+
+**Umgesetzt:**
+- **Weitere Verarbeiter mit vorhandenen Abnehmern** (Abschnitt 7, Auswahl): Forstbetrieb (Feldlogik mit Setzlingen, 30 Tage Wuchszeit, Holz = Bauhof-Artikel), Möbelwerk (Holz + Beschläge → Möbel = Einzelhandelsartikel, Großhandel und Möbelhaus kaufen lokal), Brauerei (Getreide → Fassgetränke für Restaurants und Großhandel). Die Feldlogik ist verallgemeinert (`feld.artikel`, `feld.saat`).
+- **IT-Dienstleister** (`scripts/economy/it_services.gd`, `sim.it`): Verträge Büro-IT (−15 % Büro- und Internetkosten) und Lagerverwaltung (−25 % Verderb eines Betriebs); Kapazität 4 Verträge je Person; Computer werden per Liefervertrag zum Kunden gebracht; monatliche Abrechnung nur bei erbrachter Leistung (Betrieb läuft, Personal reicht, Strom da), sonst „gestört“ ohne Zahlung und ohne Vorteil, nach zwei gestörten Monaten Vertragsende; stillschweigende Verlängerung nach 90 Tagen. KI-Aktion `buy_it_service`, Beobachtung `it_angebote`; Regel-KI gründet IT (Netzwerker/Kostenoptimierer) und bucht Lagerverwaltung für Bäckerei, Schlachthof, Restaurant.
+- **Marktmacht** (`Businesses.dominance`, Abschnitt „Marktmacht“ in der Unternehmensansicht): Marktanteil am Umsatz je Branche, Beschäftigte, Betriebe, Produktionskapazität, Fläche nach Eigentum/Pacht/Reservierung, Vermögen, Schulden, Gewinn. **Grundsteuer** monatlich 0,3 % des Bodenwerts auf gekauftes Betriebsland (auch ungenutztes).
+
+**Prüfungen:** `test_wood_and_beverages`, `test_it_services` (Abnahme 8: Kapazität, Hardware-Lieferung, Zahlung nur bei Leistung, gestörter Monat ohne Vorteil, Speichern/Laden), `test_dominance`, dazu Regressionen.
+
+**Messung 60 Spieltage, Unternehmerstart, vier Regel-KIs:** Firmen gesamt +5 138, −1 304, −9 374, −17 041 EUR (Morgen desselben Tages vor Auftrag-14-Arbeit an der Annahmeprüfung: −9 800 bis −18 300 EUR, alle im Verlust). Bäckerei +2 902 EUR, Transportbetriebe teils im Plus, Fleischkette weiter im Verlust.
+
+**Nicht umgesetzt / offen:** übrige Betriebe aus Abschnitt 7 (Zement, Ziegelei, Glas, Metallverarbeitung, Maschinenbau, Verpackung, Werkstatt, Entsorger, Gebäudedienste, Hotel, Vermietung); IT-Verträge mit der Stadt; Verpachten und Verkaufen einzelner Betriebe zwischen Unternehmern (außer über Insolvenzauktionen); Sabotage/Abwerbung für die neuen Betriebsarten nicht gesondert geprüft; Langzeitbalance über viele Seeds (Abnahme 14/15) nicht gemessen; Höhenrelief (Etappe 4).

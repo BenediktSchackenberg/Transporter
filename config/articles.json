@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS). exportpreis = Preis frei Verladestelle (Großhandelslager) für Überschüsse; die Fracht dorthin zahlt der Verkäufer. kuehlung = Kühlware: verdirbt am Standort mit Strom langsam, ohne Strom schnell; Transport nur gekühlt. 'fleisch' ist derselbe Artikel wie in den Restaurants (Retail.GOODS). Restaurantzutaten (gemuese, teigwaren, milch_zutat, fassgetraenk, fleisch) sind dieselben Artikel wie im Einzelhandel; Importpreis = Großhandelspreis für Gewerbekunden. Montanartikel in Einheiten zu 100 kg; 'stahl' und 'rohmaterial' sind dieselben Artikel wie beim Bauhof (Trader.MATERIALS). Schlacke ist Nebenprodukt des Hochofens und geht als Hüttensand in die Ausfuhr.",
+  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS). exportpreis = Preis frei Verladestelle (Großhandelslager) für Überschüsse; die Fracht dorthin zahlt der Verkäufer. kuehlung = Kühlware: verdirbt am Standort mit Strom langsam, ohne Strom schnell; Transport nur gekühlt. 'fleisch' ist derselbe Artikel wie in den Restaurants (Retail.GOODS). Restaurantzutaten (gemuese, teigwaren, milch_zutat, fassgetraenk, fleisch) sind dieselben Artikel wie im Einzelhandel; Importpreis = Großhandelspreis für Gewerbekunden. Montanartikel in Einheiten zu 100 kg; 'stahl' und 'rohmaterial' sind dieselben Artikel wie beim Bauhof (Trader.MATERIALS). Schlacke ist Nebenprodukt des Hochofens und geht als Hüttensand in die Ausfuhr. 'holz' ist derselbe Artikel wie beim Bauhof, 'moebelstueck' und 'fassgetraenk' dieselben wie im Einzelhandel.",
   "saatgut": {
     "name": "Saatgut",
     "einheit": "Sack",
@@ -110,8 +110,9 @@
     "ladung": "getraenke",
     "je_ladeeinheit": 300,
     "haltbar_tage": 0,
-    "basispreis": 0.91,
-    "importpreis": 0.91
+    "basispreis": 0.7,
+    "importpreis": 0.91,
+    "exportpreis": 0.4
   },
   "eisenerz": {
     "name": "Eisenerz",
@@ -210,5 +211,52 @@
     "haltbar_tage": 0,
     "basispreis": 0.0,
     "importpreis": null
+  },
+  "holz": {
+    "name": "Holz",
+    "einheit": "Einheit",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 12.0,
+    "importpreis": 16.0,
+    "exportpreis": 9.0
+  },
+  "setzlinge": {
+    "name": "Setzlinge",
+    "einheit": "Bund",
+    "ladung": "pakete",
+    "je_ladeeinheit": 50,
+    "haltbar_tage": 0,
+    "basispreis": 2.0,
+    "importpreis": 2.0
+  },
+  "beschlaege": {
+    "name": "Beschläge",
+    "einheit": "Satz",
+    "ladung": "pakete",
+    "je_ladeeinheit": 50,
+    "haltbar_tage": 0,
+    "basispreis": 8.0,
+    "importpreis": 8.0
+  },
+  "moebelstueck": {
+    "name": "Möbel",
+    "einheit": "Stk",
+    "ladung": "moebel",
+    "je_ladeeinheit": 5,
+    "haltbar_tage": 0,
+    "basispreis": 70.0,
+    "importpreis": null,
+    "exportpreis": 50.0
+  },
+  "computer": {
+    "name": "Computer und Server",
+    "einheit": "Stk",
+    "ladung": "elektronik",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 650.0,
+    "importpreis": 600.0
   }
 }

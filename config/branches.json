@@ -36,7 +36,9 @@
         "wachstum": 14,
         "ernte": 2
       },
-      "ohne_pflege": 0.5
+      "ohne_pflege": 0.5,
+      "artikel": "getreide",
+      "saat": "saatgut"
     },
     "gebaeude": "farm"
   },
@@ -300,5 +302,116 @@
       "lager_max": 400
     },
     "naehe": "bauhof"
+  },
+  "forst": {
+    "label": "Forstbetrieb",
+    "beschreibung": "Pflanzt und pflegt Wald auf eigener Parzelle; nach langer Wuchszeit wird Holz geerntet (Bauhof, Sägewerk, Möbel).",
+    "standort": "parzelle",
+    "gebaeude": "farm",
+    "gruendungskosten": 0,
+    "ausstattung": 9000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 1,
+    "rollen": [
+      "forstarbeit"
+    ],
+    "feld": {
+      "min_flaeche": 60,
+      "saatgut_je_10_felder": 2,
+      "ertrag_dt_je_feld": 1.2,
+      "artikel": "holz",
+      "saat": "setzlinge",
+      "tage": {
+        "vorbereitung": 1,
+        "aussaat": 2,
+        "wachstum": 30,
+        "ernte": 3
+      },
+      "ohne_pflege": 0.8
+    }
+  },
+  "brauerei": {
+    "label": "Brauerei",
+    "beschreibung": "Braut aus Getreide Fassgetränke für Restaurants und den Getränkehandel.",
+    "standort": "markt",
+    "gebaeude": "workshop",
+    "gruendungskosten": 0,
+    "ausstattung": 20000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 10.0,
+    "personal_min": 1,
+    "rollen": [
+      "brauen"
+    ],
+    "rezept": {
+      "ein": {
+        "getreide": 1
+      },
+      "aus": {
+        "fassgetraenk": 60
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 8,
+      "lager_max": 1500
+    }
+  },
+  "moebelwerk": {
+    "label": "Möbelwerk",
+    "beschreibung": "Fertigt aus Holz und Beschlägen Möbel für Möbelhäuser (über den Großhandel).",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 18000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 8.0,
+    "personal_min": 1,
+    "rollen": [
+      "schreinern"
+    ],
+    "rezept": {
+      "ein": {
+        "holz": 2,
+        "beschlaege": 1
+      },
+      "aus": {
+        "moebelstueck": 1
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 8,
+      "lager_max": 60
+    }
+  },
+  "it": {
+    "label": "IT-Dienstleister",
+    "beschreibung": "Verträge mit anderen Betrieben: Büro-IT und Support (weniger Büro- und Internetkosten), Lagerverwaltung (weniger Verderb). Kapazität aus dem Personal; Hardware wird geliefert; bezahlt wird nur erbrachte Leistung.",
+    "standort": "markt",
+    "gebaeude": "office_site",
+    "gruendungskosten": 0,
+    "ausstattung": 15000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 6.0,
+    "personal_min": 1,
+    "rollen": [
+      "it"
+    ],
+    "vertraege_je_person": 4,
+    "hardware_lager": 4,
+    "dienste": {
+      "buero_it": {
+        "name": "Büro-IT und Support",
+        "preis_monat": 350.0,
+        "hardware": 2,
+        "wirkung": 0.15,
+        "je_betrieb": false
+      },
+      "lagerverwaltung": {
+        "name": "Lagerverwaltung",
+        "preis_monat": 300.0,
+        "hardware": 1,
+        "wirkung": 0.25,
+        "je_betrieb": true
+      }
+    }
   }
 }

@@ -21,7 +21,7 @@ const MAX_DEALS_KEPT := 300
 const COLD_SPOIL := 0.08             # Kuehlware je Tag im gekuehlten Lager
 const WARM_SPOIL := 0.5              # Kuehlware je Tag ohne Strom
 const START_BATCHES := 4
-const UPSTREAM := {"getreide": "feld", "mehl": "muehle", "schlachttier": "tierhaltung", "koks": "kokerei", "eisenerz": "bergwerk", "kohle": "bergwerk", "kalkstein": "bergwerk"}
+const UPSTREAM := {"getreide": "feld", "holz": "forst", "mehl": "muehle", "schlachttier": "tierhaltung", "koks": "kokerei", "eisenerz": "bergwerk", "kohle": "bergwerk", "kalkstein": "bergwerk"}
 ## Lagerstaetten (Abschnitt 5, vereinfacht): ausgewaehlte freie Parzellen ausserhalb von Wohn- und Mischgebiet tragen ein Vorkommen.
 ## Deterministisch aus Stadtsamen und Parzellen-ID; Menge in Einheiten (100 kg), Qualitaet 0,6-1,0 (Foerderung je Person).
 const DEPOSIT_KINDS := ["eisenerz", "kohle", "kalkstein", "rohmaterial"]
@@ -193,12 +193,12 @@ func _place_field(p: Dictionary, name: String, btype: String = "farm") -> Dictio
 func on_day(day: int) -> void:
 	for b in sim.biz.items.values():
 		var spec: Dictionary = Businesses.branches().get(b.branch, {})
-		if not (spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("bau") or spec.has("abbau")) or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
+		if not (spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("bau") or spec.has("abbau") or spec.has("dienste")) or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		_costs(b)
-		if spec.has("bau"):
+		if spec.has("bau") or spec.has("dienste"):
 			_staff_ok(b, spec)
-			continue   # Baufirma arbeitet im Bausystem (Construction)
+			continue   # Baufirma arbeitet im Bausystem (Construction), IT-Betrieb in ItServices
 		b["sales_avg"] = float(b.get("sales_avg", 0.0)) * 0.7 + float(b.get("sold_today", 0)) * 0.3
 		b["sold_today"] = 0
 		if spec.has("feld"):
@@ -238,6 +238,8 @@ func _staff_ok(b: Dictionary, spec: Dictionary) -> int:
 
 func _field_day(b: Dictionary, spec: Dictionary) -> void:
 	var F: Dictionary = spec.feld
+	var crop := str(F.get("artikel", "getreide"))   # Ernteartikel (Feld: Getreide, Forst: Holz)
+	var seed := str(F.get("saat", seed))
 	var f: Dictionary = b.field
 	var cid := int(b.owner)
 	var acct := "C%d" % cid
@@ -246,7 +248,7 @@ func _field_day(b: Dictionary, spec: Dictionary) -> void:
 	var days: Dictionary = F.tage
 	match str(f.phase):
 		"brache", "vorbereitung":
-			_ensure_input(b, "saatgut", _seed_need(b, F), _seed_need(b, F))
+			_ensure_input(b, seed, _seed_need(b, F), _seed_need(b, F))
 			if staff <= 0:
 				return
 			if f.phase == "brache":
@@ -259,21 +261,21 @@ func _field_day(b: Dictionary, spec: Dictionary) -> void:
 				f.day = 0
 		"aussaat":
 			var need := _seed_need(b, F)
-			if sim.stock.available("saatgut", acct, site) < need:
-				sim.biz.block(b.id, "material", "Wartet auf Saatgut (%d Sack nötig)" % need)
-				_ensure_input(b, "saatgut", need, need)
+			if sim.stock.available(seed, acct, site) < need:
+				sim.biz.block(b.id, "material", "Wartet auf %s (%d nötig)" % [item_name(seed), need])
+				_ensure_input(b, seed, need, need)
 				return
 			sim.biz.unblock(b.id, "material")
 			if staff <= 0:
 				return
 			f.day = int(f.day) + 1
 			if int(f.day) >= int(days.aussaat):
-				_use(b, "saatgut", need, acct, site)
+				_use(b, seed, need, acct, site)
 				f.phase = "wachstum"
 				f.day = 0
 				f.growth = 0.0
 				f.grow_days = 0
-				sim.biz.note(b.id, "Aussaat abgeschlossen (%d Sack Saatgut)" % need, "Betrieb")
+				sim.biz.note(b.id, "Aussaat abgeschlossen (%d × %s)" % [need, item_name(seed)], "Betrieb")
 		"wachstum":
 			var w := growth_factor()
 			if staff <= 0:
@@ -292,15 +294,15 @@ func _field_day(b: Dictionary, spec: Dictionary) -> void:
 				var avg := float(f.growth) / maxf(1.0, float(f.grow_days))
 				var y := int(round(float(f.area) * float(F.ertrag_dt_je_feld) * avg))
 				if y > 0:
-					sim.stock.add("getreide", y, acct, site, "Ernte %s" % b.id, sim.game_min)
-					_count("produced", "getreide", y)
+					sim.stock.add(crop, y, acct, site, "Ernte %s" % b.id, sim.game_min)
+					_count("produced", crop, y)
 					_first_output(b)
 				f.last_yield = y
 				f.cycles = int(f.cycles) + 1
 				f.phase = "brache"
 				f.day = 0
-				sim.biz.note(b.id, "Ernte: %d dt Getreide (Wachstum %.0f %%) liegen am Feld zum Abtransport" % [y, avg * 100.0], "Betrieb")
-				sim.log_event("%s erntet %d dt Getreide." % [b.name, y], "good", cid)
+				sim.biz.note(b.id, "Ernte: %d %s (Wachstum %.0f %%) liegen bereit zum Abtransport" % [y, item_name(crop), avg * 100.0], "Betrieb")
+				sim.log_event("%s erntet %d × %s." % [b.name, y, item_name(crop)], "good", cid)
 
 
 # ------------------------------------------------------------------ Lagerstaetten und Bergwerk
@@ -539,10 +541,10 @@ func _spoil(b: Dictionary, spec: Dictionary) -> void:
 		if int(art(item).get("haltbar_tage", 0)) <= 0:
 			continue
 		var acct := "C%d" % int(b.owner)
-		var rate := minf(SPOIL_SHARE, 0.75 / float(art(item).haltbar_tage))   # Brot (3 Tage) 25 %, Gemuese (5 Tage) 15 % je Tag
+		var rate: float = minf(SPOIL_SHARE, 0.75 / float(art(item).haltbar_tage)) * sim.it.spoil_factor(b.id)   # Brot (3 Tage) 25 %, Gemuese 15 %; IT-Lagerverwaltung senkt
 		if bool(art(item).get("kuehlung", false)):   # Kuehlraum: mit Strom langsam, ohne Strom schnell (Kuehlkette)
 			var cold: bool = sim.grid.supplied.has(b.id)
-			rate = COLD_SPOIL if cold else WARM_SPOIL
+			rate = (COLD_SPOIL if cold else WARM_SPOIL) * sim.it.spoil_factor(b.id)
 			if not cold and sim.stock.qty(item, acct, int(b.site)) > 0:
 				sim.biz.block(b.id, "kuehlung", "Kühlraum ohne Strom: %s verdirbt" % item_name(item))
 			else:
@@ -625,7 +627,7 @@ func sellers(item: String) -> Array:
 		if b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		var spec: Dictionary = Businesses.branches().get(b.branch, {})
-		var makes: bool = spec.get("rezept", {}).get("aus", {}).has(item) or (spec.has("feld") and item == "getreide") or (spec.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
+		var makes: bool = spec.get("rezept", {}).get("aus", {}).has(item) or (spec.has("feld") and str(spec.feld.get("artikel", "getreide")) == item) or (spec.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
 		if not makes:
 			continue
 		var acct := "C%d" % int(b.owner)
@@ -963,8 +965,10 @@ func detail(b: Dictionary) -> Dictionary:
 	if spec.has("feld"):
 		var f: Dictionary = b.field
 		e = {"phase": f.phase, "tag_in_phase": int(f.day), "flaeche": int(f.area), "ernten": int(f.cycles), "letzte_ernte_dt": int(f.last_yield)}
-		e["bestand"] = {"saatgut": sim.stock.qty("saatgut", acct, int(b.site)), "getreide": sim.stock.qty("getreide", acct, int(b.site))}
-		e["preise"] = {"getreide": price_of(b, "getreide")}
+		var crop := str(spec.feld.get("artikel", "getreide"))
+		var seed := str(spec.feld.get("saat", "saatgut"))
+		e["bestand"] = {seed: sim.stock.qty(seed, acct, int(b.site)), crop: sim.stock.qty(crop, acct, int(b.site))}
+		e["preise"] = {crop: price_of(b, crop)}
 		e["absatz_tag"] = int(b.get("sales_avg", 0.0))
 	elif spec.has("abbau"):
 		var dp := deposit_of(str(b.get("parcel", "")))
@@ -1011,7 +1015,7 @@ func detail(b: Dictionary) -> Dictionary:
 
 ## Lage der Kette fuer die KI-Beobachtung: Betriebe je Stufe und bisherige Importe (= Chance fuer lokale Erzeuger).
 func market_obs() -> Dictionary:
-	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0, "baufirma": 0, "stahlwerk": 0, "elektrostahlwerk": 0, "kokerei": 0, "bergwerk": 0}
+	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0, "baufirma": 0, "stahlwerk": 0, "elektrostahlwerk": 0, "kokerei": 0, "bergwerk": 0, "brauerei": 0, "moebelwerk": 0, "forst": 0, "it": 0}
 	for b in sim.biz.items.values():
 		if n.has(b.branch) and b.status in Businesses.RUNNING:
 			n[b.branch] = int(n[b.branch]) + 1
@@ -1019,7 +1023,7 @@ func market_obs() -> Dictionary:
 	for b in sim.biz.items.values():
 		if b.status in Businesses.RUNNING and b.has("waiting_for") and UPSTREAM.has(str(b.waiting_for)):
 			waiting[b.waiting_for] = int(waiting.get(b.waiting_for, 0)) + 1
-	return {"engpaesse": waiting, "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
+	return {"engpaesse": waiting, "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "brauereien": n.brauerei, "moebelwerke": n.moebelwerk, "it_betriebe": n.it, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
 
 
 ## Marktchancen fuer die KI: wie viel einer Stufe wird importiert statt lokal erzeugt (Brot: Grosshandelsimport).

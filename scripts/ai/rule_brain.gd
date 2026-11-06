@@ -460,6 +460,15 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 					break
 	# 11b) Produktion (Auftrag 14, Etappe 2): eigene Produktionsbetriebe besetzen, eine fehlende Kettenstufe gruenden
 	_production(obs, me, cash, buffer, personality, free_staff, planned, actions, reasons)
+	# 11d) IT-Vertraege (Etappe 5): Lagerverwaltung fuer Betriebe mit verderblicher Ware, Buero-IT bei Bueros, wenn es sich rechnet
+	var ita: Dictionary = obs.get("it_angebote", {})
+	if not ita.is_empty() and "buy_it_service" not in planned and cash > buffer:
+		for b in obs.get("betriebe", []):
+			if ita.has("lagerverwaltung") and b.branche in ["baeckerei", "schlachthof", "restaurant"] and int(b.get("personal", 0)) > 0 and not b.get("it", false):
+				actions.append({"action": "buy_it_service", "leistung": "lagerverwaltung", "business_id": b.id})
+				planned.append("buy_it_service")
+				reasons.append("buche Lagerverwaltung für %s gegen Verderb" % b.id)
+				break
 	# 11c) Immobilien (Etappe 3): vorsichtige Persoenlichkeiten legen Ueberschuss in ein gut vermietetes Wohngebaeude an
 	_realty(obs, cash, buffer, personality, planned, actions, reasons)
 	# 12) Gespraeche (kurz, mit Anlass)
@@ -485,7 +494,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	return {"summary": summary, "goal": goal, "actions": actions.slice(0, MAX_ACTIONS), "memory": "Strategie: %s" % personality}
 
 
-const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant", "baufirma", "bergwerk", "kokerei", "stahlwerk", "elektrostahlwerk"]
+const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant", "baufirma", "bergwerk", "kokerei", "stahlwerk", "elektrostahlwerk", "forst", "brauerei", "moebelwerk", "it"]
 const PROD_MAX := {"wachstum": 2, "netzwerker": 1, "kostenoptimierer": 1, "risikospieler": 1}
 const PROD_RESERVE := 10000.0   # Bargeld fuer Einkauf und Loehne nach der Gruendung
 
@@ -568,6 +577,12 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "baufirma"
 	elif int(mk.get("stahlwerke", 0)) == 0 and personality in ["wachstum", "kostenoptimierer"]:
 		branch = "stahlwerk"
+	elif int(mk.get("brauereien", 0)) == 0 and int(mk.felder) > 0:
+		branch = "brauerei"
+	elif int(mk.get("moebelwerke", 0)) == 0 and personality in ["netzwerker", "risikospieler"]:
+		branch = "moebelwerk"
+	elif int(mk.get("it_betriebe", 0)) == 0 and personality in ["netzwerker", "kostenoptimierer"]:
+		branch = "it"
 	elif int(mk.felder) < 2 * int(mk.muehlen) + int(mk.get("tierhaltungen", 0)):
 		branch = "feld"
 	elif personality == "wachstum" and int(mk.brot_import) > 0:

@@ -120,8 +120,17 @@ func sell(cid: int, building: int) -> Dictionary:
 	return {"ok": true, "msg": "Gebäude %d verkauft für %s." % [building, Catalog.money(proceeds)]}
 
 
-## Monat: Instandhaltung und Grundsteuer auf die Sollmiete (auch leerstehender Wohnungen), Abschreibung des Gebaeudeanteils.
+const LAND_TAX_MONTH := 0.003       # Grundsteuer auf gekauftes Betriebsland je Monat (Anteil des Bodenwerts) - Hortung kostet
+
+## Monat: Instandhaltung und Grundsteuer auf die Sollmiete (auch leerstehender Wohnungen), Abschreibung des Gebaeudeanteils;
+## Grundsteuer auf gekauftes Land der Produktionsbetriebe (auch ungenutztes).
 func on_month(_m: int) -> void:
+	for b in sim.biz.items.values():
+		if str(b.get("land_mode", "")) != "kauf" or b.status in ["geschlossen", "verwertung"] or sim.biz.frozen(int(b.owner)):
+			continue
+		var land := float(sim.parcels.parcel(str(b.get("parcel", ""))).get("book", 0.0))
+		if land > 0.0:
+			sim.company(int(b.owner)).ledger.book("property_costs", -land * LAND_TAX_MONTH, true, "Grundsteuer %s" % b.get("parcel", ""), sim.game_min, "P0", b.id)
 	for b in sim.biz.items.values():
 		if b.branch != "immobilien" or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue

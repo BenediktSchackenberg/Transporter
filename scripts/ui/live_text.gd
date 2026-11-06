@@ -771,6 +771,17 @@ static func central_bank(sim: Simulation) -> String:
 static func businesses(sim: Simulation) -> String:
 	var txt := "[b][color=#f2c14e]UNTERNEHMER UND BETRIEBE[/color][/b]
 "
+	txt += "
+[b]Marktmacht[/b] (Anteil am Umsatz je Branche, Fläche in Feldern: Eigentum / Pacht / reserviert)
+"
+	for d in sim.biz.dominance():
+		var parts: Array = []
+		for br in d.marktanteile:
+			parts.append("%s %d %%" % [br, int(float(d.marktanteile[br]) * 100.0)])
+		txt += "  %s: %s · %d Beschäftigte · %d Betriebe · Kapazität %d Chargen/Tag · Fläche %d / %d / %d · Vermögen %s · Schulden %s · Gewinn %s
+" % [d.name,
+			", ".join(parts) if not parts.is_empty() else "noch kein Umsatz", int(d.beschaeftigte), int(d.betriebe), int(d.kapazitaet_chargen_tag), int(d.flaeche_eigentum), int(d.flaeche_pacht),
+			int(d.flaeche_reserviert), Catalog.money(float(d.vermoegen)), Catalog.money(float(d.schulden)), Catalog.money(float(d.gewinn))]
 	for c in sim.companies:
 		var L: Ledger = c.ledger
 		txt += "

@@ -94,6 +94,8 @@ const SCHEMA := {
 	"buy_property": {"params": {"gebaeude": "int", "reason": "string?"},
 		"desc": "Wohngebäude kaufen (immobilien_angebote: Preis = 12 Jahresmieten). Mieter zahlen monatlich an dich; Instandhaltung und Grundsteuer (30 % der Sollmiete) laufen auch bei Leerstand. Finanzierung über take_loan möglich."},
 	"sell_property": {"params": {"gebaeude": "int"}, "desc": "Eigenes Wohngebäude an den privaten Vermietermarkt verkaufen (95 % des Werts)."},
+	"buy_it_service": {"params": {"leistung": "string", "business_id": "string?"},
+		"desc": "IT-Vertrag beim günstigsten IT-Dienstleister (it_angebote): buero_it (−15 % Büro- und Internetkosten) oder lagerverwaltung (−25 % Verderb, business_id nötig). Monatlich bezahlt, nur wenn die Leistung erbracht wird."},
 	"set_business_price": {"params": {"business_id": "string", "item": "string", "price": "number"},
 		"desc": "Verkaufspreis eines eigenen Produktionsbetriebs je Einheit setzen (Getreide, Mehl, Brot). Käufer wählen den günstigsten Anbieter inkl. Fracht; der Großhandel kauft Brot nur unter dem Importpreis."},
 	"close_business": {"params": {"business_id": "string", "reason": "string?"},
@@ -732,6 +734,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.prod.set_price(cid, _s(a.business_id), _s(a.item), float(a.price))
 		"buy_property":
 			return sim.realty.buy(cid, _i(a.gebaeude), _s(a.get("reason", "")))
+		"buy_it_service":
+			return sim.it.buy(cid, _s(a.leistung), _s(a.get("business_id", "")))
 		"sell_property":
 			return sim.realty.sell(cid, _i(a.gebaeude))
 		"close_business":

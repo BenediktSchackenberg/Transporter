@@ -156,7 +156,7 @@ func found(cid: int, branch: String, reason: String, params: Dictionary = {}) ->
 	var spec: Dictionary = branches().get(branch, {})
 	if spec.is_empty():
 		return {"ok": false, "msg": "Unbekannte Branche '%s'. Verfügbar: %s" % [branch, ", ".join(branches().keys())]}
-	if spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("bau") or spec.has("abbau"):
+	if spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("bau") or spec.has("abbau") or spec.has("dienste"):
 		if recently_closed(cid, branch):
 			return {"ok": false, "msg": "Einen Betrieb der Branche %s hast du vor weniger als %d Tagen geschlossen; Neugründung erst danach." % [branch, REFOUND_DAYS]}
 		return sim.prod.found(cid, branch, params, reason)   # Produktionsbetriebe: Standort, Ausstattung, Feld (Etappe 2)
@@ -236,6 +236,9 @@ func obs_of(cid: int) -> Array:
 		if spec.has("bau"):
 			e["personal_min"] = int(spec.personal_min)
 			e.merge(sim.construction.company_builder_detail(b))
+		if spec.has("dienste"):
+			e["personal_min"] = int(spec.personal_min)
+			e.merge(sim.it.summary_of_provider(b))
 		if spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("abbau"):
 			e["personal_min"] = int(spec.get("personal_min", 1))
 			if spec.has("laden"):
@@ -243,9 +246,60 @@ func obs_of(cid: int) -> Array:
 			e.merge(sim.prod.detail(b))
 		if b.branch == "immobilien":
 			e.merge(sim.realty.detail(b))
+		if sim.it.has_contract(b.id):
+			e["it"] = true
 		if not b.blockers.is_empty():
 			e["blockaden"] = b.blockers.map(func(x): return x.text)
 		out.append(e)
+	return out
+
+
+## Marktmacht (Abschnitt 10): je Unternehmen Marktanteile je Branche (Anteil am Umsatz der Branche aus den Kostenstellen), Beschaeftigte,
+## Betriebe, Produktionskapazitaet (Chargen bzw. Foerderung je Tag bei voller Besetzung), Flaeche nach Eigentum/Pacht/Reservierung
+## (Felder), Vermoegen, Schulden und Gewinn.
+func dominance() -> Array:
+	var by_branch := {}
+	for b in items.values():
+		if b.status == "geschlossen":
+			continue
+		var rev: float = sim.company(int(b.owner)).ledger.cc_revenue(b.id)
+		var row: Dictionary = by_branch.get(b.branch, {})
+		row[int(b.owner)] = float(row.get(int(b.owner), 0.0)) + rev
+		by_branch[b.branch] = row
+	var out: Array = []
+	for c in sim.companies:
+		var shares := {}
+		for br in by_branch:
+			var total := 0.0
+			for k in by_branch[br]:
+				total += float(by_branch[br][k])
+			var mine := float(by_branch[br].get(c.id, 0.0))
+			if mine > 0.0 and total > 0.0:
+				shares[br] = snappedf(mine / total, 0.01)
+		var cap := 0
+		var own_area := 0
+		var lease_area := 0
+		for b in of(c.id):
+			var spec: Dictionary = branches().get(b.branch, {})
+			cap += int(spec.get("rezept", {}).get("chargen_je_person_tag", 0)) * int(spec.get("personal_min", 1))
+			var p: Dictionary = sim.parcels.parcel(str(b.get("parcel", "")))
+			if not p.is_empty():
+				if str(b.get("land_mode", "")) == "kauf":
+					own_area += int(p.area)
+				else:
+					lease_area += int(p.area)
+		for pl in sim.estate.plot_of(c.id):
+			if str(pl.mode) == "miete":
+				lease_area += int(pl.w) * int(pl.h)
+			else:
+				own_area += int(pl.w) * int(pl.h)
+		var reserved := 0
+		for p in sim.parcels.items.values():
+			if p.state == "reserviert" and str(p.get("reservation", {}).get("holder", "")) == "C%d" % c.id:
+				reserved += int(p.area)
+		out.append({"id": c.id, "name": c.company_name, "marktanteile": shares, "beschaeftigte": sim.personnel.employed(c.id).size(), "betriebe": of(c.id).size(),
+			"kapazitaet_chargen_tag": cap, "flaeche_eigentum": own_area, "flaeche_pacht": lease_area, "flaeche_reserviert": reserved,
+			"vermoegen": int(c.ledger.cash + sim.book_assets(c.id)), "schulden": int(c.ledger.debt), "gewinn": int(c.ledger.profit())})
 	return out
 
 

@@ -45,6 +45,7 @@ var mayor := Mayor.new()
 var construction := Construction.new()
 var city_depot := CityDepot.new()
 var waste := Waste.new()              # Muell, Recycling, Mehrweg (Auftrag 5, Abschnitt 12)
+var it := ItServices.new()              # IT-Dienstleister der Unternehmer (Auftrag 14, Etappe 5)
 var plant := PowerPlant.new()           # kommunales Kernkraftwerk (Auftrag 14, Etappe 4)
 var realty := RealEstate.new()         # Immobilienbetriebe der Unternehmer (Auftrag 14, Etappe 3)
 var prod := Production.new()            # Produktionsketten der Unternehmer (Auftrag 14, Etappe 2)
@@ -153,6 +154,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	road_care.setup(self)
 	prod.setup(self)
 	plant.setup(self)
+	it.setup(self)
 	retail.setup(self)
 	waste.setup(self)
 	households.setup(self)
@@ -1059,7 +1061,7 @@ func _minute_tick() -> void:
 		L.book("fuel", -_fuel[c.id], true, "Treibstoff", now)
 		_fuel[c.id] = 0.0
 		var office_cost: float = Catalog.OFFICE_PER_DAY * c.offices.size() + Catalog.INTERNET_PER_DAY[c.internet_level]
-		L.book("office", -office_cost / 1440.0, true, "Büros & Internet", now)
+		L.book("office", -office_cost * it.office_factor(c.id) / 1440.0, true, "Büros & Internet", now)   # IT-Vertrag senkt die Kosten
 		var pdep := minf(c.property_cost * Catalog.PROPERTY_DEPRECIATION_PER_DAY / 1440.0, c.property_book)
 		c.property_book -= pdep
 		L.book("depreciation", -pdep, false, "Abschreibung Büros", now)
@@ -1203,7 +1205,7 @@ func to_dict() -> Dictionary:
 	return {"seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
 
@@ -1253,6 +1255,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.retail.from_dict(d.get("retail", {}))
 	s.prod.from_dict(d.get("production", {}))
 	s.plant.from_dict(d.get("plant", {}))
+	s.it.from_dict(d.get("it", {}))
 	s.waste.from_dict(d.get("waste", {}))
 	s.care.from_dict(d.get("care", {}))
 	s.workforce.from_dict(d.get("workforce", {}))
