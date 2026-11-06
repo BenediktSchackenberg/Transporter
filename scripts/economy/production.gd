@@ -26,7 +26,7 @@ static var _articles := {}
 
 var sim
 var deals := {}                      # "D<n>" -> Liefervertrag
-var stats := {"produced": {}, "consumed": {}, "imported": {}, "sold": 0.0, "deals": 0, "fallback": 0, "spoiled": 0}
+var stats := {"produced": {}, "consumed": {}, "imported": {}, "exported": {}, "sold": 0.0, "deals": 0, "fallback": 0, "spoiled": 0}
 var _next := 1
 
 
@@ -134,8 +134,11 @@ func _parcel_candidates(pid: String, min_area: int) -> Array:
 	if pid != "":
 		var p: Dictionary = sim.parcels.parcel(pid)
 		return [p] if not p.is_empty() and p.state == "frei" and p.owner == Parcels.CITY and int(p.area) >= min_area and sim.parcels.is_buildable(p) else []
-	var out: Array = sim.parcels.search({"min_area": min_area, "limit": 400}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse))
-	out.sort_custom(func(a, b): return [a.zone in ["wohnen", "mischgebiet"], float(a.price) / float(a.area)] < [b.zone in ["wohnen", "mischgebiet"], float(b.price) / float(b.area)])
+	var t: Dictionary = sim.city.building(import_point())
+	var near := func(p) -> int: return absi(int(p.rect[0]) - int(t.x)) + absi(int(p.rect[1]) - int(t.y))
+	var out: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse) and p.zone not in ["wohnen", "mischgebiet"])
+	# kurze Wege zur Muehle/Verladestelle zaehlen mehr als billiges Land am Rand (Fracht je dt sonst hoeher als der Ertrag)
+	out.sort_custom(func(a, b): return near.call(a) < near.call(b))
 	return out.slice(0, 40)
 
 
@@ -181,6 +184,7 @@ func on_day(day: int) -> void:
 		else:
 			_recipe_day(b, spec)
 		_spoil(b, spec)
+	_export_surplus()
 	_advance_deals()
 
 
@@ -319,7 +323,7 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 	for item in R.ein:
 		var per_day := plan * int(R.ein[item])
 		if per_day > 0:
-			_ensure_input(b, item, per_day * int(R.lager_tage), per_day * int(R.lager_tage) / 2)
+			_ensure_input(b, item, per_day * int(R.lager_tage), per_day * int(R.lager_tage) / 2, _input_cap(b, R, acct, site))
 	b["today"] = 0
 	if staff <= 0:
 		return
@@ -357,6 +361,23 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 	b["total"] = int(b.get("total", 0)) + batches
 
 
+## Hoechster sinnvoller Einkaufspreis je Einheit der (einzigen) Rohware: Erloes der Ausgangsware je Einheit Rohware x 0,9.
+## Liegt das Ausgangslager halb voll (Absatz stockt, Ueberschuss geht in die Ausfuhr), zaehlt der Exportpreis. Bei mehreren
+## Rohwaren (Baeckerei) keine Grenze.
+func _input_cap(b: Dictionary, R: Dictionary, acct: String, site: int) -> float:
+	if R.ein.size() != 1:
+		return INF
+	var in_qty := float(R.ein.values()[0])
+	var value := 0.0
+	for item in R.aus:
+		var p := price_of(b, item)
+		var ep = art(item).get("exportpreis")
+		if ep != null and sim.stock.qty(item, acct, site) >= int(R.lager_max) / 2:
+			p = float(ep)
+		value += p * float(R.aus[item])
+	return value / in_qty * 0.9
+
+
 func _use(b: Dictionary, item: String, qty: int, acct: String, site: int) -> void:
 	var n: int = sim.stock.consume(item, qty, acct, site, "Verbrauch %s" % b.id, sim.game_min)
 	_count("consumed", item, n)
@@ -380,7 +401,7 @@ func _count(key: String, item: String, n: int) -> void:
 
 # ------------------------------------------------------------------ Beschaffung
 ## Bestand + Unterwegs unter `reorder` -> bis `target` nachbestellen.
-func _ensure_input(b: Dictionary, item: String, target: int, reorder: int) -> void:
+func _ensure_input(b: Dictionary, item: String, target: int, reorder: int, max_unit: float = INF) -> void:
 	var acct := "C%d" % int(b.owner)
 	var have: int = sim.stock.available(item, acct, int(b.site)) + incoming(acct, item, int(b.site))
 	if have > reorder and have > 0:
@@ -388,8 +409,10 @@ func _ensure_input(b: Dictionary, item: String, target: int, reorder: int) -> vo
 	var want := target - have
 	if want <= 0:
 		return
-	var got := order(acct, int(b.site), b.id, item, want, INF, true)
-	if got <= 0:
+	var got := order(acct, int(b.site), b.id, item, want, max_unit, true)
+	if got <= 0 and max_unit < INF:
+		sim.biz.block(b.id, "einkauf", "Kein Einkauf von %s unter %s je %s (sonst Verlust)" % [item_name(item), Catalog.money(max_unit), art(item).get("einheit", "Stk")])
+	elif got <= 0:
 		sim.biz.block(b.id, "einkauf", "Kein Einkauf von %s möglich (Bargeld oder Anbieter fehlt)" % item_name(item))
 	else:
 		sim.biz.unblock(b.id, "einkauf")
@@ -548,7 +571,8 @@ func _issue_contract(d: Dictionary) -> void:
 	k.qty = units(d.item, int(d.qty))
 	k.reward = float(d.freight)
 	k.status = "open"
-	k.payer = ("firm:" + d.buyer.substr(1)) if d.buyer.begins_with("C") else str(d.buyer)
+	var payer := str(d.get("payer", d.buyer))
+	k.payer = ("firm:" + payer.substr(1)) if payer.begins_with("C") else payer
 	k.order_ref = "deal:" + str(d.id)
 	k.created = sim.game_min
 	k.offer_until = sim.game_min + GameCalendar.days_to_min(float(OFFER_DAYS))
@@ -581,8 +605,9 @@ func _advance_deals() -> void:
 
 ## Lieferdienst (S0), wenn kein Unternehmen den Transport uebernommen hat: Kaeufer zahlt einen Teil der Fracht, Ware kommt an.
 func _fallback(d: Dictionary, k: Contract) -> void:
-	var pay := minf(float(d.freight) * FALLBACK_SHARE, maxf(0.0, _cash(d.buyer)))
-	_pay(d.buyer, "S0", pay, "trade_expense", "Lieferdienst %s" % d.id, d.buyer_biz)
+	var pa := str(d.get("payer", d.buyer))
+	var pay := minf(float(d.freight) * FALLBACK_SHARE, maxf(0.0, _cash(pa)))
+	_pay(pa, "S0", pay, "trade_expense", "Lieferdienst %s" % d.id, str(d.get("payer_biz", d.buyer_biz)))
 	d.freight_paid = pay
 	stats.fallback = int(stats.fallback) + 1
 	if k != null and k.status in ["open", "expired"]:
@@ -595,9 +620,10 @@ func contract_delivered(k: Contract) -> void:
 	var d: Dictionary = deals.get(k.order_ref.trim_prefix("deal:"), {})
 	if d.is_empty() or d.status not in ["transport", "unterwegs"]:
 		return
-	if d.buyer.begins_with("C") and k.paid > 0.0:
-		var payer = sim.company(int(d.buyer.substr(1)))
-		payer.ledger.book("trade_expense", -k.paid, true, "Fracht %s" % d.id, sim.game_min, "C0", d.buyer_biz)
+	var pa := str(d.get("payer", d.buyer))
+	if pa.begins_with("C") and k.paid > 0.0:
+		var payer = sim.company(int(pa.substr(1)))
+		payer.ledger.book("trade_expense", -k.paid, true, "Fracht %s" % d.id, sim.game_min, "C0", str(d.get("payer_biz", d.buyer_biz)))
 	d.freight_paid = k.paid
 	_receive(d)
 
@@ -618,7 +644,16 @@ func _receive(d: Dictionary) -> void:
 			stats.sold = float(stats.sold) + amount
 		else:
 			_pay(d.buyer, d.seller, amount, "trade_expense", "Einkauf %s (%s)" % [d.id, _who(d.seller)], d.buyer_biz)
-	if d.seller_biz != "" and d.seller != d.buyer:
+	elif d.seller == d.buyer and d.seller_biz != "" and d.buyer_biz != "" and moved > 0:
+		# Interne Lieferung: Verrechnungspreis zwischen den Kostenstellen (ohne Bargeld, kein Umsatz; konsolidiert null)
+		var tp := float(moved) * price_of(sim.biz.get_b(d.seller_biz), d.item)
+		var L: Ledger = sim.company(int(d.seller.substr(1))).ledger
+		L.book("internal", tp, false, "Interne Lieferung %s" % d.id, sim.game_min, "", d.seller_biz)
+		L.book("internal", -tp, false, "Interne Lieferung %s" % d.id, sim.game_min, "", d.buyer_biz)
+	if d.buyer == IMPORT and moved > 0:
+		sim.stock.consume(d.item, moved, IMPORT, int(d.buyer_loc), "Ausfuhr %s" % d.id, sim.game_min)
+		_count("exported", d.item, moved)
+	if d.seller_biz != "":   # auch interne Lieferungen zaehlen als Absatz des liefernden Betriebs
 		var sb: Dictionary = sim.biz.get_b(d.seller_biz)
 		if not sb.is_empty():
 			sb["sold_today"] = int(sb.get("sold_today", 0)) + moved
@@ -647,6 +682,44 @@ func _prune() -> void:
 	done.sort_custom(func(a, b): return int(a.done) < int(b.done))
 	for d in done.slice(0, deals.size() - MAX_DEALS_KEPT):
 		deals.erase(d.id)
+
+
+# ------------------------------------------------------------------ Ausfuhr
+## Ueberschuesse (Artikel mit Exportpreis) gehen zum Exportpreis frei Verladestelle (Grosshandelslager) hinaus; die Fracht dorthin
+## zahlt der Verkaeufer. Nur wenn mindestens EXPORT_MIN_UNITS Ladeeinheiten frei sind und nach Fracht mindestens die Haelfte des
+## Exportpreises bleibt und der Ueberschuss EXPORT_WAIT_DAYS Tage unverkauft lag. Eine Ladeeinheit bleibt fuer Kaeufer in der Stadt zurueck.
+const EXPORT_MIN_UNITS := 2
+const EXPORT_WAIT_DAYS := 3
+func _export_surplus() -> void:
+	var port := import_point()
+	for item in articles():
+		var ep = art(item).get("exportpreis")
+		if ep == null:
+			continue
+		var per := int(art(item).get("je_ladeeinheit", 1))
+		for s in sellers(item):
+			var q := int(s.avail) - per
+			var sb: Dictionary = sim.biz.get_b(str(s.biz))
+			var key: String = "surplus_since_" + str(item)
+			if q < per * EXPORT_MIN_UNITS or int(s.loc) == port:
+				sb.erase(key)
+				continue
+			var today := GameCalendar.day_of(sim.game_min)
+			if not sb.has(key):
+				sb[key] = today
+			if today - int(sb[key]) < EXPORT_WAIT_DAYS:
+				continue   # erst den Kaeufern in der Stadt Zeit lassen
+			sb.erase(key)
+			var fr := freight(int(s.loc), port, item, q)
+			if float(ep) - fr / float(q) < float(ep) * 0.5:
+				continue
+			if _deal(IMPORT, port, "", s, item, q, float(ep), fr):
+				var d: Dictionary = deals["D%d" % (_next - 1)]
+				d["payer"] = s.acct
+				d["payer_biz"] = s.biz
+				var k: Contract = sim.contracts[d.contract]
+				k.payer = "firm:" + s.acct.substr(1)
+				k.label += " · Ausfuhr"
 
 
 # ------------------------------------------------------------------ Grosshandel (Brot)

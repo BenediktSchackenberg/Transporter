@@ -519,7 +519,7 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 | Etappe | Inhalt | Stand |
 |---|---|---|
 | 1 | Unternehmer und Betriebskern, Kostenstellen, Startprofil, Migration, Grundversorgung, KI-Aktionen, Betriebsübersicht | umgesetzt (05.11.2026), Prüfbericht unten |
-| 2 | Getreide-Mehl-Brot-Kette | umgesetzt (06.11.2026), Prüfbericht unten; Bäckerei mit Theke nahe Gewinnschwelle, Mühle/Feld noch nicht tragfähig |
+| 2 | Getreide-Mehl-Brot-Kette | umgesetzt (06.11.2026), Prüfbericht unten; alle Stufen laufen 60 Tage, Bäckereien um die Gewinnschwelle, Mühle/Feld mit kleinem Verlust |
 | 3 | Fleisch, Kühlung, Gastronomie, Bau, Immobilien | offen |
 | 4 | Gelände, Bergbau, Stahl, Kraftwerk und Netz | offen |
 | 5 | IT, weitere Verarbeiter, Dominanz, Langzeitbalance | offen |
@@ -584,3 +584,13 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 - Volltest aller Tests: zweimal gestartet, beide Male wegen Speicherdruck vom System abgebrochen; geprüft sind die gezielten Tests und Regressionen oben.
 
 **Offen:** Mühle und Feld wirtschaftlich (z. B. Liefervertrag über mehrere Wochen mit festem Preis, Feld nahe der Mühle), eigene Fachrollen, sichtbare Wachstumsstufen.
+
+### Nachtrag Etappe 2 – Mühle und Feld (06.11.2026)
+
+- **Verrechnungspreise:** Interne Lieferungen (gleiche Company, anderer Betrieb) buchen den Verkaufspreis des liefernden Betriebs als Kategorie `internal` (+ beim Lieferer, − beim Empfänger, ohne Bargeld, nicht im Umsatz, konsolidiert null) und zählen als Absatz. Vorher schloss die Rückzugsregel Mühlen, die die eigene Bäckerei versorgten.
+- **Ausfuhr:** Getreide (14 EUR/dt) und Mehl (9 EUR/Sack) haben einen Exportpreis frei Verladestelle (Großhandelslager). Liegt ein Überschuss von mindestens zwei Ladeeinheiten drei Tage unverkauft und bleibt nach Fracht mindestens die Hälfte des Preises, geht er hinaus; die Fracht zahlt der Verkäufer. Ausgeführte Ware verlässt die Warenbilanz über `consume` (Statistik `exported`).
+- **Einkaufsgrenze:** Ein Betrieb mit einer Rohware kauft nur bis 90 % des Erlöses seiner Ausgangsware je Einheit Rohware; bei halbvollem Ausgangslager zählt der Exportpreis. Vorher mahlte die Mühle Importgetreide (26 EUR + Fracht) zu Exportmehl (27 EUR je dt) mit Verlust.
+- **Kalibrierung:** Mühle Ausstattung 15 000 EUR, 10 kW; Feldertrag 0,9 dt je Feld; Felder bevorzugt auf Gewerbe-/Industrieland nahe der Verladestelle (kurze Frachtwege statt billigem Randland).
+- Test `test_internal_transfer_and_export`.
+
+**Messung 60 Spieltage, Spedition (vorher → nachher):** Mühle −18 865 → −3 831 EUR (kein Importgetreide mehr, wartet auf lokales), Feld F2 Erlös 0 → 1 471 EUR, Ergebnis −3 612 → −2 620 EUR, drei Ernten bis 99 dt; Bäckereien −692 / +365 EUR; Getreideimport 384 dt → 0. Ein kleines Feld (77 Felder) wurde nach Regel geschlossen. Firmen gesamt +4 187, −3 633, −7 194, −13 576 EUR (Transport bleibt der größere Einfluss).

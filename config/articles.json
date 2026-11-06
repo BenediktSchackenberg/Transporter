@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS).",
+  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS). exportpreis = Preis frei Verladestelle (Großhandelslager) für Überschüsse; die Fracht dorthin zahlt der Verkäufer.",
   "saatgut": {
     "name": "Saatgut",
     "einheit": "Sack",
@@ -16,7 +16,8 @@
     "je_ladeeinheit": 10,
     "haltbar_tage": 0,
     "basispreis": 18.0,
-    "importpreis": 26.0
+    "importpreis": 26.0,
+    "exportpreis": 14.0
   },
   "mehl": {
     "name": "Mehl",
@@ -25,7 +26,8 @@
     "je_ladeeinheit": 40,
     "haltbar_tage": 0,
     "basispreis": 11.0,
-    "importpreis": 15.0
+    "importpreis": 15.0,
+    "exportpreis": 9.0
   },
   "backzutaten": {
     "name": "Backzutaten (Hefe, Salz)",

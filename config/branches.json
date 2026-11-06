@@ -29,7 +29,7 @@
     "feld": {
       "min_flaeche": 40,
       "saatgut_je_10_felder": 1,
-      "ertrag_dt_je_feld": 0.6,
+      "ertrag_dt_je_feld": 0.9,
       "tage": {
         "vorbereitung": 1,
         "aussaat": 1,
@@ -45,9 +45,9 @@
     "beschreibung": "Mahlt angeliefertes Getreide zu Mehl für Bäckereien.",
     "standort": "markt",
     "gruendungskosten": 0,
-    "ausstattung": 30000,
+    "ausstattung": 15000,
     "abschreibung_tag": 0.002,
-    "strom_kw": 20.0,
+    "strom_kw": 10.0,
     "personal_min": 1,
     "rollen": [
       "mahlen"
