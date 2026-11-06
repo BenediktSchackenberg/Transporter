@@ -219,6 +219,17 @@ func _process(_delta: float) -> void:
 		if args.has("shot-ship"):   # Kamera auf den Liegeplatz des Linienschiffs
 			session.set_follow(false)
 			session.city_view.set_camera_world(session.city_view.ship_view.berth + Vector2(110, -110))   # nach rechts versetzt: Seitenleiste verdeckt den rechten Bildrand
+		if args.has("shot-crew"):   # Kamera auf das Fahrzeug eines Bautrupps (bevorzugt eines, das gerade baut)
+			var pick := {}
+			for fv in session.sim.fleet.vehicles:
+				if fv.kind == "kolonne":
+					var tc: Dictionary = session.sim.crews.crews.get(str(fv.get("crew", "")), {})
+					if pick.is_empty() or tc.get("state", "") == str(args["shot-crew"]):
+						pick = fv
+			if not pick.is_empty():
+				args.erase("shot-tile")
+				session.set_follow(false)
+				session.city_view.set_camera_world(pick.mover.pos)
 		if args.has("shot-tile"):
 			var xy: PackedStringArray = str(args["shot-tile"]).split(",")
 			session.set_follow(false)
@@ -261,12 +272,36 @@ func _scenario_site(sim: Simulation, phase: int) -> void:
 	sim.economy.transfer("X0", "H0", 400000.0)
 	for it in ["ziegel", "beton", "holz", "glas", "installation", "stahl", "verbindung", "rohmaterial"]:
 		sim.stock.add(it, 2000, "T0", sim.trader.bauhof, "Szenario")
-	var full: Array = P.search({"zone": "wohnen", "min_area": 70, "limit": 300}).filter(func(q): return P.utility_level(q) == "voll")
-	var pid: String = full[0].id
-	P.reserve(pid, home)
-	var d: Dictionary = sim.permits.draft(home, pid, {"def": "mehrfamilienhaus", "floors": 3, "parking": 4})
-	sim.permits.apps[d.id].financing = {"eigenmittel": float(sim.permits.preview(d.id).costs.gesamt) + 10.0}
-	sim.permits.submit(d.id)
+	# Grundstueck suchen, auf dem der Antrag genehmigt wird (Rasterstadt: Mehrfamilienhaus, Kuestenort: Einfamilienhaus auf kleinen Parzellen)
+	var cands: Array = P.search({"zone": "wohnen", "min_area": 40, "limit": 400}).filter(func(q): return P.utility_level(q) != "keine")
+	cands.sort_custom(func(a, b): return a.area > b.area)
+	var pid := ""
+	var d := {}
+	for q in cands.slice(0, 12):
+		P.reserve(q.id, home)
+		var big: bool = int(q.area) >= 70 and P.utility_level(q) == "voll"
+		var dd: Dictionary = sim.permits.draft(home, q.id, {"def": "mehrfamilienhaus" if big else "einfamilienhaus", "floors": 3 if big else 1, "parking": 4 if big else 1})
+		if not dd.get("ok", false):
+			P.release(q.id, home)
+			continue
+		sim.permits.apps[dd.id].financing = {"eigenmittel": float(sim.permits.preview(dd.id).costs.gesamt) + 10.0}
+		sim.permits.submit(dd.id)
+		var g := 0
+		var dday := GameCalendar.day_of(sim.game_min)
+		while sim.permits.apps[dd.id].status != "entschieden" and g < 30:
+			g += 1
+			dday += 1
+			sim.game_min = GameCalendar.day_start(dday)
+			sim.parcels.on_day(dday)
+			sim.permits.on_day(dday)
+		if str(sim.permits.apps[dd.id].get("result", "")).begins_with("genehmigt"):
+			pid = q.id
+			d = dd
+			break
+		P.release(q.id, home)
+	if pid == "":
+		print("SZENARIO site: kein genehmigungsfähiges Grundstück")
+		return
 	var day := GameCalendar.day_of(sim.game_min)
 	var guard := 0
 	var pr := {}
@@ -281,8 +316,8 @@ func _scenario_site(sim: Simulation, phase: int) -> void:
 			var r: Dictionary = sim.construction.start_project(d.id)
 			sim.construction.accept_best(r.id)
 			pr = sim.construction.projects[r.id]
-		if not pr.is_empty() and ((int(pr.phase) > phase or (int(pr.phase) == phase and float(pr.progress) >= 0.5)) or pr.status == "uebergeben"):
-			break
+		if not pr.is_empty() and ((int(pr.phase) >= phase and sim.crews.on_site("bp", pr.id) and float(pr.progress) > 0.2) or pr.status == "uebergeben"):
+			break   # Trupp ist auf der Baustelle und arbeitet
 	var pc: Dictionary = sim.parcels.parcel(pid)
 	args["shot-tile"] = "%d,%d" % [int(pc.rect[0]) + int(pc.rect[2]) / 2 + 2, int(pc.rect[1]) + int(pc.rect[3]) / 2 - 2]
 	print("SZENARIO site: Phase %s, Fortschritt %.2f, Status %s" % [pr.get("phase"), pr.get("progress", 0.0), pr.get("status")])

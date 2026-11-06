@@ -193,20 +193,29 @@ func _material_need(t: Dictionary) -> Dictionary:
 	var pr: Dictionary = sim.construction.projects[t.job.id]
 	if pr.status != "im_bau":
 		return {}
-	var ph: Dictionary = Construction.PHASES[clampi(int(pr.phase), 0, Construction.PHASES.size() - 1)]
+	var k0 := clampi(int(pr.phase), 0, Construction.PHASES.size() - 1)
+	var ph: Dictionary = Construction.PHASES[k0]
 	if not pr.mats.has(ph.id) or pr.mats[ph.id].ready:
 		return {}
-	sim.construction.order_phase_material(pr, ph.id)
-	var d: Dictionary = {}
-	for x in sim.construction.deliveries.values():
-		if x.project == pr.id and x.phase == ph.id and x.status in ["offen", "unterwegs"]:
-			d = x
-	if d.is_empty() or d.status == "unterwegs" and str(d.get("carrier", "")) != t.id:
-		return {}   # eine Transportfirma bringt es gerade
-	var src: String = sim.construction.material_source(d)
-	if src == "hafen":
-		return {"delivery": d.id, "src": "hafen", "at": sim.city.building(sim.harbor.building).road}
-	return {"delivery": d.id, "src": "bauhof", "at": sim.city.building(int(sim.trader.bauhof)).road}
+	# eine Fahrt fuer die laufende und die naechste Phase mit Material (weniger Leerfahrten)
+	var ids: Array = []
+	var first := {}
+	for k in range(k0, mini(Construction.PHASES.size(), k0 + 3)):
+		var pid: String = Construction.PHASES[k].id
+		if not pr.mats.has(pid) or pr.mats[pid].ready:
+			continue
+		sim.construction.order_phase_material(pr, pid)
+		for x in sim.construction.deliveries.values():
+			if x.project == pr.id and x.phase == pid and x.status == "offen":
+				if first.is_empty():
+					first = x
+				if ids.size() < 2 and sim.construction.material_source(x) == sim.construction.material_source(first):
+					ids.append(x.id)
+	if first.is_empty() or first.phase != ph.id:
+		return {}   # Material der laufenden Phase bringt gerade eine Transportfirma
+	var src: String = sim.construction.material_source(first)
+	var at: Vector2i = sim.city.building(sim.harbor.building).road if src == "hafen" else sim.city.building(int(sim.trader.bauhof)).road
+	return {"delivery": ",".join(ids), "src": src, "at": at}
 
 
 func _load(t: Dictionary) -> bool:
@@ -215,21 +224,27 @@ func _load(t: Dictionary) -> bool:
 		e["crew_loaded"] = true
 		t.note = "Material aus dem Stadtlager geladen"
 		return true
-	var d: Dictionary = sim.construction.deliveries.get(str(t.delivery), {})
-	if d.is_empty() or d.status == "geliefert":
-		return true
-	var r: Dictionary = sim.construction.crew_load(d, str(t.src), str(t.id))
-	t.note = str(r.msg)
-	if r.ok and t.src == "hafen":
+	var ok := false
+	for did in str(t.delivery).split(",", false):
+		var d: Dictionary = sim.construction.deliveries.get(did, {})
+		if d.is_empty() or d.status == "geliefert":
+			continue
+		var r: Dictionary = sim.construction.crew_load(d, str(t.src), str(t.id))
+		t.note = str(r.msg)
+		if not r.ok:
+			return ok   # wenigstens die erste Lieferung geladen? dann losfahren, sonst warten
+		ok = true
+	if ok and t.src == "hafen":
 		stats.hafen += 1
-	return r.ok
+	return ok or str(t.delivery) == ""
 
 
 func _unload(t: Dictionary) -> void:
 	if t.job.kind == "bp" and str(t.delivery) != "":
-		var d: Dictionary = sim.construction.deliveries.get(str(t.delivery), {})
-		if not d.is_empty() and d.status == "unterwegs":
-			sim.construction.crew_unload(d)
+		for did in str(t.delivery).split(",", false):
+			var d: Dictionary = sim.construction.deliveries.get(did, {})
+			if not d.is_empty() and d.status == "unterwegs" and str(d.get("carrier", "")) == str(t.id):
+				sim.construction.crew_unload(d)
 		t.delivery = ""
 
 

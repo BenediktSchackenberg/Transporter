@@ -239,20 +239,21 @@ class SiteNode extends Node2D:
 	func _draw_crew() -> void:
 		var working: bool = crew.working
 		var people: int = int(crew.workers) + int(crew.operators) + int(crew.foreman)
+		# Bauleute in gleicher Groesse wie an Wegen und Bruecken (CrewArt): Polier winkt ein, die Kolonne arbeitet je nach Phase,
+		# zwischen zwei Arbeitsstellen laufen sie und tragen Material.
+		var s := func(w: Vector2, z: float) -> Vector2: return _s(w * 32.0) + Vector2(0, -z * 18.0)
+		var job := str(crew.get("phase", ""))
+		var act := "schaufeln" if job in ["erdarbeiten", "fundament", "aussenanlagen"] else ("messen" if job in ["vorbereitung", "uebergabe"] else "haemmern")
+		var firm: Color = crew.get("color", Color("e07a2a"))
 		for i in people:
 			var a := _spot(i, 1)
 			var b := _spot(i, 4)
-			var u := 0.5 + 0.5 * sin(t * (0.6 + _rnd(i, 7)) + _rnd(i, 8) * 6.28) if working else 0.5
-			var pos := _s(a.lerp(b, u))
-			var vest := Color("e8e8e8") if i == 0 else Color("f28c28") if i < int(crew.workers) + 1 else Color("3e7cb1")
-			var hat := Color("ffffff") if i == 0 else Color("f2c14e")
-			var bob := 1.0 * sin(t * 9.0 + float(i)) if working and u > 0.02 and u < 0.98 else 0.0
-			draw_rect(Rect2(pos + Vector2(-2, -8 + bob), Vector2(4, 6)), vest)
-			draw_rect(Rect2(pos + Vector2(-2, -2), Vector2(4, 2)), Color("3a3f4a"))
-			draw_rect(Rect2(pos + Vector2(-2, -12 + bob), Vector2(4, 4)), Color("e0b48a"))
-			draw_rect(Rect2(pos + Vector2(-3, -13 + bob), Vector2(6, 2)), hat)
-			if working and int(t * 2.0 + float(i)) % 3 == 0 and (u <= 0.02 or u >= 0.98):
-				draw_line(pos + Vector2(3, -6), pos + Vector2(6, -9 + 3.0 * sin(t * 14.0)), Color("c0c0c0"), 2.0)   # hammert
+			var u := 0.5 + 0.5 * sin(t * (0.25 + 0.2 * _rnd(i, 7)) + _rnd(i, 8) * 6.28) if working else 0.5
+			var moving := working and u > 0.08 and u < 0.92
+			var at := a.lerp(b, u) / 32.0
+			var action := "winken" if i == 0 else ("tragen" if moving else (act if working else "gehen"))
+			var vest := Color("f0f0f0") if i == 0 else (Color("f28c28") if i < int(crew.workers) + 1 else Color("3e7cb1"))
+			CrewArt.worker(self, s, at, t, action, vest, firm, seed_key + i)
 		var gi := 0
 		for g in crew.gear:
 			var gp := _s(Vector2(parcel_rect.position.x + parcel_rect.size.x * (0.18 + 0.22 * float(gi)), parcel_rect.position.y + parcel_rect.size.y * 0.2))

@@ -1182,8 +1182,10 @@ func crew_of(pr: Dictionary) -> Dictionary:
 	var work := int(ceil(float(spec.work) * scale))
 	var ops := int(spec.ops)
 	var working: bool = pr.blockers.is_empty() and int(pr.get("start", 0)) <= _today()
+	var bd: Dictionary = builders.get(pr.builder, {})
+	var col: Color = sim.company(int(bd.company)).color if bd.has("company") else Color("e07a2a")
 	return {"phase": phase_id, "role": spec.role, "foreman": 1, "workers": work, "operators": ops, "gear": spec.gear.duplicate(), "working": working,
-		"people": 1 + work + ops, "builder": pr.builder}
+		"people": 1 + work + ops, "builder": pr.builder, "color": col}
 
 
 func progress_of(pr: Dictionary) -> float:
