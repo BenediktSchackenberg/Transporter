@@ -25,6 +25,8 @@ var mayor_opt: OptionButton
 var dispatch_opt: OptionButton
 var talk_opt: OptionButton
 var profile_opt: OptionButton
+var world_opt: OptionButton
+var town_label: Label
 var _mayor_extra := {}            # weitere Einstellungen des Buergermeisters aus einer geladenen Konfiguration (Modell, Adresse, Budget)
 const WEATHER_MODES := ["live", "sim", "replay"]
 var status_label: Label
@@ -64,8 +66,18 @@ func _ready() -> void:
 	var dice := Button.new()
 	dice.text = "Neue Karte"
 	dice.tooltip_text = "Neuen zufälligen Seed würfeln – jede Partie bekommt eine andere Stadt"
-	dice.pressed.connect(func(): seed_edit.text = str(randi() % 100000))
+	dice.pressed.connect(func(): seed_edit.text = str(randi() % 100000); _update_town_name())
 	g.add_child(dice)
+	world_opt = OptionButton.new()
+	for t in ["Küstenort", "Rasterstadt"]:
+		world_opt.add_item(t)
+	world_opt.tooltip_text = "Küstenort: kleiner Ort am Meer mit Hafen, Fluss, Seen und Bergen, der durch Bauprojekte wächst. Rasterstadt: die bisherige große, fertig bebaute Stadt."
+	world_opt.item_selected.connect(func(_i): _update_town_name())
+	g.add_child(world_opt)
+	town_label = UITheme.label("", 16, UITheme.ACCENT)
+	g.add_child(town_label)
+	seed_edit.text_changed.connect(func(_t): _update_town_name())
+	_update_town_name()
 	g.add_child(UITheme.label("Partiedauer (aktive Echtzeit):"))
 	duration_opt = OptionButton.new()
 	for d in DURATIONS:
@@ -303,7 +315,7 @@ func collect() -> Dictionary:
 			"timeout": 90.0 if provider == "ollama" else 45.0})
 	return {"seed": seed_edit.text.to_int(), "duration_min": DURATIONS[duration_opt.selected],
 		"speed_idx": speed_opt.selected, "demo_fault_rate": fault_spin.value, "carry_memory": carry_check.button_pressed,
-		"mayor": _mayor_config(), "dispatcher": {"provider": "anthropic" if dispatch_opt.selected == 1 else "demo"}, "talk": {"provider": "anthropic" if talk_opt.selected == 1 else "demo"}, "rivalry_talk": talk_opt.selected != 2, "start_profil": "spedition" if profile_opt.selected == 1 else "unternehmer", "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
+		"mayor": _mayor_config(), "dispatcher": {"provider": "anthropic" if dispatch_opt.selected == 1 else "demo"}, "talk": {"provider": "anthropic" if talk_opt.selected == 1 else "demo"}, "rivalry_talk": talk_opt.selected != 2, "start_profil": "spedition" if profile_opt.selected == 1 else "unternehmer", "welt": "stadt" if world_opt.selected == 1 else "kueste", "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
 		"players": players}
 
 
@@ -330,6 +342,8 @@ func _apply_config(cfg: Dictionary, keep_seed: bool = false) -> void:
 	_mayor_extra = cfg.get("mayor", {}).duplicate()
 	dispatch_opt.select(1 if str(cfg.get("dispatcher", {}).get("provider", "demo")) == "anthropic" else 0)
 	profile_opt.select(1 if str(cfg.get("start_profil", "unternehmer")) == "spedition" else 0)
+	world_opt.select(1 if str(cfg.get("welt", "kueste")) == "stadt" else 0)
+	_update_town_name()
 	talk_opt.select(2 if not bool(cfg.get("rivalry_talk", true)) else (1 if str(cfg.get("talk", {}).get("provider", "demo")) == "anthropic" else 0))
 	mayor_opt.select({"global": 1, "anthropic": 2}.get(str(_mayor_extra.get("provider", "demo")), 0))
 	for r in rows:
@@ -437,3 +451,7 @@ static func _read_json(path: String) -> Dictionary:
 		return {}
 	var d = JSON.parse_string(FileAccess.get_file_as_string(path))
 	return d if d is Dictionary else {}
+
+## Name des Kuestenorts zum Seed (Auftrag 15, Abschnitt 4); die Rasterstadt hat keinen eigenen Namen.
+func _update_town_name() -> void:
+	town_label.text = "„%s“" % CoastGenerator.town_name(seed_edit.text.to_int()) if world_opt.selected == 0 else ""

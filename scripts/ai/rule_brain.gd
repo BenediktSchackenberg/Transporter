@@ -496,6 +496,8 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 
 const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant", "baufirma", "bergwerk", "kokerei", "stahlwerk", "elektrostahlwerk", "forst", "brauerei", "moebelwerk", "it"]
 const PROD_MAX := {"wachstum": 2, "netzwerker": 1, "kostenoptimierer": 1, "risikospieler": 1}
+## Erste Gruendung je Persoenlichkeit: [Branche, Zaehler in produktion_markt]. Gilt nur, solange die Stadt diese Stufe noch nicht hat.
+const PROD_OPENER := {"wachstum": ["baeckerei", "baeckereien"], "kostenoptimierer": ["feld", "felder"], "netzwerker": ["restaurant", "restaurants"], "risikospieler": ["tierhaltung", "tierhaltungen"]}
 const PROD_RESERVE := 10000.0   # Bargeld fuer Einkauf und Loehne nach der Gruendung
 
 
@@ -559,8 +561,11 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 			if branch == "bergwerk":
 				rohstoff = str(item)
 			break
+	var opener: Array = PROD_OPENER.get(personality, [])
 	if branch != "":
 		pass
+	elif own.is_empty() and not opener.is_empty() and int(mk.get(opener[1], 0)) == 0:
+		branch = str(opener[0])   # erste Gruendung je Persoenlichkeit verschieden, sonst gruenden alle zugleich eine Baeckerei
 	elif int(mk.baeckereien) == 0:
 		branch = "baeckerei"
 	elif int(mk.felder) == 0:

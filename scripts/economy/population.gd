@@ -460,14 +460,16 @@ func validate(log_it: bool = true) -> Array:
 			overfull += 1
 	var employed: int = sim.citizens.employed_total()
 	var pop: int = sim.citizens.population()
-	var goal: int = int(sim.population_target) if int(sim.population_target) > 0 else int(c.bevoelkerung)   # Kuestenort: nach Wohnraum
+	var goal: int = int(sim.population_target) + sim.citizens._real_workers() if int(sim.population_target) > 0 else int(c.bevoelkerung)   # Kuestenort: Wohnraum + Personal
+	var labor := maxf(1.0, float(pop - sim.citizens.applicants()))   # Quote ohne offene Bewerber
+	var owner_tol := maxf(0.05, 4.0 / maxf(1.0, n))   # kleiner Ort: Eigentum geht haushaltsweise, die Quote springt in groesseren Stufen
 	var checks: Array = [
 		{"pruefung": "Bewohner", "wert": pop, "ziel": goal, "ok": absi(pop - goal) <= maxi(20, goal / 20)},
 		{"pruefung": "mit Wohnsitz", "wert": snappedf(float(housed) / maxf(1.0, n), 0.001), "ziel": 1.0, "ok": housed == n},
-		{"pruefung": "Beschäftigungsquote", "wert": snappedf(float(employed) / maxf(1.0, pop), 0.001), "ziel": float(c.beschaeftigungsquote),
-			"ok": absf(float(employed) / maxf(1.0, pop) - float(c.beschaeftigungsquote)) <= 0.03},
+		{"pruefung": "Beschäftigungsquote", "wert": snappedf(float(employed) / labor, 0.001), "ziel": float(c.beschaeftigungsquote),
+			"ok": absf(float(employed) / labor - float(c.beschaeftigungsquote)) <= 0.03},
 		{"pruefung": "Eigentümerquote", "wert": snappedf(float(owners) / maxf(1.0, n), 0.001), "ziel": float(c.eigentuemerquote),
-			"ok": absf(float(owners) / maxf(1.0, n) - float(c.eigentuemerquote)) <= 0.05},
+			"ok": absf(float(owners) / maxf(1.0, n) - float(c.eigentuemerquote)) <= owner_tol},
 		{"pruefung": "vermietete Einheiten ohne gültigen Eigentümer", "wert": bad_owner, "ziel": 0, "ok": bad_owner == 0},
 		{"pruefung": "überbelegte Wohneinheiten", "wert": overfull, "ziel": 0, "ok": overfull == 0},
 		{"pruefung": "doppelt vergebene Arbeitsplätze", "wert": 0, "ziel": 0, "ok": true},   # Buerger haben genau einen Arbeitgeber-Eintrag

@@ -92,13 +92,14 @@ func setup(s: Simulation) -> void:
 func generate() -> void:
 	var real := _real_workers()
 	var target: int = int(sim.population_target) if int(sim.population_target) > 0 else int(Population.cfg().get("bevoelkerung", POPULATION))
-	var total := maxi(target, real + 1)   # Kuestenort: Startbevoelkerung nach Wohnraum (Auftrag 15)
+	# Kuestenort (Auftrag 15): das Ziel ist die Zahl der Buerger im vorhandenen Wohnraum; Firmenpersonal und Bewerber kommen hinzu
+	var total := target + real if int(sim.population_target) > 0 else maxi(target, real + 1)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(sim.city.seed_value) + 4711
 	var real_employed := 0
 	for c in sim.companies:
 		real_employed += sim.personnel.employed(c.id).size()
-	var jobs := maxi(0, roundi(total * employment_target()) - real_employed)
+	var jobs := maxi(0, roundi((total - applicants()) * employment_target()) - real_employed)   # offene Bewerber sind per Definition ohne Stelle
 	for k in EMPLOYERS:
 		base_cap[k] = roundi(jobs * float(EMPLOYERS[k].share))
 	cap = base_cap.duplicate()
@@ -175,6 +176,15 @@ func _real_workers() -> int:
 	var n := 0
 	for w in sim.personnel.workers.values():
 		if not w.lost:
+			n += 1
+	return n
+
+
+## Verfuegbare Arbeitskraefte am Arbeitsmarkt (ohne Arbeitgeber); zaehlen zur Bevoelkerung, aber nicht zur Beschaeftigungsquote.
+func applicants() -> int:
+	var n := 0
+	for w in sim.personnel.workers.values():
+		if not w.lost and w.employer < 0:
 			n += 1
 	return n
 

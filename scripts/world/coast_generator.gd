@@ -25,6 +25,8 @@ func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: 
 		report = validate(cd)
 		report["versuch"] = attempt + 1
 		if report.ok:
+			cd.town_name = town_name(seed_value)   # Name haengt am gewaehlten Seed, auch nach Neuerzeugung (Vorschau im Startmenue)
+			report.name = cd.town_name
 			cd.gen_params = {"welt": "kueste", "seed": seed_value, "erzeugt_mit_seed": s, "versuch": attempt + 1, "groesse": map_size}
 			return cd
 		s = seed_value + 7919 * (attempt + 1)
