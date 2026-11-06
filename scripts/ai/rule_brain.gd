@@ -564,6 +564,8 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	var opener: Array = PROD_OPENER.get(personality, [])
 	if branch != "":
 		pass
+	elif int(mk.get("bau_wartend", 0)) >= 2 and int(mk.get("bautrupps_frei", 0)) == 0 and not own.any(func(b): return b.branche == "baufirma"):
+		branch = "baufirma"   # hohe Baunachfrage: eigene Bautrupps stellen und Bauauftraege uebernehmen
 	elif own.is_empty() and not opener.is_empty() and int(mk.get(opener[1], 0)) == 0:
 		branch = str(opener[0])   # erste Gruendung je Persoenlichkeit verschieden, sonst gruenden alle zugleich eine Baeckerei
 	elif int(mk.baeckereien) == 0:

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_build_crews"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -7416,9 +7416,112 @@ func test_mayor_goals() -> void:
 	ag.free()
 
 
+## Bautrupps: ein Trupp je Vorhaben, Material aus dem Lager (Bauhof, sonst Hafen), nur vor Ort wird gebaut, danach zurueck zum Bauhof;
+## Unternehmer-Baufirmen stellen Trupps nach Personal.
+func test_build_crews() -> void:
+	var s := coast_sim()
+	var C := s.construction
+	var K: BuildCrews = s.crews
+	K.sync()
+	var cap := 0
+	for bid in C.builders:
+		if C.builders[bid].status == "aktiv":
+			cap += int(C.builders[bid].capacity)
+	ok(K.crews.size() == cap and K.crews.values().all(func(t): return t.state == "frei"), "je Kapazität ein Bautrupp, alle frei am Bauhof (%d)" % cap)
+	var yard: Vector2i = s.city.building(int(s.trader.bauhof)).road
+	ok(K.crews.values().filter(func(t): return not C.builders[t.builder].has("company")).all(func(t): return BuildCrews._v(t.home) == yard), "städtische Trupps sind am Bauhof zu Hause")
+	# zwei Vorhaben bei derselben Firma mit nur einem Trupp: das zweite wartet
+	C.builders.BF3.capacity = 1
+	K.sync()
+	var P := s.parcels
+	var homes: Array = ["H9001", "H9002"]   # Bauherren-Haushalte (der Kuestenort fuehrt Haushalte im Wohnungsmodell)
+	for hid in homes:
+		s.households.homes[hid] = {"id": hid, "members": [], "dependents": 0, "address": 0, "balance": 0.0, "shortfall": 0.0, "income": 0.0, "spent": 0.0,
+			"deficit_months": 0, "low_months": 0, "asked": false}
+	var free: Array = P.search({"zone": "wohnen", "min_area": 40, "limit": 400}).filter(func(p): return P.utility_level(p) != "keine")
+	ok(free.size() >= 2, "zwei Bauplätze im Küstenort")
+	if free.size() < 2:
+		return
+	var prs: Array = []
+	for p in free:   # kleine Grundstuecke koennen abgelehnt werden: bis zwei Vorhaben vergeben sind
+		if prs.size() >= 2:
+			break
+		var d := _approve(s, str(homes[prs.size()]), p.id, "einfamilienhaus", 1, 1)
+		if not d.get("ok", false) or not str(s.permits.apps[d.id].get("result", "")).begins_with("genehmigt"):
+			continue
+		var r := C.start_project(d.id)
+		if r.get("ok", false) and C.accept(r.id, "BF3").ok:
+			prs.append(C.projects[r.id])
+	ok(prs.size() == 2, "zwei Bauvorhaben an Meisterbau vergeben")
+	if prs.size() < 2:
+		return
+	# Bauhof leer, Material liegt im Hafenlager -> der Trupp holt es dort
+	for it in Trader.MATERIALS:
+		s.stock.consume(it, s.stock.qty(it, "T0", s.trader.bauhof), "T0", s.trader.bauhof, "Test")
+		s.stock.add(it, 2000, "X0", s.harbor.building, "Test-Import", s.game_min)
+	var d0 := GameCalendar.day_of(s.game_min)
+	var both := false
+	var max_wait := 0
+	var blocked := ""
+	var states := {}
+	for k in 200:
+		d0 += 1
+		s.game_min = GameCalendar.day_start(d0)
+		C.on_day(d0)
+		both = both or (not K.crew_for("bp", prs[0].id).is_empty() and not K.crew_for("bp", prs[1].id).is_empty())
+		max_wait = maxi(max_wait, K.waiting().size())
+		for pr in prs:
+			if str(pr.blockers).contains("freien Bautrupp"):
+				blocked = str(pr.blockers)
+		for t in K.crews.values():
+			if t.builder == "BF3":
+				states[t.state] = true
+		if prs.all(func(p): return p.status in ["uebergeben", "wartet_anschluss", "pruefung"]):
+			break
+	ok(not both, "ein Trupp baut nur ein Vorhaben, nie zwei gleichzeitig")
+	ok(max_wait >= 1 and blocked != "", "zweites Vorhaben wartet auf den Trupp (%s)" % blocked.left(80))
+	ok(int(K.stats.fahrten) >= 6 and states.has("bauen"), "Trupp fährt Lager, Baustelle und Bauhof an (%d Fahrten, Zustände %s)" % [int(K.stats.fahrten), str(states.keys())])
+	ok(int(K.stats.hafen) >= 1, "Material aus dem Hafen geholt, weil der Bauhof leer ist (%d Fahrten)" % int(K.stats.hafen))
+	ok(C.deliveries.values().any(func(x): return x.status == "geliefert" and str(x.carrier).begins_with("T")), "Trupp hat Material zur Baustelle gebracht")
+	ok(prs.all(func(p): return p.status in ["uebergeben", "wartet_anschluss", "pruefung"]), "beide Häuser nacheinander gebaut (%s, %s)" % [prs[0].status, prs[1].status])
+	for k in 3:
+		d0 += 1
+		s.game_min = GameCalendar.day_start(d0)
+		C.on_day(d0)
+	var bt: Array = K.crews.values().filter(func(t): return t.builder == "BF3")
+	ok(bt.size() == 1 and bt[0].state == "frei" and BuildCrews._v(bt[0].at) == yard, "Trupp ist zurück am Bauhof und frei")
+	ok(int(K.stats.fertig) >= 2, "zwei Aufträge abgeschlossen")
+	ok(identity_ok(s), "Geld erhalten")
+	# Unternehmer-Baufirma: Trupps nach Personal (3 Personen je Trupp)
+	s.companies[2].ledger.inject(300000.0)
+	var fb: Dictionary = s.executor.execute(2, {"action": "found_business", "branche": "baufirma"})
+	ok(fb.get("ok", false), "Unternehmer gründet eine Baufirma (%s)" % fb.get("msg", ""))
+	if fb.get("ok", false):
+		while s.personnel.employed(2).size() < 6:
+			s.personnel.hire(2, s.personnel.spawn_available("driver"))
+		var staff: Array = s.personnel.employed(2)
+		for w in staff.slice(0, 6):
+			s.biz.assign(2, w.id, str(fb.ref))
+		C.sync_company_builders()
+		K.sync()
+		var own: Array = K.crews.values().filter(func(t): return t.builder == "C2")
+		ok(own.size() == mini(6, staff.size()) / 3 and own.size() >= 1, "Unternehmer stellt %d Bautrupp(s) mit %d Leuten" % [own.size(), mini(6, staff.size())])
+		ok(own.all(func(t): return BuildCrews._v(t.home) == s.depot_road(2)), "Unternehmer-Trupps starten am Firmensitz")
+	# Regel-KI: hohe Baunachfrage ohne freie Trupps -> Baufirma gruenden
+	var obs := ObservationBuilder.build(s, 3, [], 0.0, 10.0)
+	obs.ich.bargeld = 1000000
+	obs.produktion_markt.bau_wartend = 3
+	obs.produktion_markt.bautrupps_frei = 0
+	var acts: Array = RuleBrain.decide(obs, "kostenoptimierer", RandomNumberGenerator.new()).actions
+	ok(acts.any(func(a): return a.action == "found_business" and a.get("branche", "") == "baufirma"), "Regel-KI stellt bei hoher Baunachfrage eigene Bautrupps")
+	var loaded := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(loaded.crews.crews.size() == K.crews.size(), "Bautrupps gespeichert und geladen")
+
+
 ## Ein Bautag fuer Erschliessungsbauten: Uhr vorstellen, Stadtprojekte und Zufahrten fortschreiben.
 func _works_day(s: Simulation, d: int) -> void:
 	s.game_min = GameCalendar.day_start(d)
+	s.crews.on_day(d)
 	s.construction._public_day(d)
 	s.access.on_day(d)
 

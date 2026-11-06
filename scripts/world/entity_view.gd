@@ -133,8 +133,8 @@ func _update_fleet() -> void:
 				n = _make_vehicle_node("truck", "", WasteView.ORANGE, true)
 				_add_beacon(n, -56.0)
 			else:
-				n = _make_vehicle_node("roadcrew" if v.kind == "bautrupp" else "moving", "", Color.WHITE, false)
-			if v.kind == "bautrupp":
+				n = _make_vehicle_node("roadcrew" if v.kind in ["bautrupp", "kolonne"] else "moving", "", Color.WHITE, false)
+			if v.kind in ["bautrupp", "kolonne"]:
 				_add_beacon(n, -50.0)
 			add_child(n)
 			fleet_nodes[id] = n

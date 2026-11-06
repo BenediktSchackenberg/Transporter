@@ -390,8 +390,6 @@ func on_day(day: int) -> void:
 		var target := int(floor(float(order.size()) * road_progress(j)))
 		_build_to(j, order, target)
 		_maybe_finish(j)
-		if j.status == "im_bau" and sim.construction.public.has(str(j.project)):
-			_send_crew(j)
 
 
 func _build_to(j: Dictionary, order: Array, target: int) -> void:

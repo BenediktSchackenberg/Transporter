@@ -1205,7 +1205,7 @@ func market_obs() -> Dictionary:
 			var far := remote_deposit(str(item))
 			if not far.is_empty():
 				access[item] = far
-	return {"engpaesse": waiting, "zufahrt_noetig": access, "zufahrten_im_bau": sim.access.running(), "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "brauereien": n.brauerei, "moebelwerke": n.moebelwerk, "it_betriebe": n.it, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
+	return {"bau_wartend": sim.crews.waiting().size(), "bautrupps_frei": sim.crews.crews.values().filter(func(t): return t.state == "frei").size(), "engpaesse": waiting, "zufahrt_noetig": access, "zufahrten_im_bau": sim.access.running(), "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "brauereien": n.brauerei, "moebelwerke": n.moebelwerk, "it_betriebe": n.it, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
 
 
 ## Marktchancen fuer die KI: wie viel einer Stufe wird importiert statt lokal erzeugt (Brot: Grosshandelsimport).

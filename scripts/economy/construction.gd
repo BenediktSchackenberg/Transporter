@@ -292,6 +292,65 @@ func _order_material(pr: Dictionary, phase_id: String) -> void:
 	_log(pr, "Materiallieferung %s bestellt (%s)" % [d.id, phase_id])
 
 
+## Bautrupps (BuildCrews): Material der Phase bestellen, Bezugsquelle waehlen, laden (Ware verlaesst das Lager, wird bezahlt) und abladen.
+func order_phase_material(pr: Dictionary, phase_id: String) -> void:
+	_order_material(pr, phase_id)
+
+
+## Bauhof, wenn er alles hat; sonst das Hafenlager (Importware am Kai, X0), wenn es dort alles gibt; sonst Bauhof (Trupp wartet).
+func material_source(d: Dictionary) -> String:
+	var yard := int(sim.trader.bauhof)
+	if d.need.keys().all(func(it): return sim.stock.available(it, "T0", yard) >= int(d.need[it])):
+		return "bauhof"
+	if sim.harbor.enabled and d.need.keys().all(func(it): return sim.stock.available(it, "X0", sim.harbor.building) >= int(d.need[it])):
+		return "hafen"
+	return "bauhof"
+
+
+func crew_load(d: Dictionary, src: String, crew_id: String) -> Dictionary:
+	var pr: Dictionary = projects.get(d.project, {})
+	if pr.is_empty() or d.status not in ["offen", "unterwegs"]:
+		return {"ok": true, "msg": "nichts zu laden"}
+	if d.status == "unterwegs":
+		return {"ok": true, "msg": "schon geladen"}
+	var owner := "X0" if src == "hafen" else "T0"
+	var loc: int = sim.harbor.building if src == "hafen" else int(sim.trader.bauhof)
+	for it in d.need:
+		if sim.stock.available(it, owner, loc) < int(d.need[it]):
+			return {"ok": false, "msg": "%s hat nicht genug %s (%d benötigt); der Trupp wartet." % ["Hafenlager" if src == "hafen" else "Bauhof", Trader.MATERIALS[it].name, int(d.need[it])]}
+	var cb = _builder_company(str(pr.get("builder", "")))
+	if (cb.ledger.cash if cb != null else float(sim.economy.accounts.K0)) < float(d.value):
+		return {"ok": false, "msg": "Baufirma kann das Material nicht bezahlen."}
+	for it in d.need:
+		sim.stock.consume(it, int(d.need[it]), owner, loc, "Baustelle %s" % pr.id, sim.game_min)
+	sim.economy.transfer("K0", owner, float(d.value))
+	_charge(str(pr.get("builder", "")), float(d.value), "Material %s" % pr.id)
+	d.status = "unterwegs"
+	d.carrier = crew_id
+	_log(pr, "Bautrupp lädt Material für %s (%s)" % [d.phase, "Hafen" if src == "hafen" else "Bauhof"])
+	return {"ok": true, "msg": "Material geladen (%s)" % ("Hafen" if src == "hafen" else "Bauhof")}
+
+
+func crew_unload(d: Dictionary) -> void:
+	var pr: Dictionary = projects.get(d.project, {})
+	d.status = "geliefert"
+	d.delivered_day = _today()
+	if pr.is_empty():
+		return
+	var m: Dictionary = pr.mats[d.phase]
+	for it in d.need:
+		m.delivered[it] = int(m.delivered.get(it, 0)) + int(d.need[it])
+	m.ready = true
+	_log(pr, "Material für %s auf der Baustelle" % d.phase)
+
+
+func _crew_blocker(pr: Dictionary) -> String:
+	var t: Dictionary = sim.crews.crew_for("bp", pr.id)
+	if t.is_empty():
+		return "Wartet auf einen freien Bautrupp von %s." % builders[pr.builder].name
+	return "Bautrupp %s: %s%s" % [t.name, BuildCrews.STATE_TEXT.get(t.state, t.state), (" – " + str(t.note)) if str(t.note) != "" else ""]
+
+
 func open_deliveries() -> Array:
 	return deliveries.values().filter(func(d): return d.status == "offen")
 
@@ -345,6 +404,7 @@ func _deliver(d: Dictionary, with_carrier: bool) -> Dictionary:
 # ------------------------------------------------------------------ Tageslauf
 func on_day(day: int) -> void:
 	sync_company_builders()
+	sim.crews.on_day(day)   # Bautrupps: Fahrten nachholen, freie Trupps neuen Vorhaben zuteilen
 	for pr in projects.values():
 		match pr.status:
 			"angebote":
@@ -356,9 +416,7 @@ func on_day(day: int) -> void:
 				_day_build(pr, day)
 			"pruefung":
 				_day_inspection(pr, day)
-	for d in deliveries.values():
-		if d.status == "offen" and day - int(d.day) >= DELIVERY_FALLBACK_DAYS:
-			_deliver(d, false)     # Bauhof liefert selbst
+	# Material, das kein Transportunternehmen bringt, holt der Bautrupp selbst (BuildCrews)
 	_public_day(day)
 	_jobs_day(day)
 	_household_day()
@@ -368,6 +426,9 @@ func _day_site(pr: Dictionary, day: int) -> void:
 	if day < int(pr.start) or builders[pr.builder].status != "aktiv":
 		return
 	pr.blockers = []
+	if not sim.crews.on_site("bp", pr.id):
+		pr.blockers.append(_crew_blocker(pr))
+		return
 	if not pr.temp_access:
 		if float(sim.economy.accounts.K0) >= 0.0 and _pay(pr, Planning.TEMP_ACCESS_COST, "Baustellenzufahrt"):
 			pr.temp_access = true
@@ -394,6 +455,14 @@ func _day_build(pr: Dictionary, day: int) -> void:
 		pr.blockers.append("Baufirma %s ist ausgefallen." % b.name)
 		return
 	var ph: Dictionary = PHASES[int(pr.phase)]
+	if not sim.crews.on_site("bp", pr.id):
+		for k in range(int(pr.phase), mini(PHASES.size(), int(pr.phase) + 1 + STORAGE_PHASES)):
+			if pr.mats.has(PHASES[k].id):
+				_order_material(pr, PHASES[k].id)
+		pr.blockers.append(_crew_blocker(pr))
+		var t: Dictionary = sim.crews.crew_for("bp", pr.id)
+		_lose(pr, "material" if not t.is_empty() and t.state in ["wartet_material", "zum_lager", "laden"] else "bautrupp")
+		return
 	# Material der kommenden Phase vorbestellen (begrenzte Lagerflaeche: hoechstens eine Phase im Voraus)
 	for k in range(int(pr.phase), mini(PHASES.size(), int(pr.phase) + 1 + STORAGE_PHASES)):
 		if pr.mats.has(PHASES[k].id):
@@ -418,10 +487,6 @@ func _day_build(pr: Dictionary, day: int) -> void:
 		_lose(pr, "personal")
 		b.history.verzoegert = int(b.history.verzoegert) + 1
 		return
-	var over := maxi(0, load_of(pr.builder) - int(b.capacity))
-	f *= float(b.capacity) / float(b.capacity + over)
-	if f < 0.999 and over > 0:
-		_lose(pr, "auslastung", 1.0 - float(b.capacity) / float(b.capacity + over))
 	var phase_days := maxf(1.0, float(pr.plan_days) * float(ph.days))
 	pr.progress += f / phase_days
 	if pr.progress >= 1.0:
@@ -881,6 +946,10 @@ func _public_day(day: int) -> void:
 		if not sim.city_depot.project_complete(str(e.project)):
 			e["waiting"] = "Material aus dem Stadtlager fehlt"
 			continue
+		if not sim.crews.on_site("pub", str(e.project)):
+			var t: Dictionary = sim.crews.crew_for("pub", str(e.project))
+			e["waiting"] = "Bautrupp %s" % BuildCrews.STATE_TEXT.get(t.state, "") if not t.is_empty() else "wartet auf einen freien Bautrupp"
+			continue
 		e["waiting"] = ""
 		e.days_left = int(e.days_left) - (1 if sim.wx.build_factor() > 0.3 else 0)
 		if int(e.days_left) <= 0:
@@ -941,10 +1010,10 @@ func public_progress(prj_id: String) -> float:
 	return clampf(1.0 - float(e.days_left) / maxf(1.0, float(e.days)), 0.0, 1.0)
 
 
-## Arbeitet die Firma heute (begonnen, Material da, nicht fertig)?
+## Arbeitet die Firma heute (begonnen, Material da, Bautrupp vor Ort, nicht fertig)?
 func public_running(prj_id: String) -> bool:
 	var e: Dictionary = public.get(prj_id, {})
-	return not e.is_empty() and e.status == "laufend" and _today() >= int(e.start) and str(e.get("waiting", "")) == ""
+	return not e.is_empty() and e.status == "laufend" and _today() >= int(e.start) and str(e.get("waiting", "")) == "" and sim.crews.on_site("pub", prj_id)
 
 
 func public_builder_name(prj_id: String) -> String:
@@ -1104,6 +1173,8 @@ func _release_reserve_rest(pr: Dictionary) -> void:
 func crew_of(pr: Dictionary) -> Dictionary:
 	if pr.status not in ["erschliessung", "im_bau", "pruefung", "wartet_anschluss"]:
 		return {}
+	if pr.status in ["erschliessung", "im_bau"] and not sim.crews.on_site("bp", pr.id):
+		return {}   # Mannschaft nur, wenn der Bautrupp auf der Baustelle ist
 	var phase_id: String = "erdarbeiten" if pr.status == "erschliessung" else "uebergabe" if pr.status in ["pruefung", "wartet_anschluss"] else PHASES[clampi(int(pr.phase), 0, PHASES.size() - 1)].id
 	var spec: Dictionary = CREW[phase_id]
 	var d: Dictionary = Planning.DEFS.get(pr.def, {})

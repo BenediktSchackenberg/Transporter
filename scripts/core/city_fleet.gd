@@ -69,6 +69,13 @@ func _spawn(kind: String, start: Vector2i, site: Vector2i, until: float, back: V
 	return v
 
 
+## Neues Ziel fuer ein Fahrzeug (Bautrupps).
+func reroute(v: Dictionary, to: Vector2i) -> void:
+	var target := _free_neighbor(to)
+	if not sim.route(v.mover, target):
+		v.mover.pos = sim.city.tile_center(target)
+
+
 ## Bautrupp zu einer Strassenbaustelle schicken (einer je Stelle).
 func send_crew(site: Vector2i, until: float, label: String) -> void:
 	if vehicles.any(func(v): return v.kind == "bautrupp" and v.site == site and v.phase != "rueckfahrt"):
@@ -102,6 +109,8 @@ func update(dt: float) -> void:
 			else:
 				m.advance(dt, 1.0)
 			continue
+		if v.kind == "kolonne":
+			continue   # Bautrupps (BuildCrews) steuern Ziel und Zustand selbst
 		if v.kind == "muell":
 			_garbage(v, now)
 			continue
