@@ -17,6 +17,12 @@ var benches: Array = []             # Vector2i
 var intersections: Array = []       # Vector2i
 var depot_sites: Array = []         # Gebaeude-IDs der Depotstandorte
 var start_depots: Array = []        # Gebaeude-IDs, Reihenfolge = Spieler 0..3
+var world := "stadt"                # Weltart: stadt (Rasterstadt) | kueste (Kuestenort, Auftrag 15)
+var town_name := ""                 # Fantasiename der Stadt (Kueste)
+var gen_params := {}                # Erzeugungsparameter fuer Fehlersuche und Tests
+var height := PackedByteArray()     # Gelaendehoehe je Zelle (0 = Flachland; >0 = Berg, nicht begehbar); leer in der Rasterstadt
+var lakes: Array = []               # Seemittelpunkte
+var river: Array = []               # Flusszellen
 var road_count := 0
 
 

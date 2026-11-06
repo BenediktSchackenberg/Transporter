@@ -324,7 +324,7 @@ func deposit_of(pid: String) -> Dictionary:
 
 func _build_deposits() -> void:
 	var seed_v: int = int(sim.city.seed_value)
-	var cands: Array = sim.parcels.items.values().filter(func(p): return _outskirts(p) and p.zone not in ["gruen", "korridor"] and sim.parcels.is_buildable(p) 		and int(p.area) >= 40 and p.state == "frei")
+	var cands: Array = sim.parcels.items.values().filter(func(p): return (_near_mountain(p) if sim.city.world == "kueste" else _outskirts(p)) 		and p.zone not in ["gruen", "korridor"] and sim.parcels.is_buildable(p) and int(p.area) >= 40 and p.state == "frei")
 	for p in cands:
 		var h := absi(hash([seed_v, p.id, "vorkommen"]))
 		if float(h % 1000) / 1000.0 >= DEPOSIT_SHARE:
@@ -345,6 +345,19 @@ func _build_deposits() -> void:
 			if not _deposits.has(p.id):
 				_deposits[p.id] = {"art": kind, "menge": 5000, "qualitaet": 0.8}
 				break
+
+
+## Kuestenort: Lagerstaetten liegen an den Bergraendern (Parzelle grenzt bis auf 2 Felder an ein Berggebiet).
+func _near_mountain(p: Dictionary) -> bool:
+	var h: PackedByteArray = sim.city.height
+	if h.is_empty():
+		return false
+	for y in range(int(p.rect[1]) - 2, int(p.rect[1]) + int(p.rect[3]) + 2):
+		for x in range(int(p.rect[0]) - 2, int(p.rect[0]) + int(p.rect[2]) + 2):
+			var q := Vector2i(x, y)
+			if sim.city.inside(q) and h[sim.city.idx(q)] > 0:
+				return true
+	return false
 
 
 ## Abstand des Parzellenmittelpunkts vom Kartenmittelpunkt (Felder, groesste Achse).

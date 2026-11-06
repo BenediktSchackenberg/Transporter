@@ -20,6 +20,7 @@ const SNOW := Color("eef2f6")
 var sim: Simulation
 var cv
 var _nodes := {}          # Parzelle -> MountainNode
+var _regions: Array = []  # Bergmassive aus dem Hoehenfeld der Karte (Kuestenort): statische Gelaendeknoten
 var _clock := 0.0
 var _t := 0.0
 
@@ -35,6 +36,37 @@ func setup(simulation: Simulation, city_view) -> void:
 		n.configure()
 		add_child(n)
 		_nodes[pid] = n
+	_build_regions()
+
+
+## Kuestenort (Auftrag 15): je zusammenhaengendem Berggebiet des Hoehenfelds ein Gelaendeknoten (in Kacheln von hoechstens 24 x 24
+## Feldern, damit die Tiefensortierung gegenueber Fahrzeugen und Gebaeuden am Bergfuss stimmt).
+func _build_regions() -> void:
+	var H: PackedByteArray = sim.city.height
+	if H.is_empty():
+		return
+	var tiles := {}
+	for i in H.size():
+		if H[i] == 0:
+			continue
+		var c := Vector2i(i % sim.city.size, i / sim.city.size)
+		var key := Vector2i(c.x / 24, c.y / 24)
+		if not tiles.has(key):
+			tiles[key] = {}
+		tiles[key][c] = float(H[i])
+	for key in tiles:
+		var n := RegionNode.new()
+		n.view = self
+		n.setup_region(tiles[key], "massiv_%d_%d" % [key.x, key.y])
+		add_child(n)
+		_regions.append(n)
+
+
+## Berggebiet (Hoehenfeld) unter dem Mauszeiger?
+func pick_region(world: Vector2) -> bool:
+	var H: PackedByteArray = sim.city.height
+	var t := CityData.to_tile(world)
+	return not H.is_empty() and sim.city.inside(t) and H[sim.city.idx(t)] > 0
 
 
 func update_view(delta: float) -> void:
@@ -79,6 +111,33 @@ func mine_targets() -> Array:
 		if not sim.prod.mine_on(pid).is_empty():
 			out.append(Iso.to_screen(_nodes[pid].center_world))
 	return out
+
+
+## Statischer Gelaendeknoten eines Berggebiets (ohne Bergwerk, ohne Abbau): zeichnet wie MountainNode.
+class RegionNode extends MountainNode:
+	func setup_region(region_cells: Dictionary, key: String) -> void:
+		pid = key
+		cells = region_cells
+		art = ""
+		var lo := Vector2i(1 << 30, 1 << 30)
+		var hi := Vector2i(-1, -1)
+		for c in cells:
+			lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
+			hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+		rect = Rect2i(lo, hi - lo + Vector2i.ONE)
+		origin = Vector2(rect.end) * 32.0
+		center_world = (Vector2(rect.position) + Vector2(rect.size) * 0.5) * 32.0
+		position = Iso.to_screen(origin)
+		active = false
+		queue_redraw()
+
+	func refresh() -> void:
+		pass
+
+	## Nachbarzellen ausserhalb der Kachel kennt dieser Knoten nicht: fuer saubere Flanken die Hoehe aus der Karte lesen.
+	func _nb(c: Vector2i) -> float:
+		var H: PackedByteArray = view.sim.city.height
+		return float(H[view.sim.city.idx(c)]) if view.sim.city.inside(c) else 0.0
 
 
 class MountainNode extends Node2D:

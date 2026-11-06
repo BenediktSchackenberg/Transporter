@@ -15,6 +15,8 @@ var rng := RandomNumberGenerator.new()
 var market := Market.new()
 var social := Social.new()
 var rivalry := Rivalry.new()
+var world_mode := "stadt"          # Weltart der Karte: stadt | kueste (Auftrag 15); steht im Spielstand
+var population_target := 0         # Startbevoelkerung (0 = Konfiguration); im Kuestenort aus dem vorhandenen Wohnraum
 var biz := Businesses.new()       # Betriebe der Unternehmer (Auftrag 14); Company bleibt die finanzielle Klammer
 const SAVE_VERSION := 2            # 2 = Betriebe und Kostenstellen (Auftrag 14)
 ## Startprofil: "spedition" = Transportbetrieb mit Van und 10 Mitarbeitern (bisheriger Start, Standard der Tests);
@@ -111,7 +113,9 @@ const FIRST_NAMES := ["Jonas", "Lena", "Mehmet", "Sophie", "Lukas", "Mia", "Paul
 func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, traffic_density: float = 1.0, reserve: float = Catalog.RESERVE_TARGET) -> void:
 	rng.seed = seed_value
 	reserve_share = reserve
-	city = CityGenerator.new().generate(seed_value, map_size, reserve)
+	city = (CoastGenerator.new() if world_mode == "kueste" else CityGenerator.new()).generate(seed_value, map_size, reserve)
+	if world_mode == "kueste" and population_target <= 0:
+		population_target = _housing_population()
 	parcels.setup(self)
 	parcels.build(city)
 	nav.build(city)
@@ -291,6 +295,16 @@ func fleet_book_value(cid: int) -> float:
 
 
 ## Buchwert aller Anlagen (Fahrzeuge, Bueros, Land) plus Einlagen minus aufgelaufene Lohnrueckstaende.
+## Startbevoelkerung des Kuestenorts: so viele Buerger, wie der vorhandene Wohnraum fasst (abzueglich Plaetzen fuer die Haushalte
+## des Startpersonals der Unternehmer), mindestens 20.
+func _housing_population() -> int:
+	var units := 0
+	for b in city.buildings:
+		if Housing.KINDS.has(b.type):
+			units += int(Housing.KINDS[b.type].units)
+	return maxi(20, (units - 8) * 2)
+
+
 func book_assets(cid: int) -> float:
 	return fleet_book_value(cid) + companies[cid].property_book + companies[cid].land_book + companies[cid].ledger.deposits + companies[cid].ledger.receivables - companies[cid].ledger.payables
 
@@ -1202,7 +1216,7 @@ func to_dict() -> Dictionary:
 	var owners := {}
 	for s in depot_owner:
 		owners[str(s)] = depot_owner[s]
-	return {"seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
+	return {"world": city.world, "town_name": city.town_name, "population_target": population_target, "seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "log": log_entries.slice(-150),
@@ -1223,6 +1237,8 @@ static func from_dict(d: Dictionary) -> Simulation:
 	for cd in d.companies:
 		players.append({"player_name": cd.player_name, "company_name": cd.company_name,
 			"color": Color.html(cd.color), "avatar_style": cd.avatar_style, "personality": cd.personality})
+	s.world_mode = str(d.get("world", "stadt"))
+	s.population_target = int(d.get("population_target", 0))
 	s.setup(int(d.seed), players, int(d.map_size), 1.0, float(d.get("reserve", 0.0)))   # alte Staende: Karte ohne Reserve
 	# Ausgangszustand durch gespeicherten Zustand ersetzen
 	s.companies.clear()

@@ -1,0 +1,42 @@
+# Auftrag 15: Isometrische Küstenstadt, kleiner Spielstart und sichtbare Weltentwicklung
+
+Eingegangen am 06.11.2026 (Benedikt), zusammen mit Grafikreferenzen (Pixel-Dioramen mit Erdschichten, Brücken und Bergwerkseingang;
+Low-Poly-Stufenberg mit Bergwerk und Gleisen; bunte Küstenstadt mit Strand und Schiffen). Die Referenzbilder liegen nicht im Repo
+(teils fremde Spielgrafik); sie dienen nur als Stilhinweis.
+
+## Wortlaut (gekürzt auf die verbindlichen Anforderungen; vollständiger Text siehe Abschnittsnummern)
+
+1. **Auftrag:** Grafik, Weltgenerierung und Stadtentwicklung überarbeiten; vorhandene Wirtschafts-, Bau-, Grundstücks-, Verkehrs- und KI-Systeme weiterverwenden. Bis zu vier KI-Unternehmer mit mehreren Branchen, Bürgermeister, Bürger. Start als kleiner besiedelter Küstenort, der durch wirtschaftliche Entscheidungen und sichtbare Bauarbeiten wächst.
+2. **Grafik durchgehend isometrisch:** einheitliche Diorama-Optik mit Retro-Pixel-/Voxel-Anmutung; Gelände, Gebäude, Straßen, Brücken, Fahrzeuge, Figuren in derselben Projektion (2:1); Gebäude stehen richtig auf dem Gelände; korrekte Verdeckung (ausgewählte Objekte bleiben auffindbar); Fensterlicht, Dachdetails, Zäune, Gärten, Ladezonen, Holzstapel, Marktstände, Schilder, Uferdekoration; erkennbare Nutzung je Haus; Figuren mit sichtbaren Berufen; Zoom; zusammenhängende befahrbare Karte (keine schwebenden Inseln).
+3. **Start höchstens 40 fertige Gebäude** (Obergrenze, automatisch geprüft): etwa 20 Wohnhütten, 4 Gründungsbüros, höchstens 16 weitere; genau ein Rathaus, genau ein städtischer Bauhof mit Materiallager, kleiner Hafen (Anleger, Umschlagfläche, Lager), Dorfladen/Markt, kleine Bäckerei, Gasthaus, mindestens ein beauftragbarer Bauanbieter, notwendige Finanz-/Energie-/Wasser-/Notfallversorgung, bis zu vier erreichbare Startgrundstücke. Öffentliche Funktionen anfangs zusammenfassen; Kraftwerk im Budget. Einfache Optik (Holzhütten, Schotterwege, Gärten, einfacher Anleger), keine Hochhäuser/Industrieparks. Danach Wachstum über 40 hinaus durch genehmigte Neubauten.
+4. **Jede neue Partie:** schöner Fantasiename (z. B. Silberbucht, Auenhafen, Morgenfels), angezeigt im Startbildschirm, am Rathaus, im Stadtfenster, gespeichert; Seed und Parameter verfügbar. Pflicht: Meeresküste bis zum Kartenrand, Startort an der Küste mit Hafen, mindestens drei Berggebiete, ein zusammenhängendes Flusssystem, mindestens zwei Seen, Wälder, Wiesen, fruchtbare Flächen; kompakter Startort; mindestens 60 % der bebaubaren Landfläche unerschlossen; Startgrundstücke erreichbar und gleichwertig.
+5. **Berge als echte Geländeformen**, anfangs ohne Häuser, Straßen, Bergwerke; Rohstoffe über mehrere Standorte; Erkundung; Entwicklungsweg Bedarf → Grundstück/Abbaurecht → Genehmigung/Finanzierung → Zufahrt (ggf. Brücke) → Baufirma → Material/Personal/Versorgung → erst dann Förderung; sichtbarer Betrieb; konkrete Blockaden.
+6. **Meer, Hafen, Flüsse, Seen:** Hafen als Tor der Außenwirtschaft, Schiffe liefern und holen an tatsächliche Bestände gekoppelt; Kapazität durch Kai, Lager, Arbeitskräfte, Liegeplätze; Hafen wächst als Bauprojekt; Flüsse von hoch nach tief bis zum Meer, Seen in Senken; Wasser unterbricht Landwege.
+7. **Land erschließen:** Grundstück → Recht → Planung → Genehmigung → Finanzierung → Bauauftrag → Erschließung/Bau → Anschlüsse → Betrieb; sichtbare Bauphasen; andere Flussseite und Inseln über neue Verbindungen; Landgewinnung als teures Sondervorhaben.
+8. **Brücken** werden geplant, finanziert, gebaut (keine fertigen Brücken in unerschlossenen Gebieten); Bürgermeister beauftragt, Unternehmer schlägt vor/finanziert private Zufahrt; Kosten, Bauzeit, Streckenersparnis; Widerlager, Pfeiler, Fahrbahn, Geländer, Rampen; Holz-/Stein-/Stahlbeton-Varianten mit Tragfähigkeit; vor Abnahme gesperrt, danach in der Wegesuche.
+9. **Baufirmen** als Wirtschaftsteilnehmer mit Konto, Personal, Maschinen, Material, Kapazität; Bauverträge mit Abschlägen; Lieferketten Wald→Bauholz, Steinbruch→Fundamente, Sand/Kies/Zement→Beton, Erz/Schrott→Stahl, Ton→Ziegel; Importe über den Hafen gegen Bezahlung; städtischer Bauhof mit realen Beständen.
+10. **Gebäudestufen** je Nutzung (Wohnen, Gastronomie, Bäckerei, Logistik, Bau, Hafen, Bergbau) mit Aussehen, Material, Kosten, Bauzeit, Kapazität, laufendem Aufwand; Ausbau nur bei Nachfrage, Geld, Erschließung, Personal, Material, Genehmigung; Wachstum braucht Wohnraum und Arbeit.
+11. **KI plant zusammenhängende Vorhaben** sichtbar (Status, nächster Schritt, Akteur, Ressourcen, Blockade); Bürgermeister bewertet; regelbasierte Steuerung ohne Modellaufrufe; keine ziellos herumlaufenden Figuren.
+12. **Interaktion:** alle wichtigen Standorte anklickbar (Grundstück, Berggebiet, Baustelle, Brücke, Gebäude, Rathaus/Bauhof, Hafen); Kartenebenen (Eigentum, Rohstoffe, Erschließung, Verkehr, Versorgung, Vorhaben); Stadtfenster mit Name, Einwohnern, Gebäudezahl, Entwicklung, Finanzen, Projekten.
+13. **Technik:** gemeinsame Kartendaten für Gelände, Höhe, Wasser, Grundstücke, Bebauung, Wege, Rohstoffe, Besitz; speichern (Seed, Name, Höhen-/Gewässerdaten, Vorkommen, Besitz, Erschließung, Ausbauten, Vorhaben); Migration alter Stände; performant; Generator prüft seine Bedingungen und verwirft fehlerhafte Welten.
+14. **Etappen und Abnahme:** zuerst ein funktionierender Ausschnitt (Küstensiedlung, Hafen, Fluss, ein unerschlossenes Rohstoffgebiet, ein neues Bauprojekt mit Versorgung), dann alle Berggebiete, Seen, Gebäudetypen; dann Gebäudestufen, Brücken, komplexere Erschließungen. 13 Abnahmeszenarien (Name/Küste/Hafen/3 Berge/Fluss/2 Seen; ≤40 Gebäude, genau 1 Rathaus und 1 Bauhof; Berge unbebaut; Unternehmer handeln ohne Brücken; Baustoffimport per Schiff zur Baustelle; Baufirma baut sichtbar und stoppt ohne Material/Geld; Brücke gesperrt bis Abnahme, danach befahrbar; Bergwerk erschlossen und Rohstoff verkauft; Wohngebiet entsteht mit Einzug; Bäckerei/Restaurant ausbaubar; Wachstum über Startumfang mit Ursachen; Speichern/Laden; grafische Probeläufe).
+
+## Bestandsbefund (06.11.2026)
+
+- `CityGenerator` erzeugt eine durchgehend bebaute Rasterstadt mit mehreren Hundert Gebäuden, Küste nur als Streifen am Ostrand, keine Höhen, keine Flüsse/Seen. Viele Systeme hängen an Gebäuderollen: `town_hall`, `job_board`, `staffing`, `dealer`, `workshop`, `bank`, `office_site`, `police`, `prison`, `doctor`, `clinic`, Läden nach Namen (`Retail.SHOP_KIND`), Bauhof (Gebäude mit Ausgang `baustoffe`), Startgrundstücke (`plot`), Depotstandorte.
+- Einwohnerzahl fest 1 000 (`config/residents.json`), Wohnungen auf vorhandene Wohngebäude verteilt (`Housing.generate`).
+- Gelände: nur Lagerstätten-Berge je Parzelle (`Production.terrain`, `MountainView`), Wasser als Bodentyp.
+- Spielstände erzeugen die Stadt beim Laden deterministisch aus dem Seed neu und spielen später gebaute Gebäude nach (`EventDirector.added_buildings`).
+
+## Entscheidung und Etappen
+
+- Neuer Generator **`CoastGenerator`** für neue Partien (Weltart `kueste`); der bisherige `CityGenerator` bleibt für alte Spielstände und die bestehenden Tests (Weltart `stadt`). Die Weltart steht im Spielstand.
+- Laden: weiterhin deterministische Erzeugung aus Seed und Weltart (bewährt, identische Ergebnisse); Stadtname, Weltart und Parameter werden gespeichert. Abweichung vom Wortlaut „keine Welt beim Laden neu generieren“ ist bewusst und wird geprüft (gleiche Welt nach Laden).
+
+| Etappe | Inhalt | Stand |
+|---|---|---|
+| A | Küstenwelt: Meer bis zum Rand, Höhenfeld mit ≥3 Berggebieten, Fluss bis zum Meer, ≥2 Seen, Wald/Wiese/Felder; kompakter Ort mit ≤40 Gebäuden (Rathaus mit Verwaltung, Bauhof, Hafen mit Lager, Laden, Bäckerei, Gasthaus, Grundversorgung, 4 Startgrundstücke, Hütten); Fantasiename; Startbevölkerung nach Wohnraum; Generator prüft Bedingungen; Startmenü; Spiel läuft | begonnen (06.11.2026): Generator, Prüfung, Simulation läuft, Berge gezeichnet; offen: Persönlichkeits-Reihenfolge der Gründungen (alle gründen anfangs eine Bäckerei), Test, Startmenü-Auswahl, Zufahrten |
+| B | Berggebiete als Gelände in Darstellung und Wegfindung, Lagerstätten an den Bergrändern, Erschließung über Zufahrt | offen |
+| C | Hafen mit Schiffen (Importe/Exporte an Bestände gekoppelt), Baustoffimport bis zur Baustelle | offen |
+| D | Brücken (planen, finanzieren, bauen, gesperrt bis Abnahme, Wegesuche) | offen |
+| E | Gebäudestufen (Bäckerei, Restaurant, Wohnen, Hafen, Bergbau) und Wachstum über den Start hinaus, Kartenebenen, Stadtfenster | offen |

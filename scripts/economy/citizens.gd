@@ -91,7 +91,8 @@ func setup(s: Simulation) -> void:
 ## Erzeugt die Bevoelkerung nach dem Startpersonal der Firmen.
 func generate() -> void:
 	var real := _real_workers()
-	var total := maxi(int(Population.cfg().get("bevoelkerung", POPULATION)), real + 1)
+	var target: int = int(sim.population_target) if int(sim.population_target) > 0 else int(Population.cfg().get("bevoelkerung", POPULATION))
+	var total := maxi(target, real + 1)   # Kuestenort: Startbevoelkerung nach Wohnraum (Auftrag 15)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(sim.city.seed_value) + 4711
 	var real_employed := 0

@@ -56,6 +56,8 @@ func setup(s: Simulation) -> void:
 	var center := Vector2(s.city.size, s.city.size) * 0.5
 	var best_d := INF
 	for b in s.city.buildings:
+		if s.city.world == "kueste" and b.name != "Städtischer Bauhof":
+			continue   # Kuestenort: genau ein staedtischer Bauhof (nicht das Kraftwerk)
 		if b.role != "plot" and "baustoffe" in b.out:
 			var d := Vector2(b.x, b.y).distance_to(center)
 			if d < best_d:

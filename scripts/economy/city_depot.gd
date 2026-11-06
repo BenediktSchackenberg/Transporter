@@ -79,6 +79,8 @@ func setup(s) -> void:
 	var center := Vector2(s.city.size, s.city.size) * 0.5
 	var best_d := INF
 	for b in s.city.buildings:
+		if s.city.world == "kueste":
+			break   # Kuestenort: das staedtische Materiallager ist der Bauhof (Auftrag 15)
 		if b.role == "plot" or b.id == s.trader.bauhof or b.type not in ["warehouse", "construction", "factory", "freight_shed"]:
 			continue
 		var d := Vector2(b.x, b.y).distance_to(center)

@@ -65,7 +65,7 @@ const KINDS := {
 	"technik": {"label": "Technikgeschäft", "base": 8, "staff": 2, "rent": 1000.0, "goods": ["elektrogeraet"]},
 }
 ## Zuordnung der Geschaefte nach Namen im Stadtplan
-const SHOP_KIND := {"Bäckerei": "baeckerei", "Supermarkt": "lebensmittel", "Kiosk": "lebensmittel", "Getränkemarkt": "getraenke", "Möbelhaus": "moebel",
+const SHOP_KIND := {"Bäckerei": "baeckerei", "Supermarkt": "lebensmittel", "Kiosk": "lebensmittel", "Dorfladen": "lebensmittel", "Getränkemarkt": "getraenke", "Möbelhaus": "moebel",
 	"Elektro": "technik", "Technik": "technik", "Baumarkt": "baumarkt"}
 
 var sim: Simulation

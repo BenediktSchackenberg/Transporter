@@ -460,8 +460,9 @@ func validate(log_it: bool = true) -> Array:
 			overfull += 1
 	var employed: int = sim.citizens.employed_total()
 	var pop: int = sim.citizens.population()
+	var goal: int = int(sim.population_target) if int(sim.population_target) > 0 else int(c.bevoelkerung)   # Kuestenort: nach Wohnraum
 	var checks: Array = [
-		{"pruefung": "Bewohner", "wert": pop, "ziel": int(c.bevoelkerung), "ok": absi(pop - int(c.bevoelkerung)) <= maxi(20, int(c.bevoelkerung) / 20)},
+		{"pruefung": "Bewohner", "wert": pop, "ziel": goal, "ok": absi(pop - goal) <= maxi(20, goal / 20)},
 		{"pruefung": "mit Wohnsitz", "wert": snappedf(float(housed) / maxf(1.0, n), 0.001), "ziel": 1.0, "ok": housed == n},
 		{"pruefung": "Beschäftigungsquote", "wert": snappedf(float(employed) / maxf(1.0, pop), 0.001), "ziel": float(c.beschaeftigungsquote),
 			"ok": absf(float(employed) / maxf(1.0, pop) - float(c.beschaeftigungsquote)) <= 0.03},

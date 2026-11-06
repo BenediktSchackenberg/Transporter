@@ -104,6 +104,8 @@ func _is_free(p: Vector2i) -> bool:
 	var i := city.idx(p)
 	if city.building_at[i] != -1 or _cell[i] != 0:
 		return false
+	if city.height.size() > 0 and city.height[i] > 0:
+		return false   # Berggebiet: kein Bauland (Auftrag 15)
 	return city.ground[i] in [G.GRASS, G.CONCRETE, G.GRAVEL, G.PLAZA, G.FIELD, G.CROP, G.PARKING, G.PARK]
 
 
