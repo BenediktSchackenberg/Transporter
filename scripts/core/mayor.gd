@@ -81,6 +81,13 @@ var notes: Array = []                  # Gedaechtnis des Amtes
 var commitments := 0.0                 # aus der Stadtkasse reservierte Mittel
 var elections: Array = []              # {day, approval, result, mayor}
 var pop_history: Array = []
+var growth_history: Array = []          # je Monat {monat, wohnhaeuser, geschaefte, steuern} (Ziele des Buergermeisters)
+
+## Ziele: zufriedene Buerger, Zuwachs an Wohnhaeusern und Geschaeften, Steuern. Dafuer eine ausgewogene Flaechenaufteilung (Richtwerte
+## als Anteil der bebaubaren Flaeche; Abweichungen zeigen, wo umgewidmet werden sollte).
+const HOME_TYPES := ["house", "semi", "villa", "apartment", "highrise"]
+const SHOP_TYPES := ["shop", "pharmacy", "restaurant", "office", "bank", "gas_station"]
+const ZONE_TARGET := {"wohnen": 0.45, "mischgebiet": 0.2, "gewerbe": 0.2, "industrie": 0.15}
 var marketing_boost := 0.0             # zusaetzlicher Zuzug durch Stadtmarketing (Anteil)
 var marketing_until := -1              # bis einschliesslich Monat
 var _next_plan := 1
@@ -192,6 +199,8 @@ func indicators() -> Dictionary:
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),
 		"rathaus": sim.town_hall.summary(),
 		"pruefungen": sim.inspections.summary(),
+		"ziele": goals(),
+		"flaechenplanung": zoning(),
 		"strassen": sim.road_care.summary(),
 		"hof_bauantraege": sim.estate.open_permits(),
 		"bevoelkerungsmodell": sim.population.summary(),
@@ -248,7 +257,7 @@ func stadtlager_indicators() -> Dictionary:
 func quarter_candidates(limit: int) -> Array:
 	var groups := {}
 	for p in sim.parcels.items.values():
-		if p.owner != Parcels.CITY or p.state not in ["frei", "zur_entwicklung"] or not sim.parcels.is_buildable(p) or p.zone not in ["wohnen", "mischgebiet", "gewerbe"]:
+		if p.owner != Parcels.CITY or p.state not in ["frei", "zur_entwicklung"] or not sim.parcels.is_buildable(p) or p.zone not in ["wohnen", "mischgebiet", "gewerbe", "industrie"]:
 			continue
 		if sim.parcels.utility_level(p) == "keine":
 			continue
@@ -281,6 +290,105 @@ func quarter_candidates(limit: int) -> Array:
 	return out.slice(0, limit)
 
 
+# ------------------------------------------------------------------ Ziele und Flaechenplanung
+func _counts() -> Array:
+	var homes := 0
+	var shops := 0
+	for b in sim.city.buildings:
+		if b.type in HOME_TYPES:
+			homes += 1
+		elif b.type in SHOP_TYPES:
+			shops += 1
+	return [homes, shops]
+
+
+func _taxes() -> float:
+	var P: PublicSector = sim.public_sector
+	return P.tax_total + P.corporate_total + P.vat_total + P.property_tax_total
+
+
+## Zielerreichung: Zufriedenheit, Bestand und Zuwachs an Wohnhaeusern und Geschaeften, Steuern (gesamt und im letzten Monat).
+func goals() -> Dictionary:
+	var c := _counts()
+	var last: Dictionary = growth_history[-1] if not growth_history.is_empty() else {"wohnhaeuser": c[0], "geschaefte": c[1], "steuern": 0.0}
+	var prev: Dictionary = growth_history[-2] if growth_history.size() >= 2 else last
+	return {"zufriedenheit": snappedf(sim.contentment.mean, 0.1), "wohnhaeuser": c[0], "geschaefte": c[1],
+		"zuwachs_wohnhaeuser_seit_monatsbeginn": c[0] - int(last.wohnhaeuser), "zuwachs_geschaefte_seit_monatsbeginn": c[1] - int(last.geschaefte),
+		"zuwachs_wohnhaeuser_letzter_monat": int(last.wohnhaeuser) - int(prev.wohnhaeuser), "zuwachs_geschaefte_letzter_monat": int(last.geschaefte) - int(prev.geschaefte),
+		"steuern_gesamt": snappedf(_taxes(), 1.0), "steuern_letzter_monat": snappedf(float(last.steuern) - float(prev.steuern), 1.0)}
+
+
+## Flaechenbilanz je Zone (alle bebaubaren Grundstuecke) mit Richtwert und Abweichung, dazu Umwidmungsvorschlaege fuer die Zonen mit dem
+## groessten Fehlbestand: Gruppen freier staedtischer Wohngrundstuecke in passender Lage (Mischgebiet nahe dem Zentrum, Industrie weit weg).
+func zoning() -> Dictionary:
+	var area := {}
+	var free := {}
+	var total := 0
+	for p in sim.parcels.items.values():
+		if not sim.parcels.is_buildable(p) or not ZONE_TARGET.has(p.zone):
+			continue
+		area[p.zone] = int(area.get(p.zone, 0)) + int(p.area)
+		total += int(p.area)
+		if p.state == "frei" and p.owner == Parcels.CITY:
+			free[p.zone] = int(free.get(p.zone, 0)) + int(p.area)
+	var zones := {}
+	var short: Array = []
+	for z in ZONE_TARGET:
+		var share := float(area.get(z, 0)) / maxf(1.0, float(total))
+		zones[z] = {"flaeche": int(area.get(z, 0)), "frei_staedtisch": int(free.get(z, 0)), "anteil": snappedf(share, 0.01), "richtwert": ZONE_TARGET[z],
+			"abweichung": snappedf(share - float(ZONE_TARGET[z]), 0.01)}
+		if z != "wohnen" and share < float(ZONE_TARGET[z]) - 0.05:
+			short.append(z)
+	short.sort_custom(func(a, b): return float(zones[a].abweichung) < float(zones[b].abweichung))
+	var props: Array = []
+	var used := {}
+	for z in short:
+		var c := _rezone_cluster(z, used)
+		if not c.is_empty():
+			props.append(c)
+	return {"zonen": zones, "fehlende_zonen": short, "umwidmung_vorschlaege": props,
+		"hinweis": "Umwidmen mit designate_quarter (zone = Zielzone, parcel_ids aus dem Vorschlag); danach offer_parcels und plan_infrastructure."}
+
+
+func _center() -> Vector2:
+	if sim.town_hall.building >= 0:
+		var b: Dictionary = sim.city.building(sim.town_hall.building)
+		return Vector2(float(b.x), float(b.y))
+	return Vector2(sim.city.size * 0.5, sim.city.size * 0.5)
+
+
+func _rezone_cluster(zone: String, used: Dictionary) -> Dictionary:
+	var groups := {}
+	for p in sim.parcels.items.values():
+		if p.owner != Parcels.CITY or p.state != "frei" or p.zone != "wohnen" or not sim.parcels.is_buildable(p) or used.has(p.id):
+			continue
+		var key := Vector2i(int(p.rect[0]) / 24, int(p.rect[1]) / 24)
+		if not groups.has(key):
+			groups[key] = []
+		groups[key].append(p)
+	var ctr := _center()
+	var best := {}
+	var best_score := INF
+	for key in groups:
+		var list: Array = groups[key]
+		if list.size() < 4:
+			continue
+		var dist := Vector2(key.x * 24 + 12, key.y * 24 + 12).distance_to(ctr)
+		var full := list.filter(func(p): return sim.parcels.utility_level(p) != "keine").size()
+		# Mischgebiet (Geschaefte) nahe den Wohnungen, Gewerbe in mittlerer Lage, Industrie mit Abstand; erschlossene Flaechen zuerst
+		var want: float = {"mischgebiet": 20.0, "gewerbe": 60.0, "industrie": 120.0}.get(zone, 60.0)
+		var score := absf(dist - want) - 6.0 * full
+		if score < best_score:
+			best_score = score
+			list.sort_custom(func(a, b): return a.area > b.area)
+			var chosen: Array = list.slice(0, MAX_CLUSTER)
+			best = {"zone": zone, "grundstuecke": chosen.map(func(p): return p.id), "flaeche": chosen.reduce(func(s, p): return s + int(p.area), 0),
+				"entfernung_rathaus": int(dist), "davon_erschlossen": full}
+	for id in best.get("grundstuecke", []):
+		used[id] = true
+	return best
+
+
 # ------------------------------------------------------------------ Monatslauf, Wohnungsmarkt, Wahl
 ## Zuzug je Spieltag: neue Haushalte suchen eine Wohnung, Wartende ziehen bei freiem Wohnraum ein (Umzugswagen auf der Karte).
 ## Menge nach Wirtschaftslage (Beschaeftigung) und Lebensqualitaet (mittleres Glueck, 50 = neutral); Grundrate je Monat aus
@@ -308,6 +416,10 @@ func on_month(month: int) -> void:
 	pop_history.append(Z.population())
 	if pop_history.size() > 36:
 		pop_history.pop_front()
+	var c := _counts()
+	growth_history.append({"monat": month, "wohnhaeuser": c[0], "geschaefte": c[1], "steuern": _taxes()})
+	if growth_history.size() > 36:
+		growth_history.pop_front()
 	_update_approval()
 	if month > 0 and month % 12 == 0:
 		hold_election()
@@ -715,7 +827,7 @@ func _today() -> int:
 # ------------------------------------------------------------------ Speichern
 func to_dict() -> Dictionary:
 	return {"name": name, "party": party, "term_start_day": term_start_day, "approval": approval, "stock_units": stock_units, "waiting": waiting, "plans": plans,
-		"projects": projects, "decisions": decisions, "notes": notes, "commitments": commitments, "elections": elections, "pop_history": pop_history,
+		"projects": projects, "decisions": decisions, "notes": notes, "commitments": commitments, "elections": elections, "pop_history": pop_history, "growth_history": growth_history,
 		"next": [_next_plan, _next_project, _next_dec], "marketing": [marketing_boost, marketing_until], "arrival_acc": _arrival_acc}
 
 
@@ -735,6 +847,7 @@ func from_dict(d: Dictionary) -> void:
 	commitments = float(d.get("commitments", 0.0))
 	elections = d.get("elections", [])
 	pop_history = d.get("pop_history", pop_history)
+	growth_history = d.get("growth_history", [])
 	_arrival_acc = float(d.get("arrival_acc", 0.0))
 	var mk: Array = d.get("marketing", [0.0, -1])
 	marketing_boost = float(mk[0])

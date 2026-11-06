@@ -345,7 +345,19 @@ func pending() -> Array:
 	return jobs.values().filter(func(j): return j.status == "antrag").map(func(j): return {"id": j.id, "firma": int(j.company),
 		"name": sim.company(int(j.company)).company_name, "grundstueck": j.parcel, "art": sim.prod.deposit_of(j.parcel).get("art", ""),
 		"beitrag_firma": int(j.beitrag), "anteil_stadt": int(j.stadtanteil), "bruecken": j.spans.size(), "felder": j.cells.size(),
-		"ersparnis_felder": int(j.ersparnis), "tage": int(j.tage), "eingereicht_tag": int(j.day), "begruendung": str(j.reason)})
+		"ersparnis_felder": int(j.ersparnis), "tage": int(j.tage), "eingereicht_tag": int(j.day), "begruendung": str(j.reason),
+		"brueckenarten_moeglich": _variants(j)})
+
+
+## Brueckenarten, die alle Bruecken eines Antrags schaffen (Spannweite, Last), mit Kosten fuer die Stadt.
+func _variants(j: Dictionary) -> Dictionary:
+	if j.spans.is_empty():
+		return {}
+	var out := {}
+	for v in Bridges.ORDER:
+		if j.spans.all(func(sp): return Bridges.valid_variant(v, sp.cells.size(), int(j.get("need_t", Bridges.LOAD_MINE)))):
+			out[v] = int(j.spans.reduce(func(s, sp): return s + Bridges.cost_of(v, sp.cells.size()), 0.0))
+	return out
 
 
 ## Bauordnung: Indizes von der Strasse her (letzte Zelle zuerst); Wasserfelder schliesst die Bruecke.

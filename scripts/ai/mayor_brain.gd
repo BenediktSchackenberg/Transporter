@@ -222,6 +222,14 @@ static func decide(ind: Dictionary) -> Dictionary:
 		var c: Dictionary = ind.entwicklungsvorschlaege[0]
 		actions.append({"action": "designate_quarter", "name": "Quartier %d (%s)" % [plans.size() + 1, str(c.zone).capitalize()], "parcel_ids": c.grundstuecke, "zone": c.zone,
 			"reason": "%d wohnungssuchende Haushalte, Leerstand %.1f %%, Mietindex %.0f; nächstgelegener Vorschlag mit %d erschlossenen Grundstücken." % [waiting, float(housing.leerstand) * 100.0, float(housing.mietindex), int(c.davon_voll_erschlossen)]})
+	# 5b) Flaechenplanung: fehlt eine Zone deutlich (Richtwert -5 Punkte), den Umwidmungsvorschlag ausweisen (hoechstens ein offenes Quartier)
+	var fp: Dictionary = ind.get("flaechenplanung", {})
+	if open_plans == 0 and actions.size() < MAX_ACTIONS and not fp.is_empty() and not fp.umwidmung_vorschlaege.is_empty() and plans.size() < 12 			and not actions.any(func(x): return x.action == "designate_quarter"):
+		var rz: Dictionary = fp.umwidmung_vorschlaege[0]
+		var zi: Dictionary = fp.zonen[rz.zone]
+		actions.append({"action": "designate_quarter", "name": "%s %d" % [Parcels.ZONES[rz.zone].label, plans.size() + 1], "parcel_ids": rz.grundstuecke, "zone": rz.zone,
+			"reason": "%s nur %.0f %% der Fläche (Richtwert %.0f %%): mehr Geschäfte, Arbeitsplätze und Steuern; Lage %d Felder vom Rathaus." % [Parcels.ZONES[rz.zone].label,
+				float(zi.anteil) * 100.0, float(zi.richtwert) * 100.0, int(rz.entfernung_rathaus)]})
 	# 6) Erschliessung planen fuer beschlossene Quartiere ohne Projekt
 	for pl in plans:
 		if actions.size() >= MAX_ACTIONS:
