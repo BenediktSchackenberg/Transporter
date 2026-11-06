@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Branchen der Unternehmer (Auftrag 14, docs/ENTREPRENEURS.md). Alle Mengen, Zeiten, Preise und Leistungen sind kalibrierbare Spielparameter. Neue Branchen kommen mit ihren Lieferketten hinzu (Etappen 2-5); eine Branche erscheint hier erst, wenn sie im Spiel funktioniert.",
+  "_hinweis": "Branchen der Unternehmer (Auftrag 14, docs/ENTREPRENEURS.md). Alle Mengen, Zeiten, Preise und Leistungen sind kalibrierbare Spielparameter. Neue Branchen kommen mit ihren Lieferketten hinzu (Etappen 2-5); eine Branche erscheint hier erst, wenn sie im Spiel funktioniert. standort: hauptsitz | markt (freie Parzelle nahe dem Lebensmittelgroßhandel, gepachtet oder gekauft) | parzelle (Feld); gebaeude = Kartenbild des neuen Betriebsgebäudes.",
   "transport": {
     "label": "Transportbetrieb",
     "beschreibung": "Fahrzeuge, Fahrer, Treibstoff und Wartung; vergütete Transporte für beliebige Branchen.",
@@ -37,12 +37,13 @@
         "ernte": 2
       },
       "ohne_pflege": 0.5
-    }
+    },
+    "gebaeude": "farm"
   },
   "muehle": {
     "label": "Mühle",
     "beschreibung": "Mahlt angeliefertes Getreide zu Mehl für Bäckereien.",
-    "standort": "hauptsitz",
+    "standort": "markt",
     "gruendungskosten": 0,
     "ausstattung": 30000,
     "abschreibung_tag": 0.002,
@@ -61,12 +62,13 @@
       "chargen_je_person_tag": 8,
       "lager_tage": 6,
       "lager_max": 400
-    }
+    },
+    "gebaeude": "factory"
   },
   "baeckerei": {
     "label": "Bäckerei",
     "beschreibung": "Backt aus Mehl und Backzutaten Brot und Brötchen; verkauft an den Lebensmittelgroßhandel, der die Läden beliefert.",
-    "standort": "hauptsitz",
+    "standort": "markt",
     "gruendungskosten": 0,
     "ausstattung": 18000,
     "abschreibung_tag": 0.002,
@@ -84,8 +86,9 @@
         "brot": 40
       },
       "chargen_je_person_tag": 8,
-      "lager_tage": 4,
-      "lager_max": 1200
-    }
+      "lager_tage": 10,
+      "lager_max": 800
+    },
+    "gebaeude": "workshop"
   }
 }

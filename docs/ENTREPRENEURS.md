@@ -519,7 +519,7 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 | Etappe | Inhalt | Stand |
 |---|---|---|
 | 1 | Unternehmer und Betriebskern, Kostenstellen, Startprofil, Migration, Grundversorgung, KI-Aktionen, Betriebsübersicht | umgesetzt (05.11.2026), Prüfbericht unten |
-| 2 | Getreide-Mehl-Brot-Kette | offen |
+| 2 | Getreide-Mehl-Brot-Kette | umgesetzt (06.11.2026), Prüfbericht unten; wirtschaftlich noch nicht tragfähig |
 | 3 | Fleisch, Kühlung, Gastronomie, Bau, Immobilien | offen |
 | 4 | Gelände, Bergbau, Stahl, Kraftwerk und Netz | offen |
 | 5 | IT, weitere Verarbeiter, Dominanz, Langzeitbalance | offen |
@@ -548,3 +548,24 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 - Test `test_contract_feasibility`; drei Tests, die beliebige Marktaufträge annehmen, setzen dafür jetzt eine großzügige Frist. `tests/probe_bottlenecks.gd` zeigt Einzelheiten der gescheiterten Aufträge und den Ausgang der Fremdvergaben.
 
 **Messung 40 Spieltage, vier Regel-KIs (vorher → nachher):** Spedition gescheitert 31 → 1, Gewinn −6 100 … −24 900 → −2 500 … −13 000; Unternehmer gescheitert 22 → 2, Gewinn −9 800 … −18 300 → −2 800 … −6 700. Die Firmen bleiben im Verlust, weil Löhne und Treibstoff den Transportumsatz allein noch übersteigen – das soll Etappe 2 (weitere Branchen) ändern.
+
+### Etappe 2 – Prüfbericht (06.11.2026, Branch `unternehmer`)
+
+**Umgesetzt (Dateien):**
+- `scripts/economy/production.gd` (`sim.prod`): Feld (Pacht oder Kauf einer freien Parzelle mit Straßenzugang, Hofgebäude auf der Karte, Phasen Brache → Vorbereitung → Aussaat mit Saatgutverbrauch → Wachstum nach Wetter und Pflege → Ernte; Getreide liegt am Feld), Rezepte für Mühle (1 dt Getreide → 3 Sack Mehl) und Bäckerei (1 Sack Mehl + 1 Paket Backzutaten → 40 Brote), Chargen je Person und Tag, Strom- und Personalprüfung, Lagergrenzen, Verderb verderblicher Ware am Standort, Abschreibung der Ausstattung und Pacht je Betrieb (Kostenstelle).
+- Lieferverträge `D<n>`: Käufer bestellt beim günstigsten Anbieter (Preis + Marktfracht je Stück; eigene Ware anderer Standorte ohne Warenpreis; Import über das Lager des Lebensmittelgroßhandels). Ware wird beim Verkäufer reserviert, ein echter Transportauftrag ausgeschrieben (Zahler = Käufer, Frist wie auf dem Markt), bei Anlieferung wechselt das Eigentum und der Käufer zahlt. Eigene Fracht mit eigenem Fahrzeug erzeugt keinen Umsatz. Ohne Transporteur fährt nach einem Tag der Lieferdienst (S0, 70 % der Fracht).
+- Standortwahl (`standort`: hauptsitz | markt | G<n>): Mühle und Bäckerei stehen standardmäßig auf einer erschlossenen Parzelle nahe dem Großhandel (die Hauptsitze liegen am Kartenrand, bis zu 613 Felder vom Großhandel entfernt).
+- Einzelhandel: Läden kaufen Brot direkt bei lokalen Bäckereien, wenn das frei Laden günstiger ist als über den Großhandel; der Großhandel kauft lokal, wenn es günstiger ist als der Import, der Rest ist ausgewiesener Import („Brotfabrik außerhalb“). Kein zweiter Erzeugungsweg für dieselbe Ware.
+- Daten: `config/articles.json` (Saatgut, Getreide, Mehl, Backzutaten, Brot), Branchen `feld`, `muehle`, `baeckerei` in `config/branches.json`.
+- KI: Beobachtung mit Betriebsdetails (Phase/Chargen, Bestände, Unterwegs, Preise, Absatz, Alter) und Kettenlage (`produktion_markt`); Aktionen `found_business` (standort, modus) und `set_business_price`; Regel-KI gründet die fehlende Kettenstufe, besetzt Personal (freier Mitarbeiter oder Anwerbung), passt Preise an (alle 3 Tage, 75–150 % des Basispreises), schließt nach 25 Tagen ohne Absatz bei mehr als 4 000 EUR Verlust; danach 30 Tage Sperrfrist für dieselbe Branche.
+- Betriebsansicht zeigt Feldphase, Chargen, Absatz, Bestände, Unterwegs und Preise. Produktionsbetriebe werden nie Standard-Kostenstelle (Transporterlöse bleiben beim Transportbetrieb).
+
+**Prüfungen (tatsächlich ausgeführt):** `test_grain_chain` (28 Prüfungen: Feld nur nach Aussaat und Wachstum erntbar; Mühle von B kauft das Getreide von A, C transportiert, Besitz/Kaufpreis/Fracht stimmen; Bäckerei backt aus Zutaten; der Handel kauft und bezahlt; Stromausfall und fehlendes Mehl stoppen mit Grund ohne Ersatzware; integrierte Bäckerei ohne internen Umsatz; Betriebsansicht; Speichern/Laden mitten in der Kette; Geld- und Warenbilanz), `test_rule_brain_production` (11), dazu Regressionen (Einzelhandel, Versorgung, Geldkonservierung, Betriebe, Strom, Startprofil, Speichern, Wirtschaftskreislauf, Insolvenz, Prompt). Volltest aller Tests nicht ausgeführt.
+
+**Messung `tests/probe_bottlenecks.gd`, vier Regel-KIs, Startprofil Spedition, 60 Spieltage:** Die Kette entsteht von selbst (zwei Bäckereien, eine Mühle, zwei Felder mit je zwei Ernten à 60–69 dt). Lieferverträge laufen fast vollständig über den Lieferdienst: Die Höfe der Firmen liegen am Kartenrand, für kurze Stadtlieferungen frisst die Anfahrt die Marge (gilt ebenso für die Ladenbelieferung: 0 von 124 Aufträgen gefahren). Die Bäckereien verkaufen wenig, weil Brot ein billiges Massengut ist (Import 0,90 EUR frei Großhandel) und kleine Lose bei Marktfracht teuer sind. Alle Produktionsbetriebe schließen nach etwa 25 Tagen mit 4 000–8 600 EUR Verlust (`tests/probe_bread.gd` misst Abstände und Stückkosten frei Laden).
+
+**Grenzen / offen:**
+- Wirtschaftlich trägt die Kette in dieser Kalibrierung nicht (Abnahmeszenario 15 ist für Produktion nicht erfüllt). Wirksamster nächster Schritt: Bäckerei mit eigenem Laden (Direktverkauf an Haushalte zum Ladenpreis über die vorhandene Kundschaft des Einzelhandels) statt Großhandelspreis.
+- Keine eigenen Fachrollen (Landarbeit, Müller, Bäcker): jeder Mitarbeiter zählt als Arbeitskraft; Wachstumsstufen des Feldes sind auf der Karte noch nicht sichtbar (Hofgebäude „farm“).
+- Kühlung/Verderb nur als Tagesanteil am Produktionsstandort (Kühlkette kommt mit Etappe 3).
+- Das Token-Budget im Test `test_prompt_builds` wurde von 5 500 auf 5 700 angehoben (Betriebe, Branchen, Kettenlage; Messung `tests/probe_obs_size.gd`).

@@ -108,6 +108,30 @@ func _initialize() -> void:
 		var key := "%s/%s" % [str(r.status), rk.status if rk else "entfernt"]
 		fv[key] = int(fv.get(key, 0)) + 1
 	print("Fremdvergaben (Anfrage/Auftrag): ", fv)
+	print("== Betriebe")
+	for c in s.companies:
+		for b in s.biz.summary_of(c.id):
+			print("  %s %s %-10s %-10s Personal %d Umsatz %d Ergebnis %d %s %s" % [c.company_name, b.id, b.branche, b.status, b.personal, b.umsatz, b.ergebnis, b.blockaden, s.prod.detail(s.biz.get_b(b.id))])
+	var ds := {}
+	var carriers := {}
+	for d in s.prod.deals.values():
+		ds[d.item + "/" + d.status] = int(ds.get(d.item + "/" + d.status, 0)) + 1
+	for k in s.contracts.values():
+		if k.order_ref.begins_with("deal:") and k.status == "delivered":
+			carriers[str(k.owner)] = int(carriers.get(str(k.owner), 0)) + 1
+	print("Lieferverträge: ", ds, " | gefahren von Firma: ", carriers, " | Lieferdienst: ", s.prod.stats.fallback)
+	var seen := {"deal": [0, 0, 0], "shop": [0, 0, 0]}   # [Auftraege, von einer Firma gekannt, von einer Firma gefahren]
+	for k in s.contracts.values():
+		var kind := "deal" if k.order_ref.begins_with("deal:") else ("shop" if k.order_ref.begins_with("shop:") else "")
+		if kind == "":
+			continue
+		seen[kind][0] += 1
+		if s.companies.any(func(c): return c.known.has(k.id)):
+			seen[kind][1] += 1
+		if k.owner >= 0:
+			seen[kind][2] += 1
+	print("Lieferaufträge [gesamt, gekannt, gefahren]: ", seen, " Einzelhandel-Lieferdienst: ", s.retail.stats.fallback)
+	print("Produktion: ", s.prod.stats.produced, " Importe: ", s.prod.stats.imported, " Brot-Import Großhandel: ", s.retail.stats.get("bread_import", 0), " verdorben: ", s.prod.stats.spoiled)
 	for k in s.contracts.values().filter(func(x): return x.owner >= 0 and x.status == "failed").slice(0, 8):
 		print("  gescheitert %s: Frist %d min nach Annahme, Strecke %d, Menge %d, abgeholt %d, geliefert %d, Fz %d, Annahme Tag %d" % [k.id, int(k.deadline - k.accepted_at), k.distance, k.qty, k.picked, k.delivered_qty, k.vehicle_id, GameCalendar.day_of(k.accepted_at)])
 	for v in s.vehicles.values().slice(0, 6):

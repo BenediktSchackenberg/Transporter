@@ -89,8 +89,8 @@ const SCHEMA := {
 		"desc": "Wie propose_cooperation."},
 	"poach_customer": {"params": {"customer_id": "int"}, "desc": "Stammkunden eines Konkurrenten abwerben (legal, 800 EUR)."},
 	"report_rival": {"params": {"target": "int", "reason": "string?"}, "desc": "Konkurrenten beim Bürgermeister anzeigen: das Amt prüft sofort (Steuer, Zahlungsrückstand, Zustand der Einrichtungen). Ohne Beanstandung zahlst DU Bußgeld und verlierst Ruf."},
-	"found_business": {"params": {"branche": "string", "reason": "string?", "grundstueck": "string?", "modus": "string?"},
-		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). Standort ist der Hauptsitz; Feld (Ackerbau): freies Grundstück G<n> (ohne Angabe das günstigste passende), modus pachten|kaufen. Gründungskosten (inkl. Ausstattung) und Strombedarf siehe Branche. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
+	"found_business": {"params": {"branche": "string", "reason": "string?", "standort": "string?", "modus": "string?"},
+		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). standort: hauptsitz | markt (freie Parzelle nahe dem Großhandel, kurze Lieferwege) | G<n>; Feld: ohne Angabe das günstigste passende Grundstück. modus pachten|kaufen (Grundstück). kosten (Gründung inkl. Ausstattung) und kw (Strombedarf) siehe Liste. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
 	"set_business_price": {"params": {"business_id": "string", "item": "string", "price": "number"},
 		"desc": "Verkaufspreis eines eigenen Produktionsbetriebs je Einheit setzen (Getreide, Mehl, Brot). Käufer wählen den günstigsten Anbieter inkl. Fracht; der Großhandel kauft Brot nur unter dem Importpreis."},
 	"close_business": {"params": {"business_id": "string", "reason": "string?"},
@@ -724,7 +724,7 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 		"block_road":
 			return sim.rivalry.block_road(cid, _i(a.target))
 		"found_business":
-			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")), {"grundstueck": _s(a.get("grundstueck", "")), "modus": _s(a.get("modus", "pachten"))})
+			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")), {"standort": _s(a.get("standort", a.get("grundstueck", ""))), "modus": _s(a.get("modus", "pachten"))})
 		"set_business_price":
 			return sim.prod.set_price(cid, _s(a.business_id), _s(a.item), float(a.price))
 		"close_business":

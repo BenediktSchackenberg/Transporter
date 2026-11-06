@@ -793,6 +793,23 @@ static func businesses(sim: Simulation) -> String:
 			for bl in r.blockaden:
 				txt += "    [color=#e0a040]Blockade: %s[/color]
 " % bl
+			var pd: Dictionary = sim.prod.detail(sim.biz.get_b(r.id))   # Produktion (Etappe 2): Phase/Chargen, Bestand, Unterwegs, Preise
+			if pd.has("phase"):
+				txt += "    Feld %s: Phase %s (Tag %d) · %d Felder · Ernten %d, zuletzt %d dt
+" % [str(pd.get("grundstueck", "")), pd.phase, int(pd.tag_in_phase), int(pd.flaeche), int(pd.ernten), int(pd.letzte_ernte_dt)]
+			elif pd.has("chargen_heute"):
+				txt += "    Produktion heute %d Chargen (gesamt %d) · Absatz ~%d/Tag
+" % [int(pd.chargen_heute), int(pd.chargen_gesamt), int(pd.get("absatz_tag", 0))]
+			if pd.has("bestand"):
+				var parts: Array = []
+				for it in pd.bestand:
+					parts.append("%s %d" % [Production.item_name(it), int(pd.bestand[it])])
+				for it in pd.get("unterwegs", {}):
+					parts.append("%s %d unterwegs" % [Production.item_name(it), int(pd.unterwegs[it])])
+				for it in pd.get("preise", {}):
+					parts.append("Preis %s %s" % [Production.item_name(it), Catalog.money(float(pd.preise[it]))])
+				txt += "    %s
+" % " · ".join(parts)
 			if not r.letzte_entscheidung.is_empty():
 				txt += "    Zuletzt (%s): %s
 " % [r.letzte_entscheidung.source, r.letzte_entscheidung.text]

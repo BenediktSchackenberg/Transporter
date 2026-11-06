@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -699,7 +699,7 @@ func test_prompt_builds() -> void:
 	var up := ctl.user_prompt(ObservationBuilder.build(s, 0, [], 0.0, 10.0))
 	ok(sp.contains("willst diese Partie gewinnen") and sp.contains("attempt_vehicle_sabotage"), "Systemprompt vollständig gebaut")
 	ok(not sp.contains("%s") and not sp.contains("%d"), "keine offenen Platzhalter")
-	ok(up.length() / 4 < 5500, "Beobachtung kompakt (~%d Token)" % (up.length() / 4))
+	ok(up.length() / 4 < 5700, "Beobachtung kompakt (~%d Token)" % (up.length() / 4))   # +200 fuer Betriebe/Branchen/Brotkette (Auftrag 14, Etappe 2; Messung tests/probe_obs_size.gd)
 	ctl.free()
 
 
@@ -6443,10 +6443,11 @@ func test_grain_chain() -> void:
 	ok(phases.has("wachstum") and int(fb.field.cycles) == 1 and grain > 0, "erst nach Aussaat und Wachstum gibt es Ernte (%d dt, Phasen %s)" % [grain, phases.keys()])
 	ok(P.stats.consumed.get("saatgut", 0) > 0, "Aussaat hat Saatgut verbraucht")
 	# 2) Muehle von B kauft das Getreide (lokal guenstiger als Import); C transportiert und wird von B bezahlt
-	var mr: Dictionary = s.executor.execute(1, {"action": "found_business", "branche": "muehle"})
+	var mr: Dictionary = s.executor.execute(1, {"action": "found_business", "branche": "muehle", "standort": "hauptsitz"})
 	ok(mr.ok, "Mühle gegründet (%s)" % mr.msg)
 	var mb: Dictionary = s.biz.get_b(str(mr.ref))
 	s.biz.assign(1, s.personnel.employed(1).back().id, mb.id)
+	ok(s.executor.execute(0, {"action": "set_business_price", "business_id": fb.id, "item": "getreide", "price": 2.0}).ok, "A senkt den Getreidepreis (Feld weit entfernt, Import sonst günstiger)")
 	var c0_income := float(s.companies[0].ledger.totals.get("trade_income", 0.0))
 	next_day(s)
 	var gd: Array = P.deals.values().filter(func(d): return d.item == "getreide" and d.buyer == "C1")
@@ -6461,7 +6462,7 @@ func test_grain_chain() -> void:
 		var c1_exp := float(s.companies[1].ledger.totals.get("trade_expense", 0.0))
 		s.deliver_contract(v, k)
 		ok(d.status == "geliefert" and s.stock.qty("getreide", "C1", int(mb.site)) == int(d.qty), "Getreide liegt nach Anlieferung bei der Mühle (Eigentum B)")
-		ok(is_equal_approx(float(s.companies[0].ledger.totals.trade_income) - c0_income, float(d.qty) * float(d.unit)), "A erhält den Kaufpreis")
+		ok(is_equal_approx(float(s.companies[0].ledger.totals.get("trade_income", 0.0)) - c0_income, float(d.qty) * float(d.unit)), "A erhält den Kaufpreis")
 		ok(float(s.companies[3].ledger.totals.transport) - c3_before > 0.0 and is_equal_approx(c1_exp - float(s.companies[1].ledger.totals.trade_expense), float(d.qty) * float(d.unit) + k.paid), "C erhält die Fracht, B zahlt Ware und Fracht")
 	next_day(s)
 	ok(s.stock.qty("mehl", "C1", int(mb.site)) > 0 or mb.blockers.any(func(x): return x.key == "strom"), "Mühle mahlt Mehl (oder zeigt Stromblockade)")
@@ -6469,6 +6470,7 @@ func test_grain_chain() -> void:
 	var br: Dictionary = s.executor.execute(2, {"action": "found_business", "branche": "baeckerei"})
 	ok(br.ok, "Bäckerei gegründet (%s)" % br.msg)
 	var bb: Dictionary = s.biz.get_b(str(br.ref))
+	ok(bb.has("parcel") and s.city.building(int(bb.site)).type == "workshop", "Bäckerei steht standardmäßig auf einer Parzelle nahe dem Großhandel")
 	s.biz.assign(2, s.personnel.employed(2).back().id, bb.id)
 	s.grid.capacity = 100000.0
 	for i in 7:   # Ausschreibung, Neuausschreibung, dann Lieferdienst
@@ -6477,13 +6479,13 @@ func test_grain_chain() -> void:
 	var bread := s.stock.qty("brot", "C2", int(bb.site))
 	ok(int(bb.get("total", 0)) > 0 and bread > 0, "Bäckerei backt Brot aus Zutaten (%d Stk)" % bread)
 	var c2_income := float(s.companies[2].ledger.totals.get("trade_income", 0.0))
-	var wl := s.retail.wholesale_building
-	var landed := float(Retail.GOODS.brot.cost) + P.freight(s.city_depot.port, wl, "brot", bread) / float(bread)
-	var got := P.wholesale_order("brot", bread, wl, landed)
-	ok(got > 0, "Großhandel bestellt lokales Brot (%d)" % got)
+	for i in 2:
+		next_day(s)
+	var buyers: Array = P.deals.values().filter(func(d): return d.item == "brot" and d.seller == "C2").map(func(d): return d.buyer)
+	ok(not buyers.is_empty() and buyers.all(func(x): return x == "W0" or s.retail.shops.has(x)), "der Handel kauft das Brot von sich aus, wenn es inkl. Fracht günstiger ist (Läden direkt oder Großhandel: %s)" % [buyers])
 	for i in 6:
 		next_day(s)
-	ok(float(s.companies[2].ledger.totals.get("trade_income", 0.0)) > c2_income, "Großhandel bezahlt die Bäckerei")
+	ok(float(s.companies[2].ledger.totals.get("trade_income", 0.0)) > c2_income, "der Handel bezahlt die Bäckerei")
 	ok(s.stock.lots.values().any(func(l): return l.item == "brot" and str(l.source).begins_with("Produktion") and l.owner != "C2"), "lokales Brot ist im Handel angekommen")
 	# 4) Stromausfall und fehlende Zutat stoppen die Produktion mit Grund, ohne Ersatzware
 	s.grid.capacity = 0.0
@@ -6499,7 +6501,7 @@ func test_grain_chain() -> void:
 	next_day(s)
 	ok(bb.blockers.any(func(x): return x.text.begins_with("Wartet auf Mehl")) and s.stock.qty("mehl", "C2", int(bb.site)) == 0, "fehlendes Mehl: 'Wartet auf Mehl', keine Ersatzware")
 	# 5) Interne Kette: B backt am eigenen Standort mit eigenem Mehl - kein Liefervertrag an sich selbst, kein Umsatz
-	var b2: Dictionary = s.executor.execute(1, {"action": "found_business", "branche": "baeckerei"})
+	var b2: Dictionary = s.executor.execute(1, {"action": "found_business", "branche": "baeckerei", "standort": "hauptsitz"})
 	s.biz.assign(1, s.personnel.employed(1)[0].id, str(b2.ref))
 	var inc1 := float(s.companies[1].ledger.totals.get("trade_income", 0.0))
 	var paid_before := {}
@@ -6514,6 +6516,41 @@ func test_grain_chain() -> void:
 	ok(not P.deals.values().any(func(d): return d.seller == "C1" and d.buyer == "C1"), "eigenes Mehl am selben Standort ohne Liefervertrag")
 	ok(int(s.biz.get_b(str(b2.ref)).get("total", 0)) > 0 and is_equal_approx(float(s.companies[1].ledger.totals.get("trade_income", 0.0)) - inc1, sold_ext), "integrierte Bäckerei backt; Umsatz nur aus Verkäufen an Dritte")
 	# 6) Speichern und Laden mitten in der Kette
+	var view := LiveText.businesses(s)
+	ok(view.contains("Phase") and view.contains("Chargen") and view.contains("Mehl"), "Betriebsansicht zeigt Feldphase, Produktion und Bestände")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.prod.deals.size() == P.deals.size() and s2.biz.get_b(fb.id).field.phase == fb.field.phase and s2.stock.balance_error() == 0, "nach Laden: Lieferverträge, Feldphase und Warenbilanz gleich")
 	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+func test_rule_brain_production() -> void:
+	var s := new_sim(2)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	ok(obs.produktion_markt.baeckereien == 0 and obs.verfuegbare_branchen.any(func(b): return b.get("branche", "") == "baeckerei"), "Beobachtung zeigt Kettenlage und gründbare Bäckerei")
+	var d: Dictionary = RuleBrain.decide(obs, "wachstum", rng)
+	var f: Array = d.actions.filter(func(a): return a.action == "found_business")
+	ok(not f.is_empty() and f[0].branche == "baeckerei", "Regel-KI gründet die fehlende Stufe Bäckerei")
+	var r: Dictionary = s.executor.execute(0, f[0] if not f.is_empty() else {"action": "wait"})
+	ok(r.ok, "Gründung ausgeführt (%s)" % r.get("msg", ""))
+	obs = ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	var bb: Array = obs.betriebe.filter(func(b): return b.branche == "baeckerei")
+	ok(not bb.is_empty() and bb[0].has("bestand") and int(bb[0].personal_min) == 1, "Betrieb mit Bestand und Personalbedarf in der Beobachtung")
+	d = RuleBrain.decide(obs, "wachstum", rng)
+	var asg: Array = d.actions.filter(func(a): return a.action in ["assign_staff", "recruit_worker"])
+	ok(not asg.is_empty() and (asg[0].action == "recruit_worker" or asg[0].business_id == bb[0].id), "nächste Runde: Personal für die Bäckerei")
+	ok(not d.actions.any(func(a): return a.action == "found_business"), "keine zweite Gründung, solange der Betrieb unbesetzt ist")
+	ok(s.companies[0].ledger.cost_center != bb[0].id, "Produktionsbetrieb wird nicht Standard-Kostenstelle (Transporterlöse bleiben beim Transportbetrieb)")
+	# Rueckzug: lange ohne Absatz und mit Verlust -> schliessen; danach Sperrfrist fuer dieselbe Branche
+	var fake: Dictionary = obs.betriebe.filter(func(b): return b.branche == "baeckerei")[0]
+	fake.personal = 1
+	fake.alter_tage = 30
+	fake.absatz_tag = 0
+	fake.ergebnis = -5000
+	d = RuleBrain.decide(obs, "wachstum", rng)
+	var cl: Array = d.actions.filter(func(a): return a.action == "close_business")
+	ok(not cl.is_empty() and cl[0].business_id == fake.id, "Regel-KI schließt den dauerhaft unrentablen Betrieb")
+	ok(s.executor.execute(0, cl[0] if not cl.is_empty() else {"action": "wait"}).ok, "Schließung ausgeführt")
+	ok(not s.executor.execute(0, {"action": "found_business", "branche": "baeckerei"}).ok and 		not ObservationBuilder.build(s, 0, [], 0.0, 10.0).verfuegbare_branchen.any(func(b): return b.get("branche", "") == "baeckerei"), "Sperrfrist: keine sofortige Neugründung derselben Branche")
+	ok(identity_ok(s), "Geld erhalten")

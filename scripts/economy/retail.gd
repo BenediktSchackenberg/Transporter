@@ -175,16 +175,14 @@ func _stock_wholesale(day: int) -> void:
 			demand += float(s.use.get(item, 0.0))
 		target = maxi(target, int(ceil(demand * float(STOCK_DAYS) * 1.2)))   # genug fuer alle Betriebe, die den Artikel fuehren
 		var local_in: int = sim.prod.incoming(WHOLESALER, item, wholesale_building)   # lokale Ware unterwegs (Auftrag 14, Etappe 2)
+		if not Production.art(item).is_empty() and have + local_in < target:
+			# Lokale Erzeuger liefern taeglich bis zum Zielbestand (frische Ware), wenn sie inklusive Fracht guenstiger sind als der
+			# Import, der direkt im Grosshandelslager ankommt.
+			var room := target - have - local_in
+			local_in += sim.prod.wholesale_order(item, room, wholesale_building, float(GOODS[item].cost))
 		if have + local_in >= target / 2:
 			continue
 		var need := target - have - local_in
-		if not Production.art(item).is_empty():
-			# Vergleich frei Grosshandelslager: Importware traegt die Fracht vom Importterminal, lokale Ware die Fracht vom Erzeuger
-			var landed := float(GOODS[item].cost) + sim.prod.freight(sim.city_depot.port, wholesale_building, item, need) / float(need)
-			var local: int = sim.prod.wholesale_order(item, need, wholesale_building, landed)
-			need -= local
-			if need <= 0:
-				continue
 		var unit_cost: float = GOODS[item].cost
 		var buy := need
 		var refill := 0
@@ -255,7 +253,7 @@ func stock_of(s: Dictionary, item: String) -> int:
 
 
 func incoming(s: Dictionary, item: String) -> int:
-	var n := 0
+	var n: int = sim.prod.incoming(s.id, item, int(s.building))   # direkt bei lokalen Erzeugern bestellt (Auftrag 14)
 	for o in orders.values():
 		if o.shop == s.id and o.item == item and o.status in ["bestellt", "transport", "unterwegs"]:
 			n += int(o.qty)
@@ -407,6 +405,13 @@ func _reorder(s: Dictionary) -> void:
 		if float(have) >= use * float(REORDER_DAYS):
 			continue
 		var qty := int(ceil(use * float(STOCK_DAYS))) - have
+		if not Production.art(item).is_empty() and qty > 0:
+			# Direkt beim lokalen Erzeuger (z. B. Baeckerei in der Naehe), wenn das frei Laden guenstiger ist als ueber den Grosshandel
+			# (beide Wege mit Marktfracht gerechnet).
+			var via_w := float(GOODS[item].cost) * WHOLESALE_MARKUP + sim.prod.freight(wholesale_building, int(s.building), item, qty) / float(qty)
+			qty -= sim.prod.order(s.id, int(s.building), "", item, qty, via_w, false)
+			if qty <= 0:
+				continue
 		var wl := sim.stock.available(item, WHOLESALER, wholesale_building)
 		qty = mini(qty, wl)
 		if qty <= 0:

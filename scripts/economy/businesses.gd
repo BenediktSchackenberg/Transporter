@@ -157,7 +157,11 @@ func found(cid: int, branch: String, reason: String, params: Dictionary = {}) ->
 	if spec.is_empty():
 		return {"ok": false, "msg": "Unbekannte Branche '%s'. Verfügbar: %s" % [branch, ", ".join(branches().keys())]}
 	if spec.has("feld") or spec.has("rezept"):
+		if recently_closed(cid, branch):
+			return {"ok": false, "msg": "Einen Betrieb der Branche %s hast du vor weniger als %d Tagen geschlossen; Neugründung erst danach." % [branch, REFOUND_DAYS]}
 		return sim.prod.found(cid, branch, params, reason)   # Produktionsbetriebe: Standort, Ausstattung, Feld (Etappe 2)
+	if recently_closed(cid, branch):
+		return {"ok": false, "msg": "Einen Betrieb der Branche %s hast du vor weniger als %d Tagen geschlossen; Neugründung erst danach." % [branch, REFOUND_DAYS]}
 	var c = sim.company(cid)
 	if c.depots.is_empty():
 		return {"ok": false, "msg": "Kein Hauptsitz vorhanden."}
@@ -176,6 +180,13 @@ func found(cid: int, branch: String, reason: String, params: Dictionary = {}) ->
 	return {"ok": true, "msg": "%s gegründet (%s)." % [b.name, b.id], "ref": b.id}
 
 
+## Sperrfrist nach einer Schliessung: verhindert Gruenden-Schliessen-Kreislaeufe derselben Branche.
+const REFOUND_DAYS := 30
+func recently_closed(cid: int, branch: String) -> bool:
+	var since: float = sim.game_min - GameCalendar.days_to_min(float(REFOUND_DAYS))
+	return of(cid, true).any(func(b): return b.branch == branch and b.status == "geschlossen" and float(b.since) > since)
+
+
 func close(cid: int, id: String, reason: String) -> Dictionary:
 	var b := get_b(id)
 	if b.is_empty() or int(b.owner) != cid:
@@ -191,7 +202,7 @@ func close(cid: int, id: String, reason: String) -> Dictionary:
 	for w in staff_of(id):
 		w.business = ""
 	set_status(id, "geschlossen", reason if reason != "" else "Geschlossen")
-	if b.has("field") and str(b.field.get("mode", "")) == "pacht":
+	if str(b.get("land_mode", "")) == "pacht":
 		var p: Dictionary = sim.parcels.parcel(str(b.get("parcel", "")))
 		if not p.is_empty():
 			p.owner = Parcels.CITY   # Pacht endet; das Hofgebaeude bleibt stehen
@@ -219,6 +230,10 @@ func obs_of(cid: int) -> Array:
 	var out: Array = []
 	for b in of(cid):
 		var e := {"id": b.id, "branche": b.branch, "status": b.status, "personal": staff_of(b.id).size(), "ergebnis": int(L.cc_profit(b.id))}
+		var spec: Dictionary = branches().get(b.branch, {})
+		if spec.has("feld") or spec.has("rezept"):
+			e["personal_min"] = int(spec.get("personal_min", 1))
+			e.merge(sim.prod.detail(b))
 		if not b.blockers.is_empty():
 			e["blockaden"] = b.blockers.map(func(x): return x.text)
 		out.append(e)
@@ -230,8 +245,9 @@ static func available() -> Array:
 	var out: Array = []
 	for k in branches():
 		var s: Dictionary = branches()[k]
-		out.append({"branche": k, "name": s.get("label", k), "gruendungskosten": float(s.get("gruendungskosten", 0.0)) + float(s.get("ausstattung", 0.0)),
-			"strom_kw": float(s.get("strom_kw", 0.0)), "standort": s.get("standort", "hauptsitz")})
+		out.append({"branche": k, "kosten": int(float(s.get("gruendungskosten", 0.0)) + float(s.get("ausstattung", 0.0))), "kw": int(s.get("strom_kw", 0.0))})
+		if str(s.get("standort", "hauptsitz")) == "parzelle":
+			out.back()["standort"] = "Grundstück"
 	return out
 
 

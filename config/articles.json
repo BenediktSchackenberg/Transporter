@@ -1,8 +1,48 @@
 {
-  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags; importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS).",
-  "saatgut": {"name": "Saatgut", "einheit": "Sack", "ladung": "pakete", "je_ladeeinheit": 20, "haltbar_tage": 0, "basispreis": 18.0, "importpreis": 20.0},
-  "getreide": {"name": "Getreide", "einheit": "dt", "ladung": "pakete", "je_ladeeinheit": 5, "haltbar_tage": 0, "basispreis": 18.0, "importpreis": 26.0},
-  "mehl": {"name": "Mehl", "einheit": "Sack (25 kg)", "ladung": "pakete", "je_ladeeinheit": 20, "haltbar_tage": 0, "basispreis": 11.0, "importpreis": 15.0},
-  "backzutaten": {"name": "Backzutaten (Hefe, Salz)", "einheit": "Paket", "ladung": "pakete", "je_ladeeinheit": 40, "haltbar_tage": 0, "basispreis": 3.0, "importpreis": 3.0},
-  "brot": {"name": "Brot und Brötchen", "einheit": "Stk", "ladung": "pakete", "je_ladeeinheit": 60, "haltbar_tage": 3, "basispreis": 0.8, "importpreis": null}
+  "_hinweis": "Artikel der Produktionsketten (Auftrag 14, Etappe 2). Alle Mengen und Preise sind kalibrierbare Spielparameter, keine realen Betriebsdaten. je_ladeeinheit = Artikelmenge je Ladeeinheit eines Transportauftrags (etwa 1 t bzw. ein Rollwagen); importpreis = Preis frei Importterminal (null = nicht importierbar). Der Artikel 'brot' ist derselbe wie im Einzelhandel (Retail.GOODS).",
+  "saatgut": {
+    "name": "Saatgut",
+    "einheit": "Sack",
+    "ladung": "pakete",
+    "je_ladeeinheit": 40,
+    "haltbar_tage": 0,
+    "basispreis": 18.0,
+    "importpreis": 20.0
+  },
+  "getreide": {
+    "name": "Getreide",
+    "einheit": "dt",
+    "ladung": "pakete",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 18.0,
+    "importpreis": 26.0
+  },
+  "mehl": {
+    "name": "Mehl",
+    "einheit": "Sack (25 kg)",
+    "ladung": "pakete",
+    "je_ladeeinheit": 40,
+    "haltbar_tage": 0,
+    "basispreis": 11.0,
+    "importpreis": 15.0
+  },
+  "backzutaten": {
+    "name": "Backzutaten (Hefe, Salz)",
+    "einheit": "Paket",
+    "ladung": "pakete",
+    "je_ladeeinheit": 200,
+    "haltbar_tage": 0,
+    "basispreis": 3.0,
+    "importpreis": 3.0
+  },
+  "brot": {
+    "name": "Brot und Brötchen",
+    "einheit": "Stk",
+    "ladung": "pakete",
+    "je_ladeeinheit": 200,
+    "haltbar_tage": 3,
+    "basispreis": 0.8,
+    "importpreis": null
+  }
 }

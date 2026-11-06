@@ -449,6 +449,8 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 					actions.append({"action": "bid_auction", "auction_id": au.id, "amount": int(ceil(offer))})
 					reasons.append("biete %d EUR auf %s" % [int(ceil(offer)), au.bezeichnung])
 					break
+	# 11b) Produktion (Auftrag 14, Etappe 2): eigene Produktionsbetriebe besetzen, eine fehlende Kettenstufe gruenden
+	_production(obs, me, cash, buffer, personality, free_staff, planned, actions, reasons)
 	# 12) Gespraeche (kurz, mit Anlass)
 	if rng.randf() < 0.2 and actions.size() < MAX_ACTIONS:
 		var pool: Array = LINES.get(personality, LINES.kostenoptimierer)
@@ -470,6 +472,83 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	if attacked:
 		goal = "Betrieb absichern und Ausfälle beheben"
 	return {"summary": summary, "goal": goal, "actions": actions.slice(0, MAX_ACTIONS), "memory": "Strategie: %s" % personality}
+
+
+const PROD_BRANCHES := ["feld", "muehle", "baeckerei"]
+const PROD_MAX := {"wachstum": 2, "netzwerker": 1, "kostenoptimierer": 1, "risikospieler": 1}
+const PROD_RESERVE := 10000.0   # Bargeld fuer Einkauf und Loehne nach der Gruendung
+
+
+## Produktionskette: Erst Personal fuer eigene Betriebe (freier Arbeiter, sonst Anwerbung), dann hoechstens eine Gruendung je Runde.
+## Gruendet die Stufe, die der Stadt fehlt: keine Baeckerei -> Baeckerei (Brot wird importiert); zu wenige Muehlen fuer die
+## Baeckereien -> Muehle; zu wenige Felder fuer die Muehlen -> Feld. Nur aus Bargeld ueber Puffer + Reserve (Kostenoptimierer doppelter Puffer).
+static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: float, personality: String, free_staff: Array, planned: Array, actions: Array, reasons: Array) -> void:
+	var mk: Dictionary = obs.get("produktion_markt", {})
+	if mk.is_empty():
+		return
+	var own: Array = obs.get("betriebe", []).filter(func(b): return b.branche in PROD_BRANCHES)
+	var own_ids: Array = own.map(func(b): return b.id)
+	# Preisregel (hoechstens alle 3 Tage): liegt Ware ohne Absatz, Preis senken (nicht unter 75 % des Basispreises, darunter deckt er
+	# Zutaten und Fracht nicht); verkauft sich taeglich mindestens der halbe Bestand, vorsichtig erhoehen (bis 150 %).
+	var base: Dictionary = obs.get("produktion_markt", {}).get("basispreise", {})
+	for b in own:
+		if int(b.get("preis_seit_tagen", 0)) < 3:
+			continue
+		for item in b.get("preise", {}):
+			var p := float(b.preise[item])
+			var stock := int(b.get("bestand", {}).get(item, 0))
+			var sold := int(b.get("absatz_tag", 0))
+			var bp := float(base.get(item, p))
+			if stock > 0 and sold == 0 and p > bp * 0.75:
+				actions.append({"action": "set_business_price", "business_id": b.id, "item": item, "price": snappedf(maxf(bp * 0.75, p * 0.9), 0.01)})
+				reasons.append("senke den Preis für %s, weil nichts verkauft wird" % item)
+			elif sold > 0 and sold * 2 >= stock and p < bp * 1.5:
+				actions.append({"action": "set_business_price", "business_id": b.id, "item": item, "price": snappedf(minf(bp * 1.5, p * 1.05), 0.01)})
+				reasons.append("erhöhe den Preis für %s, weil die Ware gut abfließt" % item)
+	# Rueckzug: nach 25 Tagen ohne Absatz und mit mehr als 4000 EUR Verlust wird der Betrieb geschlossen (Kosten stoppen)
+	for b in own:
+		if int(b.get("alter_tage", 0)) >= 25 and int(b.get("absatz_tag", 0)) == 0 and int(b.ergebnis) < -4000:
+			actions.append({"action": "close_business", "business_id": b.id, "reason": "seit %d Tagen ohne Absatz, Ergebnis %d EUR" % [int(b.alter_tage), int(b.ergebnis)]})
+			reasons.append("schließe %s, weil er seit Wochen nichts verkauft und Verlust macht" % b.id)
+			return
+	for b in own:
+		if int(b.personal) >= int(b.get("personal_min", 1)):
+			continue
+		var pool: Array = free_staff.filter(func(w): return str(w.get("betrieb", "")) not in own_ids)
+		if not pool.is_empty():
+			actions.append({"action": "assign_staff", "worker_id": pool[0].id, "business_id": b.id})
+			free_staff.erase(pool[0])
+			reasons.append("setze %s im Betrieb %s ein, der sonst ruht" % [pool[0].name, b.id])
+		elif "recruit_worker" not in planned:
+			var cand := _best_candidate(obs.ressourcen.arbeitskraefte, "verladen")
+			if not cand.is_empty() and cash > float(cand.anwerbung) + 3000.0:
+				actions.append({"action": "recruit_worker", "worker_id": cand.id})
+				planned.append("recruit_worker")
+				reasons.append("werbe %s für den Betrieb %s an" % [cand.name, b.id])
+		return
+	if own.size() >= int(PROD_MAX.get(personality, 1)) or "found_business" in planned:
+		return
+	var branch := ""
+	if int(mk.baeckereien) == 0:
+		branch = "baeckerei"
+	elif int(mk.muehlen) < maxi(1, int(mk.baeckereien) / 2):
+		branch = "muehle"
+	elif int(mk.felder) < 2 * int(mk.muehlen):
+		branch = "feld"
+	elif personality == "wachstum" and int(mk.brot_import) > 0:
+		branch = "baeckerei"
+	if branch == "" or own.any(func(b): return b.branche == branch):
+		return
+	var spec: Array = obs.get("verfuegbare_branchen", []).filter(func(x): return x.get("branche", "") == branch)
+	if spec.is_empty():
+		return
+	var cost := float(spec[0].kosten)
+	var need := cost + buffer * (2.0 if personality == "kostenoptimierer" else 1.0) + PROD_RESERVE
+	if cash < need:
+		return
+	actions.append({"action": "found_business", "branche": branch, "reason": "Kettenstufe fehlt in der Stadt (Bäckereien %d, Mühlen %d, Felder %d)" % [int(mk.baeckereien), int(mk.muehlen), int(mk.felder)]})
+	planned.append("found_business")
+	reasons.append("gründe %s, weil diese Stufe der Brotkette in der Stadt fehlt" % Businesses.branches()[branch].label)
 
 
 ## Risikospieler: erst auskundschaften, dann mit dem entbehrlichsten Arbeiter ein stehendes Fremdfahrzeug angreifen.
