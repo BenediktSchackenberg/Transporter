@@ -313,13 +313,16 @@ func collect() -> Dictionary:
 			"interval": r.interval.value, "max_requests": int(r.max_requests.value),
 			"max_tokens": int(r.max_tokens.value), "max_tokens_per_request": int(r.tokens_per_request.value),
 			"fallback": r.fallback.button_pressed, "strategy": r.strategy.text.strip_edges(),
-			"timeout": 90.0 if provider == "ollama" else 45.0})
+			"timeout": 300.0 if provider == "ollama" else 45.0, "num_ctx": OLLAMA_CTX})
 	return {"seed": seed_edit.text.to_int(), "duration_min": DURATIONS[duration_opt.selected],
 		"speed_idx": speed_opt.selected, "demo_fault_rate": fault_spin.value, "carry_memory": carry_check.button_pressed,
 		"mayor": _mayor_config(), "dispatcher": {"provider": "anthropic" if dispatch_opt.selected == 1 else "demo"}, "talk": {"provider": "anthropic" if talk_opt.selected == 1 else "demo"}, "rivalry_talk": talk_opt.selected != 2, "start_profil": "spedition" if profile_opt.selected == 1 else "unternehmer", "welt": "stadt" if world_opt.selected == 1 else "kueste", "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
 		"players": players}
 
 
+## Gemeinsame Kontextgroesse aller Ollama-Agenten (Spieler und Buergermeister): Ollama laedt ein Modell neu, sobald eine Anfrage
+## eine andere Kontextgroesse verlangt; mit einem Wert bleibt das Modell geladen.
+const OLLAMA_CTX := 24576
 ## Lokaler Buergermeister: groesseres Modell auf dem eigenen Ollama (langsamer, daher lange Wartezeit und seltener).
 const MAYOR_LOCAL_MODEL := "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M"
 const MAYOR_LOCAL_URL := "http://127.0.0.1:11435"
@@ -340,7 +343,7 @@ func _mayor_config() -> Dictionary:
 		m["model"] = str(m.get("model", MAYOR_LOCAL_MODEL))
 		m["timeout"] = float(m.get("timeout", 300.0))
 		m["interval"] = float(m.get("interval", 120.0))
-		m["num_ctx"] = int(m.get("num_ctx", 24576))
+		m["num_ctx"] = OLLAMA_CTX
 		m["max_tokens_per_request"] = int(m.get("max_tokens_per_request", 2000))
 	return m
 
