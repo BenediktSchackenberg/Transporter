@@ -29,34 +29,38 @@ def init():
 
 def plane(seed=1):
     """Kleines Propellerflugzeug, blickt nach +x, mittig in einem quadratischen Grundriss (26,26), Boden z=0.
-    Fuer die Fluganimation (AirView): wird 90-Grad-gedreht je Fahrtrichtung; Pivot = Modellunterkante Mitte."""
+    Fuer die Fluganimation (AirView): wird 90-Grad-gedreht je Fahrtrichtung; Pivot = Modellunterkante Mitte.
+    Schlankes Profil (E2): sechspixelige Kabine, dreipixelige Fluegel, niedrige Flosse – wirkt zierlich neben Huetten."""
     S = 52
-    m = Model(S, S, 24)
+    m = Model(S, S, 20)
     W, GLASS, DARK, LIV = M("white"), M("glass_dark"), M("black"), M("plane_livery")
-    # Rumpf (Mittellinie x, zentriert um y=26)
-    m.box(10, 22, 1, 42, 30, 9, W)
-    m.box(10, 22, 3, 42, 30, 6, LIV)          # Farbband
+    # Rumpf (schmal, Mittellinie y=26)
+    m.box(6, 23, 3, 46, 29, 9, W)
+    m.box(6, 23, 5, 46, 29, 6, LIV)          # Farbband
     # Leitwerk (Heck, kleines x)
-    m.box(6, 23, 8, 14, 29, 20, W)             # Flosse
-    m.box(6, 23, 13, 14, 29, 20, LIV)          # Flossenfarbband
-    m.put(9, 26, 19, M("plane_red"))           # Positionslicht am Heck (blinkt bei Nacht)
-    m.box(6, 14, 9, 16, 38, 12, W)             # Seitenleitwerk
-    m.put(7, 15, 10, M("plane_white_lamp"))
-    m.put(7, 37, 10, M("plane_red"))
+    m.box(2, 24, 8, 10, 28, 16, W)            # Flosse (schmal und niedrig)
+    m.box(2, 24, 12, 10, 28, 16, LIV)         # Flossenfarbband
+    m.put(3, 26, 15, M("plane_red"))          # Positionslicht am Heck (blinkt bei Nacht)
+    m.box(2, 16, 8, 11, 26, 10, W)            # Seitenleitwerk West
+    m.box(2, 26, 8, 11, 36, 10, W)            # Seitenleitwerk Ost
+    m.put(3, 17, 9, M("plane_white_lamp"))
+    m.put(3, 35, 9, M("plane_red"))
     # Nase und Propeller (vorne, grosses x)
-    m.box(40, 23, 2, 45, 29, 8, W)
-    m.box(43, 24, 4, 45, 28, 6, DARK)          # Propellerhub
+    m.box(44, 24, 2, 49, 28, 8, W)
+    m.box(47, 25, 4, 49, 27, 6, DARK)         # Propellerhub
     # Cockpit
-    m.box(30, 22, 7, 38, 30, 11, GLASS)
-    # Tragfluegel (spannen ueber y, symmetrisch)
-    m.box(16, 6, 4, 30, 46, 7, W)
-    m.box(16, 6, 4, 17, 46, 7, LIV)            # Fluegeltipp West
-    m.box(29, 6, 4, 30, 46, 7, LIV)            # Fluegeltipp Ost
+    m.box(30, 23, 8, 39, 29, 12, GLASS)
+    # Tragfluegel (drei Voxel dick, spannen symmetrisch ueber y)
+    m.box(18, 8, 4, 29, 44, 6, W)
+    m.box(18, 8, 4, 29, 12, 6, LIV)           # Fluegeltipp West
+    m.box(18, 40, 4, 29, 44, 6, LIV)          # Fluegeltipp Ost
+    m.put(20, 9, 5, M("plane_white_lamp"))    # Positionslichter an den Tips
+    m.put(20, 43, 5, M("plane_red"))
     # Fahrwerk (bietet den Fusspunkt z=0)
-    for gx in (14, 32):
-        m.box(gx, 20, 0, gx + 4, 23, 2, DARK)
-        m.box(gx, 29, 0, gx + 4, 32, 2, DARK)
-    return m, {"height": 20}
+    for gx in (14, 34):
+        m.box(gx, 22, 0, gx + 2, 25, 3, DARK)
+        m.box(gx, 27, 0, gx + 2, 30, 3, DARK)
+    return m, {"height": 16}
 
 
 def terminal(seed=1):
