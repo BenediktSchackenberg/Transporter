@@ -47,6 +47,41 @@ func place_cell(k: Contract, place: String) -> Vector2i:
 	return sim.city.building(site).road if site >= 0 else Vector2i(-1, -1)
 
 
+## Geschaetzte Spielminuten, bis Fahrzeug v einen neuen Auftrag k vollstaendig geliefert haette: erst alle geplanten Stopps,
+## dann Abholung und Lieferung. Strecke = Manhattan-Abstand x Umwegfaktor, Tempo = Nenntempo x gemessener Fahranteil
+## (tests/probe_bottlenecks.gd: ~65 % in Fahrt), je Stopp Be-/Entladezeit; ohne Fahrer ein Zuschlag fuer dessen Anfahrt.
+const ETA_DETOUR := 1.3
+const ETA_SPEED_SHARE := 0.65
+const ETA_NO_DRIVER_MIN := 60.0
+const ETA_BUFFER := 1.2       # Sicherheitszuschlag bei der Annahmepruefung (Regel-KI, Disponent und ActionExecutor gleich)
+
+## Fahrzeit in Spielminuten fuer `tiles` Felder Manhattan-Abstand bei Nenntempo `speed` (Felder je Sim-Sekunde).
+static func travel_minutes(tiles: float, speed: float) -> float:
+	return tiles * ETA_DETOUR * Catalog.GAME_MIN_PER_SIM_SEC / (maxf(0.1, speed) * ETA_SPEED_SHARE)
+
+
+func eta_minutes(v: FleetVehicle, k: Contract) -> float:
+	var speed := float(v.spec().speed)
+	var at := v.tile()
+	var t := 0.0
+	for st in v.stops:
+		var kk: Contract = sim.contracts.get(str(st.contract_id))
+		if kk == null:
+			continue
+		var c := place_cell(kk, str(st.ort))
+		if c.x < 0:
+			continue
+		t += travel_minutes(absi(c.x - at.x) + absi(c.y - at.y), speed) + Catalog.LOADING_MIN
+		at = c
+	var pick: Vector2i = sim.city.building(k.pickup).road
+	var drop: Vector2i = sim.city.building(k.dropoff).road
+	t += travel_minutes(absi(pick.x - at.x) + absi(pick.y - at.y), speed) + Catalog.LOADING_MIN
+	t += travel_minutes(absi(drop.x - pick.x) + absi(drop.y - pick.y), speed) + Catalog.LOADING_MIN
+	if sim.driver_of(v) == null:
+		t += ETA_NO_DRIVER_MIN
+	return t
+
+
 func place_building(k: Contract, place: String) -> int:
 	if place == PICKUP:
 		return k.pickup

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -311,6 +311,7 @@ func test_end_settlement() -> void:
 	var k_fine: Contract = open[1]
 	for k in [k_over, k_fine]:
 		k.exclusive_for = -1
+		k.deadline = s.game_min + 100000.0   # Annahmepruefung: rechtzeitig machbar
 		s.executor.execute(1, {"action": "accept_contract", "contract_id": k.id})
 	k_over.deadline = s.game_min - 10.0
 	k_fine.deadline = s.game_min + 500.0
@@ -461,6 +462,7 @@ func test_kinggamer_features() -> void:
 	var accepted := 0
 	var last := {}
 	for k in open.slice(0, 4):
+		k.deadline = s.game_min + 100000.0   # Annahmepruefung: rechtzeitig machbar
 		last = s.executor.execute(0, {"action": "accept_contract", "contract_id": k.id})
 		if last.ok:
 			accepted += 1
@@ -6309,6 +6311,7 @@ func test_activity_feed() -> void:
 	# Auftrag annehmen: Markierung am Abholort mit Firma und Text
 	var v: FleetVehicle = s.company_vehicles(0)[0]
 	var k: Contract = s.market.open_contracts().filter(func(x): return s.companies[0].known.has(x.id) and x.vehicle_ok(v.model) and x.min_rep <= s.companies[0].reputation)[0]
+	k.deadline = s.game_min + 100000.0   # Annahmepruefung: rechtzeitig machbar
 	var r: Dictionary = s.executor.execute(0, {"action": "accept_contract", "contract_id": k.id, "vehicle_id": v.id}, "", "api")
 	ok(r.ok and A.items.size() == n0 + 1, "ausgeführte Entscheidung erscheint in der Aktivität")
 	var e: Dictionary = A.items.back()
@@ -6383,4 +6386,28 @@ func test_public_safety() -> void:
 	ok(s.mayor.indicators().has("sicherheit_gesundheit"), "Bürgermeister sieht Sicherheit und Gesundheit")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(int(s2.safety.stats.festnahmen) == int(S.stats.festnahmen) and s2.safety.vehicles.size() == S.vehicles.size(), "nach Laden")
+	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_contract_feasibility() -> void:
+	var s := new_sim(2)
+	var c0: Company = s.companies[0]
+	c0.reputation = 100.0
+	var v: FleetVehicle = s.company_vehicles(0)[0]
+	var k: Contract = s.market.open_contracts().filter(func(x): return x.vehicle_ok(v.model) and x.exclusive_for < 0)[0]
+	c0.known[k.id] = true
+	var eta := s.logistics.eta_minutes(v, k)
+	ok(eta > 2.0 * Catalog.LOADING_MIN, "Schätzung enthält Fahrt und Laden (%.0f min)" % eta)
+	# zu knapp: Ablehnung mit Begruendung, Auftrag bleibt offen
+	k.deadline = s.game_min + eta
+	var r := s.executor.execute(0, {"action": "accept_contract", "contract_id": k.id, "vehicle_id": v.id})
+	ok(not r.ok and r.msg.contains("nicht rechtzeitig") and k.status == "open", "knappe Frist abgelehnt (%s)" % r.msg)
+	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
+	var ov: Dictionary = obs.fahrzeuge.filter(func(x): return int(x.id) == v.id)[0]
+	var mk: Array = obs.markt.filter(func(x): return x.id == k.id)
+	ok(mk.is_empty() or RuleBrain._best_contract(mk, ov, obs.fahrzeugmodelle[ov.modell], 100.0).is_empty(), "Regel-KI schlägt den knappen Auftrag nicht vor")
+	# ausreichend: Annahme
+	k.deadline = s.game_min + eta * Logistics.ETA_BUFFER * 1.5
+	r = s.executor.execute(0, {"action": "accept_contract", "contract_id": k.id, "vehicle_id": v.id})
+	ok(r.ok and k.owner == 0, "ausreichende Frist angenommen (%s)" % r.get("msg", ""))
 	ok(identity_ok(s), "Geld erhalten")

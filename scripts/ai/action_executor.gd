@@ -772,6 +772,9 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 		return {"ok": false, "msg": "Auftrag %s ist dir unbekannt – zuerst collect_contracts (Jobbörse oder Büro mit Internet)." % kid}
 	if c.reputation < k.min_rep:
 		return {"ok": false, "msg": "Reputation %.0f zu niedrig (benötigt %.0f)." % [c.reputation, k.min_rep]}
+	var late := _too_late(cid, k, vid)
+	if late != "":
+		return {"ok": false, "msg": late}
 	var active := active_contracts(cid)
 	if active >= c.contract_capacity():
 		return {"ok": false, "msg": "Büro ausgelastet (%d/%d laufende Aufträge) – Büro eröffnen oder ausbauen." % [active, c.contract_capacity()]}
@@ -795,6 +798,22 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 		var r := _assign(cid, vid, kid)
 		msg += " " + r.msg
 	return {"ok": true, "msg": msg}
+
+
+## Machbarkeit vor der Annahme: Kann ein eigenes passendes Fahrzeug (das genannte oder das schnellste) nach seinen geplanten Fahrten
+## vor der Frist liefern (mit 20 % Puffer)? Ohne passendes Fahrzeug keine Pruefung (Fremdvergabe/Transporthilfe bleibt moeglich).
+func _too_late(cid: int, k: Contract, vid: int) -> String:
+	var best := INF
+	for v in sim.company_vehicles(cid):
+		if (vid >= 0 and v.id != vid) or not k.vehicle_ok(v.model) or v.state in ["broken", "repairing"]:
+			continue
+		best = minf(best, sim.logistics.eta_minutes(v, k))
+	if best == INF:
+		return ""
+	var left: float = k.deadline - sim.game_min
+	if best * Logistics.ETA_BUFFER > left:
+		return "Auftrag %s ist nicht rechtzeitig machbar: Lieferung frühestens in ~%d Spielminuten, Frist in %d. Nimm einen näheren Auftrag oder vergib ihn weiter." % [k.id, int(best * Logistics.ETA_BUFFER), int(left)]
+	return ""
 
 
 func active_contracts(cid: int) -> int:

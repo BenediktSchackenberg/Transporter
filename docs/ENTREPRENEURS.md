@@ -539,3 +539,12 @@ Belegt aus dem Code; "vorhanden" heißt implementiert und getestet, nicht nur ge
 **Messung `tests/probe_bottlenecks.gd`, 40 Spieltage, vier Regel-KIs:** Löhne je Firma Spedition −9 600 bis −12 200, Unternehmer −2 500 bis −4 600; Gewinn Spedition −6 100 bis −24 900, Unternehmer −9 800 bis −18 300; gescheiterte Aufträge 31 bzw. 22, alle „Frist weit überschritten“.
 
 **Grenzen / offen:** Solange nur die Transportbranche existiert, bleiben die Firmen im Regelspiel im Verlust; Hauptursache ist die Auftragsannahme ohne Machbarkeitsprüfung (Fahrzeuge nehmen Aufträge an, die sie vor Fristende nicht erreichen). Treibstoff wird weiterhin beim Kauf als Aufwand gebucht. Die Betriebsansicht ist eine Textansicht (keine eigene Kartenebene). Das Kraftwerk ist noch eine pauschale Erzeugung (Etappe 4).
+
+### Nachtrag 06.11.2026 – Annahmeprüfung (Hauptursache der Verluste)
+
+- `Logistics.eta_minutes` schätzt, wann ein Fahrzeug einen neuen Auftrag geliefert hätte (erst geplante Stopps, dann Abholung und Lieferung; Umwegfaktor 1,3, gemessener Fahranteil 65 %, Laden je Stopp, Zuschlag ohne Fahrer). `Logistics.travel_minutes` ist die gemeinsame Formel; Sicherheitszuschlag `ETA_BUFFER` 1,2.
+- `ActionExecutor` lehnt `accept_contract` ab, wenn kein passendes eigenes Fahrzeug rechtzeitig liefern kann (Meldung mit geschätzter Lieferzeit und Frist). Regel-KI und Claude-Disponent (`RuleBrain._best_contract`, `DispatchCandidates`) nutzen dieselbe Schätzung und schlagen solche Aufträge gar nicht erst vor.
+- Fremdvergabe der Regel-KI („Zusatzfracht für einen Partner“) nur noch, wenn ein Partner nach einer Angebotsrunde (120 min) mit LKW-Tempo rechtzeitig liefern kann (`RuleBrain._partner_feasible`). Messung zeigte: alle verbliebenen gescheiterten Aufträge waren Fremdvergaben.
+- Test `test_contract_feasibility`; drei Tests, die beliebige Marktaufträge annehmen, setzen dafür jetzt eine großzügige Frist. `tests/probe_bottlenecks.gd` zeigt Einzelheiten der gescheiterten Aufträge und den Ausgang der Fremdvergaben.
+
+**Messung 40 Spieltage, vier Regel-KIs (vorher → nachher):** Spedition gescheitert 31 → 1, Gewinn −6 100 … −24 900 → −2 500 … −13 000; Unternehmer gescheitert 22 → 2, Gewinn −9 800 … −18 300 → −2 800 … −6 700. Die Firmen bleiben im Verlust, weil Löhne und Treibstoff den Transportumsatz allein noch übersteigen – das soll Etappe 2 (weitere Branchen) ändern.

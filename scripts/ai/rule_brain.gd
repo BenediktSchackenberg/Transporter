@@ -150,8 +150,9 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 				reasons.append("frage Partner fuer unbediente Fracht %s an" % k.id)
 				break
 	# Bei voller eigener Flotte kann eine weitere profitable Fracht als Partnerauftrag geplant werden.
-	if ready.is_empty() and active < capacity and cash > buffer + 3000.0 and not market.is_empty() and not ops.get("hilfeanfragen", []).any(func(r): return r.own):
-		var partner_job: Dictionary = market[0]
+	var partner_pool: Array = market.filter(func(k): return _partner_feasible(k))
+	if ready.is_empty() and active < capacity and cash > buffer + 3000.0 and not partner_pool.is_empty() and not ops.get("hilfeanfragen", []).any(func(r): return r.own):
+		var partner_job: Dictionary = partner_pool[0]
 		if float(partner_job.verguetung) > 500.0 and float(me.reputation) >= float(partner_job.get("min_reputation", 0)):
 			actions.append({"action": "accept_contract", "contract_id": partner_job.id})
 			actions.append({"action": "request_transport_help", "contract_id": partner_job.id, "max_fee": minf(cash * 0.1, float(partner_job.verguetung) * 0.4)})
@@ -593,8 +594,8 @@ static func _best_contract(market: Array, v: Dictionary, spec: Dictionary, rep: 
 		if rep < k.min_reputation:
 			continue
 		var tiles := float(k.strecke) + _dist(k.von_pos, v.pos)
-		var minutes_needed := tiles * 1.25 / float(spec.tempo) * 2.0 + 40.0   # Umwege, Ampeln, Laden (knapp, aber Puffer bleibt: verspaetet war <2 %)
-		if minutes_needed > k.frist_in_min:
+		var minutes_needed := Logistics.travel_minutes(tiles, float(spec.tempo)) + 2.0 * Catalog.LOADING_MIN   # gleiche Schaetzung wie die Annahmepruefung
+		if minutes_needed * Logistics.ETA_BUFFER > k.frist_in_min:
 			continue
 		var margin := float(k.verguetung) + float(k.get("praemie_stadt", 0)) - tiles * float(spec.kosten_pro_tile) * 1.1
 		var score := margin / (tiles + 30.0)
@@ -603,6 +604,17 @@ static func _best_contract(market: Array, v: Dictionary, spec: Dictionary, rep: 
 			best_score = score
 			best = k
 	return best
+
+
+## Fremdvergabe nur, wenn ein Partner nach einer Angebotsrunde noch rechtzeitig liefern kann: Anfahrt ab unserem Hof als
+## Naeherung, LKW-Tempo, Laden und Puffer wie bei der eigenen Annahme. (Messung probe_bottlenecks: ohne diese Pruefung
+## scheiterten alle gescheiterten Auftraege als Fremdvergabe.)
+const PARTNER_QUOTE_MIN := 120.0
+const PARTNER_SPEED := 2.1
+static func _partner_feasible(k: Dictionary) -> bool:
+	var tiles := float(k.strecke) + float(k.get("anfahrt_vom_depot", 0))
+	var need := PARTNER_QUOTE_MIN + Logistics.travel_minutes(tiles, PARTNER_SPEED) + 2.0 * Catalog.LOADING_MIN
+	return need * Logistics.ETA_BUFFER <= float(k.frist_in_min)
 
 
 static func _best_vehicle(vs: Array, qty: int, cold: bool, heavy: bool, models: Dictionary) -> Dictionary:

@@ -28,12 +28,20 @@ func _initialize() -> void:
 	var prog := {}      # Fahrzeug -> [Restweg, Zustand]
 	var speed := [0.0, 0]   # Felder je Stichprobe (200 Schritte = 20 Sim-s) in Fahrt
 	var stuck := 0
+	var fail_info: Array = []
 	s.logged.connect(func(e):
 		var t := str(e.text)
 		var i := t.find("gescheitert (")
 		if i >= 0:
 			var r := t.substr(i + 13, t.find(")", i) - i - 13)
-			reasons[r] = int(reasons.get(r, 0)) + 1)
+			reasons[r] = int(reasons.get(r, 0)) + 1
+			var m := RegEx.create_from_string("Auftrag (A[0-9]+) gescheitert").search(t)
+			if m != null and s.contracts.has(m.get_string(1)) and fail_info.size() < 12:
+				var k: Contract = s.contracts[m.get_string(1)]
+				var fv: FleetVehicle = s.vehicles.get(k.vehicle_id)
+				fail_info.append("%s: Frist %d min ab Annahme, Strecke %d, Menge %d/%d abgeholt, %d geliefert, Fz %d (%s, %s), Fremdvergabe %s, Linie %s" % [k.id,
+					int(k.deadline - k.accepted_at), k.distance, k.picked, k.qty, k.delivered_qty, k.vehicle_id, fv.state if fv else "-",
+					("Fahrer" if fv and s.driver_of(fv) != null else "ohne Fahrer"), str(s.operations.requests.values().any(func(h): return str(h.get("contract", "")) == k.id)), str(s.operations.jobs.has(k.id))]))
 	while GameCalendar.day_of(s.game_min) < days:
 		if step % 200 == 0:
 			for c in s.companies:
@@ -92,6 +100,14 @@ func _initialize() -> void:
 	print("Fahrzeugzustände (Stichproben): ", states)
 	print("Fortschritt in Fahrt: Ø %.1f Felder je 20 Sim-s (%d Messungen, davon %d ohne Fortschritt); Nennwert Van %.1f Felder/s" % [speed[0] / maxf(1.0, float(speed[1])), speed[1], stuck, float(Catalog.VEHICLE_MODELS.van.speed)])
 	print("Gründe fürs Scheitern: ", reasons)
+	for f in fail_info:
+		print("  ", f)
+	var fv := {}
+	for r in s.operations.requests.values():
+		var rk: Contract = s.contracts.get(str(r.contract))
+		var key := "%s/%s" % [str(r.status), rk.status if rk else "entfernt"]
+		fv[key] = int(fv.get(key, 0)) + 1
+	print("Fremdvergaben (Anfrage/Auftrag): ", fv)
 	for k in s.contracts.values().filter(func(x): return x.owner >= 0 and x.status == "failed").slice(0, 8):
 		print("  gescheitert %s: Frist %d min nach Annahme, Strecke %d, Menge %d, abgeholt %d, geliefert %d, Fz %d, Annahme Tag %d" % [k.id, int(k.deadline - k.accepted_at), k.distance, k.qty, k.picked, k.delivered_qty, k.vehicle_id, GameCalendar.day_of(k.accepted_at)])
 	for v in s.vehicles.values().slice(0, 6):
