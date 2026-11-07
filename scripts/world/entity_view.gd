@@ -24,6 +24,7 @@ var cv: CityView
 var vehicle_nodes := {}
 var traffic_nodes: Array = []
 var service_nodes: Array = []         # Streifen- und Krankenwagen (PublicSafety.vehicles)
+var fire_node: Node2D = null    # Feuerwehrwehrauto (Airport.fire_vehicle, Etappe E5)
 var fleet_nodes := {}                 # CityFleet: Bautrupps und Umzugswagen (ID -> Node2D)
 var avatar_nodes := {}
 var _people_timer := 0.0
@@ -60,6 +61,10 @@ func build(simulation: Simulation, city_view: CityView) -> void:
 		_add_beacon(sn, -30.0 if sv.kind == "polizei" else -58.0)
 		add_child(sn)
 		service_nodes.append(sn)
+	if sim.airport.fire_vehicle != null:
+		fire_node = _make_vehicle_node("firetruck", "", Color.WHITE, false)
+		_add_beacon(fire_node, -50.0)
+		add_child(fire_node)
 	for m in sim.traffic:
 		var n := _make_vehicle_node("car", CAR_NAMES[_ped_rng.randi() % CAR_NAMES.size()], Color.WHITE, false)
 		traffic_nodes.append(n)
@@ -391,6 +396,15 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		var siren: Sprite2D = sn.get_node("siren")
 		siren.visible = on_duty
 		siren.modulate = (Color(0.3, 0.5, 1.0, 0.95) if blink else Color(1.0, 0.25, 0.25, 0.95)) if sv.kind == "krankenwagen" else (Color(0.3, 0.5, 1.0, 0.95) if blink else Color(0.6, 0.75, 1.0, 0.5))
+	# Feuerwehrwehrauto (Flughafen, Etappe E5): Blaulicht nur im Einsatz
+	if fire_node != null and sim.airport.fire_vehicle != null:
+		fire_node.position = Iso.to_screen(sim.airport.fire_vehicle.pos)
+		_set_vehicle_dir(fire_node, sim.airport.fire_vehicle.heading)
+		var in_action: bool = not sim.airport.fire_task.is_empty()
+		var fblink := int(anim_time * 7.0) % 2 == 0
+		var fsiren: Sprite2D = fire_node.get_node("siren")
+		fsiren.visible = in_action
+		fsiren.modulate = Color(1.0, 0.3, 0.3, 0.95) if fblink else Color(0.3, 0.5, 1.0, 0.95)
 	_update_fleet()
 	for i in sim.traffic.size():
 		var m: Mover = sim.traffic[i]
