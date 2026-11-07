@@ -9,6 +9,8 @@ extends CoastGenerator
 ## Gebaeude tragen "town"; CityData.towns beschreibt die Orte. validate() prueft alles und verwirft fehlerhafte Welten.
 
 var town_count := 4
+## Ortscharakter (je Ort aus dem Seed): praegt Strassennetz, Bebauung und Umland, damit die Staedte verschieden aussehen.
+const CHARACTERS := ["Fischerdorf", "Marktflecken", "Bauerndorf", "Handwerkerort"]
 var towns_out: Array = []          # [{id, name, center: [x, y], rect: [x, y, w, h], airport: {...}}]
 var _rects: Array = []             # Rect2i je Ort
 var _air_rects: Array = []
@@ -28,7 +30,7 @@ func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: 
 		report["versuch"] = attempt + 1
 		failures.append(report.get("fehler", []))
 		if report.ok:
-			cd.gen_params = {"welt": "region", "seed": seed_value, "erzeugt_mit_seed": s, "versuch": attempt + 1, "groesse": map_size, "orte": town_count, "generator": 1}
+			cd.gen_params = {"welt": "region", "seed": seed_value, "erzeugt_mit_seed": s, "versuch": attempt + 1, "groesse": map_size, "orte": town_count, "generator": 2}
 			return cd
 		s = seed_value + 7919 * (attempt + 1)
 	push_error("RegionGenerator: keine gueltige Region in 8 Versuchen (Seed %d, %d Orte): %s" % [seed_value, town_count, str(report.get("fehler", []))])
@@ -79,6 +81,15 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 	_mountains_region()
 	_lakes_region()
 	_river_region()
+	# je Ort ein anderer Charakter (gemischt nach Seed), damit die Staedte verschieden aussehen
+	var chars: Array = CHARACTERS.duplicate()
+	for i in range(chars.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = chars[i]
+		chars[i] = chars[j]
+		chars[j] = tmp
+	for k in town_count:
+		towns_out[k]["charakter"] = chars[k % chars.size()]
 	for k in town_count:
 		_build_town(k)
 	_connect_towns()
@@ -244,16 +255,12 @@ func _first_id(from: int, pred: Callable) -> int:
 ## Ortskern wie CoastGenerator._town(), aber genau ein Unternehmer-Startgrundstueck und Gebaeudelimit je Ort.
 func _town_core(k: int) -> void:
 	var t := town
-	_road(Vector2i(t.x, t.y - 20), Vector2i(t.x, t.y + 20))
+	var ch: String = str(towns_out[k].charakter)
+	_streets(t, ch)
 	for x in range(t.x, coast[t.y] - 1):
 		c.ground[c.idx(Vector2i(x, t.y))] = G.ROAD
 	for x in range(t.x + 1, coast[t.y]):   # Kai beginnt hinter der Hauptstrasse (sonst trennt er deren Suedteil ab)
 		c.ground[c.idx(Vector2i(x, t.y + 1))] = G.QUAY
-	for dy in [-12, 0, 12]:
-		_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 30, t.y + dy))
-	_road(Vector2i(t.x - 30, t.y - 20), Vector2i(t.x - 30, t.y + 20))
-	_road(Vector2i(t.x - 30, t.y - 20), Vector2i(t.x, t.y - 20))
-	_road(Vector2i(t.x - 30, t.y + 20), Vector2i(t.x, t.y + 20))
 	for y in range(town_rect.position.y, town_rect.end.y):
 		for x in range(town_rect.position.x, mini(town_rect.end.x, coast[clampi(y, 0, n - 1)] - 2)):
 			var p := Vector2i(x, y)
@@ -279,6 +286,13 @@ func _town_core(k: int) -> void:
 	_put("dealer", Vector2i(t.x - 14, t.y + 16), "dealer", "Fahrzeughandel %s" % nm)
 	_put("workshop", Vector2i(t.x - 8, t.y + 16), "workshop", "Werkstatt " + SURNAMES[rng.randi() % SURNAMES.size()])
 	_put("gas_station", Vector2i(t.x - 3, t.y + 15), "", "Tankstelle %s" % nm)
+	match ch:
+		"Marktflecken":
+			_put("shop", core + Vector2i(-10, 6), "", "Markthalle %s" % nm)
+		"Handwerkerort":
+			_put("workshop", Vector2i(t.x - 18, t.y + 8), "", "Schmiede " + SURNAMES[rng.randi() % SURNAMES.size()])
+		"Fischerdorf":
+			_put("containers", Vector2i(t.x + 2, t.y + 10), "", "Fischhalle %s" % nm)
 	# genau ein Unternehmer-Startgrundstueck je Ort (Abschnitt 5)
 	var y0 := t.y - 9
 	var r := Rect2i(t.x - 38, y0, PLOT_W, PLOT_H)
@@ -299,13 +313,57 @@ func _town_core(k: int) -> void:
 	var budget := MAX_BUILDINGS - _counted_from(first)
 	var k2 := 0
 	var tries := 0
-	while budget > 0 and tries < 200:
+	# Bebauung nach Charakter: Fischerdorf dicht am Wasser, Bauerndorf weit verstreut mit Hoefen, Marktflecken mit Doppelhaeusern
+	var span: Array = {"Fischerdorf": [1, 14], "Marktflecken": [4, 22], "Bauerndorf": [10, 30], "Handwerkerort": [4, 28]}[ch]
+	while budget > 0 and tries < 260:
 		tries += 1
-		var p := Vector2i(t.x - rng.randi_range(4, 28), t.y + rng.randi_range(-19, 19))
-		var id2 := _put("semi" if k2 % 3 == 2 else "house", p)
+		var p := Vector2i(t.x - rng.randi_range(int(span[0]), int(span[1])), t.y + rng.randi_range(-19, 19))
+		var kind := "house"
+		match ch:
+			"Marktflecken":
+				kind = "semi" if k2 % 2 == 1 else "house"
+			"Bauerndorf":
+				kind = "farm" if k2 % 5 == 4 else "house"
+			"Handwerkerort":
+				kind = "workshop" if k2 % 6 == 5 else ("semi" if k2 % 3 == 2 else "house")
+			_:
+				kind = "semi" if k2 % 4 == 3 else "house"
+		var id2 := _put(kind, p)
 		if id2 >= 0:
 			budget -= 1
 			k2 += 1
+
+
+## Strassennetz des Orts nach Charakter. Allen gemeinsam: Hauptstrasse an der Kueste (x = Ortsmitte), Querstrasse auf Hoehe der
+## Ortsmitte bis zur Hinterstrasse (x - 30, dort beginnen Feldweg und Startgrundstueck).
+func _streets(t: Vector2i, ch: String) -> void:
+	match ch:
+		"Fischerdorf":   # lange Uferstrasse, kurze Stichstrassen, kurze Hinterstrasse
+			_road(Vector2i(t.x, t.y - 22), Vector2i(t.x, t.y + 22))
+			for dy in [-18, -9, 9, 18]:
+				_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 12, t.y + dy))
+			_road(Vector2i(t.x, t.y), Vector2i(t.x - 30, t.y))
+			_road(Vector2i(t.x - 30, t.y - 10), Vector2i(t.x - 30, t.y + 6))
+		"Marktflecken":  # dichtes Raster um den Markt
+			_road(Vector2i(t.x, t.y - 18), Vector2i(t.x, t.y + 18))
+			for dy in [-12, -6, 0, 6, 12]:
+				_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 30, t.y + dy))
+			_road(Vector2i(t.x - 15, t.y - 12), Vector2i(t.x - 15, t.y + 12))
+			_road(Vector2i(t.x - 30, t.y - 18), Vector2i(t.x - 30, t.y + 18))
+			_road(Vector2i(t.x - 30, t.y - 18), Vector2i(t.x, t.y - 18))
+		"Bauerndorf":    # lockeres Netz, lange Hofwege nach Westen
+			_road(Vector2i(t.x, t.y - 16), Vector2i(t.x, t.y + 16))
+			for dy in [-14, 0, 14]:
+				_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 30, t.y + dy))
+			_road(Vector2i(t.x - 30, t.y - 14), Vector2i(t.x - 30, t.y + 14))
+			_road(Vector2i(t.x - 30, t.y + 8), Vector2i(t.x - 38, t.y + 8))
+		_:               # Handwerkerort: zwei Achsen, Werkstattgasse
+			_road(Vector2i(t.x, t.y - 20), Vector2i(t.x, t.y + 20))
+			for dy in [-14, 0, 10]:
+				_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 30, t.y + dy))
+			_road(Vector2i(t.x - 18, t.y - 14), Vector2i(t.x - 18, t.y + 18))
+			_road(Vector2i(t.x - 30, t.y - 20), Vector2i(t.x - 30, t.y + 20))
+			_road(Vector2i(t.x - 18, t.y + 18), Vector2i(t.x, t.y + 18))
 
 
 func _counted_from(first: int) -> int:
@@ -333,8 +391,8 @@ func _connect_towns() -> void:
 				astar.set_point_weight_scale(p, 1.0 + 0.6 * (noise.get_noise_2d(x * 2 + 700, y * 2) + 1.0))
 	c.region_roads = []
 	for k in towns_out.size() - 1:
-		var a := Vector2i(int(towns_out[k].center[0]) - 30, int(towns_out[k].center[1]) + 20)
-		var b := Vector2i(int(towns_out[k + 1].center[0]) - 30, int(towns_out[k + 1].center[1]) - 20)
+		var a := _edge_road(k, true)        # suedlichste Strasse des Orts k ...
+		var b := _edge_road(k + 1, false)   # ... zur noerdlichsten des Nachbarorts
 		var path := astar.get_id_path(a, b)
 		var cells: Array = []
 		for p in path:
@@ -344,6 +402,22 @@ func _connect_towns() -> void:
 				cells.append([p.x, p.y])
 		c.region_roads.append({"id": "L%d" % (k + 1), "von": k, "nach": k + 1, "zellen": cells.size(), "laenge": path.size(), "verbunden": not path.is_empty(),
 			"eigentum": "region", "wartung": "anliegende Städte je Verwaltungsgebiet"})
+
+
+## Strassenzelle eines Orts, die dem Nachbarort am naechsten liegt (south: groesstes y), nur Zellen, die mit der Ortsmitte verbunden sind.
+func _edge_road(k: int, south: bool) -> Vector2i:
+	var r: Rect2i = _rects[k]
+	var ctr := Vector2i(int(towns_out[k].center[0]), int(towns_out[k].center[1]))
+	var best := ctr
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var p := Vector2i(x, y)
+			if not c.inside(p) or not c.is_road(p) or x >= ctr.x:
+				continue   # nicht die Uferstrasse/Hafenzufahrt
+			if (south and p.y > best.y) or (not south and p.y < best.y):
+				if _road_path_exists(p, ctr):
+					best = p
+	return best
 
 
 func _land_cover_region() -> void:
@@ -358,8 +432,20 @@ func _land_cover_region() -> void:
 			var f := noise.get_noise_2d(x * 1.5 + 1000, y * 1.5)
 			if f > 0.25 and rng.randf() < 0.55:
 				_tree(p)
-			elif f < -0.35 and _rects.any(func(r): return r.grow(30).has_point(p)):
+			elif f < _field_threshold(p) and _rects.any(func(r): return r.grow(30).has_point(p)):
 				c.ground[i] = G.CROP if (y / 3) % 2 == 0 else G.FIELD
+
+
+## Felder: Bauerndorf haeufiger (Schwelle hoeher), Fischerdorf seltener.
+func _field_threshold(p: Vector2i) -> float:
+	for i in _rects.size():
+		if _rects[i].grow(30).has_point(p):
+			match str(towns_out[i].get("charakter", "")):
+				"Bauerndorf":
+					return -0.1
+				"Fischerdorf":
+					return -0.5
+	return -0.35
 
 
 # ------------------------------------------------------------------ Pruefung

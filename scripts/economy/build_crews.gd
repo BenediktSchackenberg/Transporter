@@ -53,6 +53,10 @@ func _home_of(bid: String) -> Vector2i:
 	var b: Dictionary = sim.construction.builders.get(bid, {})
 	if b.has("company"):
 		return sim.depot_road(int(b.company))
+	if b.has("town"):   # oertliche Baufirma einer weiteren Stadt: Bauhof dieser Stadt
+		var own: Dictionary = sim.city.building(int(sim.towns.depot(int(b.town)).building))
+		if not own.is_empty():
+			return own.road
 	var yard: Dictionary = sim.city.building(int(sim.trader.bauhof))
 	return yard.road if not yard.is_empty() else sim.fleet.depot_road()
 

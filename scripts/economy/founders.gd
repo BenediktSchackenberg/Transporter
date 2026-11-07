@@ -69,8 +69,10 @@ func opportunities() -> Array:
 				out.append({"stadt": k, "branche": str(Production.UPSTREAM[item]), "anlass": "%s wartet auf %s, kein Hersteller in der Region" % [b.name, Production.item_name(item)]})
 		# Bauvorhaben ohne Baufirma vor Ort
 		var waiting: int = sim.construction.works.values().filter(func(w): return w.status == "laufend" and str(w.waiting).contains("Bautrupp") and T.of_building(int(w.building)) == k).size()
+		var today := GameCalendar.day_of(sim.game_min)
+		waiting += sim.construction.projects.values().filter(func(p): return p.status in ["erschliessung", "im_bau"] and int(p.get("start", 0)) > today + 10 and T.of_parcel(str(p.parcel)) == k).size()
 		if waiting >= 2 and not in_town.any(func(b): return b.branch == "baufirma"):
-			out.append({"stadt": k, "branche": "baufirma", "anlass": "%d Bauvorhaben in %s warten auf einen Bautrupp" % [waiting, T.name_of(k)]})
+			out.append({"stadt": k, "branche": "baufirma", "anlass": "%d Bauvorhaben in %s warten auf einen Bautrupp bzw. Baubeginn" % [waiting, T.name_of(k)]})
 	return out
 
 

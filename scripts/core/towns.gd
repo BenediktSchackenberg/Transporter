@@ -7,6 +7,7 @@ extends RefCounted
 ## Zustaendigkeit: Verwaltungsgebiet = Ort mit dem naechsten Zentrum (CityData.town_of), unabhaengig vom Eigentum.
 
 const START_BUDGET := 200000.0     # Startbudget weiterer Orte (Landeszuweisung X0 -> P<k>, wie der Seed von P0)
+const DEVELOPER_CAPITAL := 140000.0   # Kapital des Bautraegers je weiterem Ort (Investoren von aussen X0 -> D0, wie dessen Seed fuer Ort 0)
 
 var sim
 var list: Array = []               # [{id, name, center: Vector2i, rect: Rect2i, town_hall, bauhof, harbor, start_plot}]
@@ -70,7 +71,7 @@ func setup(simulation) -> void:
 		for t in cd.towns:
 			list.append({"id": int(t.id), "name": str(t.name), "center": Vector2i(int(t.center[0]), int(t.center[1])),
 				"rect": Rect2i(int(t.rect[0]), int(t.rect[1]), int(t.rect[2]), int(t.rect[3])), "town_hall": int(t.get("town_hall", -1)),
-				"bauhof": int(t.get("bauhof", -1)), "harbor": int(t.get("harbor", -1)), "start_plot": int(t.get("start_plot", -1))})
+				"bauhof": int(t.get("bauhof", -1)), "harbor": int(t.get("harbor", -1)), "start_plot": int(t.get("start_plot", -1)), "charakter": str(t.get("charakter", ""))})
 	else:
 		var th := -1
 		for b in cd.buildings:

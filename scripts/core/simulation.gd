@@ -276,6 +276,7 @@ func _setup_towns() -> void:
 		var acct := Towns.account_of(k)
 		economy.accounts[acct] = 0.0
 		economy.transfer("X0", acct, Towns.START_BUDGET)
+		economy.transfer("X0", Construction.DEVELOPER, Towns.DEVELOPER_CAPITAL)   # Bautraeger bekommt Kapital fuer den Wohnungsbau dieser Stadt
 		var h := Harbor.new()
 		h.town = k
 		h.setup(self)

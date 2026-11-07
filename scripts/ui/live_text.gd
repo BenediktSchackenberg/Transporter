@@ -865,7 +865,8 @@ static func town(sim: Simulation, k: int = 0) -> String:
 	var g: Dictionary = M.goals()
 	var region := T.is_region()
 	var name: String = T.name_of(k)
-	var txt := "[b][color=#f2c14e]%s[/color][/b]  (Bürgermeister %s, %s, Zustimmung %d %%%s)\n" % [esc(name).to_upper(), esc(M.name), M.party, int(M.approval),
+	var chr: String = str(T.get_t(k).get("charakter", ""))
+	var txt := "[b][color=#f2c14e]%s[/color][/b]%s  (Bürgermeister %s, %s, Zustimmung %d %%%s)\n" % [esc(name).to_upper(), (" · " + chr) if chr != "" else "", esc(M.name), M.party, int(M.approval),
 		", Stadt %d von %d · Taste O wechselt" % [k + 1, T.count()] if region else ""]
 	var homes := sim.housing.units.values().filter(func(u): return T.of_building(int(u.building)) == k) if region else sim.housing.units.values()
 	var nb: int = sim.city.buildings.filter(func(b): return not region or T.of_building(int(b.id)) == k).size()

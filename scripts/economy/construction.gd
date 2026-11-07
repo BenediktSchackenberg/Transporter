@@ -94,6 +94,12 @@ func setup(simulation) -> void:
 		builders[id] = BUILDERS[id].duplicate()
 		builders[id]["status"] = "aktiv"
 		builders[id]["history"] = {"fertig": 0, "verzoegert": 0, "maengel": 0}
+	# Region (Auftrag 17): je weitere Stadt eine oertliche Baufirma (Trupps am Bauhof dieser Stadt); die drei bisherigen sitzen in Ort 0
+	if sim.towns.is_region():
+		for k in range(1, sim.towns.count()):
+			var bid := "BF%d" % (BUILDERS.size() + k)
+			builders[bid] = {"name": "Bau %s" % sim.towns.name_of(k), "price": 1.0, "days": 1.0, "quality": 0.8, "reliability": 0.88, "capacity": 3,
+				"town": k, "status": "aktiv", "history": {"fertig": 0, "verzoegert": 0, "maengel": 0}}
 	sim.day_changed.connect(on_day)
 	sim.month_changed.connect(on_month)
 
@@ -748,14 +754,20 @@ func _developer_town(town: int) -> void:
 	var region: bool = sim.towns.is_region()
 	var M: Mayor = sim.towns.mayor(town)
 	var mine := func(pid: String) -> bool: return not region or sim.towns.of_parcel(pid) == town
+	# Region: je Stadt 1 Vorhaben, bei vielen Wohnungssuchenden mehr (1 + je 3 Wartende, hoechstens 3); Einzelstadt wie bisher 1
+	var allowed := 1 if not region else clampi(1 + M.waiting / 3, 1, 3)
+	var running := 0
 	for pr in projects.values():
 		if pr.client == DEVELOPER and pr.status in ["angebote", "erschliessung", "im_bau", "pruefung", "wartet_anschluss"] and mine.call(str(pr.parcel)):
-			return        # ein Vorhaben nach dem anderen (je Stadt)
+			running += 1
 	for a in sim.permits.apps.values():
-		if a.applicant != DEVELOPER or not mine.call(str(a.parcel)):
+		if a.applicant == DEVELOPER and mine.call(str(a.parcel)) and a.status != "entschieden":
+			running += 1   # Antrag in Pruefung zaehlt mit
+	if running >= allowed:
+		return
+	for a in sim.permits.apps.values():
+		if a.applicant != DEVELOPER or not mine.call(str(a.parcel)) or a.status != "entschieden":
 			continue
-		if a.status != "entschieden":
-			return
 		if a.result.begins_with("genehmigt") and not a.expired:
 			var known := false
 			for pr in projects.values():

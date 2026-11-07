@@ -135,6 +135,9 @@ func vacancy() -> float:
 	return float(stock_units - occupied_units()) / maxf(1.0, float(stock_units))
 
 
+const JOB_PULL_MIN := 3.0     # Haushalte je Monat, die bei offenen Stellen mindestens zuziehen (Region)
+
+
 func _region() -> bool:
 	return sim.towns != null and sim.towns.is_region()
 
@@ -152,6 +155,15 @@ func _arrivals_town() -> void:
 	var boost := marketing_boost if month <= marketing_until else 0.0
 	var rate := float(Population.cfg().get("zuzug_je_monat", 0.04)) / float(GameCalendar.DAYS_PER_MONTH)
 	_arrival_acc += float(Z.population_of(town)) / PERSONS_PER_UNIT * rate * (0.5 + Z.employment_rate()) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost)
+	# Sog durch Arbeit: kleine Orte wachsen nicht nur proportional zur Einwohnerzahl. Je besser die Beschaeftigung, desto mehr Haushalte
+	# kommen zusaetzlich (bei 90 % JOB_PULL_MIN je Monat, mehr bei offenen Stellen); unter 70 % kein zusaetzlicher Zuzug.
+	var open_jobs := 0
+	for v in Z._vacancies().values():
+		open_jobs += maxi(0, int(v))
+	open_jobs = open_jobs / maxi(1, sim.towns.count())
+	var pull := clampf((Z.employment_rate() - 0.7) / 0.2, 0.0, 1.0)   # 70 % Beschaeftigung: kein Sog, 90 %: voller Sog
+	if pull > 0.0:
+		_arrival_acc += maxf(JOB_PULL_MIN, float(open_jobs) / PERSONS_PER_UNIT) * pull / float(GameCalendar.DAYS_PER_MONTH) * (1.0 + boost)
 	var new_h := int(_arrival_acc)
 	_arrival_acc -= float(new_h)
 	waiting += new_h
