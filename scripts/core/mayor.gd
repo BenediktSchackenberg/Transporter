@@ -271,7 +271,11 @@ func stadtlager_indicators() -> Dictionary:
 		if o.status == "vorschlag":
 			var q := D.quote(o.item, int(o.qty), int(o.crit))
 			props.append({"id": o.id, "artikel": CityGoods.get_item(o.item).name, "menge": o.qty, "kritikalitaet": o.crit, "grund": o.reason, "geschaetzte_kosten": snappedf(float(q[0].total) if not q.is_empty() else 0.0, 1.0),
-				"anbieter": q[0].name if not q.is_empty() else "", "tage_offen": _today() - int(o.day), "entscheidung": o.get("decision", "")})
+				"anbieter": q[0].name if not q.is_empty() else "", "tage_offen": _today() - int(o.day), "entscheidung": o.get("decision", ""),
+				"projekt": str(o.get("project", ""))})
+	# Material laufender Projekte zuerst: der Buergermeister hat pro Runde nur wenige Aktionen, und jedes offene
+	# Projektmaterial muss genehmigt werden, bevor der Bauschritt laeuft (sonst stauen Routineeinkaeufe die Projekte aus).
+	props.sort_custom(func(a, b): return (str(a.projekt) != "" and str(b.projekt) == "") or (str(a.projekt) != "" and str(b.projekt) != "" and int(a.kritikalitaet) > int(b.kritikalitaet)))
 	return {"rampen": D.ramps, "rampen_frei": D.ramps_free(), "lkw_wartezeiten_letzte_10_tage": D.recent_waits(), "rueckstau_wareneingang_einheiten": D.backlog_units(),
 		"personal_verfuegbar": D.available_staff(), "personal_gesamt": D.roster().size(), "kapazitaet_wareneingang_je_tag": D.dock_capacity(), "gabelstapler": D.forklifts(),
 		"laufende_kosten_monat": snappedf(float(D.running_costs().summe), 1.0), "blockaden": D.current_tasks().blockers.slice(0, 4),
