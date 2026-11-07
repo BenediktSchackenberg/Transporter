@@ -41,7 +41,8 @@ static func _finance(price: float, cash: float, buffer: float, me: Dictionary, p
 
 
 ## Investitionsfinanzierung (Gruendung, Bergwerk, Zufahrt, Ausbau): reicht das Bargeld nicht, wird die Luecke per Kredit gedeckt -
-## mit mindestens INVEST_EQUITY Eigenanteil und hoechstens dem Anteil des freien Kreditrahmens, den die Persoenlichkeit riskiert.
+## mit mindestens INVEST_EQUITY Eigenanteil und hoechstens dem Anteil des freien Kreditrahmens, den die Persoenlichkeit riskiert
+## (Laufzeit LOAN_MONTHS: die Geschaeftsbank vergibt 1 bis 12 Monate).
 ## Gibt true zurueck, wenn die Investition (ggf. mit vorgeschaltetem take_loan) jetzt erfolgen kann.
 const INVEST_APPETITE := {"wachstum": 0.8, "risikospieler": 1.0, "netzwerker": 0.6, "kostenoptimierer": 0.4}
 const INVEST_EQUITY := 0.3
@@ -51,9 +52,11 @@ static func _invest(cost: float, extra: float, cash: float, me: Dictionary, pers
 	if actions.any(func(a): return a.action in ["take_loan", "request_loan"]) or cash < cost * INVEST_EQUITY:
 		return false
 	var gap := ceilf((cost + minf(extra, PROD_RESERVE) - cash) / 1000.0) * 1000.0   # mit Kredit: nur die Betriebsreserve muss uebrig bleiben
+	if gap <= 0.0:
+		return true   # Betriebsreserve bleibt auch ohne Kredit; nur der volle Puffer fehlt
 	if gap > float(me.get("kreditrahmen_frei", 0.0)) * float(INVEST_APPETITE.get(personality, 0.5)):
 		return false
-	actions.insert(0, {"action": "take_loan", "amount": gap, "monate": 24})
+	actions.insert(0, {"action": "take_loan", "amount": gap, "monate": LOAN_MONTHS})
 	reasons.append("finanziere %d EUR der Investition per Kredit (Eigenanteil %d EUR)" % [int(gap), int(cash)])
 	return true
 
