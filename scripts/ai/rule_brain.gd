@@ -40,6 +40,24 @@ static func _finance(price: float, cash: float, buffer: float, me: Dictionary, p
 	return true
 
 
+## Investitionsfinanzierung (Gruendung, Bergwerk, Zufahrt, Ausbau): reicht das Bargeld nicht, wird die Luecke per Kredit gedeckt -
+## mit mindestens INVEST_EQUITY Eigenanteil und hoechstens dem Anteil des freien Kreditrahmens, den die Persoenlichkeit riskiert.
+## Gibt true zurueck, wenn die Investition (ggf. mit vorgeschaltetem take_loan) jetzt erfolgen kann.
+const INVEST_APPETITE := {"wachstum": 0.8, "risikospieler": 1.0, "netzwerker": 0.6, "kostenoptimierer": 0.4}
+const INVEST_EQUITY := 0.3
+static func _invest(cost: float, extra: float, cash: float, me: Dictionary, personality: String, actions: Array, reasons: Array) -> bool:
+	if cash >= cost + extra:
+		return true
+	if actions.any(func(a): return a.action in ["take_loan", "request_loan"]) or cash < cost * INVEST_EQUITY:
+		return false
+	var gap := ceilf((cost + minf(extra, PROD_RESERVE) - cash) / 1000.0) * 1000.0   # mit Kredit: nur die Betriebsreserve muss uebrig bleiben
+	if gap > float(me.get("kreditrahmen_frei", 0.0)) * float(INVEST_APPETITE.get(personality, 0.5)):
+		return false
+	actions.insert(0, {"action": "take_loan", "amount": gap, "monate": 24})
+	reasons.append("finanziere %d EUR der Investition per Kredit (Eigenanteil %d EUR)" % [int(gap), int(cash)])
+	return true
+
+
 static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenerator, strategy: Dictionary = {}) -> Dictionary:
 	if obs.is_empty():
 		return {"summary": "Ich warte ab.", "actions": [{"action": "wait"}], "memory": ""}
@@ -56,6 +74,11 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	# Flottenkauf nur bei ausreichender gemessener Auslastung (solange noch keine Messung vorliegt: keine Sperre)
 	var util_ok: bool = float(strategy.get("utilization_now", 1.0)) >= float(strategy.get("fleet_purchase_utilization_min", 0.0))
 	var planned: Array = obs.figur.geplante_aktionen
+	# Gruender mit offenem Ziel (z. B. Bergbau): das Kapital ist fuer das Ziel bestimmt, keine Fahrzeuge kaufen, bis es erreicht ist
+	var focus0 := str(me.get("fokus", ""))
+	if focus0 != "" and not obs.get("betriebe", []).any(func(b): return b.branche == focus0):
+		util_ok = false
+		planned.append("buy_vehicle")
 	var load: PackedStringArray = str(me.buero.laufende_auftraege).split("/")
 	var active := load[0].to_int()
 	var capacity := load[1].to_int()
@@ -538,7 +561,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	# wird zuerst aufgestockt (Soll = Personal der naechsten Stufe).
 	for b in own:
 		var au: Dictionary = b.get("ausbau", {})
-		if au.is_empty() or cash < float(au.kosten) + buffer + PROD_RESERVE:
+		if au.is_empty() or not _invest(float(au.kosten), buffer + PROD_RESERVE, cash, me, personality, actions, reasons):
 			continue
 		if bool(au.moeglich):
 			actions.append({"action": "upgrade_business", "business_id": b.id, "reason": "Nachfrage %d %%, Ausbau zu %s" % [int(float(b.get("nachfrage", 0.0)) * 100.0), au.ziel]})
@@ -626,7 +649,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		var why := "%s wird gebraucht (Lagerstätte %s)" % [Production.item_name(rohstoff), st.grundstueck]
 		match str(st.schritt):
 			"erkunden":
-				if cash > float(st.get("kosten", 6000)) + buffer + PROD_RESERVE:
+				if _invest(float(st.get("kosten", 6000)), buffer + PROD_RESERVE, cash, me, personality, actions, reasons):
 					actions.append({"action": "explore_deposit", "grundstueck": st.grundstueck, "reason": why})
 					reasons.append("lasse auf %s eine Probebohrung machen" % st.grundstueck)
 				planned.append("found_business")
@@ -637,7 +660,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 				planned.append("found_business")
 				return
 			"zufahrt":
-				if int(mk.get("zufahrten_im_bau", 0)) == 0 and int(st.get("kosten", -1)) > 0 and cash > float(st.kosten) + buffer + PROD_RESERVE:
+				if int(mk.get("zufahrten_im_bau", 0)) == 0 and int(st.get("kosten", -1)) > 0 and _invest(float(st.kosten), buffer + PROD_RESERVE, cash, me, personality, actions, reasons):
 					actions.append({"action": "build_access", "grundstueck": st.grundstueck, "reason": why + ", keine Zufahrt"})
 					reasons.append("beantrage eine Zufahrt zur Lagerstätte %s" % st.grundstueck)
 				planned.append("found_business")
@@ -653,8 +676,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	if not avail.has(branch):
 		return
 	var cost := float(avail[branch])
-	var need := cost + buffer * (2.0 if personality == "kostenoptimierer" else 1.0) + PROD_RESERVE
-	if cash < need:
+	if not _invest(cost, buffer * (2.0 if personality == "kostenoptimierer" else 1.0) + PROD_RESERVE, cash, me, personality, actions, reasons):
 		return
 	actions.append({"action": "found_business", "branche": branch, "rohstoff": rohstoff, "reason": "Kettenstufe fehlt in der Stadt (Bäckereien %d, Mühlen %d, Felder %d)" % [int(mk.baeckereien), int(mk.muehlen), int(mk.felder)]})
 	planned.append("found_business")

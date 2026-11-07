@@ -293,6 +293,10 @@ func decide(id: String, approve: bool, reason: String, by: String, choice: Dicti
 		var chosen := _apply_choice(j, choice)
 		if not chosen.ok:
 			return chosen
+	# Kann die Stadt ihren Brueckenanteil nicht tragen, prueft das Amt den Umweg ueber Land ohne Bruecke, den die Firma allein bezahlt
+	if float(j.stadtanteil) > 0.0 and _mayor_of(j).available_budget() < float(j.stadtanteil) and _land_only(j) and c.ledger.cash >= float(j.beitrag):
+		approve = true
+		reason = "Stadtkasse trägt keine Brücke; genehmigt als Umweg über Land (%d Felder), Kosten trägt %s (%s)." % [j.cells.size(), c.company_name, Catalog.money(float(j.beitrag))]
 	j.decision = {"by": by, "reason": reason.left(200), "day": GameCalendar.day_of(sim.game_min), "approve": approve, "wahl": choice}
 	if approve and _mayor_of(j).available_budget() < float(j.stadtanteil):
 		return {"ok": false, "msg": "Die verfügbare Stadtkasse reicht nicht für den Anteil der Stadt (%s)." % Catalog.money(float(j.stadtanteil))}
@@ -356,6 +360,23 @@ func _new_job(pid: String, cid: int, pl: Dictionary) -> Dictionary:
 	_next += 1
 	jobs[j.id] = j
 	return j
+
+
+## Antrag auf den reinen Landweg umstellen (ohne Bruecke, ohne Stadtanteil). false, wenn es keinen Landweg gibt.
+func _land_only(j: Dictionary) -> bool:
+	var p: Dictionary = sim.parcels.parcel(str(j.parcel))
+	var res := _search(p, false)
+	if not res.ok or res.cells.is_empty():
+		return false
+	_price(res, {"spans": [], "kosten": 0.0, "tage": 0})
+	j.cells = res.cells.map(func(v): return [v.x, v.y])
+	j.cost = float(res.kosten)
+	j.beitrag = float(res.kosten)
+	j.stadtanteil = 0.0
+	j.spans = []
+	j.tage = int(res.tage)
+	j.ersparnis = 0
+	return true
 
 
 ## Beschlossen: Wegebau und Bruecken als Stadtprojekte ausschreiben (Baufirmen bieten; Material aus dem Stadtlager).

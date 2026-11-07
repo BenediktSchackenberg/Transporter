@@ -68,9 +68,12 @@ func _initialize() -> void:
 		if d.seller != Production.IMPORT and d.buyer != Production.IMPORT and s.towns.of_building(int(d.seller_loc)) != s.towns.of_building(int(d.buyer_loc)):
 			inner += 1
 	print("Binnenhandel zwischen Städten: %d Geschäfte" % inner)
+	for c in s.companies.filter(func(c): return c.focus != ""):
+		print("Firma %d (Ziel %s, Kasse %d, Kreditrahmen frei %d): %s" % [c.id, c.focus, int(c.ledger.cash), int(s.max_loan(c.id) - c.ledger.debt), str(s.action_results.get(c.id, []).slice(-6).map(func(r): return str(r.text).left(120)))])
+	print("Kredite: %s" % str(s.companies.filter(func(c): return c.ledger.debt > 0.0).map(func(c): return "Firma %d %d EUR" % [c.id, int(c.ledger.debt)])))
 	var M: Mining = s.mining
 	print("Bergbau: erkundet %s, Bohrungen %s, Abbaurechte %s" % [str(M.explored.keys()), str(M.drillings.keys()), str(M.permits.values().map(func(p): return "%s Firma %d" % [p.status, int(p.cid)]))])
-	print("Zufahrten: %s" % str(s.access.jobs.values().map(func(j): return "%s %s %s" % [j.id, j.parcel, j.status])))
+	print("Zufahrten: %s" % str(s.access.jobs.values().slice(0, 3).map(func(j): return "%s %s %s Firma %d (Kasse %d, Beitrag %d) Stadtanteil %d: %s" % [j.id, j.parcel, j.status, int(j.company), int(s.company(int(j.company)).ledger.cash) if int(j.company) >= 0 else -1, int(j.beitrag), int(j.stadtanteil), str(j.get("decision", {}).get("reason", "")).left(140)])))
 	var ind_br := ["bergwerk", "kokerei", "stahlwerk", "elektrostahlwerk", "forst", "moebelwerk", "brauerei", "muehle", "feld", "schlachthof", "tierhaltung", "baufirma"]
 	print("Betriebe nach Branche: %s" % str(ind_br.map(func(br): return "%s %d" % [br, s.biz.items.values().filter(func(b): return b.branch == br and b.status != "geschlossen").size()])))
 	print("Industrieflächen je Stadt: %s" % str(range(s.towns.count()).map(func(k): return s.parcels.items.values().filter(func(p): return p.zone == "industrie" and s.towns.of_parcel(str(p.id)) == k).size())))
