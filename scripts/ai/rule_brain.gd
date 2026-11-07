@@ -561,7 +561,9 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 				planned.append("recruit_worker")
 				reasons.append("werbe %s für den Betrieb %s an" % [cand.name, b.id])
 		return
-	if own.size() >= int(PROD_MAX.get(personality, 1)) or "found_business" in planned:
+	var focus := str(me.get("fokus", ""))
+	var focus_open: bool = focus != "" and not own.any(func(b): return b.branche == focus)
+	if (own.size() >= int(PROD_MAX.get(personality, 1)) and not focus_open) or "found_business" in planned:
 		return
 	# Abgestimmt: zuerst die Vorstufe, auf die ein bestehender Betrieb wartet; Muehle erst mit Feld, Schlachthof erst mit Tierhaltung
 	var branch := ""
@@ -574,7 +576,11 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 				rohstoff = str(item)
 			break
 	var opener: Array = PROD_OPENER.get(personality, [])
-	if branch != "":
+	if focus_open:
+		branch = focus   # Gruendungsziel (z. B. Bergbau): Anlass der Gruendung, zuerst verfolgen
+		if branch == "bergwerk" and obs.has("bergbau") and not obs.bergbau.is_empty():
+			rohstoff = "eisenerz" if obs.bergbau.has("eisenerz") else str(obs.bergbau.keys()[0])
+	elif branch != "":
 		pass
 	elif int(mk.get("bau_wartend", 0)) >= 2 and int(mk.get("bautrupps_frei", 0)) == 0 and not own.any(func(b): return b.branche == "baufirma"):
 		branch = "baufirma"   # hohe Baunachfrage: eigene Bautrupps stellen und Bauauftraege uebernehmen

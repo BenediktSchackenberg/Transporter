@@ -7,6 +7,7 @@ extends RefCounted
 ## Zustaendigkeit: Verwaltungsgebiet = Ort mit dem naechsten Zentrum (CityData.town_of), unabhaengig vom Eigentum.
 
 const START_BUDGET := 200000.0     # Startbudget weiterer Orte (Landeszuweisung X0 -> P<k>, wie der Seed von P0)
+const INVESTOR_CAPITAL := 150000.0    # Kapitalgeberpool I0 je weiterem Ort (von aussen X0 -> I0, wie dessen Seed fuer Ort 0)
 const DEVELOPER_CAPITAL := 140000.0   # Kapital des Bautraegers je weiterem Ort (Investoren von aussen X0 -> D0, wie dessen Seed fuer Ort 0)
 
 var sim

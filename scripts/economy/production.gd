@@ -372,6 +372,13 @@ func deposit_of(pid: String) -> Dictionary:
 	return out
 
 
+## Grundstuecke mit Lagerstaette (legt die Lagerstaetten bei Bedarf an).
+func deposit_parcels() -> Array:
+	if _deposits.is_empty():
+		_build_deposits()
+	return _deposits.keys()
+
+
 func _build_deposits() -> void:
 	var seed_v: int = int(sim.city.seed_value)
 	var cands: Array = sim.parcels.items.values().filter(func(p): return (_near_mountain(p) if sim.city.coastal() else _outskirts(p)) 		and p.zone not in ["gruen", "korridor"] and sim.parcels.is_buildable(p) and int(p.area) >= 40 and p.state == "frei")

@@ -17,6 +17,9 @@ const STREAK := 3
 const MAX_PER_TOWN := 3              # ursprunglicher Unternehmer + bis zu zwei Gruender (konfigurierbar ueber max_per_town)
 const COOLDOWN_DAYS := 30
 const CAPITAL := 60000.0
+const CAPITAL_BY_BRANCH := {"bergwerk": 120000.0, "stahlwerk": 150000.0, "kokerei": 110000.0}
+const MINING_FROM_DAY := 20          # Bergbau als Chance erst, wenn die Orte angelaufen sind
+const FOCUS_BRANCHES := ["bergwerk"] # mehrstufige Gruendung (Probebohrung, Abbaurecht, Zufahrt): die Regel-KI geht die Schritte selbst
 const FIRST := ["Jana", "Tom", "Aylin", "Malte", "Greta", "Kemal", "Ronja", "Lars", "Mira", "Nils", "Selin", "Arne"]
 const LAST := ["Brückner", "Seidel", "Kaya", "Wendt", "Lorenz", "Ahrens", "Petersen", "Yilmaz", "Haas", "Voss", "Engel", "Kruse"]
 const WORDS := ["Werke", "& Partner", "Betriebe", "Handel", "Gruppe"]
@@ -67,6 +70,16 @@ func opportunities() -> Array:
 			var item := str(b.get("waiting_for", ""))
 			if item != "" and Production.UPSTREAM.has(item) and not running.any(func(x): return x.branch == Production.UPSTREAM[item]):
 				out.append({"stadt": k, "branche": str(Production.UPSTREAM[item]), "anlass": "%s wartet auf %s, kein Hersteller in der Region" % [b.name, Production.item_name(item)]})
+		# Rohstoffe: noch kein Bergwerk in der Region und eine Lagerstaette ist frei -> Bergbau (Ausfuhr ueber den Hafen, spaeter Industrie)
+		if k == _mining_town() and GameCalendar.day_of(sim.game_min) >= MINING_FROM_DAY and not running.any(func(b): return b.branch == "bergwerk") \
+				and not sim.companies.any(func(c): return c.focus == "bergwerk" and c.status not in ["geschlossen", "verwertung"]):
+			var dep := _free_deposit()
+			if not dep.is_empty():
+				out.append({"stadt": k, "branche": "bergwerk", "anlass": "Lagerstätte %s (%s) ungenutzt – Bergbau mit Zufahrt in die Berge" % [dep.grundstueck, Production.item_name(str(dep.art))]})
+		# Weiterverarbeitung: Erz wird gefoerdert, aber kein Stahlwerk in der Region -> Industrie
+		if k == _mining_town() and running.any(func(b): return b.branch == "bergwerk" and str(b.get("deposit", {}).get("art", "")) == "eisenerz" and int(b.get("total", 0)) > 0) \
+				and not running.any(func(b): return b.branch in ["stahlwerk", "elektrostahlwerk"]):
+			out.append({"stadt": k, "branche": "stahlwerk", "anlass": "Eisenerz wird gefördert, aber in der Region nicht verarbeitet – Stahlwerk"})
 		# Bauvorhaben ohne Baufirma vor Ort
 		var waiting: int = sim.construction.works.values().filter(func(w): return w.status == "laufend" and str(w.waiting).contains("Bautrupp") and T.of_building(int(w.building)) == k).size()
 		var today := GameCalendar.day_of(sim.game_min)
@@ -74,6 +87,31 @@ func opportunities() -> Array:
 		if waiting >= 2 and not in_town.any(func(b): return b.branch == "baufirma"):
 			out.append({"stadt": k, "branche": "baufirma", "anlass": "%d Bauvorhaben in %s warten auf einen Bautrupp bzw. Baubeginn" % [waiting, T.name_of(k)]})
 	return out
+
+
+## Stadt, von der aus Bergbau und Industrie entstehen: die einwohnerstaerkste mit freiem Gruenderplatz (Arbeitskraefte, Hafen);
+## Bergbau ist eine regionale Aufgabe, nicht an die groesste Stadt gebunden.
+func _mining_town() -> int:
+	var best := -1
+	for k in sim.towns.count():
+		if active_home(k) >= max_per_town:
+			continue
+		if best < 0 or sim.citizens.population_of(k) > sim.citizens.population_of(best):
+			best = k
+	return best
+
+
+## Freie Lagerstaette (Eisenerz bevorzugt), auf der noch niemand bohrt oder abbaut.
+func _free_deposit() -> Dictionary:
+	for art in ["eisenerz", "kohle", "kalkstein", "rohmaterial"]:
+		for pid in sim.prod.deposit_parcels():
+			var d: Dictionary = sim.prod.deposit_of(str(pid))
+			if d.is_empty() or str(d.art) != art or sim.mining.drillings.has(pid) or sim.mining.permits.has(pid):
+				continue
+			var p: Dictionary = sim.parcels.parcel(str(pid))
+			if not p.is_empty() and p.state == "frei" and Towns.is_public(str(p.owner)):
+				return {"grundstueck": str(pid), "art": art}
+	return {}
 
 
 func active_home(town: int) -> int:
@@ -99,15 +137,30 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 		return _refuse(town, branch, "unbekannte Branche")
 	var bsize: Array = CityGenerator.TYPES[str(spec.get("gebaeude", "farm"))]
 	var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4
-	var site_ok: bool = sim.parcels.search({"min_area": min_area, "town": town, "limit": 400}).any(func(p): return bool(sim.parcels.utilities_of(p).strasse))
+	var site_ok: bool = branch in FOCUS_BRANCHES or sim.parcels.search({"min_area": min_area, "town": town, "limit": 400}).any(func(p): return bool(sim.parcels.utilities_of(p).strasse))
+	if branch == "bergwerk" and _free_deposit().is_empty():
+		return _refuse(town, branch, "keine freie Lagerstätte")
 	if not site_ok:
 		return _refuse(town, branch, "kein freies erschlossenes Grundstück (mind. %d Felder)" % min_area)
 	if sim.citizens.unemployed_total() + sim.citizens.applicants() < int(spec.get("personal_min", 1)) + 1:
 		return _refuse(town, branch, "kein Personal am Arbeitsmarkt")
-	var need := CAPITAL
+	var need := float(CAPITAL_BY_BRANCH.get(branch, CAPITAL))
 	if float(sim.economy.accounts.get("I0", 0.0)) < need:
 		return _refuse(town, branch, "Kapitalgeber ohne Mittel (I0 %s, nötig %s)" % [Catalog.money(float(sim.economy.accounts.get("I0", 0.0))), Catalog.money(need)])
-	var c := _create(town, reason)
+	var c := _create(town, reason, need)
+	if branch in FOCUS_BRANCHES:
+		# mehrstufig: Ziel setzen, Hauptsitz im Ort (Rathaus-Nachbarschaft folgt mit dem ersten Betrieb); die Regel-KI bohrt, beantragt,
+		# laesst die Zufahrt bauen und gruendet dann das Bergwerk
+		c.focus = branch
+		c.personality = "wachstum"
+		c.depots.append(int(sim.towns.get_t(town).town_hall))   # vorlaeufiger Sitz: Buero im Rathaus der Heimatstadt
+		sim.personnel.start_staff_small(c.id)
+		last_found[town] = day
+		history.append({"tag": day, "stadt": town, "firma": c.id, "branche": branch, "anlass": reason, "kapital": need})
+		sim.log_event("Neue Bergbaufirma in %s: %s (%s) – Anlass: %s. Einlage %s vom Kapitalgeberpool; nächste Schritte: Probebohrung, Abbaurecht, Zufahrt, Bergwerk." % [
+			sim.towns.name_of(town), c.player_name, c.company_name, reason, Catalog.money(need)], "good", c.id)
+		company_founded.emit(c.id)
+		return {"ok": true, "msg": "%s gegründet (Firma %d, Ziel Bergbau)." % [c.company_name, c.id], "ref": c.id}
 	var r: Dictionary = sim.executor.execute(c.id, {"action": "found_business", "branche": branch, "stadt": str(town), "reason": reason})
 	if not r.get("ok", false):
 		# Gruendung des Betriebs gescheitert: Firma bleibt mit ihrer Einlage bestehen (kein Rueckbau von IDs), Grund protokolliert
@@ -127,7 +180,7 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 
 
 ## Neue Company am Ende des Registers (eigene ID, eigenes Konto "C<id>", Einlage aus I0, eigenes Gedaechtnis, Figur und Personal).
-func _create(town: int, reason: String) -> Company:
+func _create(town: int, reason: String, capital: float = CAPITAL) -> Company:
 	var cid: int = sim.companies.size()
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([sim.city.seed_value, cid, "gruender"])
@@ -145,7 +198,7 @@ func _create(town: int, reason: String) -> Company:
 	sim.companies.append(c)
 	sim.economy.attach(c.ledger, "C%d" % cid)
 	c.ledger.public_acct = Towns.account_of(town)
-	c.ledger.inject(CAPITAL)   # Einlage aus dem Kapitalgeberpool (I0 -> Firma), kein neues Geld
+	c.ledger.inject(capital)   # Einlage aus dem Kapitalgeberpool (I0 -> Firma), kein neues Geld
 	c.ledger.book("admin", -float(CompanyForms.FORMS[c.form].found_cost), true, "Gründung " + CompanyForms.name_of(c.form), sim.game_min)
 	for k in sim.contracts:
 		if sim.contracts[k].status == "open":

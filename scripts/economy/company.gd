@@ -12,6 +12,7 @@ var ledger := Ledger.new()
 var reputation := 50.0
 var depots: Array = []          # Depot-Standort-IDs (erstes = Hauptdepot)
 var home_town := 0              # Heimat-/Registrierungsstadt (Auftrag 17); Betriebe duerfen in jeder Stadt liegen
+var focus := ""                 # Gruendungsziel eines Gruenders (z. B. "bergwerk"); die Regel-KI verfolgt es vorrangig
 var fuel := 300.0               # Treibstoffvorrat in Litern (Startausstattung, fuer alle gleich)
 var parts := 2                  # Ersatzteile auf Lager
 var vehicle_ids: Array = []
@@ -81,7 +82,7 @@ func to_dict() -> Dictionary:
 		"security_level": security_level, "insurance": insurance, "disrupted_until": disrupted_until,
 		"sabotage_ready_at": sabotage_ready_at, "protected_until": protected_until, "stats": stats,
 		"key_events": key_events, "offices": offices, "office_level": office_level, "internet_level": internet_level,
-		"home_town": home_town, "form": form, "founded_min": founded_min, "generation": generation, "status": status, "status_since": status_since,
+		"home_town": home_town, "focus": focus, "form": form, "founded_min": founded_min, "generation": generation, "status": status, "status_since": status_since,
 		"status_reason": status_reason, "grace_until": grace_until, "administrator": administrator, "pending_form": pending_form,
 		"pending_form_due": pending_form_due, "fuel_rule": fuel_rule, "known": known.keys(), "property_cost": property_cost, "property_book": property_book, "land_book": land_book}
 
@@ -98,6 +99,7 @@ static func from_dict(d: Dictionary) -> Company:
 	c.reputation = d.reputation
 	c.depots = d.depots.map(func(x): return int(x))
 	c.home_town = int(d.get("home_town", 0))
+	c.focus = str(d.get("focus", ""))
 	c.fuel = float(d.get("fuel", 0.0))
 	c.parts = int(d.get("parts", 0))
 	c.vehicle_ids = d.vehicle_ids.map(func(x): return int(x))

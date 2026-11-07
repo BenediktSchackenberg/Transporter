@@ -15,7 +15,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	var now := sim.game_min
 	var depot0: Vector2i = sim.depot_road(cid)
 	var me := {
-		"id": cid, "name": c.player_name, "firma": c.company_name,
+		"id": cid, "name": c.player_name, "firma": c.company_name, "fokus": c.focus,
 		"bargeld": int(L.cash), "schulden": int(L.debt), "gewinn": int(L.profit()), "umsatz": int(L.revenue()),
 		"kosten": int(L.costs()), "kreditrahmen_frei": int(sim.max_loan(cid) - L.debt), "einlagen": int(L.deposits),
 		"reputation": snappedf(c.reputation, 0.1), "sicherheitsstufe": c.security_level, "versicherung": c.insurance,
