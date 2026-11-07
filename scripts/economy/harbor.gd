@@ -96,18 +96,27 @@ func _arrive(day: int) -> void:
 	ship = {"id": "SH%d" % _next, "name": SHIP_NAMES[(_next - 1) % SHIP_NAMES.size()], "day": day, "status": "am_kai", "geloescht": {}, "geladen": {}}
 	_next += 1
 	stats.schiffe = int(stats.schiffe) + 1
-	# Loeschen: wartende Einfuhren in Reihenfolge des Eingangs, bis das Schiff voll ist
+	# Loeschen: wartende Einfuhren in Reihenfolge des Eingangs, bis das Schiff voll ist. Uebergroesze Posten
+	# werden anteilig geloest – sonst wuerde ein Posten, der eine Ladung ueberragt, auf JEDEM Schiff als ganzes
+	# zurueckbleiben und nie ankommen (z. B. 560m Rohr fuer eine Erschliessung bei 240 Ladeeinheiten).
 	var room := capacity()
 	var rest: Array = []
 	for m in manifest:
-		var u := units_of(str(m.item), int(m.qty))
+		var qty := int(m.qty)
+		var u := units_of(str(m.item), qty)
+		var fit := qty
 		if u > room:
+			fit = int(float(qty) * float(room) / float(u))
+			if fit <= 0:
+				rest.append(m)
+				continue
+		room -= units_of(str(m.item), fit)
+		_unload(m, fit)
+		ship.geloescht[m.item] = int(ship.geloescht.get(m.item, 0)) + fit
+		stats.einheiten_ein = int(stats.einheiten_ein) + units_of(str(m.item), fit)
+		if fit < qty:
+			m.qty = qty - fit
 			rest.append(m)
-			continue
-		room -= u
-		_unload(m)
-		ship.geloescht[m.item] = int(ship.geloescht.get(m.item, 0)) + int(m.qty)
-		stats.einheiten_ein = int(stats.einheiten_ein) + u
 	stats.zurueckgestellt = int(stats.zurueckgestellt) + rest.size()
 	manifest = rest
 	# Laden: Ausfuhrware vom Kai, bis das Schiff voll ist
@@ -131,14 +140,16 @@ func _arrive(day: int) -> void:
 	ship_event.emit("ankunft", ship)
 
 
-func _unload(m: Dictionary) -> void:
+## Ware ins Ziel uebergeben. `fit` ist die tatsaechlich geloeste (anteilige) Menge; der Rest bleibt im Manifest.
+func _unload(m: Dictionary, fit: int = -1) -> void:
+	var qty := int(m.qty) if fit <= 0 else fit
 	match str(m.kind):
 		"depot":
-			sim.city_depot.on_ship(str(m.ref))
+			sim.city_depot.on_ship(str(m.ref), qty)
 		"trader":
-			sim.trader.on_ship(str(m.ref))
+			sim.trader.on_ship(str(m.ref), qty)
 		_:
-			sim.stock.add(str(m.item), int(m.qty), Production.IMPORT, building, "Schiff %s" % ship.id, sim.game_min)
+			sim.stock.add(str(m.item), qty, Production.IMPORT, building, "Schiff %s" % ship.id, sim.game_min)
 
 
 func _list(d: Dictionary) -> String:

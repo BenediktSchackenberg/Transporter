@@ -339,10 +339,19 @@ func _decide(day: int) -> void:
 
 
 ## Budgetfreigabe und Bestellung. Gibt {ok, msg} zurueck. `by`: wer entscheidet (Buergermeister oder Verwaltung).
+## Material eines laufenden oeffentlichen Projekts (Feld "project") wird aus dessen bereits reservierten Projektbudget
+## gedeckt – die Kassenverfuegbarkeit wird dafuer nicht geprueft, sonst blockieren sich Projekte gegenseitig (commitments
+## sind die reservierten Projektmittel; waehrend der Bau laeuft sind sie "nicht verfuegbar", aber genau fuer dieses Projekt verplant).
 func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 	var o: Dictionary = orders.get(order_id, {})
 	if o.is_empty() or o.status != "vorschlag":
 		return {"ok": false, "msg": "Vorschlag %s ist nicht offen." % order_id}
+	var pid := str(o.get("project", ""))
+	var project_funded := false
+	if pid != "":
+		var prj: Dictionary = sim.mayor.projects.get(pid, {})
+		if prj.has("material_budget") and str(prj.status) in ["ausgeschrieben", "beauftragt", "laufend"]:
+			project_funded = true
 	var qty := int(o.qty)
 	qty = mini(qty, zone_free(str(CityGoods.get_item(o.item).zone)))
 	if qty <= 0:
@@ -354,8 +363,7 @@ func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 	var freight := _freight(o.item, qty, int(best.loc))
 	var cost := float(best.total) + freight
 	var M: Mayor = sim.mayor
-	var for_project: bool = str(o.get("project", "")) != "" and M.projects.has(str(o.project)) and M.projects[str(o.project)].status not in ["fertig", "abgelehnt"]
-	if not for_project and M.available_budget() < cost:   # Material eines beschlossenen Projekts ist Teil des Projektbudgets
+	if not project_funded and M.available_budget() < cost:
 		_log(o, "Budgetfreigabe nicht möglich: %s nötig, %s verfügbar" % [Catalog.money(cost), Catalog.money(M.available_budget())])
 		o.decision = "Budget fehlt"
 		return {"ok": false, "msg": "Budget reicht nicht: %s nötig, %s verfügbar." % [Catalog.money(cost), Catalog.money(M.available_budget())]}
@@ -371,13 +379,18 @@ func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 	o["ordered"] = _today()
 	o.decided_by = by
 	o.decision = reason if reason != "" else "Bedarf, Budget und Lieferzeit geprüft"
-	M.commitments += cost
+	if project_funded:
+		o["from_project_budget"] = true      # wird aus dem Projektbudget bezahlt: keine zweite Reservierung in der Stadtkasse
+		M.commitments += 0.0
+	else:
+		M.commitments += cost
 	if best.supplier == "X0":
 		o.status = "bestellt"
 	else:
 		var owner: String = str(best.supplier)
 		if not sim.stock.reserve("order:" + str(o.id), o.item, qty, owner, int(best.loc)):
-			M.commitments = maxf(0.0, M.commitments - cost)
+			if not project_funded:
+				M.commitments = maxf(0.0, M.commitments - cost)
 			o.committed = 0.0
 			return {"ok": false, "msg": "Anbieter %s hat %s nicht mehr verfügbar." % [owner, o.item]}
 		if best.has("offer"):
@@ -838,6 +851,11 @@ func value_of(items: Dictionary) -> float:
 func reserve_for_project(project_id: String, items: Dictionary, mode: String = "ueberlassen") -> Dictionary:
 	var res: Dictionary = project_res.get(project_id, {"items": items.duplicate(), "mode": mode, "reserved": {}, "value": 0.0})
 	res.items = items.duplicate()
+	# Das Projektbudget steht beim Projekt als Ausgabedach: Materialvorschlaege dieses Projekts werden daraus genehmigt
+	# (statt gegen die ohnehin durch die Reservierung aufgefuellte Restkasse geprueft zu werden).
+	var prj: Dictionary = sim.mayor.projects.get(project_id, {})
+	if not prj.is_empty() and not prj.has("material_budget"):
+		prj["material_budget"] = snappedf(float(prj.get("cost", 0.0)), 1.0)
 	var missing := {}
 	for it in items:
 		var have := int(res.reserved.get(it, 0))

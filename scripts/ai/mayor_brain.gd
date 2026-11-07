@@ -33,8 +33,14 @@ static func decide(ind: Dictionary) -> Dictionary:
 	for pv in ind.stadtlager.vorschlaege:
 		if actions.size() >= MAX_ACTIONS:
 			break
+		var project := str(pv.projekt if pv.has("projekt") else "")
 		var afford := float(pv.geschaetzte_kosten) <= float(ind.haushalt.verfuegbar)
-		if afford and (int(pv.kritikalitaet) >= 2 or str(party) != "haushalt"):
+		# Material eines laufenden oeffentlichen Projekts wird aus dem bereits reservierten Projektbudget bezahlt
+		# (Kassenverfuegbarkeit egal): Ablehnung hier wuerde das Projekt unbefristet stilllegen.
+		if project != "":
+			actions.append({"action": "approve_procurement", "order_id": pv.id, "reason": "%s für Projekt %s: %s; gedeckt aus dem reservierten Projektbudget, nicht von der Restkasse." % [pv.artikel, project, pv.grund]})
+			notes.append("Projektbeschaffung %s genehmigt" % pv.id)
+		elif afford and (int(pv.kritikalitaet) >= 2 or str(party) != "haushalt"):
 			actions.append({"action": "approve_procurement", "order_id": pv.id, "reason": "%s: %s; Kosten %s im Budget (verfügbar %s)." % [pv.artikel, pv.grund, Catalog.money(float(pv.geschaetzte_kosten)), Catalog.money(float(ind.haushalt.verfuegbar))]})
 			notes.append("Beschaffung %s genehmigt" % pv.id)
 		elif not afford:
