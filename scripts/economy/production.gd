@@ -114,9 +114,15 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 		var pid := where if where.begins_with("G") else ""
 		var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4
 		var near_to: int = int(sim.trader.bauhof) if str(spec.get("naehe", "")) == "bauhof" else int(sim.retail.wholesale_building)
+		var town0 := target_town(cid, params)
+		if town0 >= 0 and town0 != sim.towns.of_building(near_to):
+			near_to = int(sim.towns.get_t(town0).town_hall)   # Region: Marktlage in der Zielstadt (Naehe Ortszentrum)
 		cands = _parcel_candidates(pid, min_area, float(spec.get("strom_kw", 0.0)) > 0.0) if spec.has("feld") or pid != "" or where == "parzelle" else _market_candidates(min_area, near_to)
+		var town := target_town(cid, params)
+		if town >= 0 and pid == "":
+			cands = cands.filter(func(p): return sim.towns.of_parcel(str(p.id)) == town)   # Region: Standort in der gewuenschten Stadt
 		if cands.is_empty():
-			return {"ok": false, "msg": "Kein freies Grundstück mit Straßenzugang und mindestens %d Feldern verfügbar." % min_area}
+			return {"ok": false, "msg": "Kein freies Grundstück mit Straßenzugang und mindestens %d Feldern verfügbar%s." % [min_area, (" in " + sim.towns.name_of(town)) if town >= 0 else ""]}
 		parcel = cands[0]
 		land = float(parcel.price) if mode == "kaufen" else 0.0
 	else:
@@ -127,6 +133,10 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 			return {"ok": false, "msg": "Am Hauptsitz gibt es schon einen Betrieb dieser Branche."}
 	if c.ledger.cash < equip + land:
 		return {"ok": false, "msg": "Nicht genug Bargeld: Ausstattung %s%s." % [Catalog.money(equip), " + Grundstück %s" % Catalog.money(land) if land > 0.0 else ""]}
+	if not parcel.is_empty() and sim.towns.is_region():
+		var perm: Dictionary = sim.towns.mayor(sim.towns.of_parcel(str(parcel.id))).business_permit(cid, parcel, branch)   # Stadt der Lage entscheidet
+		if not perm.ok:
+			return perm
 	if not parcel.is_empty():
 		var bld := {}
 		for p in cands:   # erstes Grundstueck, auf dem das Hofgebaeude Strassenzugang hat
@@ -180,10 +190,24 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 
 ## Grundstuecke fuer ein Feld: das genannte oder freie Grundstuecke mit Strassenanschluss, Aecker bevorzugt ausserhalb von Wohn-
 ## und Mischgebiet, dann nach Preis je Feld.
+## Region: Zielstadt einer Gruendung (Parameter "stadt" als ID oder Name, sonst Heimatstadt). -1 in der Einzelstadt.
+func target_town(cid: int, params: Dictionary) -> int:
+	if not sim.towns.is_region():
+		return -1
+	var want := str(params.get("stadt", ""))
+	if want != "":
+		if want.is_valid_int() and int(want) >= 0 and int(want) < sim.towns.count():
+			return int(want)
+		for t in sim.towns.list:
+			if str(t.name).to_lower() == want.to_lower():
+				return int(t.id)
+	return int(sim.company(cid).home_town)
+
+
 func _parcel_candidates(pid: String, min_area: int, need_power: bool = false) -> Array:
 	if pid != "":
 		var p: Dictionary = sim.parcels.parcel(pid)
-		return [p] if not p.is_empty() and p.state == "frei" and p.owner == Parcels.CITY and int(p.area) >= min_area and sim.parcels.is_buildable(p) else []
+		return [p] if not p.is_empty() and p.state == "frei" and Towns.is_public(str(p.owner)) and int(p.area) >= min_area and sim.parcels.is_buildable(p) else []
 	var t: Dictionary = sim.city.building(import_point())
 	var near := func(p) -> int: return absi(int(p.rect[0]) - int(t.x)) + absi(int(p.rect[1]) - int(t.y))
 	var out: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse) and p.zone not in ["wohnen", "mischgebiet"] 		and (not need_power or bool(p.get("erschliessung", {}).get("strom", true))))   # Stall/Betrieb mit Strombedarf braucht Anschluss
@@ -877,13 +901,14 @@ func order(buyer: String, loc: int, buyer_biz: String, item: String, qty: int, m
 		var unit := (0.0 if own else float(s.price)) + freight(int(s.loc), loc, item, q) / float(q)
 		cands.append({"s": s, "unit": unit, "q": q, "own": own})
 	var ip = art(item).get("importpreis")
-	var port := import_point()
+	var port := import_point(loc)   # Import nur ueber den Hafen der eigenen Stadt; Lieferanten anderer Staedte stehen oben in sellers (Binnenhandel)
+	var H := port_of(loc)
 	if allow_import and ip != null and port >= 0 and port != loc:
 		var avail := qty
-		if sim.harbor.enabled:   # Kuestenort: nur was das Schiff gebracht hat; die Fehlmenge bringt das naechste Schiff
-			avail = sim.harbor.available(item)
+		if H.enabled:   # Kuestenort: nur was das Schiff gebracht hat; die Fehlmenge bringt das naechste Schiff
+			avail = H.available(item)
 			if avail < qty:
-				sim.harbor.demand(item, qty - avail)
+				H.demand(item, qty - avail)
 		cands.append({"s": {"biz": "", "acct": IMPORT, "cid": -1, "loc": port, "avail": avail, "price": float(ip)}, "unit": float(ip) + _freight_from(IMPORT, port, loc, item, qty) / float(qty), "q": qty, "own": false})
 	cands.sort_custom(func(a, b2): return float(a.unit) < float(b2.unit))
 	var left := qty
@@ -911,8 +936,14 @@ func order(buyer: String, loc: int, buyer_biz: String, item: String, qty: int, m
 
 
 ## Importware (Saatgut, Getreide, Mehl, Backzutaten) wird ueber das Lager des Lebensmittelgrosshandels bezogen.
-func import_point() -> int:
-	return sim.harbor.building if sim.harbor.enabled else int(sim.retail.wholesale_building)   # Kuestenort: Hafenlager
+func import_point(loc: int = -1) -> int:
+	var H := port_of(loc)
+	return H.building if H.enabled else int(sim.retail.wholesale_building)   # Kuestenort: Hafenlager (Region: der eigenen Stadt)
+
+
+## Hafen der Stadt, in der ein Standort liegt (Region); sonst der eine Hafen.
+func port_of(loc: int) -> Harbor:
+	return sim.towns.harbor(sim.towns.of_building(loc)) if loc >= 0 and sim.towns.is_region() else sim.harbor
 
 
 ## Zahlungsfaehigkeit eines Kaeufers. Das Ausland (X0) ist eine Gegenbuchung ohne Kassenlimit: sein Saldo ist meist negativ,
@@ -930,7 +961,7 @@ func _deal(buyer: String, loc: int, buyer_biz: String, s: Dictionary, item: Stri
 	_next += 1
 	var ref := "deal:" + id
 	if s.acct == IMPORT:
-		if not sim.harbor.enabled:   # Kuestenort: die Ware liegt schon (per Schiff) im Hafenlager
+		if not port_of(int(s.loc)).enabled:   # Kuestenort: die Ware liegt schon (per Schiff) im Hafenlager
 			sim.stock.add(item, q, IMPORT, int(s.loc), "Import %s" % id, sim.game_min)
 		_count("imported", item, q)
 	if not sim.stock.reserve(ref, item, q, s.acct, int(s.loc)):
@@ -1052,8 +1083,8 @@ func _receive(d: Dictionary) -> void:
 		L.book("internal", tp, false, "Interne Lieferung %s" % d.id, sim.game_min, "", d.seller_biz)
 		L.book("internal", -tp, false, "Interne Lieferung %s" % d.id, sim.game_min, "", d.buyer_biz)
 	if d.buyer == IMPORT and moved > 0:
-		if sim.harbor.enabled:
-			sim.harbor.export_ready(d.item, moved)   # wartet am Kai auf das Schiff
+		if port_of(int(d.buyer_loc)).enabled:
+			port_of(int(d.buyer_loc)).export_ready(d.item, moved)   # wartet am Kai (Hafen der Verkaeuferstadt) auf das Schiff
 		else:
 			sim.stock.consume(d.item, moved, IMPORT, int(d.buyer_loc), "Ausfuhr %s" % d.id, sim.game_min)
 		_count("exported", d.item, moved)
@@ -1100,7 +1131,7 @@ func cancel_deals_of(acct: String) -> void:
 		if k != null:
 			k.status = "cancelled"
 		sim.stock.release("deal:" + str(d.id))
-		if d.seller == IMPORT and not sim.harbor.enabled:   # Kuestenort: die Ware bleibt im Hafenlager
+		if d.seller == IMPORT and not port_of(int(d.seller_loc)).enabled:   # Kuestenort: die Ware bleibt im Hafenlager
 			sim.stock.consume(d.item, int(d.qty), IMPORT, int(d.seller_loc), "Storno %s" % d.id, sim.game_min)
 		d.status = "storniert"
 
@@ -1112,7 +1143,6 @@ func cancel_deals_of(acct: String) -> void:
 const EXPORT_MIN_UNITS := 2
 const EXPORT_WAIT_DAYS := 3
 func _export_surplus() -> void:
-	var port := import_point()
 	for item in articles():
 		var ep = art(item).get("exportpreis")
 		if ep == null:
@@ -1122,6 +1152,7 @@ func _export_surplus() -> void:
 			var q := int(s.avail) - per
 			var sb: Dictionary = sim.biz.get_b(str(s.biz))
 			var key: String = "surplus_since_" + str(item)
+			var port := import_point(int(s.loc))   # Ausfuhr ueber den Hafen der eigenen Stadt
 			if q < per * EXPORT_MIN_UNITS or int(s.loc) == port:
 				sb.erase(key)
 				continue

@@ -963,6 +963,24 @@ func _own_mining() -> Dictionary:
 	return m
 
 
+## Betriebsgenehmigung des Bauamts fuer einen neuen Betrieb im eigenen Gebiet (Auftrag 17: die Stadt der Lage entscheidet, auch wenn die
+## Firma anderswo registriert ist). Regel: kein Betrieb auf Gruen-/Korridorflaechen, keine Industrie im Wohn- oder Mischgebiet.
+const INDUSTRY := ["bergwerk", "kokerei", "stahlwerk", "elektrostahlwerk", "schlachthof", "moebelwerk"]
+func business_permit(cid: int, parcel: Dictionary, branch: String) -> Dictionary:
+	var zone := str(parcel.get("zone", ""))
+	var ok := zone not in ["gruen", "korridor"] and not (branch in INDUSTRY and zone in ["wohnen", "mischgebiet"])
+	var who: String = sim.company(cid).company_name if sim.company(cid) != null else "C%d" % cid
+	var foreign: bool = sim.company(cid) != null and int(sim.company(cid).home_town) != town
+	var msg := "Bauamt %s %s %s für %s auf %s (%s%s)." % [town_label(), "genehmigt" if ok else "lehnt ab:", Businesses.branches().get(branch, {}).get("label", branch), who,
+		str(parcel.get("id", "")), Parcels.ZONES.get(zone, {}).get("label", zone), ", auswärtige Firma" if foreign else ""]
+	decisions.append({"id": Towns.prefixed(town, "B", _next_dec), "day": _today(), "action": "betriebsgenehmigung", "reason": "Zone %s" % zone, "ok": ok, "msg": msg,
+		"ref": str(parcel.get("id", "")), "args": {"firma": cid, "branche": branch}})
+	_next_dec += 1
+	if decisions.size() > 120:
+		decisions.pop_front()
+	return {"ok": ok, "msg": msg}
+
+
 ## Zustaendigkeit (Auftrag 17, Abschnitt 13): Entscheidungen ueber Antraege, Grundstuecke, Zufahrten und Verkehrsflaechen nur im eigenen
 ## Gebiet. Gibt eine Begruendung zurueck, wenn die Aktion ein fremdes Gebiet betrifft, sonst "".
 func foreign_target(a: Dictionary) -> String:

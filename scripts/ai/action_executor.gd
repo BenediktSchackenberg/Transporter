@@ -89,7 +89,7 @@ const SCHEMA := {
 		"desc": "Wie propose_cooperation."},
 	"poach_customer": {"params": {"customer_id": "int"}, "desc": "Stammkunden eines Konkurrenten abwerben (legal, 800 EUR)."},
 	"report_rival": {"params": {"target": "int", "reason": "string?"}, "desc": "Konkurrenten beim Bürgermeister anzeigen: das Amt prüft sofort (Steuer, Zahlungsrückstand, Zustand der Einrichtungen). Ohne Beanstandung zahlst DU Bußgeld und verlierst Ruf."},
-	"found_business": {"params": {"branche": "string", "reason": "string?", "standort": "string?", "modus": "string?", "rohstoff": "string?"},
+	"found_business": {"params": {"branche": "string", "reason": "string?", "standort": "string?", "modus": "string?", "rohstoff": "string?", "stadt": "string?"},
 		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). standort: hauptsitz | markt (freie Parzelle nahe dem Großhandel, kurze Lieferwege) | G<n>; Feld: ohne Angabe das günstigste passende Grundstück. modus pachten|kaufen (Grundstück). Bergwerk: rohstoff eisenerz|kohle|kalkstein|rohmaterial, die beste freie Lagerstätte wird gekauft. Kosten (Gründung inkl. Ausstattung) siehe Liste. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
 	"explore_deposit": {"params": {"grundstueck": "string", "reason": "string?"},
 		"desc": "Probebohrung auf einer Lagerstätte (bergbau.<rohstoff>.schritt = erkunden): 6 000 EUR, 2 Tage; danach sind Menge und Qualität bekannt (vorher nur geschätzt). Erster Schritt zum Bergwerk."},
@@ -743,7 +743,7 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 		"request_mining":
 			return sim.mining.request(cid, _s(a.grundstueck), str(a.get("reason", "")))
 		"found_business":
-			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")), {"standort": _s(a.get("standort", a.get("grundstueck", ""))), "modus": _s(a.get("modus", "pachten")), "rohstoff": _s(a.get("rohstoff", ""))})
+			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")), {"standort": _s(a.get("standort", a.get("grundstueck", ""))), "modus": _s(a.get("modus", "pachten")), "rohstoff": _s(a.get("rohstoff", "")), "stadt": _s(a.get("stadt", ""))})
 		"upgrade_business":
 			return sim.stages.upgrade(cid, _s(a.business_id), str(a.get("reason", "")))
 		"set_business_price":
