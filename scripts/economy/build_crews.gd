@@ -66,6 +66,10 @@ func demand() -> Array:
 	for pr in C.projects.values():
 		if pr.status in ["erschliessung", "im_bau"] and today >= int(pr.start) and str(pr.get("builder", "")) != "":
 			out.append({"kind": "bp", "id": pr.id, "builder": pr.builder})
+	for wid in C.works:
+		var w: Dictionary = C.works[wid]
+		if w.status == "laufend" and today >= int(w.start):
+			out.append({"kind": "cw", "id": wid, "builder": w.builder})
 	for pid in C.public:
 		var e: Dictionary = C.public[pid]
 		if e.status == "laufend" and today >= int(e.start) and sim.city_depot.project_complete(str(pid)):
@@ -176,6 +180,8 @@ func _check_building(t: Dictionary, now: float) -> void:
 
 
 func _job_active(t: Dictionary) -> bool:
+	if t.job.kind == "cw":
+		return sim.construction.works.get(t.job.id, {}).get("status", "") == "laufend"
 	if t.job.kind == "bp":
 		var pr: Dictionary = sim.construction.projects.get(t.job.id, {})
 		return not pr.is_empty() and pr.status in ["erschliessung", "im_bau"]
@@ -185,6 +191,12 @@ func _job_active(t: Dictionary) -> bool:
 
 ## Was muss geholt werden? Privat: offene Lieferung der laufenden Phase (Bauhof, sonst Hafen); Stadt: einmal das reservierte Material.
 func _material_need(t: Dictionary) -> Dictionary:
+	if t.job.kind == "cw":
+		var w: Dictionary = sim.construction.works[t.job.id]
+		if bool(w.crew_loaded):
+			return {}
+		var src: String = sim.construction.items_source(w.material)
+		return {"src": src, "at": sim.city.building(sim.harbor.building).road if src == "hafen" else sim.city.building(int(sim.trader.bauhof)).road}
 	if t.job.kind == "pub":
 		var e: Dictionary = sim.construction.public[t.job.id]
 		if bool(e.get("crew_loaded", false)):
@@ -219,6 +231,12 @@ func _material_need(t: Dictionary) -> Dictionary:
 
 
 func _load(t: Dictionary) -> bool:
+	if t.job.kind == "cw":
+		var r: Dictionary = sim.construction.crew_load_works(sim.construction.works[t.job.id], str(t.src))
+		t.note = str(r.msg)
+		if r.ok and t.src == "hafen":
+			stats.hafen += 1
+		return r.ok
 	if t.job.kind == "pub":
 		var e: Dictionary = sim.construction.public[t.job.id]
 		e["crew_loaded"] = true
@@ -259,6 +277,8 @@ func _drive(t: Dictionary, to: Vector2i, state: String, now: float) -> void:
 
 # ------------------------------------------------------------------ Orte
 func _site_of(kind: String, id: String) -> Vector2i:
+	if kind == "cw":
+		return nearest_road(sim.city.building(int(sim.construction.works[id].building)).road)
 	if kind == "bp":
 		var pr: Dictionary = sim.construction.projects[id]
 		return nearest_road(_parcel_center(str(pr.parcel)))
@@ -318,6 +338,9 @@ func _drop_vehicle(id: String) -> void:
 func _job_label(t: Dictionary) -> String:
 	if t.job.is_empty():
 		return "-"
+	if t.job.kind == "cw":
+		var w: Dictionary = sim.construction.works.get(t.job.id, {})
+		return "Betriebsbau %s (%s)" % [t.job.id, sim.biz.get_b(str(w.get("biz", ""))).get("name", "Betrieb")]
 	if t.job.kind == "bp":
 		var pr: Dictionary = sim.construction.projects.get(t.job.id, {})
 		return "Bauvorhaben %s (%s)" % [t.job.id, Planning.DEFS.get(pr.get("def", ""), {}).get("label", "Gebäude")]

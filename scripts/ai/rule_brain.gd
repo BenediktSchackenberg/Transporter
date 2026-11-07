@@ -580,6 +580,9 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "schlachthof"
 	elif int(mk.get("restaurants", 0)) == 0:
 		branch = "restaurant"
+	elif int(mk.get("bergwerke_gesamt", 0)) == 0 and personality in ["risikospieler", "wachstum"] and obs.has("bergbau") and not obs.bergbau.is_empty():
+		branch = "bergwerk"   # Exportchance: Erz und Kohle gehen per Schiff hinaus
+		rohstoff = "eisenerz" if obs.bergbau.has("eisenerz") else str(obs.bergbau.keys()[0])
 	elif int(mk.get("baufirmen", 0)) == 0 and int(mk.get("bauvorhaben", 0)) > 0 and personality in ["wachstum", "risikospieler"]:
 		branch = "baufirma"
 	elif int(mk.get("stahlwerke", 0)) == 0 and personality in ["wachstum", "kostenoptimierer"]:
@@ -597,7 +600,31 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	if branch == "" or own.any(func(b): return b.branche == branch):
 		return
 	# Lagerstaette ohne Strassenanschluss (Kuestenort): erst die Zufahrt bauen lassen, dann gruenden
-	var far: Dictionary = mk.get("zufahrt_noetig", {}).get(rohstoff, {}) if branch == "bergwerk" else {}
+	if branch == "bergwerk" and obs.has("bergbau"):
+		# Bergwerk-Story: Probebohrung -> Abbauantrag -> Zufahrt -> Gruendung (der Bautrupp baut das Bergwerk)
+		var st: Dictionary = obs.bergbau.get(rohstoff, {})
+		if st.is_empty() or str(st.schritt) == "warten":
+			return
+		var why := "%s wird gebraucht (Lagerstätte %s)" % [Production.item_name(rohstoff), st.grundstueck]
+		match str(st.schritt):
+			"erkunden":
+				if cash > float(st.get("kosten", 6000)) + buffer + PROD_RESERVE:
+					actions.append({"action": "explore_deposit", "grundstueck": st.grundstueck, "reason": why})
+					reasons.append("lasse auf %s eine Probebohrung machen" % st.grundstueck)
+				planned.append("found_business")
+				return
+			"abbauantrag":
+				actions.append({"action": "request_mining", "grundstueck": st.grundstueck, "reason": why})
+				reasons.append("beantrage das Abbaurecht für %s" % st.grundstueck)
+				planned.append("found_business")
+				return
+			"zufahrt":
+				if int(mk.get("zufahrten_im_bau", 0)) == 0 and int(st.get("kosten", -1)) > 0 and cash > float(st.kosten) + buffer + PROD_RESERVE:
+					actions.append({"action": "build_access", "grundstueck": st.grundstueck, "reason": why + ", keine Zufahrt"})
+					reasons.append("beantrage eine Zufahrt zur Lagerstätte %s" % st.grundstueck)
+				planned.append("found_business")
+				return
+	var far: Dictionary = mk.get("zufahrt_noetig", {}).get(rohstoff, {}) if branch == "bergwerk" and not obs.has("bergbau") else {}
 	if not far.is_empty():
 		if int(mk.get("zufahrten_im_bau", 0)) == 0 and cash > float(far.kosten) + buffer + PROD_RESERVE:
 			actions.append({"action": "build_access", "grundstueck": far.grundstueck, "reason": "%s fehlt, die Lagerstätte %s hat keine Zufahrt" % [rohstoff, far.grundstueck]})

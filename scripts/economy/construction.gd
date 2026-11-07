@@ -65,6 +65,16 @@ var deliveries := {}                  # "L<n>" -> Lieferauftrag
 var units := {}                       # "W<n>" -> Wohneinheit
 var jobs := {}                        # "S<n>" -> Einzugsauftrag {kind, unit, payer, fee, status, carrier, day}
 var public := {}                      # Mayor-Projekt-ID -> Ausfuehrung {builder, price, days_left, ...}
+var works := {}                       # "BW<n>" -> Betriebsbau eines Unternehmers {company, biz, building, kind, builder, price, days, days_left, status, material}
+var _next_works := 1
+const WORKS_PHASES := {
+	"betrieb": ["Baugrube", "Fundament", "Rohbau", "Dach", "Ausbau und Technik"],
+	"bergwerk": ["Platz und Zufahrt", "Stollenvortrieb", "Förderturm", "Halde und Technik"],
+}
+const WORKS_MATERIAL := {   # je 10 000 EUR Auftragswert
+	"betrieb": {"beton": 3, "ziegel": 4, "holz": 2, "stahl": 1},
+	"bergwerk": {"beton": 3, "stahl": 3, "holz": 3},
+}
 var reserved_co := {}                 # Unternehmen-ID -> fuer Bauvertraege zurueckgelegt
 var reserved_dev := 0.0               # beim Bautraeger fuer Vertraege zurueckgelegt
 var home_plans := {}                  # Haushalt -> {stage, parcel, app, project, credit, day}: Grundstueck -> Bank -> Antrag -> Bau
@@ -418,6 +428,7 @@ func on_day(day: int) -> void:
 				_day_inspection(pr, day)
 	# Material, das kein Transportunternehmen bringt, holt der Bautrupp selbst (BuildCrews)
 	_public_day(day)
+	_works_day(day)
 	_jobs_day(day)
 	_household_day()
 
@@ -981,6 +992,118 @@ func _finish_public(e: Dictionary) -> void:
 	sim.log_event("Erschließungsprojekt %s fertiggestellt (%s, %s)." % [prj.id, ", ".join(prj.parts), builders[e.builder].name], "info")
 
 
+# ------------------------------------------------------------------ Betriebsbau (neue Betriebsgebaeude der Unternehmer)
+## Auftrag anlegen und sofort vergeben: eigene Baufirma des Unternehmers, sonst ortsansaessige Unternehmer-Baufirma bis +15 %, sonst
+## das beste Angebot. Der Preis liegt schon bei K0 (Production.found); bezahlt wird bei Fertigstellung.
+func add_company_works(cid: int, biz: Dictionary, building: int, kind: String, price: float) -> Dictionary:
+	sync_company_builders()
+	var days := int(clampf(4.0 + price / 3000.0, 5.0, 24.0))
+	var w := {"id": "BW%d" % _next_works, "company": cid, "biz": biz.id, "building": building, "kind": kind, "price": price, "days": days,
+		"days_left": days, "status": "laufend", "start": _today() + 1, "crew_loaded": false, "waiting": "", "builder": "", "builder_name": ""}
+	_next_works += 1
+	var mat := {}
+	for it in WORKS_MATERIAL[kind]:
+		mat[it] = maxi(1, int(round(float(WORKS_MATERIAL[kind][it]) * maxf(1.0, price / 10000.0))))
+	w["material"] = mat
+	var offers := make_offers(price, days, w.id)
+	var own := "C%d" % cid
+	var o := {}
+	for x in offers:
+		if x.builder == own:
+			o = x   # Eigenbau mit der eigenen Baufirma
+	if o.is_empty():
+		o = _works_offer({"award": "", "tender": {}}, offers, best_offer(offers, price))
+	if o.is_empty():
+		o = {"builder": "BF1", "name": builders.BF1.name, "days": days, "start": _today() + 1}
+	w.builder = o.builder
+	w.builder_name = str(o.name)
+	w.days = int(o.days)
+	w.days_left = int(o.days)
+	w.start = int(o.start)
+	works[w.id] = w
+	sim.activity.add("unternehmen", cid, "bau", "Bauauftrag %s: %s" % [w.id, sim.biz.get_b(biz.id).name], "an %s" % w.builder_name, sim.city.building(building).road)
+	return w
+
+
+## Tagesfortschritt: nur mit Trupp vor Ort und geladenem Material; Wetter bremst.
+func _works_day(day: int) -> void:
+	for w in works.values():
+		if w.status != "laufend" or day < int(w.start):
+			continue
+		if builders.get(w.builder, {}).get("status", "") != "aktiv":
+			w.waiting = "Baufirma %s nicht verfügbar" % w.builder_name
+			continue
+		if not sim.crews.on_site("cw", w.id):
+			var t: Dictionary = sim.crews.crew_for("cw", w.id)
+			w.waiting = ("Bautrupp " + BuildCrews.STATE_TEXT.get(t.state, "")) if not t.is_empty() else "wartet auf einen freien Bautrupp"
+			continue
+		w.waiting = ""
+		w.days_left = int(w.days_left) - (1 if sim.wx.build_factor() > 0.3 else 0)
+		if int(w.days_left) <= 0:
+			_finish_works(w)
+
+
+func _finish_works(w: Dictionary) -> void:
+	w.status = "fertig"
+	_forward(str(w.builder), float(w.price), "Betriebsbau %s" % w.id)
+	builders[w.builder].history.fertig = int(builders[w.builder].history.fertig) + 1
+	var b: Dictionary = sim.biz.get_b(str(w.biz))
+	if not b.is_empty() and b.status == "im_bau":
+		sim.biz.set_status(b.id, "aktiv", "Gebäude fertig")
+	sim.events.buildings_added.emit([int(w.building)])   # Gebaeude erscheint auf der Karte
+	sim.log_event("%s hat %s fertig gebaut – der Betrieb kann anlaufen." % [w.builder_name, b.get("name", w.biz)], "good", int(w.company))
+	sim.activity.add("unternehmen", int(w.company), "bau", "%s fertig gebaut" % b.get("name", w.biz), w.builder_name, sim.city.building(int(w.building)).road)
+
+
+func works_progress(w: Dictionary) -> float:
+	if w.status == "fertig":
+		return 1.0
+	return clampf(1.0 - float(w.days_left) / maxf(1.0, float(w.days)), 0.0, 0.99)
+
+
+func works_phase(w: Dictionary) -> String:
+	var ph: Array = WORKS_PHASES[w.kind]
+	return str(ph[clampi(int(works_progress(w) * ph.size()), 0, ph.size() - 1)])
+
+
+## Steht auf diesem Gebaeude noch eine Baustelle (Darstellung: Gebaeude erst nach Fertigstellung zeigen)?
+func building_under_construction(building_id: int) -> bool:
+	for w in works.values():
+		if int(w.building) == building_id and w.status != "fertig":
+			return true
+	return false
+
+
+## Bauquelle fuer eine Materialliste: Bauhof, sonst Hafenlager, sonst Bauhof (Trupp wartet).
+func items_source(items: Dictionary) -> String:
+	var yard := int(sim.trader.bauhof)
+	if items.keys().all(func(it): return sim.stock.available(it, "T0", yard) >= int(items[it])):
+		return "bauhof"
+	if sim.harbor.enabled and items.keys().all(func(it): return sim.stock.available(it, "X0", sim.harbor.building) >= int(items[it])):
+		return "hafen"
+	return "bauhof"
+
+
+## Trupp laedt das Material eines Betriebsbaus (Ware verlaesst das Lager und wird von der Baufirma bezahlt).
+func crew_load_works(w: Dictionary, src: String) -> Dictionary:
+	if bool(w.crew_loaded):
+		return {"ok": true, "msg": "schon geladen"}
+	var owner := "X0" if src == "hafen" else "T0"
+	var loc: int = sim.harbor.building if src == "hafen" else int(sim.trader.bauhof)
+	for it in w.material:
+		if sim.stock.available(it, owner, loc) < int(w.material[it]):
+			return {"ok": false, "msg": "%s hat nicht genug %s (%d benötigt); der Trupp wartet." % ["Hafenlager" if src == "hafen" else "Bauhof", Trader.MATERIALS[it].name, int(w.material[it])]}
+	var value := 0.0
+	for it in w.material:
+		value += float(w.material[it]) * float(Trader.MATERIALS[it].base)
+		sim.stock.consume(it, int(w.material[it]), owner, loc, "Betriebsbau %s" % w.id, sim.game_min)
+	sim.economy.transfer("K0", owner, value)
+	_charge(str(w.builder), value, "Material Betriebsbau %s" % w.id)
+	w.crew_loaded = true
+	w["material_value"] = value
+	return {"ok": true, "msg": "Material geladen (%s)" % ("Hafen" if src == "hafen" else "Bauhof")}
+
+
 ## Vergabe bei Erschliessungsbauten: Direktvergabe des Buergermeisters an eine Unternehmer-Baufirma, sonst ortsansaessige
 ## Unternehmer-Baufirma bevorzugt, wenn ihr Angebot hoechstens 15 % ueber dem besten liegt (die Stadt gibt den Unternehmen Arbeit).
 func _works_offer(prj: Dictionary, offers: Array, best: Dictionary) -> Dictionary:
@@ -1235,7 +1358,7 @@ func _log(pr: Dictionary, text: String) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"builders": builders, "projects": projects, "deliveries": deliveries, "units": units, "jobs": jobs, "public": public, "reserved_dev": reserved_dev, "reserved_co": reserved_co,
+	return {"works": works, "next_works": _next_works, "builders": builders, "projects": projects, "deliveries": deliveries, "units": units, "jobs": jobs, "public": public, "reserved_dev": reserved_dev, "reserved_co": reserved_co,
 		"next": [_next, _next_delivery, _next_unit, _next_job], "home_plans": home_plans, "home_notes": home_notes, "dev_shops": dev_shops}
 
 
@@ -1250,6 +1373,8 @@ func from_dict(d: Dictionary) -> void:
 	for j in jobs.values():
 		j.day = int(j.day)
 	public = d.get("public", {})
+	works = d.get("works", {})
+	_next_works = int(d.get("next_works", 1))
 	reserved_dev = float(d.get("reserved_dev", 0.0))
 	reserved_co = d.get("reserved_co", {})
 	for k in reserved_co:

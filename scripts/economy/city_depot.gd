@@ -208,6 +208,10 @@ func _today() -> int:
 
 # ------------------------------------------------------------------ Tagesablauf
 func on_day(day: int) -> void:
+	# Material fuer beschlossene Projekte bestellt das Bauamt selbst (kein zweiter Budgetbeschluss)
+	for o in orders.values():
+		if o.status == "vorschlag" and str(o.get("project", "")) != "":
+			approve(str(o.id), "Bauamt", "Material für beschlossenes Projekt %s" % o.project)
 	_crew_day(day)
 	_consume(day)
 	_propose(day)
@@ -350,7 +354,8 @@ func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 	var freight := _freight(o.item, qty, int(best.loc))
 	var cost := float(best.total) + freight
 	var M: Mayor = sim.mayor
-	if M.available_budget() < cost:
+	var for_project: bool = str(o.get("project", "")) != "" and M.projects.has(str(o.project)) and M.projects[str(o.project)].status not in ["fertig", "abgelehnt"]
+	if not for_project and M.available_budget() < cost:   # Material eines beschlossenen Projekts ist Teil des Projektbudgets
 		_log(o, "Budgetfreigabe nicht möglich: %s nötig, %s verfügbar" % [Catalog.money(cost), Catalog.money(M.available_budget())])
 		o.decision = "Budget fehlt"
 		return {"ok": false, "msg": "Budget reicht nicht: %s nötig, %s verfügbar." % [Catalog.money(cost), Catalog.money(M.available_budget())]}

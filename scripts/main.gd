@@ -257,6 +257,12 @@ func _process(_delta: float) -> void:
 		session.hud.show_tab(str(args.get("tab", "Aktivitäten")), int(args.get("econ", "0")))   # schliesst auch versehentlich geoeffnete Fenster
 		for i in 90:   # Kamera schwenken lassen
 			await get_tree().process_frame
+		if args.has("shot-tile"):   # Kamera kann waehrend des Wartens verschoben worden sein (Folgen): Ziel erneut setzen
+			var xy2: PackedStringArray = str(args["shot-tile"]).split(",")
+			session.set_follow(false)
+			session.city_view.set_camera_world(Vector2(float(xy2[0]) * 32.0 + 16.0, float(xy2[1]) * 32.0 + 16.0))
+			for i in 4:
+				await get_tree().process_frame
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(args["screenshot"])
 		print("AUTOTEST: Screenshot gespeichert: ", ProjectSettings.globalize_path(args["screenshot"]))

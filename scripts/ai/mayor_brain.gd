@@ -119,6 +119,14 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var pw: Dictionary = ind.get("strom", {})
 	if actions.size() < MAX_ACTIONS and not pw.is_empty() and not bool(pw.ausbau_laeuft) and (float(pw.auslastung) > 0.85 or int(pw.abgeschaltete_betriebe) > 0) 			and float(ind.haushalt.verfuegbar) > float(pw.ausbau.kosten) * 1.5:
 		actions.append({"action": "expand_power", "reason": "Stromnetz zu %.0f %% ausgelastet, %d Betriebe ohne Strom." % [float(pw.auslastung) * 100.0, int(pw.abgeschaltete_betriebe)]})
+	# 1h1a) Bergbau: Abbauantraege genehmigen (Arbeitsplaetze, Export, Abgabe); Abgabe nach Partei
+	var mb: Dictionary = ind.get("bergbau", {})
+	for ap in mb.get("abbauantraege", []):
+		if actions.size() >= MAX_ACTIONS:
+			break
+		var pct := 12.0 if party == "haushalt" else (6.0 if party == "wachstum" else 8.0)
+		actions.append({"action": "decide_mining", "grundstueck": ap.grundstueck, "decision": "genehmigen", "abgabe_prozent": pct,
+			"reason": "%s auf %s bringt Arbeitsplätze und Exporte; Förderabgabe %d %% für die Stadtkasse." % [Production.item_name(str(ap.rohstoff)), ap.grundstueck, int(pct)]})
 	# 1h1b) Erschliessung (Ersatz fuer die KI): Antraege genehmigen, wenn die Stadt ihren Anteil tragen kann; Auftrag direkt an eine freie
 	# Unternehmer-Baufirma (die Stadt gibt den Unternehmen Arbeit), sonst Ausschreibung. Eigene Bruecke nur bei Wohnungsnot.
 	var er: Dictionary = ind.get("erschliessung", {})

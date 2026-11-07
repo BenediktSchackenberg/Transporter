@@ -252,7 +252,7 @@ func shortage_bonus(shop: Dictionary, freight: float) -> float:
 
 func pay_bonus(k: Contract, c: Company) -> void:
 	var amount := minf(k.bonus, BONUS_BUDGET - bonus_spent)
-	if c == null or amount <= 0.0 or float(sim.economy.accounts["P0"]) - amount < Mayor.RESERVE_CASH:
+	if c == null or amount <= 0.0 or float(sim.economy.accounts["P0"]) - amount < sim.mayor.reserve_cash():
 		return
 	c.ledger.book("subsidy", amount, true, "Versorgungsprämie %s" % k.id, sim.game_min, "P0")
 	bonus_spent += amount
