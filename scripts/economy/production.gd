@@ -349,14 +349,14 @@ func deposit_of(pid: String) -> Dictionary:
 
 func _build_deposits() -> void:
 	var seed_v: int = int(sim.city.seed_value)
-	var cands: Array = sim.parcels.items.values().filter(func(p): return (_near_mountain(p) if sim.city.world == "kueste" else _outskirts(p)) 		and p.zone not in ["gruen", "korridor"] and sim.parcels.is_buildable(p) and int(p.area) >= 40 and p.state == "frei")
+	var cands: Array = sim.parcels.items.values().filter(func(p): return (_near_mountain(p) if sim.city.coastal() else _outskirts(p)) 		and p.zone not in ["gruen", "korridor"] and sim.parcels.is_buildable(p) and int(p.area) >= 40 and p.state == "frei")
 	for p in cands:
 		var h := absi(hash([seed_v, p.id, "vorkommen"]))
 		if float(h % 1000) / 1000.0 >= DEPOSIT_SHARE:
 			continue
 		_deposits[p.id] = {"art": DEPOSIT_KINDS[(h / 1000) % DEPOSIT_KINDS.size()], "menge": 3000 + (h / 7) % 9000, "qualitaet": snappedf(0.6 + float((h / 13) % 41) / 100.0, 0.01)}
 	# Jeder Rohstoff mindestens einmal auf einer erreichbaren Parzelle am Stadtrand (die aeussersten zuerst)
-	var coast: bool = sim.city.world == "kueste"   # Kuestenort: Lagerstaetten duerfen abgelegen sein (Zufahrt per build_access)
+	var coast: bool = sim.city.coastal()   # Kuestenort: Lagerstaetten duerfen abgelegen sein (Zufahrt per build_access)
 	var reach: Array = cands if coast else cands.filter(func(p): return bool(sim.parcels.utilities_of(p).strasse))
 	reach.sort_custom(func(a, b): return _center_dist(a) > _center_dist(b))
 	for kind in DEPOSIT_KINDS:

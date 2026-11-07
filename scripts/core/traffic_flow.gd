@@ -152,9 +152,10 @@ func propose(kind: String, cell: Vector2i, reason: String) -> Dictionary:
 		if m.cell == cell and m.status == "im_bau":
 			return {"ok": false, "msg": "Auf (%d,%d) wird schon gebaut (%s)." % [cell.x, cell.y, m.id]}
 	var cost: float = spec.cost
-	if cost > sim.mayor.available_budget():
-		return {"ok": false, "msg": "Kosten %s übersteigen die verfügbaren Mittel %s." % [Catalog.money(cost), Catalog.money(sim.mayor.available_budget())]}
-	sim.mayor.commitments += cost
+	var M: Mayor = sim.towns.mayor(sim.towns.of_cell(cell))   # Verwaltungsgebiet der Zelle
+	if cost > M.available_budget():
+		return {"ok": false, "msg": "Kosten %s übersteigen die verfügbaren Mittel %s." % [Catalog.money(cost), Catalog.money(M.available_budget())]}
+	M.commitments += cost
 	var day := GameCalendar.day_of(sim.game_min)
 	var m := {"id": "V%d" % _next, "kind": kind, "cell": cell, "cost": cost, "status": "im_bau", "start_day": day, "finish_day": day + int(spec.days),
 		"reason": reason.left(240), "lost_start": float(lost_by_cell.get(cell, 0.0)), "lost_finish": 0.0, "factor_before": avg_speed()}
@@ -171,8 +172,9 @@ func _progress(day: int) -> void:
 		m.lost_finish = float(lost_by_cell.get(m.cell, 0.0))
 		m.done_day = day
 		bonus[m.cell] = int(bonus.get(m.cell, 0)) + 1
-		sim.mayor.commitments = maxf(0.0, sim.mayor.commitments - float(m.cost))
-		sim.economy.transfer("P0", "S0", float(m.cost))   # Bezahlung der Baufirmen und Materiallieferanten
+		var M: Mayor = sim.towns.mayor(sim.towns.of_cell(m.cell))
+		M.commitments = maxf(0.0, M.commitments - float(m.cost))
+		sim.economy.transfer(M.acct(), "S0", float(m.cost))   # Bezahlung der Baufirmen und Materiallieferanten
 		sim.log_event("Verkehrsmassnahme %s fertig: %s auf (%d,%d), Kapazität dort jetzt %d." % [m.id, MEASURES[m.kind].label, m.cell.x, m.cell.y, capacity_of(m.cell)], "good")
 
 

@@ -126,7 +126,7 @@ func create(span: Dictionary, payer: int, access_id: String, by: String) -> Dict
 	var mat := {}
 	for it in VARIANTS[b.variant].material:
 		mat[it] = int(VARIANTS[b.variant].material[it]) * b.cells.size()
-	var prj: Dictionary = sim.mayor.add_works_project("bruecke", b.id, float(b.cost), int(b.days), mat, "Brücke %s (%s)" % [b.id, by], str(span.get("award", "")))
+	var prj: Dictionary = sim.towns.mayor(sim.towns.of_cell(Vector2i(int(b.cells[0][0]), int(b.cells[0][1])))).add_works_project("bruecke", b.id, float(b.cost), int(b.days), mat, "Brücke %s (%s)" % [b.id, by], str(span.get("award", "")))
 	b.project = prj.id
 	items[b.id] = b
 	_index(b)
@@ -216,7 +216,7 @@ func proposals(limit: int = 3) -> Array:
 		return _props
 	_prop_day = today
 	_props = []
-	if sim.city.world != "kueste":
+	if not sim.city.coastal():
 		return _props
 	var deposits: Dictionary = sim.prod._deposits
 	var seen := 0

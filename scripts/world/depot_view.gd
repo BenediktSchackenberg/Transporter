@@ -112,7 +112,7 @@ func _layout() -> Array:
 	var D: CityDepot = sim.city_depot
 	var out: Array = []
 	for zone in CityGoods.ZONES:
-		var lots: Array = sim.stock.lots.values().filter(func(l): return l.owner == CityDepot.OWNER and l.loc == D.building and str(CityGoods.get_item(l.item).get("zone", "")) == zone)
+		var lots: Array = sim.stock.lots.values().filter(func(l): return l.owner == D.owner() and l.loc == D.building and str(CityGoods.get_item(l.item).get("zone", "")) == zone)
 		if lots.is_empty():
 			continue
 		lots.sort_custom(func(a, b): return str(a.id) < str(b.id))

@@ -12,11 +12,12 @@ const EDGE_OFF := 8.0          # wie weit auessel der Karte Flugzeuge eintreffen
 var sim
 var enabled := false
 var track := {}                # {size, run_x0, run_x1, run_y, apron:[x,y]} – alles in Feld-Koordinaten
+var town := 0                  # Ort dieses Flughafens (Auftrag 17); Region: Geometrie aus CityData.towns[town].airport
 
 
 func setup(simulation) -> void:
 	sim = simulation
-	var a: Dictionary = sim.city.airport
+	var a: Dictionary = sim.city.towns[town].get("airport", {}) if sim.city.towns.size() > 1 else sim.city.airport
 	if a.is_empty():
 		return
 	enabled = true

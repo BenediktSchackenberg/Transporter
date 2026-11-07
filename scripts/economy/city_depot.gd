@@ -8,7 +8,7 @@ extends RefCounted
 ## faehrt nach `FALLBACK_DAYS` der Stadtfuhrpark (langsamer, Lohn an S0). Bestellte Ware erzeugt erst bei der Anlieferung Bestand am Lager.
 ## Material fuer Projekte wird reserviert und der Baufirma als Auftragsmaterial ueberlassen (nicht verkauft, nicht nochmals abgerechnet).
 
-const OWNER := "P0"
+const OWNER := "P0"                  # Ort 0 (alte Spielstaende); allgemein owner()
 const APPROVAL_LIMIT := 15000.0     # darueber entscheidet die Buergermeisterebene; darunter genehmigt die Verwaltung routinemaessig
 const AUTO_APPROVE_DAYS := 2        # ohne Entscheidung genehmigt die Verwaltung grosse Vorschlaege nicht von selbst (nur kritische nach 6 Tagen)
 const FALLBACK_DAYS := 3            # so lange wartet ein Transportauftrag auf ein Unternehmen
@@ -43,6 +43,7 @@ const PROJECT_MATERIAL := {
 }
 
 var sim
+var town := 0                         # Ort dieses Zentrallagers (Auftrag 17); Eigentuemer/Konto = Towns.account_of(town)
 var building := -1                    # Zentrallager (Gebaeude-ID)
 var port := -1                        # Anlieferpunkt fuer Importware
 var orders := {}                      # "B<n>" -> Vorschlag/Bestellung
@@ -72,14 +73,30 @@ var _next_order := 1
 var _next_offer := 1
 
 
+## Konto/Eigentuemer, Verwaltung und Hafen dieses Orts.
+func owner() -> String:
+	return Towns.account_of(town)
+
+
+func mayor() -> Mayor:
+	return sim.towns.mayor(town) if sim.towns != null and sim.towns.mayors.size() > 0 else sim.mayor
+
+
+func harbor() -> Harbor:
+	return sim.towns.harbor(town) if sim.towns != null and sim.towns.harbors.size() > 0 else sim.harbor
+
+
 func setup(s) -> void:
 	sim = s
+	if town > 0:
+		_setup_town()
+		return
 	s.day_changed.connect(on_day)
 	s.month_changed.connect(on_month)
 	var center := Vector2(s.city.size, s.city.size) * 0.5
 	var best_d := INF
 	for b in s.city.buildings:
-		if s.city.world == "kueste":
+		if s.city.coastal():
 			break   # Kuestenort: das staedtische Materiallager ist der Bauhof (Auftrag 15)
 		if b.role == "plot" or b.id == s.trader.bauhof or b.type not in ["warehouse", "construction", "factory", "freight_shed"]:
 			continue
@@ -106,6 +123,17 @@ func setup(s) -> void:
 	add_materials(MATERIAL_SEED, "Restposten der Stadt")
 
 
+## Weiterer Ort der Region (Auftrag 17): Zentrallager im eigenen Bauhof, Importe ueber den eigenen Hafen.
+func _setup_town() -> void:
+	sim.day_changed.connect(on_day)
+	sim.month_changed.connect(on_month)
+	var t: Dictionary = sim.towns.get_t(town)
+	building = int(t.bauhof)
+	port = harbor().building if harbor().enabled else building
+	_seed_stock()
+	add_materials(MATERIAL_SEED, "Restposten der Stadt")
+
+
 # ------------------------------------------------------------------ Baustoffe fuer Firmen (Auftrag 11, Hof-Imperium)
 ## Restposten aus Stadtprojekten und Strassenwartung liegen im Stadtlager und werden an Firmen verkauft: 40 % unter dem Bauhofpreis,
 ## nur Selbstabholung (interner Transport der Firma). Der Erloes geht an die Stadtkasse.
@@ -118,11 +146,11 @@ const MATERIAL_ROAD := {"beton": 4, "rohmaterial": 8, "verbindung": 4}
 func add_materials(items: Dictionary, reason: String) -> void:
 	for it in items:
 		if int(items[it]) > 0:
-			sim.stock.add(it, int(items[it]), OWNER, building, reason, sim.game_min)
+			sim.stock.add(it, int(items[it]), owner(), building, reason, sim.game_min)
 
 
 func material_qty(item: String) -> int:
-	return sim.stock.qty(item, OWNER, building)
+	return sim.stock.qty(item, owner(), building)
 
 
 func material_price(item: String) -> float:
@@ -147,7 +175,7 @@ func sell_material(cid: int, items: Dictionary) -> float:
 		var n := mini(int(items[it]), material_qty(it))
 		if n > 0:
 			paid += material_price(it) * n
-			sim.stock.move(it, n, OWNER, building, "C%d" % cid, building, "Verkauf Restposten Stadtlager", sim.game_min)
+			sim.stock.move(it, n, owner(), building, "C%d" % cid, building, "Verkauf Restposten Stadtlager", sim.game_min)
 	stats["material_sales"] = float(stats.get("material_sales", 0.0)) + paid
 	return paid
 
@@ -159,16 +187,16 @@ func _seed_stock() -> void:
 		var it: Dictionary = items[id]
 		var n := int(it.target) if it.class == "geraet" else int(round(float(it.target) * 0.7))
 		if n > 0:
-			sim.stock.add(id, n, OWNER, building, "Anfangsbestand")
+			sim.stock.add(id, n, owner(), building, "Anfangsbestand")
 
 
 # ------------------------------------------------------------------ Bestand
 func stock_of(item: String) -> int:
-	return sim.stock.available(item, OWNER, building)
+	return sim.stock.available(item, owner(), building)
 
 
 func on_hand(item: String) -> int:
-	return sim.stock.qty(item, OWNER, building)
+	return sim.stock.qty(item, owner(), building)
 
 
 ## Menge, die bestellt oder unterwegs ist und noch nicht eingelagert wurde.
@@ -190,7 +218,7 @@ func open_proposal(item: String) -> bool:
 func zone_used(zone: String) -> int:
 	var n := 0
 	for l in sim.stock.lots.values():
-		if l.owner == OWNER and l.loc == building and str(CityGoods.get_item(l.item).get("zone", "")) == zone:
+		if l.owner == owner() and l.loc == building and str(CityGoods.get_item(l.item).get("zone", "")) == zone:
 			n += int(l.qty)
 	for o in orders.values():
 		if o.status in ["bestellt", "transport", "unterwegs", "angeliefert"] and str(CityGoods.get_item(o.item).get("zone", "")) == zone:
@@ -245,7 +273,7 @@ func _consume(day: int) -> void:
 		if n <= 0:
 			continue
 		carry[id] = float(carry[id]) - n
-		var got: int = sim.stock.consume(id, mini(n, stock_of(id)), OWNER, building, "Verbrauch Verwaltung", sim.game_min)
+		var got: int = sim.stock.consume(id, mini(n, stock_of(id)), owner(), building, "Verbrauch Verwaltung", sim.game_min)
 		if got < n:
 			if int(shortages.get(id, -99)) < day - 10:
 				sim.log_event("Stadtlager: %s ist aufgebraucht – Fehlmenge im Betrieb." % it.name, "warn")
@@ -356,7 +384,7 @@ func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 	var pid := str(o.get("project", ""))
 	var project_funded := false
 	if pid != "":
-		var prj: Dictionary = sim.mayor.projects.get(pid, {})
+		var prj: Dictionary = mayor().projects.get(pid, {})
 		if prj.has("material_budget") and str(prj.status) in ["ausgeschrieben", "beauftragt", "laufend"]:
 			project_funded = true
 	var qty := int(o.qty)
@@ -369,7 +397,7 @@ func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 	var best: Dictionary = quotes[0]
 	var freight := _freight(o.item, qty, int(best.loc))
 	var cost := float(best.total) + freight
-	var M: Mayor = sim.mayor
+	var M: Mayor = mayor()
 	if not project_funded and M.available_budget() < cost:
 		_log(o, "Budgetfreigabe nicht möglich: %s nötig, %s verfügbar" % [Catalog.money(cost), Catalog.money(M.available_budget())])
 		o.decision = "Budget fehlt"
@@ -450,9 +478,9 @@ func _advance_orders(day: int) -> void:
 		match o.status:
 			"bestellt":
 				if o.supplier == "X0":
-					if day >= int(o.get("ordered", o.day)) + int(CityGoods.get_item(o.item).lead) + CityGoods.IMPORT_LEAD and sim.harbor.enabled:
+					if day >= int(o.get("ordered", o.day)) + int(CityGoods.get_item(o.item).lead) + CityGoods.IMPORT_LEAD and harbor().enabled:
 						o.status = "auf_see"   # wartet auf das naechste Schiff (on_ship)
-						sim.harbor.ship_in("depot", str(o.id), str(o.item), int(o.qty))
+						harbor().ship_in("depot", str(o.id), str(o.item), int(o.qty))
 					elif day >= int(o.get("ordered", o.day)) + int(CityGoods.get_item(o.item).lead) + CityGoods.IMPORT_LEAD:
 						# Importware trifft am Anlieferpunkt ein und gehoert bis zur Anlieferung dem Ausland
 						sim.stock.add(o.item, int(o.qty), "X0", port, "Import Stadtlager")
@@ -488,7 +516,7 @@ func _issue_contract(o: Dictionary) -> void:
 	k.qty = _cargo_qty(int(o.qty))
 	k.reward = snappedf(float(o.freight) * float(pool.price) * (1.0 + POOL_URGENT_BONUS if bool(pool.urgent) else 1.0), 1.0)
 	k.status = "open"
-	k.payer = OWNER
+	k.payer = owner()
 	k.order_ref = str(o.id)
 	k.created = sim.game_min
 	k.offer_until = sim.game_min + GameCalendar.days_to_min(float(FALLBACK_DAYS))
@@ -537,8 +565,8 @@ func _watch_contract(o: Dictionary, day: int) -> void:
 ## Stadtfuhrpark fuehrt den Transport aus, wenn kein Unternehmen ihn uebernommen hat. Lohn an S0.
 func _fallback_trip(o: Dictionary) -> void:
 	var ref := "order:" + str(o.id)
-	var pay := minf(float(o.freight) * 0.7, maxf(0.0, float(sim.economy.accounts.P0)))
-	sim.economy.transfer(OWNER, "S0", pay)
+	var pay := minf(float(o.freight) * 0.7, maxf(0.0, float(sim.economy.accounts.get(owner(), 0.0))))
+	sim.economy.transfer(owner(), "S0", pay)
 	stats.freight += pay
 	stats.fallback_trips += 1
 	fallback_days.append(_today())
@@ -560,7 +588,7 @@ func contract_delivered(k: Contract) -> void:
 
 ## Ware am Wareneingang: Eigentum geht auf die Stadt ueber, Zustand "pruefung" (nicht verfuegbar bis zur Einlagerung).
 func _receive(o: Dictionary, ref: String) -> void:
-	var moved: int = sim.stock.move_reserved(ref, OWNER, building, "Anlieferung Stadtlager %s" % o.id, sim.game_min, "pruefung")
+	var moved: int = sim.stock.move_reserved(ref, owner(), building, "Anlieferung Stadtlager %s" % o.id, sim.game_min, "pruefung")
 	o.arrived = _today()
 	o.status = "angeliefert"
 	o.qty_received = moved
@@ -608,11 +636,11 @@ func _crew_day(day: int) -> void:
 
 
 func forklifts() -> int:
-	return sim.stock.qty("gabelstapler", OWNER, building)
+	return sim.stock.qty("gabelstapler", owner(), building)
 
 
 func hand_trucks() -> int:
-	return sim.stock.qty("hubwagen", OWNER, building)
+	return sim.stock.qty("hubwagen", owner(), building)
 
 
 ## Einheiten, die der Wareneingang heute pruefen und einlagern kann: Leistung des verfuegbaren Personals, Staplerfahrer nur mit freiem Stapler,
@@ -691,14 +719,14 @@ func backlog_units() -> int:
 
 ## Ausbau: "ramp" (zusaetzliche Entladerampe), "staff" (Lagerkraft einstellen), "forklift" (Gabelstapler kaufen). Kosten aus der Stadtkasse.
 func expand(kind: String, by: String = "Verwaltung") -> Dictionary:
-	var M: Mayor = sim.mayor
+	var M: Mayor = mayor()
 	match kind:
 		"ramp":
 			if ramps >= MAX_RAMPS:
 				return {"ok": false, "msg": "Das Zentrallager hat bereits %d Rampen (Höchstzahl)." % MAX_RAMPS}
 			if M.available_budget() < RAMP_COST:
 				return {"ok": false, "msg": "Budget reicht nicht für eine Rampe (%s)." % Catalog.money(RAMP_COST)}
-			sim.economy.transfer(OWNER, "K0", RAMP_COST)      # Bauleistung der Baufirmen
+			sim.economy.transfer(owner(), "K0", RAMP_COST)      # Bauleistung der Baufirmen
 			ramps += 1
 			sim.log_event("Stadtlager: %s lässt eine %d. Entladerampe bauen (%s)." % [by, ramps, Catalog.money(RAMP_COST)], "info")
 			return {"ok": true, "msg": "Rampe %d gebaut (%s)." % [ramps, Catalog.money(RAMP_COST)]}
@@ -706,8 +734,8 @@ func expand(kind: String, by: String = "Verwaltung") -> Dictionary:
 			var price := float(CityGoods.get_item("gabelstapler").price)
 			if M.available_budget() < price:
 				return {"ok": false, "msg": "Budget reicht nicht für einen Gabelstapler (%s)." % Catalog.money(price)}
-			sim.economy.transfer(OWNER, "X0", price)
-			sim.stock.add("gabelstapler", 1, OWNER, building, "Kauf Gabelstapler")
+			sim.economy.transfer(owner(), "X0", price)
+			sim.stock.add("gabelstapler", 1, owner(), building, "Kauf Gabelstapler")
 			return {"ok": true, "msg": "Gabelstapler gekauft (%s)." % Catalog.money(price)}
 		"staff":
 			if roster().size() >= STAFF_MAX:
@@ -802,10 +830,10 @@ func _inspect(day: int) -> void:
 		bad = clampi(bad, 0, qty)
 		var good := qty - bad
 		if bad > 0:
-			sim.stock.consume(o.item, bad, OWNER, building, "Ausschuss Wareneingang %s" % o.id, sim.game_min)   # nicht bezahlt, entsorgt
+			sim.stock.consume(o.item, bad, owner(), building, "Ausschuss Wareneingang %s" % o.id, sim.game_min)   # nicht bezahlt, entsorgt
 			stats.scrapped += bad
 			_log(o, "Warenprüfung: %d × beschädigt, nicht bezahlt und entsorgt" % bad)
-		var stored: int = sim.stock.set_state(o.item, good, OWNER, building, "pruefung", "ok")
+		var stored: int = sim.stock.set_state(o.item, good, owner(), building, "pruefung", "ok")
 		o.good = stored
 		o.bad = bad
 		o.status = "eingelagert"
@@ -814,16 +842,16 @@ func _inspect(day: int) -> void:
 
 
 func _pay(o: Dictionary) -> void:
-	var M: Mayor = sim.mayor
+	var M: Mayor = mayor()
 	var amount := snappedf(float(o.unit_price) * float(o.good), 0.01)
 	var sup: String = str(o.supplier)
 	if amount > 0.0:
-		var pay := minf(amount, maxf(0.0, float(sim.economy.accounts.P0)))
+		var pay := minf(amount, maxf(0.0, float(sim.economy.accounts.get(owner(), 0.0))))
 		if sup.begins_with("C"):
 			var c = sim.company(int(sup.substr(1)))
-			c.ledger.book("trade_income", pay, true, "Lieferung an das Stadtlager %s" % o.id, sim.game_min, OWNER)
+			c.ledger.book("trade_income", pay, true, "Lieferung an das Stadtlager %s" % o.id, sim.game_min, owner())
 		else:
-			sim.economy.transfer(OWNER, sup, pay)
+			sim.economy.transfer(owner(), sup, pay)
 		o.paid = pay
 		stats.purchases += pay
 	# Reservierung der Ware beim Anbieter: T0 erhaelt den Verkaufserloes, die Menge ist bereits beim Anlieferpunkt uebergegangen
@@ -860,7 +888,7 @@ func reserve_for_project(project_id: String, items: Dictionary, mode: String = "
 	res.items = items.duplicate()
 	# Das Projektbudget steht beim Projekt als Ausgabedach: Materialvorschlaege dieses Projekts werden daraus genehmigt
 	# (statt gegen die ohnehin durch die Reservierung aufgefuellte Restkasse geprueft zu werden).
-	var prj: Dictionary = sim.mayor.projects.get(project_id, {})
+	var prj: Dictionary = mayor().projects.get(project_id, {})
 	if not prj.is_empty() and not prj.has("material_budget"):
 		prj["material_budget"] = snappedf(float(prj.get("cost", 0.0)), 1.0)
 	var missing := {}
@@ -870,7 +898,7 @@ func reserve_for_project(project_id: String, items: Dictionary, mode: String = "
 		if want <= 0:
 			continue
 		var take := mini(want, stock_of(it))
-		if take > 0 and sim.stock.reserve("projekt:%s:%s:%d" % [project_id, it, have], it, take, OWNER, building):
+		if take > 0 and sim.stock.reserve("projekt:%s:%s:%d" % [project_id, it, have], it, take, owner(), building):
 			res.reserved[it] = have + take
 		var still := int(items[it]) - int(res.reserved.get(it, 0))
 		if still > 0:
@@ -936,7 +964,7 @@ func release_project(project_id: String) -> void:
 func issue_to_staff(item: String, qty: int, to: String, reason: String) -> Dictionary:
 	if not CityGoods.exists(item):
 		return {"ok": false, "msg": "Artikel %s unbekannt." % item}
-	var n: int = sim.stock.consume(item, mini(qty, stock_of(item)), OWNER, building, "Ausgabe an %s: %s" % [to, reason], sim.game_min)
+	var n: int = sim.stock.consume(item, mini(qty, stock_of(item)), owner(), building, "Ausgabe an %s: %s" % [to, reason], sim.game_min)
 	if n <= 0:
 		return {"ok": false, "msg": "%s ist nicht vorrätig." % item}
 	issues.append({"day": _today(), "item": item, "qty": n, "to": to, "mode": "ausgegeben", "ref": reason})
@@ -959,10 +987,10 @@ func on_month(_month: int) -> void:
 		var amount := snappedf(float(it.price) * SURPLUS_PRICE * float(over), 0.01)
 		if buyer == "T0":
 			amount = minf(amount, float(sim.economy.accounts.T0) - 5000.0)
-			sim.stock.move(id, over, OWNER, building, "T0", sim.trader.bauhof, "Verkauf Überbestand Stadtlager", sim.game_min)
+			sim.stock.move(id, over, owner(), building, "T0", sim.trader.bauhof, "Verkauf Überbestand Stadtlager", sim.game_min)
 		else:
-			sim.stock.consume(id, over, OWNER, building, "Verkauf Überbestand (Export)", sim.game_min)
-		sim.economy.transfer(buyer, OWNER, amount)
+			sim.stock.consume(id, over, owner(), building, "Verkauf Überbestand (Export)", sim.game_min)
+		sim.economy.transfer(buyer, owner(), amount)
 		stats.sold += amount
 		sim.log_event("Stadtlager verkauft Überbestand: %d × %s für %s." % [over, it.name, Catalog.money(amount)], "info")
 
@@ -1039,7 +1067,7 @@ func _pool_miss(o: Dictionary, taker: int) -> void:
 		pool.misses = int(pool.misses) + 1
 		if int(pool.misses) >= 2:
 			sim.log_event("Rahmenvertrag des Stadtlagers mit %s gekündigt: Aufträge zweimal nicht übernommen." % sim.companies[excl].company_name, "warn", excl)
-			sim.mayor.remember("Rahmenvertrag mit %s gekündigt (zweimal nicht übernommen)." % sim.companies[excl].company_name)
+			mayor().remember("Rahmenvertrag mit %s gekündigt (zweimal nicht übernommen)." % sim.companies[excl].company_name)
 			_pool_reset()
 
 
@@ -1094,7 +1122,7 @@ func to_dict() -> Dictionary:
 
 func from_dict(d: Dictionary) -> void:
 	if d.is_empty():
-		if sim.stock.of_owner(OWNER).filter(func(l): return l.loc == building).is_empty():
+		if sim.stock.of_owner(owner()).filter(func(l): return l.loc == building).is_empty():
 			_seed_stock()          # Spielstand aus der Zeit vor dem Stadtlager
 		return
 	ramps = int(d.get("ramps", RAMPS_START))

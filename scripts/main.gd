@@ -139,7 +139,7 @@ func _start_autotest() -> void:
 	var cfg := {"seed": int(args.get("seed", "777")), "duration_min": 240, "duration_seconds": float(args.get("seconds", "60")),
 		"speed_idx": GameSession.SPEEDS.find(int(args.get("speed", "16"))), "demo_fault_rate": float(args.get("fault", "0.1")),
 		"map_size": int(args.get("map", str(Catalog.MAP_SIZE))), "players": players,
-		"weather": args.get("weather", "sim"), "weather_replay": args.get("weather-replay", "")}
+		"weather": args.get("weather", "sim"), "weather_replay": args.get("weather-replay", ""), "welt": args.get("welt", "region")}
 	print("AUTOTEST: %d Spieler, %s s aktive Echtzeit, %sx, Anbieter %s" % [n, args.get("seconds", "60"), args.get("speed", "16"), args.get("provider", "demo")])
 	_start(cfg)
 

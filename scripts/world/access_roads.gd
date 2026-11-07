@@ -212,6 +212,11 @@ func request(cid: int, pid: String, reason: String = "") -> Dictionary:
 
 
 ## Erschliessung auf Initiative der Stadt (Buergermeister): Weg und Bruecken aus der Stadtkasse, sofort beschlossen.
+## Verwaltung, in deren Gebiet das Grundstueck liegt (Auftrag 17): sie entscheidet, traegt ihren Anteil und schreibt aus.
+func _mayor_of(j: Dictionary) -> Mayor:
+	return sim.towns.mayor(sim.towns.of_parcel(str(j.parcel)))
+
+
 func order_city(pid: String, by: String, choice: Dictionary = {}) -> Dictionary:
 	var chk := _check_new(pid)
 	if not chk.ok:
@@ -225,7 +230,7 @@ func order_city(pid: String, by: String, choice: Dictionary = {}) -> Dictionary:
 	j.need_t = Bridges.LOAD_TOWN
 	j.beitrag = 0.0
 	var chosen := _apply_choice(j, choice)
-	if chosen.ok and sim.mayor.available_budget() < float(j.stadtanteil):
+	if chosen.ok and _mayor_of(j).available_budget() < float(j.stadtanteil):
 		chosen = {"ok": false, "msg": "Verfügbare Stadtkasse reicht nicht (%s nötig)." % Catalog.money(float(j.stadtanteil))}
 	if not chosen.ok:
 		jobs.erase(j.id)
@@ -244,7 +249,7 @@ func decide(id: String, approve: bool, reason: String, by: String, choice: Dicti
 		if not chosen.ok:
 			return chosen
 	j.decision = {"by": by, "reason": reason.left(200), "day": GameCalendar.day_of(sim.game_min), "approve": approve, "wahl": choice}
-	if approve and sim.mayor.available_budget() < float(j.stadtanteil):
+	if approve and _mayor_of(j).available_budget() < float(j.stadtanteil):
 		return {"ok": false, "msg": "Die verfügbare Stadtkasse reicht nicht für den Anteil der Stadt (%s)." % Catalog.money(float(j.stadtanteil))}
 	if approve and c.ledger.cash < float(j.beitrag):
 		approve = false
@@ -317,7 +322,7 @@ func _start(j: Dictionary, by: String) -> Dictionary:
 	for it in ROAD_MATERIAL:
 		mat[it] = int(ROAD_MATERIAL[it]) * land
 	var road_cost := float(j.cost) - float(j.spans.reduce(func(s, x): return s + float(x.cost), 0.0))
-	var prj: Dictionary = sim.mayor.add_works_project("zufahrt", j.id, road_cost, maxi(2, ceili(float(land) / CELLS_PER_DAY)), mat,
+	var prj: Dictionary = _mayor_of(j).add_works_project("zufahrt", j.id, road_cost, maxi(2, ceili(float(land) / CELLS_PER_DAY)), mat,
 		"Zufahrt %s zu %s (%s)" % [j.id, j.parcel, by], str(j.get("award", "")))
 	j.project = prj.id
 	for sp in j.spans:
@@ -382,7 +387,7 @@ func road_progress(j: Dictionary) -> float:
 func on_day(day: int) -> void:
 	for j in jobs.values():
 		if j.status == "antrag" and day - int(j.day) >= ANTRAG_FRIST:
-			var ok: bool = sim.mayor.available_budget() >= float(j.stadtanteil)
+			var ok: bool = _mayor_of(j).available_budget() >= float(j.stadtanteil)
 			decide(j.id, ok, "Frist abgelaufen, Bauamt entscheidet: %s" % ("Mittel vorhanden" if ok else "Stadtkasse reicht nicht"), "Bauamt")
 		if j.status != "im_bau":
 			continue

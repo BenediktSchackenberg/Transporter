@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -7854,3 +7854,132 @@ func test_coast_growth() -> void:
 	s.construction._developer_month()
 	var apps: Array = s.permits.apps.values().filter(func(a): return a.applicant == Construction.DEVELOPER)
 	ok(s.permits.apps.size() == n0 + 1 and not apps.is_empty() and str(apps[0].get("def", apps[0].get("app", {}).get("def", ""))) in ["doppelhaus", "einfamilienhaus", "mehrfamilienhaus"], "Bauträger beantragt ein Wohnhaus, das aufs Grundstück passt (%s)" % str(apps[0].get("def", "?")) if not apps.is_empty() else "kein Antrag")
+
+
+# ================================================================== Auftrag 17: Region mehrerer Staedte (docs/REGION.md)
+## Neue Region mit n Startspielern (je Stadt ein Unternehmer), Tests ohne Bauantraege/Gebote wie coast_sim.
+func region_sim(n: int = 4, seed_v: int = 4242) -> Simulation:
+	var s := Simulation.new()
+	s.world_mode = "region"
+	s.start_profile = "unternehmer"
+	s.setup(seed_v, players(n), Catalog.MAP_SIZE, 0.5)
+	s.estate.permits_enabled = false
+	s.estate.auctions_enabled = false
+	s.prod.instant_build = true
+	s.mining.enabled = false
+	return s
+
+
+## Abnahme 1-3: 2/3/4 Startspieler -> so viele Staedte, eindeutige Namen, je ein Unternehmer, <= 40 Startgebaeude je Stadt,
+## Rathaus/Bauhof/Hafen/Flughafen je Stadt erreichbar, keine versteckten Startfirmen; gleicher Seed reproduziert, anderer nicht.
+func test_region_world() -> void:
+	for n in [2, 3, 4]:
+		var s := region_sim(n)
+		var T: Towns = s.towns
+		ok(T.count() == n and T.is_region() and s.companies.size() == n, "%d Startspieler -> %d Städte, %d Unternehmen" % [n, T.count(), s.companies.size()])
+		var names: Array = T.list.map(func(t): return t.name)
+		ok(names.all(func(x): return names.count(x) == 1 and str(x) != ""), "eindeutige Namen %s" % str(names))
+		var homes: Array = s.companies.map(func(c): return c.home_town)
+		ok(homes == range(n), "je Stadt genau ein Startunternehmer (Heimat %s)" % str(homes))
+		for k in n:
+			var own: Array = s.city.buildings.filter(func(b): return int(b.get("town", -1)) == k)
+			var counted := own.filter(func(b): return b.type != "plot" or int(b.get("parent", -1)) < 0).size()
+			var ctr: Vector2i = T.get_t(k).center
+			var reach := true
+			for bid in [T.get_t(k).town_hall, T.get_t(k).bauhof, T.get_t(k).harbor, int(s.city.towns[k].airport.terminal)]:
+				reach = reach and int(bid) >= 0 and not s.nav.road_path(s.city.building(int(bid)).road, ctr).is_empty()
+			ok(counted <= CoastGenerator.MAX_BUILDINGS and own.filter(func(b): return b.role == "town_hall").size() == 1 and reach and T.airport(k).enabled and T.harbor(k).enabled,
+				"%s: %d Startgebäude, Rathaus/Bauhof/Hafen/Flughafen vorhanden und erreichbar" % [T.name_of(k), counted])
+		ok(s.city.buildings.all(func(b): return not (b.type == "plot" and int(b.get("parent", -1)) < 0) or s.companies.any(func(c): return c.depots[0] == int(b.id))), "keine versteckten Startfirmen-Grundstücke")
+		ok(identity_ok(s), "Geld und Waren erhalten (%d Städte)" % n)
+	var a := RegionGenerator.new(4)
+	var ca: CityData = a.generate(77, 512)
+	var b := RegionGenerator.new(4)
+	var cb: CityData = b.generate(77, 512)
+	var c := RegionGenerator.new(4)
+	var cc: CityData = c.generate(78, 512)
+	ok(ca.towns.map(func(t): return [t.name, t.center]) == cb.towns.map(func(t): return [t.name, t.center]) and ca.buildings.size() == cb.buildings.size(), "gleicher Seed reproduziert die Region")
+	ok(ca.towns.map(func(t): return t.center) != cc.towns.map(func(t): return t.center), "anderer Seed, andere Lage")
+	ok(a.report.ok and int(a.report.berggebiete) >= 3 and float(a.report.unerschlossen) >= 0.6, "Berge unbebaut, >= 3 Berggebiete, %d %% unerschlossen" % int(float(a.report.unerschlossen) * 100.0))
+
+
+## Abnahme 4 (Strassen): alle Staedte ueber das Startnetz verbunden, ohne Bruecke.
+func test_region_roads() -> void:
+	var s := region_sim(4)
+	var T: Towns = s.towns
+	var c0: Vector2i = T.get_t(0).center
+	for k in range(1, T.count()):
+		var path: Array = s.nav.road_path(c0, T.get_t(k).center)
+		ok(not path.is_empty() and not path.any(func(p): return s.bridges.is_bridge(p)), "Straße %s -> %s befahrbar (%d Felder)" % [T.name_of(0), T.name_of(k), path.size()])
+	ok(s.city.region_roads.size() == T.count() - 1 and s.city.region_roads.all(func(r): return bool(r.verbunden) and str(r.eigentum) == "region"), "Verbindungsstraßen als Startinfrastruktur mit Eigentum/Wartung")
+
+
+## Abnahme 5/7: getrennte Kassen, Zustaendigkeit, Projekte der richtigen Stadt aus deren Kasse und Lager.
+func test_region_administration() -> void:
+	var s := region_sim(4)
+	var T: Towns = s.towns
+	var M0: Mayor = T.mayor(0)
+	var M1: Mayor = T.mayor(1)
+	ok(M0 != M1 and M1.town == 1 and M1.acct() == "P1" and M1.land_owner() == "stadt1" and M0.name != M1.name, "eigene Verwaltung je Stadt (%s / %s)" % [M0.name, M1.name])
+	var p0 := M0.cash()
+	var p1 := M1.cash()
+	var r: Dictionary = M0.execute({"action": "city_marketing", "budget": 5000, "reason": "Test"})
+	ok(r.ok and is_equal_approx(M0.cash(), p0 - 5000.0) and is_equal_approx(M1.cash(), p1), "Zahlung aus %s ändert die Kasse von %s nicht" % [T.name_of(0), T.name_of(1)])
+	var foreign: Array = s.parcels.items.values().filter(func(p): return p.owner == "stadt1" and p.state == "frei")
+	ok(not foreign.is_empty() and T.of_parcel(foreign[0].id) == 1, "öffentliches Land gehört der Stadt seines Gebiets")
+	var rb: Dictionary = M0.execute({"action": "build_bridge", "grundstueck": foreign[0].id, "reason": "Test"})
+	ok(not rb.ok and str(rb.msg).begins_with("Nicht zuständig"), "fremde Verwaltungsaktion abgelehnt (%s)" % str(rb.msg).left(90))
+	ok(T.depot(1).building != T.depot(0).building and T.depot(1).owner() == "P1" and T.depot(1).stock_of("diesel") > 0, "eigenes Zentrallager je Stadt mit eigenem Bestand")
+	# Hafenausbau in Stadt 1: Projekt-ID je Stadt, Material aus Lager 1, Bezahlung aus Kasse 1
+	var H1: Harbor = T.harbor(1)
+	var res: Dictionary = M1.execute({"action": "expand_harbor", "reason": "Test"})
+	var pid := str(res.get("ref", ""))
+	ok(res.ok and pid.begins_with("T1P") and T.mayor_of_project(pid) == M1 and M1.commitments > 0.0 and is_equal_approx(M0.commitments, 0.0), "Projekt %s gehört Stadt 1, Mittel dort reserviert" % pid)
+	var D1: CityDepot = T.depot(1)
+	var m: Dictionary = M1.projects[pid].material
+	for it in m:
+		s.stock.add(it, int(m[it]), D1.owner(), D1.building, "Test-Lieferung", s.game_min)
+	D1.reserve_for_project(pid, m)
+	var p0b := M0.cash()
+	var p1b := M1.cash()
+	var d := GameCalendar.day_of(s.game_min)
+	for k in 90:
+		_works_day(s, d + 1 + k)
+		if M1.projects[pid].status == "fertig":
+			break
+	ok(M1.projects[pid].status == "fertig" and H1.stage == 2 and T.harbor(0).stage == 1, "Hafen von %s ausgebaut, Hafen von %s unverändert" % [T.name_of(1), T.name_of(0)])
+	ok(M1.cash() < p1b and is_equal_approx(M0.cash(), p0b), "Baufirma aus der Kasse von Stadt 1 bezahlt (%s), Stadt 0 unverändert" % Catalog.money(p1b - M1.cash()))
+	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+## Abnahme 16/17: Wahl in einer Stadt aendert die andere nicht; verspaetete Antwort des alten Amtsinhabers verworfen;
+## Speichern/Laden der Region und alter Einzelstadt-Staende.
+func test_region_mayors_and_save() -> void:
+	var s := region_sim(3)
+	var T: Towns = s.towns
+	var n0 := T.mayor(0).name
+	var mem0: Array = T.mayor(0).notes.duplicate()
+	T.mayor(1).remember("Nur Stadt 1 merkt sich das.")
+	for i in 6:
+		T.mayor(1).hold_election()
+	ok(T.mayor(0).name == n0 and T.mayor(0).notes == mem0, "Wahl/Gedächtnis in %s ändert %s nicht" % [T.name_of(1), T.name_of(0)])
+	var ag := MayorAgent.new()
+	ag.town = 1
+	ag.sim = s
+	ag.api_log = ApiLog.new()
+	ag._inflight = 7
+	ag._inflight_term = "Früherer Amtsinhaber@0"
+	var acts0: int = T.mayor(1).decisions.size()
+	ag.handle_result(7, {"ok": true, "content": "{\"summary\": \"x\", \"actions\": [{\"action\": \"wait\"}]}"})
+	ok(ag.discarded == 1 and T.mayor(1).decisions.size() == acts0, "verspätete Antwort des früheren Amtsinhabers verworfen")
+	ag.free()
+	T.mayor(2).execute({"action": "city_marketing", "budget": 6000, "reason": "Test"})
+	var cash2 := T.mayor(2).cash()
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var T2: Towns = s2.towns
+	ok(T2.count() == 3 and s2.load_warnings.is_empty() and T2.list.map(func(t): return t.name) == T.list.map(func(t): return t.name), "Laden: dieselben Städte, keine Abweichung")
+	ok(T2.mayor(1).name == T.mayor(1).name and T2.mayor(1).town == 1 and is_equal_approx(T2.mayor(2).cash(), cash2) and T2.mayor(2).marketing_until == T.mayor(2).marketing_until, "Laden: Verwaltungen, Kassen und Maßnahmen je Stadt erhalten")
+	ok(s2.companies.map(func(c): return c.home_town) == s.companies.map(func(c): return c.home_town) and identity_ok(s2), "Laden: Heimatstädte und Geldidentität erhalten")
+	var old := coast_sim()
+	var o2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(old.to_dict())))
+	ok(o2.towns.count() == 1 and not o2.towns.is_region() and o2.towns.mayor(0) == o2.mayor and o2.companies.size() == 4 and identity_ok(o2), "alter Einzelstadt-Stand lädt als Region mit einer Stadt, alle Unternehmen bleiben dort")

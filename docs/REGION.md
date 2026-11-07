@@ -92,9 +92,9 @@ Gebäudestufen und Küstenort Etappe E). Arbeit auf Branch `region` (Worktree `P
 | Etappe | Inhalt | Stand |
 |---|---|---|
 | 1 | Bestandsaufnahme, Architektur | fertig (07.11.2026, dieses Dokument) |
-| 2 | Stadtidentitäten, Konten/Eigentümer je Stadt, Zuständigkeitsauflösung, Migration | offen |
-| 3 | Regionsgenerator 2–4 Orte, je ein Unternehmer, Startstraßennetz | offen |
-| 4 | Verwaltung je Stadt (Bürgermeister, Haushalt, Bauhof, Genehmigung, Projekte, Wahlen), Gemeinschaftsprojekte | offen |
+| 2 | Stadtidentitäten, Konten/Eigentümer je Stadt, Zuständigkeitsauflösung, Migration | fertig (07.11.2026): `Towns` (`sim.towns`, `scripts/core/towns.gd`): je Ort Konto `P<k>` (Ort 0 `P0`), Grundeigentümer `stadt<k>` (Ort 0 `stadt`), Projekt-/Plan-IDs `T<k>P<n>`; Zuständigkeit `of_cell/of_building/of_parcel` (Verwaltungsgebiet = nächstes Ortszentrum, keine unzugeordnete Fläche); `Company.home_town`; Startbudget weiterer Orte 200 000 EUR als Landeszuweisung X0 → P<k> (verbucht). Migration: Spielstände ohne `region` laden als eine Stadt (Test). Spielstand: Abschnitt `region` mit Ortszahl, Generatorparametern, Städten (Ladeprüfung meldet Abweichung) und Zuständen der weiteren Verwaltungen |
+| 3 | Regionsgenerator 2–4 Orte, je ein Unternehmer, Startstraßennetz | fertig (07.11.2026): `RegionGenerator` (Weltart `region`, Standard im Startmenü und Autotest): Orte gleichmäßig entlang der Küste, Berge mit Abstand, Fluss mündet jenseits der Orte, je Ort ≤ 40 Gebäude mit Rathaus, Bauhof, Hafen, Flughafen, genau einem Startgrundstück; ein regionales Kraftwerk (Ort 0); Verbindungsstraßen per Wegsuche über Land (`CityData.region_roads`, Eigentum Region, Wartung nach Verwaltungsgebiet); Selbstprüfung mit bis zu 8 Versuchen (Seeds 7, 21, 99, 123, 4242: erster Versuch). Behoben dabei: Kaikante trennte die Hauptstraße, Flussquelle in Bergmulde |
+| 4 | Verwaltung je Stadt (Bürgermeister, Haushalt, Bauhof, Genehmigung, Projekte, Wahlen), Gemeinschaftsprojekte | teilweise (07.11.2026): je Ort eigene Instanz von `Mayor`, `CityDepot`, `Harbor`, `Airport`, eigener `MayorAgent` (eigener Kontext, Budget, Protokoll `buergermeister_<k>`, zeitversetzt; Antworten nach Amtswechsel verworfen); Wahlen je Ort; Kennzahlen nur eigenes Gebiet (Bauanträge, Zufahrten, Abbauanträge, Gebäude); Zuständigkeitsprüfung `Mayor.foreign_target` (Anträge, Grundstücke, Zufahrten, Verkehr); öffentliche Projekte aus Kasse und Lager der beauftragenden Stadt; Zufahrten/Brücken/Straßenwartung/Verkehrsmaßnahmen/Förderabgabe nach Verwaltungsgebiet. **Offen:** Gemeinschaftsprojekte mit Kostenanteilen; Rathauspersonal, Sozialleistungen, Steuern, Grundsteuer und Wohnungsmarkt laufen noch regional über Ort 0 (`Mayor.on_day`, `Housing`, `PublicSector`, `TownHall`) |
 | 5 | Binnenhandel zwischen Städten, Flughäfen und Flugverkehr | offen |
 | 6 | Expansion, zusätzliche Gründer, Pendeln, Umzüge | offen |
 | 7 | Oberfläche, Auswertungen, Grafikprüfung, Balance | offen |
@@ -103,13 +103,13 @@ Gebäudestufen und Küstenort Etappe E). Arbeit auf Branch `region` (Worktree `P
 
 | Nr. | Szenario | Stand |
 |---|---|---|
-| 1 | 2/3/4 Startspieler → so viele gültige Städte, eindeutige Namen, je ein Unternehmer | offen |
-| 2 | ≤ 40 Startgebäude je Stadt; Rathaus, Bauhof, Hafen, Flugplatz erreichbar; keine versteckten Startfirmen | offen |
-| 3 | Verschiedene Seeds gültig, gleicher Seed reproduziert; Berge unbebaut | offen |
-| 4 | Städte über Straßen verbunden, LKW-Lieferung zwischen Stadtzentren | offen |
-| 5 | Zahlung aus A ändert B nicht; fremde Verwaltungsaktionen abgelehnt | offen |
+| 1 | 2/3/4 Startspieler → so viele gültige Städte, eindeutige Namen, je ein Unternehmer | erfüllt (`test_region_world`) |
+| 2 | ≤ 40 Startgebäude je Stadt; Rathaus, Bauhof, Hafen, Flugplatz erreichbar; keine versteckten Startfirmen | erfüllt (`test_region_world`) |
+| 3 | Verschiedene Seeds gültig, gleicher Seed reproduziert; Berge unbebaut | erfüllt (`test_region_world`) |
+| 4 | Städte über Straßen verbunden, LKW-Lieferung zwischen Stadtzentren | Straßen erfüllt (`test_region_roads`); LKW-Lieferung offen (Etappe 5) |
+| 5 | Zahlung aus A ändert B nicht; fremde Verwaltungsaktionen abgelehnt | erfüllt (`test_region_administration`) |
 | 6 | Firma aus A kauft Land in B, Antrag in B, Entscheidung von B, Betrieb läuft | offen |
-| 7 | Kommunaler Materialauftrag von der richtigen Stadt bezahlt und ins richtige Lager; Personal einmal entlohnt | offen |
+| 7 | Kommunaler Materialauftrag von der richtigen Stadt bezahlt und ins richtige Lager; Personal einmal entlohnt | teilweise: Projekt aus Kasse/Lager der Stadt (`test_region_administration`); Rathauspersonal noch regional |
 | 8 | Gemeinsames Projekt einmal vergeben, anteilig finanziert, erst nach Abnahme nutzbar; Folgen bei Ablehnung | offen |
 | 9 | Produkt zwischen zwei Städten verkauft/transportiert, X0 unverändert | offen |
 | 10 | Echter Flug A→B, Fracht erst nach Ankunft verfügbar, Kapazität und Kosten | offen |
@@ -118,8 +118,8 @@ Gebäudestufen und Küstenort Etappe E). Arbeit auf Branch `region` (Worktree `P
 | 13 | Gründung scheitert verständlich (Kapital, Standort, Quote); Heimatstadt vs. Filiale | offen |
 | 14 | Company-ID > Startslots funktioniert überall (Verträge, Personal, Kredite, UI, Speichern) | offen |
 | 15 | Insolvenz reguliert Forderungen; keine ID-Wiederverwendung | offen |
-| 16 | Wahl in A ändert B nicht; verspätete Antwort des alten Amtsinhabers verworfen | offen |
-| 17 | Speichern/Laden neuer Regionen und alter Einzelstadt-Stände ohne Verlust | offen |
+| 16 | Wahl in A ändert B nicht; verspätete Antwort des alten Amtsinhabers verworfen | erfüllt (`test_region_mayors_and_save`) |
+| 17 | Speichern/Laden neuer Regionen und alter Einzelstadt-Stände ohne Verlust | teilweise: Städte, Verwaltungen, Kassen, Heimatstädte, alte Stände (`test_region_mayors_and_save`); laufende Flüge/Umzüge folgen mit Etappe 5/6 |
 | 18 | Bilanzen/Warenbilanz/Geldprüfungen konsistent, keine unbeabsichtigten Mittel | offen |
 | 19 | Langer Probelauf mit 4 Städten und Gründern; API-Ausfall blockiert nichts | offen |
 | 20 | Grafische Probeläufe der Region | offen |

@@ -52,10 +52,10 @@ func _build_landfill() -> void:
 			continue
 		if not bool(sim.parcels.utilities_of(p).strasse):
 			continue
-		if city.world != "kueste" and not sim.prod._outskirts(p):
+		if not city.coastal() and not sim.prod._outskirts(p):
 			continue
 		var h := float(absi(hash([city.seed_value, p.id, "deponie"])) % 100000)
-		if city.world == "kueste":   # Kuestenort: an der Ortsgrenze, so weit wie moeglich vom Hafen (Strassen gibt es nur im Ort)
+		if city.coastal():   # Kuestenort: an der Ortsgrenze, so weit wie moeglich vom Hafen (Strassen gibt es nur im Ort)
 			h = -Vector2(float(p.rect[0]), float(p.rect[1])).distance_to(Vector2(city.building(city.start_depots[0]).road)) if not city.start_depots.is_empty() else h
 		if h < best_h:
 			best_h = h

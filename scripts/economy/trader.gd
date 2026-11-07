@@ -55,8 +55,10 @@ func setup(s: Simulation) -> void:
 	s.month_changed.connect(on_month)
 	var center := Vector2(s.city.size, s.city.size) * 0.5
 	var best_d := INF
-	for b in s.city.buildings:
-		if s.city.world == "kueste" and b.name != "Städtischer Bauhof":
+	if s.city.towns.size() > 1:
+		bauhof = int(s.city.towns[0].get("bauhof", -1))   # Region: ein privater Grosshandel im Bauhof des ersten Orts (regionaler Anbieter)
+	for b in (s.city.buildings if bauhof < 0 else []):
+		if s.city.coastal() and b.name != "Städtischer Bauhof":
 			continue   # Kuestenort: genau ein staedtischer Bauhof (nicht das Kraftwerk)
 		if b.role != "plot" and "baustoffe" in b.out:
 			var d := Vector2(b.x, b.y).distance_to(center)

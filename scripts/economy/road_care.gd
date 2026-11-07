@@ -139,9 +139,10 @@ func order(id: String, mode: String, by: String = "") -> Dictionary:
 	if mode == "firma" and running("firma") >= MAX_FIRM_JOBS:
 		return {"ok": false, "msg": "Höchstens %d Baufirmen-Aufträge gleichzeitig." % MAX_FIRM_JOBS}
 	var cost := float(MODES[mode].cost)
-	if sim.mayor.available_budget() < cost:
-		return {"ok": false, "msg": "Verfügbare Stadtkasse (%s) reicht nicht für %s." % [Catalog.money(sim.mayor.available_budget()), Catalog.money(cost)]}
-	sim.economy.transfer("P0", "S0", cost)   # Material bzw. Werklohn der Baufirma
+	var M: Mayor = sim.towns.mayor(sim.towns.of_cell(cells[seg]))   # Wartungszustaendigkeit: Verwaltungsgebiet des Abschnitts
+	if M.available_budget() < cost:
+		return {"ok": false, "msg": "Verfügbare Stadtkasse (%s) reicht nicht für %s." % [Catalog.money(M.available_budget()), Catalog.money(cost)]}
+	sim.economy.transfer(M.acct(), "S0", cost)   # Material bzw. Werklohn der Baufirma
 	stats.spent += cost
 	var today := GameCalendar.day_of(sim.game_min)
 	var j := {"id": "S%d" % _next, "seg": seg, "cell": cells[seg], "mode": mode, "start": today, "end": today + int(MODES[mode].days), "cost": cost,

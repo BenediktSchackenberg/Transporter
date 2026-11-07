@@ -118,18 +118,20 @@ func _bill() -> void:
 
 ## Ausbau durch den Buergermeister: staedtisches Bauprojekt (Ausschreibung an Baufirmen, auch Unternehmer-Baufirmen); die Leistung
 ## steigt erst mit der Fertigstellung, bezahlt wird die ausfuehrende Baufirma.
-func expand(by: String) -> Dictionary:
-	if sim.mayor.available_budget() < EXPAND_COST:
+func expand(by: String, M: Mayor = null) -> Dictionary:
+	if M == null:
+		M = sim.mayor
+	if M.available_budget() < EXPAND_COST:
 		return {"ok": false, "msg": "Verfügbare Stadtkasse reicht nicht (%s nötig)." % Catalog.money(EXPAND_COST)}
 	if expansion_running():
 		return {"ok": false, "msg": "Ein Netzausbau läuft bereits."}
-	var prj: Dictionary = sim.mayor.add_power_project(EXPAND_COST, EXPAND_KW, by)
+	var prj: Dictionary = M.add_power_project(EXPAND_COST, EXPAND_KW, by)
 	sim.log_event("%s lässt Kraftwerk und Netz ausbauen: +%d kW, ausgeschrieben als %s (%s)." % [by, int(EXPAND_KW), prj.id, Catalog.money(EXPAND_COST)], "info")
 	return {"ok": true, "msg": "Netzausbau +%d kW als Projekt %s ausgeschrieben (Bauzeit etwa %d Tage)." % [int(EXPAND_KW), prj.id, EXPAND_DAYS], "ref": prj.id}
 
 
 func expansion_running() -> bool:
-	return sim.mayor.projects.values().any(func(p): return p.kind == "netzausbau" and p.status != "fertig")
+	return sim.towns.mayors.any(func(M): return M.projects.values().any(func(p): return p.kind == "netzausbau" and p.status != "fertig"))
 
 
 ## Vom Bausystem bei Fertigstellung des Projekts aufgerufen.

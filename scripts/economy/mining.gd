@@ -134,7 +134,7 @@ func royalty(b: Dictionary, item: String, q: int) -> void:
 	if pct <= 0.0 or q <= 0:
 		return
 	var amount := snappedf(float(q) * float(sim.prod.art(item).get("basispreis", 5.0)) * pct, 0.01)
-	sim.company(int(b.owner)).ledger.book("property_costs", -amount, true, "Förderabgabe %s" % b.id, sim.game_min, "P0", b.id)
+	sim.company(int(b.owner)).ledger.book("property_costs", -amount, true, "Förderabgabe %s" % b.id, sim.game_min, Towns.account_of(sim.towns.of_parcel(str(b.get("parcel", "")))), b.id)
 	royalty_total += amount
 	royalty_month += amount
 

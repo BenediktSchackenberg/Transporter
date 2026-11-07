@@ -72,7 +72,7 @@ func demand() -> Array:
 			out.append({"kind": "cw", "id": wid, "builder": w.builder})
 	for pid in C.public:
 		var e: Dictionary = C.public[pid]
-		if e.status == "laufend" and today >= int(e.start) and sim.city_depot.project_complete(str(pid)):
+		if e.status == "laufend" and today >= int(e.start) and sim.towns.depot(Towns.town_of_id(str(pid))).project_complete(str(pid)):
 			out.append({"kind": "pub", "id": pid, "builder": e.builder})
 	return out
 
@@ -195,13 +195,13 @@ func _material_need(t: Dictionary) -> Dictionary:
 		var w: Dictionary = sim.construction.works[t.job.id]
 		if bool(w.crew_loaded):
 			return {}
-		var src: String = sim.construction.items_source(w.material)
-		return {"src": src, "at": sim.city.building(sim.harbor.building).road if src == "hafen" else sim.city.building(int(sim.trader.bauhof)).road}
+		var src: String = sim.construction.items_source(w.material, sim.towns.of_building(int(w.building)))
+		return {"src": src, "at": sim.city.building(sim.towns.harbor(sim.towns.of_building(int(w.building))).building).road if src == "hafen" else sim.city.building(int(sim.trader.bauhof)).road}
 	if t.job.kind == "pub":
 		var e: Dictionary = sim.construction.public[t.job.id]
 		if bool(e.get("crew_loaded", false)):
 			return {}
-		return {"src": "stadtlager", "at": sim.city.building(sim.city_depot.building).road}
+		return {"src": "stadtlager", "at": sim.city.building(sim.towns.depot(Towns.town_of_id(str(t.job.id))).building).road}
 	var pr: Dictionary = sim.construction.projects[t.job.id]
 	if pr.status != "im_bau":
 		return {}
@@ -226,7 +226,7 @@ func _material_need(t: Dictionary) -> Dictionary:
 	if first.is_empty() or first.phase != ph.id:
 		return {}   # Material der laufenden Phase bringt gerade eine Transportfirma
 	var src: String = sim.construction.material_source(first)
-	var at: Vector2i = sim.city.building(sim.harbor.building).road if src == "hafen" else sim.city.building(int(sim.trader.bauhof)).road
+	var at: Vector2i = sim.city.building(sim.towns.harbor(sim.towns.of_parcel(str(pr.parcel))).building).road if src == "hafen" else sim.city.building(int(sim.trader.bauhof)).road
 	return {"delivery": ",".join(ids), "src": src, "at": at}
 
 
@@ -282,7 +282,7 @@ func _site_of(kind: String, id: String) -> Vector2i:
 	if kind == "bp":
 		var pr: Dictionary = sim.construction.projects[id]
 		return nearest_road(_parcel_center(str(pr.parcel)))
-	var prj: Dictionary = sim.mayor.projects.get(id, {})
+	var prj: Dictionary = sim.towns.project(id)
 	match str(prj.get("kind", "")):
 		"zufahrt":
 			var j: Dictionary = sim.access.jobs.get(str(prj.ref), {})
@@ -344,7 +344,7 @@ func _job_label(t: Dictionary) -> String:
 	if t.job.kind == "bp":
 		var pr: Dictionary = sim.construction.projects.get(t.job.id, {})
 		return "Bauvorhaben %s (%s)" % [t.job.id, Planning.DEFS.get(pr.get("def", ""), {}).get("label", "Gebäude")]
-	var prj: Dictionary = sim.mayor.projects.get(t.job.id, {})
+	var prj: Dictionary = sim.towns.project(str(t.job.id))
 	return "Stadtprojekt %s (%s)" % [t.job.id, prj.get("kind", "")]
 
 

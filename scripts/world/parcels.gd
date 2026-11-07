@@ -59,6 +59,8 @@ func build(c: CityData) -> void:
 
 
 func _new(r: Rect2i, zone: String, state: String, owner: String, use: String) -> Dictionary:
+	if owner == CITY and city.towns.size() > 1:
+		owner = Towns.owner_of(city.town_of(r.position + r.size / 2))   # Region: oeffentliches Land gehoert dem Ort des Gebiets
 	var id := "G%d" % _next
 	_next += 1
 	var z: Dictionary = ZONES[zone]
@@ -251,7 +253,9 @@ func search(criteria: Dictionary = {}) -> Array:
 	var out: Array = []
 	var order := ["keine", "teilweise", "voll"]
 	for p in items.values():
-		if p.state != "frei" or not is_buildable(p) or p.owner != CITY:
+		if p.state != "frei" or not is_buildable(p) or not Towns.is_public(p.owner):
+			continue
+		if criteria.has("town") and Towns.town_of_owner(p.owner) != int(criteria.town):
 			continue
 		if criteria.has("zone") and p.zone != criteria.zone:
 			continue
@@ -307,7 +311,7 @@ func reserve(pid: String, holder: String, days: int = RESERVATION_DAYS) -> Dicti
 	var p := parcel(pid)
 	if p.is_empty():
 		return {"ok": false, "msg": "Grundstück %s gibt es nicht." % pid}
-	if p.state != "frei" or not is_buildable(p) or p.owner != CITY:
+	if p.state != "frei" or not is_buildable(p) or not Towns.is_public(p.owner):
 		return {"ok": false, "msg": "Grundstück %s ist nicht verfügbar (%s)." % [pid, p.state]}
 	p.state = "reserviert"
 	p.reservation = {"holder": holder, "until_day": _day() + days}
@@ -357,7 +361,7 @@ func buy_for_household(pid: String, home_id: String) -> Dictionary:
 ## Die Stadt darf nur ueber Flaechen verfuegen, die ihr gehoeren; private Rechte bleiben unangetastet.
 func city_can_assign(pid: String) -> bool:
 	var p := parcel(pid)
-	return not p.is_empty() and p.owner == CITY and p.state in ["frei", "zur_entwicklung"] and p.rights.is_empty()
+	return not p.is_empty() and Towns.is_public(p.owner) and p.state in ["frei", "zur_entwicklung"] and p.rights.is_empty()
 
 
 func on_day(day: int) -> void:

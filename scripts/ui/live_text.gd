@@ -1106,7 +1106,7 @@ static func depot_panel(sim: Simulation) -> String:
 	txt += "[b]Auslastung[/b] " + " · ".join(zs) + "\n"
 	var res_total := 0
 	for r in sim.stock.reservations.values():
-		if r.owner == CityDepot.OWNER:
+		if Towns.town_of_account(str(r.owner)) >= 0:
 			res_total += int(r.qty)
 	txt += "[b]Reserviert[/b] %d Einheiten für %d Projekte\n" % [res_total, D.project_res.size()]
 	var inc: Array = D.open_orders().filter(func(o): return o.status != "vorschlag")

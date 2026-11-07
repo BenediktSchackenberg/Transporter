@@ -32,6 +32,11 @@ var towns: Array = []               # [{id, name, center: [x, y], rect: [x, y, w
 var region_roads: Array = []        # Verbindungsstrassen der Startinfrastruktur [{id, von, nach, zellen, laenge, verbunden, eigentum, wartung}]
 
 
+## Kuestenwelt (Kuestenort oder Region aus Kuestenorten): Hafen, Berge, Zufahrten, Bruecken.
+func coastal() -> bool:
+	return world in ["kueste", "region"]
+
+
 ## Verwaltungsgebiet: Ort mit dem naechsten Ortszentrum (jede Zelle gehoert genau einem Ort; ohne Orte: 0).
 func town_of(cell: Vector2i) -> int:
 	if towns.size() <= 1:

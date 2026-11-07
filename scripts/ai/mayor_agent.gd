@@ -10,6 +10,9 @@ const FAIL_LIMIT := 3
 const MAX_ACTIONS := 4
 
 var sim: Simulation
+var town := 0                  # Ort dieser Verwaltung (Auftrag 17): eigener Kontext, Gedaechtnis, Budget und Protokoll
+var discarded := 0             # verworfene veraltete Antworten (Amtswechsel waehrend der Anfrage)
+var _inflight_term := ""       # Amtsinhaber bei Absenden der Anfrage (Name und Amtsbeginn)
 var config := {}
 var adapter: LLMAdapter
 var api_log: ApiLog
@@ -45,8 +48,21 @@ func setup(simulation: Simulation, cfg: Dictionary, logger: ApiLog) -> void:
 		adapter.completed.connect(handle_result)
 		ApiLog.register_secret(str(cfg.get("api_key", "")))
 	sim.permits.mayor_attached = true
-	_since = float(cfg.get("interval", 45.0))   # erste Entscheidung sofort beim Start, nicht erst nach einem Intervall
+	# erste Entscheidung bald nach dem Start; weitere Orte zeitversetzt, damit sich die Verwaltungen einen lokalen Modellserver teilen
+	_since = float(cfg.get("interval", 45.0)) - float(town) * float(cfg.get("interval", 45.0)) / 4.0
 	status = "regelbasiert" if adapter == null else "bereit"
+
+
+func mayor() -> Mayor:
+	return sim.towns.mayor(town)
+
+
+func _who() -> String:
+	return "buergermeister" if town == 0 else "buergermeister_%d" % town
+
+
+func _term() -> String:
+	return "%s@%d" % [mayor().name, int(mayor().term_start_day)]
 
 
 func uses_model() -> bool:
@@ -83,14 +99,15 @@ func think() -> void:
 			status = "Budget erschöpft – Ersatzmodus (regelbasiert)"
 		_run_rules("Ersatzmodus" if adapter != null else "Regeln")
 		return
-	var obs := sim.mayor.indicators()
+	var obs := mayor().indicators()
 	var messages := [{"role": "system", "content": system_prompt()}, {"role": "user", "content": user_prompt(obs)}]
 	_inflight = _next_req
 	_next_req += 1
 	_inflight_sent = real_time
+	_inflight_term = _term()
 	stats.requests += 1
 	status = "wartet auf Antwort"
-	api_log.write({"type": "request", "player": "buergermeister", "req": _inflight, "game_time": sim.game_min, "provider": config.get("provider"), "model": config.get("model"), "messages": messages})
+	api_log.write({"type": "request", "player": _who(), "req": _inflight, "game_time": sim.game_min, "provider": config.get("provider"), "model": config.get("model"), "messages": messages})
 	adapter.observation = obs
 	adapter.send(_inflight, messages)
 
@@ -100,9 +117,15 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 		return
 	_inflight = -1
 	_applied[req_id] = true
+	if _inflight_term != _term():
+		# Antwort des frueheren Amtsinhabers (Wahl waehrend der Anfrage): nicht mehr gueltig, die neue Verwaltung entscheidet selbst
+		discarded += 1
+		api_log.write({"type": "discarded", "player": _who(), "req": req_id, "reason": "Amtswechsel", "term_sent": _inflight_term, "term_now": _term()})
+		sim.log_event("%s: verspätete Antwort für den früheren Amtsinhaber verworfen." % sim.towns.name_of(town), "info")
+		return
 	var usage: Dictionary = r.get("usage", {}) if r.get("usage") is Dictionary else {}
 	stats.tokens += int(usage.get("total_tokens", 0))
-	api_log.write({"type": "response", "player": "buergermeister", "req": req_id, "ok": r.get("ok", false), "content": r.get("content", ""), "error": r.get("error", ""), "usage": usage})
+	api_log.write({"type": "response", "player": _who(), "req": req_id, "ok": r.get("ok", false), "content": r.get("content", ""), "error": r.get("error", ""), "usage": usage})
 	if not r.get("ok", false):
 		_on_failure(req_id, str(r.get("error", "Fehler")))
 		return
@@ -126,14 +149,14 @@ func _on_failure(req_id: int, msg: String) -> void:
 	last_error = msg
 	_backoff_until = real_time + minf(60.0, 2.0 * pow(2.0, _fail - 1))
 	status = "Fehler: %s" % msg
-	api_log.write({"type": "failure", "player": "buergermeister", "req": req_id, "error": msg})
+	api_log.write({"type": "failure", "player": _who(), "req": req_id, "error": msg})
 	if _fail >= FAIL_LIMIT and config.get("fallback", true) and not fallback_active:
 		fallback_active = true
 		sim.log_event("Bürgermeister: API gestört – ERSATZMODUS (regelbasiert) aktiv.", "warn")
 
 
 func _run_rules(source: String) -> void:
-	var d := MayorBrain.decide(sim.mayor.indicators())
+	var d := MayorBrain.decide(mayor().indicators())
 	_apply(AgentController.parse_response(JSON.stringify(d)), source)
 
 
@@ -143,17 +166,18 @@ func _apply(parsed: Dictionary, source: String) -> void:
 		summaries.append({"t": sim.game_min, "text": summary, "source": source})
 		if summaries.size() > 20:
 			summaries.pop_front()
-		sim.log_event("Bürgermeister %s%s: „%s“" % [sim.mayor.name, " [%s]" % source if source != "KI" else "", summary.left(200)], "ai")
+		var where := " (%s)" % sim.towns.name_of(town) if sim.towns.is_region() else ""
+		sim.log_event("Bürgermeister %s%s%s: „%s“" % [mayor().name, where, " [%s]" % source if source != "KI" else "", summary.left(200)], "ai")
 		decided.emit(summary, source)
 	if parsed.memory != "":
-		sim.mayor.remember(parsed.memory)
+		mayor().remember(parsed.memory)
 	for a in parsed.actions.slice(0, MAX_ACTIONS):
-		var res := sim.mayor.execute(a)
+		var res := mayor().execute(a)
 		if res.ok:
 			stats.actions_ok += 1
 		else:
 			stats.actions_rejected += 1
-		api_log.write({"type": "action", "player": "buergermeister", "source": source, "action": a, "ok": res.ok, "msg": res.msg})
+		api_log.write({"type": "action", "player": _who(), "source": source, "action": a, "ok": res.ok, "msg": res.msg})
 
 
 func system_prompt() -> String:
@@ -181,10 +205,11 @@ func user_prompt(obs: Dictionary) -> String:
 
 
 func to_dict() -> Dictionary:
-	return {"stats": stats, "summaries": summaries, "fallback": fallback_active}
+	return {"town": town, "stats": stats, "summaries": summaries, "fallback": fallback_active, "discarded": discarded}
 
 
 func from_dict(d: Dictionary) -> void:
 	stats = d.get("stats", stats)
+	discarded = int(d.get("discarded", 0))
 	summaries = d.get("summaries", [])
 	fallback_active = bool(d.get("fallback", false))

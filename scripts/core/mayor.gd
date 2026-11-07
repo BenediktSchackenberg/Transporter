@@ -94,6 +94,7 @@ const SHOP_TYPES := ["shop", "pharmacy", "restaurant", "office", "bank", "gas_st
 const ZONE_TARGET := {"wohnen": 0.45, "mischgebiet": 0.2, "gewerbe": 0.2, "industrie": 0.15}
 var marketing_boost := 0.0             # zusaetzlicher Zuzug durch Stadtmarketing (Anteil)
 var marketing_until := -1              # bis einschliesslich Monat
+var town := 0                          # Ort dieser Verwaltung (Auftrag 17); Konto, Grundeigentum und Lager ueber Towns
 var _next_plan := 1
 var _next_project := 1
 var _next_dec := 1
@@ -109,7 +110,7 @@ func setup(simulation) -> void:
 ## Anfangszustand nach Erzeugung der Stadt: Wohnungsbestand passt zur Bevoelkerung (3 % Leerstand).
 func start() -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = int(sim.city.seed_value) + 31337
+	rng.seed = int(sim.city.seed_value) + 31337 + 7919 * town   # je Ort eigener Buergermeister
 	name = "%s %s" % [FIRST_NAMES[rng.randi() % FIRST_NAMES.size()], LAST_NAMES[rng.randi() % LAST_NAMES.size()]]
 	party = Council.SEATS.keys()[rng.randi() % 3]
 	stock_units = int(ceil(float(sim.citizens.population()) / PERSONS_PER_UNIT * (1.0 + BASE_VACANCY)))
@@ -130,8 +131,33 @@ func rent_index() -> float:
 	return clampf(100.0 + 400.0 * float(waiting) / maxf(1.0, float(stock_units)) - 300.0 * (vacancy() - BASE_VACANCY), 70.0, 160.0)
 
 
+## Stadtkasse dieses Orts (Towns.account_of), oeffentliches Grundeigentum, eigenes Zentrallager und eigener Hafen.
+func acct() -> String:
+	return Towns.account_of(town)
+
+
+func land_owner() -> String:
+	return Towns.owner_of(town)
+
+
+func cash() -> float:
+	return float(sim.economy.accounts.get(acct(), 0.0))
+
+
+func depot() -> CityDepot:
+	return sim.towns.depot(town) if sim.towns != null and sim.towns.depots.size() > 0 else depot()
+
+
+func harbor() -> Harbor:
+	return sim.towns.harbor(town) if sim.towns != null and sim.towns.harbors.size() > 0 else sim.harbor
+
+
+func town_label() -> String:
+	return sim.towns.name_of(town) if sim.towns != null and sim.towns.list.size() > 0 else (sim.city.town_name if sim.city.town_name != "" else "die Stadt")
+
+
 func available_budget() -> float:
-	return maxf(0.0, float(sim.economy.accounts.P0) - reserve_cash() - commitments)
+	return maxf(0.0, cash() - reserve_cash() - commitments)
 
 
 ## Mindestreserve nach Ortsgroesse: 20 000 EUR + 80 EUR je Einwohner, hoechstens RESERVE_CASH (die grosse Stadt bleibt bei 100 000).
@@ -150,9 +176,9 @@ func _state_grant() -> void:
 	if pop >= GRANT_UNTIL:
 		return
 	grant_last = snappedf(GRANT_BASE * (1.0 - float(pop) / float(GRANT_UNTIL)), 10.0)
-	sim.economy.transfer("X0", "P0", grant_last)
+	sim.economy.transfer("X0", acct(), grant_last)
 	grants_total += grant_last
-	sim.log_event("Landeszuweisung für %s: %s (Strukturförderung kleiner Orte, %d Einwohner)." % [sim.city.town_name if sim.city.town_name != "" else "die Stadt", Catalog.money(grant_last), pop], "info")
+	sim.log_event("Landeszuweisung für %s: %s (Strukturförderung kleiner Orte, %d Einwohner)." % [town_label(), Catalog.money(grant_last), pop], "info")
 
 
 func indicators() -> Dictionary:
@@ -175,7 +201,7 @@ func indicators() -> Dictionary:
 	var served := 0
 	var free_n := 0
 	for p in sim.parcels.items.values():
-		if p.state == "frei" and sim.parcels.is_buildable(p) and p.owner == Parcels.CITY:
+		if p.state == "frei" and sim.parcels.is_buildable(p) and p.owner == land_owner():
 			free_n += 1
 			var e: Dictionary = free_by_zone.get(p.zone, {"anzahl": 0, "flaeche": 0})
 			e.anzahl += 1
@@ -187,7 +213,7 @@ func indicators() -> Dictionary:
 	var queue_ids: Array = []
 	var pending: Array = []
 	for a in sim.permits.apps.values():
-		if a.status == "zur_entscheidung":
+		if a.status == "zur_entscheidung" and _mine(str(a.parcel)):
 			queue_ids.append(a.id)
 			var pre := Planning.assess(sim.parcels.parcel(a.parcel), a)
 			pending.append({"id": a.id, "antragsteller": a.applicant, "grundstueck": a.parcel, "art": Planning.DEFS[a.def].label, "geschosse": a.floors,
@@ -212,9 +238,9 @@ func indicators() -> Dictionary:
 		"verkehr": _traffic_indicators(jams),
 		"versorgung": {"freie_stadtgrundstuecke": free_n, "davon_voll_erschlossen": served,
 			"anteil_voll_erschlossen": snappedf(float(served) / maxf(1.0, float(free_n)), 0.01)},
-		"haushalt": {"kasse": snappedf(float(sim.economy.accounts.P0), 1.0), "reserviert": snappedf(commitments, 1.0), "verfuegbar": snappedf(available_budget(), 1.0),
+		"haushalt": {"kasse": snappedf(cash(), 1.0), "reserviert": snappedf(commitments, 1.0), "verfuegbar": snappedf(available_budget(), 1.0),
 			"steuern_gesamt": snappedf(sim.public_sector.tax_total + sim.public_sector.social_total + sim.public_sector.corporate_total, 1.0),
-			"defizit": float(sim.economy.accounts.P0) < reserve_cash(), "mindestreserve": int(reserve_cash()), "landeszuweisung_monat": int(grant_last),
+			"defizit": cash() < reserve_cash(), "mindestreserve": int(reserve_cash()), "landeszuweisung_monat": int(grant_last),
 			"hinweis": "verfuegbar = Kasse - Mindestreserve - reserviert. Ist verfuegbar 0, scheitert jede Ausgabe: dann Grundstücke verkaufen (offer_parcels), Grundsteuer anpassen oder warten."},
 		"bauantraege": {"warteschlange": sim.permits.queue().size(), "zur_entscheidung": queue_ids, "zur_entscheidung_details": pending, "kapazitaet_je_tag": snappedf(sim.permits.capacity(), 0.1)},
 		"plaene": plans.values().map(func(p): return {"id": p.id, "name": p.name, "status": p.status, "grundstuecke": p.parcels.size(), "zone": p.zone,
@@ -234,8 +260,8 @@ func indicators() -> Dictionary:
 		"rivalitaet": sim.rivalry.mayor_summary(),
 		"strom": sim.grid.summary(),
 		"erschliessung": access_indicators(),
-		"bergbau": sim.mining.summary(),
-		"hafen": sim.harbor.summary() if sim.harbor.enabled else {},
+		"bergbau": _own_mining(),
+		"hafen": harbor().summary() if harbor().enabled else {},
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 		"zuletzt_abgelehnt": decisions.slice(-12).filter(func(d): return not d.ok).map(func(d): return "%s: %s" % [d.action, d.msg.left(100)]),
@@ -268,7 +294,7 @@ func _traffic_indicators(jams: int) -> Dictionary:
 
 ## Stadtlager: offene Beschaffungsvorschlaege (Entscheidung der Buergermeisterebene), kritische Bestaende, laufende Bestellungen.
 func stadtlager_indicators() -> Dictionary:
-	var D: CityDepot = sim.city_depot
+	var D: CityDepot = depot()
 	var props: Array = []
 	for o in D.orders.values():
 		if o.status == "vorschlag":
@@ -290,7 +316,7 @@ func stadtlager_indicators() -> Dictionary:
 func quarter_candidates(limit: int) -> Array:
 	var groups := {}
 	for p in sim.parcels.items.values():
-		if p.owner != Parcels.CITY or p.state not in ["frei", "zur_entwicklung"] or not sim.parcels.is_buildable(p) or p.zone not in ["wohnen", "mischgebiet", "gewerbe", "industrie"]:
+		if p.owner != land_owner() or p.state not in ["frei", "zur_entwicklung"] or not sim.parcels.is_buildable(p) or p.zone not in ["wohnen", "mischgebiet", "gewerbe", "industrie"]:
 			continue
 		if sim.parcels.utility_level(p) == "keine":
 			continue
@@ -327,7 +353,10 @@ func quarter_candidates(limit: int) -> Array:
 func _counts() -> Array:
 	var homes := 0
 	var shops := 0
+	var region: bool = sim.towns != null and sim.towns.is_region()
 	for b in sim.city.buildings:
+		if region and sim.city.town_of_building(int(b.id)) != town:
+			continue   # nur Gebaeude im eigenen Verwaltungsgebiet
 		if b.type in HOME_TYPES:
 			homes += 1
 		elif b.type in SHOP_TYPES:
@@ -362,7 +391,7 @@ func zoning() -> Dictionary:
 			continue
 		area[p.zone] = int(area.get(p.zone, 0)) + int(p.area)
 		total += int(p.area)
-		if p.state == "frei" and p.owner == Parcels.CITY:
+		if p.state == "frei" and p.owner == land_owner():
 			free[p.zone] = int(free.get(p.zone, 0)) + int(p.area)
 	var zones := {}
 	var short: Array = []
@@ -393,7 +422,7 @@ func _center() -> Vector2:
 func _rezone_cluster(zone: String, used: Dictionary) -> Dictionary:
 	var groups := {}
 	for p in sim.parcels.items.values():
-		if p.owner != Parcels.CITY or p.state != "frei" or p.zone != "wohnen" or not sim.parcels.is_buildable(p) or used.has(p.id):
+		if p.owner != land_owner() or p.state != "frei" or p.zone != "wohnen" or not sim.parcels.is_buildable(p) or used.has(p.id):
 			continue
 		var key := Vector2i(int(p.rect[0]) / 24, int(p.rect[1]) / 24)
 		if not groups.has(key):
@@ -427,6 +456,8 @@ func _rezone_cluster(zone: String, used: Dictionary) -> Dictionary:
 ## Menge nach Wirtschaftslage (Beschaeftigung) und Lebensqualitaet (mittleres Glueck, 50 = neutral); Grundrate je Monat aus
 ## config/residents.json "zuzug_je_monat" (Anteil der Haushalte, Standard 0,04).
 func on_day(_day: int) -> void:
+	if town != 0:
+		return   # Zwischenstand Auftrag 17: Zuzug und Wohnungsmarkt laufen regional ueber Ort 0, bis Bewohner eine Wohnstadt haben (Etappe 6)
 	var Z: Citizens = sim.citizens
 	var month := GameCalendar.month_of(sim.game_min)
 	var boost := marketing_boost if month <= marketing_until else 0.0
@@ -464,7 +495,7 @@ func _update_approval() -> void:
 	var target := 55.0
 	target += 20.0 * (Z.employment_rate() - Citizens.employment_target()) / 0.1
 	target -= 250.0 * float(waiting) / maxf(1.0, float(stock_units)) * 10.0 / 10.0
-	if float(sim.economy.accounts.P0) < reserve_cash():
+	if cash() < reserve_cash():
 		target -= 10.0
 	target -= 2.0 * maxf(0.0, float(sim.permits.queue().size()) - 3.0)
 	target += 1.5 * float(plans.values().filter(func(p): return p.status == "beschlossen").size())
@@ -496,6 +527,9 @@ func execute(action: Dictionary) -> Dictionary:
 	var a := ActionExecutor.normalize(action)
 	var act := str(a.get("action", a.get("type", "")))
 	var err := ActionExecutor.validate_against(SCHEMA, act, a)
+	if err == "":
+		a["action"] = act
+		err = foreign_target(a)   # Region: keine Entscheidungen im Gebiet einer anderen Stadt
 	var res: Dictionary
 	if err != "":
 		res = {"ok": false, "msg": err}
@@ -517,13 +551,13 @@ func execute(action: Dictionary) -> Dictionary:
 			"tender":
 				res = _tender(a)
 			"approve_procurement":
-				res = sim.city_depot.approve(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
+				res = depot().approve(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
 			"expand_depot":
-				res = sim.city_depot.expand(str(a.get("kind", "")), "Bürgermeister %s" % name)
+				res = depot().expand(str(a.get("kind", "")), "Bürgermeister %s" % name)
 			"improve_traffic":
 				res = _improve_traffic(a)
 			"reject_procurement":
-				res = sim.city_depot.reject(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
+				res = depot().reject(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
 			"assess_financing":
 				res = _assess_financing(a)
 			"decide_application":
@@ -535,7 +569,7 @@ func execute(action: Dictionary) -> Dictionary:
 			"dismiss_staff":
 				res = sim.town_hall.dismiss(str(a.abteilung), int(a.anzahl))
 			"set_city_freight":
-				res = sim.city_depot.set_pool(str(a.vergabe), int(a.get("firma", -1)), int(a.get("tage", 0)), float(a.get("preisfaktor", sim.city_depot.pool.price)), bool(a.get("eilig", false)))
+				res = depot().set_pool(str(a.vergabe), int(a.get("firma", -1)), int(a.get("tage", 0)), float(a.get("preisfaktor", depot().pool.price)), bool(a.get("eilig", false)))
 			"repair_road":
 				res = sim.road_care.order(str(a.abschnitt), str(a.ausfuehrung), str(a.get("reason", "")))
 			"set_public_staff":
@@ -553,9 +587,9 @@ func execute(action: Dictionary) -> Dictionary:
 			"warn_company":
 				res = sim.rivalry.warn(int(a.firma), "Bürgermeister %s" % name)
 			"expand_power":
-				res = sim.grid.expand("Bürgermeister %s" % name)
+				res = sim.grid.expand("Bürgermeister %s" % name, self)
 			"expand_harbor":
-				res = sim.harbor.expand("Bürgermeister %s" % name)
+				res = harbor().expand("Bürgermeister %s" % name)
 			"build_bridge":
 				res = sim.access.order_city(str(a.grundstueck), "Bürgermeister %s" % name, _build_choice(a))
 			"decide_mining":
@@ -573,7 +607,7 @@ func execute(action: Dictionary) -> Dictionary:
 			_:
 				res = {"ok": false, "msg": "Unbekannte Aktion."}
 	if act != "wait":
-		decisions.append({"id": "B%d" % _next_dec, "day": _today(), "action": act, "reason": str(a.get("reason", "")).left(240), "ok": res.ok, "msg": str(res.msg).left(300),
+		decisions.append({"id": Towns.prefixed(town, "B", _next_dec), "day": _today(), "action": act, "reason": str(a.get("reason", "")).left(240), "ok": res.ok, "msg": str(res.msg).left(300),
 			"ref": res.get("ref", ""), "args": a})
 		_next_dec += 1
 		if decisions.size() > 120:
@@ -628,7 +662,7 @@ func _city_marketing(budget: float) -> Dictionary:
 		return {"ok": false, "msg": "Eine Kampagne läuft noch bis Monat %d." % marketing_until}
 	if available_budget() < budget:
 		return {"ok": false, "msg": "Verfügbare Stadtkasse (%s) reicht nicht." % Catalog.money(available_budget())}
-	sim.economy.transfer("P0", "S0", budget)
+	sim.economy.transfer(acct(), "S0", budget)
 	marketing_boost = budget / 100000.0
 	marketing_until = month + 2
 	return {"ok": true, "msg": "Stadtmarketing für %s: +%d %% Zuzug bis Monat %d." % [Catalog.money(budget), roundi(marketing_boost * 100.0), marketing_until]}
@@ -648,7 +682,7 @@ func _city_parcels(ids: Array, states: Array) -> Dictionary:
 		var p: Dictionary = sim.parcels.parcel(str(id))
 		if p.is_empty():
 			return {"error": "Grundstück %s gibt es nicht." % id}
-		if p.owner != Parcels.CITY or not p.rights.is_empty():
+		if p.owner != land_owner() or not p.rights.is_empty():
 			return {"error": "Grundstück %s gehört nicht der Stadt oder ist mit Rechten Dritter belastet; die Stadt darf darüber nicht verfügen." % id}
 		if p.state not in states:
 			return {"error": "Grundstück %s hat den Zustand %s (erforderlich: %s)." % [id, p.state, "/".join(states)]}
@@ -681,7 +715,7 @@ func _designate_quarter(a: Dictionary) -> Dictionary:
 	for p in chk.parcels:
 		area += int(p.area)
 	var v := _proposal_vote("quartier", 0.0, 0, area)
-	var plan := {"id": "Q%d" % _next_plan, "name": str(a.name).left(60), "zone": zone, "parcels": chk.parcels.map(func(p): return p.id), "area": area,
+	var plan := {"id": Towns.prefixed(town, "Q", _next_plan), "name": str(a.name).left(60), "zone": zone, "parcels": chk.parcels.map(func(p): return p.id), "area": area,
 		"status": "beschlossen" if v.passed else "abgelehnt", "reason": str(a.reason).left(240), "vote": v.text, "day": _today()}
 	_next_plan += 1
 	plans[plan.id] = plan
@@ -739,7 +773,7 @@ func _plan_infrastructure(a: Dictionary) -> Dictionary:
 	if cost > available_budget():
 		return {"ok": false, "msg": "Kosten %s übersteigen die verfügbaren Mittel %s." % [Catalog.money(cost), Catalog.money(available_budget())]}
 	commitments += cost
-	var prj := {"id": "P%d" % _next_project, "kind": "erschliessung", "parcels": chk.parcels.map(func(p): return p.id), "parts": parts, "cost": snappedf(cost, 1.0),
+	var prj := {"id": Towns.prefixed(town, "P", _next_project), "kind": "erschliessung", "parcels": chk.parcels.map(func(p): return p.id), "parts": parts, "cost": snappedf(cost, 1.0),
 		"status": "beschlossen", "vote": v.text, "reason": str(a.reason).left(240), "day": _today(), "tender": {}}
 	_next_project += 1
 	projects[prj.id] = prj
@@ -764,7 +798,7 @@ func _prioritize_road(a: Dictionary) -> Dictionary:
 	if cost > available_budget():
 		return {"ok": false, "msg": "Kosten %s übersteigen die verfügbaren Mittel %s." % [Catalog.money(cost), Catalog.money(available_budget())]}
 	commitments += cost
-	var prj := {"id": "P%d" % _next_project, "kind": "strasse", "parcels": [p.id], "parts": ["strasse"], "cost": snappedf(cost, 1.0), "priority": prio,
+	var prj := {"id": Towns.prefixed(town, "P", _next_project), "kind": "strasse", "parcels": [p.id], "parts": ["strasse"], "cost": snappedf(cost, 1.0), "priority": prio,
 		"status": "beschlossen", "vote": v.text, "reason": str(a.reason).left(240), "day": _today(), "tender": {}}
 	_next_project += 1
 	projects[prj.id] = prj
@@ -787,7 +821,7 @@ func _improve_traffic(a: Dictionary) -> Dictionary:
 ## Netzausbau (Auftrag 14, Etappe 4): beschlossenes und sofort ausgeschriebenes Bauprojekt ohne Grundstuecke; Construction fuehrt es aus.
 func add_power_project(cost: float, kw: float, by: String) -> Dictionary:
 	commitments += cost
-	var prj := {"id": "P%d" % _next_project, "kind": "netzausbau", "parcels": [], "parts": [], "cost": snappedf(cost, 1.0), "kw": kw,
+	var prj := {"id": Towns.prefixed(town, "P", _next_project), "kind": "netzausbau", "parcels": [], "parts": [], "cost": snappedf(cost, 1.0), "kw": kw,
 		"status": "ausgeschrieben", "vote": "Stadtwerke", "reason": "Netzausbau (%s)" % by, "day": _today(), "tender": {"opened_day": _today(), "bids": []}}
 	_next_project += 1
 	projects[prj.id] = prj
@@ -799,7 +833,7 @@ func add_power_project(cost: float, kw: float, by: String) -> Dictionary:
 ## Ausschreibung (ortsansaessige Unternehmer-Baufirmen bevorzugt). Construction fuehrt aus und meldet die Fertigstellung.
 func add_works_project(kind: String, ref: String, cost: float, days: int, material: Dictionary, by: String, award: String = "") -> Dictionary:
 	commitments += cost
-	var prj := {"id": "P%d" % _next_project, "kind": kind, "ref": ref, "parcels": [], "parts": [], "cost": snappedf(cost, 1.0),
+	var prj := {"id": Towns.prefixed(town, "P", _next_project), "kind": kind, "ref": ref, "parcels": [], "parts": [], "cost": snappedf(cost, 1.0),
 		"days": days, "material": material.duplicate(), "status": "ausgeschrieben", "vote": "Erschließung", "reason": by, "day": _today(),
 		"tender": {"opened_day": _today(), "bids": []}, "award": award}
 	if kind == "bruecke":
@@ -831,7 +865,7 @@ func access_indicators() -> Dictionary:
 	for v in Bridges.ORDER:
 		var d: Dictionary = Bridges.VARIANTS[v]
 		kinds[v] = {"max_spannweite": int(d.max_span), "traegt_t": int(d.last_t), "kosten_grund": int(d.base), "kosten_je_feld": int(d.cell)}
-	return {"antraege": sim.access.pending(), "laufend": sim.access.summary().filter(func(j): return j.status == "im_bau"), "bruecken": sim.bridges.summary().bruecken,
+	return {"antraege": sim.access.pending().filter(func(x): return _mine(str(x.grundstueck))), "laufend": sim.access.summary().filter(func(j): return j.status == "im_bau"), "bruecken": sim.bridges.summary().bruecken,
 		"brueckenarten": kinds, "baufirmen": firms, "vorschlaege": sim.bridges.proposals()}
 
 
@@ -851,7 +885,38 @@ func _assess_financing(a: Dictionary) -> Dictionary:
 	if prj.is_empty():
 		return {"ok": false, "msg": "Projekt %s gibt es nicht." % a.project_id}
 	return {"ok": true, "msg": "Projekt %s: Kosten %s, reserviert %s, verfügbar %s, Kasse %s." % [prj.id, Catalog.money(float(prj.cost)), Catalog.money(commitments),
-		Catalog.money(available_budget()), Catalog.money(float(sim.economy.accounts.P0))]}
+		Catalog.money(available_budget()), Catalog.money(cash())]}
+
+
+## Liegt das Grundstueck im eigenen Verwaltungsgebiet? (Region; Einzelstadt: immer)
+func _mine(pid: String) -> bool:
+	return sim.towns == null or not sim.towns.is_region() or sim.towns.of_parcel(pid) == town
+
+
+func _own_mining() -> Dictionary:
+	var m: Dictionary = sim.mining.summary()
+	m.abbauantraege = m.abbauantraege.filter(func(x): return _mine(str(x.grundstueck)))
+	return m
+
+
+## Zustaendigkeit (Auftrag 17, Abschnitt 13): Entscheidungen ueber Antraege, Grundstuecke, Zufahrten und Verkehrsflaechen nur im eigenen
+## Gebiet. Gibt eine Begruendung zurueck, wenn die Aktion ein fremdes Gebiet betrifft, sonst "".
+func foreign_target(a: Dictionary) -> String:
+	if sim.towns == null or not sim.towns.is_region():
+		return ""
+	var t := -1
+	match str(a.get("action", "")):
+		"decide_application":
+			t = sim.towns.of_parcel(str(sim.permits.apps.get(str(a.get("application_id", "")), {}).get("parcel", "")))
+		"decide_mining", "build_bridge":
+			t = sim.towns.of_parcel(str(a.get("grundstueck", "")))
+		"decide_access":
+			t = sim.towns.of_parcel(str(sim.access.jobs.get(str(a.get("antrag", "")), {}).get("parcel", "")))
+		"improve_traffic":
+			t = sim.towns.of_cell(Vector2i(int(a.get("x", 0)), int(a.get("y", 0))))
+	if t < 0 or t == town:
+		return ""
+	return "Nicht zuständig: das Ziel liegt im Gebiet von %s; dort entscheidet Bürgermeister %s." % [sim.towns.name_of(t), sim.towns.mayor(t).name]
 
 
 func _decide_application(a: Dictionary) -> Dictionary:
@@ -870,12 +935,13 @@ func _today() -> int:
 func to_dict() -> Dictionary:
 	return {"name": name, "party": party, "term_start_day": term_start_day, "approval": approval, "stock_units": stock_units, "waiting": waiting, "plans": plans,
 		"projects": projects, "decisions": decisions, "notes": notes, "commitments": commitments, "elections": elections, "pop_history": pop_history, "grants_total": grants_total, "grant_last": grant_last, "growth_history": growth_history,
-		"next": [_next_plan, _next_project, _next_dec], "marketing": [marketing_boost, marketing_until], "arrival_acc": _arrival_acc}
+		"town": town, "next": [_next_plan, _next_project, _next_dec], "marketing": [marketing_boost, marketing_until], "arrival_acc": _arrival_acc}
 
 
 func from_dict(d: Dictionary) -> void:
 	if d.is_empty():
 		return
+	town = int(d.get("town", town))
 	name = str(d.get("name", name))
 	party = str(d.get("party", party))
 	term_start_day = int(d.get("term_start_day", 0))

@@ -17,7 +17,8 @@ var sim_budget_ms := 60.0         # max. Rechenzeit der Simulation je Bild (0 = 
 var cfg := {}                     # Spielkonfiguration OHNE API-Keys
 var sim: Simulation
 var controllers: Array[AgentController] = []
-var mayor_agent: MayorAgent
+var mayor_agent: MayorAgent          # Ort 0 (Kompatibilitaet); alle Orte in mayor_agents
+var mayor_agents: Array = []         # je Ort ein Buergermeister-Agent (Auftrag 17)
 var dispatch_agent: DispatchAgent
 var talk_agent: TalkAgent
 var activity_layer: ActivityLayer
@@ -57,7 +58,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 				"personality": p.personality, "form": p.get("form", "einzel")})
 		sim = Simulation.new()
 		sim.start_profile = str(cfg.get("start_profil", "unternehmer"))   # Auftrag 14: branchenneutraler Start; "spedition" = bisheriger Start
-		sim.world_mode = str(cfg.get("welt", "kueste"))   # Auftrag 15: neue Partien beginnen als kleiner Kuestenort
+		sim.world_mode = str(cfg.get("welt", "region"))   # Auftrag 17: neue Partien beginnen als Region (je Startspieler eine Stadt)
 		sim.setup(int(cfg.seed), players, int(cfg.get("map_size", Catalog.MAP_SIZE)))
 		sim.game_master.enabled = bool(cfg.get("game_master", true))
 		sim.yard.load_learning()   # gelernte Prognosefaktoren des Bauberaters aus frueheren Partien   # Spielleitung im Spiel an; Konfiguration "game_master": false schaltet sie ab
@@ -104,11 +105,21 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 		if not loaded.is_empty() and i < loaded.controllers.size():
 			ctl.from_dict(loaded.controllers[i])
 		controllers.append(ctl)
-	mayor_agent = MayorAgent.new()
-	add_child(mayor_agent)
-	mayor_agent.setup(sim, _mayor_config(keys), api_log)
-	if not loaded.is_empty() and loaded.has("mayor_agent"):
-		mayor_agent.from_dict(loaded.mayor_agent)
+	# je Ort ein Buergermeister mit eigenem Kontext und Budget; Profil gemeinsam (Standard) oder je Ort in cfg.mayors[k]
+	var saved_agents: Array = loaded.get("mayor_agents", [loaded.mayor_agent] if loaded.has("mayor_agent") else [])
+	for k in sim.towns.count():
+		var mc: Dictionary = _mayor_config(keys)
+		var per: Array = cfg.get("mayors", []) if cfg.get("mayors") is Array else []
+		if k < per.size() and per[k] is Dictionary:
+			mc.merge(per[k], true)
+		var ag := MayorAgent.new()
+		ag.town = k
+		add_child(ag)
+		ag.setup(sim, mc, api_log)
+		if k < saved_agents.size() and saved_agents[k] is Dictionary:
+			ag.from_dict(saved_agents[k])
+		mayor_agents.append(ag)
+	mayor_agent = mayor_agents[0]
 	if mayor_agent.uses_model():   # Buergermeister fragt zuerst: bei einem gemeinsamen lokalen Modell steht er vorn in der Warteschlange
 		for ctl in controllers:
 			ctl._startup_at += 2.0
@@ -312,7 +323,8 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, MAX_FRAME_DT)
 	var running := not paused and not ended
 	sim.remaining_real_min = remaining_seconds() / 60.0
-	mayor_agent.active = running
+	for ag in mayor_agents:
+		ag.active = running
 	for ctl in controllers:
 		ctl.active = running and sim.company(ctl.cid).is_active()
 		ctl.speed = float(speed())
@@ -360,9 +372,10 @@ func end_match(reason: String) -> void:
 	for ctl in controllers:
 		ctl.active = false
 		ctl.adapter.cancel()
-	mayor_agent.active = false
-	if mayor_agent.adapter != null:
-		mayor_agent.adapter.cancel()
+	for ag in mayor_agents:
+		ag.active = false
+		if ag.adapter != null:
+			ag.adapter.cancel()
 	play_sound("end")
 	var rank := sim.ranking()
 	var result := {"reason": reason, "active_seconds": active_seconds, "game_time": Catalog.game_minutes_to_text(sim.game_min),
@@ -394,7 +407,7 @@ func end_match(reason: String) -> void:
 func save_game() -> void:
 	DirAccess.make_dir_recursive_absolute("user://saves")
 	var data := {"version": 1, "cfg": cfg, "active_seconds": active_seconds, "sim": sim.to_dict(),
-		"controllers": controllers.map(func(c): return c.to_dict()), "mayor_agent": mayor_agent.to_dict(), "executed": sim.executor.executed}
+		"controllers": controllers.map(func(c): return c.to_dict()), "mayor_agent": mayor_agent.to_dict(), "mayor_agents": mayor_agents.map(func(ag): return ag.to_dict()), "executed": sim.executor.executed}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
 		hud.show_toast("Speichern fehlgeschlagen")

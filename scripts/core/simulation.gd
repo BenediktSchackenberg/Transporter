@@ -15,7 +15,10 @@ var rng := RandomNumberGenerator.new()
 var market := Market.new()
 var social := Social.new()
 var rivalry := Rivalry.new()
-var world_mode := "stadt"          # Weltart der Karte: stadt | kueste (Auftrag 15); steht im Spielstand
+var world_mode := "stadt"          # Weltart der Karte: stadt | kueste (Auftrag 15) | region (Auftrag 17); steht im Spielstand
+var region_town_count := 0        # Region: Zahl der Orte (Standard = Zahl der Startspieler); im Spielstand, weil spaetere Gruender die Firmenzahl erhoehen
+var towns := Towns.new()          # Stadtregister: je Ort Buergermeister, Kasse, Lager, Hafen, Flughafen (Auftrag 17)
+var load_warnings: Array = []     # Abweichungen beim Laden (z. B. geaenderter Generator)
 var population_target := 0         # Startbevoelkerung (0 = Konfiguration); im Kuestenort aus dem vorhandenen Wohnraum
 var biz := Businesses.new()       # Betriebe der Unternehmer (Auftrag 14); Company bleibt die finanzielle Klammer
 const SAVE_VERSION := 2            # 2 = Betriebe und Kostenstellen (Auftrag 14)
@@ -120,12 +123,18 @@ const FIRST_NAMES := ["Jonas", "Lena", "Mehmet", "Sophie", "Lukas", "Mia", "Paul
 func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, traffic_density: float = 1.0, reserve: float = Catalog.RESERVE_TARGET) -> void:
 	rng.seed = seed_value
 	reserve_share = reserve
-	city = (CoastGenerator.new() if world_mode == "kueste" else CityGenerator.new()).generate(seed_value, map_size, reserve)
-	if world_mode == "kueste" and population_target <= 0:
+	if world_mode == "region":
+		if region_town_count <= 0:
+			region_town_count = clampi(players.size(), 1, 4)
+		city = RegionGenerator.new(region_town_count).generate(seed_value, map_size, reserve)
+	else:
+		city = (CoastGenerator.new() if world_mode == "kueste" else CityGenerator.new()).generate(seed_value, map_size, reserve)
+	if world_mode in ["kueste", "region"] and population_target <= 0:
 		population_target = _housing_population()
 	parcels.setup(self)
 	parcels.build(city)
 	nav.build(city)
+	towns.setup(self)
 	market.setup(self)
 	social.setup(self)
 	rivalry.setup(self)
@@ -162,6 +171,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	mayor.setup(self)
 	construction.setup(self)
 	city_depot.setup(self)
+	_setup_towns()
 	yard.setup(self)
 	traffic_flow.setup(self)
 	road_care.setup(self)
@@ -197,7 +207,8 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 		c.avatar_style = int(p.avatar_style)
 		c.personality = p.personality
 		c.form = str(p.get("form", "einzel"))
-		var site: int = city.start_depots[order[i]]
+		var site: int = city.start_depots[order[i]] if not towns.is_region() else city.start_depots[i % city.start_depots.size()]
+		c.home_town = towns.of_building(site)   # Region: je Ort genau ein Startunternehmer
 		c.depots.append(site)
 		depot_owner[site] = i
 		city.buildings[site].name = c.company_name + " (Betriebshof)"
@@ -233,7 +244,8 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	housing.generate()
 	population.assign_ownership()
 	population.validate()
-	mayor.start()
+	for m in towns.mayors:
+		m.start()
 	var cars := int(city.road_count / 45.0 * traffic_density)
 	for k in cars:
 		_spawn_traffic_car()
@@ -246,6 +258,31 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 		c.ledger.sample(0.0)
 	log_event("Die Partie beginnt. %d Unternehmen, Startkapital je %s." % [companies.size(),
 		Catalog.money(Catalog.START_CAPITAL)], "system")
+
+
+## Weitere Orte der Region (Auftrag 17): eigene Kasse (Startbudget als Landeszuweisung X0 -> P<k>, im Geldbuch verbucht), Hafen,
+## Flughafen, Buergermeister und Zentrallager. Ort 0 nutzt die bestehenden Instanzen (sim.mayor, sim.city_depot, ...).
+func _setup_towns() -> void:
+	for k in range(1, towns.count()):
+		var acct := Towns.account_of(k)
+		economy.accounts[acct] = 0.0
+		economy.transfer("X0", acct, Towns.START_BUDGET)
+		var h := Harbor.new()
+		h.town = k
+		h.setup(self)
+		towns.harbors.append(h)
+		var a := Airport.new()
+		a.town = k
+		a.setup(self)
+		towns.airports.append(a)
+		var m := Mayor.new()
+		m.town = k
+		m.setup(self)
+		towns.mayors.append(m)
+		var dp := CityDepot.new()
+		dp.town = k
+		dp.setup(self)
+		towns.depots.append(dp)
 
 
 func _driver_name() -> String:
@@ -1239,7 +1276,7 @@ func to_dict() -> Dictionary:
 	return {"world": city.world, "town_name": city.town_name, "population_target": population_target, "seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "access": access.to_dict(), "bridges": bridges.to_dict(), "crews": crews.to_dict(), "mining": mining.to_dict(), "stages": stages.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "region": _region_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
 
@@ -1251,6 +1288,40 @@ func _storage_dict() -> Dictionary:
 	return out
 
 
+## Region im Spielstand: Zahl und Identitaet der Orte (Pruefung beim Laden) und die Zustaende der weiteren Verwaltungen.
+func _region_dict() -> Dictionary:
+	var out := {"orte": towns.count() if towns.is_region() else 0, "generator": city.gen_params.duplicate(),
+		"staedte": towns.list.map(func(t): return {"id": t.id, "name": t.name, "zentrum": [t.center.x, t.center.y]}), "verwaltungen": []}
+	for k in range(1, towns.count()):
+		out.verwaltungen.append({"mayor": towns.mayor(k).to_dict(), "depot": towns.depot(k).to_dict(), "harbor": towns.harbor(k).to_dict(), "airport": towns.airport(k).to_dict()})
+	return out
+
+
+func _region_from_dict(r: Dictionary) -> void:
+	if r.is_empty():
+		return
+	# Gleiche Welt? Orte (Name, Zentrum) muessen mit dem Spielstand uebereinstimmen, sonst hat sich der Generator geaendert.
+	var saved: Array = r.get("staedte", [])
+	for i in mini(saved.size(), towns.count()):
+		var t: Dictionary = towns.get_t(i)
+		if str(saved[i].name) != str(t.name) or int(saved[i].zentrum[0]) != t.center.x or int(saved[i].zentrum[1]) != t.center.y:
+			load_warnings.append("Ort %d weicht ab: gespeichert %s %s, erzeugt %s %s (Generator geändert?)" % [i, saved[i].name, str(saved[i].zentrum), t.name, str(t.center)])
+	if saved.size() != towns.count() and towns.is_region():
+		load_warnings.append("Spielstand hat %d Orte, erzeugt wurden %d" % [saved.size(), towns.count()])
+	for w in load_warnings:
+		push_warning(w)
+		log_event("Ladeprüfung: " + w, "bad")
+	var vs: Array = r.get("verwaltungen", [])
+	for i in vs.size():
+		var k := i + 1
+		if k >= towns.count():
+			break
+		towns.mayor(k).from_dict(vs[i].get("mayor", {}))
+		towns.depot(k).from_dict(vs[i].get("depot", {}))
+		towns.harbor(k).from_dict(vs[i].get("harbor", {}))
+		towns.airport(k).from_dict(vs[i].get("airport", {}))
+
+
 static func from_dict(d: Dictionary) -> Simulation:
 	var s := Simulation.new()
 	var players: Array = []
@@ -1258,6 +1329,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 		players.append({"player_name": cd.player_name, "company_name": cd.company_name,
 			"color": Color.html(cd.color), "avatar_style": cd.avatar_style, "personality": cd.personality})
 	s.world_mode = str(d.get("world", "stadt"))
+	s.region_town_count = int(d.get("region", {}).get("orte", 0))
 	s.population_target = int(d.get("population_target", 0))
 	s.setup(int(d.seed), players, int(d.map_size), 1.0, float(d.get("reserve", 0.0)))   # alte Staende: Karte ohne Reserve
 	# Ausgangszustand durch gespeicherten Zustand ersetzen
@@ -1285,6 +1357,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.oversight.from_dict(d.get("oversight", {}))
 	s.permits.from_dict(d.get("permits", {}))
 	s.mayor.from_dict(d.get("mayor", {}))
+	s._region_from_dict(d.get("region", {}))
 	s.construction.from_dict(d.get("construction", {}))
 	s.city_depot.from_dict(d.get("city_depot", {}))
 	s.traffic_flow.from_dict(d.get("traffic_flow", {}))

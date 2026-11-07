@@ -311,12 +311,17 @@ func order_phase_material(pr: Dictionary, phase_id: String) -> void:
 
 ## Bauhof, wenn er alles hat; sonst das Hafenlager (Importware am Kai, X0), wenn es dort alles gibt; sonst Bauhof (Trupp wartet).
 func material_source(d: Dictionary) -> String:
-	var yard := int(sim.trader.bauhof)
-	if d.need.keys().all(func(it): return sim.stock.available(it, "T0", yard) >= int(d.need[it])):
-		return "bauhof"
-	if sim.harbor.enabled and d.need.keys().all(func(it): return sim.stock.available(it, "X0", sim.harbor.building) >= int(d.need[it])):
-		return "hafen"
-	return "bauhof"
+	return items_source(d.need, _project_town(str(d.project)))
+
+
+## Ort einer Baustelle (Verwaltungsgebiet des Grundstuecks) bzw. eines Gebaeudes; Hafen dieses Orts.
+func _project_town(project_id: String) -> int:
+	var pr: Dictionary = projects.get(project_id, {})
+	return sim.towns.of_parcel(str(pr.get("parcel", ""))) if not pr.is_empty() else 0
+
+
+func _port(town: int) -> Harbor:
+	return sim.towns.harbor(town)
 
 
 func crew_load(d: Dictionary, src: String, crew_id: String) -> Dictionary:
@@ -326,7 +331,7 @@ func crew_load(d: Dictionary, src: String, crew_id: String) -> Dictionary:
 	if d.status == "unterwegs":
 		return {"ok": true, "msg": "schon geladen"}
 	var owner := "X0" if src == "hafen" else "T0"
-	var loc: int = sim.harbor.building if src == "hafen" else int(sim.trader.bauhof)
+	var loc: int = _port(_project_town(str(d.project))).building if src == "hafen" else int(sim.trader.bauhof)
 	for it in d.need:
 		if sim.stock.available(it, owner, loc) < int(d.need[it]):
 			return {"ok": false, "msg": "%s hat nicht genug %s (%d benötigt); der Trupp wartet." % ["Hafenlager" if src == "hafen" else "Bauhof", Trader.MATERIALS[it].name, int(d.need[it])]}
@@ -603,7 +608,7 @@ func _create_units(pr: Dictionary, parcel: Dictionary) -> void:
 	var n := Planning.units_of(pr.def, int(pr.floors))
 	if d.use not in ["wohnen", "misch"]:
 		return
-	sim.mayor.stock_units += n
+	sim.towns.mayor(0).stock_units += n   # Zwischenstand Auftrag 17: Wohnungsmarkt regional (Etappe 6 trennt je Ort)
 	for i in n:
 		var u := {"id": "W%d" % _next_unit, "building": int(pr.building), "project": pr.id, "owner": pr.client, "tenant": "", "rent": RENT_PER_UNIT_MONTH, "area": 60 + 10 * i % 3 * 5, "move_in_day": -1}
 		_next_unit += 1
@@ -634,7 +639,7 @@ func _move_in(u: Dictionary, payer: String) -> void:
 	u["utilities_day"] = _today()
 	if payer.begins_with("H") and sim.households.homes.has(payer) and float(sim.households.homes[payer].balance) >= CONNECTION_FEE:
 		sim.households.homes[payer].balance = float(sim.households.homes[payer].balance) - CONNECTION_FEE
-		sim.economy.transfer("H0", "P0", CONNECTION_FEE)
+		sim.economy.transfer("H0", Towns.account_of(sim.towns.of_building(int(u.building))), CONNECTION_FEE)
 
 
 func open_jobs() -> Array:
@@ -686,7 +691,7 @@ func _jobs_day(day: int) -> void:
 
 # ------------------------------------------------------------------ Monat: Vermietung
 func on_month(_month: int) -> void:
-	var M: Mayor = sim.mayor
+	var M: Mayor = sim.towns.mayor(0)   # Zwischenstand Auftrag 17: Wohnungssuchende regional (Etappe 6)
 	for u in units.values():
 		var hu: Dictionary = sim.housing.units.get(str(u.get("hid", "")), {})
 		if not hu.is_empty():
@@ -729,7 +734,7 @@ func _collect_rent(u: Dictionary) -> void:
 
 # ------------------------------------------------------------------ Bautraeger (Immobilienunternehmen, baut selbststaendig)
 func _developer_month() -> void:
-	var M: Mayor = sim.mayor
+	var M: Mayor = sim.towns.mayor(0)   # Zwischenstand Auftrag 17: Wohnungsnachfrage regional (Etappe 6 trennt je Ort)
 	for pr in projects.values():
 		if pr.client == DEVELOPER and pr.status in ["angebote", "erschliessung", "im_bau", "pruefung", "wartet_anschluss"]:
 			return        # ein Vorhaben nach dem anderen
@@ -793,7 +798,7 @@ func _supply_project() -> bool:
 		var d: Dictionary = Planning.DEFS[def_id]
 		var probe := {"def": def_id, "floors": int(d.floors[0]), "parking": int(d.parking), "financing": {"eigenmittel": 1.0e9}}
 		for zone in d.zones:
-			var cands: Array = sim.parcels.search({"zone": zone, "min_area": int(d.w) * int(d.h), "limit": 120}).filter(func(p): return 				p.state == "frei" and p.owner == Parcels.CITY and sim.city.district_of(Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)) == int(gap.district))
+			var cands: Array = sim.parcels.search({"zone": zone, "min_area": int(d.w) * int(d.h), "limit": 120}).filter(func(p): return 				p.state == "frei" and Towns.is_public(p.owner) and sim.city.district_of(Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)) == int(gap.district))
 			for p in cands:
 				var chk := Planning.assess(p, probe)
 				if not chk.ok or not chk.questions.is_empty() or float(chk.costs.gesamt) > available_funds(DEVELOPER):
@@ -854,7 +859,7 @@ func _has_house_project(hid: String) -> bool:
 
 func _plan_home(hid: String, h: Dictionary) -> Dictionary:
 	var P: Parcels = sim.parcels
-	var cands: Array = P.search({"zone": "wohnen", "min_area": 35, "limit": 200}).filter(func(p): return p.state == "frei" and p.owner == Parcels.CITY and P.utility_level(p) != "keine")
+	var cands: Array = P.search({"zone": "wohnen", "min_area": 35, "limit": 200}).filter(func(p): return p.state == "frei" and Towns.is_public(p.owner) and P.utility_level(p) != "keine")
 	cands.sort_custom(func(x, y): return (P.utility_level(x) == "voll") and (P.utility_level(y) != "voll"))   # voll erschlossene zuerst
 	cands = cands.slice(0, 40)
 	if cands.is_empty():
@@ -936,7 +941,28 @@ func _household_day() -> void:
 
 # ------------------------------------------------------------------ Oeffentliche Erschliessung (Buergermeister-Projekte)
 func _public_day(day: int) -> void:
-	var M: Mayor = sim.mayor
+	for M in sim.towns.mayors:
+		_tender_public(M, day)
+	for e in public.values():
+		if e.status != "laufend" or day < int(e.start):
+			continue
+		if builders[e.builder].status != "aktiv":
+			continue
+		if not sim.towns.depot(Towns.town_of_id(str(e.project))).project_complete(str(e.project)):
+			e["waiting"] = "Material aus dem Stadtlager fehlt"
+			continue
+		if not sim.crews.on_site("pub", str(e.project)):
+			var t: Dictionary = sim.crews.crew_for("pub", str(e.project))
+			e["waiting"] = "Bautrupp %s" % BuildCrews.STATE_TEXT.get(t.state, "") if not t.is_empty() else "wartet auf einen freien Bautrupp"
+			continue
+		e["waiting"] = ""
+		e.days_left = int(e.days_left) - (1 if sim.wx.build_factor() > 0.3 else 0)
+		if int(e.days_left) <= 0:
+			_finish_public(e)
+
+
+func _tender_public(M: Mayor, day: int) -> void:
+	var D: CityDepot = sim.towns.depot(M.town)
 	for prj in M.projects.values():
 		if prj.status == "ausgeschrieben" and not public.has(prj.id) and day > int(prj.tender.get("opened_day", day)):
 			var days := 0
@@ -958,38 +984,22 @@ func _public_day(day: int) -> void:
 				continue
 			# Material kommt aus dem Stadtlager (Auftragsmaterial): wird reserviert und vom Angebotspreis abgezogen, nicht nochmals abgerechnet
 			var mats: Dictionary = prj.get("material", {}).duplicate() if prj.has("material") else CityDepot.material_need(prj.parts, prj.parcels.size())
-			sim.city_depot.reserve_for_project(str(prj.id), mats, "ueberlassen")
-			var mval := minf(sim.city_depot.value_of(mats), float(o.price) * 0.6)
+			D.reserve_for_project(str(prj.id), mats, "ueberlassen")
+			var mval := minf(D.value_of(mats), float(o.price) * 0.6)
 			public[prj.id] = {"project": prj.id, "builder": o.builder, "price": float(o.price) - mval, "days_left": int(o.days), "days": int(o.days), "status": "laufend", "start": int(o.start), "paid": 0.0,
 				"material_value": mval, "material_mode": "ueberlassen"}
 			prj.status = "beauftragt"
 			prj["builder"] = o.builder
-	for e in public.values():
-		if e.status != "laufend" or day < int(e.start):
-			continue
-		if builders[e.builder].status != "aktiv":
-			continue
-		if not sim.city_depot.project_complete(str(e.project)):
-			e["waiting"] = "Material aus dem Stadtlager fehlt"
-			continue
-		if not sim.crews.on_site("pub", str(e.project)):
-			var t: Dictionary = sim.crews.crew_for("pub", str(e.project))
-			e["waiting"] = "Bautrupp %s" % BuildCrews.STATE_TEXT.get(t.state, "") if not t.is_empty() else "wartet auf einen freien Bautrupp"
-			continue
-		e["waiting"] = ""
-		e.days_left = int(e.days_left) - (1 if sim.wx.build_factor() > 0.3 else 0)
-		if int(e.days_left) <= 0:
-			_finish_public(e)
 
 
 func _finish_public(e: Dictionary) -> void:
-	var M: Mayor = sim.mayor
+	var M: Mayor = sim.towns.mayor_of_project(str(e.project))   # die beauftragende Stadt bezahlt aus ihrer Kasse
 	var prj: Dictionary = M.projects[e.project]
-	var pay := minf(float(e.price), maxf(0.0, float(sim.economy.accounts.P0)))
-	sim.economy.transfer("P0", "K0", pay)
+	var pay := minf(float(e.price), maxf(0.0, M.cash()))
+	sim.economy.transfer(M.acct(), "K0", pay)
 	_forward(str(e.builder), pay, "Stadtprojekt %s" % e.project)
 	e.paid = pay
-	e["material_used"] = sim.city_depot.consume_project(str(e.project), builders[e.builder].name)
+	e["material_used"] = sim.towns.depot(M.town).consume_project(str(e.project), builders[e.builder].name)
 	M.commitments = maxf(0.0, M.commitments - float(prj.cost))
 	for pid in prj.parcels:
 		var p: Dictionary = sim.parcels.parcel(pid)
@@ -997,7 +1007,7 @@ func _finish_public(e: Dictionary) -> void:
 			p.erschliessung[part] = true
 		sim.parcels.touch(pid)
 	if prj.kind == "hafenausbau":
-		sim.harbor.finish_expansion()
+		sim.towns.harbor(M.town).finish_expansion()
 	if prj.kind == "netzausbau":
 		sim.grid.finish_expansion(float(prj.get("kw", PowerGrid.EXPAND_KW)))
 	if prj.kind == "bruecke":
@@ -1095,11 +1105,12 @@ func building_under_construction(building_id: int) -> bool:
 
 
 ## Bauquelle fuer eine Materialliste: Bauhof, sonst Hafenlager, sonst Bauhof (Trupp wartet).
-func items_source(items: Dictionary) -> String:
+func items_source(items: Dictionary, town: int = 0) -> String:
 	var yard := int(sim.trader.bauhof)
 	if items.keys().all(func(it): return sim.stock.available(it, "T0", yard) >= int(items[it])):
 		return "bauhof"
-	if sim.harbor.enabled and items.keys().all(func(it): return sim.stock.available(it, "X0", sim.harbor.building) >= int(items[it])):
+	var H := _port(town)
+	if H.enabled and items.keys().all(func(it): return sim.stock.available(it, "X0", H.building) >= int(items[it])):
 		return "hafen"
 	return "bauhof"
 
@@ -1109,7 +1120,7 @@ func crew_load_works(w: Dictionary, src: String) -> Dictionary:
 	if bool(w.crew_loaded):
 		return {"ok": true, "msg": "schon geladen"}
 	var owner := "X0" if src == "hafen" else "T0"
-	var loc: int = sim.harbor.building if src == "hafen" else int(sim.trader.bauhof)
+	var loc: int = _port(sim.towns.of_building(int(w.building))).building if src == "hafen" else int(sim.trader.bauhof)
 	for it in w.material:
 		if sim.stock.available(it, owner, loc) < int(w.material[it]):
 			return {"ok": false, "msg": "%s hat nicht genug %s (%d benötigt); der Trupp wartet." % ["Hafenlager" if src == "hafen" else "Bauhof", Trader.MATERIALS[it].name, int(w.material[it])]}

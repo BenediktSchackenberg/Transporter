@@ -28,12 +28,18 @@ var ship := {}                     # aktuelles bzw. letztes Schiff {id, name, da
 var stats := {"schiffe": 0, "einheiten_ein": 0, "einheiten_aus": 0, "zurueckgestellt": 0}
 var _next := 1
 var stage := 1                     # Hafenstufe (1..STAGES.size())
+var town := 0                      # Ort dieses Hafens (Auftrag 17)
 
 
 func setup(simulation) -> void:
 	sim = simulation
-	enabled = sim.city.world == "kueste"
+	enabled = sim.city.coastal()
 	if not enabled:
+		return
+	if sim.city.towns.size() > 1:   # Region: Hafenlager des eigenen Orts
+		building = int(sim.city.towns[town].get("harbor", -1))
+		enabled = building >= 0
+		sim.day_changed.connect(on_day)
 		return
 	for b in sim.city.buildings:
 		if b.type == "warehouse" and str(b.name) == "Hafenlager":
@@ -152,7 +158,7 @@ func _unload(m: Dictionary, fit: int = -1) -> void:
 	match str(m.kind):
 		"depot":
 			if complete:
-				sim.city_depot.on_ship(str(m.ref))
+				_depot().on_ship(str(m.ref))
 		"trader":
 			if complete:
 				sim.trader.on_ship(str(m.ref))
@@ -169,6 +175,14 @@ func _list(d: Dictionary) -> String:
 	return ", ".join(parts)
 
 
+func _mayor() -> Mayor:
+	return sim.towns.mayor(town) if sim.towns != null and sim.towns.mayors.size() > 0 else sim.mayor
+
+
+func _depot() -> CityDepot:
+	return sim.towns.depot(town) if sim.towns != null and sim.towns.depots.size() > 0 else sim.city_depot
+
+
 func capacity() -> int:
 	return int(STAGES[clampi(stage, 1, STAGES.size()) - 1].ladung)
 
@@ -178,7 +192,7 @@ func stage_name() -> String:
 
 
 func expansion_running() -> bool:
-	return sim.mayor.projects.values().any(func(p): return p.kind == "hafenausbau" and p.status != "fertig")
+	return _mayor().projects.values().any(func(p): return p.kind == "hafenausbau" and p.status != "fertig")
 
 
 ## Naechste Hafenstufe als Stadtprojekt ausschreiben (Kosten reserviert die Stadtkasse, eine Baufirma baut mit Material aus dem Stadtlager).
@@ -190,9 +204,9 @@ func expand(by: String) -> Dictionary:
 	if expansion_running():
 		return {"ok": false, "msg": "Ein Hafenausbau läuft bereits."}
 	var nd: Dictionary = STAGES[stage]
-	if sim.mayor.available_budget() < float(nd.kosten):
+	if _mayor().available_budget() < float(nd.kosten):
 		return {"ok": false, "msg": "Verfügbare Stadtkasse reicht nicht (%s nötig)." % Catalog.money(float(nd.kosten))}
-	var prj: Dictionary = sim.mayor.add_works_project("hafenausbau", "S%d" % (stage + 1), float(nd.kosten), int(nd.tage), nd.material, "Hafenausbau (%s)" % by)
+	var prj: Dictionary = _mayor().add_works_project("hafenausbau", "S%d" % (stage + 1), float(nd.kosten), int(nd.tage), nd.material, "Hafenausbau (%s)" % by)
 	sim.log_event("%s lässt den Hafen ausbauen: %s → %s (%d statt %d Ladeeinheiten je Schiff), ausgeschrieben als %s (%s)." % [by, stage_name(), nd.name, int(nd.ladung), capacity(), prj.id, Catalog.money(float(nd.kosten))], "info")
 	sim.activity.add("stadt", -1, "bau", "Hafenausbau zu %s ausgeschrieben" % nd.name, by, sim.city.building(building).road)
 	return {"ok": true, "msg": "Hafenausbau zu %s als Projekt %s ausgeschrieben (etwa %d Tage)." % [nd.name, prj.id, int(nd.tage)], "ref": prj.id}
@@ -218,11 +232,12 @@ func summary() -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"stage": stage, "manifest": manifest.duplicate(true), "export_wait": export_wait.duplicate(), "ship": ship.duplicate(true), "stats": stats.duplicate(), "next": _next}
+	return {"town": town, "stage": stage, "manifest": manifest.duplicate(true), "export_wait": export_wait.duplicate(), "ship": ship.duplicate(true), "stats": stats.duplicate(), "next": _next}
 
 
 func from_dict(d: Dictionary) -> void:
 	stage = int(d.get("stage", 1))
+	town = int(d.get("town", town))
 	manifest = d.get("manifest", []).duplicate(true)
 	for m in manifest:
 		m.qty = int(m.qty)
