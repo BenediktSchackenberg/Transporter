@@ -241,11 +241,18 @@ func _items_text(items: Dictionary) -> String:
 
 
 ## Kuestenort: das Schiff hat den Nachschub geloescht; er geht vom Hafen in den Bauhof.
-func on_ship(order_id: String) -> void:
+## `fit` ist die tatsaechlich geloeste (anteilige) Menge; bleibt Rest, wartet der Posten aufs naechste Schiff
+## und der offene Bedarf wird im Order um den gelieferten Teil gekuerzt (der Rest kommt mit).
+func on_ship(order_id: String, fit: int = -1) -> void:
 	for o in orders.duplicate():
-		if str(o.id) == order_id:
-			sim.stock.add(o.item, int(o.qty), "T0", bauhof, "Import per Schiff", sim.game_min)
+		if str(o.id) != order_id:
+			continue
+		var n := int(o.qty) if fit <= 0 else mini(fit, int(o.qty))
+		sim.stock.add(o.item, n, "T0", bauhof, "Import per Schiff", sim.game_min)
+		if n >= int(o.qty):
 			orders.erase(o)
+		else:
+			o.qty = int(o.qty) - n   # Restmenge bleibt offen; der Manifest-Posten wird im Hafen um den Rest gekurzt
 
 
 # ------------------------------------------------------------------ Tagesablauf

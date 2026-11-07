@@ -1,17 +1,28 @@
 class_name Airport
 extends RefCounted
-## Flughafen-Betrieb (Auftrag 16, Etappe E2 – Fluganimation): die Flugbewegung ist eine deterministische Funktion
-## der Spielzeit. Ein kleines Flugzeug erscheint am Kartenrand, setzt auf der Startbahn auf, rollt zum Vorfeld,
-## steht kurz (Abfertigung, Etappe E2-Wirtschaft setzt darauf auf) und fliegt wieder ab. Die Geometrie (Startbahn,
-## Vorfeld) kommt aus city_data.airport (deterministisch aus dem Seed). Position und Hohe sind reine Funktionen der
-## Spieluhr, daher bleibt der Flug bei Speichern/Laden ohne weiteren Zustand nahtlos fortlaufend.
+## Flughafen-Betrieb (Auftrag 16). Die Flugbewegung (Etappe E2) ist eine deterministische Funktion der Spielzeit:
+## ein kleines Flugzeug erscheint am Kartenrand, setzt auf der Startbahn auf, rollt zum Vorfeld, steht kurz
+## (Abfertigung) und fliegt wieder ab. Die Geometrie (Startbahn, Vorfeld) kommt aus city_data.airport (Seed).
+## Position und Hohe sind reine Funktionen der Spieluhr, daher bleibt der Flug bei Speichern/Laden nahtlos.
+##
+## Etappe E2, Teil Luftfracht: das Flugzeug ist zugleich der Transportweg. Bestellte Luftfracht (vom Stadtlager,
+## via_air) wartet im Luftfracht-Manifest und wird bei der naechsten Landung geliefert – aber nur bei Flugwetter:
+## Starkregen, Sturm, Schnee, Glaette oder dichter Nebel lassen den Flug ausfallen (die Ware wartet). Die Ware
+## landet als X0-Importware im Flughafen-Frachtterminal und wird per Transportauftrag ins Zentrallager gebracht –
+## genau so wie die Schifffahrt am Hafen (Auftrag 15, Etappe C), nur schneller und wetterhaengig. Jede Landung
+## kostet die Stadt eine kleine Abfuhr (Luftfracht-Pauschale).
 
 const PERIOD := 60.0           # Spielminuten je Flugbewegung (Regelverkehr, ~30 s Echtzeit)
 const EDGE_OFF := 8.0          # wie weit auessel der Karte Flugzeuge eintreffen/verschwinden (Feld)
+const AIRFREIGHT_FEE := 180.0  # Stadtkasse zahlt je Landung, die Luftfracht mitnimmt (Betreiberpauschale)
 
 var sim
 var enabled := false
-var track := {}                # {size, run_x0, run_x1, run_y, apron:[x,y]} – alles in Feld-Koordinaten
+var track := {}                # {size, run_x0, run_x1, run_y, apron:[x,y], cargo} – Feld-/Gebaeude-Koordinaten
+var cargo_building := -1       # Flughafen-Frachtterminal (Anlieferungspunkt der Luftfracht)
+var manifest: Array = []       # wartende Luftfracht {ref, item, qty, since}
+var _last_flight := 0          # letzte entladene Landung (Flugzaehler; mitgespeichert)
+var stats := {"fluege": 0, "abgebrochen": 0, "einheiten_ein": 0}
 
 
 func setup(simulation) -> void:
@@ -20,6 +31,7 @@ func setup(simulation) -> void:
 	if a.is_empty():
 		return
 	enabled = true
+	cargo_building = int(a.get("cargo", -1))
 	# Stehplatz: der erste genannte Vorfeldpunkt, der frei ist (die Nennpunkte können unter Gebäuden liegen),
 	# sonst eine freie Vorfeldzelle in der Reihe unter den Gebäuden.
 	var spot: Array = []
@@ -99,10 +111,64 @@ func movements_since_start(now: float) -> int:
 func runway() -> Array:
 	return [int(track.run_x0), int(track.run_x1), int(track.run_y)] if enabled else []
 
+# ------------------------------------------------------------------ Luftfracht (Etappe E2, Teil 2)
+## Bestellte Luftfracht wird im Manifest vormerk (analog Hafen.ship_in). `ref` = Bestell-ID des Stadtlagers.
+func cargo_in(order_id: String, item: String, qty: int) -> void:
+	manifest.append({"ref": order_id, "item": item, "qty": qty, "since": GameCalendar.day_of(sim.game_min)})
+
+## Flugwetter-Gate: bei Starkregen, Sturm, Schnee, Glätte oder dichtem Nebel fällt die Landung aus
+## und die wartende Fracht kommt erst mit dem nächsten Flug. Das Flugzeug selbst fliegt weiterhin seine
+## Animation (pure clock) – die Wirtschaft (Frachtlieferung) ist wetterabhängig.
+func flight_ok() -> bool:
+	var wx: Weather = sim.wx
+	return not (wx.is_heavy_rain() or wx.is_snow() or wx.is_strong_wind() or wx.is_icy() or wx.is_fog())
+
+## Pro Minute-Tick: Ein neuer Flugzyklus (PERIOD Spielminuten) beendet sich genau einmal pro Periode.
+## Bei Flugwetter wird die wartende Fracht ins Frachtterminal ausgeliefert, bei schlechtem Wetter
+## faellt der eine Flug aus (ein Abbruch, nicht pro Minute). Der Flugzaehler laeuft weiter, damit die
+## naechste Periode korrekt erkannt wird und der ausgefallene Flug genau ein Mal gezahlt wird.
+func on_minute(now: float) -> void:
+	if not enabled:
+		return
+	var flights_done := int(float(now) / PERIOD)
+	if flights_done <= _last_flight:
+		return
+	_last_flight = flights_done
+	if flight_ok():
+		if not manifest.is_empty():
+			_unload_manifest()
+	else:
+		if not manifest.is_empty():
+			stats.abgebrochen = int(stats.abgebrochen) + 1
+
+## Wartende Luftfracht wird als X0-Importware ins Frachtterminal ausgeliefert und die
+## Stadtlager-Bestellung wird übergeben (analog Hafen._unload → city_depot.on_ship).
+func _unload_manifest() -> void:
+	var unloaded := 0
+	for m in manifest:
+		var qty := int(m.qty)
+		if qty > 0:
+			sim.stock.add(str(m.item), qty, Production.IMPORT, cargo_building, "Luftfracht (Flugzeug)", sim.game_min)
+			sim.city_depot.on_aircraft(str(m.ref))
+			stats.einheiten_ein = int(stats.einheiten_ein) + qty
+			unloaded += 1
+	manifest.clear()
+	if unloaded > 0:
+		sim.economy.transfer("P0", "X0", AIRFREIGHT_FEE)   # Betreiberpauschale
+		stats.fluege = int(stats.fluege) + 1
+		sim.log_event("Luftfracht: %d Posten gelandet, %d Einheiten im Frachtterminal" % [unloaded, stats.einheiten_ein], "info")
+		sim.activity.add("stadt", cargo_building, "sonstiges", "Luftfracht gelandet",
+			"%d Posten ins Frachtterminal gebracht (Wetter: %s)" % [unloaded, str(sim.wx.cur.get("cond", ""))],
+			sim.city.building(cargo_building).road)
 
 func to_dict() -> Dictionary:
-	return {"enabled": enabled}   # die Flugbewegung selbst ist reine Funktion der Uhr
+	return {"enabled": enabled, "manifest": manifest.duplicate(true), "last_flight": _last_flight, "stats": stats.duplicate()}
 
-
-func from_dict(_d: Dictionary) -> void:
-	pass
+func from_dict(d: Dictionary) -> void:
+	manifest = d.get("manifest", []).duplicate(true)
+	for m in manifest:
+		m.qty = int(m.qty)
+	_last_flight = int(d.get("last_flight", 0))
+	var st: Dictionary = d.get("stats", {})
+	for k in st:
+		stats[k] = st[k]
