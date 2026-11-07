@@ -367,9 +367,21 @@ func city_can_assign(pid: String) -> bool:
 func on_day(day: int) -> void:
 	for p in items.values():
 		if p.state == "reserviert" and int(p.reservation.get("until_day", 0)) <= day:
+			if _pending_application(p):
+				p.reservation.until_day = day + 1   # Bauantrag laeuft noch: Reservierung haelt bis zur Entscheidung
+				continue
 			p.state = "frei"
 			p.reservation = {}
 			_touch(p)
+
+
+## Liegt fuer das reservierte Grundstueck ein noch nicht entschiedener Bauantrag des Reservierenden vor?
+func _pending_application(p: Dictionary) -> bool:
+	var holder := str(p.reservation.get("holder", ""))
+	for a in sim.permits.apps.values():
+		if str(a.parcel) == str(p.id) and str(a.applicant) == holder and a.status not in ["entschieden", "entwurf"]:
+			return true
+	return false
 
 
 func _day() -> int:
