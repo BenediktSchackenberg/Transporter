@@ -123,6 +123,49 @@ func generate() -> void:
 
 
 ## Zuzug: neue, zunaechst arbeitslose Buerger (Haushalte, die eine Wohnung gefunden haben).
+## Wohnstadt einer Person (Auftrag 17): Ort der Wohnung (p.home -> Gebaeude), ohne Wohnung Ort 0. Einzelstadt: immer 0.
+func home_town(p: Dictionary) -> int:
+	if not sim.towns.is_region():
+		return 0
+	var u: Dictionary = sim.housing.units.get(str(p.get("home", "")), {})
+	return sim.towns.of_building(int(u.building)) if not u.is_empty() else 0
+
+
+## Personen nach Wohnstadt (fuer Abrechnungen je Stadtkasse).
+func by_town(list: Array) -> Dictionary:
+	var out := {}
+	for p in list:
+		var k := home_town(p)
+		if not out.has(k):
+			out[k] = []
+		out[k].append(p)
+	return out
+
+
+## Einwohner einer Stadt (Region) bzw. alle: Buerger nach Wohnung, Firmenpersonal nach Wohnung seines Haushalts, sonst nach der
+## Heimatstadt des Arbeitgebers (Bewerber ohne Arbeitgeber und ohne Wohnung: Ort 0). Jede Person zaehlt genau einmal.
+func population_of(town: int) -> int:
+	if not sim.towns.is_region():
+		return population()
+	var n := people.filter(func(p): return home_town(p) == town).size()
+	for w in sim.personnel.workers.values():
+		if not w.lost and worker_town(w) == town:
+			n += 1
+	return n
+
+
+func worker_town(w) -> int:
+	if not sim.towns.is_region():
+		return 0
+	var h: Dictionary = sim.households.homes.get(str(w.household), {}) if str(w.household) != "" else {}
+	var u: Dictionary = sim.housing.units.get(str(h.get("unit", "")), {}) if not h.is_empty() else {}
+	if not u.is_empty():
+		return sim.towns.of_building(int(u.building))
+	if int(w.employer) >= 0 and sim.company(int(w.employer)) != null:
+		return int(sim.company(int(w.employer)).home_town)
+	return 0
+
+
 func immigrate(n: int, month: int, home: String = "") -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(sim.city.seed_value) + 9100 + month * 1000 + _next   # Zuzug kommt taeglich: je Aufruf eigene Namen
@@ -327,6 +370,8 @@ func _pay(month: int = 0) -> void:
 			continue
 		var w: float = float(p.wage) * HOURS_PER_MONTH
 		var payer: String = EMPLOYERS[p.employer].payer
+		if payer == "P0":
+			payer = Towns.account_of(home_town(p))
 		if not by_payer.has(payer):
 			by_payer[payer] = []
 		by_payer[payer].append([p, w])
@@ -341,7 +386,14 @@ func _pay(month: int = 0) -> void:
 		for payer in by_payer:
 			for e in by_payer[payer]:
 				e[0].balance = float(e[0].balance) - float(e[1]) * (1.0 - net_share)
-		net = sim.public_sector.withhold(gross, Population.ACCOUNT)
+		# Lohnsteuer und Sozialabgaben an die Wohnstadt
+		var gross_by := {}
+		for payer in by_payer:
+			for e in by_payer[payer]:
+				var k := home_town(e[0])
+				gross_by[k] = float(gross_by.get(k, 0.0)) + float(e[1])
+		for k in gross_by:
+			net += sim.public_sector.withhold(float(gross_by[k]), Population.ACCOUNT, Towns.account_of(int(k)))
 		stats.tax = gross - net
 	stats.wages = gross
 	# 2) Grundsicherung: Anteil des mittleren Nettolohns fuer jeden Arbeitslosen
@@ -350,7 +402,9 @@ func _pay(month: int = 0) -> void:
 	var benefit_each := 0.0
 	if employed > 0 and not jobless.is_empty():
 		benefit_each = BENEFIT_RATE * net / employed
-		benefit = P.pay_in("P0", jobless.map(func(q): return [q, benefit_each]))
+		var jb := by_town(jobless)
+		for k in jb:
+			benefit += P.pay_in(Towns.account_of(int(k)), jb[k].map(func(q): return [q, benefit_each]))   # Grundsicherung der Wohnstadt
 		sim.public_sector.benefits_total += benefit
 		sim.public_sector.departments.Soziales += benefit
 	stats.benefits = benefit
@@ -376,7 +430,13 @@ func _pay(month: int = 0) -> void:
 	var paid_spend := P.pay_out("S0", spend_entries)
 	if at_tills > 0.0:
 		sim.economy.transfer("S0", "H0", minf(at_tills, paid_spend))   # Kassenkaeufe: der Haushaltssektor wird entlastet, nicht doppelt belastet
-	sim.public_sector.consumption_tax(paid_spend)
+	# kommunaler Umsatzsteueranteil an die Wohnstaedte, anteilig nach Konsum
+	var spend_by := {}
+	for e in spend_entries:
+		var k := home_town(e[0])
+		spend_by[k] = float(spend_by.get(k, 0.0)) + float(e[1])
+	for k in spend_by:
+		sim.public_sector.consumption_tax(paid_spend * float(spend_by[k]) / maxf(1.0, spend), Towns.account_of(int(k)))
 	var paid_imports := P.pay_out("X0", import_entries)
 	sim.economy.transfer("X0", "S0", paid_imports)   # Ausfuhren der Stadtwirtschaft gleichen die Importe aus
 	sim.economy.outflow["H0"] = outflow_h0

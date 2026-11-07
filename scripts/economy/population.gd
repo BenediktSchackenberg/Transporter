@@ -283,10 +283,16 @@ func collect_property_tax(month: int) -> float:
 		return 0.0
 	var share := 1.0 if yearly else 1.0 / 12.0
 	var due_by := {}
+	var town_due := {}   # Person -> {Stadt der Wohnung: Betrag} (Grundsteuer an die Stadt der Lage)
 	for u in sim.housing.units.values():
 		var o := str(u.owner)
 		if o.begins_with(OWNER_PREFIX) and o.substr(1).is_valid_int():
-			due_by[int(o.substr(1))] = float(due_by.get(int(o.substr(1)), 0.0)) + unit_value(u) * tax_rate / 100.0 * share
+			var amt := unit_value(u) * tax_rate / 100.0 * share
+			due_by[int(o.substr(1))] = float(due_by.get(int(o.substr(1)), 0.0)) + amt
+			var td: Dictionary = town_due.get(int(o.substr(1)), {})
+			var tk: int = sim.towns.of_building(int(u.building))
+			td[tk] = float(td.get(tk, 0.0)) + amt
+			town_due[int(o.substr(1))] = td
 	var idx := person_index()
 	var entries: Array = []
 	for pid in due_by:
@@ -297,7 +303,14 @@ func collect_property_tax(month: int) -> float:
 		var pay := minf(due, maxf(0.0, float(p.balance)))
 		p.tax_arrears = snappedf(due - pay, 0.01)
 		entries.append([p, pay])
-	var paid := pay_out("P0", entries)
+	var paid := 0.0
+	for e in entries:
+		var td: Dictionary = town_due.get(int(e[0].id), {0: 1.0})
+		var tot := 0.0
+		for tk in td:
+			tot += float(td[tk])
+		for tk in td:
+			paid += pay_out(Towns.account_of(int(tk)), [[e[0], float(e[1]) * float(td[tk]) / maxf(0.0001, tot)]])
 	tax_total += paid
 	sim.public_sector.property_tax_total += paid
 	return paid
@@ -382,12 +395,13 @@ func behave(month: int) -> void:
 			var chance := float(c.weiterbildung_chance) * (1.0 + 2.0 * float(training_support) / 100.0)
 			if int(p.education) < 3 and int(p.jobless_months) >= int(c.weiterbildung_ab_monaten_arbeitslos) and Citizens.roll(pid, month, 51) < chance:
 				var grant := TRAINING_COST * float(training_support) / 100.0
-				if grant > 0.0 and sim.mayor.available_budget() < grant:
+				var tm: Mayor = sim.towns.mayor(sim.citizens.home_town(p))   # Foerderung der Wohnstadt
+				if grant > 0.0 and tm.available_budget() < grant:
 					training_support = 0       # Kasse leer: Foerderung endet
 					sim.log_event("Weiterbildungsförderung eingestellt: Stadtkasse reicht nicht.", "warn")
 					grant = 0.0
 				if grant > 0.0:
-					sim.economy.transfer("P0", "S0", grant)
+					sim.economy.transfer(tm.acct(), "S0", grant)
 					behavior["foerderung"] = float(behavior.get("foerderung", 0.0)) + grant
 				p["course_until"] = day + 30 * int(c.weiterbildung_monate)
 				behavior.weiterbildung_beginn += 1

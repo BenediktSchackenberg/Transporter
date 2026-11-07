@@ -283,7 +283,7 @@ func _consume(day: int) -> void:
 ## Ortsgroesse fuer Ziel- und Meldebestaende: der Katalog ist fuer eine Stadt mit ~800+ Einwohnern bemessen; ein Dorf (Kuestenort)
 ## haelt anteilig weniger vor (mindestens 15 %), sonst importiert es Vorraete, die es nie verbraucht.
 func size_factor() -> float:
-	return clampf(float(sim.citizens.population()) / 800.0, 0.15, 1.0)
+	return clampf(float(sim.citizens.population_of(town)) / 800.0, 0.15, 1.0)
 
 
 ## Beschaffungsvorschlag, wenn Bestand plus Bestelltes den Meldebestand (plus Verbrauch in der Lieferzeit) unterschreitet.

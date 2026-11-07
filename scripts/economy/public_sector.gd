@@ -37,20 +37,20 @@ func setup(s: Simulation) -> void:
 
 
 ## Umsatzsteuer-Anteil: Der Handel (S0) fuehrt einen Teil der Konsumausgaben an die Stadt ab. Gibt den Steuerbetrag zurueck.
-func consumption_tax(spent: float) -> float:
+func consumption_tax(spent: float, to_acct: String = "P0") -> float:
 	var tax := spent * vat_rate
 	if tax <= 0.0:
 		return 0.0
-	sim.economy.transfer("S0", "P0", tax)
+	sim.economy.transfer("S0", to_acct, tax)
 	vat_total += tax
 	return tax
 
 
 ## Zieht Steuer und Sozialabgaben vom Bruttolohn (liegt auf H0) ab und gibt den Nettobetrag zurueck.
-func withhold(gross: float, acct: String = "H0") -> float:
+func withhold(gross: float, acct: String = "H0", to_acct: String = "P0") -> float:
 	var tax := gross * INCOME_TAX
 	var social := gross * SOCIAL_RATE
-	sim.economy.transfer(acct, "P0", tax + social)
+	sim.economy.transfer(acct, to_acct, tax + social)
 	tax_total += tax
 	social_total += social
 	return gross - tax - social
@@ -71,9 +71,10 @@ func _adjust_rate() -> void:
 func on_month(_month: int) -> void:
 	_adjust_rate()
 	for h in sim.households.homes.values():
-		var aid := minf(float(h.get("shortfall", 0.0)) * BENEFIT_SHARE, maxf(0.0, float(sim.economy.accounts.P0)))
+		var hacct := Towns.account_of(sim.towns.of_building(int(h.get("address", -1))) if int(h.get("address", -1)) >= 0 else 0)   # Wohnstadt des Haushalts
+		var aid := minf(float(h.get("shortfall", 0.0)) * BENEFIT_SHARE, maxf(0.0, float(sim.economy.accounts.get(hacct, 0.0))))
 		if aid > 0.0:
-			sim.economy.transfer("P0", "H0", aid)
+			sim.economy.transfer(hacct, "H0", aid)
 			h.balance = float(h.balance) + aid
 			benefits_total += aid
 			departments.Soziales += aid
@@ -81,12 +82,14 @@ func on_month(_month: int) -> void:
 		collect_corporate_tax(c)
 		if _audit_roll(c.id, _month) < AUDIT_CHANCE:
 			audit(c, _month)
-	var excess: float = float(sim.economy.accounts.P0) - float(Economy.SEED.P0)
-	if excess > 0.0:
-		sim.economy.transfer("P0", "S0", SPEND_SHARE * excess)
-		spending_total += SPEND_SHARE * excess
-		for d in DEPARTMENTS:
-			departments[d] += SPEND_SHARE * excess * DEPARTMENTS[d]
+	for k in sim.towns.count():   # jede Stadt gibt Mittel ueber ihrem Startstand aus (Auftraege an S0)
+		var acct := Towns.account_of(k)
+		var excess: float = float(sim.economy.accounts.get(acct, 0.0)) - (float(Economy.SEED.P0) if k == 0 else Towns.START_BUDGET)
+		if excess > 0.0:
+			sim.economy.transfer(acct, "S0", SPEND_SHARE * excess)
+			spending_total += SPEND_SHARE * excess
+			for d in DEPARTMENTS:
+				departments[d] += SPEND_SHARE * excess * DEPARTMENTS[d]
 
 
 ## Ertragsteuer: Sollsteuer auf den kumulierten Vorsteuergewinn (nie negativ) abzueglich bereits gezahlter Steuer, soweit Bargeld da ist.

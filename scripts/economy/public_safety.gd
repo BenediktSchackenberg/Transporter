@@ -214,7 +214,7 @@ func _forced_sale(p: Dictionary, u: Dictionary) -> void:
 	sim.economy.transfer(Housing.LANDLORD, Population.ACCOUNT, value)
 	p.balance = float(p.balance) + value
 	var arrears := float(p.get("tax_arrears", 0.0))
-	sim.population.pay_out("P0", [[p, arrears]])
+	sim.population.pay_out(Towns.account_of(sim.towns.of_building(int(u.building))), [[p, arrears]])
 	p.tax_arrears = 0.0
 	u.owner = Housing.LANDLORD
 	u.owner_occupied = false

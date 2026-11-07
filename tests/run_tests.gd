@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -8038,3 +8038,47 @@ func test_region_joint_project() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.city.is_road(cell0) and s2.regional.items[rid].status == "fertig" and identity_ok(s2), "Laden: neue Straße bleibt, Geld erhalten")
 	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+## Bewohner je Stadt (Abnahme 7 Personal, 11 Bevoelkerung): eindeutige Wohnstadt, regionale Bevoelkerung ohne Doppelzaehlung, oeffentliche
+## Loehne genau einmal aus der Kasse der Wohnstadt, Zuzug in freie Wohnungen der eigenen Stadt.
+func test_region_residents() -> void:
+	var s := region_sim(3)
+	var T: Towns = s.towns
+	var Z: Citizens = s.citizens
+	var sum := 0
+	for k in T.count():
+		sum += Z.population_of(k)
+	ok(sum == Z.population() and Z.people.all(func(p): return str(p.get("home", "")) != "" and Z.home_town(p) in range(T.count())), "jede Person hat genau eine Wohnstadt; Summe der Städte = Region (%d)" % sum)
+	ok(range(T.count()).all(func(k): return Z.population_of(k) > 0), "alle Städte bewohnt %s" % str(range(T.count()).map(func(k): return Z.population_of(k))))
+	# Monatsloehne: oeffentlicher Dienst aus der Kasse der Wohnstadt, je Person genau einmal
+	var expect := {}
+	for p in Z.people:
+		if p.employer != "" and str(Citizens.EMPLOYERS[p.employer].payer) == "P0":
+			var k := Z.home_town(p)
+			expect[k] = float(expect.get(k, 0.0)) + float(p.wage) * Citizens.HOURS_PER_MONTH
+	s.economy.flows.clear()
+	Z._pay(1)
+	var total_public := 0.0
+	var paid_all := 0.0
+	for k in T.count():
+		total_public += float(expect.get(k, 0.0))
+		paid_all += float(s.economy.flows.get("%s>%s" % [Towns.account_of(k), Population.ACCOUNT], 0.0))
+	ok(is_equal_approx(paid_all, total_public + float(Z.stats.benefits)), "öffentliche Löhne (%s) und Grundsicherung genau einmal ausgezahlt" % Catalog.money(total_public))
+	var each: bool = true
+	for k in T.count():
+		var flow := float(s.economy.flows.get("%s>%s" % [Towns.account_of(k), Population.ACCOUNT], 0.0))
+		each = each and flow >= float(expect.get(k, 0.0)) - 0.01 and float(s.economy.flows.get("%s>%s" % [Population.ACCOUNT, Towns.account_of(k)], 0.0)) > 0.0
+	ok(each, "jede Stadt zahlt ihr Personal und erhält Lohnsteuer ihrer Einwohner")
+	# Zuzug: Wohnungssuchende von Stadt 1 ziehen in eine freie Wohnung in Stadt 1
+	var M1: Mayor = T.mayor(1)
+	var b1: int = T.get_t(1).town_hall
+	s.housing.register_unit(b1, 60.0, Housing.LANDLORD)
+	var free1: Array = M1.town_units().filter(func(x): return x.tenant == "").map(func(x): return x.id)
+	var p0 := Z.population_of(0)
+	var p1 := Z.population_of(1)
+	M1.waiting = 1
+	M1._arrivals_town()
+	var newcomers: Array = Z.people.filter(func(p): return str(p.home) in free1)
+	ok(Z.population_of(1) > p1 and Z.population_of(0) == p0 and not newcomers.is_empty() and newcomers.all(func(p): return Z.home_town(p) == 1), "Zuzug nach %s in deren freie Wohnung; %s unverändert" % [T.name_of(1), T.name_of(0)])
+	ok(identity_ok(s), "Geld erhalten")

@@ -400,7 +400,10 @@ func summary() -> Dictionary:
 func planning_aids() -> Dictionary:
 	var vacant := vacant_units().size()
 	var spare := maxi(0, vacant - ceili(Mayor.BASE_VACANCY * units.size()))
-	var need := maxi(0, ceili(float(homeless_count()) / Mayor.PERSONS_PER_UNIT) + sim.mayor.waiting - spare)
+	var waiting_all := 0
+	for M in sim.towns.mayors:
+		waiting_all += M.waiting   # Wohnungssuchende aller Staedte
+	var need := maxi(0, ceili(float(homeless_count()) / Mayor.PERSONS_PER_UNIT) + waiting_all - spare)
 	var occupied := units.size() - vacant
 	var late := units.values().filter(func(u): return u.tenant != "" and int(u.arrears) > 0).size()
 	var burden := 0.0

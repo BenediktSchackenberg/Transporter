@@ -691,8 +691,8 @@ func _jobs_day(day: int) -> void:
 
 # ------------------------------------------------------------------ Monat: Vermietung
 func on_month(_month: int) -> void:
-	var M: Mayor = sim.towns.mayor(0)   # Zwischenstand Auftrag 17: Wohnungssuchende regional (Etappe 6)
 	for u in units.values():
+		var M: Mayor = sim.towns.mayor(sim.towns.of_building(int(u.building)))   # Wohnungssuchende der Stadt, in der die Wohnung liegt
 		var hu: Dictionary = sim.housing.units.get(str(u.get("hid", "")), {})
 		if not hu.is_empty():
 			# Wohnungssuchende ziehen in die neue Einheit; Mietvertrag und Miete laufen ueber Housing (Zahlung an den Eigentuemer).
@@ -734,7 +734,7 @@ func _collect_rent(u: Dictionary) -> void:
 
 # ------------------------------------------------------------------ Bautraeger (Immobilienunternehmen, baut selbststaendig)
 func _developer_month() -> void:
-	var M: Mayor = sim.towns.mayor(0)   # Zwischenstand Auftrag 17: Wohnungsnachfrage regional (Etappe 6 trennt je Ort)
+	var M: Mayor = sim.towns.mayor(_demand_town())   # Stadt mit der groessten Wohnungsnachfrage (Einzelstadt: 0)
 	for pr in projects.values():
 		if pr.client == DEVELOPER and pr.status in ["angebote", "erschliessung", "im_bau", "pruefung", "wartet_anschluss"]:
 			return        # ein Vorhaben nach dem anderen
@@ -759,12 +759,25 @@ func _developer_month() -> void:
 		def_id = "stadtvilla"   # gehobener Wohnungsbau, sobald die Wohnstufen der Stadt ihn tragen
 	# Zuerst wie bisher Mehrfamilienhaus/Stadtvilla auf grossen Grundstuecken; passt dort nichts (Kuestenort: kleine Grundstuecke im Ort),
 	# das groesste Wohnhaus, das auf ein erschlossenes Grundstueck passt (Doppelhaus, Einfamilienhaus).
-	var free: Array = sim.parcels.search({"zone": "wohnen", "min_area": 12, "utilities": "voll", "limit": 160})   # erst filtern, dann begrenzen (billigste sind oft unerschlossen)
+	var crit := {"zone": "wohnen", "min_area": 12, "utilities": "voll", "limit": 160}
+	if sim.towns.is_region():
+		crit["town"] = M.town   # dort bauen, wo die Wohnungssuchenden warten
+	var free: Array = sim.parcels.search(crit)   # erst filtern, dann begrenzen (billigste sind oft unerschlossen)
 	if _developer_try(free.filter(func(p): return int(p.area) >= 40), def_id):
 		return
 	for small in ["doppelhaus", "einfamilienhaus"]:
 		if _developer_try(free, small):
 			return
+
+
+## Region: Stadt mit den meisten Wohnungssuchenden (bei Gleichstand geringster Leerstand).
+func _demand_town() -> int:
+	var best := 0
+	for M in sim.towns.mayors:
+		var Mb: Mayor = sim.towns.mayor(best)
+		if M.waiting > Mb.waiting or (M.waiting == Mb.waiting and M.vacancy() < Mb.vacancy()):
+			best = M.town
+	return best
 
 
 ## Bautraeger: erstes passendes Grundstueck fuer `def_id` reservieren und den Bauantrag stellen.

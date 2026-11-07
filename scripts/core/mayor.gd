@@ -117,17 +117,55 @@ func start() -> void:
 	rng.seed = int(sim.city.seed_value) + 31337 + 7919 * town   # je Ort eigener Buergermeister
 	name = "%s %s" % [FIRST_NAMES[rng.randi() % FIRST_NAMES.size()], LAST_NAMES[rng.randi() % LAST_NAMES.size()]]
 	party = Council.SEATS.keys()[rng.randi() % 3]
-	stock_units = int(ceil(float(sim.citizens.population()) / PERSONS_PER_UNIT * (1.0 + BASE_VACANCY)))
-	pop_history = [sim.citizens.population()]
+	stock_units = int(ceil(float(sim.citizens.population_of(town)) / PERSONS_PER_UNIT * (1.0 + BASE_VACANCY)))
+	pop_history = [sim.citizens.population_of(town)]
 
 
 # ------------------------------------------------------------------ Kennzahlen
 func occupied_units() -> int:
+	if _region():
+		return town_units().filter(func(u): return u.tenant != "").size()
 	return mini(stock_units, int(round(float(sim.citizens.population()) / PERSONS_PER_UNIT)))
 
 
 func vacancy() -> float:
+	if _region():
+		var all := town_units().size()
+		return float(all - occupied_units()) / maxf(1.0, float(all))
 	return float(stock_units - occupied_units()) / maxf(1.0, float(stock_units))
+
+
+func _region() -> bool:
+	return sim.towns != null and sim.towns.is_region()
+
+
+## Wohneinheiten im eigenen Verwaltungsgebiet (Region).
+func town_units() -> Array:
+	return sim.housing.units.values().filter(func(u): return sim.towns.of_building(int(u.building)) == town)
+
+
+## Region: Zuzug in die eigene Stadt (Einwohner, Beschaeftigung und Glueck dieser Stadt bzw. der Region); Zugezogene ziehen direkt in
+## freie Wohnungen des eigenen Gebiets. Wer keine Wohnung findet, wartet (Wohnungssuchende dieser Stadt).
+func _arrivals_town() -> void:
+	var Z: Citizens = sim.citizens
+	var month := GameCalendar.month_of(sim.game_min)
+	var boost := marketing_boost if month <= marketing_until else 0.0
+	var rate := float(Population.cfg().get("zuzug_je_monat", 0.04)) / float(GameCalendar.DAYS_PER_MONTH)
+	_arrival_acc += float(Z.population_of(town)) / PERSONS_PER_UNIT * rate * (0.5 + Z.employment_rate()) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost)
+	var new_h := int(_arrival_acc)
+	_arrival_acc -= float(new_h)
+	waiting += new_h
+	if waiting <= 0:
+		return
+	var free: Array = town_units().filter(func(u): return u.tenant == "")
+	free.sort_custom(func(a, b): return a.id < b.id)
+	var moving := mini(waiting, free.size())
+	for i in moving:
+		var u: Dictionary = free[i]
+		Z.immigrate(int(round(PERSONS_PER_UNIT)), month, str(u.id))
+		u.tenant = "B"
+		u.arrears = 0
+	waiting -= moving
 
 
 ## Mietniveau relativ (100 = ausgeglichener Markt): steigt bei wartenden Haushalten, sinkt bei Leerstand.
@@ -166,7 +204,7 @@ func available_budget() -> float:
 
 ## Mindestreserve nach Ortsgroesse: 20 000 EUR + 80 EUR je Einwohner, hoechstens RESERVE_CASH (die grosse Stadt bleibt bei 100 000).
 func reserve_cash() -> float:
-	return minf(RESERVE_CASH, 20000.0 + 80.0 * float(sim.citizens.population()))
+	return minf(RESERVE_CASH, 20000.0 + 80.0 * float(sim.citizens.population_of(town)))
 
 
 ## Landeszuweisung (Strukturfoerderung) fuer kleine Orte: monatlich, faellt mit wachsender Einwohnerzahl weg (ab GRANT_UNTIL).
@@ -175,7 +213,7 @@ const GRANT_UNTIL := 500
 var grants_total := 0.0
 var grant_last := 0.0
 func _state_grant() -> void:
-	var pop: int = sim.citizens.population()
+	var pop: int = sim.citizens.population_of(town)
 	grant_last = 0.0
 	if pop >= GRANT_UNTIL:
 		return
@@ -228,7 +266,7 @@ func indicators() -> Dictionary:
 		trend = int(pop_history[-1]) - int(pop_history[-2])
 	return {
 		"buergermeister": {"name": name, "partei": party, "zustimmung": snappedf(approval, 0.1), "amtszeit_seit_tag": term_start_day, "tag": _today()},
-		"bevoelkerung": {"einwohner": Z.population(), "veraenderung_letzter_monat": trend, "monat": GameCalendar.month_of(sim.game_min),
+		"bevoelkerung": {"einwohner": Z.population_of(town), "veraenderung_letzter_monat": trend, "monat": GameCalendar.month_of(sim.game_min),
 			"stadtmarketing_bis_monat": marketing_until, "stadtmarketing_zuzug_plus": snappedf(marketing_boost, 0.01)},
 		"wohnen": {"bestand_einheiten": stock_units, "belegt": occupied_units(), "leerstand": snappedf(vacancy(), 0.001),
 			"wohnungssuchende_haushalte": waiting, "mietindex": snappedf(rent_index(), 0.1), "miete_monat": snappedf(rent, 1.0),
@@ -461,8 +499,9 @@ func _rezone_cluster(zone: String, used: Dictionary) -> Dictionary:
 ## Menge nach Wirtschaftslage (Beschaeftigung) und Lebensqualitaet (mittleres Glueck, 50 = neutral); Grundrate je Monat aus
 ## config/residents.json "zuzug_je_monat" (Anteil der Haushalte, Standard 0,04).
 func on_day(_day: int) -> void:
-	if town != 0:
-		return   # Zwischenstand Auftrag 17: Zuzug und Wohnungsmarkt laufen regional ueber Ort 0, bis Bewohner eine Wohnstadt haben (Etappe 6)
+	if _region():
+		_arrivals_town()
+		return
 	var Z: Citizens = sim.citizens
 	var month := GameCalendar.month_of(sim.game_min)
 	var boost := marketing_boost if month <= marketing_until else 0.0
@@ -482,7 +521,7 @@ func on_month(month: int) -> void:
 	var Z: Citizens = sim.citizens
 	# lange Wartende wandern ab
 	waiting = maxi(0, waiting - int(round(float(waiting) * 0.08)))
-	pop_history.append(Z.population())
+	pop_history.append(Z.population_of(town))
 	if pop_history.size() > 36:
 		pop_history.pop_front()
 	_state_grant()
