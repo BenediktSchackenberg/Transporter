@@ -1059,6 +1059,8 @@ func _minute_tick() -> void:
 	if minute_index % Workforce.TICK_MIN == 0:
 		workforce.minute_tick()
 	airport.on_minute(game_min)   # Luftfracht: neue Landung + Flugwetter-Gate (Etappe E2, Teil 2)
+	if airport.fire_vehicle != null:
+		airport.update_fire(game_min)   # Feuerwehr: Wehrauto hin und rueck (Etappe E5)
 	if minute_index % 5 == 0:
 		crews.tick(game_min)
 	var now := game_min

@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -8019,3 +8019,53 @@ func test_airport_expansion() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.airport.stage == 2, "Speichern/Laden behaelt die Flughafenstufe")
 	ok(identity_ok(s), "Geld und Waren erhalten")
+## Etappe E5 (Auftrag 16): Feuerwehr/Notfälle. Am Flughafen kann ein Brand ausbrechen (deterministisch aus Welt-Seed
+## und Spieltag); die Flughafenfeuerwehr schickt das Wehrauto los (Einsatz: hin -> Schaden -> zurück). Das Feuer frisst
+## einen Teil der Luftfracht im Frachtterminal (Stadtlager-Ware, X0); die Versicherung ersetzt 40 % des Warenwerts
+## (S0 -> P0), die Stadt zahlt die Einsatzkosten (P0 -> S0). Geld und Warenbilanz bleiben erhalten.
+func test_air_fire() -> void:
+	var s := coast_sim()
+	var A: Airport = s.airport
+	ok(A.enabled and A.fire_station >= 0 and A.fire_vehicle != null, "Flughafenfeuerwehr mit Wehrauto ist angelegt (Wache aus E1, aktiv seit E5)")
+	var seed_v: int = s.city.seed_value
+	var fire_day := 0
+	for d in range(1, 366):
+		if Citizens.roll(seed_v, d, Airport.FIRE_SALT) < Airport.FIRE_CHANCE:
+			fire_day = d
+			break
+	ok(fire_day > 0, "ein Brandtag liegt deterministisch innerhalb eines Jahres (Tag %d, Chance %.3f)" % [fire_day, Airport.FIRE_CHANCE])
+	ok(A.fire_task.is_empty(), "zu Beginn steht das Wehrauto in der Wache")
+	# Luftfracht im Frachtterminal (X0-Ware), die ein Feuer treffen kann
+	var q := 60
+	s.stock.add("holz", q, Production.IMPORT, A.cargo_building, "Luftfracht (Feuerwehrtest)")
+	var day0 := GameCalendar.day_of(s.game_min)
+	var p0_before := float(s.economy.accounts.P0)
+	var s0_before := float(s.economy.accounts.S0)
+	A._fire_dispatch(day0)
+	ok(not A.fire_task.is_empty() and str(A.fire_task.phase) == "hin", "Alarm: das Wehrauto ist ausgerüstet (Phase hin)")
+	ok(int(A.stats.einsaetze) == 1, "der Einsatz steht in der Statistik")
+	# Das Wehrauto faehrt den Einsatzort an; die "hin"-Phase laeuft bis Schaden und Abrechnung ab
+	var guard := 0
+	while not A.fire_task.is_empty() and str(A.fire_task.phase) == "hin" and guard < 500:
+		A.update_fire(s.game_min)
+		guard += 1
+	ok(str(A.fire_task.phase) == "zurueck", "das Wehrauto ist am Frachtbereich, Schaden abgerechnet (Phase zurueck, %d Schritte)" % guard)
+	var expected_burned := int(float(q) * Airport.FIRE_LOSS_SHARE)
+	var expected_insured := float(expected_burned) * float(Production.art("holz").get("basispreis", 0.0)) * Airport.FIRE_INSURE_FACTOR
+	ok(s.stock.qty("holz", "X0", A.cargo_building) == q - expected_burned, "das Feuer hat einen Teil der Luftfracht verbrannt (%d -> %d)" % [q, q - expected_burned])
+	ok(int(A.stats.verloren) == expected_burned, "die verbrannten Einheiten sind erfasst (%d)" % expected_burned)
+	ok(is_equal_approx(float(A.stats.entschaedigung), expected_insured), "die Versicherung ersetzt 40 % des Warenwerts (%s)" % Catalog.money(expected_insured))
+	ok(is_equal_approx(float(A.stats.einsatzkosten), Airport.FIRE_CALL_OUT), "die Einsatzkosten sind erfasst (%s)" % Catalog.money(Airport.FIRE_CALL_OUT))
+	ok(is_equal_approx(float(s.economy.accounts.P0) - p0_before, expected_insured - Airport.FIRE_CALL_OUT), "Stadtkasse: Abloesung eingenommen, Einsatzkosten raus (Saldo %s)" % Catalog.money(expected_insured - Airport.FIRE_CALL_OUT))
+	ok(is_equal_approx(float(s.economy.accounts.S0) - s0_before, Airport.FIRE_CALL_OUT - expected_insured), "Versicherer: Abloesung raus, Einsatzkosten eingenommen (Saldo %s)" % Catalog.money(Airport.FIRE_CALL_OUT - expected_insured))
+	ok(identity_ok(s), "Geld und Waren erhalten (Brand: verbrannte Ware, Abloesung, Einsatzkosten)")
+	# Speichern/Laden: der laufende Einsatz (Wehrauto auf dem Rueckweg, Phase zurueck) bleibt erhalten
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(int(s2.airport.stats.einsaetze) == 1 and not s2.airport.fire_task.is_empty() and str(s2.airport.fire_task.phase) == "zurueck", "Speichern/Laden behaelt den laufenden Einsatz (Phase zurueck)")
+	ok(s2.airport.fire_vehicle != null and s2.airport.fire_vehicle.path.size() > 0, "das geladene Wehrauto hat den Rueckweg im Speicher")
+	ok(identity_ok(s2), "Geld und Waren erhalten (nach dem Laden, Einsatz laeuft)")
+	# Rueckfahrt zur Wache: der neue Tag wird gesperrt (keine Reisen, kein zweiter Brand), das Wehrauto fahrt heim
+	A._last_trip_day = 999999
+	run(s, 30.0)
+	ok(A.fire_task.is_empty(), "nach der Rueckfahrt ist der Einsatz beendet (Wehrauto in der Wache)")
+	ok(identity_ok(s), "Geld und Waren erhalten (Einsatz zu Ende)")

@@ -28,18 +28,31 @@ const STAGES := [
 	{"name": "Regionalzentrum", "plaetze": 12, "fracht": 40, "landegae": 80.0, "pauschale": 450.0,
 		"kosten": 160000.0, "tage": 40, "material": {"glas": 40, "daemmung": 60, "betonfertigteil": 160, "schotter": 120, "verbindung": 50}},
 ]
+## Feuerwehr und Notfaelle (Etappe E5): die Wache (Gebaeude 'fire' der E1) faehrt mit einem Wehrauto Einsatz.
+## Brandchance je Tag (deterministisch aus Welt-Seed und Tag); brennt der Vorfeldkranz, frisst das Feuer pro Einsatz
+## einen Teil der dort lagernden Luftfracht. Die Versicherung ersetzt den Warenwert (S0 -> P0); der Stadt bleiben
+## Abloesung und Einsatzkosten (P0 -> S0). Abloesung 0,4 × Basispreis je verbrannter Einheit, Einsatz 2000 EUR.
+const FIRE_CHANCE := 0.004
+const FIRE_LOSS_SHARE := 0.5        # Anteil der Ware im Frachtterminal, die ein Brand verraucht
+const FIRE_INSURE_FACTOR := 0.4    # Versicherung ersetzt 40 % des Basispreises je verbrannter Einheit
+const FIRE_CALL_OUT := 2000.0      # Einsatzkosten (Personal, Fahrzeug, Material), zahlt die Stadtkasse
+const FIRE_VEHICLES := 1
+const FIRE_SALT := 4310          # Salzt des deterministischen Brand-Wurfes (Welt-Seed + Spieltag)
 
 var sim
 var enabled := false
 var track := {}                # {size, run_x0, run_x1, run_y, apron:[x,y], cargo} – Feld-/Gebaeude-Koordinaten
 var cargo_building := -1       # Flughafen-Frachtterminal (Anlieferungspunkt der Luftfracht)
+var fire_station := -1         # Flughafenfeuerwehr (Etappe E5; Basis des Wehrautos)
+var fire_vehicle: Mover        # Flughafen-Wehrauto (Etappe E5)
+var fire_task := {}            # laufender Einsatz: {target, cell, phase, insured, cost}
 var manifest: Array = []       # wartende Luftfracht {ref, item, qty, since}
 var trips := {}                # Auslandsreisen {id: "Y<n>", person, reason, status, return_day, flight} (Etappe E3)
 var _last_trip_day := -1       # letzter Tag, an dem neue Auslandsreisen zugelassen wurden (Etappe E3)
 var _next_trip := 1
 var _last_flight := 0          # letzte entladene Landung (Flugzaehler; mitgespeichert)
 var stage := 1                 # Flughafenstufe (1..STAGES.size, Etappe E4)
-var stats := {"fluege": 0, "abgebrochen": 0, "einheiten_ein": 0, "passagiere": 0}
+var stats := {"fluege": 0, "abgebrochen": 0, "einheiten_ein": 0, "passagiere": 0, "einsaetze": 0, "verloren": 0, "entschaedigung": 0.0, "einsatzkosten": 0.0}
 
 
 func setup(simulation) -> void:
@@ -49,6 +62,7 @@ func setup(simulation) -> void:
 		return
 	enabled = true
 	cargo_building = int(a.get("cargo", -1))
+	fire_station = int(a.get("fire", -1))
 	# Stehplatz: der erste genannte Vorfeldpunkt, der frei ist (die Nennpunkte können unter Gebäuden liegen),
 	# sonst eine freie Vorfeldzelle in der Reihe unter den Gebäuden.
 	var spot: Array = []
@@ -71,6 +85,11 @@ func setup(simulation) -> void:
 		"run_x0": int(a.run_x0), "run_x1": int(a.run_x1), "run_y": int(a.run_y),
 		"apron": spot,
 	}
+	# Wehrauto (E5): Basis an der Strasse neben der Wache
+	if fire_station >= 0 and sim.city.building(fire_station).has("road"):
+		fire_vehicle = Mover.new()
+		fire_vehicle.speed = 3.4
+		fire_vehicle.pos = sim.city.tile_center(sim.city.building(fire_station).road)
 	sim.day_changed.connect(on_day)
 
 
@@ -184,7 +203,94 @@ func summary() -> Dictionary:
 		"ausbau": {} if nd.is_empty() else {"ziel": nd.name, "plaetze": int(nd.plaetze), "fracht": int(nd.fracht), "kosten": int(nd.kosten), "tage": int(nd.tage)},
 		"rueckstau_fluege": snappedf(float(waiting_units()) / float(maxi(1, cargo_cap())), 0.1),
 		"wartende_flugfracht": manifest.size(), "wartende_einheiten": waiting_units(),
+		"feuerwehr": {"einsaetze": int(stats.einsaetze), "im_einsatz": fire_task.size() > 0,
+			"verlorene_einheiten": int(stats.verloren), "entschaedigung": float(stats.entschaedigung),
+			"einsatzkosten": float(stats.einsatzkosten)},
 		"aktiv": enabled, "statistik": stats.duplicate()}
+
+# ------------------------------------------------------------------ Feuerwehr (Etappe E5)
+## Brand am Flughafen: die Wache schickt das Wehrauto los (Einsatz hin -> Warenschaden und Abrechnung -> Rueckfahrt).
+## Schaden: ein Teil der Luftfracht im Frachtterminal brennt (Wareneigentum der Stadt, X0 am Terminal);
+## die Versicherung zahlt einen Anteil des Warenwerts (S0 -> P0), die Stadt zahlt die Einsatzkosten (P0 -> S0).
+## Reservierte Ware darf nicht angefasst werden (bestelltes Material der Projekte bleibt unangetastet).
+func _fire_roll(day: int) -> void:
+	if not enabled or fire_station < 0 or fire_vehicle == null:
+		return
+	if fire_task.size() > 0:
+		return
+	if Citizens.roll(int(sim.city.seed_value), day, FIRE_SALT) >= FIRE_CHANCE:
+		return
+	_fire_dispatch(day)
+
+## Alarm: Wehrauto auf die Strasse, Einsatzort der Frachtbereich. `day` dient nur dem Protokoll.
+func _fire_dispatch(day: int) -> void:
+	var cell: Vector2i = sim.city.building(cargo_building).road if sim.city.building(cargo_building).has("road") else _fire_road_near(Vector2i(int(track.run_x0) + 2, int(track.run_y) + 3))
+	fire_task = {"target": cargo_building, "cell": [cell.x, cell.y], "phase": "hin", "burned": 0, "insured": 0.0}
+	stats.einsaetze = int(stats.einsaetze) + 1
+	sim.route(fire_vehicle, cell)
+	sim.log_event("Feuerwehr am Flughafen: Alarm am Tag %d – das Wehrauto ruestet sich (Einsatzort Frachtbereich)." % day, "warn")
+	sim.activity.add("stadt", cargo_building, "feuerwehr", "Feuerwehreinsatz am Flughafen",
+		"Wehrauto ruestet sich – Einsatzort: Frachtbereich", sim.city.building(cargo_building).road)
+
+## Strassennaehe zum Einsatzort (Strassenkranz des Vorfelds; Radius begrenzt).
+func _fire_road_near(cell: Vector2i) -> Vector2i:
+	if sim.city.is_road(cell):
+		return cell
+	for r in range(1, 6):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var q := cell + Vector2i(dx, dy)
+				if sim.city.is_road(q):
+					return q
+	return cell
+
+## Bewegung des Wehrautos (Minute-Tick): Einsatz anfahren -> Schaden und Abrechnung -> Rueckfahrt zur Wache.
+## 1 Minute = 0,5 Sim-Sekunden (1 Sim-Sekunde = 2 Minuten).
+func update_fire(now: float) -> void:
+	if fire_vehicle == null or fire_task.is_empty():
+		return
+	if fire_task.phase == "zurueck":
+		if fire_vehicle.arrived():
+			fire_task = {}
+		else:
+			fire_vehicle.advance(0.5, 1.0)
+		return
+	if not fire_vehicle.arrived():
+		fire_vehicle.advance(0.5, 1.0)
+		return
+	fire_task.phase = "zurueck"
+	_fire_damage(now)
+	if fire_station >= 0 and sim.city.building(fire_station).has("road"):
+		sim.route(fire_vehicle, sim.city.building(fire_station).road)
+
+## Schaden am Frachtterminal und Abrechnung: verbrannte Ware wird vernichtet und abgeschrieben, die Versicherung
+## ersetzt 40 % des Basispreises (S0 -> P0), die Stadt zahlt die Einsatzkosten (P0 -> S0).
+func _fire_damage(now: float) -> void:
+	var burned := 0
+	for l in sim.stock.of_owner("X0"):
+		if int(l.loc) != cargo_building:
+			continue
+		var item := str(l.item)
+		var avail := maxi(0, sim.stock.qty(item, "X0", cargo_building) - sim.stock.reserved(item, "X0", cargo_building))
+		var take := int(float(avail) * FIRE_LOSS_SHARE)
+		if take <= 0:
+			continue
+		var n: int = sim.stock.consume(item, take, "X0", cargo_building, "Brand am Flughafen", now)
+		burned += n
+		var unit: float = float(sim.prod.art(item).get("basispreis", 0.0))
+		var ins: float = n * unit * FIRE_INSURE_FACTOR
+		sim.economy.transfer("S0", "P0", ins)
+		stats.entschaedigung = float(stats.entschaedigung) + ins
+	sim.economy.transfer("P0", "S0", FIRE_CALL_OUT)
+	stats.einsatzkosten = float(stats.einsatzkosten) + FIRE_CALL_OUT
+	stats.verloren = int(stats.verloren) + burned
+	fire_task.burned = burned
+	fire_task.insured = float(stats.entschaedigung)
+	sim.log_event("Brand am Flughafen: %d Ladeeinheiten Luftfracht verbrannt, die Versicherung ersetzt %s, Einsatzkosten %s." % [
+		burned, Catalog.money(float(stats.entschaedigung)), Catalog.money(FIRE_CALL_OUT)], "bad")
+	sim.activity.add("stadt", cargo_building, "feuerwehr", "Brand am Flughafen abgearbeitet",
+		"%d Ladeeinheiten Luftfracht verbrannt, Abloesung %s" % [burned, Catalog.money(float(stats.entschaedigung))],
+		sim.city.building(cargo_building).road)
 
 # ------------------------------------------------------------------ Luftfracht (Etappe E2, Teil 2)
 ## Bestellte Luftfracht wird im Manifest vormerk (analog Hafen.ship_in). `ref` = Bestell-ID des Stadtlagers.
@@ -243,6 +349,7 @@ func on_day(day: int) -> void:
 		if str(t.status) == "unterwegs" and day >= int(t.get("return_day", day + 1)):
 			t.status = "return"   # Aufenthalt vorbei: der Rueckflug sitzt auf dem naechsten Flug
 	_book_trips(day)
+	_fire_roll(day)
 
 ## Neue Auslandsreisen buchen: je Buerger die Chance TRIP_CHANCE, mit ausreichend Guthaben, nicht im Gefaengnis,
 ## nicht schon unterwegs. Pro Tag steigen hoechstens so viele neue Reisende ein, wie Plaetze zurueckbleiben.
@@ -363,8 +470,13 @@ func _unload_manifest(flight_no: int = -1) -> void:
 			sim.city.building(cargo_building).road)
 
 func to_dict() -> Dictionary:
+	var fd := {}
+	if fire_vehicle != null:
+		fd = {"x": fire_vehicle.pos.x, "y": fire_vehicle.pos.y, "path": fire_vehicle.path, "path_i": fire_vehicle.path_i,
+			"goal": [fire_vehicle.goal.x, fire_vehicle.goal.y]}
 	return {"enabled": enabled, "manifest": manifest.duplicate(true), "last_flight": _last_flight, "stats": stats.duplicate(),
-		"stage": stage, "trips": trips.duplicate(true), "next_trip": _next_trip, "last_trip_day": _last_trip_day}
+		"stage": stage, "trips": trips.duplicate(true), "next_trip": _next_trip, "last_trip_day": _last_trip_day,
+		"fire_vehicle": fd, "fire_task": fire_task.duplicate(true)}
 
 func from_dict(d: Dictionary) -> void:
 	stage = int(d.get("stage", 1))
@@ -384,3 +496,16 @@ func from_dict(d: Dictionary) -> void:
 		t.flight = int(t.flight)
 	_next_trip = int(d.get("next_trip", 1))
 	_last_trip_day = int(d.get("last_trip_day", _last_trip_day))
+	fire_task = d.get("fire_task", {}).duplicate(true)
+	var fd: Dictionary = d.get("fire_vehicle", {})
+	if fire_vehicle != null and not fd.is_empty():
+		fire_vehicle.pos = Vector2(float(fd.x), float(fd.y))
+		var p: Array[Vector2i] = []
+		for c in fd.get("path", []):
+			p.append(Vector2i(int(c[0]), int(c[1])))
+		fire_vehicle.path = p
+		fire_vehicle.path_i = int(fd.get("path_i", 1 if p.size() > 1 else 0))
+		var goal: Array = fd.get("goal", [-1, -1])
+		fire_vehicle.goal = Vector2i(int(goal[0]), int(goal[1]))
+		if fire_task.size() > 0 and not fire_vehicle.arrived():
+			sim.route(fire_vehicle, fire_vehicle.goal)   # Pfad neu setzen (Strassenlage kann sich gendaert haben)

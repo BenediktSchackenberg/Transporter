@@ -5,7 +5,7 @@ import random
 
 from engine import Model, mat, M
 
-SIZES = {"police": 40, "ambulance": 60, "roadcrew": 60, "moving": 66, "car": 36, "cargobike": 26, "van": 56, "transporter": 66, "reefer": 66, "truck": 86, "semi": 126}
+SIZES = {"police": 40, "ambulance": 60, "firetruck": 60, "roadcrew": 60, "moving": 66, "car": 36, "cargobike": 26, "van": 56, "transporter": 66, "reefer": 66, "truck": 86, "semi": 126}
 CAR_COLORS = {"car_silver": "#c0c4cc", "car_black": "#2f3239", "car_red": "#b03a36", "car_blue": "#3a5fa0", "car_gold": "#cdb060",
               "car_white": "#e4e4e0", "car_green": "#4f8a55", "car_violet": "#74559c"}
 
@@ -110,6 +110,32 @@ def ambulance():
     _cab(m, x0 + 34, y0, W, 19, 16)
     m.box(x0 + 34, y0 + 3, 19, x0 + 38, y0 + W - 3, 21, M("beacon_blue"))
     for wx in (x0 + 8, x0 + 40):
+        _wheel(m, wx, y0, 4, 1, 1)
+        _wheel(m, wx, y0 + W - 1, 4, 1, 0)
+    _lights(m, x0 + L, x0, y0, W, 5)
+    return m
+
+
+def firetruck():
+    """Flugplatzfeuerwehrauto: roter Aufbau mit roemischer Ziffer Fuenf (weiss), Lichtbalken und Schlauchbalken."""
+    S = SIZES["firetruck"]
+    m = _square(S)
+    L, W = 52, 20
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 3, x0 + L, y0 + W, 24, M("signal_red"))
+    m.box(x0, y0, 3, x0 + L, y0 + W, 5, M("black"))
+    m.box(x0, y0 + W - 1, 6, x0 + L, y0 + W, 9, M("hazard_white"))      # weisse Zierleiste an der Seite
+    m.box(x0, y0, 6, x0 + L, y0 + 1, 9, M("hazard_white"))
+    # Romanische Fuenf (V) als weisses Feld auf der Seite
+    m.box(x0 + 16, y0, 10, x0 + 26, y0 + 1, 15, M("hazard_white"))
+    m.box(x0 + 19, y0 + 1, 12, x0 + 23, y0 + 1, 15, M("hazard_white"))
+    m.box(x0 + 2, y0 + 8, 24, x0 + 10, y0 + W - 8, 24, M("hazard_white"))   # waagerechter Balken
+    m.box(x0 + 12, y0 + 8, 22, x0 + 16, y0 + 13, 24, M("hazard_white"))
+    m.box(x0 + 34, y0, 6, x0 + 40, y0 + W - 1, 10, M("steel_dark"))         # Schlauchbalken hinten
+    m.box(x0 + 36, y0 + 6, 24, x0 + 38, y0 + W - 6, 26, M("steel"))
+    m.box(x0 + 1, y0 + 2, 24, x0 + 4, y0 + W - 2, 26, M("beacon_blue"))     # Lichtbalken vorn
+    _cab(m, x0 + L - 16, y0, W, 24, 15, "signal_red")
+    for wx in (x0 + 8, x0 + L - 10):
         _wheel(m, wx, y0, 4, 1, 1)
         _wheel(m, wx, y0 + W - 1, 4, 1, 0)
     _lights(m, x0 + L, x0, y0, W, 5)
