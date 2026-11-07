@@ -27,6 +27,33 @@ var road_count := 0
 # Flughafen (Auftrag 16): Startbahn und Vorfeld liegen außerhalb der Baublöcke; die Geometrie ist für die
 # Flugbewegung (FlightOps) und die Darstellung (AirView) relevant und wird deterministisch aus dem Seed erzeugt.
 var airport: Dictionary = {}        # {rect, run_x0, run_x1, run_y, dir, apron: [[x,y],...], road, walk} (leer, wenn kein Flughafen)
+# Region (Auftrag 17): Orte auf derselben Karte. Leer in alten Welten (dann eine Stadt aus town_name, siehe Towns).
+var towns: Array = []               # [{id, name, center: [x, y], rect: [x, y, w, h], town_hall, bauhof, harbor, port_office, start_plot, airport}]
+var region_roads: Array = []        # Verbindungsstrassen der Startinfrastruktur [{id, von, nach, zellen, laenge, verbunden, eigentum, wartung}]
+
+
+## Verwaltungsgebiet: Ort mit dem naechsten Ortszentrum (jede Zelle gehoert genau einem Ort; ohne Orte: 0).
+func town_of(cell: Vector2i) -> int:
+	if towns.size() <= 1:
+		return 0
+	var best := 0
+	var best_d := 1 << 30
+	for t in towns:
+		var d := absi(cell.x - int(t.center[0])) + absi(cell.y - int(t.center[1]))
+		if d < best_d:
+			best_d = d
+			best = int(t.id)
+	return best
+
+
+## Ort eines Gebaeudes: beim Erzeugen gesetzt, sonst nach Lage.
+func town_of_building(id: int) -> int:
+	var b := building(id)
+	if b.is_empty():
+		return 0
+	if b.has("town"):
+		return int(b.town)
+	return town_of(Vector2i(int(b.x), int(b.y)))
 
 
 func setup(n: int, s: int) -> void:
