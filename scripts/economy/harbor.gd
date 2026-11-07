@@ -10,7 +10,13 @@ extends RefCounted
 signal ship_event(kind: String, ship: Dictionary)   # "ankunft" | "abfahrt" (Darstellung)
 
 const INTERVAL_DAYS := 2
-const CAPACITY := 240
+const CAPACITY := 240              # Ladeeinheiten je Schiff und Richtung auf Stufe 1 (Holzanleger)
+## Hafenstufen (Etappe E): Ausbau als Stadtprojekt des Buergermeisters (Baufirma, Material aus dem Stadtlager), danach mehr Ladung je Schiff.
+const STAGES := [
+	{"name": "Holzanleger", "ladung": 240},
+	{"name": "Kaimauer mit Kran", "ladung": 400, "kosten": 60000.0, "tage": 14, "material": {"betonfertigteil": 40, "schotter": 30, "verbindung": 12}},
+	{"name": "Containerhafen", "ladung": 600, "kosten": 140000.0, "tage": 22, "material": {"betonfertigteil": 90, "schotter": 60, "verbindung": 30}},
+]
 const SHIP_NAMES := ["Möwe", "Nordstern", "Seeadler", "Bernstein", "Wellenreiter", "Abendrot", "Kormoran", "Lotte"]
 
 var sim
@@ -21,6 +27,7 @@ var export_wait := {}              # Artikel -> Menge am Kai fuer das naechste S
 var ship := {}                     # aktuelles bzw. letztes Schiff {id, name, day, status, gelöscht, geladen}
 var stats := {"schiffe": 0, "einheiten_ein": 0, "einheiten_aus": 0, "zurueckgestellt": 0}
 var _next := 1
+var stage := 1                     # Hafenstufe (1..STAGES.size())
 
 
 func setup(simulation) -> void:
@@ -90,7 +97,7 @@ func _arrive(day: int) -> void:
 	_next += 1
 	stats.schiffe = int(stats.schiffe) + 1
 	# Loeschen: wartende Einfuhren in Reihenfolge des Eingangs, bis das Schiff voll ist
-	var room := CAPACITY
+	var room := capacity()
 	var rest: Array = []
 	for m in manifest:
 		var u := units_of(str(m.item), int(m.qty))
@@ -104,7 +111,7 @@ func _arrive(day: int) -> void:
 	stats.zurueckgestellt = int(stats.zurueckgestellt) + rest.size()
 	manifest = rest
 	# Laden: Ausfuhrware vom Kai, bis das Schiff voll ist
-	room = CAPACITY
+	room = capacity()
 	for item in export_wait.keys():
 		var q := int(export_wait[item])
 		var fit := q if units_of(item, q) <= room else q * room / units_of(item, q)   # anteilig, was noch passt
@@ -143,16 +150,60 @@ func _list(d: Dictionary) -> String:
 	return ", ".join(parts)
 
 
+func capacity() -> int:
+	return int(STAGES[clampi(stage, 1, STAGES.size()) - 1].ladung)
+
+
+func stage_name() -> String:
+	return str(STAGES[clampi(stage, 1, STAGES.size()) - 1].name)
+
+
+func expansion_running() -> bool:
+	return sim.mayor.projects.values().any(func(p): return p.kind == "hafenausbau" and p.status != "fertig")
+
+
+## Naechste Hafenstufe als Stadtprojekt ausschreiben (Kosten reserviert die Stadtkasse, eine Baufirma baut mit Material aus dem Stadtlager).
+func expand(by: String) -> Dictionary:
+	if not enabled:
+		return {"ok": false, "msg": "Kein Hafen in dieser Stadt."}
+	if stage >= STAGES.size():
+		return {"ok": false, "msg": "Der Hafen ist schon %s (höchste Stufe)." % stage_name()}
+	if expansion_running():
+		return {"ok": false, "msg": "Ein Hafenausbau läuft bereits."}
+	var nd: Dictionary = STAGES[stage]
+	if sim.mayor.available_budget() < float(nd.kosten):
+		return {"ok": false, "msg": "Verfügbare Stadtkasse reicht nicht (%s nötig)." % Catalog.money(float(nd.kosten))}
+	var prj: Dictionary = sim.mayor.add_works_project("hafenausbau", "S%d" % (stage + 1), float(nd.kosten), int(nd.tage), nd.material, "Hafenausbau (%s)" % by)
+	sim.log_event("%s lässt den Hafen ausbauen: %s → %s (%d statt %d Ladeeinheiten je Schiff), ausgeschrieben als %s (%s)." % [by, stage_name(), nd.name, int(nd.ladung), capacity(), prj.id, Catalog.money(float(nd.kosten))], "info")
+	sim.activity.add("stadt", -1, "bau", "Hafenausbau zu %s ausgeschrieben" % nd.name, by, sim.city.building(building).road)
+	return {"ok": true, "msg": "Hafenausbau zu %s als Projekt %s ausgeschrieben (etwa %d Tage)." % [nd.name, prj.id, int(nd.tage)], "ref": prj.id}
+
+
+## Vom Bausystem bei Fertigstellung des Projekts aufgerufen.
+func finish_expansion() -> void:
+	stage = mini(stage + 1, STAGES.size())
+	sim.log_event("Hafen ausgebaut: jetzt %s, %d Ladeeinheiten je Schiff." % [stage_name(), capacity()], "good")
+
+
+## Rueckstau der Einfuhren in Schiffsladungen (fuer Buergermeister und Ansicht).
+func backlog_ships() -> float:
+	return snappedf(float(waiting_units()) / float(capacity()), 0.1)
+
+
 func summary() -> Dictionary:
-	return {"aktiv": enabled, "schiff": ship.duplicate(true), "naechstes_in_tagen": INTERVAL_DAYS - GameCalendar.day_of(sim.game_min) % INTERVAL_DAYS,
+	var nd: Dictionary = STAGES[stage] if stage < STAGES.size() else {}
+	return {"stufe": stage, "stufe_name": stage_name(), "ladung_je_schiff": capacity(), "rueckstau_schiffsladungen": backlog_ships(), "ausbau_laeuft": expansion_running(),
+		"ausbau": {} if nd.is_empty() else {"ziel": nd.name, "ladung": int(nd.ladung), "kosten": int(nd.kosten), "tage": int(nd.tage)},
+		"aktiv": enabled, "schiff": ship.duplicate(true), "naechstes_in_tagen": INTERVAL_DAYS - GameCalendar.day_of(sim.game_min) % INTERVAL_DAYS,
 		"wartende_einfuhren": manifest.size(), "wartende_einheiten": waiting_units(), "ausfuhr_am_kai": export_wait.duplicate(), "statistik": stats.duplicate()}
 
 
 func to_dict() -> Dictionary:
-	return {"manifest": manifest.duplicate(true), "export_wait": export_wait.duplicate(), "ship": ship.duplicate(true), "stats": stats.duplicate(), "next": _next}
+	return {"stage": stage, "manifest": manifest.duplicate(true), "export_wait": export_wait.duplicate(), "ship": ship.duplicate(true), "stats": stats.duplicate(), "next": _next}
 
 
 func from_dict(d: Dictionary) -> void:
+	stage = int(d.get("stage", 1))
 	manifest = d.get("manifest", []).duplicate(true)
 	for m in manifest:
 		m.qty = int(m.qty)

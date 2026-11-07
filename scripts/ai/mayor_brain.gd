@@ -119,6 +119,10 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var pw: Dictionary = ind.get("strom", {})
 	if actions.size() < MAX_ACTIONS and not pw.is_empty() and not bool(pw.ausbau_laeuft) and (float(pw.auslastung) > 0.85 or int(pw.abgeschaltete_betriebe) > 0) 			and float(ind.haushalt.verfuegbar) > float(pw.ausbau.kosten) * 1.5:
 		actions.append({"action": "expand_power", "reason": "Stromnetz zu %.0f %% ausgelastet, %d Betriebe ohne Strom." % [float(pw.auslastung) * 100.0, int(pw.abgeschaltete_betriebe)]})
+	# 1h1-) Hafen: Einfuhren stauen sich ueber mehr als eine Schiffsladung -> naechste Stufe, wenn die Kasse das 1,5-fache traegt
+	var hf: Dictionary = ind.get("hafen", {})
+	if actions.size() < MAX_ACTIONS and not hf.is_empty() and not bool(hf.ausbau_laeuft) and not hf.ausbau.is_empty() 			and float(hf.rueckstau_schiffsladungen) > 1.0 and float(ind.haushalt.verfuegbar) > float(hf.ausbau.kosten) * 1.5:
+		actions.append({"action": "expand_harbor", "reason": "Einfuhren für %.1f Schiffsladungen warten am Hafen; %s schafft %d statt %d Einheiten je Schiff." % [float(hf.rueckstau_schiffsladungen), hf.ausbau.ziel, int(hf.ausbau.ladung), int(hf.ladung_je_schiff)]})
 	# 1h1a) Bergbau: Abbauantraege genehmigen (Arbeitsplaetze, Export, Abgabe); Abgabe nach Partei
 	var mb: Dictionary = ind.get("bergbau", {})
 	for ap in mb.get("abbauantraege", []):

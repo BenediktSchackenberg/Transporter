@@ -48,6 +48,8 @@ const SCHEMA := {
 		"desc": "Zwischen zwei zerstrittenen Firmen schlichten (obs.rivalitaet.paare, ab Spannung 30): Spannung −25 und Stillhalteabkommen für 3–14 Tage (Standard 7). Wer es bricht (Abwerben, Anzeige, Blockade, Sabotage gegen den anderen), zahlt 3000 EUR und verliert 10 Ruf. Unruhe zwischen Firmen kostet Zustimmung."},
 	"expand_power": {"params": {"reason": "string"},
 		"desc": "Stromnetz der Stadtwerke ausbauen: +500 kW Leistung nach 10 Tagen für 60 000 EUR. Sinnvoll, wenn obs.strom.auslastung über 0,85 liegt oder Betriebe abgeschaltet sind."},
+	"expand_harbor": {"params": {"reason": "string"},
+		"desc": "Hafen eine Stufe ausbauen (obs.hafen.ausbau: Ziel, Ladung je Schiff, Kosten, Tage): Stadtprojekt, eine Baufirma baut mit Material aus dem Stadtlager. Sinnvoll, wenn obs.hafen.rueckstau_schiffsladungen über 1 liegt (Einfuhren warten auf mehrere Schiffe)."},
 	"warn_company": {"params": {"firma": "int", "reason": "string"},
 		"desc": "Firma öffentlich verwarnen (nur wenn sie in den letzten 7 Tagen eskaliert hat, siehe obs.rivalitaet.verursacher): Ruf −2, für 10 Tage kostet jede weitere Eskalation zusätzlich Ruf."},
 	"build_bridge": {"params": {"grundstueck": "string", "bruecke": "string?", "vergabe": "string?", "firma": "int?", "reason": "string"},
@@ -233,6 +235,7 @@ func indicators() -> Dictionary:
 		"strom": sim.grid.summary(),
 		"erschliessung": access_indicators(),
 		"bergbau": sim.mining.summary(),
+		"hafen": sim.harbor.summary() if sim.harbor.enabled else {},
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 		"zuletzt_abgelehnt": decisions.slice(-12).filter(func(d): return not d.ok).map(func(d): return "%s: %s" % [d.action, d.msg.left(100)]),
@@ -547,6 +550,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.rivalry.warn(int(a.firma), "Bürgermeister %s" % name)
 			"expand_power":
 				res = sim.grid.expand("Bürgermeister %s" % name)
+			"expand_harbor":
+				res = sim.harbor.expand("Bürgermeister %s" % name)
 			"build_bridge":
 				res = sim.access.order_city(str(a.grundstueck), "Bürgermeister %s" % name, _build_choice(a))
 			"decide_mining":

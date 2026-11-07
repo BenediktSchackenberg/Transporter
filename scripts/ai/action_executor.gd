@@ -104,6 +104,8 @@ const SCHEMA := {
 		"desc": "IT-Vertrag beim günstigsten IT-Dienstleister (it_angebote): buero_it (−15 % Büro- und Internetkosten) oder lagerverwaltung (−25 % Verderb, business_id nötig). Monatlich bezahlt, nur wenn die Leistung erbracht wird."},
 	"set_business_price": {"params": {"business_id": "string", "item": "string", "price": "number"},
 		"desc": "Verkaufspreis eines eigenen Produktionsbetriebs je Einheit setzen (Getreide, Mehl, Brot). Käufer wählen den günstigsten Anbieter inkl. Fracht; der Großhandel kauft Brot nur unter dem Importpreis."},
+	"upgrade_business": {"params": {"business_id": "string", "reason": "string?"},
+		"desc": "Eigenen Betrieb eine Gebäudestufe ausbauen (betriebe[].ausbau: Ziel, Kosten, moeglich, fehlt). Nur bei Nachfrage, Geld, Personal und Strom; ein Bautrupp baut mit Material aus Bauhof/Hafen, die Stufe gilt nach Fertigstellung. Bäckerei/Restaurant: mehr Kundschaft und Plätze, Bergwerk: mehr Förderung."},
 	"close_business": {"params": {"business_id": "string", "reason": "string?"},
 		"desc": "Eigenen Betrieb schließen (z. B. dauerhaft unrentabel). Sein Personal geht zurück an den Hauptsitz. Ein Transportbetrieb muss vorher ohne Fahrzeuge und laufende Aufträge sein."},
 	"assign_staff": {"params": {"worker_id": "string", "business_id": "string"},
@@ -742,6 +744,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.mining.request(cid, _s(a.grundstueck), str(a.get("reason", "")))
 		"found_business":
 			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")), {"standort": _s(a.get("standort", a.get("grundstueck", ""))), "modus": _s(a.get("modus", "pachten")), "rohstoff": _s(a.get("rohstoff", ""))})
+		"upgrade_business":
+			return sim.stages.upgrade(cid, _s(a.business_id), str(a.get("reason", "")))
 		"set_business_price":
 			return sim.prod.set_price(cid, _s(a.business_id), _s(a.item), float(a.price))
 		"buy_property":

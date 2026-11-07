@@ -534,6 +534,18 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 			actions.append({"action": "close_business", "business_id": b.id, "reason": "seit %d Tagen ohne Absatz, Ergebnis %d EUR" % [int(b.alter_tage), int(b.ergebnis)]})
 			reasons.append("schließe %s, weil er seit Wochen nichts verkauft und Verlust macht" % b.id)
 			return
+	# Gebaeudestufe: ausbauen, wenn alle Voraussetzungen erfuellt sind und Geld fuer den Betrieb bleibt; fehlt nur Personal,
+	# wird zuerst aufgestockt (Soll = Personal der naechsten Stufe).
+	for b in own:
+		var au: Dictionary = b.get("ausbau", {})
+		if au.is_empty() or cash < float(au.kosten) + buffer + PROD_RESERVE:
+			continue
+		if bool(au.moeglich):
+			actions.append({"action": "upgrade_business", "business_id": b.id, "reason": "Nachfrage %d %%, Ausbau zu %s" % [int(float(b.get("nachfrage", 0.0)) * 100.0), au.ziel]})
+			reasons.append("baue %s zu %s aus, weil Kundschaft oder Abnehmer mehr wollen" % [b.id, au.ziel])
+			return
+		if au.fehlt.size() == 1 and str(au.fehlt[0]).begins_with("zu wenig Personal"):
+			b["personal_soll"] = maxi(int(b.get("personal_soll", 1)), int(au.personal))
 	for b in own:
 		if int(b.personal) >= int(b.get("personal_soll", b.get("personal_min", 1))):
 			continue

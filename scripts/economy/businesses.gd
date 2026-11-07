@@ -246,6 +246,7 @@ func obs_of(cid: int) -> Array:
 			e.merge(sim.prod.detail(b))
 		if b.branch == "immobilien":
 			e.merge(sim.realty.detail(b))
+		e.merge(sim.stages.obs(b))   # Gebaeudestufe und Ausbau-Voraussetzungen
 		if sim.it.has_contract(b.id):
 			e["it"] = true
 		if not b.blockers.is_empty():

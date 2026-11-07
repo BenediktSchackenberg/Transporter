@@ -222,7 +222,7 @@ func _place_field(p: Dictionary, name: String, btype: String = "farm") -> Dictio
 # ------------------------------------------------------------------ Tageslauf
 func on_day(day: int) -> void:
 	for b in sim.biz.items.values():
-		var spec: Dictionary = Businesses.branches().get(b.branch, {})
+		var spec: Dictionary = sim.stages.spec_of(b)   # mit der Wirkung der Gebaeudestufe
 		if not (spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("bau") or spec.has("abbau") or spec.has("dienste")) or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		_costs(b)

@@ -290,12 +290,12 @@ func counters() -> Array:
 		if not spec.has("laden") or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)) or not bool(b.get("counter", false)):
 			continue
 		out.append({"id": b.id, "kind": str(spec.laden.kundschaft), "item": str(spec.laden.get("artikel", "")), "building": int(b.site), "owner": int(b.owner),
-			"price_factor": float(b.get("laden_faktor", 1.0))})
+			"price_factor": float(b.get("laden_faktor", 1.0)), "stage_factor": BusinessStages.customer_factor(b), "seats": BusinessStages.seats(b)})
 	return out
 
 
 func _weight(s: Dictionary) -> float:
-	return pow(1.0 / maxf(0.5, float(s.price_factor)), 1.6) * sim.contentment.building_factor(int(s.building))
+	return pow(1.0 / maxf(0.5, float(s.price_factor)), 1.6) * sim.contentment.building_factor(int(s.building)) * float(s.get("stage_factor", 1.0))
 
 
 ## Anteil, den die Kundschaft einer Geschaeftsart bei den bisherigen Betrieben behaelt: Die Kundschaft ist ein gemeinsamer Topf
@@ -325,6 +325,10 @@ func _serve_counter(ct: Dictionary, day: int) -> void:
 	var acct := "C%d" % int(ct.owner)
 	var r := _rng(ct, day)
 	var n := int(round(float(customers(ct, r)) * float(_share.get(ct.kind, 1.0))))
+	var turned := 0
+	if int(ct.get("seats", -1)) >= 0 and n > int(ct.seats):   # Sitzplaetze der Gebaeudestufe: Rest wird abgewiesen
+		turned = n - int(ct.seats)
+		n = int(ct.seats)
 	var sold := 0
 	var lost := 0
 	var amount := 0.0
@@ -362,6 +366,7 @@ func _serve_counter(ct: Dictionary, day: int) -> void:
 	b["sold_today"] = int(b.get("sold_today", 0)) + sold
 	b["counter_customers"] = n
 	b["counter_lost"] = lost
+	b["counter_turned"] = turned
 
 
 func _rng(s: Dictionary, day: int) -> RandomNumberGenerator:

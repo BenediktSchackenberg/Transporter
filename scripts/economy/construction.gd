@@ -70,10 +70,12 @@ var _next_works := 1
 const WORKS_PHASES := {
 	"betrieb": ["Baugrube", "Fundament", "Rohbau", "Dach", "Ausbau und Technik"],
 	"bergwerk": ["Platz und Zufahrt", "Stollenvortrieb", "Förderturm", "Halde und Technik"],
+	"ausbau": ["Gerüst und Anbau", "Rohbau Anbau", "Technik und Einrichtung"],
 }
 const WORKS_MATERIAL := {   # je 10 000 EUR Auftragswert
 	"betrieb": {"beton": 3, "ziegel": 4, "holz": 2, "stahl": 1},
 	"bergwerk": {"beton": 3, "stahl": 3, "holz": 3},
+	"ausbau": {"beton": 2, "ziegel": 3, "holz": 2, "stahl": 1},
 }
 var reserved_co := {}                 # Unternehmen-ID -> fuer Bauvertraege zurueckgelegt
 var reserved_dev := 0.0               # beim Bautraeger fuer Vertraege zurueckgelegt
@@ -981,6 +983,8 @@ func _finish_public(e: Dictionary) -> void:
 		for part in prj.parts:
 			p.erschliessung[part] = true
 		sim.parcels.touch(pid)
+	if prj.kind == "hafenausbau":
+		sim.harbor.finish_expansion()
 	if prj.kind == "netzausbau":
 		sim.grid.finish_expansion(float(prj.get("kw", PowerGrid.EXPAND_KW)))
 	if prj.kind == "bruecke":
@@ -1047,6 +1051,9 @@ func _finish_works(w: Dictionary) -> void:
 	w.status = "fertig"
 	_forward(str(w.builder), float(w.price), "Betriebsbau %s" % w.id)
 	builders[w.builder].history.fertig = int(builders[w.builder].history.fertig) + 1
+	if w.has("upgrade"):   # Ausbau eines laufenden Betriebs (BusinessStages): Gebaeude steht schon
+		sim.stages.finish(w)
+		return
 	var b: Dictionary = sim.biz.get_b(str(w.biz))
 	if not b.is_empty() and b.status == "im_bau":
 		sim.biz.set_status(b.id, "aktiv", "Gebäude fertig")
@@ -1069,7 +1076,7 @@ func works_phase(w: Dictionary) -> String:
 ## Steht auf diesem Gebaeude noch eine Baustelle (Darstellung: Gebaeude erst nach Fertigstellung zeigen)?
 func building_under_construction(building_id: int) -> bool:
 	for w in works.values():
-		if int(w.building) == building_id and w.status != "fertig":
+		if int(w.building) == building_id and w.status != "fertig" and not w.has("upgrade"):
 			return true
 	return false
 

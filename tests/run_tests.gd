@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -7720,3 +7720,100 @@ func test_airport() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.airport.enabled and s2.airport.state(s.game_min).pos.is_equal_approx(A.state(s.game_min).pos) and is_equal_approx(s2.airport.state(s.game_min).h, A.state(s.game_min).h), "Speichern/Laden setzt den Flug nahtlos am selben Punkt fort")
 	ok(identity_ok(s), "Geld erhalten")
+
+
+## Etappe E: Gebaeudestufen. Ausbau nur mit Nachfrage, Geld, Personal, Strom; Bautrupp baut, Stufe gilt nach Fertigstellung.
+func test_business_stages() -> void:
+	var s := coast_sim()
+	var C := s.construction
+	var G: BusinessStages = s.stages
+	for it in Trader.MATERIALS:
+		s.stock.add(it, 400, "T0", s.trader.bauhof, "Testbestand", s.game_min)
+	s.companies[0].ledger.inject(200000.0)
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "baeckerei", "standort": "markt"})
+	ok(r.ok, "Bäckerei gegründet (%s)" % r.get("msg", ""))
+	if not r.ok:
+		return
+	var b: Dictionary = s.biz.get_b(str(r.ref))
+	ok(BusinessStages.stage_of(b) == 1 and BusinessStages.stage_name(b) == "Backstube" and G.spec_of(b) == Businesses.branches().baeckerei, "Start als Backstube, Stufe 1 ändert nichts")
+	var ob: Dictionary = G.obs(b)
+	ok(ob.has("ausbau") and not bool(ob.ausbau.moeglich) and ob.ausbau.fehlt.any(func(x): return str(x).begins_with("Nachfrage")) and ob.ausbau.fehlt.any(func(x): return str(x).begins_with("zu wenig Personal")), "ohne Nachfrage und Personal kein Ausbau (%s)" % str(ob.get("ausbau", {}).get("fehlt", [])))
+	r = s.executor.execute(0, {"action": "upgrade_business", "business_id": b.id})
+	ok(not r.ok and str(r.msg).contains("Nachfrage"), "Aktion nennt die fehlende Voraussetzung")
+	# Nachfrage: Kundschaft geht leer aus
+	b["counter"] = true
+	b["counter_customers"] = 40
+	b["counter_lost"] = 20
+	for i in 8:
+		G.on_day(0)
+	ok(float(b.demand_avg) > BusinessStages.DEMAND_SHOP, "leer ausgegangene Kundschaft erzeugt Nachfrage (%.2f)" % float(b.demand_avg))
+	var staff: Array = s.personnel.employed(0)
+	while staff.size() < 3:
+		s.personnel.hire(0, s.personnel.spawn_available("driver"))
+		staff = s.personnel.employed(0)
+	for w in staff.slice(0, 3):
+		s.biz.assign(0, w.id, b.id)
+	s.grid.capacity = 10.0
+	s.grid.last["bedarf"] = 10.0
+	ok(G.check(b).gruende.any(func(x): return str(x).begins_with("Stromnetz")), "volles Stromnetz verhindert den Ausbau")
+	s.grid.capacity = 100000.0
+	var ck: Dictionary = G.check(b)
+	ok(bool(ck.moeglich), "alle Voraussetzungen erfüllt (%s)" % str(ck.gruende))
+	var cash0: float = s.companies[0].ledger.cash
+	r = s.executor.execute(0, {"action": "upgrade_business", "business_id": b.id})
+	ok(r.ok and is_equal_approx(s.companies[0].ledger.cash, cash0 - float(ck.kosten)), "Ausbau beauftragt und bezahlt (%s)" % r.get("msg", ""))
+	var w: Dictionary = C.works.get(str(r.get("ref", "")), {})
+	ok(not w.is_empty() and w.kind == "ausbau" and not C.building_under_construction(int(b.site)) and b.status == "aktiv", "Gebäude bleibt sichtbar und in Betrieb, Bautrupp-Auftrag läuft")
+	ok(BusinessStages.stage_of(b) == 1 and not bool(G.check(b).moeglich), "Stufe gilt erst nach Fertigstellung, kein zweiter Ausbau")
+	var d := GameCalendar.day_of(s.game_min)
+	for k in 60:
+		d += 1
+		s.game_min = GameCalendar.day_start(d)
+		C.on_day(d)
+		if w.status == "fertig":
+			break
+	ok(w.status == "fertig" and bool(w.crew_loaded) and BusinessStages.stage_of(b) == 2 and BusinessStages.stage_name(b) == "Bäckerei mit Café", "Bautrupp fertig: Bäckerei mit Café")
+	var base: Dictionary = Businesses.branches().baeckerei
+	ok(int(G.spec_of(b).rezept.chargen_je_person_tag) > int(base.rezept.chargen_je_person_tag) and BusinessStages.customer_factor(b) > 1.0 and float(b.energy_kw) > float(base.strom_kw), "Stufe 2: mehr Chargen, mehr Kundschaft, mehr Strom")
+	var s2 := Simulation.from_dict(s.to_dict())
+	ok(BusinessStages.stage_of(s2.biz.get_b(b.id)) == 2 and int(s2.stages.stats.ausbauten) == 1, "Speichern/Laden behält die Stufe")
+	# Restaurant: Sitzplaetze begrenzen die Gaeste je Tag
+	var rr: Dictionary = s.executor.execute(1, {"action": "found_business", "branche": "restaurant"})
+	if rr.ok:
+		var rb: Dictionary = s.biz.get_b(str(rr.ref))
+		rb["counter"] = true
+		var ct: Array = s.retail.counters().filter(func(x): return x.id == rb.id)
+		ok(not ct.is_empty() and int(ct[0].seats) == 40, "Gasthaus hat 40 Plätze")
+	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+## Etappe E: Hafenstufen. Buergermeister schreibt den Ausbau aus, Baufirma baut mit Material aus dem Stadtlager, danach mehr Ladung je Schiff.
+func test_harbor_expansion() -> void:
+	var s := coast_sim()
+	var H: Harbor = s.harbor
+	ok(H.stage == 1 and H.capacity() == Harbor.CAPACITY and H.summary().ausbau.ziel == "Kaimauer mit Kran", "Start: Holzanleger, nächste Stufe Kaimauer mit Kran")
+	H.ship_in("stock", "", "saatgut", 3 * Harbor.CAPACITY * int(Production.art("saatgut").get("je_ladeeinheit", 1)))
+	var ind: Dictionary = s.mayor.indicators()
+	ok(float(ind.hafen.rueckstau_schiffsladungen) > 1.0, "Rückstau in Schiffsladungen sichtbar (%.1f)" % float(ind.hafen.rueckstau_schiffsladungen))
+	var dec: Dictionary = MayorBrain.decide(ind)
+	ok(dec.actions.any(func(a): return a.action == "expand_harbor"), "Regel-Bürgermeister baut den Hafen bei Rückstau aus")
+	var res: Dictionary = s.mayor.execute({"action": "expand_harbor", "reason": "Test"})
+	ok(res.ok and H.expansion_running(), "Hafenausbau ausgeschrieben (%s)" % res.get("msg", ""))
+	ok(not s.mayor.execute({"action": "expand_harbor", "reason": "Test"}).ok, "kein zweiter Ausbau gleichzeitig")
+	var pid := str(res.get("ref", ""))
+	_stock_project(s, pid)
+	s.city_depot.reserve_for_project(pid, s.mayor.projects[pid].material)
+	var d := GameCalendar.day_of(s.game_min)
+	for k in 90:
+		_works_day(s, d + 1 + k)
+		if s.mayor.projects[pid].status == "fertig":
+			break
+	ok(s.mayor.projects[pid].status == "fertig" and H.stage == 2 and H.capacity() == 400, "Baufirma fertig: Kaimauer mit Kran, 400 Ladeeinheiten je Schiff (Stufe %d)" % H.stage)
+	H.manifest.clear()
+	for i in 2:
+		H.ship_in("stock", "", "saatgut", 400 * int(Production.art("saatgut").get("je_ladeeinheit", 1)))
+	H._arrive(d + 100)
+	ok(int(H.ship.geloescht.get("saatgut", 0)) == 400 * int(Production.art("saatgut").get("je_ladeeinheit", 1)), "Schiff löscht jetzt 400 Ladeeinheiten")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.harbor.stage == 2, "Speichern/Laden behält die Hafenstufe")
+	ok(identity_ok(s), "Geld und Waren erhalten")
