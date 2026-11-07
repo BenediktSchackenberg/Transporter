@@ -4,6 +4,18 @@ Eingegangen am 07.11.2026 (Benedikt): „im Anschluss ohne Rückfragen selbstän
 Auftrag: `unternehmer` @ `d2bca42`; tatsächliche Arbeitsbasis: `unternehmer` @ `14a6912` (enthält zusätzlich Bergwerk-Geschichte,
 Gebäudestufen und Küstenort Etappe E). Arbeit auf Branch `region` (Worktree `PTR_e`).
 
+## Eckregionen für neue Partien (Generator 3)
+
+Die Minikarte ist geografisch nordausgerichtet: `x` wächst nach Osten (rechts), `y` nach Süden (unten). Die isometrische Spielansicht
+ändert diese Zuordnung nicht. Vier Startspieler erhalten je einen Ort in Nordwest, Nordost, Südwest und Südost. Bei zwei Spielern werden
+seedabhängig NW/SO oder NO/SW gewählt; bei drei bleibt seedabhängig eine Ecke frei. Innerhalb jeder Ecke variieren die Küstenlage und
+Nord-/Südposition mit dem Seed. Die gemeinsame Landmasse liegt zwischen einer West- und einer Ostküste. Die Orte behalten Hafen,
+Flughafen, Rathaus, Bauhof und je ein Startgrundstück; einfache Straßen verbinden sie über Land. Der Start enthält keine Autobahn.
+
+`CornerRegionGenerator` schreibt `gen_params.generator = 3`. `Simulation.from_dict` verwendet für alte Regionsspielstände mit
+Generatorversion 2 weiterhin `RegionGenerator`. Damit werden die alten Orte beim Laden nicht an die neuen Eckpositionen verschoben.
+Die bisherige `region`-Dokumentation beschreibt im Folgenden auch den historischen Generator 2.
+
 ## Wortlaut (gekürzt auf die verbindlichen Anforderungen, Abschnittsnummern wie im Auftrag)
 
 1. **Ziel:** Region mit mehreren eigenständigen Städten auf einer Karte. Neue Partie: Städte = Startspieler (2–4), je Stadt genau ein

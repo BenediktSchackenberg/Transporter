@@ -10,6 +10,7 @@ signal day_changed(day: int)       # absoluter Spieltag (0 = erster)
 signal month_changed(month: int)
 
 var city: CityData
+var region_generator_version := 3 # alte Regionsspielstaende behalten ihre bisherige Kartenlage
 var nav := NavGrid.new()
 var rng := RandomNumberGenerator.new()
 var market := Market.new()
@@ -130,7 +131,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	if world_mode == "region":
 		if region_town_count <= 0:
 			region_town_count = clampi(players.size(), 1, 4)
-		city = RegionGenerator.new(region_town_count).generate(seed_value, map_size, reserve)
+		city = (RegionGenerator.new(region_town_count) if region_generator_version <= 2 else CornerRegionGenerator.new(region_town_count)).generate(seed_value, map_size, reserve)
 	else:
 		city = (CoastGenerator.new() if world_mode == "kueste" else CityGenerator.new()).generate(seed_value, map_size, reserve)
 	if world_mode in ["kueste", "region"] and population_target <= 0:
@@ -1343,6 +1344,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 			"color": Color.html(cd.color), "avatar_style": cd.avatar_style, "personality": cd.personality})
 	s.world_mode = str(d.get("world", "stadt"))
 	s.region_town_count = int(d.get("region", {}).get("orte", 0))
+	s.region_generator_version = int(d.get("region", {}).get("generator", {}).get("generator", 2))
 	s.population_target = int(d.get("population_target", 0))
 	s.setup(int(d.seed), players, int(d.map_size), 1.0, float(d.get("reserve", 0.0)))   # alte Staende: Karte ohne Reserve
 	# Ausgangszustand durch gespeicherten Zustand ersetzen

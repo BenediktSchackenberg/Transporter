@@ -7883,6 +7883,12 @@ func test_region_world() -> void:
 		ok(T.count() == n and T.is_region() and s.companies.size() == n, "%d Startspieler -> %d Städte, %d Unternehmen" % [n, T.count(), s.companies.size()])
 		var names: Array = T.list.map(func(t): return t.name)
 		ok(names.all(func(x): return names.count(x) == 1 and str(x) != ""), "eindeutige Namen %s" % str(names))
+		var corners: Array = s.city.towns.map(func(t): return str(t.get("ecke", "")))
+		ok(corners.size() == n and corners.all(func(x): return x in CornerRegionGenerator.CORNERS and corners.count(x) == 1), "je Startstadt eine eigene Eckregion: %s" % str(corners))
+		if n == 2:
+			ok(corners == ["NW", "SO"] or corners == ["NO", "SW"], "zwei Orte liegen in Gegenueberecken")
+		if n == 4:
+			ok(corners == CornerRegionGenerator.CORNERS, "vier Orte liegen NW, NO, SW und SO")
 		var homes: Array = s.companies.map(func(c): return c.home_town)
 		ok(homes == range(n), "je Stadt genau ein Startunternehmer (Heimat %s)" % str(homes))
 		for k in n:
@@ -7896,11 +7902,11 @@ func test_region_world() -> void:
 				"%s: %d Startgebäude, Rathaus/Bauhof/Hafen/Flughafen vorhanden und erreichbar" % [T.name_of(k), counted])
 		ok(s.city.buildings.all(func(b): return not (b.type == "plot" and int(b.get("parent", -1)) < 0) or s.companies.any(func(c): return c.depots[0] == int(b.id))), "keine versteckten Startfirmen-Grundstücke")
 		ok(identity_ok(s), "Geld und Waren erhalten (%d Städte)" % n)
-	var a := RegionGenerator.new(4)
+	var a := CornerRegionGenerator.new(4)
 	var ca: CityData = a.generate(77, 512)
-	var b := RegionGenerator.new(4)
+	var b := CornerRegionGenerator.new(4)
 	var cb: CityData = b.generate(77, 512)
-	var c := RegionGenerator.new(4)
+	var c := CornerRegionGenerator.new(4)
 	var cc: CityData = c.generate(78, 512)
 	ok(ca.towns.map(func(t): return [t.name, t.center]) == cb.towns.map(func(t): return [t.name, t.center]) and ca.buildings.size() == cb.buildings.size(), "gleicher Seed reproduziert die Region")
 	ok(ca.towns.map(func(t): return t.center) != cc.towns.map(func(t): return t.center), "anderer Seed, andere Lage")
@@ -7987,6 +7993,14 @@ func test_region_mayors_and_save() -> void:
 	var old := coast_sim()
 	var o2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(old.to_dict())))
 	ok(o2.towns.count() == 1 and not o2.towns.is_region() and o2.towns.mayor(0) == o2.mayor and o2.companies.size() == 4 and identity_ok(o2), "alter Einzelstadt-Stand lädt als Region mit einer Stadt, alle Unternehmen bleiben dort")
+	var legacy := Simulation.new()
+	legacy.world_mode = "region"
+	legacy.region_town_count = 2
+	legacy.region_generator_version = 2
+	legacy.setup(4242, players(2), 512)
+	var legacy_centers: Array = legacy.city.towns.map(func(t): return t.center)
+	var restored := Simulation.from_dict(JSON.parse_string(JSON.stringify(legacy.to_dict())))
+	ok(restored.region_generator_version == 2 and restored.city.towns.map(func(t): return t.center) == legacy_centers and identity_ok(restored), "alte Regionskarte bleibt beim Laden an ihren bisherigen Positionen")
 
 
 ## Abnahme 8: Gemeinschaftsprojekt (neue Verbindungsstrasse) einmal vergeben, aus Anteilen finanziert, erst nach Abnahme befahrbar;
