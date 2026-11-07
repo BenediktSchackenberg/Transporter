@@ -44,6 +44,8 @@ func travel_plan(person: Dictionary, hour: float = -1.0) -> Dictionary:
 	if _travel_revision != sim.city.buildings.size():
 		_travel_places.clear()
 		_travel_revision = sim.city.buildings.size()
+	if sim.towns.airports.any(func(ap): return str(ap.away_of(person)) != ""):
+		return {}   # Auslandsreise (Flughafen E3): unterwegs auf der Welt, kein Weg auf der Karte
 	if hour < 0.0:
 		hour = Catalog.hour_of_day(sim.game_min)
 	var unit: Dictionary = sim.housing.units.get(str(person.get("home", "")), {})

@@ -28,6 +28,7 @@ var fleet_nodes := {}                 # CityFleet: Bautrupps und Umzugswagen (ID
 var avatar_nodes := {}
 var _people_timer := 0.0
 var _people_cache: Array = []
+var _ped_cursor := 0                     # Fortschritt durch die Bevoelkerung beim Erzeugen der Fussgaenger
 var peds: Array = []                    # [Mover, Node2D, Wartezeit]
 var bubble_nodes := {}
 var headlights: Array = []              # [Sprite2D Licht, Node2D Fahrzeug]
@@ -270,26 +271,32 @@ func _make_avatar(cid: int) -> void:
 
 
 func _spawn_ped() -> void:
-	if sim.citizens.people.is_empty() or peds.size() >= sim.citizens.people.size():
+	var total := sim.citizens.people.size()
+	if total == 0 or peds.size() >= total:
 		return
-	var person: Dictionary = sim.citizens.people[peds.size()]
-	var plan: Dictionary = sim.citizens.travel_plan(person)
-	if plan.is_empty():
+	var tried := 0
+	while _ped_cursor < total and tried < total:
+		var person: Dictionary = sim.citizens.people[_ped_cursor]
+		_ped_cursor += 1
+		tried += 1
+		var plan: Dictionary = sim.citizens.travel_plan(person)
+		if plan.is_empty():
+			continue   # z. B. Auslandsreise: nicht auf der Karte – naechste Person (Cursor bleibt fortgeschritten)
+		var unit: Dictionary = sim.housing.units.get(str(person.get("home", "")), {})
+		var cell: Vector2i = sim.city.building(int(unit.building)).walk if unit.has("building") else plan.cell
+		var m := Mover.new()
+		m.lane = 0.0
+		m.speed = 1.1
+		m.pos = sim.city.tile_center(cell)
+		var style := posmod(int(person.id), Catalog.AVATAR_COUNT)
+		var n := _make_figure(style, 1.0, SHIRTS[posmod(int(person.id), SHIRTS.size())])
+		n.set_meta("umbrella_user", int(person.id) % 2 == 0)
+		n.set_meta("citizen", person)
+		n.set_meta("purpose", "Zu Hause" if unit.has("building") else plan.purpose)
+		n.set_meta("destination", int(unit.get("building", plan.building)))
+		add_child(n)
+		peds.append([m, n, float(int(person.id) % 5)])
 		return
-	var unit: Dictionary = sim.housing.units.get(str(person.get("home", "")), {})
-	var cell: Vector2i = sim.city.building(int(unit.building)).walk if unit.has("building") else plan.cell
-	var m := Mover.new()
-	m.lane = 0.0
-	m.speed = 1.1
-	m.pos = sim.city.tile_center(cell)
-	var style := posmod(int(person.id), Catalog.AVATAR_COUNT)
-	var n := _make_figure(style, 1.0, SHIRTS[posmod(int(person.id), SHIRTS.size())])
-	n.set_meta("umbrella_user", int(person.id) % 2 == 0)
-	n.set_meta("citizen", person)
-	n.set_meta("purpose", "Zu Hause" if unit.has("building") else plan.purpose)
-	n.set_meta("destination", int(unit.get("building", plan.building)))
-	add_child(n)
-	peds.append([m, n, float(int(person.id) % 5)])
 
 
 func _make_worker(w: Worker) -> Node2D:

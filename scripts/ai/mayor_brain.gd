@@ -147,6 +147,10 @@ static func decide(ind: Dictionary) -> Dictionary:
 		miss.sort_custom(func(a, b): return int(a.entfernung) < int(b.entfernung))
 		actions.append({"action": "propose_regional_project", "partner": int(miss[0].id), "anteil_prozent": 50,
 			"reason": "Keine direkte Straße nach %s; eine Verbindung verkürzt Wege für Lieferungen und Pendler." % miss[0].name})
+	# 1h1+) Flughafen: Luftfracht staut sich auf mehr als einen Flug -> naechste Stufe, wenn die Kasse das 1,5-fache traegt
+	var af: Dictionary = ind.get("flughafen", {})
+	if actions.size() < MAX_ACTIONS and not af.is_empty() and not bool(af.ausbau_laeuft) and not af.ausbau.is_empty() and float(af.rueckstau_fluege) > 1.0 and float(ind.haushalt.verfuegbar) > float(af.ausbau.kosten) * 1.5:
+		actions.append({"action": "expand_airport", "reason": "Luftfracht für %.1f Flüge wartet am Flughafen; %s bringt %d statt %d Einheiten je Flug." % [float(af.rueckstau_fluege), af.ausbau.ziel, int(af.ausbau.fracht), int(af.fracht_je_flug)]})
 	# 1h1a) Bergbau: Abbauantraege genehmigen (Arbeitsplaetze, Export, Abgabe); Abgabe nach Partei
 	var mb: Dictionary = ind.get("bergbau", {})
 	for ap in mb.get("abbauantraege", []):

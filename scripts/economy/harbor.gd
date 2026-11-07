@@ -106,27 +106,40 @@ func _arrive(day: int) -> void:
 	ship = {"id": "SH%d" % _next, "name": SHIP_NAMES[(_next - 1) % SHIP_NAMES.size()], "day": day, "status": "am_kai", "geloescht": {}, "geladen": {}}
 	_next += 1
 	stats.schiffe = int(stats.schiffe) + 1
-	# Loeschen: wartende Einfuhren in Reihenfolge des Eingangs, bis das Schiff voll ist. Uebergroesze Posten
-	# werden anteilig geloest – sonst wuerde ein Posten, der eine Ladung ueberragt, auf JEDEM Schiff als ganzes
-	# zurueckbleiben und nie ankommen (z. B. 560m Rohr fuer eine Erschliessung bei 240 Ladeeinheiten).
+	# Loeschen, in zwei Wegen: zuerst alle Posten, die ganz in die Ladung passen (in Reihenfolge des
+	# Eingangs), danach wird der Restplatz mit den uebergroessen Posten anteilig gefuellt. Ein einzelner
+	# uebergrosser Posten darf kleinere nicht verdraengen, und ein Posten, der eine Ladung ueberragt, wird
+	# auf JEDEM Schiff anteilig geloest (z. B. 560m Rohr fuer eine Erschliessung bei 240 Ladeeinheiten).
 	var room := capacity()
 	var rest: Array = []
 	for m in manifest:
+		if units_of(str(m.item), int(m.qty)) <= room:
+			room -= units_of(str(m.item), int(m.qty))
+			_unload(m)
+			ship.geloescht[m.item] = int(ship.geloescht.get(m.item, 0)) + int(m.qty)
+			stats.einheiten_ein = int(stats.einheiten_ein) + units_of(str(m.item), int(m.qty))
+		else:
+			rest.append(m)
+	for m in rest.duplicate():
+		if room <= 0:
+			break
 		var qty := int(m.qty)
 		var u := units_of(str(m.item), qty)
-		var fit := qty
-		if u > room:
-			fit = int(float(qty) * float(room) / float(u))
-			if fit <= 0:
-				rest.append(m)
-				continue
+		if u <= room:
+			room -= u
+			_unload(m)
+			ship.geloescht[m.item] = int(ship.geloescht.get(m.item, 0)) + qty
+			stats.einheiten_ein = int(stats.einheiten_ein) + u
+			rest.erase(m)
+			continue
+		var fit := int(float(qty) * float(room) / float(u))
+		if fit <= 0:
+			continue
 		room -= units_of(str(m.item), fit)
 		_unload(m, fit)
 		ship.geloescht[m.item] = int(ship.geloescht.get(m.item, 0)) + fit
 		stats.einheiten_ein = int(stats.einheiten_ein) + units_of(str(m.item), fit)
-		if fit < qty:
-			m.qty = qty - fit
-			rest.append(m)
+		m.qty = qty - fit
 	stats.zurueckgestellt = int(stats.zurueckgestellt) + rest.size()
 	manifest = rest
 	# Laden: Ausfuhrware vom Kai, bis das Schiff voll ist

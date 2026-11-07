@@ -1066,6 +1066,8 @@ func _finish_public(e: Dictionary) -> void:
 			sim.log_event("%s: neue Straße (%d Felder) zu %d Grundstücken fertig." % [sim.towns.name_of(M.town), prj.road_cells.size(), prj.parcels.size()], "good")
 	if prj.kind == "hafenausbau":
 		sim.towns.harbor(M.town).finish_expansion()
+	if prj.kind == "flughafenausbau":
+		sim.towns.airport(M.town).finish_expansion()
 	if prj.kind == "netzausbau":
 		sim.grid.finish_expansion(float(prj.get("kw", PowerGrid.EXPAND_KW)))
 	if prj.kind == "bruecke":

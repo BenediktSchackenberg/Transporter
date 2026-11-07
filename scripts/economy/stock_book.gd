@@ -73,6 +73,25 @@ func move_reserved(ref: String, to_owner: String, to_loc: int, reason: String, n
 	return move(r.item, int(r.qty), r.owner, int(r.loc), to_owner, to_loc, reason, now, to_state)
 
 
+## Bestehende Reservierung um eine weitere (bereits hinzugefuegte) Menge erhoehen – fuer Teilanlieferungen,
+## bei denen ein und derselbe Auftrag ueber mehrere Schiffe/Fluege ankommt. Die Ware muss als freier Bestand
+## am Standort liegen, sonst wird nur so viel zugebucht, wie verfuegbar ist.
+func reserve_more(ref: String, amount: int, owner: String, loc: int) -> bool:
+	var r: Dictionary = reservations.get(ref, {})
+	if r.is_empty() or amount <= 0:
+		return false
+	var n := mini(amount, maxi(0, qty(str(r.item), owner, loc) - reserved(str(r.item), owner, loc)))
+	if n <= 0:
+		return false
+	r.qty = int(r.qty) + n
+	return true
+
+
+## Bestimmt, ob fur diese Referenz schon eine Reservierung besteht (fuer Teilanlieferungen).
+func has_reservation(ref: String) -> bool:
+	return reservations.has(ref)
+
+
 ## Zustand eines Teils des Bestands aendern (z. B. Wareneingang pruefung -> ok). Gibt die geaenderte Menge zurueck.
 func set_state(item: String, amount: int, owner: String, loc: int, from_state: String, to_state: String) -> int:
 	var left := amount

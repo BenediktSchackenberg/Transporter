@@ -12,6 +12,7 @@ const OWNER := "P0"                  # Ort 0 (alte Spielstaende); allgemein owne
 const APPROVAL_LIMIT := 15000.0     # darueber entscheidet die Buergermeisterebene; darunter genehmigt die Verwaltung routinemaessig
 const AUTO_APPROVE_DAYS := 2        # ohne Entscheidung genehmigt die Verwaltung grosse Vorschlaege nicht von selbst (nur kritische nach 6 Tagen)
 const FALLBACK_DAYS := 3            # so lange wartet ein Transportauftrag auf ein Unternehmen
+const AIRFREIGHT_FACTOR := 1.25     # Luftfracht (Flughafen) kostet 25 % mehr als Schifffracht – nur die dringendste Ware (Kritikalitaet 3) faehrt die Luft, sonst der guenstigere Seeweg
 const MAX_REISSUE := 2
 const INSPECTION_DAYS := 1
 const RAMPS_START := 2              # Entladerampen am Wareneingang
@@ -80,6 +81,10 @@ func owner() -> String:
 
 func mayor() -> Mayor:
 	return sim.towns.mayor(town) if sim.towns != null and sim.towns.mayors.size() > 0 else sim.mayor
+
+
+func airport() -> Airport:
+	return sim.towns.airport(town) if sim.towns != null and sim.towns.airports.size() > 0 else sim.airport
 
 
 func harbor() -> Harbor:
@@ -203,7 +208,7 @@ func on_hand(item: String) -> int:
 func incoming(item: String) -> int:
 	var n := 0
 	for o in orders.values():
-		if o.item == item and o.status in ["bestellt", "transport", "unterwegs", "angeliefert"]:
+		if o.item == item and o.status in ["bestellt", "auf_see", "in_der_luft", "transport", "unterwegs", "angeliefert"]:
 			n += int(o.qty)
 	return n
 
@@ -327,6 +332,11 @@ func quote(item: String, qty: int, crit: int = 1) -> Array:
 	if Trader.MATERIALS.has(item) and sim.trader.stock_of(item) >= qty:
 		out.append({"supplier": "T0", "unit_price": sim.trader.price(item, qty), "lead": 0, "loc": sim.trader.bauhof, "name": "Bauhof (privater Großhandel)"})
 	out.append({"supplier": "X0", "unit_price": snappedf(cat_price * CityGoods.IMPORT_FACTOR, 0.01), "lead": int(it.lead) + CityGoods.IMPORT_LEAD, "loc": port, "name": "Import (Ausland)"})
+	# Luftfracht (Flughafen, nur Kuestenort): 30 % teurer, liefert ab naechster Landung – steht fuer
+	# kritische Ware oder eilige Auftraege zur Wahl; der Preisvorteil des Seewegs siegt, wenn es keine Eile hat.
+	if airport().enabled and (int(it.crit) >= 3 or crit >= 3):
+		out.append({"supplier": "X0", "via_air": true, "unit_price": snappedf(cat_price * CityGoods.IMPORT_FACTOR * AIRFREIGHT_FACTOR, 0.01),
+			"lead": 1, "loc": airport().cargo_building, "name": "Luftfracht (Flughafen)"})
 	for of in offers.values():
 		if of.item == item and int(of.left) >= qty and sim.stock.available(item, "C%d" % of.cid, int(of.loc)) >= qty:
 			out.append({"supplier": "C%d" % of.cid, "unit_price": float(of.price), "lead": int(of.lead), "loc": int(of.loc), "name": sim.company(int(of.cid)).company_name, "offer": of.id})
@@ -410,6 +420,8 @@ func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 	o.committed = cost
 	o["loc"] = int(best.loc)
 	o["offer"] = best.get("offer", "")
+	o["lead"] = int(best.lead)
+	o["via_air"] = bool(best.get("via_air", false))
 	o.due = _today() + int(best.lead) + 4
 	o["ordered"] = _today()
 	o.decided_by = by
@@ -478,7 +490,11 @@ func _advance_orders(day: int) -> void:
 		match o.status:
 			"bestellt":
 				if o.supplier == "X0":
-					if day >= int(o.get("ordered", o.day)) + int(CityGoods.get_item(o.item).lead) + CityGoods.IMPORT_LEAD and harbor().enabled:
+					if bool(o.get("via_air", false)) and airport().enabled:
+						if day >= int(o.get("ordered", o.day)) + maxi(1, int(o.get("lead", 1))) + 1:
+							o.status = "in_der_luft"   # wartet auf die naechste Landung (on_aircraft)
+							airport().cargo_in(str(o.id), str(o.item), int(o.qty))
+					elif day >= int(o.get("ordered", o.day)) + int(CityGoods.get_item(o.item).lead) + CityGoods.IMPORT_LEAD and harbor().enabled:
 						o.status = "auf_see"   # wartet auf das naechste Schiff (on_ship)
 						harbor().ship_in("depot", str(o.id), str(o.item), int(o.qty))
 					elif day >= int(o.get("ordered", o.day)) + int(CityGoods.get_item(o.item).lead) + CityGoods.IMPORT_LEAD:
@@ -493,12 +509,33 @@ func _advance_orders(day: int) -> void:
 
 
 ## Kuestenort: das Schiff hat die Importware im Hafenlager geloescht; ab hier wie bisher (Auftrag an Transporteure zum Stadtlager).
-func on_ship(order_id: String) -> void:
+## `fit` ist die mit DIESEM Schiff gelieferte (anteilige) Menge. Uebergroesse Posten brauchen mehrere Schiffe: die Ware
+## wird jeweils im Hafenlager abgesetzt und der offene Rest des Postens bleibt im Manifest. Der Transportauftrag zum
+## Stadtlager geht erst raus, wenn die gesamte Bestellmenge gelandet ist (der Ref reserviert pro Schiff den zugehoerigen Teil).
+func on_ship(order_id: String, fit: int = -1) -> void:
 	var o: Dictionary = orders.get(order_id, {})
 	if o.is_empty() or o.status != "auf_see":
 		return
-	sim.stock.add(o.item, int(o.qty), "X0", port, "Import Stadtlager (Schiff)")
-	sim.stock.reserve("order:" + str(o.id), o.item, int(o.qty), "X0", port)
+	var n := int(o.qty) if fit <= 0 else mini(fit, int(o.qty))
+	sim.stock.add(o.item, n, "X0", port, "Import Stadtlager (Schiff)")
+	var ref := "order:" + str(o.id)
+	if sim.stock.has_reservation(ref):
+		sim.stock.reserve_more(ref, n, "X0", port)      # zweites/naechstes Schiff: bestehende Reservierung ergaenzen
+	else:
+		sim.stock.reserve(ref, o.item, n, "X0", port)
+	o.aftership = int(o.get("aftership", 0)) + n
+	if int(o.aftership) >= int(o.qty):
+		o.status = "bestellt"
+		_issue_contract(o)
+
+
+## Kuestenort: das Flugzeug hat die Luftfracht im Frachtterminal abgesetzt (die Ware liegt bereits dort als X0);
+## ab hier wie beim Schiff (Auftrag an Transporteure zum Stadtlager).
+func on_aircraft(order_id: String) -> void:
+	var o: Dictionary = orders.get(order_id, {})
+	if o.is_empty() or o.status != "in_der_luft":
+		return
+	sim.stock.reserve("order:" + str(o.id), o.item, int(o.qty), "X0", airport().cargo_building)
 	o.status = "bestellt"
 	_issue_contract(o)
 
@@ -1141,7 +1178,7 @@ func from_dict(d: Dictionary) -> void:
 	port = int(d.get("port", port))
 	orders = d.get("orders", {})
 	for o in orders.values():
-		for k in ["qty", "crit", "reissued", "due", "day", "good", "bad", "loc", "arrived", "qty_received", "ordered"]:
+		for k in ["qty", "crit", "reissued", "due", "day", "good", "bad", "loc", "arrived", "qty_received", "ordered", "lead", "aftership"]:
 			if o.has(k):
 				o[k] = int(o[k])
 	offers = d.get("offers", {})
