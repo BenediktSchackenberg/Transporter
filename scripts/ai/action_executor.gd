@@ -91,6 +91,10 @@ const SCHEMA := {
 	"report_rival": {"params": {"target": "int", "reason": "string?"}, "desc": "Konkurrenten beim Bürgermeister anzeigen: das Amt prüft sofort (Steuer, Zahlungsrückstand, Zustand der Einrichtungen). Ohne Beanstandung zahlst DU Bußgeld und verlierst Ruf."},
 	"found_business": {"params": {"branche": "string", "reason": "string?", "standort": "string?", "modus": "string?", "rohstoff": "string?"},
 		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). standort: hauptsitz | markt (freie Parzelle nahe dem Großhandel, kurze Lieferwege) | G<n>; Feld: ohne Angabe das günstigste passende Grundstück. modus pachten|kaufen (Grundstück). Bergwerk: rohstoff eisenerz|kohle|kalkstein|rohmaterial, die beste freie Lagerstätte wird gekauft. Kosten (Gründung inkl. Ausstattung) siehe Liste. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
+	"explore_deposit": {"params": {"grundstueck": "string", "reason": "string?"},
+		"desc": "Probebohrung auf einer Lagerstätte (bergbau.<rohstoff>.schritt = erkunden): 6 000 EUR, 2 Tage; danach sind Menge und Qualität bekannt (vorher nur geschätzt). Erster Schritt zum Bergwerk."},
+	"request_mining": {"params": {"grundstueck": "string", "reason": "string?"},
+		"desc": "Abbaurecht für eine erkundete Lagerstätte beantragen (schritt = abbauantrag). Der Bürgermeister entscheidet und legt eine Förderabgabe von 3–15 % des Rohstoffwerts fest; danach Zufahrt (build_access) oder gleich found_business bergwerk."},
 	"build_access": {"params": {"grundstueck": "string", "reason": "string?"},
 		"desc": "Zufahrt (Schotterweg) zu einer abgelegenen Lagerstätte bauen lassen (produktion_markt.zufahrt_noetig: Grundstück, Kosten, Tage). Das ist ein Erschließungsantrag: der Bürgermeister entscheidet; genehmigt zahlst du den Beitrag für den Weg, die Stadt trägt eine nötige Brücke, Baufirmen bauen (eigene Baufirma kann den Auftrag bekommen). Danach ist ein Bergwerk dort möglich."},
 	"buy_property": {"params": {"gebaeude": "int", "reason": "string?"},
@@ -732,6 +736,10 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.rivalry.block_road(cid, _i(a.target))
 		"build_access":
 			return sim.access.request(cid, _s(a.grundstueck), str(a.get("reason", "")))
+		"explore_deposit":
+			return sim.mining.explore(cid, _s(a.grundstueck))
+		"request_mining":
+			return sim.mining.request(cid, _s(a.grundstueck), str(a.get("reason", "")))
 		"found_business":
 			return sim.biz.found(cid, _s(a.branche), _s(a.get("reason", "")), {"standort": _s(a.get("standort", a.get("grundstueck", ""))), "modus": _s(a.get("modus", "pachten")), "rohstoff": _s(a.get("rohstoff", ""))})
 		"set_business_price":

@@ -52,6 +52,8 @@ const SCHEMA := {
 		"desc": "Firma öffentlich verwarnen (nur wenn sie in den letzten 7 Tagen eskaliert hat, siehe obs.rivalitaet.verursacher): Ruf −2, für 10 Tage kostet jede weitere Eskalation zusätzlich Ruf."},
 	"build_bridge": {"params": {"grundstueck": "string", "bruecke": "string?", "vergabe": "string?", "firma": "int?", "reason": "string"},
 		"desc": "Die Stadt ausbauen: städtisches Grundstück jenseits von Fluss oder See erschließen (obs.erschliessung.vorschlaege), Weg und Brücke ganz aus der Stadtkasse. bruecke holz | stein | stahlbeton (muss Spannweite und Last schaffen, siehe brueckenarten; Standard die günstigste passende). vergabe ausschreibung (Standard; ortsansässige Unternehmer-Baufirmen bevorzugt) | direkt mit firma = Firmen-ID einer Unternehmer-Baufirma (obs.erschliessung.baufirmen), damit die Firma den Auftrag bekommt. Bis zur Abnahme gesperrt."},
+	"decide_mining": {"params": {"grundstueck": "string", "decision": "string", "abgabe_prozent": "number?", "reason": "string"},
+		"desc": "Abbauantrag eines Unternehmers entscheiden (obs.bergbau.abbauantraege): decision genehmigen | ablehnen. abgabe_prozent 3–15 = Förderabgabe vom Rohstoffwert an die Stadtkasse (Standard 8); höher bringt mehr Steuern, zu hoch macht den Abbau unrentabel. Bergwerke schaffen Arbeitsplätze und Exporte über den Hafen. Ohne Entscheidung genehmigt das Bauamt nach 3 Tagen mit 8 %."},
 	"decide_access": {"params": {"antrag": "string", "decision": "string", "bruecke": "string?", "vergabe": "string?", "firma": "int?", "reason": "string"},
 		"desc": "Erschließungsantrag eines Unternehmers entscheiden (obs.erschliessung.antraege: Zufahrt zu einer Lagerstätte, ggf. mit Brücke). decision genehmigen | ablehnen. Genehmigt zahlt die Firma ihren Beitrag für den Weg, die Stadt trägt die Brücke(n) (anteil_stadt). Du bestimmst, wie gebaut wird: bruecke holz | stein | stahlbeton (muss Spannweite und Last schaffen) und vergabe ausschreibung | direkt (firma = Firmen-ID einer Unternehmer-Baufirma). Ohne Entscheidung entscheidet das Bauamt nach 3 Tagen."},
 	"decide_application": {"params": {"application_id": "string", "decision": "string", "reason": "string", "conditions": "array?"},
@@ -127,7 +129,28 @@ func rent_index() -> float:
 
 
 func available_budget() -> float:
-	return maxf(0.0, float(sim.economy.accounts.P0) - RESERVE_CASH - commitments)
+	return maxf(0.0, float(sim.economy.accounts.P0) - reserve_cash() - commitments)
+
+
+## Mindestreserve nach Ortsgroesse: 20 000 EUR + 80 EUR je Einwohner, hoechstens RESERVE_CASH (die grosse Stadt bleibt bei 100 000).
+func reserve_cash() -> float:
+	return minf(RESERVE_CASH, 20000.0 + 80.0 * float(sim.citizens.population()))
+
+
+## Landeszuweisung (Strukturfoerderung) fuer kleine Orte: monatlich, faellt mit wachsender Einwohnerzahl weg (ab GRANT_UNTIL).
+const GRANT_BASE := 14000.0
+const GRANT_UNTIL := 500
+var grants_total := 0.0
+var grant_last := 0.0
+func _state_grant() -> void:
+	var pop: int = sim.citizens.population()
+	grant_last = 0.0
+	if pop >= GRANT_UNTIL:
+		return
+	grant_last = snappedf(GRANT_BASE * (1.0 - float(pop) / float(GRANT_UNTIL)), 10.0)
+	sim.economy.transfer("X0", "P0", grant_last)
+	grants_total += grant_last
+	sim.log_event("Landeszuweisung für %s: %s (Strukturförderung kleiner Orte, %d Einwohner)." % [sim.city.town_name if sim.city.town_name != "" else "die Stadt", Catalog.money(grant_last), pop], "info")
 
 
 func indicators() -> Dictionary:
@@ -189,7 +212,8 @@ func indicators() -> Dictionary:
 			"anteil_voll_erschlossen": snappedf(float(served) / maxf(1.0, float(free_n)), 0.01)},
 		"haushalt": {"kasse": snappedf(float(sim.economy.accounts.P0), 1.0), "reserviert": snappedf(commitments, 1.0), "verfuegbar": snappedf(available_budget(), 1.0),
 			"steuern_gesamt": snappedf(sim.public_sector.tax_total + sim.public_sector.social_total + sim.public_sector.corporate_total, 1.0),
-			"defizit": float(sim.economy.accounts.P0) < RESERVE_CASH},
+			"defizit": float(sim.economy.accounts.P0) < reserve_cash(), "mindestreserve": int(reserve_cash()), "landeszuweisung_monat": int(grant_last),
+			"hinweis": "verfuegbar = Kasse - Mindestreserve - reserviert. Ist verfuegbar 0, scheitert jede Ausgabe: dann Grundstücke verkaufen (offer_parcels), Grundsteuer anpassen oder warten."},
 		"bauantraege": {"warteschlange": sim.permits.queue().size(), "zur_entscheidung": queue_ids, "zur_entscheidung_details": pending, "kapazitaet_je_tag": snappedf(sim.permits.capacity(), 0.1)},
 		"plaene": plans.values().map(func(p): return {"id": p.id, "name": p.name, "status": p.status, "grundstuecke": p.parcels.size(), "zone": p.zone,
 			"ids_zur_entwicklung": p.parcels.filter(func(id): return sim.parcels.parcel(id).get("state", "") == "zur_entwicklung").slice(0, MAX_CLUSTER)}),
@@ -208,8 +232,10 @@ func indicators() -> Dictionary:
 		"rivalitaet": sim.rivalry.mayor_summary(),
 		"strom": sim.grid.summary(),
 		"erschliessung": access_indicators(),
+		"bergbau": sim.mining.summary(),
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
+		"zuletzt_abgelehnt": decisions.slice(-12).filter(func(d): return not d.ok).map(func(d): return "%s: %s" % [d.action, d.msg.left(100)]),
 	}
 
 
@@ -416,6 +442,7 @@ func on_month(month: int) -> void:
 	pop_history.append(Z.population())
 	if pop_history.size() > 36:
 		pop_history.pop_front()
+	_state_grant()
 	var c := _counts()
 	growth_history.append({"monat": month, "wohnhaeuser": c[0], "geschaefte": c[1], "steuern": _taxes()})
 	if growth_history.size() > 36:
@@ -430,7 +457,7 @@ func _update_approval() -> void:
 	var target := 55.0
 	target += 20.0 * (Z.employment_rate() - Citizens.employment_target()) / 0.1
 	target -= 250.0 * float(waiting) / maxf(1.0, float(stock_units)) * 10.0 / 10.0
-	if float(sim.economy.accounts.P0) < RESERVE_CASH:
+	if float(sim.economy.accounts.P0) < reserve_cash():
 		target -= 10.0
 	target -= 2.0 * maxf(0.0, float(sim.permits.queue().size()) - 3.0)
 	target += 1.5 * float(plans.values().filter(func(p): return p.status == "beschlossen").size())
@@ -522,6 +549,12 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.grid.expand("Bürgermeister %s" % name)
 			"build_bridge":
 				res = sim.access.order_city(str(a.grundstueck), "Bürgermeister %s" % name, _build_choice(a))
+			"decide_mining":
+				var dm := str(a.get("decision", "")).to_lower()
+				if dm not in ["genehmigen", "ablehnen"]:
+					res = {"ok": false, "msg": "decision muss genehmigen oder ablehnen sein."}
+				else:
+					res = sim.mining.decide(str(a.grundstueck), dm == "genehmigen", float(a.get("abgabe_prozent", 8.0)) / 100.0, str(a.get("reason", "")), "Bürgermeister %s" % name)
 			"decide_access":
 				var dec := str(a.get("decision", "")).to_lower()
 				if dec not in ["genehmigen", "ablehnen"]:
@@ -827,7 +860,7 @@ func _today() -> int:
 # ------------------------------------------------------------------ Speichern
 func to_dict() -> Dictionary:
 	return {"name": name, "party": party, "term_start_day": term_start_day, "approval": approval, "stock_units": stock_units, "waiting": waiting, "plans": plans,
-		"projects": projects, "decisions": decisions, "notes": notes, "commitments": commitments, "elections": elections, "pop_history": pop_history, "growth_history": growth_history,
+		"projects": projects, "decisions": decisions, "notes": notes, "commitments": commitments, "elections": elections, "pop_history": pop_history, "grants_total": grants_total, "grant_last": grant_last, "growth_history": growth_history,
 		"next": [_next_plan, _next_project, _next_dec], "marketing": [marketing_boost, marketing_until], "arrival_acc": _arrival_acc}
 
 
@@ -847,6 +880,8 @@ func from_dict(d: Dictionary) -> void:
 	commitments = float(d.get("commitments", 0.0))
 	elections = d.get("elections", [])
 	pop_history = d.get("pop_history", pop_history)
+	grants_total = float(d.get("grants_total", 0.0))
+	grant_last = float(d.get("grant_last", 0.0))
 	growth_history = d.get("growth_history", [])
 	_arrival_acc = float(d.get("arrival_acc", 0.0))
 	var mk: Array = d.get("marketing", [0.0, -1])

@@ -122,7 +122,7 @@
     "haltbar_tage": 0,
     "basispreis": 9.0,
     "importpreis": 13.0,
-    "exportpreis": 6.0
+    "exportpreis": 11.0
   },
   "kohle": {
     "name": "Kohle",
@@ -132,7 +132,7 @@
     "haltbar_tage": 0,
     "basispreis": 12.0,
     "importpreis": 17.0,
-    "exportpreis": 8.0
+    "exportpreis": 14.0
   },
   "kalkstein": {
     "name": "Kalkstein",
@@ -142,7 +142,7 @@
     "haltbar_tage": 0,
     "basispreis": 3.0,
     "importpreis": 5.0,
-    "exportpreis": 2.0
+    "exportpreis": 4.0
   },
   "rohmaterial": {
     "name": "Rohmaterial (Kies, Sand)",
@@ -152,7 +152,7 @@
     "haltbar_tage": 0,
     "basispreis": 6.0,
     "importpreis": null,
-    "exportpreis": 4.0
+    "exportpreis": 7.0
   },
   "koks": {
     "name": "Koks",

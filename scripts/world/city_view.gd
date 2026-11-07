@@ -282,6 +282,8 @@ func refresh_wear() -> void:
 func add_building_sprite(b: Dictionary) -> void:
 	if b.type == "plot":
 		return   # Firmengrundstuecke zeichnet EstateView
+	if sim.construction.building_under_construction(int(b.id)):
+		return   # Betriebsbau laeuft: SiteView zeichnet die Baustelle, das Gebaeude erscheint bei Fertigstellung
 	var info: Dictionary = man.buildings.get(b.sprite, {})
 	if info.is_empty():
 		return

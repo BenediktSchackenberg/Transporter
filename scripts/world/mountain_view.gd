@@ -21,6 +21,7 @@ var sim: Simulation
 var cv
 var _nodes := {}          # Parzelle -> MountainNode
 var _regions: Array = []  # Bergmassive aus dem Hoehenfeld der Karte (Kuestenort): statische Gelaendeknoten
+var relief := PackedFloat32Array()   # Darstellungshoehe je Zelle (geglaettet, mit Graten und Gipfeln); die Spiellogik nutzt weiter city.height
 var _clock := 0.0
 var _t := 0.0
 
@@ -45,6 +46,7 @@ func _build_regions() -> void:
 	var H: PackedByteArray = sim.city.height
 	if H.is_empty():
 		return
+	_build_relief()
 	var tiles := {}
 	for i in H.size():
 		if H[i] == 0:
@@ -53,13 +55,80 @@ func _build_regions() -> void:
 		var key := Vector2i(c.x / 24, c.y / 24)
 		if not tiles.has(key):
 			tiles[key] = {}
-		tiles[key][c] = float(H[i])
+		tiles[key][c] = relief[i]
 	for key in tiles:
 		var n := RegionNode.new()
 		n.view = self
 		n.setup_region(tiles[key], "massiv_%d_%d" % [key.x, key.y])
 		add_child(n)
 		_regions.append(n)
+
+
+## Schoene Berge (nur Darstellung): das Hoehenfeld des Generators wird geglaettet (kein Rauschen je Feld), mit einem Gratnetz
+## (Ridged-Noise) ueberlagert und auf bis zu 15 Stufen gestreckt. Der Bergfuss bleibt niedrig, Gipfel und Grate ragen heraus.
+func _build_relief() -> void:
+	var H: PackedByteArray = sim.city.height
+	var n: int = sim.city.size
+	relief.resize(H.size())
+	relief.fill(0.0)
+	# 1) Glaetten: Mittel ueber 5x5 (zwei Durchgaenge mit Radius 2 als Kastenfilter, getrennt nach Zeilen und Spalten)
+	var a := PackedFloat32Array()
+	a.resize(H.size())
+	for i in H.size():
+		a[i] = float(H[i])
+	for pass_i in 2:
+		var b := PackedFloat32Array()
+		b.resize(a.size())
+		for y in n:
+			for x in n:
+				var i := y * n + x
+				if H[i] == 0:
+					continue
+				var sum := 0.0
+				var cnt := 0.0
+				for k in range(-2, 3):
+					var xx := clampi(x + k, 0, n - 1)
+					sum += a[y * n + xx]
+					cnt += 1.0
+				b[i] = sum / cnt
+		for y in n:
+			for x in n:
+				var i := y * n + x
+				if H[i] == 0:
+					continue
+				var sum := 0.0
+				var cnt := 0.0
+				for k in range(-2, 3):
+					var yy := clampi(y + k, 0, n - 1)
+					sum += b[yy * n + x]
+					cnt += 1.0
+				a[i] = sum / cnt
+	# 2) Grate und Strecken: hohe Lagen bekommen Grate, der Fuss bleibt sanft
+	var ridge := FastNoiseLite.new()
+	ridge.seed = sim.city.seed_value * 7 + 3
+	ridge.frequency = 0.03
+	ridge.fractal_type = FastNoiseLite.FRACTAL_RIDGED
+	ridge.fractal_octaves = 3
+	var top := 0.0
+	for i in H.size():
+		if H[i] > 0:
+			top = maxf(top, a[i])
+	for i in H.size():
+		if H[i] == 0:
+			continue
+		var x := i % n
+		var y := i / n
+		var k := clampf(a[i] / maxf(1.0, top), 0.0, 1.0)              # 0 am Fuss .. 1 am Gipfel
+		var crest := clampf(ridge.get_noise_2d(x, y) * 0.5 + 0.5, 0.0, 1.0)
+		var h := 1.0 + 14.0 * pow(k, 1.35) * (0.45 + 0.75 * pow(crest, 1.6))   # Grate hoch, dazwischen Kare und Taeler
+		relief[i] = clampf(round(h), 1.0, 15.0)
+
+
+## Darstellungshoehe einer Zelle (Relief), ausserhalb der Berge 0.
+func relief_at(c: Vector2i) -> float:
+	if relief.is_empty() or not sim.city.inside(c):
+		return 0.0
+	return relief[sim.city.idx(c)]
 
 
 ## Berggebiet (Hoehenfeld) unter dem Mauszeiger?
@@ -134,10 +203,9 @@ class RegionNode extends MountainNode:
 	func refresh() -> void:
 		pass
 
-	## Nachbarzellen ausserhalb der Kachel kennt dieser Knoten nicht: fuer saubere Flanken die Hoehe aus der Karte lesen.
+	## Nachbarzellen ausserhalb der Kachel kennt dieser Knoten nicht: fuer saubere Flanken die Reliefhoehe der Karte lesen.
 	func _nb(c: Vector2i) -> float:
-		var H: PackedByteArray = view.sim.city.height
-		return float(H[view.sim.city.idx(c)]) if view.sim.city.inside(c) else 0.0
+		return view.relief_at(c)
 
 
 class MountainNode extends Node2D:
@@ -260,20 +328,22 @@ class MountainNode extends Node2D:
 	func _nb(c: Vector2i) -> float:
 		return _level(c) if cells.has(c) else 0.0
 
-	## Farbe der Oberseite nach Hoehe mit weichen Uebergaengen: Wiese, Geroell, Fels, Schnee.
+	## Farbe der Oberseite nach Hoehenstufe mit weichen Uebergaengen: Bergwald, Almwiese, Geroell, Felsbaender, Schnee an den Gipfeln.
 	func _top_color(L: float, c: Vector2i) -> Color:
-		var j := (_rnd(c, 2) - 0.5) * 0.06
+		var j := (_rnd(c, 2) - 0.5) * 0.035
 		var col: Color
-		if L < 2.2:
-			col = MountainView.GRASS
-		elif L < 3.4:
-			col = MountainView.GRASS.lerp(Color("8f8a6a"), (L - 2.2) / 1.2)
+		if L < 3.5:
+			col = Color("4c7d3a")
 		elif L < 6.0:
-			col = Color("8f8a6a").lerp(MountainView.ROCK, (L - 3.4) / 2.6)
-		elif L < 7.6:
-			col = MountainView.ROCK.lerp(MountainView.ROCK_DARK, (L - 6.0) / 1.6)
+			col = Color("4c7d3a").lerp(Color("86a157"), (L - 3.5) / 2.5)        # Almwiese
+		elif L < 8.0:
+			col = Color("86a157").lerp(Color("9d927a"), (L - 6.0) / 2.0)        # Geroell
+		elif L < 11.0:
+			col = Color("9d927a").lerp(MountainView.ROCK, (L - 8.0) / 3.0)      # Fels
+		elif L < 13.0:
+			col = MountainView.ROCK.lerp(Color("b4b1ad"), (L - 11.0) / 2.0)
 		else:
-			col = MountainView.SNOW.lerp(Color("dfe8f2"), _rnd(c, 6) * 0.5)
+			col = MountainView.SNOW.lerp(Color("dfe8f2"), _rnd(c, 6) * 0.3)
 		return col.lightened(j) if j > 0.0 else col.darkened(-j)
 
 	func _draw_cell(c: Vector2i) -> void:
@@ -292,7 +362,7 @@ class MountainNode extends Node2D:
 			top = _top_color(L, c)
 			# Licht von Nordwest: Hang zur Sonne heller, abgewandt dunkler
 			var slope := (L - 0.5 * (_nb(c + Vector2i(-1, 0)) + _nb(c + Vector2i(0, -1))))
-			top = top.lightened(clampf(slope * 0.05, 0.0, 0.18)) if slope > 0.0 else top.darkened(clampf(-slope * 0.06, 0.0, 0.25))
+			top = top.lightened(clampf(slope * 0.09, 0.0, 0.26)) if slope > 0.0 else top.darkened(clampf(-slope * 0.1, 0.0, 0.32))
 		# Flanken nur, wo sie sichtbar sind (Nachbar davor niedriger), mit Gesteinsschichten
 		var lw := _nb(c + Vector2i(0, 1))
 		var le := _nb(c + Vector2i(1, 0))
@@ -305,7 +375,7 @@ class MountainNode extends Node2D:
 			draw_colored_polygon(PackedVector2Array([so + up, e + up, e + lo2, so + lo2]), rock.darkened(0.32))
 			_strata(so, e, le, L, rock.darkened(0.45))
 		draw_colored_polygon(PackedVector2Array([n + up, e + up, so + up, w + up]), top)
-		if L >= 7.6 and not pit.has(c):   # Schneekante an den Flanken
+		if L >= 13.0 and not pit.has(c):   # Schneekante an den Flanken
 			draw_colored_polygon(PackedVector2Array([w + up, so + up, so + up + Vector2(0, 7), w + up + Vector2(0, 5)]), Color("e6edf5"))
 			draw_colored_polygon(PackedVector2Array([so + up, e + up, e + up + Vector2(0, 5), so + up + Vector2(0, 7)]), Color("c9d6e4"))
 		draw_polyline(PackedVector2Array([w + up, n + up, e + up]), Color(1, 1, 1, 0.10), 1.0)   # Lichtkante
@@ -313,12 +383,12 @@ class MountainNode extends Node2D:
 			draw_line((n + w) * 0.5 + up, (e + so) * 0.5 + up, top.darkened(0.25), 1.5)
 			return
 		var mid := (n + e + so + w) * 0.25 + up
-		if L >= 3.4 and L < 7.6 and _rnd(c, 7) < 0.5:   # Geroellbrocken
+		if L >= 6.0 and L < 12.5 and _rnd(c, 7) < 0.35:   # Geroellbrocken
 			var bp := mid + Vector2((_rnd(c, 8) - 0.5) * 34.0, (_rnd(c, 9) - 0.5) * 12.0)
 			draw_colored_polygon(PackedVector2Array([bp + Vector2(-5, 0), bp + Vector2(-3, -5), bp + Vector2(3, -6), bp + Vector2(6, -1), bp + Vector2(1, 2)]), Color("9a9389"))
 			draw_colored_polygon(PackedVector2Array([bp + Vector2(1, 2), bp + Vector2(6, -1), bp + Vector2(3, -6)]), Color("6f685f"))
-		if L < 3.6:   # Bergwald am Fuss, dichter je niedriger
-			var trees := 2 if L < 2.2 else 1
+		if L < 6.0:   # Bergwald am Fuss, dichter je niedriger
+			var trees := 2 if L < 4.0 else 1
 			for k in trees:
 				if _rnd(c, 10 + k) > 0.75:
 					continue

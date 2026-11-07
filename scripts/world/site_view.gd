@@ -43,6 +43,23 @@ func update_view(delta: float) -> void:
 		if e.sig != sig:
 			e.sig = sig
 			_configure(e.node, pr)
+	# Betriebsbauten der Unternehmer (Construction.works): Baustelle auf dem Gebaeudeplatz, Trupp nur wenn er vor Ort ist
+	for w in sim.construction.works.values():
+		if w.status != "laufend":
+			continue
+		var key := "works:" + str(w.id)
+		seen[key] = true
+		var k := sim.construction.works_progress(w)
+		var on := sim.crews.on_site("cw", str(w.id))
+		var sig2 := "%d|%s" % [int(k * 10.0), str(on)]
+		if not _nodes.has(key):
+			var n2 := SiteNode.new()
+			add_child(n2)
+			_nodes[key] = {"node": n2, "sig": ""}
+		var e2: Dictionary = _nodes[key]
+		if e2.sig != sig2:
+			e2.sig = sig2
+			_configure_works(e2.node, w, k, on)
 	# Bautrupps der Strassenwartung (RoadCare): Absperrung um die Arbeitsstelle, Trupp mit Gerät
 	for j in sim.road_care.jobs.values():
 		if j.status != "laufend":
@@ -125,6 +142,28 @@ func _configure(n: SiteNode, pr: Dictionary) -> void:
 	n.blocked = not pr.blockers.is_empty()
 	n.crew = sim.construction.crew_of(pr)
 	n.seed_key = hash(pr.id)
+	n.queue_redraw()
+
+
+## Betriebsbau: Baustelle in der Groesse des kuenftigen Gebaeudes; Stufe und Hoehe nach Fortschritt, Mannschaft je Phase.
+func _configure_works(n: SiteNode, w: Dictionary, k: float, on_site: bool) -> void:
+	var b: Dictionary = sim.city.building(int(w.building))
+	var foot := Rect2(float(b.x) * 32.0, float(b.y) * 32.0, float(b.w) * 32.0, float(b.h) * 32.0)
+	var r := foot.grow(16.0)
+	n.position = Iso.to_screen(r.end)
+	n.parcel_rect = r
+	n.foot = foot
+	n.origin = r.end
+	n.state = 1 if k < 0.2 else (2 if k < 0.35 else (3 if k < 0.75 else 4))
+	n.height = (34.0 if w.kind == "betrieb" else 46.0) * clampf((k - 0.2) / 0.55, 0.0, 1.0)
+	n.blocked = str(w.waiting) != ""
+	var ph: String = ["erdarbeiten", "fundament", "rohbau", "dach", "innenausbau"][clampi(int(k * 5.0), 0, 4)]
+	var spec: Dictionary = Construction.CREW[ph]
+	var bd: Dictionary = sim.construction.builders.get(w.builder, {})
+	var col: Color = sim.company(int(bd.company)).color if bd.has("company") else Color("e07a2a")
+	n.crew = {} if not on_site else {"phase": ph, "role": spec.role, "foreman": 1, "workers": int(spec.work) + 1, "operators": int(spec.ops),
+		"gear": spec.gear.duplicate(), "working": true, "people": 2 + int(spec.work) + int(spec.ops), "builder": w.builder, "color": col}
+	n.seed_key = hash(w.id)
 	n.queue_redraw()
 
 

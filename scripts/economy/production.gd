@@ -70,6 +70,11 @@ func setup(simulation) -> void:
 ## grundstueck (Parzelle "G<n>", gleichbedeutend), modus ("pachten"|"kaufen"). Feld: guenstigste passende Parzelle. "markt": freie
 ## Parzelle mit Strassenzugang, die dem Lebensmittelgrosshandel am naechsten liegt (kurze Wege zu Kunden, aber hoehere Pacht).
 ## Ausstattung (Maschinen, Ofen, Traktor) ist eine Investition mit Abschreibung je Tag (Kostenstelle des Betriebs).
+## Neue Betriebsgebaeude baut ein Bautrupp (Construction.add_company_works); in Tests mit fertigen Betrieben abschaltbar.
+var instant_build := false
+const WORKS_SHARE := 0.4            # Anteil der Ausstattung, der als Bauauftrag an die Baufirma geht (Gesamtkosten unveraendert)
+
+
 func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dictionary:
 	var spec: Dictionary = Businesses.branches().get(branch, {})
 	var c = sim.company(cid)
@@ -87,7 +92,15 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 	var btype := str(spec.get("gebaeude", "farm"))
 	var bsize: Array = CityGenerator.TYPES[btype]
 	if spec.has("abbau"):
+		if sim.mining.enabled and not where.begins_with("G"):
+			var own_pid: String = sim.mining.permitted_for(cid, str(params.get("rohstoff", "")))   # Lagerstaette mit eigenem Abbaurecht zuerst
+			if own_pid != "":
+				where = own_pid
 		var dep := best_deposit(str(params.get("rohstoff", "")), where if where.begins_with("G") else "")
+		if not dep.is_empty():
+			var chk: Dictionary = sim.mining.check_found(cid, str(dep.grundstueck))
+			if not chk.ok:
+				return chk
 		if dep.is_empty():
 			var far := remote_deposit(str(params.get("rohstoff", "")))
 			if not far.is_empty():
@@ -134,12 +147,17 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 			c.land_book += land
 			parcel["book"] = land
 		sim.parcels.touch(parcel.id)
-	var b: Dictionary = sim.biz.create(cid, branch, site, "", "aktiv")   # nie Standard-Kostenstelle: Transport- und Hauptsitzbuchungen gehoeren nicht hierher
-	if equip > 0.0:
-		c.ledger.invest(equip, "S0")
-		c.property_book += equip
-		b["book"] = equip
+	var build := not instant_build and not parcel.is_empty()   # neues Gebaeude: erst bauen, dann betreiben
+	var b: Dictionary = sim.biz.create(cid, branch, site, "", "im_bau" if build else "aktiv")   # nie Standard-Kostenstelle: Transport- und Hauptsitzbuchungen gehoeren nicht hierher
+	var works_price := snappedf(maxf(equip, 8000.0) * WORKS_SHARE, 10.0) if build else 0.0
+	if equip > 0.0 or works_price > 0.0:
+		c.ledger.invest(maxf(0.0, equip - works_price), "S0")
+		if works_price > 0.0:
+			c.ledger.invest(works_price, "K0")   # Bauauftrag: Geld liegt bei den Baufirmen (K0) bis zur Fertigstellung
+		c.property_book += maxf(equip, works_price)
+		b["book"] = maxf(equip, works_price)
 		b["equip"] = equip
+		b["works_price"] = works_price
 	b["prices"] = {}
 	if not parcel.is_empty():
 		b["parcel"] = parcel.id
@@ -152,6 +170,10 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 		b["field"] = {"area": int(parcel.area), "phase": "brache", "day": 0, "growth": 0.0, "grow_days": 0, "cycles": 0, "last_yield": 0}
 	sim.biz.note(b.id, "Gegründet: %s" % (reason if reason != "" else spec.label), "Unternehmer")
 	sim.log_event("%s gründet %s%s." % [c.company_name, b.name, " auf Grundstück %s (%d Felder, %s)" % [parcel.id, int(parcel.area), "gekauft" if mode == "kaufen" else "gepachtet"] if not parcel.is_empty() else " am Hauptsitz"], "info", cid)
+	if build:
+		var w: Dictionary = sim.construction.add_company_works(cid, b, site, "bergwerk" if spec.has("abbau") else "betrieb", works_price)
+		sim.biz.note(b.id, "Bauauftrag %s an %s (%s, etwa %d Tage)" % [w.id, w.builder_name, Catalog.money(float(w.price)), int(w.days)], "Unternehmer")
+		return {"ok": true, "msg": "%s gegründet (%s); %s baut das Gebäude (Auftrag %s, etwa %d Tage). Danach Personal zuordnen (assign_staff)." % [b.name, b.id, w.builder_name, w.id, int(w.days)], "ref": b.id}
 	return {"ok": true, "msg": "%s gegründet (%s). Personal zuordnen (assign_staff), sonst ruht der Betrieb." % [b.name, b.id], "ref": b.id}
 
 
@@ -550,6 +572,7 @@ func _mine_day(b: Dictionary, spec: Dictionary) -> void:
 	sim.biz.unblock(b.id, "material")
 	mined[str(b.parcel)] = int(mined.get(str(b.parcel), 0)) + q
 	sim.stock.add(item, q, acct, site, "Förderung %s" % b.id, sim.game_min)
+	sim.mining.royalty(b, item, q)   # Foerderabgabe an die Stadtkasse
 	_count("produced", item, q)
 	_first_output(b)
 	b.today = q
@@ -891,7 +914,11 @@ func import_point() -> int:
 	return sim.harbor.building if sim.harbor.enabled else int(sim.retail.wholesale_building)   # Kuestenort: Hafenlager
 
 
+## Zahlungsfaehigkeit eines Kaeufers. Das Ausland (X0) ist eine Gegenbuchung ohne Kassenlimit: sein Saldo ist meist negativ,
+## eine Begrenzung darauf wuerde jede Ausfuhr mit 0 EUR bezahlen.
 func _cash(acct: String) -> float:
+	if acct == IMPORT:
+		return INF
 	if acct.begins_with("C"):
 		return sim.company(int(acct.substr(1))).ledger.cash
 	return maxf(0.0, float(sim.economy.accounts.get(acct, 0.0)))
@@ -1205,7 +1232,7 @@ func market_obs() -> Dictionary:
 			var far := remote_deposit(str(item))
 			if not far.is_empty():
 				access[item] = far
-	return {"bau_wartend": sim.crews.waiting().size(), "bautrupps_frei": sim.crews.crews.values().filter(func(t): return t.state == "frei").size(), "engpaesse": waiting, "zufahrt_noetig": access, "zufahrten_im_bau": sim.access.running(), "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "brauereien": n.brauerei, "moebelwerke": n.moebelwerk, "it_betriebe": n.it, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
+	return {"bergwerke_gesamt": sim.biz.items.values().filter(func(b): return b.branch == "bergwerk" and b.status != "geschlossen").size(), "bau_wartend": sim.crews.waiting().size(), "bautrupps_frei": sim.crews.crews.values().filter(func(t): return t.state == "frei").size(), "engpaesse": waiting, "zufahrt_noetig": access, "zufahrten_im_bau": sim.access.running(), "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "brauereien": n.brauerei, "moebelwerke": n.moebelwerk, "it_betriebe": n.it, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
 
 
 ## Marktchancen fuer die KI: wie viel einer Stufe wird importiert statt lokal erzeugt (Brot: Grosshandelsimport).
