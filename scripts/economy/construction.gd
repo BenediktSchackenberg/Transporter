@@ -1001,8 +1001,16 @@ func _public_day(day: int) -> void:
 			_finish_public(e)
 
 
+const AUTO_TENDER_DAYS := 3   # beschlossenes Projekt ohne Ausschreibung: danach schreibt das Bauamt selbst aus (langsame KI)
+
+
 func _tender_public(M: Mayor, day: int) -> void:
 	var D: CityDepot = sim.towns.depot(M.town)
+	for prj in M.projects.values():
+		if prj.status == "beschlossen" and day - int(prj.get("tender", {}).get("opened_day", prj.get("day", day))) >= AUTO_TENDER_DAYS:
+			prj.status = "ausgeschrieben"
+			prj.tender = {"opened_day": day, "bids": [], "by": "Bauamt"}
+			sim.log_event("Bauamt %s schreibt Projekt %s aus (%s), seit %d Tagen beschlossen." % [M.town_label(), prj.id, Catalog.money(float(prj.cost)), AUTO_TENDER_DAYS], "info")
 	for prj in M.projects.values():
 		if prj.status == "ausgeschrieben" and not public.has(prj.id) and day > int(prj.tender.get("opened_day", day)):
 			var days := 0
