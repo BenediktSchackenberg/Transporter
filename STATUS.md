@@ -7,6 +7,12 @@ DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen l
 
 **KI-Verbesserung 03.11.2026 (Messung, kein Codewechsel):** `tests/probe_expiry.gd` ordnet verfallene Marktaufträge nach Eigenschaften ein (Seed 21, 20 Tage: 151 von 831). Rund die Hälfte sind reine Stadtaufträge (Vergütung unter 100 EUR, für Spieler unsichtbar, unproblematisch). Der Rest sind wertvolle Fahrten (Ø 400–850 EUR), meist weit oder gekühlt, bei denen die Flotte fachlich passt, aber kein Fahrzeug frei ist. Versuch: Fahrzeugkauf auch bei bereiten Fahrzeugen, sobald mindestens zwei lohnende Aufträge kein bereites Fahrzeug finden (Bargeld über 4 × Puffer + 20 000). Ergebnis über Seeds 21–24, 30 Tage: Gewinnsumme aller vier Firmen −18 267 statt −4 136 EUR, also schlechter; **verworfen**. Mehr Fahrzeuge lösen den Engpass nicht (Fahrer, Hof, Marge). Nächste Hebel: Disposition über Tourenbündelung (zwei Aufträge je Fahrt), Risikospieler: Anschläge sind schon an Gewinn und Kasse gebunden (rund 1 500 EUR Sabotage und 2 000 EUR Bußgelder in 30 Tagen); sein Minus kommt aus geringem Umsatz (4 Fahrzeuge, wenige Aufträge), nicht aus den Anschlägen.
 
+## Region mehrerer Städte (Auftrag 17, 07.11.2026)
+
+- Neue Partien starten als **Region** (Weltart `region`, Standard im Startmenü): je Startspieler eine Küstenstadt mit eigenem Bürgermeister, Kasse, Zentrallager, Hafen und Flughafen, verbunden durch Schotterstraßen. Alte Spielstände laden als eine Stadt.
+- Umgesetzt: Stadtregister `Towns`, Regionsgenerator, Zuständigkeiten und Geldflüsse je Stadt, Gemeinschaftsprojekte, Binnenhandel, Flugverkehr (`AirNetwork`), Gründer (`Founders`), Pendeln/Umzug (`Commuting`), Stadtwahl (Taste O), Stadtfenster und Regionsübersicht. Etappen, Abnahmeszenarien und Grenzen: `docs/REGION.md`.
+- Tests `test_region_*` (13 Tests) grün; Probelauf `tests/probe_region.gd` (4 Städte, 60 Tage) mit Geld- und Warenidentität; Autotest und grafische Probeläufe ohne Fehler. Live-API mit mehreren Bürgermeistern nicht getestet.
+
 ## Küstenort Etappe E und Bergwerk (07.11.2026)
 
 - **Bergwerk-Geschichte** (`Mining`): Probebohrung → Abbauantrag (Bürgermeister, Förderabgabe 3–15 %) → Zufahrt → Bautrupp baut. **Fehler behoben:** Ausfuhren wurden mit 0 EUR bezahlt (negativer Saldo des Auslands X0 galt als Kassenlimit); Bergwerk jetzt +300 bis +500 EUR/Tag.

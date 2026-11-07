@@ -94,10 +94,10 @@ Gebäudestufen und Küstenort Etappe E). Arbeit auf Branch `region` (Worktree `P
 | 1 | Bestandsaufnahme, Architektur | fertig (07.11.2026, dieses Dokument) |
 | 2 | Stadtidentitäten, Konten/Eigentümer je Stadt, Zuständigkeitsauflösung, Migration | fertig (07.11.2026): `Towns` (`sim.towns`, `scripts/core/towns.gd`): je Ort Konto `P<k>` (Ort 0 `P0`), Grundeigentümer `stadt<k>` (Ort 0 `stadt`), Projekt-/Plan-IDs `T<k>P<n>`; Zuständigkeit `of_cell/of_building/of_parcel` (Verwaltungsgebiet = nächstes Ortszentrum, keine unzugeordnete Fläche); `Company.home_town`; Startbudget weiterer Orte 200 000 EUR als Landeszuweisung X0 → P<k> (verbucht). Migration: Spielstände ohne `region` laden als eine Stadt (Test). Spielstand: Abschnitt `region` mit Ortszahl, Generatorparametern, Städten (Ladeprüfung meldet Abweichung) und Zuständen der weiteren Verwaltungen |
 | 3 | Regionsgenerator 2–4 Orte, je ein Unternehmer, Startstraßennetz | fertig (07.11.2026): `RegionGenerator` (Weltart `region`, Standard im Startmenü und Autotest): Orte gleichmäßig entlang der Küste, Berge mit Abstand, Fluss mündet jenseits der Orte, je Ort ≤ 40 Gebäude mit Rathaus, Bauhof, Hafen, Flughafen, genau einem Startgrundstück; ein regionales Kraftwerk (Ort 0); Verbindungsstraßen per Wegsuche über Land (`CityData.region_roads`, Eigentum Region, Wartung nach Verwaltungsgebiet); Selbstprüfung mit bis zu 8 Versuchen (Seeds 7, 21, 99, 123, 4242: erster Versuch). Behoben dabei: Kaikante trennte die Hauptstraße, Flussquelle in Bergmulde |
-| 4 | Verwaltung je Stadt (Bürgermeister, Haushalt, Bauhof, Genehmigung, Projekte, Wahlen), Gemeinschaftsprojekte | teilweise (07.11.2026): je Ort eigene Instanz von `Mayor`, `CityDepot`, `Harbor`, `Airport`, eigener `MayorAgent` (eigener Kontext, Budget, Protokoll `buergermeister_<k>`, zeitversetzt; Antworten nach Amtswechsel verworfen); Wahlen je Ort; Kennzahlen nur eigenes Gebiet (Bauanträge, Zufahrten, Abbauanträge, Gebäude); Zuständigkeitsprüfung `Mayor.foreign_target` (Anträge, Grundstücke, Zufahrten, Verkehr); öffentliche Projekte aus Kasse und Lager der beauftragenden Stadt; Zufahrten/Brücken/Straßenwartung/Verkehrsmaßnahmen/Förderabgabe nach Verwaltungsgebiet. **Offen:** Gemeinschaftsprojekte mit Kostenanteilen; Rathauspersonal, Sozialleistungen, Steuern, Grundsteuer und Wohnungsmarkt laufen noch regional über Ort 0 (`Mayor.on_day`, `Housing`, `PublicSector`, `TownHall`) |
-| 5 | Binnenhandel zwischen Städten, Flughäfen und Flugverkehr | offen |
-| 6 | Expansion, zusätzliche Gründer, Pendeln, Umzüge | offen |
-| 7 | Oberfläche, Auswertungen, Grafikprüfung, Balance | offen |
+| 4 | Verwaltung je Stadt (Bürgermeister, Haushalt, Bauhof, Genehmigung, Projekte, Wahlen), Gemeinschaftsprojekte | fertig (07.11.2026): je Ort eigene Instanz von `Mayor`, `CityDepot`, `Harbor`, `Airport` und eigener `MayorAgent` (Kontext, Budget, Protokoll `buergermeister_<k>`, zeitversetzt, Antworten nach Amtswechsel verworfen, eine laufende Anfrage je Modellserver, Gesamtbudget `max_requests_total`); Wahlen je Ort; Kennzahlen nur eigenes Gebiet; Zuständigkeitsprüfung `Mayor.foreign_target`; öffentliche Projekte aus Kasse und Lager der beauftragenden Stadt; Zufahrten, Brücken, Straßenwartung, Verkehrsmaßnahmen, Förderabgabe, Grundsteuer, Pacht, Gebühren, Ladenmieten nach Lage; Steuern/Verwaltung/Bußgelder der Firmen an die Heimatstadt (`Ledger.public_acct`); öffentliche Löhne, Lohnsteuer, Grundsicherung, Konsumsteuer, Weiterbildung je Wohnstadt; Zuzug und Wohnungsmarkt je Stadt; Betriebsgenehmigung durch das Bauamt der Stadt der Lage. Gemeinschaftsprojekte `RegionalProjects` (`sim.regional`): Vorschlag mit Anteilen, Beschluss je Stadt mit Frist, eine Ausschreibung, Zahlung je Anteil bei Abnahme. Bewusst regional: ein Stromnetz mit Kraftwerk in Ort 0 (Tarif an P0, Ausbau bezahlt die anordnende Stadt), ein privater Großhandel (Bauhof T0), Rathauspersonal-Modell `TownHall`, Müllabfuhr, Grundsteuersatz |
+| 5 | Binnenhandel zwischen Städten, Flughäfen und Flugverkehr | fertig (07.11.2026): Lieferanten aller Städte konkurrieren in `Production.order` nach Preis + Fracht; Import/Ausfuhr nur über den Hafen der eigenen Stadt (`import_point(loc)`); Gründung in einer Zielstadt (`found_business stadt=`). `AirNetwork` (`sim.air`): Strecken zwischen Nachbarstädten, je Strecke ein Flugzeug, Zustände Abfertigung → Rollen → Flug → Landung → Entladen, Abflug gebündelt (ab 3 Reisenden, Fracht oder 100 min Wartezeit, Umsetzflüge), Luftfracht (Reservierung am Abgangsort, Zubringerzeit, 20 LE je Flug, Ware erst nach der Entladung im Frachtterminal der Zielstadt), Reisende mit Grund und Rückflug, Betreiber Regionalflug (Konto A0, Startkapital 60 000 EUR von außen, Ticket 55 EUR, Kerosin an X0, Abfertigung/Landegebühr an die Städte); AirView zeichnet die echten Flüge; Aktion `book_air_cargo` |
+| 6 | Expansion, zusätzliche Gründer, Pendeln, Umzüge | fertig (07.11.2026): Filialen in anderen Städten (Heimatstadt bleibt). `Founders` (`sim.founders`): Chancen je Stadt (fehlende Bäckerei/Restaurant, fehlende Vorstufe, Bauvorhaben ohne Bautrupp) über drei Prüfungen; Quote 3 aktive Unternehmen je Heimatstadt (`max_per_town`), Abklingzeit 30 Tage, Standort, Personal, Einlage 60 000 EUR aus dem Kapitalgeberpool I0; neue Company am Ende des Registers (append-only, keine ID-Wiederverwendung) mit Figur, Gedächtnis und eigenem Regel-Controller (auch nach dem Laden); Ablehnungen mit Grund. `Commuting` (`sim.commute`): Personal mit Wohnung in A und Arbeit in B zahlt Fahrtkosten, Motivation sinkt, nach 2 Monaten Umzug in eine bezahlbare freie Wohnung der Arbeitsstadt |
+| 7 | Oberfläche, Auswertungen, Grafikprüfung, Balance | fertig (07.11.2026): Taste O wählt Stadt (Kamera springt, Protokoll filtert), Stadt → Ort (Stadtfenster je Stadt), Stadt → Region (Städtevergleich mit offen gelegten Gewichten, Straßen, Gemeinschaftsprojekte, Flugnetz, Gründer, Pendeln, Binnen-/Außenhandel), Firmenansicht mit Heimatstadt und Betrieben je Stadt, Karten und Figuren für spätere Gründer. Grafische Probeläufe (Fenster-Build, Seed 21): Städte, Verbindungsstraße mit Verkehr, Flughafen mit Flugzeug, Bautrupps. Probelauf `tests/probe_region.gd` (4 Städte, 60 Tage, Regel-KI): Identität stets erfüllt, Schritt Ø 1,3–1,7 ms, ein Gründer (Bäckerei), 5 Geschäfte zwischen Städten, 69 Flüge mit 88 Reisenden, Flugbetreiber −6 300 EUR in 60 Tagen (Anlaufverlust), 16 Pendler |
 
 ## Abnahmeszenarien
 
@@ -106,20 +106,39 @@ Gebäudestufen und Küstenort Etappe E). Arbeit auf Branch `region` (Worktree `P
 | 1 | 2/3/4 Startspieler → so viele gültige Städte, eindeutige Namen, je ein Unternehmer | erfüllt (`test_region_world`) |
 | 2 | ≤ 40 Startgebäude je Stadt; Rathaus, Bauhof, Hafen, Flugplatz erreichbar; keine versteckten Startfirmen | erfüllt (`test_region_world`) |
 | 3 | Verschiedene Seeds gültig, gleicher Seed reproduziert; Berge unbebaut | erfüllt (`test_region_world`) |
-| 4 | Städte über Straßen verbunden, LKW-Lieferung zwischen Stadtzentren | Straßen erfüllt (`test_region_roads`); LKW-Lieferung offen (Etappe 5) |
+| 4 | Städte über Straßen verbunden, LKW-Lieferung zwischen Stadtzentren | erfüllt (`test_region_roads`; `test_region_trade`: LKW fährt die Mehllieferung von Stadt 0 nach Stadt 1) |
 | 5 | Zahlung aus A ändert B nicht; fremde Verwaltungsaktionen abgelehnt | erfüllt (`test_region_administration`) |
-| 6 | Firma aus A kauft Land in B, Antrag in B, Entscheidung von B, Betrieb läuft | offen |
-| 7 | Kommunaler Materialauftrag von der richtigen Stadt bezahlt und ins richtige Lager; Personal einmal entlohnt | teilweise: Projekt aus Kasse/Lager der Stadt (`test_region_administration`); Rathauspersonal noch regional |
-| 8 | Gemeinsames Projekt einmal vergeben, anteilig finanziert, erst nach Abnahme nutzbar; Folgen bei Ablehnung | offen |
-| 9 | Produkt zwischen zwei Städten verkauft/transportiert, X0 unverändert | offen |
-| 10 | Echter Flug A→B, Fracht erst nach Ankunft verfügbar, Kapazität und Kosten | offen |
-| 11 | Flug/Umzug erzeugt keine Personen, Bevölkerung und Vermögen erhalten | offen |
-| 12 | Nachfrage + Finanzierung → neue Company mit eigenem Controller | offen |
-| 13 | Gründung scheitert verständlich (Kapital, Standort, Quote); Heimatstadt vs. Filiale | offen |
-| 14 | Company-ID > Startslots funktioniert überall (Verträge, Personal, Kredite, UI, Speichern) | offen |
-| 15 | Insolvenz reguliert Forderungen; keine ID-Wiederverwendung | offen |
+| 6 | Firma aus A kauft Land in B, Antrag in B, Entscheidung von B, Betrieb läuft | erfüllt (`test_region_trade`: Betriebsgenehmigung des Bauamts von B, Kaufpreis an B) |
+| 7 | Kommunaler Materialauftrag von der richtigen Stadt bezahlt und ins richtige Lager; Personal einmal entlohnt | erfüllt (`test_region_administration`; `test_region_residents`: öffentliche Löhne genau einmal aus der Kasse der Wohnstadt) |
+| 8 | Gemeinsames Projekt einmal vergeben, anteilig finanziert, erst nach Abnahme nutzbar; Folgen bei Ablehnung | erfüllt (`test_region_joint_project`) |
+| 9 | Produkt zwischen zwei Städten verkauft/transportiert, X0 unverändert | erfüllt (`test_region_trade`) |
+| 10 | Echter Flug A→B, Fracht erst nach Ankunft verfügbar, Kapazität und Kosten | erfüllt (`test_region_flight`) |
+| 11 | Flug/Umzug erzeugt keine Personen, Bevölkerung und Vermögen erhalten | erfüllt (`test_region_flight`, `test_region_commute`, `test_region_residents`) |
+| 12 | Nachfrage + Finanzierung → neue Company mit eigenem Controller | erfüllt (`test_region_founders`; Controller und Karte im Autotest ohne Fehler) |
+| 13 | Gründung scheitert verständlich (Kapital, Standort, Quote); Heimatstadt vs. Filiale | erfüllt (`test_region_founders`: Quote, Kapital, Filiale; Standortgrund im Code, nicht eigens getestet) |
+| 14 | Company-ID > Startslots funktioniert überall (Verträge, Personal, Kredite, UI, Speichern) | erfüllt für Personal, Kredit, Betriebe, Speichern (`test_region_founders`) sowie Figur, Karte und Controller (Autotest); Transportverträge einer Gründerfirma nicht eigens getestet |
+| 15 | Insolvenz reguliert Forderungen; keine ID-Wiederverwendung | erfüllt (`test_region_founders`: Neugründung nur am eigenen Platz, nächster Gründer neue ID ohne Schulden; Insolvenzregeln unverändert, `test_insolvency`) |
 | 16 | Wahl in A ändert B nicht; verspätete Antwort des alten Amtsinhabers verworfen | erfüllt (`test_region_mayors_and_save`) |
-| 17 | Speichern/Laden neuer Regionen und alter Einzelstadt-Stände ohne Verlust | teilweise: Städte, Verwaltungen, Kassen, Heimatstädte, alte Stände (`test_region_mayors_and_save`); laufende Flüge/Umzüge folgen mit Etappe 5/6 |
-| 18 | Bilanzen/Warenbilanz/Geldprüfungen konsistent, keine unbeabsichtigten Mittel | offen |
-| 19 | Langer Probelauf mit 4 Städten und Gründern; API-Ausfall blockiert nichts | offen |
-| 20 | Grafische Probeläufe der Region | offen |
+| 17 | Speichern/Laden neuer Regionen und alter Einzelstadt-Stände ohne Verlust | erfüllt (`test_region_mayors_and_save`; Laden im Flug `test_region_flight`; Gemeinschaftsprojekt `test_region_joint_project`; Gründer `test_region_founders`) |
+| 18 | Bilanzen/Warenbilanz/Geldprüfungen konsistent, keine unbeabsichtigten Mittel | erfüllt (`identity_ok` in allen Regionstests und im 60-Tage-Lauf; Startbudgets, Flugbetreiber und Gründereinlagen mit Gegenkonto X0/I0) |
+| 19 | Langer Probelauf mit 4 Städten und Gründern; API-Ausfall blockiert nichts | erfüllt (`tests/probe_region.gd`, 60 Tage; `test_region_model_queue`); Live-API nicht getestet |
+| 20 | Grafische Probeläufe der Region | erfüllt (Bildschirmfotos Fenster-Build, Seed 21); Schritt Ø 1,3–1,7 ms bei 4 Städten |
+
+
+## Spielstand und Migration
+
+- `SAVE_VERSION` bleibt 2: Der Abschnitt `region` (Ortszahl, Generatorparameter, Städte, Zustände der weiteren Verwaltungen) sowie
+  `regional`, `air`, `founders` und `commute` sind optional; alte Stände ohne sie laden als eine Stadt (`test_region_mayors_and_save`).
+- Die Welt wird beim Laden aus Seed und Parametern neu erzeugt (wie bisher). Die Ladeprüfung vergleicht Namen und Zentren der Städte mit
+  dem Spielstand und meldet eine Abweichung (geänderter Generator) im Protokoll und in `Simulation.load_warnings`.
+- Neue Konten: `P1`–`P3` (Stadtkassen), `A0` (Regionalflug). Startbudgets und Startkapital kommen per Überweisung von `X0` (im Geldbuch).
+
+## Offene Punkte und Grenzen
+
+- Bürger (Citizens) haben keinen ortsgebundenen Arbeitsplatz; Pendeln und Umzug gelten für das Firmenpersonal.
+- Rathauspersonal (`TownHall`) und Müllabfuhr sind ein regionales Modell; das Stromnetz ist regional mit Kraftwerk in Ort 0.
+- Die Regel-KI bucht keine Luftfracht von selbst (Modelle können `book_air_cargo` nutzen). Gemeinschaftsprojekte schlagen nur Modell-Bürgermeister
+  vor; der Regel-Bürgermeister stimmt zu oder lehnt ab.
+- Die Bürgermeisterkarte links zeigt Ort 0; die anderen Bürgermeister stehen im Stadtfenster und in der Regionsübersicht. Die Zoomgrenze
+  erlaubt keine Gesamtansicht aller Städte (Minikarte zeigt sie).
+- Live-API (Claude/Ollama) mit mehreren Bürgermeistern nicht getestet.

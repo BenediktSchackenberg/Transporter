@@ -10,6 +10,11 @@ Pixel Transport Rivals ist eine **autonome Wirtschaftssimulation in isometrische
 
 ## ✨ Was hier passiert
 
+### 🗺️ Eine Region mehrerer Städte
+- **Je Startspieler eine eigene Küstenstadt** (2–4) auf einer gemeinsamen Karte: eigener Fantasiename, eigener Bürgermeister mit Kasse, Zentrallager, Hafen und kleinem Flughafen, höchstens 40 Startgebäude, verbunden durch Schotterstraßen.
+- **Unternehmer handeln und expandieren über Stadtgrenzen**: Lieferanten aus der Nachbarstadt, Filialen mit Genehmigung der dortigen Verwaltung, Luftfracht, neue Gründer aus anhaltenden Chancen (höchstens drei Unternehmen je Heimatstadt).
+- **Echter Flugverkehr und Pendeln**: Flüge mit Fracht und Reisenden zwischen den Flughäfen, Pendler und Umzüge in die Arbeitsstadt, Gemeinschaftsprojekte mehrerer Städte mit Kostenanteilen.
+
 ### 🏙️ Eine Stadt mit eigenem Leben
 - **Echtes Wetter aus Mainz** (Open-Meteo, alle 15 Minuten): Regen, Schnee, Nebel, Sturm und Hitze verändern Straßen, Ladezeiten, Pannenrisiko und Bautempo. Ohne Netz springt ein gekennzeichnetes Ersatzwetter ein.
 - **Automatische Ereignisse mit Ursache**: Starkregen, Neueröffnungen, Nachfrageschübe, Frachtterminal-Großaufträge. Jedes Ereignis hat einen Auslöser, eine Abklingzeit und eine ruhige Phase danach.
@@ -61,6 +66,8 @@ Ein 9B-Modell vergisst oft Pflichtangaben. Ein **Assistent** ergänzt Lücken (F
 | 6 | Bewohner, Haushalte, Wohnungen, Mieten, private Kredite, Zufriedenheit | ✅ fertig (`docs/HOUSING_AND_MONEY.md`) |
 | 7 | Größere Karte, Baugrundstücke, Bauunternehmen, Bürgermeister-KI, Bauanträge | ✅ fertig (siehe `docs/URBAN_DEVELOPMENT.md`) |
 | 8 | Wohnstufen und Bedürfnisse (Anno-Prinzip): Versorgung der Viertel als Transportbedarf, Versorgungsbau, Prämien, Freischaltungen, Meilensteine | ✅ umgesetzt, Balance nur in Probeläufen (`docs/GROWTH_TIERS.md`) |
+| 15 | Küstenort: kleiner Start, Berge, Bergbau, Hafen, Brücken, Gebäudestufen, Wachstum | ✅ fertig (`docs/COASTAL_TOWN.md`) |
+| 17 | Region mehrerer Städte: Bürgermeister und Kassen je Stadt, Straßen, Flugverkehr, Binnenhandel, Gründer, Pendeln | ✅ umgesetzt, Grenzen in `docs/REGION.md` |
 
 Die Pläne stehen in [`docs/ECONOMY.md`](docs/ECONOMY.md) und [`STATUS.md`](STATUS.md).
 
@@ -169,6 +176,8 @@ Beim ersten WebUI-Aufruf ein lokales Admin-Konto anlegen. Im Spiel wählst du de
 | Leertaste / 1–5 | Pause / Simulationsgeschwindigkeit 1×–16× |
 | F5 / „Speichern“, „Laden“ | Schnellspeichern / Laden (ohne Keys) |
 | Minimap | Klicken oder ziehen springt mit der Kamera |
+| O | Region: nächste Stadt wählen, Kamera springt hin, Protokoll filtert nach ihr (Reiter Stadt → Ort / Region) |
+| L / B / M | Kartenebenen durchschalten (u. a. Rohstoffe) / nächstes Bergwerk / Müllabfuhr |
 
 Links stehen zunächst nur die **Porträts der Unternehmer**. Ein Klick öffnet ein live aktualisiertes Detailfenster: Unternehmenszahlen, aktueller Zustand, Personal und Aufträge stehen neben dem selbst formulierten KI-Ziel, zuletzt berücksichtigten Ereignissen, dokumentierter Begründung, Planfortschritt, nächstem Schritt und KI-Status. Die Schaltflächen *Folgen*, *Betriebshof* und *Verlauf* stehen im Fenster. Das **Wetter** ist kompakt in der Kopfleiste; Niederschlag, Wind, Datenzeit und Abrufstatus zeigt der Tooltip. Rechts gibt es die Reiter **Aktivitäten** (was jede KI gerade tut und warum), **Lage** (Wetter, Zeitachsen, aktive Ereignisse mit Ursache → Wirkung → Aufträge → Entscheidungen, wartende Kunden), **Ereignisse**, **Dialoge**, **Aufträge**, **Fahrzeuge**, **Finanzen**, **KI-Spieler**, **Personal** und **Entscheidungen** (filterbar nach Herkunft und Unternehmen, mit Folgen).
 
