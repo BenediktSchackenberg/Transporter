@@ -998,6 +998,8 @@ func _finish_public(e: Dictionary) -> void:
 		sim.parcels.touch(pid)
 	if prj.kind == "hafenausbau":
 		sim.harbor.finish_expansion()
+	if prj.kind == "flughafenausbau":
+		sim.airport.finish_expansion()
 	if prj.kind == "netzausbau":
 		sim.grid.finish_expansion(float(prj.get("kw", PowerGrid.EXPAND_KW)))
 	if prj.kind == "bruecke":

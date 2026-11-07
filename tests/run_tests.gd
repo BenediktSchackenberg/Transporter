@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -7966,3 +7966,56 @@ func test_air_passengers() -> void:
 	ok(str(A.away_of(vp)) == "", "keine laufende Reise mehr")
 	ok(is_equal_approx(float(vp.balance), bal1), "der Rueckflug kostet nichts mehr (im Ticket inbegriffen)")
 	ok(identity_ok(s), "Geld erhalten (Rueckkehr, Landegebuehr)")
+
+## Etappe E4 (Auftrag 16): Flughafen-Ausbaustufen. Der Flughafen waechst ueber Stadtprojekte (Baufirma, Material
+## aus dem Stadtlager) eine Stufe weiter: mehr Passagierplaetze, mehr Frachtplatz, hoehere Abfertigungsgebuhr.
+## Die Regel-KI baut bei Luftfracht-Rueckstau aus; der Ausbau wird bei Fertigstellung wirksam und bleibt gespeichert.
+func test_airport_expansion() -> void:
+	var s := coast_sim()
+	var A: Airport = s.airport
+	ok(A.enabled and A.stage == 1 and A.stage_name() == "Kleinstflughafen", "Start: Kleinstflughafen, %d Plaetze, %d Frachteinheiten je Flug" % [A.seats(), A.cargo_cap()])
+	ok(A.cargo_cap() == 8, "Stufe 1 faesst 8 Ladeeinheiten Luftfracht je Flug")
+	# Rueckstau: eine groessere Luftfracht-Bestellung (Asphalt, 10 Ladeeinheiten) passt nicht in einen Flug (8)
+	var D: CityDepot = s.city_depot
+	var ord := D._new_order("asphalt", 100, "Flughafen-Ausbau", "")
+	ord.crit = 3
+	# Wie die Luftfracht-Erfassung (E2): die Bestellung ist dem Flughafen zugeteilt (kein Bauhof, der hier gaeünstiger ist).
+	ord.supplier = "X0"
+	ord["via_air"] = true
+	ord["loc"] = A.cargo_building
+	ord.status = "in_der_luft"
+	D.orders[ord.id] = ord
+	var q := int(ord.qty)   # 100 t; 1 Ladeeinheit = 10 t
+	ok(q > 80, "die Luftfracht-Bestellung uebersteigt die Kapazitaet der Stufe 1 (%d > 80 t)" % q)
+	A.cargo_in(str(ord.id), "asphalt", q)
+	# Die Regel-KI reagiert, solange die ganze Fracht wartet (Rueckstau > 1 Flug); Kasse muss das 1,5-fache tragen
+	var ind: Dictionary = s.mayor.indicators()
+	ok(float(A.summary().rueckstau_fluege) > 1.0, "Luftfracht-Rueckstau ist sichtbar (%.1f Fluege)" % float(A.summary().rueckstau_fluege))
+	ok(float(ind.haushalt.verfuegbar) > float(A.STAGES[1].kosten) * 1.5, "die Stadtkasse traegt den Ausbau (1,5 × %s)" % Catalog.money(float(A.STAGES[1].kosten)))
+	var dec: Dictionary = MayorBrain.decide(ind)
+	ok(dec.actions.any(func(a): return a.action == "expand_airport"), "Regel-Buergermeister baut den Flughafen bei Rueckstau aus")
+	var res: Dictionary = s.mayor.execute({"action": "expand_airport", "reason": "Luftfracht staut sich"})
+	ok(res.ok and A.expansion_running(), "Flughafenausbau ausgeschrieben (%s)" % res.get("msg", ""))
+	ok(not s.mayor.execute({"action": "expand_airport", "reason": "wieder"}).ok, "kein zweiter Ausbau gleichzeitig")
+	# Erste Landung in Stufe 1: nur 8 Ladeeinheiten (80 t) passen, der Rest wartet auf den Ausbau
+	A._unload_manifest(1)
+	ok(A.manifest.size() == 1 and int(A.manifest[0].left) == q - 80, "Stufe 1: groessere Luftfracht kommt nicht ganz rein, Rest wartet (%d offen)" % int(A.manifest[0].left if A.manifest.size() > 0 else 0))
+	var pid := str(res.get("ref", ""))
+	_stock_project(s, pid)
+	s.city_depot.reserve_for_project(pid, s.mayor.projects[pid].material)
+	var d := GameCalendar.day_of(s.game_min)
+	for k in 90:
+		_works_day(s, d + 1 + k)
+		if s.mayor.projects[pid].status == "fertig":
+			break
+	ok(s.mayor.projects[pid].status == "fertig" and A.stage == 2 and A.cargo_cap() == 20 and A.stage_name() == "Regionalflughafen", "Baufirma fertig: Regionalflughafen, %d Frachteinheiten je Flug (Stufe %d)" % [A.cargo_cap(), A.stage])
+	A._unload_manifest(2)   # naechster Flug mit der groesseren Kapazitaet
+	ok(A.manifest.is_empty(), "nach dem Ausbau bringt der naechste Flug den Rest der Luftfracht")
+	ok(int(A.stats.einheiten_ein) >= q, "die gesamte Bestellung ist gelandet (%d t)" % int(A.stats.einheiten_ein))
+	ok(s.stock.qty("asphalt", "X0", A.cargo_building) >= q, "die gelandete Menge liegt als X0-Ware im Frachtterminal (%d)" % s.stock.qty("asphalt", "X0", A.cargo_building))
+	ok(str(D.orders[ord.id].status) in ["bestellt", "transport", "unterwegs", "angeliefert", "eingelagert", "bezahlt"], "die ganze Bestellung ist ans Stadtlager uebergeben (%s)" % D.orders[ord.id].status)
+	ok(float(A.summary().rueckstau_fluege) == 0.0, "nach dem Ausbau ist der Rueckstau weg")
+	# Speichern/Laden behaelt die Stufe
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.airport.stage == 2, "Speichern/Laden behaelt die Flughafenstufe")
+	ok(identity_ok(s), "Geld und Waren erhalten")

@@ -14,14 +14,20 @@ extends RefCounted
 
 const PERIOD := 60.0           # Spielminuten je Flugbewegung (Regelverkehr, ~30 s Echtzeit)
 const EDGE_OFF := 8.0          # wie weit auessel der Karte Flugzeuge eintreffen/verschwinden (Feld)
-const AIRFREIGHT_FEE := 180.0  # Stadtkasse zahlt je Landung, die Luftfracht mitnimmt (Betreiberpauschale)
 const TICKET := 28.0            # Hin- und Rückflug, gezahlt aus dem Buergerguthaben (Etappe E3)
-const LANDING_FEE := 40.0       # die Stadt kassiert je Passagierflug eine Landegebuehr (X0 -> P0)
 const TRIP_CHANCE := 0.004      # je Buerger und Tag: Reise ins Ausland (Urlaub, Arzt, Geschaeft)
 const MIN_BALANCE := 150.0      # darunter ist das Ticket zu teuer (kein Urlaub auf Pump)
 const STAY_DAYS := 2            # Aufenthaltsdauer im Ausland; die Rueckkehr fliegt mit dem regelmaeßigen Verkehr
-const TRIPS_PER_FLIGHT := 4     # Plaetze im Passagierteil
 const REASONS := ["Urlaub", "Familienbesuch", "Arzt", "Geschaftsreise", "Einkauf"]
+## Flughafenstufen (Etappe E4): Ausbau als Stadtprojekt des Buergermeisters (Baufirma, Material aus dem Stadtlager),
+## danach mehr Passagiere je Flug, mehr Frachtplatz, groessere Abfertigungsgebuhr.
+const STAGES := [
+	{"name": "Kleinstflughafen", "plaetze": 4, "fracht": 8, "landegae": 40.0, "pauschale": 180.0},
+	{"name": "Regionalflughafen", "plaetze": 8, "fracht": 20, "landegae": 60.0, "pauschale": 300.0,
+		"kosten": 60000.0, "tage": 20, "material": {"betonfertigteil": 80, "schotter": 60, "verbindung": 20}},
+	{"name": "Regionalzentrum", "plaetze": 12, "fracht": 40, "landegae": 80.0, "pauschale": 450.0,
+		"kosten": 160000.0, "tage": 40, "material": {"glas": 40, "daemmung": 60, "betonfertigteil": 160, "schotter": 120, "verbindung": 50}},
+]
 
 var sim
 var enabled := false
@@ -32,6 +38,7 @@ var trips := {}                # Auslandsreisen {id: "Y<n>", person, reason, sta
 var _last_trip_day := -1       # letzter Tag, an dem neue Auslandsreisen zugelassen wurden (Etappe E3)
 var _next_trip := 1
 var _last_flight := 0          # letzte entladene Landung (Flugzaehler; mitgespeichert)
+var stage := 1                 # Flughafenstufe (1..STAGES.size, Etappe E4)
 var stats := {"fluege": 0, "abgebrochen": 0, "einheiten_ein": 0, "passagiere": 0}
 
 
@@ -122,10 +129,75 @@ func movements_since_start(now: float) -> int:
 func runway() -> Array:
 	return [int(track.run_x0), int(track.run_x1), int(track.run_y)] if enabled else []
 
+# ------------------------------------------------------------------ Stufen (Etappe E4)
+## Aktuelle Stufe (1..STAGES.size).
+func _s() -> Dictionary:
+	return STAGES[clampi(stage, 1, STAGES.size()) - 1]
+
+func stage_name() -> String:
+	return str(_s().name)
+
+## Plaetze im Passagierteil der aktuellen Stufe.
+func seats() -> int:
+	return int(_s().plaetze)
+
+## Frachtkapazitaet (Ladeeinheiten) je Flug der aktuellen Stufe.
+func cargo_cap() -> int:
+	return int(_s().fracht)
+
+## Landegebuehr der Stadt je Passagierflug (X0 -> P0).
+func landing_fee() -> float:
+	return float(_s().landegae)
+
+## Betreiberpauschale, die die Stadtkasse je Landung mit Fracht zahlt (P0 -> X0).
+func airfreight_fee() -> float:
+	return float(_s().pauschale)
+
+func expansion_running() -> bool:
+	return sim.mayor.projects.values().any(func(p): return p.kind == "flughafenausbau" and p.status != "fertig")
+
+## Naechste Flughafenstufe als Stadtprojekt ausschreiben.
+func expand(by: String) -> Dictionary:
+	if not enabled:
+		return {"ok": false, "msg": "Kein Flughafen in dieser Stadt."}
+	if stage >= STAGES.size():
+		return {"ok": false, "msg": "Der Flughafen ist schon %s (hoechste Stufe)." % stage_name()}
+	if expansion_running():
+		return {"ok": false, "msg": "Ein Flughafenausbau laeuft bereits."}
+	var nd: Dictionary = STAGES[stage]
+	if sim.mayor.available_budget() < float(nd.kosten):
+		return {"ok": false, "msg": "Verfuegbare Stadtkasse reicht nicht (%s noetig)." % Catalog.money(float(nd.kosten))}
+	var prj: Dictionary = sim.mayor.add_works_project("flughafenausbau", "S%d" % (stage + 1), float(nd.kosten), int(nd.tage), nd.material, "Flughafenausbau (%s)" % by)
+	sim.log_event("%s laesst den Flughafen ausbauen: %s -> %s (%d Plaetze, %d Frachteinheiten je Flug), ausgeschrieben als %s (%s)." % [by, stage_name(), nd.name, int(nd.plaetze), int(nd.fracht), prj.id, Catalog.money(float(nd.kosten))], "info")
+	sim.activity.add("stadt", -1, "bau", "Flughafenausbau zu %s ausgeschrieben" % nd.name, by, sim.city.building(cargo_building).road)
+	return {"ok": true, "msg": "Flughafenausbau zu %s als Projekt %s ausgeschrieben (etwa %d Tage)." % [nd.name, prj.id, int(nd.tage)], "ref": prj.id}
+
+## Vom Bausystem bei Fertigstellung des Projekts aufgerufen.
+func finish_expansion() -> void:
+	stage = mini(stage + 1, STAGES.size())
+	sim.log_event("Flughafen ausgebaut: jetzt %s, %d Plaetze und %d Frachteinheiten je Flug." % [stage_name(), seats(), cargo_cap()], "good")
+
+func summary() -> Dictionary:
+	var nd: Dictionary = STAGES[stage] if stage < STAGES.size() else {}
+	return {"stufe": stage, "stufe_name": stage_name(), "plaetze": seats(), "fracht_je_flug": cargo_cap(),
+		"landegae": landing_fee(), "pauschale": airfreight_fee(), "ausbau_laeuft": expansion_running(),
+		"ausbau": {} if nd.is_empty() else {"ziel": nd.name, "plaetze": int(nd.plaetze), "fracht": int(nd.fracht), "kosten": int(nd.kosten), "tage": int(nd.tage)},
+		"rueckstau_fluege": snappedf(float(waiting_units()) / float(maxi(1, cargo_cap())), 0.1),
+		"wartende_flugfracht": manifest.size(), "wartende_einheiten": waiting_units(),
+		"aktiv": enabled, "statistik": stats.duplicate()}
+
 # ------------------------------------------------------------------ Luftfracht (Etappe E2, Teil 2)
 ## Bestellte Luftfracht wird im Manifest vormerk (analog Hafen.ship_in). `ref` = Bestell-ID des Stadtlagers.
+## `left` = noch auszuliefernde Menge; die Ladezaehler der einzelnen Fluege begrenzen die Auslieferung.
 func cargo_in(order_id: String, item: String, qty: int) -> void:
-	manifest.append({"ref": order_id, "item": item, "qty": qty, "since": GameCalendar.day_of(sim.game_min)})
+	manifest.append({"ref": order_id, "item": item, "qty": qty, "left": qty, "since": GameCalendar.day_of(sim.game_min)})
+
+## Wartende Luftfracht in Ladeeinheiten (fuer Rueckstau-Anzeige und Ausbaubeschluesse, wie am Hafen).
+func waiting_units() -> int:
+	var u := 0
+	for m in manifest:
+		u += Harbor.units_of(str(m.item), int(m.left))
+	return u
 
 ## Flugwetter-Gate: bei Starkregen, Sturm, Schnee, Glätte oder dichtem Nebel fällt die Landung aus
 ## und die wartende Fracht kommt erst mit dem nächsten Flug. Das Flugzeug selbst fliegt weiterhin seine
@@ -147,7 +219,7 @@ func on_minute(now: float) -> void:
 	_last_flight = flights_done
 	if flight_ok():
 		if not manifest.is_empty():
-			_unload_manifest()
+			_unload_manifest(flights_done)
 		_passengers_go(flights_done)
 	else:
 		if not manifest.is_empty():
@@ -173,13 +245,13 @@ func on_day(day: int) -> void:
 	_book_trips(day)
 
 ## Neue Auslandsreisen buchen: je Buerger die Chance TRIP_CHANCE, mit ausreichend Guthaben, nicht im Gefaengnis,
-## nicht schon unterwegs. Pro Tag steigen hoechstens TRIPS_PER_FLIGHT neue Reisende ein.
+## nicht schon unterwegs. Pro Tag steigen hoechstens so viele neue Reisende ein, wie Plaetze zurueckbleiben.
 func _book_trips(day: int) -> void:
 	var taken := 0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([sim.city.seed_value, day, "airport_reisen"])
 	for p in sim.citizens.people:
-		if taken >= TRIPS_PER_FLIGHT:
+		if taken >= seats():
 			break
 		if p.has("away") or PublicSafety.in_prison(p, day) or float(p.get("balance", 0.0)) < MIN_BALANCE:
 			continue
@@ -207,7 +279,7 @@ func _passengers_go(flight_no: int) -> void:
 	var boarded := 0
 	var arrived := 0
 	for t in moving:
-		if boarded >= TRIPS_PER_FLIGHT:
+		if boarded >= seats():
 			break
 		var p: Dictionary = idx.get(int(t.person), {})
 		if p.is_empty():
@@ -228,7 +300,7 @@ func _passengers_go(flight_no: int) -> void:
 			t["return_day"] = day + STAY_DAYS
 			p["away"] = {"trip": t.id, "reason": t.reason, "boarded": flight_no}
 	if boarded > 0:
-		sim.economy.transfer("X0", "P0", LANDING_FEE)   # Landegebuehr der Stadt
+		sim.economy.transfer("X0", "P0", landing_fee())   # Landegebuehr der Stadt
 		stats.passagiere = int(stats.passagiere) + boarded
 		sim.log_event("Flughafen: %d Passagiere gestiegen, %d Rueckkehrer gelandet (Flug %d)." % [boarded - arrived, arrived, flight_no], "info")
 
@@ -251,34 +323,56 @@ func away_count() -> int:
 			n += 1
 	return n
 
-## Wartende Luftfracht wird als X0-Importware ins Frachtterminal ausgeliefert und die
-## Stadtlager-Bestellung wird übergeben (analog Hafen._unload → city_depot.on_ship).
-func _unload_manifest() -> void:
-	var unloaded := 0
-	for m in manifest:
-		var qty := int(m.qty)
-		if qty > 0:
-			sim.stock.add(str(m.item), qty, Production.IMPORT, cargo_building, "Luftfracht (Flugzeug)", sim.game_min)
+## Wartende Luftfracht wird nach der Ladekapazitaet der aktuellen Stufe ins Frachtterminal ausgeliefert (analog
+## Hafen._arrive, nur kleiner): was nicht in diesen Flug passt, bleibt im Manifest und kommt mit dem naechsten Flug.
+## Erst wenn die gesamte Bestellung gelandet ist, uebernimmt das Stadtlager (on_aircraft).
+func _unload_manifest(flight_no: int = -1) -> void:
+	if flight_no < 0:
+		flight_no = int(float(sim.game_min) / PERIOD)
+	var room := cargo_cap()
+	var units_out := 0
+	for m in manifest.duplicate():
+		var left := int(m.left)
+		var u := Harbor.units_of(str(m.item), left)
+		if u <= room:
+			room -= u
+			sim.stock.add(str(m.item), left, Production.IMPORT, cargo_building, "Luftfracht (Flug %d)" % flight_no, sim.game_min)
+			m.left = 0
+			stats.einheiten_ein = int(stats.einheiten_ein) + left
+			units_out += u
+		else:
+			var fit := int(float(left) * float(room) / float(u))
+			if fit <= 0:
+				continue
+			room -= Harbor.units_of(str(m.item), fit)
+			sim.stock.add(str(m.item), fit, Production.IMPORT, cargo_building, "Luftfracht (Flug %d)" % flight_no, sim.game_min)
+			m.left = left - fit
+			stats.einheiten_ein = int(stats.einheiten_ein) + fit
+			units_out += Harbor.units_of(str(m.item), fit)
+		if int(m.left) <= 0:
 			sim.city_depot.on_aircraft(str(m.ref))
-			stats.einheiten_ein = int(stats.einheiten_ein) + qty
-			unloaded += 1
-	manifest.clear()
-	if unloaded > 0:
-		sim.economy.transfer("P0", "X0", AIRFREIGHT_FEE)   # Betreiberpauschale
+			manifest.erase(m)
+	if units_out > 0:
+		sim.economy.transfer("P0", "X0", airfreight_fee())   # Betreiberpauschale
 		stats.fluege = int(stats.fluege) + 1
-		sim.log_event("Luftfracht: %d Posten gelandet, %d Einheiten im Frachtterminal" % [unloaded, stats.einheiten_ein], "info")
+		var rest := manifest.size()
+		sim.log_event("Luftfracht: %d Ladeeinheiten gelandet%s (Flug %d, Raum %d)." % [
+			units_out, ", %d Posten warten auf den naechsten Flug" % rest if rest > 0 else "", flight_no, cargo_cap()], "info")
 		sim.activity.add("stadt", cargo_building, "sonstiges", "Luftfracht gelandet",
-			"%d Posten ins Frachtterminal gebracht (Wetter: %s)" % [unloaded, str(sim.wx.cur.get("cond", ""))],
+			"%d Ladeeinheiten ins Frachtterminal gebracht (Wetter: %s)" % [units_out, str(sim.wx.cur.get("cond", ""))],
 			sim.city.building(cargo_building).road)
 
 func to_dict() -> Dictionary:
 	return {"enabled": enabled, "manifest": manifest.duplicate(true), "last_flight": _last_flight, "stats": stats.duplicate(),
-		"trips": trips.duplicate(true), "next_trip": _next_trip, "last_trip_day": _last_trip_day}
+		"stage": stage, "trips": trips.duplicate(true), "next_trip": _next_trip, "last_trip_day": _last_trip_day}
 
 func from_dict(d: Dictionary) -> void:
+	stage = int(d.get("stage", 1))
 	manifest = d.get("manifest", []).duplicate(true)
 	for m in manifest:
 		m.qty = int(m.qty)
+		if not m.has("left"):
+			m.left = m.qty   # alte Spieldaete ohne Restfeld: die gesamte Postenmenge steht noch aus
 	_last_flight = int(d.get("last_flight", 0))
 	var st: Dictionary = d.get("stats", {})
 	for k in st:

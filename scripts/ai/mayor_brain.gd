@@ -129,6 +129,10 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var hf: Dictionary = ind.get("hafen", {})
 	if actions.size() < MAX_ACTIONS and not hf.is_empty() and not bool(hf.ausbau_laeuft) and not hf.ausbau.is_empty() 			and float(hf.rueckstau_schiffsladungen) > 1.0 and float(ind.haushalt.verfuegbar) > float(hf.ausbau.kosten) * 1.5:
 		actions.append({"action": "expand_harbor", "reason": "Einfuhren für %.1f Schiffsladungen warten am Hafen; %s schafft %d statt %d Einheiten je Schiff." % [float(hf.rueckstau_schiffsladungen), hf.ausbau.ziel, int(hf.ausbau.ladung), int(hf.ladung_je_schiff)]})
+	# 1h1+) Flughafen: Luftfracht staut sich auf mehr als einen Flug -> naechste Stufe, wenn die Kasse das 1,5-fache traegt
+	var af: Dictionary = ind.get("flughafen", {})
+	if actions.size() < MAX_ACTIONS and not af.is_empty() and not bool(af.ausbau_laeuft) and not af.ausbau.is_empty() and float(af.rueckstau_fluege) > 1.0 and float(ind.haushalt.verfuegbar) > float(af.ausbau.kosten) * 1.5:
+		actions.append({"action": "expand_airport", "reason": "Luftfracht für %.1f Flüge wartet am Flughafen; %s bringt %d statt %d Einheiten je Flug." % [float(af.rueckstau_fluege), af.ausbau.ziel, int(af.ausbau.fracht), int(af.fracht_je_flug)]})
 	# 1h1a) Bergbau: Abbauantraege genehmigen (Arbeitsplaetze, Export, Abgabe); Abgabe nach Partei
 	var mb: Dictionary = ind.get("bergbau", {})
 	for ap in mb.get("abbauantraege", []):
