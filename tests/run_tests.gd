@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -8265,3 +8265,48 @@ func test_region_founders() -> void:
 	if g2.ok:
 		ok(int(g2.ref) == ids_before.size() and s.companies[int(g2.ref)].ledger.debt == 0.0, "nächster Gründer bekommt neue ID %d ohne fremde Schulden" % int(g2.ref))
 	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+## Abnahme 11 (Umzug): Mitarbeiter wohnt in A, arbeitet in B -> pendelt (Kosten, Motivation), zieht nach zwei Monaten in eine freie Wohnung
+## in B; genau eine Hauptwohnung, keine neue Person, Geld erhalten.
+func test_region_commute() -> void:
+	var s := region_sim(2)
+	var T: Towns = s.towns
+	var C: Commuting = s.commute
+	s.grid.capacity = 100000.0
+	s.companies[0].ledger.inject(100000.0)
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "baeckerei", "stadt": "1"})
+	ok(r.ok, "Betrieb von Firma 0 in %s" % T.name_of(1))
+	if not r.ok:
+		return
+	var w = null
+	for x in s.personnel.employed(0):
+		if str(x.household) != "":
+			w = x
+			break
+	if w == null:
+		w = s.personnel.employed(0)[0]
+		s.households.household_of(w)
+	var h: Dictionary = s.households.homes[str(w.household)]
+	if str(h.get("unit", "")) == "" or T.of_building(int(s.housing.units[str(h.unit)].building)) != 0:
+		var u0: Dictionary = s.housing.register_unit(T.get_t(0).town_hall, 60.0, Housing.LANDLORD)
+		s.housing.move_household(str(h.id), str(u0.id))
+	ok(T.of_building(int(s.housing.units[str(h.unit)].building)) == 0, "Haushalt wohnt in %s" % T.name_of(0))
+	s.biz.assign(0, w.id, str(r.ref))
+	ok(T.of_building(C.workplace(w)) == 1, "Arbeitsplatz in %s" % T.name_of(1))
+	var free1: Dictionary = s.housing.register_unit(T.get_t(1).town_hall, 50.0, Housing.LANDLORD)
+	free1.rent = 50.0
+	h.last_income = 2000.0
+	h.balance = maxf(float(h.balance), 0.0)
+	s.economy.transfer("X0", "H0", 1000.0)   # Rueckhalt fuer Fahrtkosten und Umzug (Haushaltskonto H0)
+	h.balance = float(h.balance) + 1000.0
+	var units_of_h := func(): return s.housing.units.values().filter(func(x): return x.tenant == str(h.id)).size()
+	var people0 := s.citizens.population()
+	var bal0 := float(h.balance)
+	var mot0 := float(w.motivation)
+	C.on_month(1)
+	ok(int(C.stats.pendler) >= 1 and float(h.balance) < bal0 and float(w.motivation) < mot0 and int(h.get("pendel_monate", 0)) == 1, "Pendler: Fahrtkosten %s, Motivation sinkt" % Catalog.money(bal0 - float(h.balance)))
+	C.on_month(2)
+	ok(T.of_building(int(s.housing.units[str(h.unit)].building)) == 1 and units_of_h.call() == 1 and int(C.stats.umzuege) == 1, "Umzug nach %s: genau eine Hauptwohnung" % T.name_of(1))
+	ok(s.citizens.population() == people0 and s.citizens.worker_town(w) == 1, "keine neue Person; Mitarbeiter zählt jetzt zu %s" % T.name_of(1))
+	ok(identity_ok(s), "Geld erhalten")
