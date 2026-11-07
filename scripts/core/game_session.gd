@@ -19,6 +19,7 @@ var sim: Simulation
 var controllers: Array[AgentController] = []
 var mayor_agent: MayorAgent          # Ort 0 (Kompatibilitaet); alle Orte in mayor_agents
 var mayor_agents: Array = []         # je Ort ein Buergermeister-Agent (Auftrag 17)
+var selected_town := -1               # Stadtauswahl (Taste O): Stadtfenster, Protokollfilter; -1 = ganze Region
 var dispatch_agent: DispatchAgent
 var talk_agent: TalkAgent
 var activity_layer: ActivityLayer
@@ -139,6 +140,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	hud = HUD.new()
 	ui.add_child(hud)
 	hud.build(self)
+	sim.founders.company_founded.connect(func(cid): hud.add_company_card(cid))
 	end_screen = EndScreen.new()
 	end_screen.visible = false
 	ui.add_child(end_screen)
@@ -471,6 +473,21 @@ func _next_garbage() -> void:
 
 ## Taste B: Kamera springt reihum zu den laufenden Bergwerken (sonst zu den Bergen).
 var _mine_idx := -1
+## Stadtauswahl (Region): naechste Stadt, Kamera springt zum Ortskern; nach der letzten wieder "ganze Region".
+func _next_town() -> void:
+	if not sim.towns.is_region():
+		return
+	selected_town = selected_town + 1
+	if selected_town >= sim.towns.count():
+		selected_town = -1
+		hud.show_toast("Ganze Region (Taste O: nächste Stadt)")
+		return
+	var t: Dictionary = sim.towns.get_t(selected_town)
+	following = false
+	city_view.set_camera_world(Vector2(float(t.center.x) * 32.0, float(t.center.y) * 32.0))
+	hud.show_toast("%s · Bürgermeister %s (Taste O: nächste Stadt; Stadt → Ort zeigt Details)" % [t.name, sim.towns.mayor(selected_town).name])
+
+
 func _next_mine() -> void:
 	var targets: Array = city_view.mountain_view.mine_targets()
 	var label := "Bergwerk"
@@ -551,4 +568,5 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_TAB: hud.toggle_panels()
 			KEY_L: sim.log_event(city_view.parcel_layer.cycle(), "info")
 			KEY_B: _next_mine()
+			KEY_O: _next_town()
 			KEY_M: _next_garbage()

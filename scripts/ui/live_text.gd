@@ -521,6 +521,20 @@ static func banks(sim: Simulation) -> String:
 
 
 ## Reiter "Unternehmen": Rechtsform und Status, laufende Auktionen, Historie geschlossener Unternehmen.
+## Region: Heimatstadt und Betriebe nach Standort (Auftrag 17, Abschnitt 14).
+static func company_places(sim: Simulation, c: Company) -> String:
+	var per := {}
+	for b in sim.biz.of(c.id):
+		var k: int = sim.towns.of_building(int(b.site))
+		if not per.has(k):
+			per[k] = []
+		per[k].append(str(b.branch))
+	var parts: Array = []
+	for k in per:
+		parts.append("%s: %s" % [sim.towns.name_of(int(k)), ", ".join(per[k])])
+	return "Heimat %s · Betriebe %s" % [sim.towns.name_of(int(c.home_town)), "; ".join(parts) if not parts.is_empty() else "keine"]
+
+
 static func firms(sim: Simulation) -> String:
 	var I: Insolvency = sim.insolvency
 	var txt := "[b][color=#f2c14e]UNTERNEHMEN[/color][/b]
@@ -532,6 +546,9 @@ static func firms(sim: Simulation) -> String:
 " % [c.company_name, spec.name, c.generation, c.status.to_upper()]
 		txt += "  Gründung %s · Verwaltung %s/Monat · Berichtspflicht %s · Kreditrahmen ×%.1f
 " % [GameCalendar.log_text(c.founded_min), Catalog.money(spec.admin), spec.report, spec.loan_factor]
+		if sim.towns.is_region():
+			txt += "  " + company_places(sim, c) + "
+"
 		if c.status_reason != "":
 			txt += "  [color=#ffb347]%s[/color]
 " % c.status_reason
@@ -842,40 +859,128 @@ static func businesses(sim: Simulation) -> String:
 
 ## Stadtwerke: Leistung, Last, Abschaltungen, Tarif und Ausbau (Auftrag 14, Grundversorgung).
 ## Stadtfenster (Auftrag 15, Abschnitt 12): Name, Einwohner, Gebaeude, Entwicklung, Finanzen, Projekte, Hafen, Betriebsstufen.
-static func town(sim: Simulation) -> String:
-	var M: Mayor = sim.mayor
+static func town(sim: Simulation, k: int = 0) -> String:
+	var T: Towns = sim.towns
+	var M: Mayor = T.mayor(k)
 	var g: Dictionary = M.goals()
-	var name: String = sim.city.town_name if sim.city.town_name != "" else "Stadt"
-	var txt := "[b][color=#f2c14e]%s[/color][/b]  (Bürgermeister %s, Zustimmung %d %%)\n" % [esc(name).to_upper(), esc(M.name), int(M.approval)]
-	txt += "Einwohner %d · Haushalte %d · Wohnhäuser %d · Geschäfte %d · Gebäude %d · Zufriedenheit %.0f\n" % [sim.citizens.population(), sim.households.homes.size(),
-		int(g.wohnhaeuser), int(g.geschaefte), sim.city.buildings.size(), float(g.zufriedenheit)]
-	txt += "Wohnungssuchende %d · Leerstand %d %%\n" % [int(M.waiting), int(M.vacancy() * 100.0)]
+	var region := T.is_region()
+	var name: String = T.name_of(k)
+	var txt := "[b][color=#f2c14e]%s[/color][/b]  (Bürgermeister %s, %s, Zustimmung %d %%%s)\n" % [esc(name).to_upper(), esc(M.name), M.party, int(M.approval),
+		", Stadt %d von %d · Taste O wechselt" % [k + 1, T.count()] if region else ""]
+	var homes := sim.housing.units.values().filter(func(u): return T.of_building(int(u.building)) == k) if region else sim.housing.units.values()
+	var nb: int = sim.city.buildings.filter(func(b): return not region or T.of_building(int(b.id)) == k).size()
+	txt += "Einwohner %d · Wohnungen %d (Leerstand %d %%) · Wohnungssuchende %d · Wohnhäuser %d · Geschäfte %d · Gebäude %d · Zufriedenheit %.0f\n" % [sim.citizens.population_of(k),
+		homes.size(), int(M.vacancy() * 100.0), int(M.waiting), int(g.wohnhaeuser), int(g.geschaefte), nb, float(g.zufriedenheit)]
+	var jobless: int = sim.citizens.people.filter(func(p): return p.employer == "" and sim.citizens.home_town(p) == k).size()
+	txt += "Beschäftigung: %d Arbeitslose unter den Bürgern · Grundsicherung aus der eigenen Kasse\n" % jobless
+	if region:
+		var cm: Dictionary = sim.commute.stats.last.get(k, {})
+		txt += "Pendler: %d fahren hinaus, %d kommen herein\n" % [int(cm.get("aus", 0)), int(cm.get("ein", 0))]
 	if not M.growth_history.is_empty():
 		var parts: Array = []
 		for h in M.growth_history.slice(-4):
 			parts.append("M%d: %d Wohnh./%d Gesch." % [int(h.monat), int(h.wohnhaeuser), int(h.geschaefte)])
 		txt += "[b]Entwicklung[/b] " + " · ".join(parts) + "\n"
-	txt += "[b]Finanzen[/b] Kasse %s · verfügbar %s · für Projekte reserviert %s · Mindestreserve %s\n" % [Catalog.money(float(sim.economy.accounts.P0)),
+	txt += "[b]Finanzen[/b] Kasse %s · verfügbar %s · für Projekte reserviert %s · Mindestreserve %s\n" % [Catalog.money(M.cash()),
 		Catalog.money(M.available_budget()), Catalog.money(M.commitments), Catalog.money(M.reserve_cash())]
 	var open: Array = M.projects.values().filter(func(p): return p.status != "fertig" and p.has("kind"))
 	txt += "[b]Projekte[/b] %d laufend\n" % open.size()
 	for p in open.slice(0, 6):
-		txt += "  %s %s: %s (%s)\n" % [p.id, p.kind, p.status, Catalog.money(float(p.cost))]
-	if sim.harbor.enabled:
-		var h: Dictionary = sim.harbor.summary()
+		txt += "  %s %s: %s (%s)%s\n" % [p.id, p.kind, p.status, Catalog.money(float(p.cost)), " · Gemeinschaftsprojekt" if p.has("shares") else ""]
+	var H: Harbor = T.harbor(k)
+	if H.enabled:
+		var h: Dictionary = H.summary()
 		txt += "[b]Hafen[/b] %s · %d Ladeeinheiten je Schiff · Rückstau %.1f Schiffsladungen%s\n" % [h.stufe_name, int(h.ladung_je_schiff), float(h.rueckstau_schiffsladungen),
 			" · Ausbau läuft" if bool(h.ausbau_laeuft) else (" · nächste Stufe %s (%s)" % [h.ausbau.ziel, Catalog.money(float(h.ausbau.kosten))] if not h.ausbau.is_empty() else "")]
-	var staged: Array = sim.biz.items.values().filter(func(b): return BusinessStages.has_stages(str(b.branch)) and b.status != "geschlossen")
-	if not staged.is_empty():
-		txt += "[b]Betriebe und Gebäudestufen[/b]\n"
-		for b in staged:
+	var D: CityDepot = T.depot(k)
+	txt += "[b]Zentrallager[/b] %s · Konto %s\n" % [esc(sim.city.building(D.building).get("name", "")), D.owner()]
+	if region:
+		var firms: Array = sim.companies.filter(func(c): return int(c.home_town) == k)
+		txt += "[b]Unternehmen mit Heimat hier[/b] %s\n" % ", ".join(firms.map(func(c): return "%s (%s)" % [esc(c.company_name), c.status]))
+	var here: Array = sim.biz.items.values().filter(func(b): return b.status != "geschlossen" and (not region or T.of_building(int(b.site)) == k))
+	if not here.is_empty():
+		txt += "[b]Betriebe in der Stadt[/b]\n"
+		for b in here.slice(0, 14):
 			var ob: Dictionary = sim.stages.obs(b)
 			var nxt := ""
 			if ob.has("ausbau"):
 				nxt = " → %s %s" % [ob.ausbau.ziel, "möglich" if bool(ob.ausbau.moeglich) else "(fehlt: %s)" % "; ".join(ob.ausbau.fehlt)]
 			if str(b.get("upgrading", "")) != "":
 				nxt = " · Ausbau im Bau (%s)" % b.upgrading
-			txt += "  %s: %s, Nachfrage %d %%%s\n" % [esc(b.name), ob.stufe_name, int(float(ob.nachfrage) * 100.0), nxt]
+			var owner: Company = sim.company(int(b.owner))
+			txt += "  %s (%s%s)%s%s\n" % [esc(b.name), esc(owner.company_name), ", auswärts registriert" if region and int(owner.home_town) != k else "",
+				(": " + str(ob.stufe_name) + ", Nachfrage %d %%" % int(float(ob.nachfrage) * 100.0)) if not ob.is_empty() else "", nxt]
+	return txt
+
+
+## Bewertung einer Stadt (Auftrag 17, Abschnitt 14): Bestandteile und Gewichte offen. Groesse und Schulden zaehlen nicht als Erfolg.
+const TOWN_SCORE := {"versorgung": 0.25, "beschaeftigung": 0.2, "wohnen": 0.2, "zufriedenheit": 0.15, "infrastruktur": 0.1, "finanzen": 0.1}
+static func town_score(sim: Simulation, k: int) -> Dictionary:
+	var T: Towns = sim.towns
+	var M: Mayor = T.mayor(k)
+	var running: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING and T.of_building(int(b.site)) == k)
+	var shops := 0
+	for br in ["baeckerei", "restaurant"]:
+		if running.any(func(b): return b.branch == br):
+			shops += 1
+	var vers := (float(shops) / 2.0) * 0.6 + (0.4 if sim.city.buildings.any(func(b): return b.type == "shop" and T.of_building(int(b.id)) == k) else 0.0)
+	var mine: Array = sim.citizens.people.filter(func(p): return sim.citizens.home_town(p) == k)
+	var emp := float(mine.filter(func(p): return p.employer != "").size()) / maxf(1.0, float(mine.size()))
+	var wohn := clampf(1.0 - float(M.waiting) / 5.0, 0.0, 1.0) * clampf(1.0 - absf(M.vacancy() - Mayor.BASE_VACANCY) * 3.0, 0.0, 1.0)
+	var zuf := clampf(float(M.approval) / 100.0, 0.0, 1.0)
+	var parcels_town: Array = sim.parcels.items.values().filter(func(p): return Towns.town_of_owner(str(p.owner)) == k)
+	var infra := float(parcels_town.filter(func(p): return sim.parcels.utility_level(p) == "voll").size()) / maxf(1.0, float(parcels_town.size())) * 5.0
+	var start := float(Economy.SEED.P0) if k == 0 else Towns.START_BUDGET
+	var fin := clampf(M.available_budget() / start, 0.0, 1.0)
+	var parts := {"versorgung": snappedf(vers, 0.01), "beschaeftigung": snappedf(emp, 0.01), "wohnen": snappedf(wohn, 0.01), "zufriedenheit": snappedf(zuf, 0.01),
+		"infrastruktur": snappedf(minf(1.0, infra), 0.01), "finanzen": snappedf(fin, 0.01)}
+	var total := 0.0
+	for key in TOWN_SCORE:
+		total += float(TOWN_SCORE[key]) * float(parts[key])
+	return {"punkte": int(round(total * 100.0)), "teile": parts}
+
+
+## Regionsuebersicht (Auftrag 17, Abschnitt 14): Staedte, Verbindungen, Fluege, Gemeinschaftsprojekte, Gruender, Pendler, Handel.
+static func region(sim: Simulation) -> String:
+	var T: Towns = sim.towns
+	if not T.is_region():
+		return "[b]REGION[/b]\nDiese Partie hat eine einzige Stadt (Weltart %s)." % sim.city.world
+	var txt := "[b][color=#f2c14e]REGION · %d STÄDTE[/color][/b]  (Taste O: Stadt wählen und hinspringen)\n" % T.count()
+	txt += "[b]Städte[/b] (Punkte = %s)\n" % ", ".join(TOWN_SCORE.keys().map(func(key): return "%s %d %%" % [key, int(TOWN_SCORE[key] * 100.0)]))
+	for t in T.summary():
+		var k := int(t.id)
+		var sc := town_score(sim, k)
+		txt += "  %s – Bürgermeister %s (%s), Zustimmung %d %%, Einwohner %d, Kasse %s (verfügbar %s), Unternehmen %d, Punkte %d %s\n" % [esc(t.name), esc(t.buergermeister),
+			t.partei, int(t.zustimmung), sim.citizens.population_of(k), Catalog.money(float(t.kasse)), Catalog.money(float(t.verfuegbar)),
+			sim.companies.filter(func(c): return int(c.home_town) == k).size(), int(sc.punkte), str(sc.teile)]
+	txt += "[b]Verbindungen[/b] Startstraßen: %s\n" % ", ".join(sim.city.region_roads.map(func(r): return "%s %s–%s (%d Felder)" % [r.id, T.name_of(int(r.von)), T.name_of(int(r.nach)), int(r.laenge)]))
+	for r in sim.regional.summary():
+		txt += "  Gemeinschaftsprojekt %s %s: %s (%s, Anteile %s)%s\n" % [r.id, r.verbindung, r.status, Catalog.money(float(r.kosten)), r.anteile, (" – " + str(r.hinweis)) if str(r.hinweis) != "" else ""]
+	if sim.air.enabled:
+		var a: Dictionary = sim.air.summary()
+		txt += "[b]Flugnetz[/b] Betreiber %s (Kasse %s) · Strecken %s\n" % [a.betreiber, Catalog.money(float(a.kasse)), ", ".join(a.strecken)]
+		txt += "  Flüge %d · Passagiere %d · Fracht %d LE · Erlöse %s · Kosten %s · ausgefallen %d\n" % [int(a.statistik.fluege), int(a.statistik.passagiere), int(a.statistik.fracht_einheiten),
+			Catalog.money(float(a.statistik.erloese)), Catalog.money(float(a.statistik.kosten)), int(a.statistik.ausgefallen)]
+		for f in a.fluege_unterwegs:
+			txt += "  ✈ %s %s → %s: %s (%d Passagiere, %d LE Fracht)\n" % [f.id, f.von, f.nach, f.status, int(f.passagiere), int(f.fracht_le)]
+	var fs: Dictionary = sim.founders.summary()
+	txt += "[b]Gründer[/b] höchstens %d aktive Unternehmen je Heimatstadt · Gründungen %d\n" % [int(fs.max_je_stadt), sim.founders.history.size()]
+	for h in fs.gruendungen:
+		txt += "  Tag %d %s: Firma %d (%s) – %s\n" % [int(h.tag), T.name_of(int(h.stadt)), int(h.firma), h.branche, h.anlass]
+	for r in fs.abgelehnt:
+		txt += "  [color=#999]Tag %d %s %s: %s[/color]\n" % [int(r.tag), T.name_of(int(r.stadt)), r.branche, r.grund]
+	var cm: Dictionary = sim.commute.summary()
+	txt += "[b]Pendeln[/b] %d Pendler · Fahrtkosten bisher %s · Umzüge zwischen Städten %d\n" % [int(cm.pendler), Catalog.money(float(cm.pendelkosten)), int(cm.umzuege)]
+	var inner := 0
+	var inner_val := 0.0
+	for d in sim.prod.deals.values():
+		if d.seller != Production.IMPORT and d.buyer != Production.IMPORT and T.of_building(int(d.seller_loc)) != T.of_building(int(d.buyer_loc)):
+			inner += 1
+			inner_val += float(d.qty) * float(d.unit)
+	var ex: Dictionary = sim.prod.stats.exported
+	var im: Dictionary = sim.prod.stats.imported
+	txt += "[b]Handel[/b] Binnenhandel zwischen Städten: %d Geschäfte (%s) · Außenhandel: Einfuhr %d, Ausfuhr %d Einheiten\n" % [inner, Catalog.money(inner_val),
+		im.values().reduce(func(s, x): return s + int(x), 0), ex.values().reduce(func(s, x): return s + int(x), 0)]
 	return txt
 
 

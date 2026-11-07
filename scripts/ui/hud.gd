@@ -88,7 +88,8 @@ const NAV := [
 		{"label": "Staat", "tab": "Wirtschaft", "view": 5, "hint": "Stadtkasse, Steuern, Ausgaben und Prüfungen."},
 		{"label": "Haushalte", "tab": "Wirtschaft", "view": 4, "hint": "Mitarbeiterhaushalte: Einkommen, Miete, Rücklagen."}]},
 	{"name": "Stadt", "hint": "Bürger, Wohnen, Bauen und Versorgung", "pages": [
-		{"label": "Ort", "tab": "Wirtschaft", "view": 16, "hint": "Stadtfenster: Name, Einwohner, Gebäude, Entwicklung, Finanzen, Projekte, Hafen und Betriebsstufen."},
+		{"label": "Ort", "tab": "Wirtschaft", "view": 16, "hint": "Stadtfenster der gewählten Stadt (Taste O wechselt und springt hin): Einwohner, Gebäude, Entwicklung, Finanzen, Projekte, Hafen, Unternehmen, Betriebe."},
+		{"label": "Region", "tab": "Wirtschaft", "view": 17, "hint": "Alle Städte im Vergleich, Verbindungen, Flüge, Gemeinschaftsprojekte, Gründer, Pendler, Binnen- und Außenhandel."},
 		{"label": "Bürger", "tab": "Wirtschaft", "view": 6, "hint": "Bevölkerung, Arbeitsmarkt und Löhne."},
 		{"label": "Wohnen", "tab": "Wirtschaft", "view": 12, "hint": "Wohnungen, Mieten, Leerstand und Zufriedenheit je Viertel."},
 		{"label": "Bürgermeister", "tab": "Wirtschaft", "view": 9, "hint": "Stadtplanung, Kennzahlen und Beschlüsse."},
@@ -99,7 +100,7 @@ const NAV := [
 		{"label": "Stadtlager", "tab": "Wirtschaft", "view": 11, "hint": "Bestand, Bestellungen und Personal des Zentrallagers."},
 		{"label": "Bauhof", "tab": "Wirtschaft", "view": 3, "hint": "Großhändler: Material, Preise und Bestand."}]},
 ]
-const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat", "Bürger", "Grundstücke", "Bauanträge", "Bürgermeister", "Bauvorhaben", "Stadtlager", "Wohnen", "Zentralbank", "Unternehmen", "Strom", "Ort"]
+const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat", "Bürger", "Grundstücke", "Bauanträge", "Bürgermeister", "Bauvorhaben", "Stadtlager", "Wohnen", "Zentralbank", "Unternehmen", "Strom", "Ort", "Region"]
 var decision_company := -1
 var decision_company_opt: OptionButton
 var sel_panel: PanelContainer
@@ -248,13 +249,23 @@ func _build_left() -> void:
 	left_scroll.add_child(box)
 	_build_mayor_card(box)
 	for c in sim.companies:
+		add_company_card(c.id)
+
+
+## Karte eines Unternehmens in der linken Leiste (auch fuer spaeter gegruendete Firmen, Auftrag 17).
+func add_company_card(cid0: int) -> void:
+	if cards.any(func(e): return int(e.cid) == cid0):
+		return
+	var box: VBoxContainer = left_box
+	var c: Company = sim.company(cid0)
+	if true:
 		var p := PanelContainer.new()
 		var sb := UITheme.box(Color("#2a2d42"), c.color, 3, 4)
 		var sb_hover := UITheme.box(Color("#3a3f5c"), c.color.lightened(0.35), 3, 4)
 		p.add_theme_stylebox_override("panel", sb)
 		p.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		var cid := c.id
-		p.tooltip_text = "%s · %s\nKlicken: Details öffnen" % [c.player_name, c.company_name]
+		p.tooltip_text = "%s · %s%s\nKlicken: Details öffnen" % [c.player_name, c.company_name, (" · Heimat " + sim.towns.name_of(c.home_town)) if sim.towns.is_region() else ""]
 		p.mouse_entered.connect(func(): p.add_theme_stylebox_override("panel", sb_hover))
 		p.mouse_exited.connect(func(): p.add_theme_stylebox_override("panel", sb))
 		p.gui_input.connect(func(ev: InputEvent):
@@ -719,7 +730,8 @@ func _economy_text() -> String:
 		13: return LiveText.central_bank(sim)
 		14: return LiveText.businesses(sim)
 		15: return LiveText.power(sim)
-		16: return LiveText.town(sim)
+		16: return LiveText.town(sim, maxi(0, session.selected_town))
+		17: return LiveText.region(sim)
 	return LiveText.standings(sim)
 
 
@@ -1070,12 +1082,28 @@ const KIND_COLORS := {"report": "#9fd8ff", "foreman": "#9fd8ff", "money": "#6fd0
 	"ai": "#e8d9a8", "system": "#f2c14e", "info": "#c9c4b4"}
 
 
+## Protokollfilter (Auftrag 17): mit gewaehlter Stadt (Taste O) nur deren Ereignisse – Firmen mit Heimat dort oder Meldungen, die den Ort
+## nennen; allgemeine Meldungen ohne Bezug bleiben sichtbar.
+func _event_in_town(e: Dictionary) -> bool:
+	var k: int = session.selected_town
+	if k < 0 or not sim.towns.is_region():
+		return true
+	var nm: String = sim.towns.name_of(k)
+	if str(e.text).contains(nm):
+		return true
+	if int(e.company) >= 0:
+		return int(sim.company(int(e.company)).home_town) == k
+	return not sim.towns.list.any(func(t): return str(e.text).contains(str(t.name)))
+
+
 func _append_events() -> void:
 	var fresh := sim.log_total - _events_shown
 	if fresh <= 0:
 		return
 	var entries := sim.log_entries
 	for e in entries.slice(maxi(0, entries.size() - fresh)):
+		if not _event_in_town(e):
+			continue
 		var col: String = KIND_COLORS.get(e.kind, "#c9c4b4")
 		var who := ""
 		if e.company >= 0:
