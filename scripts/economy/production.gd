@@ -140,10 +140,11 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 		if bld.is_empty():
 			return {"ok": false, "msg": "Auf %s ist kein Platz mit Straßenzugang." % ("Grundstück " + str(parcel.id) if cands.size() == 1 else "den freien Grundstücken")}
 		site = int(bld.id)
+		var seller := Towns.account_of(sim.towns.of_parcel(str(parcel.id)))   # Verkaeufer: Stadt der Lage
 		parcel.owner = "C%d" % cid
 		parcel["lease_by"] = cid if mode != "kaufen" else -1
 		if mode == "kaufen":
-			c.ledger.invest(land, "P0")
+			c.ledger.invest(land, seller)
 			c.land_book += land
 			parcel["book"] = land
 		sim.parcels.touch(parcel.id)
@@ -254,7 +255,7 @@ func _costs(b: Dictionary) -> void:
 		c.property_book = maxf(0.0, c.property_book - dep)
 		c.ledger.book("depreciation", -dep, false, "Abschreibung %s" % b.name, sim.game_min, "", b.id)
 	if float(b.get("lease_day", 0.0)) > 0.0:
-		c.ledger.book("rent", -float(b.lease_day), true, "Pacht %s" % b.get("parcel", ""), sim.game_min, "P0", b.id)
+		c.ledger.book("rent", -float(b.lease_day), true, "Pacht %s" % b.get("parcel", ""), sim.game_min, Towns.account_of(sim.towns.of_parcel(str(b.get("parcel", "")))), b.id)
 
 
 func _staff_ok(b: Dictionary, spec: Dictionary) -> int:

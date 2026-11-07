@@ -474,7 +474,7 @@ func _shutdown_business(c: Company, a: Dictionary) -> void:
 	if not p.is_empty():
 		if str(b.get("land_mode", "")) == "kauf":
 			var x := float(p.get("book", 0.0)) * 0.8
-			c.ledger.divest(x, "P0")
+			c.ledger.divest(x, Towns.account_of(sim.towns.of_parcel(str(p.id))))
 			proceeds += x
 		p.owner = Parcels.CITY
 		sim.parcels.touch(p.id)

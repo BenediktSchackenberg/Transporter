@@ -995,8 +995,20 @@ func _tender_public(M: Mayor, day: int) -> void:
 func _finish_public(e: Dictionary) -> void:
 	var M: Mayor = sim.towns.mayor_of_project(str(e.project))   # die beauftragende Stadt bezahlt aus ihrer Kasse
 	var prj: Dictionary = M.projects[e.project]
-	var pay := minf(float(e.price), maxf(0.0, M.cash()))
-	sim.economy.transfer(M.acct(), "K0", pay)
+	var pay := 0.0
+	if prj.has("shares"):
+		# Gemeinschaftsprojekt: jede Stadt zahlt genau ihren beschlossenen Anteil am Werklohn und gibt ihre Reservierung frei
+		var cost := maxf(1.0, float(prj.cost))
+		for k in prj.shares:
+			var Mk: Mayor = sim.towns.mayor(int(k))
+			var part := minf(float(e.price) * float(prj.shares[k]) / cost, maxf(0.0, Mk.cash()))
+			sim.economy.transfer(Mk.acct(), "K0", part)
+			pay += part
+			Mk.commitments = maxf(0.0, Mk.commitments - float(prj.shares[k]))
+		M.commitments += float(prj.cost)   # wird unten wie bei jedem Projekt wieder abgezogen
+	else:
+		pay = minf(float(e.price), maxf(0.0, M.cash()))
+		sim.economy.transfer(M.acct(), "K0", pay)
 	_forward(str(e.builder), pay, "Stadtprojekt %s" % e.project)
 	e.paid = pay
 	e["material_used"] = sim.towns.depot(M.town).consume_project(str(e.project), builders[e.builder].name)
@@ -1006,6 +1018,8 @@ func _finish_public(e: Dictionary) -> void:
 		for part in prj.parts:
 			p.erschliessung[part] = true
 		sim.parcels.touch(pid)
+	if prj.kind == "verbindung":
+		sim.regional.finish(str(prj.ref))
 	if prj.kind == "hafenausbau":
 		sim.towns.harbor(M.town).finish_expansion()
 	if prj.kind == "netzausbau":

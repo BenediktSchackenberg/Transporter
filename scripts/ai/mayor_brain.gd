@@ -129,6 +129,15 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var hf: Dictionary = ind.get("hafen", {})
 	if actions.size() < MAX_ACTIONS and not hf.is_empty() and not bool(hf.ausbau_laeuft) and not hf.ausbau.is_empty() 			and float(hf.rueckstau_schiffsladungen) > 1.0 and float(ind.haushalt.verfuegbar) > float(hf.ausbau.kosten) * 1.5:
 		actions.append({"action": "expand_harbor", "reason": "Einfuhren für %.1f Schiffsladungen warten am Hafen; %s schafft %d statt %d Einheiten je Schiff." % [float(hf.rueckstau_schiffsladungen), hf.ausbau.ziel, int(hf.ausbau.ladung), int(hf.ladung_je_schiff)]})
+	# 1h0) Gemeinschaftsprojekte der Region: zustimmen, wenn der Anteil hoechstens die Haelfte der verfuegbaren Mittel bindet
+	var rg: Dictionary = ind.get("region", {})
+	for gp in rg.get("gemeinschaftsprojekte_offen", []):
+		if actions.size() >= MAX_ACTIONS:
+			break
+		var share := float(gp.anteil_eur)
+		var ok_share := share <= float(ind.haushalt.verfuegbar) * 0.5
+		actions.append({"action": "decide_regional_project", "projekt": gp.id, "decision": "zustimmen" if ok_share else "ablehnen",
+			"reason": ("Anteil %s ist gedeckt; die Verbindung %s bringt kürzere Wege." % [Catalog.money(share), gp.verbindung]) if ok_share else ("Anteil %s bindet mehr als die Hälfte der verfügbaren Mittel (%s)." % [Catalog.money(share), Catalog.money(float(ind.haushalt.verfuegbar))])})
 	# 1h1a) Bergbau: Abbauantraege genehmigen (Arbeitsplaetze, Export, Abgabe); Abgabe nach Partei
 	var mb: Dictionary = ind.get("bergbau", {})
 	for ap in mb.get("abbauantraege", []):

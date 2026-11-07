@@ -32,6 +32,7 @@ var entries: Array = []   # letzte Buchungen fuer die Anzeige
 var history: Array = []   # [Spielminute, Gewinn, Bargeld]
 var economy: Economy = null   # Gegenbuchungen (Geldkonservierung); null = unverbunden
 var account := ""
+var public_acct := "P0"     # Stadtkasse der Heimatstadt (Auftrag 17): Gegenkonto fuer Steuer, Verwaltung, Bussgelder, Grundstueckskosten
 
 
 const GENERAL := "allgemein"
@@ -77,7 +78,10 @@ func book(category: String, amount: float, affects_cash: bool, note: String, tim
 	assert(LABELS.has(category), "Unbekannte Buchungskategorie: " + category)
 	_add_total(category, amount, cc)
 	if affects_cash:
-		_move(amount, counter if counter != "" else Economy.COUNTER[category])
+		var ctr: String = counter if counter != "" else Economy.COUNTER[category]
+		if counter == "" and ctr == "P0" and category != "energy":
+			ctr = public_acct
+		_move(amount, ctr)
 	# Laufende Kleinstbuchungen (Treibstoff, Loehne, ...) nicht einzeln protokollieren
 	if absf(amount) >= 50.0 or category in ["transport", "penalties", "fines", "asset_result"]:
 		entries.append({"t": time, "cat": category, "amount": amount, "note": note})

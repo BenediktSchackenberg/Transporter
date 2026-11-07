@@ -671,7 +671,7 @@ func on_month(_month: int) -> void:
 		sim.economy.transfer(s.id, "S0", pay_w)   # S0 zahlt die Loehne des Handels (Citizens, Arbeitgeber "handel")
 		s.wages += pay_w
 		var rent := minf(float(spec.rent), maxf(0.0, float(sim.economy.accounts[s.id])))
-		sim.economy.transfer(s.id, "D0" if sim.construction.dev_shops.has(int(s.building)) else "P0", rent)   # Eigentuemer: Bautraeger oder Stadt
+		sim.economy.transfer(s.id, "D0" if sim.construction.dev_shops.has(int(s.building)) else Towns.account_of(sim.towns.of_building(int(s.building))), rent)   # Eigentuemer: Bautraeger oder Stadt
 		s.rent += rent
 		if pay_w < wages or rent < float(spec.rent):
 			s.status = "zahlungsschwach"

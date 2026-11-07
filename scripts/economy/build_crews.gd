@@ -288,6 +288,11 @@ func _site_of(kind: String, id: String) -> Vector2i:
 			var j: Dictionary = sim.access.jobs.get(str(prj.ref), {})
 			if not j.is_empty():
 				return nearest_road(sim.access._head(j))
+		"verbindung":
+			var r: Dictionary = sim.regional.items.get(str(prj.ref), {})
+			if not r.is_empty() and not r.cells.is_empty():
+				var mid: Array = r.cells[r.cells.size() / 2]
+				return nearest_road(Vector2i(int(mid[0]), int(mid[1])), 60)
 		"bruecke":
 			var b: Dictionary = sim.bridges.items.get(str(prj.bridge), {})
 			if not b.is_empty():

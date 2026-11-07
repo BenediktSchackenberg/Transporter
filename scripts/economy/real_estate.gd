@@ -130,7 +130,7 @@ func on_month(_m: int) -> void:
 			continue
 		var land := float(sim.parcels.parcel(str(b.get("parcel", ""))).get("book", 0.0))
 		if land > 0.0:
-			sim.company(int(b.owner)).ledger.book("property_costs", -land * LAND_TAX_MONTH, true, "Grundsteuer %s" % b.get("parcel", ""), sim.game_min, "P0", b.id)
+			sim.company(int(b.owner)).ledger.book("property_costs", -land * LAND_TAX_MONTH, true, "Grundsteuer %s" % b.get("parcel", ""), sim.game_min, Towns.account_of(sim.towns.of_parcel(str(b.get("parcel", "")))), b.id)
 	for b in sim.biz.items.values():
 		if b.branch != "immobilien" or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
@@ -139,7 +139,7 @@ func on_month(_m: int) -> void:
 			var p: Dictionary = b.props[key]
 			var rent := rent_month(units_of(int(key), "C%d" % int(b.owner)))
 			c.ledger.book("property_costs", -rent * MAINTENANCE, true, "Instandhaltung Gebäude %s" % key, sim.game_min, "S0", b.id)
-			c.ledger.book("property_costs", -rent * PROPERTY_TAX, true, "Grundsteuer Gebäude %s" % key, sim.game_min, "P0", b.id)
+			c.ledger.book("property_costs", -rent * PROPERTY_TAX, true, "Grundsteuer Gebäude %s" % key, sim.game_min, Towns.account_of(sim.towns.of_building(int(key))), b.id)
 			var dep := minf(float(p.price) * (1.0 - LAND_SHARE) * DEPRECIATION_MONTH, float(p.book))
 			p.book = float(p.book) - dep
 			c.property_book = maxf(0.0, c.property_book - dep)

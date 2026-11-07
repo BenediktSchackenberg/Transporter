@@ -54,6 +54,10 @@ const SCHEMA := {
 		"desc": "Firma öffentlich verwarnen (nur wenn sie in den letzten 7 Tagen eskaliert hat, siehe obs.rivalitaet.verursacher): Ruf −2, für 10 Tage kostet jede weitere Eskalation zusätzlich Ruf."},
 	"build_bridge": {"params": {"grundstueck": "string", "bruecke": "string?", "vergabe": "string?", "firma": "int?", "reason": "string"},
 		"desc": "Die Stadt ausbauen: städtisches Grundstück jenseits von Fluss oder See erschließen (obs.erschliessung.vorschlaege), Weg und Brücke ganz aus der Stadtkasse. bruecke holz | stein | stahlbeton (muss Spannweite und Last schaffen, siehe brueckenarten; Standard die günstigste passende). vergabe ausschreibung (Standard; ortsansässige Unternehmer-Baufirmen bevorzugt) | direkt mit firma = Firmen-ID einer Unternehmer-Baufirma (obs.erschliessung.baufirmen), damit die Firma den Auftrag bekommt. Bis zur Abnahme gesperrt."},
+	"propose_regional_project": {"params": {"partner": "int", "anteil_prozent": "number?", "reason": "string"},
+		"desc": "Gemeinschaftsprojekt mit einer Nachbarstadt vorschlagen (obs.region.nachbarn): neue Schotterstraße zwischen beiden Orten; eine Ausschreibung, Kosten nach Anteilen (anteil_prozent = dein Anteil, Standard 50). Die Partnerstadt muss zustimmen (Frist 5 Tage), sonst scheitert es."},
+	"decide_regional_project": {"params": {"projekt": "string", "decision": "string", "reason": "string"},
+		"desc": "Über die Beteiligung an einem Gemeinschaftsprojekt entscheiden (obs.region.gemeinschaftsprojekte_offen): decision zustimmen | ablehnen. Zustimmen reserviert deinen Anteil; Ablehnen lässt das Projekt scheitern."},
 	"decide_mining": {"params": {"grundstueck": "string", "decision": "string", "abgabe_prozent": "number?", "reason": "string"},
 		"desc": "Abbauantrag eines Unternehmers entscheiden (obs.bergbau.abbauantraege): decision genehmigen | ablehnen. abgabe_prozent 3–15 = Förderabgabe vom Rohstoffwert an die Stadtkasse (Standard 8); höher bringt mehr Steuern, zu hoch macht den Abbau unrentabel. Bergwerke schaffen Arbeitsplätze und Exporte über den Hafen. Ohne Entscheidung genehmigt das Bauamt nach 3 Tagen mit 8 %."},
 	"decide_access": {"params": {"antrag": "string", "decision": "string", "bruecke": "string?", "vergabe": "string?", "firma": "int?", "reason": "string"},
@@ -261,6 +265,7 @@ func indicators() -> Dictionary:
 		"strom": sim.grid.summary(),
 		"erschliessung": access_indicators(),
 		"bergbau": _own_mining(),
+		"region": _region_obs(),
 		"hafen": harbor().summary() if harbor().enabled else {},
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
@@ -592,6 +597,16 @@ func execute(action: Dictionary) -> Dictionary:
 				res = harbor().expand("Bürgermeister %s" % name)
 			"build_bridge":
 				res = sim.access.order_city(str(a.grundstueck), "Bürgermeister %s" % name, _build_choice(a))
+			"propose_regional_project":
+				var mine := clampf(float(a.get("anteil_prozent", 50.0)) / 100.0, 0.0, 1.0)
+				var partner := int(a.partner)
+				res = sim.regional.propose(town, "verbindung", partner, {town: mine, partner: 1.0 - mine}, str(a.get("reason", "")))
+			"decide_regional_project":
+				var dr := str(a.get("decision", "")).to_lower()
+				if dr not in ["zustimmen", "ablehnen"]:
+					res = {"ok": false, "msg": "decision muss zustimmen oder ablehnen sein."}
+				else:
+					res = sim.regional.decide(str(a.projekt), town, dr == "zustimmen", str(a.get("reason", "")))
 			"decide_mining":
 				var dm := str(a.get("decision", "")).to_lower()
 				if dm not in ["genehmigen", "ablehnen"]:
@@ -891,6 +906,16 @@ func _assess_financing(a: Dictionary) -> Dictionary:
 ## Liegt das Grundstueck im eigenen Verwaltungsgebiet? (Region; Einzelstadt: immer)
 func _mine(pid: String) -> bool:
 	return sim.towns == null or not sim.towns.is_region() or sim.towns.of_parcel(pid) == town
+
+
+## Region: Nachbarstaedte (knapp), offene Gemeinschaftsprojekte zur eigenen Entscheidung, eigene laufende.
+func _region_obs() -> Dictionary:
+	if sim.towns == null or not sim.towns.is_region():
+		return {}
+	var me: String = sim.towns.name_of(town)
+	return {"stadt": me, "nachbarn": sim.towns.summary().filter(func(t): return int(t.id) != town).map(func(t): return {"id": t.id, "name": t.name, "buergermeister": t.buergermeister, "verfuegbar": t.verfuegbar}),
+		"gemeinschaftsprojekte_offen": sim.regional.pending_for(town),
+		"gemeinschaftsprojekte": sim.regional.summary().filter(func(r): return me in str(r.verbindung))}
 
 
 func _own_mining() -> Dictionary:

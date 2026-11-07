@@ -236,7 +236,7 @@ func _decide(a: Dictionary, day: int, by: String) -> void:
 		_log(a, a.decision)
 		return
 	var fee := float(res.costs.gebuehr)
-	if not _charge(a.applicant, fee, "Baugenehmigungsgebühr %s" % a.id):
+	if not _charge(a.applicant, fee, "Baugenehmigungsgebühr %s" % a.id, Towns.account_of(sim.towns.of_parcel(str(a.parcel)))):
 		a.status = "rueckfrage"
 		a.result = "ueberarbeitung_erforderlich"
 		a.questions = ["Die Genehmigungsgebühr von %s kann nicht gezahlt werden." % Catalog.money(fee)]
@@ -271,7 +271,7 @@ func _expire(a: Dictionary) -> void:
 	a.expired = true
 	var p: Dictionary = sim.parcels.parcel(a.parcel)
 	if p.get("state", "") == "genehmigt" and p.get("application", "") == a.id:
-		sim.parcels.mark(a.parcel, "privat_gehalten" if str(p.owner) != Parcels.CITY else "frei", "")
+		sim.parcels.mark(a.parcel, "privat_gehalten" if not Towns.is_public(str(p.owner)) else "frei", "")
 	_log(a, "Genehmigung abgelaufen")
 
 
@@ -283,7 +283,7 @@ func _has_rights(applicant: String, p: Dictionary) -> bool:
 
 
 ## Gebuehr vom Konto des Antragstellers an die Stadt (Haushalt: Guthaben; Unternehmen: Kasse als Verwaltungsaufwand).
-func _charge(applicant: String, amount: float, note: String) -> bool:
+func _charge(applicant: String, amount: float, note: String, town_acct: String = "P0") -> bool:
 	if amount <= 0.0:
 		return true
 	if applicant.begins_with("H"):
@@ -291,18 +291,18 @@ func _charge(applicant: String, amount: float, note: String) -> bool:
 		if h.is_empty() or float(h.balance) < amount:
 			return false
 		h.balance = float(h.balance) - amount
-		sim.economy.transfer("H0", "P0", amount)
+		sim.economy.transfer("H0", town_acct, amount)
 		return true
 	if applicant.begins_with("C"):
 		var c: Company = sim.company(int(applicant.substr(1)))
 		if c == null or c.ledger.cash < amount:
 			return false
-		c.ledger.book("admin", -amount, true, note, sim.game_min)
+		c.ledger.book("admin", -amount, true, note, sim.game_min, town_acct)
 		return true
 	if applicant == Construction.DEVELOPER:
 		if float(sim.economy.accounts[applicant]) - sim.construction.reserved_dev < amount:
 			return false
-		sim.economy.transfer(applicant, "P0", amount)
+		sim.economy.transfer(applicant, town_acct, amount)
 		return true
 	return applicant == Planning.PUBLIC_APPLICANT
 
