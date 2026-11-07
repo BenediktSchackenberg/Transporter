@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -8146,3 +8146,63 @@ func test_region_trade() -> void:
 	ok(s.companies[1].ledger.cash < cash1 and float(s.companies[0].ledger.cc_totals.get(mill.id, {}).get("trade_income", 0.0)) > 0.0, "Käufer hat bezahlt, Verkäufer Umsatz")
 	ok(deal.seller == "C0" and deal.buyer == "C1" and float(deal.paid) > 0.0 and str(k.payer) != "X0", "Binnenhandel: Verkäufer Firma 0, Käufer Firma 1, bezahlt %s – kein Import/Ausland (X0) beteiligt" % Catalog.money(float(deal.paid)))
 	ok(identity_ok(s), "Geld und Waren erhalten")
+
+
+## Abnahme 10/11/17: echter Flug A -> B mit Fracht und Passagier. Fracht ist reserviert und erst nach der Landung im Ziel verfuegbar,
+## Kapazitaet und Kosten zaehlen, Landegebuehr an B; die Reise erzeugt keine Person; Speichern/Laden waehrend des Flugs verdoppelt nichts.
+func test_region_flight() -> void:
+	var s := region_sim(2)
+	var T: Towns = s.towns
+	var A: AirNetwork = s.air
+	ok(A.enabled and A.routes.size() == 1 and A.planes.size() == 1 and is_equal_approx(A.cash(), AirNetwork.START_CAPITAL), "Flugnetz: eine Strecke %s, ein Flugzeug, Betreiber mit Startkapital" % str(A.summary().strecken))
+	var c0: Company = s.companies[0]
+	var hof := int(c0.depots[0])
+	s.stock.add("mehl", 30, "C0", hof, "Test", s.game_min)
+	var big := A.book_cargo(0, "mehl", 30 * 50, hof, 1)
+	ok(not big.ok, "über der Kapazität abgelehnt (%s)" % str(big.msg).left(60))
+	var rb: Dictionary = A.book_cargo(0, "mehl", 30, hof, 1)
+	ok(rb.ok and s.stock.available("mehl", "C0", hof) == 0, "Luftfracht gebucht, Ware am Abgangsort reserviert (%s)" % str(rb.get("msg", "")).left(70))
+	var dest := A._cargo_building(1)
+	var person: Dictionary = {}
+	for p in s.citizens.people:
+		if s.citizens.home_town(p) == 0 and float(p.get("balance", 0.0)) > 3.0 * AirNetwork.TICKET:
+			person = p
+			break
+	var bal0 := float(person.balance)
+	var pop0 := s.citizens.population()
+	var people0 := s.citizens.people.size()
+	var rt: Dictionary = A.book_trip(person, 1, "Familienbesuch")
+	ok(rt.ok and is_equal_approx(float(person.balance), bal0 - AirNetwork.TICKET), "Reise gebucht, Ticket aus dem eigenen Guthaben")
+	var p1 := T.mayor(1).cash()
+	var saw_air := false
+	var saved := {}
+	var t := 0.0
+	var f: Dictionary = {}
+	while t < 400.0:
+		s.step(0.1)
+		t += 0.1
+		var pl: Dictionary = A.planes[0]
+		f = A.flights.get(str(pl.flight), f)
+		if not f.is_empty() and f.status == "in_der_luft":
+			var st: Dictionary = A.plane_state(pl, s.game_min)
+			saw_air = saw_air or float(st.h) > 3.0
+			if saved.is_empty():
+				saved = JSON.parse_string(JSON.stringify(s.to_dict()))
+				ok(s.stock.qty("mehl", "C0", dest) == 0 and int(f.units) > 0 and f.pax.size() == 1, "in der Luft: Fracht an Bord (%d LE), nicht im Ziellager; 1 Passagier" % int(f.units))
+		if A.bookings[str(rb.ref)].status == "angekommen":
+			break
+	ok(A.bookings[str(rb.ref)].status == "angekommen" and saw_air, "Flug gestartet, sichtbar in der Luft, gelandet")
+	ok(s.stock.qty("mehl", "C0", dest) == 30 and T.of_building(dest) == 1 and s.stock.qty("mehl", "C0", hof) == 0, "Fracht im Frachtterminal von %s (Eigentum Firma 0)" % T.name_of(1))
+	ok(T.mayor(1).cash() >= p1 + AirNetwork.LANDING_FEE - 0.01 and float(A.stats.kosten) > 0.0 and float(A.stats.erloese) > 0.0, "Landegebühr an %s, Kosten und Erlöse des Betreibers verbucht" % T.name_of(1))
+	ok(s.citizens.people.size() == people0 and s.citizens.population() == pop0 and s.citizens.home_town(person) == 0 and int(person.get("reise_ort", -1)) == 1, "Reise erzeugt keine Person; Wohnstadt bleibt %s, Aufenthalt in %s" % [T.name_of(0), T.name_of(1)])
+	ok(identity_ok(s), "Geld und Waren erhalten")
+	# Laden mitten im Flug und zu Ende fliegen: keine Verdopplung
+	var s2 := Simulation.from_dict(saved)
+	var A2: AirNetwork = s2.air
+	var f2: Dictionary = A2.flights.get(str(f.id), {})
+	ok(not f2.is_empty() and f2.status == "in_der_luft" and s2.stock.qty("mehl", "C0", dest) == 0 and s2.citizens.people.size() == people0, "Laden während des Flugs: Flug in der Luft, Fracht nicht doppelt")
+	var t2 := 0.0
+	while t2 < 200.0 and A2.bookings[str(rb.ref)].status != "angekommen":
+		s2.step(0.1)
+		t2 += 0.1
+	ok(A2.bookings[str(rb.ref)].status == "angekommen" and s2.stock.qty("mehl", "C0", dest) == 30 and s2.stock.qty("mehl", "C0", hof) == 0 and identity_ok(s2), "nach dem Laden landet der Flug, Fracht genau einmal angekommen")

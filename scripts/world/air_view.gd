@@ -75,7 +75,27 @@ static func _dir_of(a: Vector2, b: Vector2) -> int:
 	return 1 if d.y >= 0.0 else 3
 
 
+var _region_planes := {}       # Flugzeug-ID -> Node (Region: echte Fluege des AirNetwork)
+
+
+## Region: je Flugzeug des Flugnetzes ein Sprite an seiner aus dem Flugzustand berechneten Position.
+func _update_region() -> void:
+	_plane.visible = false
+	for p in sim.air.planes:
+		if not _region_planes.has(p.id):
+			_region_planes[p.id] = _make_plane()
+		var node: Node2D = _region_planes[p.id]
+		var st: Dictionary = sim.air.plane_state(p, sim.game_min)
+		if st.is_empty():
+			node.visible = false
+			continue
+		_place(node, st, int(st.dir))
+
+
 func update_view(_delta: float) -> void:
+	if sim != null and sim.air.enabled and _plane != null:
+		_update_region()
+		return
 	if sim == null or not sim.airport.enabled or _plane == null:
 		if _plane != null:
 			_plane.visible = false
@@ -85,26 +105,30 @@ func update_view(_delta: float) -> void:
 		_plane.visible = false
 		return
 	var dir := _dir_of(sim.airport.state(sim.game_min - 0.5).pos, sim.airport.state(sim.game_min + 0.5).pos)
+	_place(_plane, st, dir)
+
+
+func _place(plane: Node2D, st: Dictionary, dir: int) -> void:
 	# st.pos steht in Feldern; to_screen erwartet Welt-Einheiten (1 Feld = 32), wie in ShipView.
 	var ground := Iso.to_screen(Vector2(float(st.pos.x) * 32.0, float(st.pos.y) * 32.0))
 	var lift := -2.0 * float(st.h) * STEP * 0.5
-	_plane.position = ground
-	var body: Sprite2D = _plane.get_node("body")
+	plane.position = ground
+	var body: Sprite2D = plane.get_node("body")
 	var key := "air_%d" % dir
 	body.texture = tex(key)
 	body.scale = Vector2(SCALE, SCALE)
 	body.offset = -pivot(dir) * SCALE + Vector2(0, lift)
-	var lit: Sprite2D = _plane.get_node("lit")
+	var lit: Sprite2D = plane.get_node("lit")
 	lit.texture = tex(key + "_lit")
 	lit.scale = Vector2(SCALE, SCALE)
 	lit.offset = body.offset
 	lit.modulate.a = _night
-	var shadow: Sprite2D = _plane.get_node("shadow")
+	var shadow: Sprite2D = plane.get_node("shadow")
 	shadow.offset = -pivot(dir) * SCALE
 	# Der Bodenschatten bleibt unten auf dem Boden; je hoeher der Flug, desto groesser und weicher (Tiefenillusion).
 	shadow.scale = Vector2(SCALE, SCALE).lerp(Vector2(SCALE * 1.6, SCALE * 1.35), clampf(float(st.h) / 12.0, 0.0, 1.0))
 	shadow.modulate.a = 0.42 * (1.0 - clampf(float(st.h) / 20.0, 0.0, 0.55))
-	_plane.visible = true
+	plane.visible = true
 
 
 ## Naechtlichter (Positions-/Blinklichter) folgen der Naechte der Stadt.
