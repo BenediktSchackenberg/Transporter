@@ -11,6 +11,7 @@ extends RefCounted
 ## Begruendung; die vorschlagende Stadt kann es allein (Anteil 100 %) neu vorschlagen.
 
 const DEADLINE_DAYS := 5
+const RETRY_DAYS := 30               # Sperrfrist nach einem gescheiterten Vorschlag fuer dasselbe Staedtepaar
 const COST_BASE := 4000.0
 const COST_CELL := 140.0
 const CELLS_PER_DAY := 12
@@ -65,9 +66,13 @@ func plan_link(a: int, b: int) -> Dictionary:
 func propose(initiator: int, kind: String, partner: int, shares: Dictionary = {}, reason: String = "") -> Dictionary:
 	if kind != "verbindung":
 		return {"ok": false, "msg": "Unbekannte Projektart %s (verbindung)." % kind}
+	var today := GameCalendar.day_of(sim.game_min)
 	for r in items.values():
-		if r.status in ["vorgeschlagen", "beschlossen", "im_bau"] and ((int(r.from) == initiator and int(r.to) == partner) or (int(r.from) == partner and int(r.to) == initiator)):
+		var pair: bool = (int(r.from) == initiator and int(r.to) == partner) or (int(r.from) == partner and int(r.to) == initiator)
+		if pair and r.status in ["vorgeschlagen", "beschlossen", "im_bau"]:
 			return {"ok": false, "msg": "Für %s – %s läuft schon das Gemeinschaftsprojekt %s." % [sim.towns.name_of(initiator), sim.towns.name_of(partner), r.id]}
+		if pair and r.status == "gescheitert" and today - int(r.deadline) < RETRY_DAYS:
+			return {"ok": false, "msg": "%s ist vor kurzem gescheitert (%s); neuer Vorschlag frühestens an Tag %d." % [r.id, r.note, int(r.deadline) + RETRY_DAYS]}
 	var pl := plan_link(initiator, partner)
 	if not pl.ok:
 		return pl
@@ -188,6 +193,23 @@ func pending_for(town: int) -> Array:
 	return items.values().filter(func(r): return r.status == "vorgeschlagen" and str(r.votes.get(str(town), "")) == "offen").map(func(r): return {
 		"id": r.id, "von": sim.towns.name_of(int(r.initiator)), "verbindung": "%s – %s" % [sim.towns.name_of(int(r.from)), sim.towns.name_of(int(r.to))],
 		"anteil_eur": int(share_amount(r, town)), "kosten_gesamt": int(r.cost), "neue_felder": r.cells.size(), "frist_tag": int(r.deadline), "begruendung": r.reason})
+
+
+## Direkt per Strasse verbundene Staedte (Startstrassen und fertige Verbindungen).
+func linked(town: int) -> Array:
+	var out: Array = []
+	for r in sim.city.region_roads:
+		if int(r.von) == town:
+			out.append(int(r.nach))
+		elif int(r.nach) == town:
+			out.append(int(r.von))
+	for r in items.values():
+		if r.status == "fertig":
+			if int(r.from) == town:
+				out.append(int(r.to))
+			elif int(r.to) == town:
+				out.append(int(r.from))
+	return out
 
 
 func summary() -> Array:

@@ -138,6 +138,15 @@ static func decide(ind: Dictionary) -> Dictionary:
 		var ok_share := share <= float(ind.haushalt.verfuegbar) * 0.5
 		actions.append({"action": "decide_regional_project", "projekt": gp.id, "decision": "zustimmen" if ok_share else "ablehnen",
 			"reason": ("Anteil %s ist gedeckt; die Verbindung %s bringt kürzere Wege." % [Catalog.money(share), gp.verbindung]) if ok_share else ("Anteil %s bindet mehr als die Hälfte der verfügbaren Mittel (%s)." % [Catalog.money(share), Catalog.money(float(ind.haushalt.verfuegbar))])})
+	# 1h0b) Strassennetz der Region ausbauen: mit gut gefuellter Kasse eine direkte Verbindung zur naechsten noch nicht direkt
+	# angebundenen Stadt vorschlagen (Kosten je zur Haelfte); laeuft schon ein Projekt oder ist eines kuerzlich gescheitert, lehnt die
+	# Region den Vorschlag mit Grund ab.
+	var miss: Array = rg.get("ohne_direkte_strasse", [])
+	if actions.size() < MAX_ACTIONS and not miss.is_empty() and rg.get("gemeinschaftsprojekte", []).filter(func(r): return str(r.status) in ["vorgeschlagen", "beschlossen", "im_bau"]).is_empty() \
+			and float(ind.haushalt.verfuegbar) > 90000.0:
+		miss.sort_custom(func(a, b): return int(a.entfernung) < int(b.entfernung))
+		actions.append({"action": "propose_regional_project", "partner": int(miss[0].id), "anteil_prozent": 50,
+			"reason": "Keine direkte Straße nach %s; eine Verbindung verkürzt Wege für Lieferungen und Pendler." % miss[0].name})
 	# 1h1a) Bergbau: Abbauantraege genehmigen (Arbeitsplaetze, Export, Abgabe); Abgabe nach Partei
 	var mb: Dictionary = ind.get("bergbau", {})
 	for ap in mb.get("abbauantraege", []):

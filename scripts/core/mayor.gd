@@ -318,7 +318,11 @@ func _traffic_indicators(jams: int) -> Dictionary:
 	for m in T.measures.values():
 		busy[m.cell] = m.status
 	var spots: Array = []
-	for h in T.hotspots(5):
+	for h in T.hotspots(5 if not _region() else 40):
+		if _region() and sim.towns.of_cell(h.cell) != town:
+			continue   # nur Engpaesse im eigenen Gebiet
+		if spots.size() >= 5:
+			break
 		spots.append({"x": h.cell.x, "y": h.cell.y, "verlorene_fahrzeugsekunden": snappedf(h.lost, 1.0), "tage_mit_stau": h.days, "wiederkehrend": h.recurring,
 			"kreuzung": T.is_junction(h.cell), "neben_gebaeude": T.next_to_building(h.cell), "kapazitaet": T.capacity_of(h.cell), "massnahme": busy.get(h.cell, "")})
 	var done: Array = []
@@ -954,6 +958,9 @@ func _region_obs() -> Dictionary:
 	var me: String = sim.towns.name_of(town)
 	return {"stadt": me, "nachbarn": sim.towns.summary().filter(func(t): return int(t.id) != town).map(func(t): return {"id": t.id, "name": t.name, "buergermeister": t.buergermeister, "verfuegbar": t.verfuegbar}),
 		"gemeinschaftsprojekte_offen": sim.regional.pending_for(town),
+		"direkt_verbunden": sim.regional.linked(town).map(func(k): return sim.towns.name_of(k)),
+		"ohne_direkte_strasse": range(sim.towns.count()).filter(func(k): return k != town and k not in sim.regional.linked(town)).map(func(k): return {"id": k, "name": sim.towns.name_of(k),
+			"entfernung": absi(sim.towns.get_t(k).center.y - sim.towns.get_t(town).center.y) + absi(sim.towns.get_t(k).center.x - sim.towns.get_t(town).center.x)}),
 		"gemeinschaftsprojekte": sim.regional.summary().filter(func(r): return me in str(r.verbindung))}
 
 

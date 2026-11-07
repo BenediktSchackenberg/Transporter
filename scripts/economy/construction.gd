@@ -435,6 +435,9 @@ func on_day(day: int) -> void:
 				_day_inspection(pr, day)
 	# Material, das kein Transportunternehmen bringt, holt der Bautrupp selbst (BuildCrews)
 	_public_day(day)
+	if sim.towns.is_region() and day % DEV_TICK_DAYS == 0:
+		for k in sim.towns.count():
+			_developer_town(k)
 	_works_day(day)
 	_jobs_day(day)
 	_household_day()
@@ -734,14 +737,26 @@ func _collect_rent(u: Dictionary) -> void:
 
 # ------------------------------------------------------------------ Bautraeger (Immobilienunternehmen, baut selbststaendig)
 func _developer_month() -> void:
-	var M: Mayor = sim.towns.mayor(_demand_town())   # Stadt mit der groessten Wohnungsnachfrage (Einzelstadt: 0)
+	if sim.towns.is_region():
+		return   # Region: der Bautraeger arbeitet je Stadt alle DEV_TICK_DAYS Tage (_developer_town aus on_day)
+	_developer_town(0)
+
+
+## Region (Auftrag 17): Bautraeger je Stadt - hoechstens ein laufendes Vorhaben je Stadt; ein genehmigter Antrag wird sofort begonnen.
+const DEV_TICK_DAYS := 5
+func _developer_town(town: int) -> void:
+	var region: bool = sim.towns.is_region()
+	var M: Mayor = sim.towns.mayor(town)
+	var mine := func(pid: String) -> bool: return not region or sim.towns.of_parcel(pid) == town
 	for pr in projects.values():
-		if pr.client == DEVELOPER and pr.status in ["angebote", "erschliessung", "im_bau", "pruefung", "wartet_anschluss"]:
-			return        # ein Vorhaben nach dem anderen
+		if pr.client == DEVELOPER and pr.status in ["angebote", "erschliessung", "im_bau", "pruefung", "wartet_anschluss"] and mine.call(str(pr.parcel)):
+			return        # ein Vorhaben nach dem anderen (je Stadt)
 	for a in sim.permits.apps.values():
-		if a.applicant == DEVELOPER and a.status != "entschieden":
+		if a.applicant != DEVELOPER or not mine.call(str(a.parcel)):
+			continue
+		if a.status != "entschieden":
 			return
-		if a.applicant == DEVELOPER and a.status == "entschieden" and a.result.begins_with("genehmigt") and not a.expired:
+		if a.result.begins_with("genehmigt") and not a.expired:
 			var known := false
 			for pr in projects.values():
 				known = known or pr.app == a.id
@@ -750,7 +765,7 @@ func _developer_month() -> void:
 				if r.ok:
 					accept_best(r.id)
 				return
-	if _supply_project():
+	if town == 0 and _supply_project():
 		return
 	if M.waiting <= 0 and M.vacancy() > 0.02:
 		return
@@ -760,8 +775,8 @@ func _developer_month() -> void:
 	# Zuerst wie bisher Mehrfamilienhaus/Stadtvilla auf grossen Grundstuecken; passt dort nichts (Kuestenort: kleine Grundstuecke im Ort),
 	# das groesste Wohnhaus, das auf ein erschlossenes Grundstueck passt (Doppelhaus, Einfamilienhaus).
 	var crit := {"zone": "wohnen", "min_area": 12, "utilities": "voll", "limit": 160}
-	if sim.towns.is_region():
-		crit["town"] = M.town   # dort bauen, wo die Wohnungssuchenden warten
+	if region:
+		crit["town"] = town   # in der Stadt, deren Wohnungssuchende warten
 	var free: Array = sim.parcels.search(crit)   # erst filtern, dann begrenzen (billigste sind oft unerschlossen)
 	if _developer_try(free.filter(func(p): return int(p.area) >= 40), def_id):
 		return
@@ -1033,6 +1048,10 @@ func _finish_public(e: Dictionary) -> void:
 		sim.parcels.touch(pid)
 	if prj.kind == "verbindung":
 		sim.regional.finish(str(prj.ref))
+	if prj.kind == "erschliessung" and "strasse" in prj.parts:
+		prj["road_cells"] = sim.access.lay_roads(prj.parcels)   # neue Strassen bis an die Grundstuecke (sichtbar, befahrbar)
+		if not prj.road_cells.is_empty():
+			sim.log_event("%s: neue Straße (%d Felder) zu %d Grundstücken fertig." % [sim.towns.name_of(M.town), prj.road_cells.size(), prj.parcels.size()], "good")
 	if prj.kind == "hafenausbau":
 		sim.towns.harbor(M.town).finish_expansion()
 	if prj.kind == "netzausbau":

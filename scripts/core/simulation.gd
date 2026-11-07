@@ -1369,6 +1369,10 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.permits.from_dict(d.get("permits", {}))
 	s.mayor.from_dict(d.get("mayor", {}))
 	s._region_from_dict(d.get("region", {}))
+	for M in s.towns.mayors:   # Strassen aus fertigen Erschliessungen wieder anlegen
+		for prj in M.projects.values():
+			if prj.get("status", "") == "fertig" and prj.has("road_cells"):
+				s.access.reapply(prj.road_cells)
 	s.construction.from_dict(d.get("construction", {}))
 	s.city_depot.from_dict(d.get("city_depot", {}))
 	s.traffic_flow.from_dict(d.get("traffic_flow", {}))

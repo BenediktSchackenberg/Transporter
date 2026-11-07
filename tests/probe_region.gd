@@ -50,8 +50,11 @@ func _initialize() -> void:
 			for k in s.towns.count():
 				var M: Mayor = s.towns.mayor(k)
 				var biz: int = s.biz.items.values().filter(func(b): return b.status != "geschlossen" and s.towns.of_building(int(b.site)) == k).size()
-				print("  %s: Einwohner %d, Kasse %d (verfügbar %d), Betriebe %d, Unternehmen mit Heimat %d, Projekte %d, Zustimmung %d" % [s.towns.name_of(k),
-					s.citizens.population_of(k), int(M.cash()), int(M.available_budget()), biz, s.founders.active_home(k), M.projects.values().filter(func(p): return p.status != "fertig").size(), int(M.approval)])
+				var nb: int = s.city.buildings.filter(func(b): return s.towns.of_building(int(b.id)) == k).size()
+				var g: Dictionary = M.goals()
+				var bauv: int = s.construction.projects.values().filter(func(p): return s.towns.of_parcel(str(p.parcel)) == k and p.status not in ["abgebrochen"]).size()
+				print("  %s: Gebäude %d, Wohnhäuser %d, Bauvorhaben %d, Wartende %d, Einwohner %d, Kasse %d (verfügbar %d), Betriebe %d, Firmen %d, Projekte %d" % [s.towns.name_of(k), nb, int(g.wohnhaeuser), bauv, M.waiting,
+					s.citizens.population_of(k), int(M.cash()), int(M.available_budget()), biz, s.founders.active_home(k), M.projects.values().filter(func(p): return p.status != "fertig").size()])
 			var a: Dictionary = s.air.summary()
 			print("  Unternehmen %d · Gründungen %d · abgelehnt %d · Flüge %d · Passagiere %d · Fracht %d LE · Flugkasse %d · Pendler %d · Umzüge %d · Identität %s" % [s.companies.size(),
 				s.founders.history.size(), s.founders.refusals.size(), int(a.statistik.fluege), int(a.statistik.passagiere), int(a.statistik.fracht_einheiten), int(a.kasse),

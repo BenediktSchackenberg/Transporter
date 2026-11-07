@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -1869,7 +1869,7 @@ func test_stage2_memory() -> void:
 	ok(rel.erfahrungen.size() <= MemoryBook.PROMPT_EXPERIENCES and rel.erfahrungen[0].inhalt.contains("Hafen"), "Auswahl begrenzt, passender Bereich zuerst")
 	ok(M.books[0].experiences.size() <= MemoryBook.MAX_EXPERIENCES, "Gedächtnis begrenzt")
 	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
-	ok(obs.has("gedaechtnis") and JSON.stringify(obs).length() / 4 < 6000, "Gedächtnis in der Beobachtung, Größe begrenzt")
+	ok(obs.has("gedaechtnis") and JSON.stringify(obs).length() / 4 < 6200, "Gedächtnis in der Beobachtung, Größe begrenzt (~%d Token)" % (JSON.stringify(obs).length() / 4))   # +200: Bergbau-Schritte, Gebaeudestufen, Region (07.11.2026, gemessen 6149)
 	# Speichern/Laden und Uebernahme in neue Partie
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.memory.books[0].experiences.size() == M.books[0].experiences.size(), "Gedächtnis im Spielstand")
@@ -7999,11 +7999,15 @@ func test_region_joint_project() -> void:
 	ok(R.pending_for(2).size() == 1 and R.pending_for(0).is_empty() and not M2.indicators().region.gemeinschaftsprojekte_offen.is_empty(), "Partnerstadt sieht den Vorschlag in ihren Kennzahlen")
 	var no: Dictionary = M2.execute({"action": "decide_regional_project", "projekt": str(r1.ref), "decision": "ablehnen", "reason": "kein Bedarf"})
 	ok(no.ok and R.items[str(r1.ref)].status == "gescheitert" and is_equal_approx(M0.commitments, 0.0) and is_equal_approx(M2.commitments, 0.0), "Ablehnung: Projekt gescheitert, nichts reserviert")
+	var again: Dictionary = R.propose(0, "verbindung", 2, {0: 0.5, 2: 0.5}, "sofort erneut")
+	ok(not again.ok and str(again.msg).contains("frühestens"), "Sperrfrist nach Ablehnung: %s" % str(again.msg).left(80))
+	R.items[str(r1.ref)].deadline = -100   # Sperrfrist abgelaufen
 	# Fristablauf ohne Beschluss
 	var r2: Dictionary = R.propose(0, "verbindung", 2, {0: 0.5, 2: 0.5}, "Test Frist")
 	var day := GameCalendar.day_of(s.game_min)
 	R.on_day(day + RegionalProjects.DEADLINE_DAYS + 1)
 	ok(R.items[str(r2.ref)].status == "gescheitert" and str(R.items[str(r2.ref)].note).contains("Frist"), "Fristablauf: gescheitert mit Begründung")
+	R.items[str(r2.ref)].deadline = -100
 	# Zustimmung: eine Vergabe, Anteile reserviert und bezahlt
 	var r3: Dictionary = R.propose(0, "verbindung", 2, {0: 0.6, 2: 0.4}, "Test")
 	var rid := str(r3.ref)
@@ -8348,6 +8352,38 @@ func test_region_model_queue() -> void:
 	MayorAgent._server_busy.clear()
 	for ag in agents:
 		ag.free()
+
+
+## Strassennetz waechst: Erschliessung legt echte Strassenzellen vom Netz bis an das Grundstueck (befahrbar, nach dem Laden erhalten);
+## Regel-Buergermeister schlaegt eine direkte Verbindung zu einer noch nicht angebundenen Stadt vor.
+func test_region_town_roads() -> void:
+	var s := region_sim(3)
+	var T: Towns = s.towns
+	var M0: Mayor = T.mayor(0)
+	var cands: Array = s.parcels.search({"zone": "wohnen", "town": 0, "limit": 3000}).filter(func(p): return s.parcels.utility_level(p) == "keine" and int(p.area) >= 40)
+	cands.sort_custom(func(a, b): return (absi(int(a.rect[0]) - T.get_t(0).center.x) + absi(int(a.rect[1]) - T.get_t(0).center.y)) < (absi(int(b.rect[0]) - T.get_t(0).center.x) + absi(int(b.rect[1]) - T.get_t(0).center.y)))
+	var pid := ""
+	var plan := {}
+	for p in cands.slice(0, 40):
+		plan = s.access.plan(str(p.id), Bridges.LOAD_TOWN)
+		if plan.ok and not plan.cells.is_empty() and plan.get("spans", []).is_empty():
+			pid = str(p.id)
+			break
+	ok(pid != "", "unerschlossenes Wohngrundstück mit Landweg gefunden (%s)" % pid)
+	if pid == "":
+		return
+	var roads0: int = s.city.road_count
+	var cells: Array = s.access.lay_roads([pid])
+	var c0 := Vector2i(int(cells[0][0]), int(cells[0][1]))
+	ok(not cells.is_empty() and s.city.road_count == roads0 + cells.size() and s.city.is_road(c0) and not s.nav.road.is_point_solid(c0), "neue Straße mit %d Feldern angelegt und befahrbar" % cells.size())
+	M0.projects["P99"] = {"id": "P99", "kind": "erschliessung", "status": "fertig", "parcels": [pid], "parts": ["strasse"], "cost": 0.0, "road_cells": cells}
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.city.is_road(c0) and s2.city.road_count == s.city.road_count, "Laden: neue Straße bleibt erhalten")
+	var ind: Dictionary = M0.indicators()
+	ok(not ind.region.ohne_direkte_strasse.is_empty(), "%s hat Städte ohne direkte Straße: %s" % [T.name_of(0), str(ind.region.ohne_direkte_strasse.map(func(x): return x.name))])
+	var dec: Dictionary = MayorBrain.decide(ind)
+	ok(dec.actions.any(func(a): return a.action == "propose_regional_project"), "Regel-Bürgermeister schlägt eine direkte Verbindung vor")
+	ok(identity_ok(s), "Geld erhalten")
 
 
 ## Testadapter: nimmt Anfragen an und antwortet nicht (laufende Anfrage am gemeinsamen Server).

@@ -217,6 +217,34 @@ func _mayor_of(j: Dictionary) -> Mayor:
 	return sim.towns.mayor(sim.towns.of_parcel(str(j.parcel)))
 
 
+## Erschliessung (Auftrag 17: das Strassennetz waechst mit der Stadt): fuer jedes Grundstueck den Landweg vom bestehenden Netz bis an
+## einen Bauplatz als echte Strassenzellen anlegen. Gibt die neuen Zellen als [[x, y], ...] zurueck (fuer Speichern/Laden).
+func lay_roads(pids: Array) -> Array:
+	var out: Array = []
+	for pid in pids:
+		var p: Dictionary = sim.parcels.parcel(str(pid))
+		if p.is_empty():
+			continue
+		var res := _search(p, false)
+		if not res.ok or res.cells.is_empty():
+			continue
+		_apply_cells(res.cells)
+		_fields.clear()
+		_cache.clear()
+		for c in res.cells:
+			out.append([c.x, c.y])
+	return out
+
+
+## Laden: gespeicherte Strassenzellen wieder anlegen (die Welt wird aus dem Seed neu erzeugt).
+func reapply(cells: Array) -> void:
+	if cells.is_empty():
+		return
+	_apply_cells(cells.map(func(a): return Vector2i(int(a[0]), int(a[1]))))
+	_fields.clear()
+	_cache.clear()
+
+
 func order_city(pid: String, by: String, choice: Dictionary = {}) -> Dictionary:
 	var chk := _check_new(pid)
 	if not chk.ok:
