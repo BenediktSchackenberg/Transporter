@@ -163,7 +163,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"freie_depotstandorte": free_sites.slice(0, 6), "verkehr": sim.traffic_events.map(func(e): return e.text),
 		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid), "personal_lage": sim.households.summary_of(cid), "wohnmarkt": _housing(sim, cid), "bevoelkerung": _population(sim), "spielerkredite": sim.player_loans.summary_of(cid), "auflagen": sim.oversight.open_for("C%d" % cid).map(func(o): return {"id": o.id, "betrifft": o.label, "zustand": int(sim.oversight.condition_of(o.what)), "frist_tag": int(o.deadline)}), "gebaeudezustand": sim.care.summary_of(cid), "gesundheit_personal": sim.workforce.summary_of(cid),
 		"meldungen_nur_daten": sim.news.items.filter(func(i): return float(i.relevance) >= 0.5).slice(0, 3).map(func(i): return {"gemeldet": i.title, "einschaetzung_engine": "%s, Relevanz %d %%" % [i.cat, int(float(i.relevance) * 100.0)]}),
-		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "rivalitaet": sim.rivalry.summary_of(cid), "betriebe": sim.biz.obs_of(cid), "bergbau": sim.mining.steps_for(cid), "verfuegbare_branchen": _branches(sim, cid), "produktion_markt": sim.prod.market_obs(), "immobilien_angebote": sim.realty.offers(2) if sim.company(cid).ledger.cash > 80000.0 else [], "it_angebote": sim.it.offers(), "fremde_stammkunden": foreign_loyal.slice(0, 8),
+		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "rivalitaet": sim.rivalry.summary_of(cid), "betriebe": sim.biz.obs_of(cid), "region": _region(sim, cid), "bergbau": sim.mining.steps_for(cid), "verfuegbare_branchen": _branches(sim, cid), "produktion_markt": sim.prod.market_obs(), "immobilien_angebote": sim.realty.offers(2) if sim.company(cid).ledger.cash > 80000.0 else [], "it_angebote": sim.it.offers(), "fremde_stammkunden": foreign_loyal.slice(0, 8),
 		"nachrichten": msgs, "angebote_an_dich": offers_in, "deine_angebote": offers_out,
 		"ergebnisse_deiner_aktionen": results.slice(-10), "ereignisse": events.slice(-10),
 		"hinweis": hint, "plan": sim.plans.summary(cid), "gedaechtnis": sim.memory.relevant(cid, _context(sim, cid, market)),
@@ -314,6 +314,25 @@ static func _financed_vehicles(sim: Simulation, cid: int, known_open: Array) -> 
 
 ## Lokales Modell bekommt die fuer Transportentscheidungen relevanten Fakten und
 ## exakte IDs. Der vollstaendige Zustand bleibt fuer andere Provider erhalten.
+## Region (Auftrag 17): eigene Heimatstadt, die anderen Staedte knapp (Einwohner, fehlende Versorgung, freies erschlossenes Land), Flugnetz.
+## Leer in der Einzelstadt (keine zusaetzlichen Token). Standorte fremder Staedte: found_business mit stadt=<Name>.
+static func _region(sim: Simulation, cid: int) -> Dictionary:
+	if not sim.towns.is_region():
+		return {}
+	var T: Towns = sim.towns
+	var running: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING)
+	var towns: Array = []
+	for t in T.list:
+		var k := int(t.id)
+		var here := running.filter(func(b): return T.of_building(int(b.site)) == k)
+		var missing: Array = ["baeckerei", "restaurant"].filter(func(br): return not here.any(func(b): return b.branch == br))
+		towns.append({"stadt": t.name, "einwohner": sim.citizens.population_of(k), "fehlt": missing, "freie_grundstuecke": sim.parcels.search({"town": k, "utilities": "voll", "limit": 50}).size()})
+	var out := {"heimat": T.name_of(int(sim.company(cid).home_town)), "staedte": towns}
+	if sim.air.enabled:
+		out["flugnetz"] = {"strecken": sim.air.summary().strecken, "fracht_je_flug_le": AirNetwork.CARGO_UNITS, "entgelt": "%d EUR + %d EUR/LE" % [int(AirNetwork.CARGO_BASE), int(AirNetwork.CARGO_UNIT)]}
+	return out
+
+
 static func compact_for_local(obs: Dictionary) -> Dictionary:
 	var keys := ["spielminute", "zeit", "dein_ziel", "ich", "figur", "fahrzeuge", "meine_auftraege", "markt",
 		"unbekannte_offene_auftraege", "fahrzeugmodelle", "personal", "aufgaben", "ressourcen", "bank",

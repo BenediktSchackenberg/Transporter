@@ -91,6 +91,8 @@ const SCHEMA := {
 	"report_rival": {"params": {"target": "int", "reason": "string?"}, "desc": "Konkurrenten beim Bürgermeister anzeigen: das Amt prüft sofort (Steuer, Zahlungsrückstand, Zustand der Einrichtungen). Ohne Beanstandung zahlst DU Bußgeld und verlierst Ruf."},
 	"found_business": {"params": {"branche": "string", "reason": "string?", "standort": "string?", "modus": "string?", "rohstoff": "string?", "stadt": "string?"},
 		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). standort: hauptsitz | markt (freie Parzelle nahe dem Großhandel, kurze Lieferwege) | G<n>; Feld: ohne Angabe das günstigste passende Grundstück. modus pachten|kaufen (Grundstück). Bergwerk: rohstoff eisenerz|kohle|kalkstein|rohmaterial, die beste freie Lagerstätte wird gekauft. Kosten (Gründung inkl. Ausstattung) siehe Liste. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
+	"book_air_cargo": {"params": {"item": "string", "menge": "int", "standort": "int", "stadt": "string", "reason": "string?"},
+		"desc": "Luftfracht (Region, region.flugnetz): eigene Ware vom Standort (Gebäude-ID in deiner Stadt) in eine Nachbarstadt mit Direktflug. Schnell, aber teurer und höchstens 20 Ladeeinheiten je Flug; die Ware liegt nach der Landung im Frachtterminal der Zielstadt."},
 	"explore_deposit": {"params": {"grundstueck": "string", "reason": "string?"},
 		"desc": "Probebohrung auf einer Lagerstätte (bergbau.<rohstoff>.schritt = erkunden): 6 000 EUR, 2 Tage; danach sind Menge und Qualität bekannt (vorher nur geschätzt). Erster Schritt zum Bergwerk."},
 	"request_mining": {"params": {"grundstueck": "string", "reason": "string?"},
@@ -738,6 +740,14 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.rivalry.block_road(cid, _i(a.target))
 		"build_access":
 			return sim.access.request(cid, _s(a.grundstueck), str(a.get("reason", "")))
+		"book_air_cargo":
+			var tgt := -1
+			for t in sim.towns.list:
+				if str(t.name).to_lower() == _s(a.stadt).to_lower() or str(t.id) == _s(a.stadt):
+					tgt = int(t.id)
+			if tgt < 0:
+				return {"ok": false, "msg": "Unbekannte Stadt %s." % _s(a.stadt)}
+			return sim.air.book_cargo(cid, _s(a.item), _i(a.menge), _i(a.standort), tgt)
 		"explore_deposit":
 			return sim.mining.explore(cid, _s(a.grundstueck))
 		"request_mining":

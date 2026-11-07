@@ -18,7 +18,9 @@ const CARGO_UNITS := 20              # Ladeeinheiten je Flug
 const TURN_MIN := 25.0               # Abfertigung am Boden (Spielminuten)
 const TAXI_MIN := 4.0
 const UNLOAD_MIN := 8.0
-const TICKET := 28.0
+const TICKET := 55.0
+const MIN_PAX := 3                    # Abflug erst ab 3 Reisenden oder angelieferter Fracht ...
+const MAX_WAIT := 100.0              # ... oder wenn die aelteste Buchung so lange (Spielminuten) wartet
 const CARGO_BASE := 30.0
 const CARGO_UNIT := 6.0
 const FUEL_BASE := 45.0
@@ -127,7 +129,7 @@ func book_trip(person: Dictionary, to_town: int, reason: String, back: bool = fa
 	stats.erloese = float(stats.erloese) + TICKET
 	var id := "Y%d" % _next
 	_next += 1
-	bookings[id] = {"id": id, "kind": "pax", "person": int(person.id), "from": from_town, "to": to_town, "reason": reason, "status": "gebucht", "flight": "", "back": back}
+	bookings[id] = {"id": id, "kind": "pax", "person": int(person.id), "from": from_town, "to": to_town, "reason": reason, "status": "gebucht", "flight": "", "back": back, "since": sim.game_min}
 	person["reise"] = id
 	return {"ok": true, "msg": "Reise %s gebucht." % id, "ref": id}
 
@@ -140,11 +142,43 @@ func tick(now: float) -> void:
 	for b in bookings.values():
 		if b.kind == "cargo" and b.status == "anlieferung" and now >= float(b.ready_min):
 			b.status = "bereit"
+			b["since"] = now
 	for f in flights.values():
 		_advance(f, now)
 	for p in planes:
 		if p.flight == "" and now >= float(p.next_dep):
-			_depart(p, now)
+			var r := _route(str(p.route))
+			var here := int(p.at)
+			var there := int(r.b) if here == int(r.a) else int(r.a)
+			if _due(here, there, now) or (_waiting(here, there).is_empty() and _due(there, here, now)):
+				_depart(p, now)   # mit Ladung, oder leer zur anderen Seite, wo Buchungen zu lange warten (Umsetzflug)
+			else:
+				p.next_dep = now + 10.0
+
+
+func _route(id: String) -> Dictionary:
+	for x in routes:
+		if x.id == id:
+			return x
+	return {}
+
+
+## Wartende Buchungen einer Richtung (Fracht angeliefert bzw. Reisende gebucht).
+func _waiting(from: int, to: int) -> Array:
+	return bookings.values().filter(func(b): return int(b.from) == from and int(b.to) == to and str(b.flight) == "" and ((b.kind == "cargo" and b.status == "bereit") or (b.kind == "pax" and b.status == "gebucht")))
+
+
+## Lohnt ein Abflug? Ab MIN_PAX Reisenden, bei angelieferter Fracht oder wenn die aelteste Buchung MAX_WAIT wartet.
+func _due(from: int, to: int, now: float) -> bool:
+	var w := _waiting(from, to)
+	if w.is_empty():
+		return false
+	if w.any(func(b): return b.kind == "cargo") or w.filter(func(b): return b.kind == "pax").size() >= MIN_PAX:
+		return true
+	var oldest := now
+	for b in w:
+		oldest = minf(oldest, float(b.get("since", now)))
+	return now - oldest >= MAX_WAIT
 
 
 func _depart(p: Dictionary, now: float) -> void:

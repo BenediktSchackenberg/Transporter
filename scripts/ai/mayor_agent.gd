@@ -13,6 +13,9 @@ var sim: Simulation
 var town := 0                  # Ort dieser Verwaltung (Auftrag 17): eigener Kontext, Gedaechtnis, Budget und Protokoll
 var discarded := 0             # verworfene veraltete Antworten (Amtswechsel waehrend der Anfrage)
 var _inflight_term := ""       # Amtsinhaber bei Absenden der Anfrage (Name und Amtsbeginn)
+static var _server_busy := {}  # Basis-URL -> Ort, dessen Anfrage gerade laeuft (gemeinsamer lokaler Modellserver)
+static var global_requests := 0   # Anfragen aller Buergermeister zusammen (globales Budget: config.max_requests_total)
+var waits := 0                 # Runden, in denen der gemeinsame Server belegt war (Warteschlange)
 var config := {}
 var adapter: LLMAdapter
 var api_log: ApiLog
@@ -99,6 +102,16 @@ func think() -> void:
 			status = "Budget erschöpft – Ersatzmodus (regelbasiert)"
 		_run_rules("Ersatzmodus" if adapter != null else "Regeln")
 		return
+	var server := str(config.get("base_url", config.get("provider", "")))
+	if _server_busy.has(server) and int(_server_busy[server]) != town:
+		waits += 1
+		_since = float(config.get("interval", 45.0)) - 3.0   # Server belegt: in wenigen Sekunden erneut (faire Reihenfolge durch Versatz)
+		return
+	if global_requests >= int(config.get("max_requests_total", 800)):
+		_run_rules("Gesamtbudget erschöpft")
+		return
+	_server_busy[server] = town
+	global_requests += 1
 	var obs := mayor().indicators()
 	var messages := [{"role": "system", "content": system_prompt()}, {"role": "user", "content": user_prompt(obs)}]
 	_inflight = _next_req
@@ -112,7 +125,14 @@ func think() -> void:
 	adapter.send(_inflight, messages)
 
 
+func _free_server() -> void:
+	var server := str(config.get("base_url", config.get("provider", "")))
+	if int(_server_busy.get(server, -1)) == town:
+		_server_busy.erase(server)
+
+
 func handle_result(req_id: int, r: Dictionary) -> void:
+	_free_server()
 	if _applied.has(req_id) or _abandoned.has(req_id) or req_id != _inflight:
 		return
 	_inflight = -1
@@ -144,6 +164,7 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 
 
 func _on_failure(req_id: int, msg: String) -> void:
+	_free_server()
 	stats.errors += 1
 	_fail += 1
 	last_error = msg
