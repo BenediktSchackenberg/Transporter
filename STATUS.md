@@ -7,6 +7,13 @@ DEMO-Adapter (regelbasiert, keine KI) oder den echten HTTP-Adapter gegen einen l
 
 **KI-Verbesserung 03.11.2026 (Messung, kein Codewechsel):** `tests/probe_expiry.gd` ordnet verfallene Marktaufträge nach Eigenschaften ein (Seed 21, 20 Tage: 151 von 831). Rund die Hälfte sind reine Stadtaufträge (Vergütung unter 100 EUR, für Spieler unsichtbar, unproblematisch). Der Rest sind wertvolle Fahrten (Ø 400–850 EUR), meist weit oder gekühlt, bei denen die Flotte fachlich passt, aber kein Fahrzeug frei ist. Versuch: Fahrzeugkauf auch bei bereiten Fahrzeugen, sobald mindestens zwei lohnende Aufträge kein bereites Fahrzeug finden (Bargeld über 4 × Puffer + 20 000). Ergebnis über Seeds 21–24, 30 Tage: Gewinnsumme aller vier Firmen −18 267 statt −4 136 EUR, also schlechter; **verworfen**. Mehr Fahrzeuge lösen den Engpass nicht (Fahrer, Hof, Marge). Nächste Hebel: Disposition über Tourenbündelung (zwei Aufträge je Fahrt), Risikospieler: Anschläge sind schon an Gewinn und Kasse gebunden (rund 1 500 EUR Sabotage und 2 000 EUR Bußgelder in 30 Tagen); sein Minus kommt aus geringem Umsatz (4 Fahrzeuge, wenige Aufträge), nicht aus den Anschlägen.
 
+## Küstenort Etappe E und Bergwerk (07.11.2026)
+
+- **Bergwerk-Geschichte** (`Mining`): Probebohrung → Abbauantrag (Bürgermeister, Förderabgabe 3–15 %) → Zufahrt → Bautrupp baut. **Fehler behoben:** Ausfuhren wurden mit 0 EUR bezahlt (negativer Saldo des Auslands X0 galt als Kassenlimit); Bergwerk jetzt +300 bis +500 EUR/Tag.
+- **Gebäudestufen** für Bäckerei, Restaurant, Bergwerk und Hafen, Wachstum des Küstenorts, Kartenebene Rohstoffe, Stadtfenster: Einzelheiten in `docs/COASTAL_TOWN.md`, Etappe E.
+- **Fehler behoben:** Bauträger fand im Küstenort nie ein Grundstück (Suche begrenzte vor dem Erschließungsfilter); Hafen meldete Teillieferungen mit falscher Argumentzahl an Stadtlager/Bauhof; Stadtlagerwaren zählten je Liter/Meter als Ladeeinheit (Diesel füllte 16 Schiffe).
+- Gezielte Tests grün; Volltest nicht gelaufen (Speicherdruck bei früheren Läufen).
+
 ## KI sichtbar machen, Rathaus, Bevölkerung (03.11.2026)
 
 - **KI-Aktivität auf der Karte** (`ActivityFeed`, `ActivityLayer`, Leiste im HUD, Taste K): jede ausgeführte Entscheidung mit Ort (Abholort, Hof, Händler, Zielfahrzeug, Grundstück), Linie von der Unternehmerfigur zum Ziel, Sabotage/Angriffe rot; Bürgermeister gold, Disponent kenntlich; Bauphasen und Übergaben. Nach jeder Modellrunde steht die Begründung als Sprechblase an der Figur. Prüfung per Autotest-Bildschirmfoto `--shot-activity`. Einmal stürzte ein Autotest im Grafiklauf mit einem Engine-Fehler (Index außerhalb des Bereichs) ab, der Wiederholungslauf lief durch; Ursache ungeklärt.

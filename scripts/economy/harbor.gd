@@ -47,8 +47,12 @@ func setup(simulation) -> void:
 
 
 ## Ladeeinheiten einer Menge (Artikel der Produktion haben eigene Ladeeinheiten, sonst je Stueck).
+## Waren des Stadtlagers (CityGoods) nach Mengeneinheit: ein Tankcontainer fasst 1000 l, ein Rohr-/Kabelbund 100 m usw.
+const CITY_UNIT_LOAD := {"l": 1000, "m": 100, "m²": 50, "t": 10, "Pack": 50, "Eimer": 40, "Stk": 10}
 static func units_of(item: String, qty: int) -> int:
 	var per := int(Production.art(item).get("je_ladeeinheit", 1))
+	if Production.art(item).is_empty() and CityGoods.exists(item):
+		per = int(CITY_UNIT_LOAD.get(str(CityGoods.get_item(item).get("unit", "")), 1))
 	return maxi(1, ceili(float(qty) / float(maxi(1, per))))
 
 
@@ -143,11 +147,15 @@ func _arrive(day: int) -> void:
 ## Ware ins Ziel uebergeben. `fit` ist die tatsaechlich geloeste (anteilige) Menge; der Rest bleibt im Manifest.
 func _unload(m: Dictionary, fit: int = -1) -> void:
 	var qty := int(m.qty) if fit <= 0 else fit
+	# Bestellungen von Stadtlager und Bauhof gelten erst mit dem letzten Teil als angekommen (on_ship uebernimmt die ganze Bestellung)
+	var complete := qty >= int(m.qty)
 	match str(m.kind):
 		"depot":
-			sim.city_depot.on_ship(str(m.ref), qty)
+			if complete:
+				sim.city_depot.on_ship(str(m.ref))
 		"trader":
-			sim.trader.on_ship(str(m.ref), qty)
+			if complete:
+				sim.trader.on_ship(str(m.ref))
 		_:
 			sim.stock.add(str(m.item), qty, Production.IMPORT, building, "Schiff %s" % ship.id, sim.game_min)
 

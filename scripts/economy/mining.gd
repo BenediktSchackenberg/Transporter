@@ -215,8 +215,17 @@ func steps_for(cid: int) -> Dictionary:
 	var out := {}
 	for k in Production.DEPOSIT_KINDS:
 		var s := next_step(cid, k)
-		if not s.is_empty():
-			out[k] = s
+		if s.is_empty():
+			continue
+		# knapp fuer die Beobachtung (Tokenbudget): erkundete Werte stehen in produktion_markt, Schaetzung nur vor der Bohrung
+		var e := {"schritt": s.schritt, "grundstueck": s.get("grundstueck", "")}
+		if s.has("kosten"):
+			e["kosten"] = s.kosten
+		if s.has("lagerstaette") and not bool(s.lagerstaette.get("erkundet", true)):
+			e["schaetzung"] = {"menge": s.lagerstaette.get("menge_geschaetzt", 0), "qualitaet": s.lagerstaette.get("qualitaet_geschaetzt", 0)}
+		if s.has("grund"):
+			e["grund"] = s.grund
+		out[k] = e
 	return out
 
 

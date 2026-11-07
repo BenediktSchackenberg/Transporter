@@ -841,6 +841,44 @@ static func businesses(sim: Simulation) -> String:
 
 
 ## Stadtwerke: Leistung, Last, Abschaltungen, Tarif und Ausbau (Auftrag 14, Grundversorgung).
+## Stadtfenster (Auftrag 15, Abschnitt 12): Name, Einwohner, Gebaeude, Entwicklung, Finanzen, Projekte, Hafen, Betriebsstufen.
+static func town(sim: Simulation) -> String:
+	var M: Mayor = sim.mayor
+	var g: Dictionary = M.goals()
+	var name: String = sim.city.town_name if sim.city.town_name != "" else "Stadt"
+	var txt := "[b][color=#f2c14e]%s[/color][/b]  (Bürgermeister %s, Zustimmung %d %%)\n" % [esc(name).to_upper(), esc(M.name), int(M.approval)]
+	txt += "Einwohner %d · Haushalte %d · Wohnhäuser %d · Geschäfte %d · Gebäude %d · Zufriedenheit %.0f\n" % [sim.citizens.population(), sim.households.homes.size(),
+		int(g.wohnhaeuser), int(g.geschaefte), sim.city.buildings.size(), float(g.zufriedenheit)]
+	txt += "Wohnungssuchende %d · Leerstand %d %%\n" % [int(M.waiting), int(M.vacancy() * 100.0)]
+	if not M.growth_history.is_empty():
+		var parts: Array = []
+		for h in M.growth_history.slice(-4):
+			parts.append("M%d: %d Wohnh./%d Gesch." % [int(h.monat), int(h.wohnhaeuser), int(h.geschaefte)])
+		txt += "[b]Entwicklung[/b] " + " · ".join(parts) + "\n"
+	txt += "[b]Finanzen[/b] Kasse %s · verfügbar %s · für Projekte reserviert %s · Mindestreserve %s\n" % [Catalog.money(float(sim.economy.accounts.P0)),
+		Catalog.money(M.available_budget()), Catalog.money(M.commitments), Catalog.money(M.reserve_cash())]
+	var open: Array = M.projects.values().filter(func(p): return p.status != "fertig" and p.has("kind"))
+	txt += "[b]Projekte[/b] %d laufend\n" % open.size()
+	for p in open.slice(0, 6):
+		txt += "  %s %s: %s (%s)\n" % [p.id, p.kind, p.status, Catalog.money(float(p.cost))]
+	if sim.harbor.enabled:
+		var h: Dictionary = sim.harbor.summary()
+		txt += "[b]Hafen[/b] %s · %d Ladeeinheiten je Schiff · Rückstau %.1f Schiffsladungen%s\n" % [h.stufe_name, int(h.ladung_je_schiff), float(h.rueckstau_schiffsladungen),
+			" · Ausbau läuft" if bool(h.ausbau_laeuft) else (" · nächste Stufe %s (%s)" % [h.ausbau.ziel, Catalog.money(float(h.ausbau.kosten))] if not h.ausbau.is_empty() else "")]
+	var staged: Array = sim.biz.items.values().filter(func(b): return BusinessStages.has_stages(str(b.branch)) and b.status != "geschlossen")
+	if not staged.is_empty():
+		txt += "[b]Betriebe und Gebäudestufen[/b]\n"
+		for b in staged:
+			var ob: Dictionary = sim.stages.obs(b)
+			var nxt := ""
+			if ob.has("ausbau"):
+				nxt = " → %s %s" % [ob.ausbau.ziel, "möglich" if bool(ob.ausbau.moeglich) else "(fehlt: %s)" % "; ".join(ob.ausbau.fehlt)]
+			if str(b.get("upgrading", "")) != "":
+				nxt = " · Ausbau im Bau (%s)" % b.upgrading
+			txt += "  %s: %s, Nachfrage %d %%%s\n" % [esc(b.name), ob.stufe_name, int(float(ob.nachfrage) * 100.0), nxt]
+	return txt
+
+
 static func power(sim: Simulation) -> String:
 	var g: Dictionary = sim.grid.summary()
 	var txt := "[b][color=#f2c14e]STROM (STADTWERKE)[/color][/b]

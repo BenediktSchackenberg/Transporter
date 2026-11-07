@@ -88,6 +88,7 @@ const NAV := [
 		{"label": "Staat", "tab": "Wirtschaft", "view": 5, "hint": "Stadtkasse, Steuern, Ausgaben und Prüfungen."},
 		{"label": "Haushalte", "tab": "Wirtschaft", "view": 4, "hint": "Mitarbeiterhaushalte: Einkommen, Miete, Rücklagen."}]},
 	{"name": "Stadt", "hint": "Bürger, Wohnen, Bauen und Versorgung", "pages": [
+		{"label": "Ort", "tab": "Wirtschaft", "view": 16, "hint": "Stadtfenster: Name, Einwohner, Gebäude, Entwicklung, Finanzen, Projekte, Hafen und Betriebsstufen."},
 		{"label": "Bürger", "tab": "Wirtschaft", "view": 6, "hint": "Bevölkerung, Arbeitsmarkt und Löhne."},
 		{"label": "Wohnen", "tab": "Wirtschaft", "view": 12, "hint": "Wohnungen, Mieten, Leerstand und Zufriedenheit je Viertel."},
 		{"label": "Bürgermeister", "tab": "Wirtschaft", "view": 9, "hint": "Stadtplanung, Kennzahlen und Beschlüsse."},
@@ -98,7 +99,7 @@ const NAV := [
 		{"label": "Stadtlager", "tab": "Wirtschaft", "view": 11, "hint": "Bestand, Bestellungen und Personal des Zentrallagers."},
 		{"label": "Bauhof", "tab": "Wirtschaft", "view": 3, "hint": "Großhändler: Material, Preise und Bestand."}]},
 ]
-const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat", "Bürger", "Grundstücke", "Bauanträge", "Bürgermeister", "Bauvorhaben", "Stadtlager", "Wohnen", "Zentralbank", "Unternehmen", "Strom"]
+const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat", "Bürger", "Grundstücke", "Bauanträge", "Bürgermeister", "Bauvorhaben", "Stadtlager", "Wohnen", "Zentralbank", "Unternehmen", "Strom", "Ort"]
 var decision_company := -1
 var decision_company_opt: OptionButton
 var sel_panel: PanelContainer
@@ -718,6 +719,7 @@ func _economy_text() -> String:
 		13: return LiveText.central_bank(sim)
 		14: return LiveText.businesses(sim)
 		15: return LiveText.power(sim)
+		16: return LiveText.town(sim)
 	return LiveText.standings(sim)
 
 

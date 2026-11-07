@@ -749,11 +749,23 @@ func _developer_month() -> void:
 		return
 	if M.waiting <= 0 and M.vacancy() > 0.02:
 		return
-	var cands: Array = sim.parcels.search({"zone": "wohnen", "min_area": 40, "limit": 80}).filter(func(p): return sim.parcels.utility_level(p) == "voll" and p.state == "frei" and p.owner == Parcels.CITY)
 	var def_id := "mehrfamilienhaus"
 	if sim.tiers.unlocked("stadtvilla") and (_next % 3) == 0:
 		def_id = "stadtvilla"   # gehobener Wohnungsbau, sobald die Wohnstufen der Stadt ihn tragen
-	var probe := {"def": def_id, "floors": 3 if def_id == "mehrfamilienhaus" else int(Planning.DEFS[def_id].floors[0]), "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": 1.0e9}}
+	# Zuerst wie bisher Mehrfamilienhaus/Stadtvilla auf grossen Grundstuecken; passt dort nichts (Kuestenort: kleine Grundstuecke im Ort),
+	# das groesste Wohnhaus, das auf ein erschlossenes Grundstueck passt (Doppelhaus, Einfamilienhaus).
+	var free: Array = sim.parcels.search({"zone": "wohnen", "min_area": 12, "utilities": "voll", "limit": 160})   # erst filtern, dann begrenzen (billigste sind oft unerschlossen)
+	if _developer_try(free.filter(func(p): return int(p.area) >= 40), def_id):
+		return
+	for small in ["doppelhaus", "einfamilienhaus"]:
+		if _developer_try(free, small):
+			return
+
+
+## Bautraeger: erstes passendes Grundstueck fuer `def_id` reservieren und den Bauantrag stellen.
+func _developer_try(cands: Array, def_id: String) -> bool:
+	var floors := 3 if def_id == "mehrfamilienhaus" else int(Planning.DEFS[def_id].floors[0])
+	var probe := {"def": def_id, "floors": floors, "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": 1.0e9}}
 	for p in cands:
 		var chk := Planning.assess(p, probe)
 		if not chk.ok or not chk.questions.is_empty() or float(chk.costs.gesamt) > available_funds(DEVELOPER):
@@ -767,7 +779,8 @@ func _developer_month() -> void:
 			continue
 		sim.permits.apps[dr.id].financing = {"eigenmittel": float(chk.costs.gesamt)}
 		sim.permits.submit(dr.id)
-		return
+		return true
+	return false
 
 
 ## Versorgungsbau (Auftrag 8): Fehlt einem Viertel dauerhaft ein Geschaeft oder eine Einrichtung fuer ein Beduerfnis seiner Bewohner und gibt es

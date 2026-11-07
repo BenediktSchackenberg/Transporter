@@ -252,6 +252,12 @@ func _consume(day: int) -> void:
 			shortages[id] = day
 
 
+## Ortsgroesse fuer Ziel- und Meldebestaende: der Katalog ist fuer eine Stadt mit ~800+ Einwohnern bemessen; ein Dorf (Kuestenort)
+## haelt anteilig weniger vor (mindestens 15 %), sonst importiert es Vorraete, die es nie verbraucht.
+func size_factor() -> float:
+	return clampf(float(sim.citizens.population()) / 800.0, 0.15, 1.0)
+
+
 ## Beschaffungsvorschlag, wenn Bestand plus Bestelltes den Meldebestand (plus Verbrauch in der Lieferzeit) unterschreitet.
 func _propose(day: int) -> void:
 	for id in CityGoods.items():
@@ -259,10 +265,11 @@ func _propose(day: int) -> void:
 		if open_proposal(id):
 			continue
 		var position := on_hand(id) + incoming(id)
-		var lead_use := int(ceil(float(it.use) / BASE_USE_DIVISOR * float(it.lead + 1)))
-		if position > int(it.reorder) + lead_use:
+		var f := size_factor() if it.class != "geraet" else 1.0
+		var lead_use := int(ceil(float(it.use) * f / BASE_USE_DIVISOR * float(it.lead + 1)))
+		if position > int(float(it.reorder) * f) + lead_use:
 			continue
-		var qty := int(it.target) - position
+		var qty := int(float(it.target) * f) - position
 		qty = mini(qty, zone_free(str(it.zone)))
 		if qty <= 0:
 			continue

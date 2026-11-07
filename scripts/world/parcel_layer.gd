@@ -3,14 +3,16 @@ extends Node2D
 ## Kartenebenen der Stadtentwicklung (Auftrag 7, Abschnitt 16), Taste L schaltet weiter: Verfuegbarkeit, Eigentum, zulaessige Bebauung,
 ## Erschliessung, Antraege und Bauprojekte. Zeichnet nur flache Farbflaechen ueber dem Boden; liest nur aus Simulation.parcels.
 
-const MODES := ["aus", "Verfügbarkeit", "Eigentum und Nutzungsrechte", "zulässige Bebauung", "Erschließungszustand", "Anträge und Bauprojekte", "Versorgungs- und Verkehrsengpässe"]
+const MODES := ["aus", "Verfügbarkeit", "Eigentum und Nutzungsrechte", "zulässige Bebauung", "Erschließungszustand", "Anträge und Bauprojekte", "Versorgungs- und Verkehrsengpässe", "Rohstoffe"]
 const LEGENDS := ["",
 	"frei grün · reserviert gelb · privat gehalten grau · zur Entwicklung blau · genehmigt/im Bau orange · bebaut ausgeblendet",
 	"Stadt blau · Haushalte grün · Unternehmen orange · Bauträger violett",
 	"Wohnen grün · Mischgebiet gelb · Gewerbe orange · Industrie rot · öffentlich blau · Grün hellgrün · Korridor grau",
 	"voll erschlossen grün · teilweise gelb · keine rot",
 	"Antrag in Prüfung violett · genehmigt blau · Erschließung orange · im Bau rot · übergeben ausgeblendet",
-	"Baustelle blockiert rot · wartet auf Lieferung orange · Straßensperrung/Baustelle/Überflutung dunkelrot · Stau gelb · Verkehrsdichte rot (je dichter)"]
+	"Baustelle blockiert rot · wartet auf Lieferung orange · Straßensperrung/Baustelle/Überflutung dunkelrot · Stau gelb · Verkehrsdichte rot (je dichter)",
+	"Eisenerz rotbraun · Kohle schwarz · Kalkstein hell · Kies/Sand ocker · kräftig = erkundet, blass = nur geschätzt · Rand weiß = Bergwerk/Abbaurecht"]
+const DEPOSIT_COLORS := {"eisenerz": Color("a0522d"), "kohle": Color("2b2b2b"), "kalkstein": Color("e6e2d0"), "rohmaterial": Color("d0a050")}
 const ZONE_COLORS := {"wohnen": Color("5fb85f"), "mischgebiet": Color("e0c050"), "gewerbe": Color("e08a3c"), "industrie": Color("d0504a"), "oeffentlich": Color("4a8fd0"),
 	"gruen": Color("a6d98a"), "korridor": Color("8a8a8a")}
 
@@ -87,6 +89,12 @@ func color_of(p: Dictionary) -> Color:
 				"im_bau": return Color(0.9, 0.3, 0.25, 0.55)
 			if not a.is_empty() and a.status != "entschieden":
 				return Color(0.7, 0.35, 0.85, 0.55)
+		7:
+			var dp: Dictionary = sim.prod.deposit_of(str(p.id))
+			if not dp.is_empty():
+				var dc: Color = DEPOSIT_COLORS.get(str(dp.art), Color.WHITE)
+				dc.a = 0.65 if sim.mining.explored.has(str(p.id)) or not sim.mining.enabled else 0.3
+				return dc
 		6:
 			for pr in sim.construction.projects.values():
 				if pr.parcel == p.id and pr.status in Construction.ACTIVE_STATES:
@@ -128,7 +136,7 @@ func _draw() -> void:
 	if mode == 6:
 		_draw_traffic()
 	for p in sim.parcels.items.values():
-		if p.state == "bebaut" and mode != 2 and mode != 3:
+		if p.state == "bebaut" and mode != 2 and mode != 3 and mode != 7:
 			continue
 		if p.zone == "korridor" and mode != 3:
 			continue
