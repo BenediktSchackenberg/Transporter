@@ -31,6 +31,8 @@ var streaks := {}                    # "Stadt|Branche" -> aufeinanderfolgende Pr
 var last_found := {}                 # Stadt -> Tag der letzten Gruendung
 var history: Array = []              # {tag, stadt, firma, branche, anlass, kapital}
 var refusals: Array = []             # {tag, stadt, branche, grund}
+var topups := {}                     # Firma -> Nachschuss des Kapitalgebers fuer das Gruendungsziel (hoechstens einmal)
+const TOPUP_TARGET := 55000.0        # Bargeld fuer Bergwerksgruendung (Gebaeude 30.000) plus Betriebsreserve
 
 
 func setup(simulation) -> void:
@@ -41,6 +43,7 @@ func setup(simulation) -> void:
 func on_day(day: int) -> void:
 	if not enabled or not sim.towns.is_region() or day % CHECK_DAYS != 0:
 		return
+	_topup_focus(day)
 	var seen := {}
 	for chance in opportunities():
 		var key := "%d|%s" % [int(chance.stadt), chance.branche]
@@ -52,6 +55,31 @@ func on_day(day: int) -> void:
 	for key in streaks.keys():
 		if not seen.has(key):
 			streaks.erase(key)   # Chance verschwunden: kurzer Engpass begruendet keine Gruendung
+
+
+## Nachfinanzierung: Hat eine Gruenderfirma alle Vorstufen ihres Ziels geschafft (Bergbau: Abbaurecht und Zufahrt) und fehlt nur
+## noch Geld fuer den Betrieb, schiesst der Kapitalgeberpool I0 einmal nach (Einlage, kein Kredit - die Banken verlangen ein
+## Fahrzeug als Pfand, das eine Bergbaufirma nicht hat). Geld kommt aus I0, entsteht also nicht neu.
+func _topup_focus(day: int) -> void:
+	for c in sim.companies:
+		if c.focus != "bergwerk" or topups.has(c.id) or c.status in ["geschlossen", "verwertung"]:
+			continue
+		if sim.biz.items.values().any(func(b): return int(b.owner) == c.id and b.branch == c.focus):
+			continue
+		var ready := false
+		for art in ["eisenerz", "kohle", "kalkstein", "rohmaterial"]:
+			if str(sim.mining.next_step(c.id, art).get("schritt", "")) == "gruenden":
+				ready = true
+				break
+		var gap: float = TOPUP_TARGET - c.ledger.cash
+		if not ready or gap <= 1000.0:
+			continue
+		gap = minf(gap, float(sim.economy.accounts.get("I0", 0.0)))
+		if gap <= 1000.0:
+			continue
+		c.ledger.inject(gap)
+		topups[c.id] = gap
+		sim.log_event("Kapitalgeber schießen %s für %s nach: Abbaurecht und Zufahrt stehen, das Bergwerk kann gebaut werden." % [Catalog.money(gap), c.company_name], "good", c.id)
 
 
 ## Erkannte Chancen je Stadt: [{stadt, branche, anlass}].
@@ -223,11 +251,14 @@ func summary() -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"streaks": streaks.duplicate(), "last_found": last_found.duplicate(), "history": history.duplicate(true), "refusals": refusals.duplicate(true), "max": max_per_town}
+	return {"streaks": streaks.duplicate(), "last_found": last_found.duplicate(), "history": history.duplicate(true), "refusals": refusals.duplicate(true), "max": max_per_town, "topups": topups.duplicate()}
 
 
 func from_dict(d: Dictionary) -> void:
 	streaks = d.get("streaks", {})
+	topups = {}
+	for k in d.get("topups", {}):
+		topups[int(k)] = float(d.topups[k])
 	last_found = {}
 	for k in d.get("last_found", {}):
 		last_found[int(k)] = int(d.last_found[k])
