@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders"]
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -8206,3 +8206,62 @@ func test_region_flight() -> void:
 		s2.step(0.1)
 		t2 += 0.1
 	ok(A2.bookings[str(rb.ref)].status == "angekommen" and s2.stock.qty("mehl", "C0", dest) == 30 and s2.stock.qty("mehl", "C0", hof) == 0 and identity_ok(s2), "nach dem Laden landet der Flug, Fracht genau einmal angekommen")
+
+
+## Abnahme 12-15: Gruender aus anhaltender Chance mit eigener Identitaet (ID hinter den Startplaetzen), Ablehnung mit Ursache
+## (Quote, Kapital), Heimatstadt vs. Filiale, neue Firma funktioniert in Aktionen/Personal/Kredit/Speichern, keine ID-Wiederverwendung.
+func test_region_founders() -> void:
+	var s := region_sim(3)
+	var T: Towns = s.towns
+	var F: Founders = s.founders
+	s.grid.capacity = 100000.0
+	var names0: Array = s.companies.map(func(c): return [c.id, c.company_name, c.player_name, c.ledger.start_capital])
+	var chances: Array = F.opportunities()
+	ok(chances.any(func(x): return x.branche == "baeckerei"), "Chance erkannt: %s" % str(chances.map(func(x): return "%s/%s" % [T.name_of(int(x.stadt)), x.branche])).left(160))
+	var i0 := float(s.economy.accounts.I0)
+	F.on_day(5)
+	F.on_day(10)
+	ok(s.companies.size() == 3, "kurzer Engpass begründet noch keine Gründung (2 Prüfungen)")
+	F.on_day(15)
+	ok(s.companies.size() >= 4, "nach anhaltender Nachfrage: neue Firma (%d Unternehmen)" % s.companies.size())
+	if s.companies.size() < 4:
+		return
+	var n: Company = s.companies[3]
+	ok(n.id == 3 and n.home_town in range(T.count()) and n.ledger.account == "C3" and s.memory.books.has(3) and s.avatars.has(3), "eigene Identität: ID 3, Konto C3, Heimat %s, Gedächtnis, Figur" % T.name_of(n.home_town))
+	ok(is_equal_approx(float(s.economy.accounts.I0), i0 - Founders.CAPITAL * float(s.companies.size() - 3)) and is_equal_approx(n.ledger.start_capital, Founders.CAPITAL), "Einlage aus dem Kapitalgeberpool, kein neues Geld")
+	ok(s.companies.slice(0, 3).map(func(c): return [c.id, c.company_name, c.player_name, c.ledger.start_capital]) == names0, "Startfirmen unverändert")
+	ok(s.biz.of(3).size() >= 1 and s.biz.of(3).all(func(b): return T.of_building(int(b.site)) == n.home_town), "Gründer betreibt seinen ersten Betrieb in der Heimatstadt")
+	# Ablehnungen mit Ursache
+	F.max_per_town = 1
+	var q: Dictionary = F.try_found(0, "restaurant", "Test")
+	ok(not q.ok and str(q.msg).contains("Gründerquote"), "Quote erreicht: %s" % str(q.msg).left(90))
+	F.max_per_town = 3
+	F.last_found.clear()
+	s.economy.transfer("I0", "X0", float(s.economy.accounts.I0))
+	var m: Dictionary = F.try_found(2, "restaurant", "Test")
+	ok(not m.ok and str(m.msg).contains("Kapitalgeber"), "fehlendes Kapital: %s" % str(m.msg).left(90))
+	# Filiale: Firma 0 gruendet in Stadt 2 -> keine Gruenderquote der Stadt 2 verbraucht
+	var before := F.active_home(2)
+	s.companies[0].ledger.inject(100000.0)
+	var fil: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "restaurant", "stadt": "2"})
+	ok(fil.ok and F.active_home(2) == before and s.companies[0].home_town == 0, "Filiale in %s zählt nicht als Gründer dort" % T.name_of(2))
+	# neue Firma funktioniert: Personal zuordnen, Kredit, Aktion nur fuer sich
+	var w: Array = s.personnel.employed(3)
+	var nb: Array = s.biz.of(3)
+	if not w.is_empty() and not nb.is_empty():
+		ok(s.executor.execute(3, {"action": "assign_staff", "worker_id": w[0].id, "business_id": nb[0].id}).ok, "Personal der neuen Firma zuordnen")
+	var cash3 := n.ledger.cash
+	var loan: Dictionary = s.executor.execute(3, {"action": "take_loan", "amount": 5000})
+	ok(loan.ok and n.ledger.cash > cash3 and n.ledger.debt > 0.0 and is_equal_approx(s.companies[0].ledger.debt, 0.0), "Kredit für Firma 3, nicht für Slot 0 (%s)" % str(loan.get("msg", "")).left(60))
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.companies.size() == s.companies.size() and s2.companies[3].company_name == n.company_name and s2.companies[3].home_town == n.home_town and s2.biz.of(3).size() == s.biz.of(3).size() and identity_ok(s2), "Speichern/Laden erhält die neue Firma mit ID 3")
+	# Insolvenz-Neugruendung am Platz und spaetere Gruender: IDs werden nie wiederverwendet
+	var ids_before: Array = s.companies.map(func(c): return c.id)
+	s.insolvency.refound(1, int(s.companies[1].depots[0]))
+	ok(s.companies.size() == ids_before.size() and s.companies.map(func(c): return c.id) == ids_before and s.companies[3].company_name == n.company_name, "Neugründung ersetzt nur am eigenen Platz, Firma 3 unberührt")
+	s.economy.transfer("X0", "I0", 200000.0)
+	F.last_found.clear()
+	var g2: Dictionary = F.try_found(1, "restaurant", "Test")
+	if g2.ok:
+		ok(int(g2.ref) == ids_before.size() and s.companies[int(g2.ref)].ledger.debt == 0.0, "nächster Gründer bekommt neue ID %d ohne fremde Schulden" % int(g2.ref))
+	ok(identity_ok(s), "Geld und Waren erhalten")

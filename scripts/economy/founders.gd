@@ -1,0 +1,181 @@
+class_name Founders
+extends RefCounted
+## Zusaetzliche Unternehmer aus wirtschaftlichen Chancen (Auftrag 17, Abschnitt 12). Neue Companies mit eigener Identitaet, Heimatstadt,
+## Konto, Gedaechtnis und (in der Sitzung) eigenem Regel-Controller. Das Firmenregister bleibt append-only: neue ID = naechster Index,
+## keine ID wird wiederverwendet; die Startspieler (IDs 0..n-1) behalten ihre Profile.
+##
+## Alle CHECK_DAYS Tage je Stadt: Chancen erkennen (Lieferengpass einer Vorstufe, fehlende Baeckerei/fehlendes Restaurant bei
+## ausreichender Einwohnerzahl, Bauvorhaben ohne freien Bautrupp). Eine Chance muss bei STREAK aufeinanderfolgenden Pruefungen bestehen
+## (laenger unbefriedigte Nachfrage). Dann Pruefung: Gruenderquote (aktive Unternehmen mit Heimat in der Stadt < MAX_PER_TOWN),
+## Abklingzeit der Stadt, Standort (freies Grundstueck mit Strassen- und Stromanschluss in der Stadt), Personal (Arbeitslose bzw.
+## Bewerber), Finanzierung (Einlage aus dem Kapitalgeberpool I0, kein neues Geld). Scheitert eine Pruefung, wird der Grund protokolliert.
+
+signal company_founded(cid: int)
+
+const CHECK_DAYS := 5
+const STREAK := 3
+const MAX_PER_TOWN := 3              # ursprunglicher Unternehmer + bis zu zwei Gruender (konfigurierbar ueber max_per_town)
+const COOLDOWN_DAYS := 30
+const CAPITAL := 60000.0
+const FIRST := ["Jana", "Tom", "Aylin", "Malte", "Greta", "Kemal", "Ronja", "Lars", "Mira", "Nils", "Selin", "Arne"]
+const LAST := ["Brückner", "Seidel", "Kaya", "Wendt", "Lorenz", "Ahrens", "Petersen", "Yilmaz", "Haas", "Voss", "Engel", "Kruse"]
+const WORDS := ["Werke", "& Partner", "Betriebe", "Handel", "Gruppe"]
+
+var sim
+var enabled := true
+var max_per_town := MAX_PER_TOWN
+var streaks := {}                    # "Stadt|Branche" -> aufeinanderfolgende Pruefungen mit dieser Chance
+var last_found := {}                 # Stadt -> Tag der letzten Gruendung
+var history: Array = []              # {tag, stadt, firma, branche, anlass, kapital}
+var refusals: Array = []             # {tag, stadt, branche, grund}
+
+
+func setup(simulation) -> void:
+	sim = simulation
+	sim.day_changed.connect(on_day)
+
+
+func on_day(day: int) -> void:
+	if not enabled or not sim.towns.is_region() or day % CHECK_DAYS != 0:
+		return
+	var seen := {}
+	for chance in opportunities():
+		var key := "%d|%s" % [int(chance.stadt), chance.branche]
+		seen[key] = true
+		streaks[key] = int(streaks.get(key, 0)) + 1
+		if int(streaks[key]) >= STREAK:
+			var r := try_found(int(chance.stadt), str(chance.branche), str(chance.anlass))
+			streaks[key] = 0 if r.ok else int(streaks[key])
+	for key in streaks.keys():
+		if not seen.has(key):
+			streaks.erase(key)   # Chance verschwunden: kurzer Engpass begruendet keine Gruendung
+
+
+## Erkannte Chancen je Stadt: [{stadt, branche, anlass}].
+func opportunities() -> Array:
+	var out: Array = []
+	var T: Towns = sim.towns
+	var running: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING or b.status == "im_bau")
+	for k in T.count():
+		var pop: int = sim.citizens.population_of(k)
+		var in_town := running.filter(func(b): return T.of_building(int(b.site)) == k)
+		for br in ["baeckerei", "restaurant"]:
+			if pop >= 40 and not in_town.any(func(b): return b.branch == br):
+				out.append({"stadt": k, "branche": br, "anlass": "Keine %s in %s bei %d Einwohnern" % [Businesses.branches()[br].label, T.name_of(k), pop]})
+		# Vorstufe fehlt: Betriebe dieser Stadt warten auf eine Ware, die niemand in der Region herstellt
+		for b in in_town:
+			var item := str(b.get("waiting_for", ""))
+			if item != "" and Production.UPSTREAM.has(item) and not running.any(func(x): return x.branch == Production.UPSTREAM[item]):
+				out.append({"stadt": k, "branche": str(Production.UPSTREAM[item]), "anlass": "%s wartet auf %s, kein Hersteller in der Region" % [b.name, Production.item_name(item)]})
+		# Bauvorhaben ohne Baufirma vor Ort
+		var waiting: int = sim.construction.works.values().filter(func(w): return w.status == "laufend" and str(w.waiting).contains("Bautrupp") and T.of_building(int(w.building)) == k).size()
+		if waiting >= 2 and not in_town.any(func(b): return b.branch == "baufirma"):
+			out.append({"stadt": k, "branche": "baufirma", "anlass": "%d Bauvorhaben in %s warten auf einen Bautrupp" % [waiting, T.name_of(k)]})
+	return out
+
+
+func active_home(town: int) -> int:
+	return sim.companies.filter(func(c): return int(c.home_town) == town and c.status not in ["geschlossen", "verwertung"]).size()
+
+
+func _refuse(town: int, branch: String, why: String) -> Dictionary:
+	refusals.append({"tag": GameCalendar.day_of(sim.game_min), "stadt": town, "branche": branch, "grund": why})
+	if refusals.size() > 40:
+		refusals.pop_front()
+	return {"ok": false, "msg": "Keine Gründung (%s, %s): %s" % [sim.towns.name_of(town), branch, why]}
+
+
+## Gruendungsversuch. Prueft Quote, Abklingzeit, Standort, Personal, Finanzierung; legt dann die Company an und gruendet den Betrieb.
+func try_found(town: int, branch: String, reason: String) -> Dictionary:
+	var day := GameCalendar.day_of(sim.game_min)
+	if active_home(town) >= max_per_town:
+		return _refuse(town, branch, "Gründerquote erreicht (%d aktive Unternehmen mit Heimat %s)" % [active_home(town), sim.towns.name_of(town)])
+	if last_found.has(town) and day - int(last_found[town]) < COOLDOWN_DAYS:
+		return _refuse(town, branch, "Abklingzeit nach der letzten Gründung (bis Tag %d)" % (int(last_found[town]) + COOLDOWN_DAYS))
+	var spec: Dictionary = Businesses.branches().get(branch, {})
+	if spec.is_empty():
+		return _refuse(town, branch, "unbekannte Branche")
+	var bsize: Array = CityGenerator.TYPES[str(spec.get("gebaeude", "farm"))]
+	var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4
+	var site_ok: bool = sim.parcels.search({"min_area": min_area, "town": town, "limit": 400}).any(func(p): return bool(sim.parcels.utilities_of(p).strasse))
+	if not site_ok:
+		return _refuse(town, branch, "kein freies erschlossenes Grundstück (mind. %d Felder)" % min_area)
+	if sim.citizens.unemployed_total() + sim.citizens.applicants() < int(spec.get("personal_min", 1)) + 1:
+		return _refuse(town, branch, "kein Personal am Arbeitsmarkt")
+	var need := CAPITAL
+	if float(sim.economy.accounts.get("I0", 0.0)) < need:
+		return _refuse(town, branch, "Kapitalgeber ohne Mittel (I0 %s, nötig %s)" % [Catalog.money(float(sim.economy.accounts.get("I0", 0.0))), Catalog.money(need)])
+	var c := _create(town, reason)
+	var r: Dictionary = sim.executor.execute(c.id, {"action": "found_business", "branche": branch, "stadt": str(town), "reason": reason})
+	if not r.get("ok", false):
+		# Gruendung des Betriebs gescheitert: Firma bleibt mit ihrer Einlage bestehen (kein Rueckbau von IDs), Grund protokolliert
+		_refuse(town, branch, "Betrieb nicht gegründet: %s" % str(r.get("msg", "")).left(120))
+	else:
+		var b: Dictionary = sim.biz.get_b(str(r.ref))
+		if c.depots.is_empty() and not b.is_empty():
+			c.depots.append(int(b.site))   # Hauptsitz am ersten Betrieb
+		if not c.depots.is_empty():
+			sim.personnel.start_staff_small(c.id)   # zwei Allrounder am Hauptsitz, wie beim Startunternehmer
+	last_found[town] = day
+	history.append({"tag": day, "stadt": town, "firma": c.id, "branche": branch, "anlass": reason, "kapital": need})
+	sim.log_event("Neue Unternehmerin/neuer Unternehmer in %s: %s (%s) gründet %s – Anlass: %s. Einlage %s vom Kapitalgeberpool." % [sim.towns.name_of(town),
+		c.player_name, c.company_name, spec.get("label", branch), reason, Catalog.money(need)], "good", c.id)
+	company_founded.emit(c.id)
+	return {"ok": true, "msg": "%s gegründet (Firma %d)." % [c.company_name, c.id], "ref": c.id}
+
+
+## Neue Company am Ende des Registers (eigene ID, eigenes Konto "C<id>", Einlage aus I0, eigenes Gedaechtnis, Figur und Personal).
+func _create(town: int, reason: String) -> Company:
+	var cid: int = sim.companies.size()
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([sim.city.seed_value, cid, "gruender"])
+	var c := Company.new()
+	c.id = cid
+	c.player_name = "%s %s" % [FIRST[r.randi() % FIRST.size()], LAST[r.randi() % LAST.size()]]
+	c.company_name = "%s %s" % [c.player_name.split(" ")[1], WORDS[r.randi() % WORDS.size()]]
+	c.color = Catalog.COMPANY_COLORS[cid % Catalog.COMPANY_COLORS.size()].lightened(0.15 * float(cid / Catalog.COMPANY_COLORS.size()))
+	c.avatar_style = cid % 4
+	c.personality = Catalog.PERSONALITIES.keys()[r.randi() % Catalog.PERSONALITIES.size()]
+	c.form = "einzel"
+	c.founded_min = sim.game_min
+	c.home_town = town
+	c.ledger = Ledger.new(0.0)
+	sim.companies.append(c)
+	sim.economy.attach(c.ledger, "C%d" % cid)
+	c.ledger.public_acct = Towns.account_of(town)
+	c.ledger.inject(CAPITAL)   # Einlage aus dem Kapitalgeberpool (I0 -> Firma), kein neues Geld
+	c.ledger.book("admin", -float(CompanyForms.FORMS[c.form].found_cost), true, "Gründung " + CompanyForms.name_of(c.form), sim.game_min)
+	for k in sim.contracts:
+		if sim.contracts[k].status == "open":
+			c.known[k] = true
+	var a := Avatar.new()
+	a.owner = cid
+	var hall: int = int(sim.towns.get_t(town).town_hall)
+	a.pos = sim.city.tile_center(sim.city.building(hall).walk if hall >= 0 else sim.towns.get_t(town).center)
+	sim.avatars[cid] = a
+	sim.action_results[cid] = []
+	sim._fuel[cid] = 0.0
+	sim.memory.books[cid] = {"events": [], "experiences": [], "next": 1}
+	sim.personnel.seen[cid] = {}
+	c.ledger.sample(sim.game_min)
+	c.add_key_event("Gegründet in %s: %s" % [sim.towns.name_of(town), reason.left(80)], sim.game_min)
+	return c
+
+
+func summary() -> Dictionary:
+	return {"max_je_stadt": max_per_town, "gruendungen": history.slice(-10), "abgelehnt": refusals.slice(-6),
+		"chancen": streaks.keys().map(func(k): return {"chance": k, "pruefungen": int(streaks[k])})}
+
+
+func to_dict() -> Dictionary:
+	return {"streaks": streaks.duplicate(), "last_found": last_found.duplicate(), "history": history.duplicate(true), "refusals": refusals.duplicate(true), "max": max_per_town}
+
+
+func from_dict(d: Dictionary) -> void:
+	streaks = d.get("streaks", {})
+	last_found = {}
+	for k in d.get("last_found", {}):
+		last_found[int(k)] = int(d.last_found[k])
+	history = d.get("history", [])
+	refusals = d.get("refusals", [])
+	max_per_town = int(d.get("max", MAX_PER_TOWN))

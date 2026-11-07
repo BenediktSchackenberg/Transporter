@@ -410,6 +410,8 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 	# Figuren der Unternehmer
 	for cid in sim.avatars:
 		var a: Avatar = sim.avatars[cid]
+		if not avatar_nodes.has(cid):
+			_make_avatar(cid)   # spaeter gegruendete Firma (Auftrag 17): Figur nachtraeglich anlegen
 		var n: Node2D = avatar_nodes[cid]
 		n.position = Iso.to_screen(a.pos)
 		var moving := a.state in ["walking", "wander"] and not a.arrived()

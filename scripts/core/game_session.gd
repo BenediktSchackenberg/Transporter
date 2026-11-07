@@ -94,7 +94,10 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 				var items = JSON.parse_string(FileAccess.get_file_as_string(path))
 				var n := sim.memory.import_experiences(i, items if items is Array else [])
 				sim.log_event("%s übernimmt %d Erfahrungen aus der vorigen Partie." % [sim.company(i).player_name, n], "plan", i)
-	for i in cfg.players.size():
+	for i in sim.companies.size():   # Startspieler mit ihren Profilen; spaetere Gruender (IDs dahinter) mit Regel-KI
+		if i >= cfg.players.size():
+			_add_founder_controller(i, loaded.controllers[i] if not loaded.is_empty() and i < loaded.controllers.size() else {})
+			continue
 		var p: Dictionary = cfg.players[i]
 		var pc := p.duplicate()
 		pc["api_key"] = keys.get(int(p.slot), "")
@@ -126,6 +129,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	_setup_dispatcher()
 	_setup_talk(loaded.is_empty())
 	sim.insolvency.company_refounded.connect(_on_refounded)
+	sim.founders.company_founded.connect(func(cid): _add_founder_controller(cid, {}))
 	_setup_weather()
 	_setup_fuel()
 	_setup_news()
@@ -295,6 +299,24 @@ func play_sound(n: String) -> void:
 
 
 ## Neuer Unternehmer auf einem Platz: Erinnerung und Persoenlichkeit des Controllers zuruecksetzen.
+## Controller fuer einen spaeteren Gruender: regelbasiert (kein Modellprofil, kein Schluessel, kein fremdes Gedaechtnis).
+func _add_founder_controller(cid: int, saved: Dictionary) -> void:
+	while controllers.size() < cid:
+		_add_founder_controller(controllers.size(), {})
+	if cid < controllers.size():
+		return
+	var pc := {"slot": -1, "player_name": sim.company(cid).player_name, "company_name": sim.company(cid).company_name, "personality": sim.company(cid).personality,
+		"provider": "demo", "model": "regel", "api_key": "", "interval": 45.0, "max_requests": 0, "max_tokens": 0, "fallback": true, "timeout": 20.0, "strategy": "",
+		"demo_fault_rate": 0.0}
+	var ctl := AgentController.new()
+	add_child(ctl)
+	ctl.setup(sim, cid, pc, api_log)
+	if not saved.is_empty():
+		ctl.from_dict(saved)
+	ctl.active = not paused and not ended
+	controllers.append(ctl)
+
+
 func _on_refounded(cid: int) -> void:
 	if cid >= controllers.size():
 		return
