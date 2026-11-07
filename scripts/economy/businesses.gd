@@ -236,7 +236,10 @@ func obs_of(cid: int) -> Array:
 		if spec.has("bau"):
 			e["personal_min"] = int(spec.personal_min)
 			e.merge(sim.construction.company_builder_detail(b))
-		if spec.has("dienste"):
+		if b.branch == "hotel" or Tourism.VENUES.has(str(b.branch)):
+			e["personal_min"] = int(spec.personal_min)
+			e.merge(sim.tourism.detail(b))
+		elif spec.has("dienste"):
 			e["personal_min"] = int(spec.personal_min)
 			e.merge(sim.it.summary_of_provider(b))
 		if spec.has("feld") or spec.has("rezept") or spec.has("laden") or spec.has("abbau"):

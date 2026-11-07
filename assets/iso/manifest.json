@@ -1849,6 +1849,96 @@
    "w": 3,
    "h": 2,
    "height": 34
+  },
+  "hotel_pension": {
+   "anchor": [
+    258,
+    97
+   ],
+   "size": [
+    516,
+    355
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 71
+  },
+  "hotel_strand": {
+   "anchor": [
+    258,
+    128
+   ],
+   "size": [
+    516,
+    386
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 94
+  },
+  "hotel_grand": {
+   "anchor": [
+    258,
+    174
+   ],
+   "size": [
+    516,
+    432
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 117
+  },
+  "kneipe": {
+   "anchor": [
+    130,
+    112
+   ],
+   "size": [
+    260,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 52
+  },
+  "strandbar": {
+   "anchor": [
+    130,
+    44
+   ],
+   "size": [
+    260,
+    174
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 30
+  },
+  "disco": {
+   "anchor": [
+    194,
+    79
+   ],
+   "size": [
+    388,
+    273
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 3,
+   "height": 50
   }
  },
  "facilities": {

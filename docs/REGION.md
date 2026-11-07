@@ -4,6 +4,42 @@ Eingegangen am 07.11.2026 (Benedikt): „im Anschluss ohne Rückfragen selbstän
 Auftrag: `unternehmer` @ `d2bca42`; tatsächliche Arbeitsbasis: `unternehmer` @ `14a6912` (enthält zusätzlich Bergwerk-Geschichte,
 Gebäudestufen und Küstenort Etappe E). Arbeit auf Branch `region` (Worktree `PTR_e`).
 
+## Eckregionen für neue Partien (Generator 3)
+
+Die Minikarte ist geografisch nordausgerichtet: `x` wächst nach Osten (rechts), `y` nach Süden (unten). Die isometrische Spielansicht
+ändert diese Zuordnung nicht. Vier Startspieler erhalten je einen Ort in Nordwest, Nordost, Südwest und Südost. Bei zwei Spielern werden
+seedabhängig NW/SO oder NO/SW gewählt; bei drei bleibt seedabhängig eine Ecke frei. Innerhalb jeder Ecke variieren die Küstenlage und
+Nord-/Südposition mit dem Seed. Die gemeinsame Landmasse liegt zwischen einer West- und einer Ostküste. Die Orte behalten Hafen,
+Flughafen, Rathaus, Bauhof und je ein Startgrundstück; einfache Straßen verbinden sie über Land. Der Start enthält keine Autobahn.
+
+`CornerRegionGenerator` schreibt `gen_params.generator = 3`. `Simulation.from_dict` verwendet für alte Regionsspielstände mit
+Generatorversion 2 weiterhin `RegionGenerator`. Damit werden die alten Orte beim Laden nicht an die neuen Eckpositionen verschoben.
+Die bisherige `region`-Dokumentation beschreibt im Folgenden auch den historischen Generator 2.
+
+## Tourismus und Freizeitbetriebe (Ausbaustand)
+
+Unternehmer können in Küstenstädten eine Strandpension auf einem erschlossenen Grundstück gründen. Wie andere Betriebe wird sie bei
+normaler Spielkonfiguration von einem Bautrupp mit Bauauftrag errichtet, benötigt zugeordnetes Personal und trägt Ausstattung,
+Abschreibung, Pacht und Stromkosten in der Firmenbilanz. Drei ausbaubare Gebäudestufen (10/32/80 Zimmer) besitzen eigene
+Voxelmodelle. Der Ausbau wird erst nach fertigem Bauauftrag wirksam. Die KI kann `found_business branche=hotel`,
+`assign_staff`, `set_hotel_price` und `upgrade_business` benutzen; die Beobachtung enthält belegte und morgen gebuchte Zimmer.
+
+`Tourism` führt Reisegruppen mit begrenztem Budget als eigene Gegenkonten. Externe Gäste finanzieren sich über `X0`, inländische
+Gäste über das Guthaben eines Bewohners (`R0`). Ankunft benötigt Flugplätze beziehungsweise eine befahrbare Straßenroute;
+Zimmer und Flugplätze sind für den Zeitraum reserviert. Übernachtungen, Ortstaxe und optionales Frühstück werden tatsächlich
+bezahlt, Frühstück verbraucht angeliefertes Brot und Fassgetränke. Nicht genutztes Geld fließt bei Stornierung/Abreise an die
+Herkunft zurück. Die Gruppen werden auf der Karte am Flughafen, entlang der Straßenroute, im Hotel und tagsüber am Strand
+gezeichnet. Ankünfte, Übernachtungen, Ausgaben und aktive Gäste stehen im Stadt- und Regionsfenster.
+
+Hafenkneipe, Strandbar und Diskothek sind eigene gründbare Betriebe mit Voxelmodellen, Personal, Strom und Getränkelieferungen.
+Touristen und Einheimische besuchen sie, bezahlen Eintritt/Getränk und verbrauchen vorhandene Ware. Die KI kann
+`set_venue_price` ausführen; Besucher und Bestand sind in der Betriebsbeobachtung sichtbar. Touristen erscheinen zur
+Öffnungszeit am besuchten Betrieb. `test_tourism_hotel` und `test_tourism_venues` prüfen Buchungen, Zahlungen,
+Warenverbrauch, Ansichten und Spielstand.
+
+Noch ausstehend aus dem ergänzenden Auftrag: öffentliches Strand-/Promenadenprojekt mit Bau und Material, vertiefte
+Besucherzufriedenheit sowie Verkehrszählung und genehmigte Autobahnprojekte mit Fahrspuren, Anschlussstellen und Kreuzungen.
+
 ## Wortlaut (gekürzt auf die verbindlichen Anforderungen, Abschnittsnummern wie im Auftrag)
 
 1. **Ziel:** Region mit mehreren eigenständigen Städten auf einer Karte. Neue Partie: Städte = Startspieler (2–4), je Stadt genau ein

@@ -846,6 +846,12 @@ static func businesses(sim: Simulation) -> String:
 				txt += "    %s
 " % " · ".join(parts)
 			var rb: Dictionary = sim.biz.get_b(r.id)
+			if rb.branch == "hotel":
+				var td: Dictionary = sim.tourism.detail(rb)
+				txt += "    Zimmer %d, belegt %d, morgen gebucht %d · Preis %s/Nacht\n" % [int(td.zimmer), int(td.belegt), int(td.gebucht_morgen), Catalog.money(float(td.zimmerpreis))]
+			elif Tourism.VENUES.has(str(rb.branch)):
+				var td: Dictionary = sim.tourism.detail(rb)
+				txt += "    Besucher heute %d · Eintritt %s · Getränke auf Lager %d\n" % [int(td.besucher_tag), Catalog.money(float(td.eintritt)), int(td.getraenke)]
 			if rb.get("branch", "") == "immobilien":
 				for key in rb.get("props", {}):
 					var dd: Dictionary = sim.realty.detail(rb).gebaeude[key]
@@ -895,6 +901,8 @@ static func town(sim: Simulation, k: int = 0) -> String:
 			" · Ausbau läuft" if bool(h.ausbau_laeuft) else (" · nächste Stufe %s (%s)" % [h.ausbau.ziel, Catalog.money(float(h.ausbau.kosten))] if not h.ausbau.is_empty() else "")]
 	var D: CityDepot = T.depot(k)
 	txt += "[b]Zentrallager[/b] %s · Konto %s\n" % [esc(sim.city.building(D.building).get("name", "")), D.owner()]
+	var guests: Dictionary = sim.tourism.summary(k)
+	txt += "[b]Tourismus[/b] %d Ankünfte · %d aktive Gäste · %d Übernachtungen · %d Freizeitbesuche · Ausgaben %s\n" % [int(guests.ankuenfte), int(guests.aktive_gaeste), int(guests.uebernachtungen), int(guests.get("nachtleben", 0)), Catalog.money(float(guests.ausgaben))]
 	if region:
 		var firms: Array = sim.companies.filter(func(c): return int(c.home_town) == k)
 		txt += "[b]Unternehmen mit Heimat hier[/b] %s\n" % ", ".join(firms.map(func(c): return "%s (%s)" % [esc(c.company_name), c.status]))
@@ -954,6 +962,8 @@ static func region(sim: Simulation) -> String:
 		txt += "  %s – Bürgermeister %s (%s), Zustimmung %d %%, Einwohner %d, Kasse %s (verfügbar %s), Unternehmen %d, Punkte %d %s\n" % [esc(t.name), esc(t.buergermeister),
 			t.partei, int(t.zustimmung), sim.citizens.population_of(k), Catalog.money(float(t.kasse)), Catalog.money(float(t.verfuegbar)),
 			sim.companies.filter(func(c): return int(c.home_town) == k).size(), int(sc.punkte), str(sc.teile)]
+		var guests: Dictionary = sim.tourism.summary(k)
+		txt += "    Tourismus: %d Ankünfte · %d aktive Gäste · %d Übernachtungen · %d Freizeitbesuche · Ausgaben %s\n" % [int(guests.ankuenfte), int(guests.aktive_gaeste), int(guests.uebernachtungen), int(guests.get("nachtleben", 0)), Catalog.money(float(guests.ausgaben))]
 	txt += "[b]Verbindungen[/b] Startstraßen: %s\n" % ", ".join(sim.city.region_roads.map(func(r): return "%s %s–%s (%d Felder)" % [r.id, T.name_of(int(r.von)), T.name_of(int(r.nach)), int(r.laenge)]))
 	for r in sim.regional.summary():
 		txt += "  Gemeinschaftsprojekt %s %s: %s (%s, Anteile %s)%s\n" % [r.id, r.verbindung, r.status, Catalog.money(float(r.kosten)), r.anteile, (" – " + str(r.hinweis)) if str(r.hinweis) != "" else ""]

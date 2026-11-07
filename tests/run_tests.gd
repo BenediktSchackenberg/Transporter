@@ -12,6 +12,8 @@ func _initialize() -> void:
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
 			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application"]
+	test_names.append("test_tourism_hotel")
+	test_names.append("test_tourism_venues")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -4955,6 +4957,121 @@ func test_depot_operations() -> void:
 	ok(s2.city_depot.ramps == D.ramps and s2.city_depot.roster().size() == D.roster().size(), "Ausbau nach Laden erhalten")
 
 
+func test_tourism_hotel() -> void:
+	var s := Simulation.new()
+	s.world_mode = "region"
+	s.region_town_count = 2
+	s.start_profile = "unternehmer"
+	s.setup(4242, players(2), 512, 0.0)
+	s.prod.instant_build = true
+	var r: Dictionary = s.biz.found(0, "hotel", "Strandgaeste beherbergen", {"stadt": "0"})
+	ok(r.ok, "Strandpension auf einer städtischen Parzelle gegründet")
+	if not r.ok:
+		return
+	var b: Dictionary = s.biz.get_b(str(r.ref))
+	ok(s.tourism.rooms(b) == 10 and s.city.building(int(b.site)).sprite == "hotel_pension", "Pension mit zehn Zimmern und eigener Grafik")
+	ok(not s.tourism.book(str(b.id), 2, 1, 300.0).ok, "Hotel ohne Personal nimmt keine Buchung an")
+	var w := hire_free(s, 0, "allround")
+	ok(s.biz.assign(0, w.id, str(b.id)).ok, "Personal kann im Hotel arbeiten")
+	var trip: Dictionary = s.tourism.book(str(b.id), 3, 2, 500.0)
+	ok(trip.ok, "Auslandsgruppe bucht Zimmer und Flugplätze")
+	if not trip.ok:
+		return
+	ok(not s.tourism.book(str(b.id), 2, 1, 250.0).ok, "Flugplätze des Ankunftstages werden nicht überbucht")
+	ok(not s.tourism.set_price(1, str(b.id), 70.0).ok and not s.tourism.set_price(0, str(b.id), 10.0).ok, "Preis nur durch Eigentümer und innerhalb der Grenzen")
+	ok(s.executor.execute(0, {"action": "set_hotel_price", "business_id": b.id, "price": 70.0}).ok, "KI kann den Zimmerpreis ändern")
+	ok(int(s.tourism.trips[str(trip.ref)].price) == 65 and int(b.room_price) == 70, "Bestehende Buchung behält den vereinbarten Preis")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(s.to_dict()))
+	var loaded: Simulation = Simulation.from_dict(saved)
+	ok(loaded.tourism.trips.has(str(trip.ref)) and loaded.tourism.rooms(loaded.biz.get_b(str(b.id))) == 10, "Reise und Hotel überstehen Speichern und Laden")
+	var id := str(trip.ref)
+	for d in range(int(trip.arrival_day), int(trip.departure_day) + 1):
+		loaded.game_min = GameCalendar.day_start(d)
+		loaded.tourism.on_day(d)
+	ok(loaded.tourism.trips[id].status == "abgereist", "Gäste reisen nach zwei bezahlten Nächten ab")
+	ok(int(loaded.tourism.trips[id].paid_nights) == 2 and loaded.tourism.summary(0).uebernachtungen >= 6, "Nächte und Gäste in Stadtstatistik erfasst")
+	ok(absf(float(loaded.economy.accounts[id])) < 0.01, "Restbudget an die Herkunft zurückgezahlt")
+	var domestic := {}
+	for p in loaded.citizens.people:
+		if loaded.citizens.home_town(p) == 1:
+			loaded.population.pay_in("X0", [[p, 250.0]])
+			domestic = loaded.tourism.book(str(b.id), 1, 1, 160.0, int(p.id))
+			break
+	ok(domestic.get("ok", false) and domestic.get("mode", "") == "strasse", "Inlandsgast finanziert die Reise aus dem Bürgerguthaben und fährt auf Straßen")
+	if domestic.get("ok", false):
+		var inland: Dictionary = loaded.tourism.trips[str(domestic.ref)]
+		loaded.game_min = (float(inland.booked_min) + GameCalendar.day_start(int(inland.arrival_day))) * 0.5
+		loaded.tourism.tick()
+		ok(int(inland.position) > 0 and int(inland.position) < inland.route.size(), "Inlandsgast bewegt sich sichtbar entlang der Straßenroute")
+		for d in range(int(trip.departure_day) + 1, int(inland.departure_day) + 1):
+			loaded.game_min = GameCalendar.day_start(d)
+			loaded.tourism.on_day(d)
+		ok(inland.status == "abgereist" and absf(float(loaded.economy.accounts[str(domestic.ref)])) < 0.01, "Inlandsgast bezahlt und erhält Restguthaben zurück")
+	loaded.company(0).ledger.inject(250000.0)
+	for item in Trader.MATERIALS:
+		loaded.stock.add(item, 500, "T0", loaded.trader.bauhof, "Testbestand", loaded.game_min)
+	loaded.grid.capacity = 100000.0
+	var hb: Dictionary = loaded.biz.get_b(str(b.id))
+	while loaded.biz.staff_of(str(b.id)).size() < 6:
+		var extra := hire_free(loaded, 0, "allround")
+		loaded.biz.assign(0, extra.id, str(b.id))
+	var day := maxi(int(trip.departure_day), int(domestic.get("departure_day", 0)))
+	for target in [2, 3]:
+		hb["demand_avg"] = 0.9
+		var up: Dictionary = loaded.stages.upgrade(0, str(b.id), "gebuchte Zimmer")
+		ok(up.ok and BusinessStages.stage_of(hb) == target - 1, "Hotelausbau zu Stufe %d beauftragt; Kapazität bleibt bis zur Fertigstellung" % target)
+		if not up.ok:
+			break
+		var works: Dictionary = loaded.construction.works[str(up.ref)]
+		for k in 70:
+			day += 1
+			loaded.game_min = GameCalendar.day_start(day)
+			loaded.construction.on_day(day)
+			if works.status == "fertig":
+				break
+		ok(works.status == "fertig" and BusinessStages.stage_of(hb) == target, "Bautrupp stellt Hotelstufe %d fertig" % target)
+		ok(loaded.city.building(int(hb.site)).sprite == BusinessStages.stage_def(hb).sprite and loaded.tourism.rooms(hb) == (32 if target == 2 else 80), "Hotelstufe %d aktualisiert Grafik und Zimmerzahl" % target)
+	ok(identity_ok(loaded), "Tourismus wahrt Geld- und Warenbilanz")
+
+
+func test_tourism_venues() -> void:
+	var s := Simulation.new()
+	s.world_mode = "region"
+	s.region_town_count = 2
+	s.start_profile = "unternehmer"
+	s.setup(4242, players(2), 512, 0.0)
+	s.prod.instant_build = true
+	s.company(0).ledger.inject(100000.0)
+	var hotel: Dictionary = s.biz.found(0, "hotel", "Hotel", {"stadt": "0"})
+	var bar: Dictionary = s.biz.found(0, "strandbar", "Promenade", {"stadt": "0"})
+	ok(hotel.ok and bar.ok, "Hotel und Strandbar lassen sich in derselben Küstenstadt errichten")
+	if not hotel.ok or not bar.ok:
+		return
+	var hb: Dictionary = s.biz.get_b(str(hotel.ref))
+	var vb: Dictionary = s.biz.get_b(str(bar.ref))
+	ok(s.city.building(int(vb.site)).sprite == "strandbar", "Strandbar hat ein eigenes Kartenmodell")
+	for bid in [str(hb.id), str(vb.id)]:
+		var worker := hire_free(s, 0, "allround")
+		s.biz.assign(0, worker.id, bid)
+	s.stock.add("fassgetraenk", 20, "C0", int(vb.site), "Testanlieferung", s.game_min)
+	ok(s.executor.execute(0, {"action": "set_venue_price", "business_id": vb.id, "price": 17.0}).ok, "KI kann Eintritt und Getränk festlegen")
+	var trip: Dictionary = s.tourism.book(str(hb.id), 2, 2, 300.0)
+	ok(trip.ok, "Reisegruppe bucht das Hotel")
+	if not trip.ok:
+		return
+	s.game_min = GameCalendar.day_start(int(trip.arrival_day))
+	s.tourism.on_day(int(trip.arrival_day))
+	var t: Dictionary = s.tourism.trips[str(trip.ref)]
+	ok(str(t.get("venue", "")) == str(vb.id) and s.tourism.summary(0).nachtleben >= 2, "Touristen besuchen sichtbar die Strandbar")
+	ok(s.stock.available("fassgetraenk", "C0", int(vb.site)) < 20 and int(vb.get("visitors_today", 0)) >= 2, "Besuche verbrauchen gelieferte Getränke")
+	s.game_min = float(t.venue_from) + 60.0
+	ok(s.tourism.position_of(t) == s.city.building(int(vb.site)).walk, "Besucher stehen während der Öffnungszeit an der Bar")
+	ok(identity_ok(s), "Barbesuche von Gästen und Bürgern wahren Geld- und Warenbilanz")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(s.to_dict()))
+	var loaded: Simulation = Simulation.from_dict(saved)
+	ok(str(loaded.tourism.trips[str(trip.ref)].venue) == str(vb.id), "Besuchsplan und Freizeitbetrieb bleiben im Spielstand")
+
+
 func test_traffic_flow() -> void:
 	GameCalendar.configure(60.0)
 	var s := new_sim(2, 256)
@@ -7883,6 +8000,12 @@ func test_region_world() -> void:
 		ok(T.count() == n and T.is_region() and s.companies.size() == n, "%d Startspieler -> %d Städte, %d Unternehmen" % [n, T.count(), s.companies.size()])
 		var names: Array = T.list.map(func(t): return t.name)
 		ok(names.all(func(x): return names.count(x) == 1 and str(x) != ""), "eindeutige Namen %s" % str(names))
+		var corners: Array = s.city.towns.map(func(t): return str(t.get("ecke", "")))
+		ok(corners.size() == n and corners.all(func(x): return x in CornerRegionGenerator.CORNERS and corners.count(x) == 1), "je Startstadt eine eigene Eckregion: %s" % str(corners))
+		if n == 2:
+			ok(corners == ["NW", "SO"] or corners == ["NO", "SW"], "zwei Orte liegen in Gegenueberecken")
+		if n == 4:
+			ok(corners == CornerRegionGenerator.CORNERS, "vier Orte liegen NW, NO, SW und SO")
 		var homes: Array = s.companies.map(func(c): return c.home_town)
 		ok(homes == range(n), "je Stadt genau ein Startunternehmer (Heimat %s)" % str(homes))
 		for k in n:
@@ -7896,11 +8019,11 @@ func test_region_world() -> void:
 				"%s: %d Startgebäude, Rathaus/Bauhof/Hafen/Flughafen vorhanden und erreichbar" % [T.name_of(k), counted])
 		ok(s.city.buildings.all(func(b): return not (b.type == "plot" and int(b.get("parent", -1)) < 0) or s.companies.any(func(c): return c.depots[0] == int(b.id))), "keine versteckten Startfirmen-Grundstücke")
 		ok(identity_ok(s), "Geld und Waren erhalten (%d Städte)" % n)
-	var a := RegionGenerator.new(4)
+	var a := CornerRegionGenerator.new(4)
 	var ca: CityData = a.generate(77, 512)
-	var b := RegionGenerator.new(4)
+	var b := CornerRegionGenerator.new(4)
 	var cb: CityData = b.generate(77, 512)
-	var c := RegionGenerator.new(4)
+	var c := CornerRegionGenerator.new(4)
 	var cc: CityData = c.generate(78, 512)
 	ok(ca.towns.map(func(t): return [t.name, t.center]) == cb.towns.map(func(t): return [t.name, t.center]) and ca.buildings.size() == cb.buildings.size(), "gleicher Seed reproduziert die Region")
 	ok(ca.towns.map(func(t): return t.center) != cc.towns.map(func(t): return t.center), "anderer Seed, andere Lage")
@@ -7987,6 +8110,14 @@ func test_region_mayors_and_save() -> void:
 	var old := coast_sim()
 	var o2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(old.to_dict())))
 	ok(o2.towns.count() == 1 and not o2.towns.is_region() and o2.towns.mayor(0) == o2.mayor and o2.companies.size() == 4 and identity_ok(o2), "alter Einzelstadt-Stand lädt als Region mit einer Stadt, alle Unternehmen bleiben dort")
+	var legacy := Simulation.new()
+	legacy.world_mode = "region"
+	legacy.region_town_count = 2
+	legacy.region_generator_version = 2
+	legacy.setup(4242, players(2), 512)
+	var legacy_centers: Array = legacy.city.towns.map(func(t): return t.center)
+	var restored := Simulation.from_dict(JSON.parse_string(JSON.stringify(legacy.to_dict())))
+	ok(restored.region_generator_version == 2 and restored.city.towns.map(func(t): return t.center) == legacy_centers and identity_ok(restored), "alte Regionskarte bleibt beim Laden an ihren bisherigen Positionen")
 
 
 ## Abnahme 8: Gemeinschaftsprojekt (neue Verbindungsstrasse) einmal vergeben, aus Anteilen finanziert, erst nach Abnahme befahrbar;

@@ -10,6 +10,7 @@ signal day_changed(day: int)       # absoluter Spieltag (0 = erster)
 signal month_changed(month: int)
 
 var city: CityData
+var region_generator_version := 3 # alte Regionsspielstaende behalten ihre bisherige Kartenlage
 var nav := NavGrid.new()
 var rng := RandomNumberGenerator.new()
 var market := Market.new()
@@ -25,6 +26,7 @@ var towns := Towns.new()          # Stadtregister: je Ort Buergermeister, Kasse,
 var load_warnings: Array = []     # Abweichungen beim Laden (z. B. geaenderter Generator)
 var population_target := 0         # Startbevoelkerung (0 = Konfiguration); im Kuestenort aus dem vorhandenen Wohnraum
 var biz := Businesses.new()       # Betriebe der Unternehmer (Auftrag 14); Company bleibt die finanzielle Klammer
+var tourism := Tourism.new()       # Hotelbuchungen und Besucherbudgets (nicht Teil der Einwohnerzahl)
 const SAVE_VERSION := 2            # 2 = Betriebe und Kostenstellen (Auftrag 14)
 ## Startprofil: "spedition" = Transportbetrieb mit Van und 10 Mitarbeitern (bisheriger Start, Standard der Tests);
 ## "unternehmer" = Hauptsitz auf dem Startgrundstueck, zwei Allrounder, kein Fahrzeug (Spiel, Auftrag 14). Vor setup() setzen.
@@ -130,7 +132,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	if world_mode == "region":
 		if region_town_count <= 0:
 			region_town_count = clampi(players.size(), 1, 4)
-		city = RegionGenerator.new(region_town_count).generate(seed_value, map_size, reserve)
+		city = (RegionGenerator.new(region_town_count) if region_generator_version <= 2 else CornerRegionGenerator.new(region_town_count)).generate(seed_value, map_size, reserve)
 	else:
 		city = (CoastGenerator.new() if world_mode == "kueste" else CityGenerator.new()).generate(seed_value, map_size, reserve)
 	if world_mode in ["kueste", "region"] and population_target <= 0:
@@ -195,6 +197,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	retail.setup(self)
 	stages.setup(self)
 	day_changed.connect(stages.on_day)   # nach Produktion und Ladenverkauf
+	tourism.setup(self)
 	waste.setup(self)
 	households.setup(self)
 	housing.setup(self)
@@ -1110,6 +1113,7 @@ func _minute_tick() -> void:
 	if minute_index % 5 == 0:
 		crews.tick(game_min)
 	air.tick(game_min)
+	tourism.tick()
 	var now := game_min
 	var day := GameCalendar.day_of(now)
 	if day != _last_day:
@@ -1289,7 +1293,7 @@ func to_dict() -> Dictionary:
 	return {"world": city.world, "town_name": city.town_name, "population_target": population_target, "seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "access": access.to_dict(), "bridges": bridges.to_dict(), "crews": crews.to_dict(), "regional": regional.to_dict(), "air": air.to_dict(), "founders": founders.to_dict(), "commute": commute.to_dict(), "mining": mining.to_dict(), "stages": stages.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "region": _region_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "tourism": tourism.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "region": _region_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
 
@@ -1343,6 +1347,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 			"color": Color.html(cd.color), "avatar_style": cd.avatar_style, "personality": cd.personality})
 	s.world_mode = str(d.get("world", "stadt"))
 	s.region_town_count = int(d.get("region", {}).get("orte", 0))
+	s.region_generator_version = int(d.get("region", {}).get("generator", {}).get("generator", 2))
 	s.population_target = int(d.get("population_target", 0))
 	s.setup(int(d.seed), players, int(d.map_size), 1.0, float(d.get("reserve", 0.0)))   # alte Staende: Karte ohne Reserve
 	# Ausgangszustand durch gespeicherten Zustand ersetzen
@@ -1460,6 +1465,10 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.rivalry.from_dict(d.rivalry)
 	s.talk.from_dict(d.get("talk", {}))
 	s.biz.from_dict(d.get("businesses", {}))
+	for hb in s.biz.items.values():
+		if hb.branch == "hotel" and int(hb.site) >= 0 and int(hb.site) < s.city.buildings.size():
+			s.city.buildings[int(hb.site)].sprite = str(BusinessStages.stage_def(hb).get("sprite", "hotel_pension"))
+	s.tourism.from_dict(d.get("tourism", {}))
 	s.start_profile = str(d.get("start_profile", "spedition"))
 	s.grid.from_dict(d.get("grid", {}))
 	var migrated := s.biz.migrate() if int(d.get("save_version", 1)) < 2 else 0   # Spielstand vor Version 2: Speditionen werden Transportbetriebe

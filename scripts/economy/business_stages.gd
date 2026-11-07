@@ -7,6 +7,11 @@ extends RefCounted
 ## Die neue Stufe gilt erst nach Fertigstellung. Stufe 1 ist der Gruendungszustand (Faktor 1, keine Aenderung bestehender Betriebe).
 
 const STAGES := {
+	"hotel": [
+		{"name": "Strandpension", "zimmer": 10, "sprite": "hotel_pension"},
+		{"name": "Strandhotel", "zimmer": 32, "sprite": "hotel_strand", "kosten": 36000.0, "personal": 3, "strom": 1.5},
+		{"name": "Grandhotel", "zimmer": 80, "sprite": "hotel_grand", "kosten": 78000.0, "personal": 6, "strom": 2.5},
+	],
 	"baeckerei": [
 		{"name": "Backstube"},
 		{"name": "Bäckerei mit Café", "kosten": 16000.0, "personal": 3, "produktion": 1.3, "lager": 1.5, "kundschaft": 1.35, "strom": 1.4},
@@ -92,7 +97,9 @@ func on_day(_day: int) -> void:
 		if not STAGES.has(str(b.branch)) or b.status not in Businesses.RUNNING:
 			continue
 		var x := 0.0
-		if b.branch == "bergwerk":
+		if b.branch == "hotel":
+			x = sim.tourism.occupancy(str(b.id))
+		elif b.branch == "bergwerk":
 			x = clampf(float(b.get("sales_avg", 0.0)) / maxf(1.0, float(b.get("today", 0))), 0.0, 1.0) if int(b.get("today", 0)) > 0 else 0.0
 		elif bool(b.get("counter", false)):
 			var want := int(b.get("counter_customers", 0)) + int(b.get("counter_turned", 0))
@@ -174,6 +181,10 @@ func finish(w: Dictionary) -> void:
 	b.erase("upgrading")
 	var base := float(Businesses.branches().get(b.branch, {}).get("strom_kw", 0.0))
 	b.energy_kw = base * float(stage_def(b).get("strom", 1.0))
+	if b.branch == "hotel":
+		var site := int(b.site)
+		sim.city.buildings[site].sprite = str(stage_def(b).get("sprite", "hotel_pension"))
+		sim.events.buildings_added.emit([site])
 	b["demand_avg"] = 0.0
 	stats.ausbauten = int(stats.ausbauten) + 1
 	sim.biz.note(b.id, "Ausbau fertig: jetzt %s" % stage_name(b), "Bau")

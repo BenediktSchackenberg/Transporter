@@ -106,6 +106,10 @@ const SCHEMA := {
 		"desc": "IT-Vertrag beim günstigsten IT-Dienstleister (it_angebote): buero_it (−15 % Büro- und Internetkosten) oder lagerverwaltung (−25 % Verderb, business_id nötig). Monatlich bezahlt, nur wenn die Leistung erbracht wird."},
 	"set_business_price": {"params": {"business_id": "string", "item": "string", "price": "number"},
 		"desc": "Verkaufspreis eines eigenen Produktionsbetriebs je Einheit setzen (Getreide, Mehl, Brot). Käufer wählen den günstigsten Anbieter inkl. Fracht; der Großhandel kauft Brot nur unter dem Importpreis."},
+	"set_hotel_price": {"params": {"business_id": "string", "price": "number"},
+		"desc": "Zimmerpreis des eigenen Hotels auf 25 bis 350 EUR pro Nacht setzen. Bestehende Buchungen behalten ihren vereinbarten Preis. Freie und gebuchte Zimmer stehen in betriebe[]."},
+	"set_venue_price": {"params": {"business_id": "string", "price": "number"},
+		"desc": "Eintritt und Getränk im eigenen Freizeitbetrieb (Hafenkneipe, Strandbar, Diskothek) auf 5 bis 100 EUR setzen. Besucher, Getränke und Personal stehen in betriebe[]."},
 	"upgrade_business": {"params": {"business_id": "string", "reason": "string?"},
 		"desc": "Eigenen Betrieb eine Gebäudestufe ausbauen (betriebe[].ausbau: Ziel, Kosten, moeglich, fehlt). Nur bei Nachfrage, Geld, Personal und Strom; ein Bautrupp baut mit Material aus Bauhof/Hafen, die Stufe gilt nach Fertigstellung. Bäckerei/Restaurant: mehr Kundschaft und Plätze, Bergwerk: mehr Förderung."},
 	"close_business": {"params": {"business_id": "string", "reason": "string?"},
@@ -758,6 +762,10 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.stages.upgrade(cid, _s(a.business_id), str(a.get("reason", "")))
 		"set_business_price":
 			return sim.prod.set_price(cid, _s(a.business_id), _s(a.item), float(a.price))
+		"set_hotel_price":
+			return sim.tourism.set_price(cid, _s(a.business_id), float(a.price))
+		"set_venue_price":
+			return sim.tourism.set_venue_price(cid, _s(a.business_id), float(a.price))
 		"buy_property":
 			return sim.realty.buy(cid, _i(a.gebaeude), _s(a.get("reason", "")))
 		"buy_it_service":
