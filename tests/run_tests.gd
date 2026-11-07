@@ -8002,11 +8002,13 @@ func test_region_joint_project() -> void:
 	var again: Dictionary = R.propose(0, "verbindung", 2, {0: 0.5, 2: 0.5}, "sofort erneut")
 	ok(not again.ok and str(again.msg).contains("frühestens"), "Sperrfrist nach Ablehnung: %s" % str(again.msg).left(80))
 	R.items[str(r1.ref)].deadline = -100   # Sperrfrist abgelaufen
-	# Fristablauf ohne Beschluss
+	# Fristablauf ohne Beschluss: die Verwaltung der Partnerstadt entscheidet; ist der Anteil nicht gedeckt, lehnt sie ab
 	var r2: Dictionary = R.propose(0, "verbindung", 2, {0: 0.5, 2: 0.5}, "Test Frist")
 	var day := GameCalendar.day_of(s.game_min)
+	M2.commitments = 1.0e9   # Partnerstadt hat keine verfuegbaren Mittel
 	R.on_day(day + RegionalProjects.DEADLINE_DAYS + 1)
-	ok(R.items[str(r2.ref)].status == "gescheitert" and str(R.items[str(r2.ref)].note).contains("Frist"), "Fristablauf: gescheitert mit Begründung")
+	M2.commitments = 0.0
+	ok(R.items[str(r2.ref)].status == "gescheitert" and str(R.items[str(r2.ref)].note).contains("Verwaltung"), "Fristablauf: Verwaltung entscheidet, Anteil nicht gedeckt -> gescheitert (%s)" % str(R.items[str(r2.ref)].note).left(80))
 	R.items[str(r2.ref)].deadline = -100
 	# Zustimmung: eine Vergabe, Anteile reserviert und bezahlt
 	var r3: Dictionary = R.propose(0, "verbindung", 2, {0: 0.6, 2: 0.4}, "Test")

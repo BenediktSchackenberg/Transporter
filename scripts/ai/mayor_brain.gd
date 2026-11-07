@@ -272,6 +272,14 @@ static func decide(ind: Dictionary) -> Dictionary:
 			break
 		if pl.status == "beschlossen" and budget > 20000.0 and ind.projekte.filter(func(p): return pl.ids_zur_entwicklung.any(func(id): return id in p.grundstuecke)).is_empty() and not pl.ids_zur_entwicklung.is_empty():
 			actions.append({"action": "plan_infrastructure", "parcel_ids": pl.ids_zur_entwicklung, "reason": "Quartier %s braucht Anschlüsse; verfügbare Mittel %s." % [pl.name, Catalog.money(budget)]})
+	# Vorrang: Ein beschlossenes Quartier ohne Anschluss wird erschlossen (Strasse, Strom, Wasser), auch wenn die Runde sonst schon voll ist -
+	# ohne Erschliessung entstehen weder neue Strassen noch Bauland.
+	if not actions.any(func(x): return x.action == "plan_infrastructure") and budget > 20000.0:
+		for pl in plans:
+			var ids: Array = pl.get("ids_ohne_anschluss", pl.ids_zur_entwicklung)
+			if pl.status == "beschlossen" and not ids.is_empty() and ind.projekte.filter(func(p): return ids.any(func(id): return id in p.grundstuecke)).is_empty():
+				actions.insert(0, {"action": "plan_infrastructure", "parcel_ids": ids, "reason": "Quartier %s ist beschlossen, aber nicht erschlossen: Straße und Anschlüsse bauen (verfügbar %s)." % [pl.name, Catalog.money(budget)]})
+				break
 	if actions.is_empty():
 		actions.append({"action": "wait"})
 	var summary := "Lage: %d wohnungssuchende Haushalte, Leerstand %.1f %%, Beschäftigung %.0f %%, %d Anträge zur Entscheidung. %s" % [waiting, float(housing.leerstand) * 100.0,

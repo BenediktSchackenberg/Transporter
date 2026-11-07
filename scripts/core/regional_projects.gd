@@ -180,8 +180,14 @@ func finish(rid: String) -> void:
 func on_day(day: int) -> void:
 	for r in items.values():
 		if r.status == "vorgeschlagen" and day > int(r.deadline):
-			var late: Array = r.votes.keys().filter(func(k): return r.votes[k] == "offen").map(func(k): return sim.towns.name_of(int(k)))
-			_fail(r, "Frist verstrichen ohne Beschluss von %s" % ", ".join(late))
+			# Ohne Beschluss entscheidet die Verwaltung der Partnerstadt (wie das Bauamt bei Antraegen): zustimmen, wenn der Anteil hoechstens
+			# die Haelfte der verfuegbaren Mittel bindet, sonst ablehnen.
+			for k in r.votes.keys().filter(func(x): return r.votes[x] == "offen"):
+				var Mk: Mayor = sim.towns.mayor(int(k))
+				var ok_share := share_amount(r, int(k)) <= Mk.available_budget() * 0.5
+				decide(str(r.id), int(k), ok_share, "Frist verstrichen, Verwaltung entscheidet: %s" % ("Anteil gedeckt" if ok_share else "Anteil bindet zu viel der verfügbaren Mittel"))
+				if r.status != "vorgeschlagen":
+					break
 		elif r.status == "beschlossen":
 			var prj: Dictionary = sim.towns.project(str(r.project))
 			if str(prj.get("status", "")) in ["beauftragt", "laufend"]:

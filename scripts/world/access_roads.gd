@@ -226,6 +226,8 @@ func lay_roads(pids: Array) -> Array:
 		if p.is_empty():
 			continue
 		var res := _search(p, false)
+		if res.ok and res.cells.is_empty() and int(p.area) >= QUARTER_STREET_MIN_AREA:
+			res = _street_to_center(p)   # schon angeschlossen: Erschliessungsstrasse bis in die Mitte des Grundstuecks (Quartiersstrasse)
 		if not res.ok or res.cells.is_empty():
 			continue
 		_apply_cells(res.cells)
@@ -234,6 +236,21 @@ func lay_roads(pids: Array) -> Array:
 		for c in res.cells:
 			out.append([c.x, c.y])
 	return out
+
+
+const QUARTER_STREET_MIN_AREA := 30
+
+
+## Weg von der Mitte eines Grundstuecks zur naechsten Strasse (Entfernungsfeld ueber Land). Leer, wenn die Mitte nicht erreichbar ist.
+func _street_to_center(p: Dictionary) -> Dictionary:
+	var city: CityData = sim.city
+	if not _fields.has("land"):
+		_fields["land"] = _field(false)
+	var toward: PackedInt32Array = _fields["land"][0]
+	var ctr := Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)
+	if not city.inside(ctr) or city.is_road(ctr) or toward[city.idx(ctr)] < 0 or not _passable(ctr, false, true):
+		return {"ok": false, "cells": []}
+	return {"ok": true, "cells": _trace(toward, city.idx(ctr))}
 
 
 ## Laden: gespeicherte Strassenzellen wieder anlegen (die Welt wird aus dem Seed neu erzeugt).
