@@ -93,7 +93,7 @@ func setup(simulation) -> void:
 	track = {
 		"size": sim.city.size,
 		"run_x0": int(a.run_x0), "run_x1": int(a.run_x1), "run_y": int(a.run_y),
-		"apron": spot,
+		"apron": spot, "dir": int(a.get("dir", 1)),
 	}
 	# Wehrauto (E5): Basis an der Strasse neben der Wache
 	if fire_station >= 0 and sim.city.building(fire_station).has("road"):
@@ -114,6 +114,12 @@ func state(now: float) -> Dictionary:
 	var ax: float = float(track.apron[0])
 	var ay: float = float(track.apron[1])
 	var edge: float = float(track.size) + EDGE_OFF
+	var mirrored := int(track.get("dir", 1)) < 0
+	if mirrored:
+		var old_x0 := rx0
+		rx0 = float(track.size - 1) - rx1
+		rx1 = float(track.size - 1) - old_x0
+		ax = float(track.size - 1) - ax
 	# Key-Points [t, x, y, h]: Anflug vom Kartenrand, Touchdown, Rollen, Vorfeld (stehend), Rollen, Abflug.
 	# Der letzte Punkt gleicht dem ersten, damit sich die Periode nahtlos wiederholt.
 	var kp: Array = [
@@ -127,6 +133,9 @@ func state(now: float) -> Dictionary:
 		[0.96, rx1 + 3.0, ry, 0.4],
 		[1.00, edge, ry - 14.0, 11.0],
 	]
+	if mirrored:
+		for point in kp:
+			point[1] = float(track.size - 1) - float(point[1])
 	var i := 0
 	while i < kp.size() - 1 and kp[i + 1][0] < t:
 		i += 1

@@ -19,20 +19,26 @@ func setup(simulation: Simulation) -> void:
 	if not sim.harbor.enabled:
 		return
 	var port := {}
-	for b in sim.city.buildings:
-		if b.type == "port_office":
-			port = b
+	if not sim.city.towns.is_empty():
+		port = sim.city.building(int(sim.city.towns[0].get("port_office", -1)))
+	if port.is_empty():
+		for b in sim.city.buildings:
+			if b.type == "port_office":
+				port = b
+				break
 	if port.is_empty():
 		port = sim.city.building(sim.harbor.building)
-	var y: int = int(port.road.y) + 3
-	var x: int = int(port.road.x)
-	while x < sim.city.size - 1 and sim.city.g(Vector2i(x, y)) != CityData.G.WATER:
-		x += 1
-	berth = Vector2(float(x) + LEN * 0.5 + 0.4, float(y) + BEAM * 0.5 + 0.15) * 32.0
-	edge = Vector2(float(sim.city.size) + LEN, float(y) + BEAM * 0.5 + 0.15) * 32.0
+	var y: int = int(port.y) + int(port.h) + 1
+	var west := sim.city.world == "region" and not sim.city.towns.is_empty() and str(sim.city.towns[0].get("ecke", "")).ends_with("W")
+	var x: int = int(port.x) if west else int(port.x) + int(port.w)
+	var direction := -1 if west else 1
+	while x > 0 and x < sim.city.size - 1 and sim.city.g(Vector2i(x, y)) != CityData.G.WATER:
+		x += direction
+	berth = Vector2(float(x) + (-(LEN * 0.5) if west else LEN * 0.5) + 0.4, float(y) + BEAM * 0.5 + 0.15) * 32.0
+	edge = Vector2(-LEN if west else float(sim.city.size) + LEN, float(y) + BEAM * 0.5 + 0.15) * 32.0
 	var jetty := JettyNode.new()   # Holzanleger vom Ufer ins Wasser, das Schiff liegt suedlich laengsseits
-	jetty.from_x = float(x) - 1.0
-	jetty.to_x = float(x) + LEN + 1.0
+	jetty.from_x = float(x) - LEN - 1.0 if west else float(x) - 1.0
+	jetty.to_x = float(x) + 1.0 if west else float(x) + LEN + 1.0
 	jetty.y = float(y) - 1.0
 	jetty.position = Iso.to_screen(Vector2((jetty.from_x + jetty.to_x) * 0.5, jetty.y + 0.5) * 32.0)
 	add_child(jetty)

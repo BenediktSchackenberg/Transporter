@@ -23,6 +23,7 @@ import buildings as B
 import commercial as C
 import industrial as I
 import airport as A
+import tourism as TU
 
 OUT = os.path.join(HERE, "..", "assets", "iso")
 os.makedirs(OUT, exist_ok=True)
@@ -139,6 +140,12 @@ def building_specs():
             s["shop%ds%d" % (v, k)] = (lambda v=v, k=k: C.shop(v, 1 + v + 4 * k))
     s["pharmacy"] = lambda: C.pharmacy(1)
     s["restaurant"] = lambda: C.restaurant(1)
+    s["hotel_pension"] = lambda: TU.hotel_pension(1)
+    s["hotel_strand"] = lambda: TU.hotel_strand(2)
+    s["hotel_grand"] = lambda: TU.hotel_grand(3)
+    s["kneipe"] = lambda: TU.kneipe(4)
+    s["strandbar"] = lambda: TU.strandbar(5)
+    s["disco"] = lambda: TU.disco(6)
     s["bank"] = lambda: C.bank(1)
     s["clinic"] = lambda: C.clinic(1)
     s["job_board"] = lambda: C.job_board(1)
@@ -328,6 +335,8 @@ def main():
         build_ground()
     if "buildings" in what:
         build_buildings()
+    if "tourism" in what:
+        build_buildings(only=["hotel_pension", "hotel_strand", "hotel_grand", "kneipe", "strandbar", "disco"])
     if "facilities" in what:
         build_facilities()
     if "vehicles" in what:

@@ -35,6 +35,12 @@ func _draw() -> void:
 		return
 	var s := size.x / sim.city.size
 	draw_texture_rect(map_tex, Rect2(Vector2.ZERO, size), false)
+	if sim.city.world == "region":
+		for town in sim.city.towns:
+			var p := Vector2(float(town.center[0]), float(town.center[1])) * s
+			draw_circle(p, 4.0, Color("#f8e5a8"))
+			draw_circle(p, 2.0, Color("#433c35"))
+		draw_string(ThemeDB.fallback_font, Vector2(size.x * 0.5, 14), "N", HORIZONTAL_ALIGNMENT_CENTER, -1, 12, Color.WHITE)
 	for site in sim.depot_owner:
 		var b: Dictionary = sim.city.building(site)
 		draw_rect(Rect2(Vector2(b.x, b.y) * s - Vector2(1, 1), Vector2(b.w, b.h) * s + Vector2(2, 2)),

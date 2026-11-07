@@ -325,8 +325,9 @@ static func _region(sim: Simulation, cid: int) -> Dictionary:
 	for t in T.list:
 		var k := int(t.id)
 		var here := running.filter(func(b): return T.of_building(int(b.site)) == k)
-		var missing: Array = ["baeckerei", "restaurant"].filter(func(br): return not here.any(func(b): return b.branch == br))
-		towns.append({"stadt": t.name, "einwohner": sim.citizens.population_of(k), "fehlt": missing, "freie_grundstuecke": sim.parcels.search({"town": k, "utilities": "voll", "limit": 50}).size()})
+		var missing: Array = ["baeckerei", "restaurant", "hotel", "strandbar", "kneipe", "disco"].filter(func(br): return not here.any(func(b): return b.branch == br))
+		towns.append({"stadt": t.name, "einwohner": sim.citizens.population_of(k), "fehlt": missing,
+			"tourismus": sim.tourism.summary(k), "freie_grundstuecke": sim.parcels.search({"town": k, "utilities": "voll", "limit": 50}).size()})
 	var out := {"heimat": T.name_of(int(sim.company(cid).home_town)), "staedte": towns}
 	if sim.air.enabled:
 		out["flugnetz"] = {"strecken": sim.air.summary().strecken, "fracht_je_flug_le": AirNetwork.CARGO_UNITS, "entgelt": "%d EUR + %d EUR/LE" % [int(AirNetwork.CARGO_BASE), int(AirNetwork.CARGO_UNIT)]}

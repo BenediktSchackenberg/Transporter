@@ -38,6 +38,7 @@ var ship_view := ShipView.new()           # Linienschiff im Hafen (Kuestenort)
 var bridge_view := BridgeView.new()       # Bruecken im Bau und freigegeben (Kuestenort)
 var air_view := AirView.new()            # Fluganimation ueber der Karte (Kuestenort, Flughafen)
 var waste_view := WasteView.new()         # Deponie und Muellabfuhr
+var tourist_view := TouristView.new()     # sichtbare Reisende am Hotel und Strand
 var _lit_nodes: Array = []                 # Fensterlichter (Sprite2D)
 var _blink_nodes: Array = []
 var _traffic_lights: Array = []            # [Sprite2D, Vector2i, bool erste Ampel]
@@ -45,6 +46,7 @@ var _depot_marks := {}                     # Standort -> {masks: [Sprite2D], lab
 var _roadwork_nodes := {}                  # Vector2i -> Sprite2D
 var _office_marks := {}                    # Buerostandort -> [Node2D, Signatur der Mieter]
 var _building_parts := {}                  # Gebaeude-ID -> Sprites (Zustandsfarbe)
+var _building_lights := {}                 # Gebaeude-ID -> Fensterlicht (fuer Ausbaustufen)
 var _roofs: Array = []                     # Dachmasken (Sprite2D) fuer Schnee und Naesse
 var _roof_key := ""
 var _puddles: Array = []
@@ -123,6 +125,8 @@ func build(simulation: Simulation) -> void:
 	mountain_view.setup(sim, self)
 	buildings_node.add_child(waste_view)
 	waste_view.setup(sim)
+	buildings_node.add_child(tourist_view)
+	tourist_view.setup(sim, self)
 	buildings_node.add_child(ship_view)
 	ship_view.setup(sim)
 	buildings_node.add_child(bridge_view)
@@ -284,6 +288,17 @@ func add_building_sprite(b: Dictionary) -> void:
 		return   # Firmengrundstuecke zeichnet EstateView
 	if sim.construction.building_under_construction(int(b.id)):
 		return   # Betriebsbau laeuft: SiteView zeichnet die Baustelle, das Gebaeude erscheint bei Fertigstellung
+	if _building_parts.has(int(b.id)):
+		for old in _building_parts[int(b.id)]:
+			for child in old.get_children():
+				_roofs.erase(child)
+			old.queue_free()
+		_building_parts.erase(int(b.id))
+	if _building_lights.has(int(b.id)):
+		var old_light: Sprite2D = _building_lights[int(b.id)]
+		_lit_nodes.erase(old_light)
+		old_light.queue_free()
+		_building_lights.erase(int(b.id))
 	var info: Dictionary = man.buildings.get(b.sprite, {})
 	if info.is_empty():
 		return
@@ -301,6 +316,7 @@ func add_building_sprite(b: Dictionary) -> void:
 		lit.modulate.a = 0.0
 		lights_layer.add_child(lit)
 		_lit_nodes.append(lit)
+		_building_lights[int(b.id)] = lit
 	if info.has("smoke"):
 		_add_smoke(origin + Vector2(info.smoke[0], info.smoke[1]))
 	if b.role == "office_site":
@@ -542,6 +558,7 @@ func update_view(delta: float) -> void:
 	site_view.update_view(delta)
 	mountain_view.update_view(delta)
 	waste_view.update_view(delta)
+	tourist_view.update_view(delta)
 	ship_view.update_view(delta)
 	bridge_view.update_view(delta)
 	air_view.set_night(night_factor)

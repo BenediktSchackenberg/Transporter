@@ -49,8 +49,8 @@ func plan_link(a: int, b: int) -> Dictionary:
 				astar.set_point_solid(p, true)
 			elif cd.ground[i] == CityData.G.ROAD:
 				astar.set_point_weight_scale(p, 6.0)   # vorhandene Strassen moeglichst nicht mitbenutzen
-	var pa: Vector2i = T.get_t(a).center + Vector2i(-30, 0)
-	var pb: Vector2i = T.get_t(b).center + Vector2i(-30, 0)
+	var pa: Vector2i = _inland_anchor(a)
+	var pb: Vector2i = _inland_anchor(b)
 	var path := astar.get_id_path(pa, pb)
 	if path.is_empty():
 		return {"ok": false, "msg": "Kein Landweg zwischen %s und %s (Brücke nötig)." % [T.name_of(a), T.name_of(b)]}
@@ -60,6 +60,12 @@ func plan_link(a: int, b: int) -> Dictionary:
 			cells.append([p.x, p.y])
 	var cost := snappedf(COST_BASE + COST_CELL * float(cells.size()), 10.0)
 	return {"ok": true, "cells": cells, "laenge": path.size(), "neue_felder": cells.size(), "kosten": cost, "tage": maxi(3, ceili(float(cells.size()) / float(CELLS_PER_DAY)))}
+
+
+func _inland_anchor(town: int) -> Vector2i:
+	var ctr: Vector2i = sim.towns.get_t(town).center
+	var info: Dictionary = sim.city.towns[town] if town < sim.city.towns.size() else {}
+	return ctr + Vector2i(30 if str(info.get("ecke", "")).ends_with("W") else -30, 0)
 
 
 ## Vorschlag einer Stadt. shares: {Stadt-ID: Anteil}; Summe 1. Ohne Angabe je Hälfte (Initiator und Partner).

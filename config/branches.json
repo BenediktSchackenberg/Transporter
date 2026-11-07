@@ -173,6 +173,34 @@
       "start_gaeste": 30
     }
   },
+  "hotel": {
+    "label": "Strandpension",
+    "beschreibung": "Bezahlte Unterkunft mit buchbaren Zimmern. Brot und Fassgetraenke werden ueber die bestehende Warenkette geliefert; Personal und Betriebskosten laufen ueber das Firmenbuch.",
+    "standort": "markt",
+    "gebaeude": "hotel",
+    "gruendungskosten": 0,
+    "ausstattung": 30000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 8.0,
+    "personal_min": 1,
+    "rollen": ["rezeption", "reinigung", "kueche", "service", "hausmeister"],
+    "dienste": {}
+  },
+  "kneipe": {
+    "label": "Hafenkneipe", "beschreibung": "Abendliche Gaststaette mit echten Gaesten, Personal und gelieferten Fassgetraenken.",
+    "standort": "markt", "gebaeude": "kneipe", "ausstattung": 14000, "abschreibung_tag": 0.002,
+    "strom_kw": 4.0, "personal_min": 1, "rollen": ["ausschank", "service"], "dienste": {}
+  },
+  "strandbar": {
+    "label": "Strandbar", "beschreibung": "Bar an der Promenade fuer Touristen und Einheimische, mit sichtbaren Besuchern und Warenlieferungen.",
+    "standort": "markt", "gebaeude": "strandbar", "ausstattung": 19000, "abschreibung_tag": 0.002,
+    "strom_kw": 5.0, "personal_min": 1, "rollen": ["ausschank", "service"], "dienste": {}
+  },
+  "disco": {
+    "label": "Diskothek", "beschreibung": "Nachtbetrieb fuer Touristen und Einheimische; braucht Personal, Strom und gelieferte Getraenke.",
+    "standort": "markt", "gebaeude": "disco", "ausstattung": 38000, "abschreibung_tag": 0.002,
+    "strom_kw": 15.0, "personal_min": 2, "rollen": ["einlass", "service", "technik"], "dienste": {}
+  },
   "immobilien": {
     "label": "Immobilienbetrieb",
     "beschreibung": "Kauft Wohngebäude vom privaten Vermietersektor (buy_property) und vermietet sie nach dem Mietspiegel; Instandhaltung und Grundsteuer laufen monatlich, auch bei Leerstand. Entsteht mit dem ersten Kauf.",

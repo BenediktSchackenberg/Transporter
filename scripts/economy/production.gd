@@ -121,6 +121,12 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 		var town := target_town(cid, params)
 		if town >= 0 and pid == "":
 			cands = cands.filter(func(p): return sim.towns.of_parcel(str(p.id)) == town)   # Region: Standort in der gewuenschten Stadt
+		if branch in ["hotel", "strandbar"]:
+			cands = cands.filter(func(p):
+				var tk: int = sim.towns.of_parcel(str(p.id))
+				var ctr: Vector2i = sim.towns.get_t(tk).center
+				var px := int(p.rect[0]) + int(p.rect[2]) / 2
+				return sim.city.coastal() and absi(px - ctr.x) <= (28 if branch == "hotel" else 20) and p.zone != "strand")
 		if cands.is_empty():
 			return {"ok": false, "msg": "Kein freies Grundstück mit Straßenzugang und mindestens %d Feldern verfügbar%s." % [min_area, (" in " + sim.towns.name_of(town)) if town >= 0 else ""]}
 		parcel = cands[0]
