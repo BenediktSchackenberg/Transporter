@@ -260,3 +260,10 @@ etwa 50 Tagen; Gebäude noch nicht (Häuser brauchen weiter 10–15 Tage vom Bau
 
 KI-Spieler: Ist das gewählte Fahrzeugangebot schon verkauft, kauft der Ausführer ein gleichwertiges Ersatzangebot (≤ 25 % teurer, gleiche
 Eignung). Die Vormerkung von Marktaufträgen hält so lange, wie das Modell zuletzt in Spielminuten brauchte (+50 %, mindestens 600).
+
+Nachtrag (Gebäudezahl): Der Bauhof (ein Bauhof für alle Städte) hielt Ziel-/Meldebestände und Werkszyklen für eine Stadt – mit mehr
+Baustellen stiegen die Materialverluste auf 149 Tage. Jetzt × Zahl der Städte (`Trader._scale`); Mängel in der Region zwei je Tag;
+Bauträger abwechselnd Einfamilien-/Doppelhaus zuerst; ein Laden je 15, eine Werkstatt je 25 Einwohner. Tag 40: 215 Gebäude,
+254 Einwohner, Materialverlust 26 Tage. Rechnung zur Verdopplung: die ~170 Startgebäude enthalten ~100 Nichtwohnbauten; eine
+Verdopplung in 45 Tagen hieße ~170 neue Gebäude = ~170 neue Haushalte (Einwohner × ~3,5). Die Simulation koppelt Neubau an
+echte Nachfrage (Wohnungssuchende), daher wächst die Gebäudezahl mit den Einwohnern (×1,7 an Tag 40) gedämpft mit.

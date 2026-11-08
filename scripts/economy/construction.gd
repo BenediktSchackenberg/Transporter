@@ -582,7 +582,7 @@ func _day_inspection(pr: Dictionary, day: int) -> void:
 	if builders[pr.builder].status != "aktiv":
 		return
 	if int(pr.defects) > 0:
-		pr.defects = int(pr.defects) - 1       # ein Mangel je Tag wird auf Kosten der Baufirma behoben
+		pr.defects = maxi(0, int(pr.defects) - (2 if sim.towns.is_region() else 1))   # Maengel je Tag auf Kosten der Baufirma (Region: zwei)
 		_lose(pr, "maengel")
 		return
 	var parcel: Dictionary = sim.parcels.parcel(pr.parcel)
@@ -785,8 +785,8 @@ const REGION_BUILD_FACTOR := 0.5      # Region: Bauzeit und Erschliessungszeit j
 const RESALE_MARGIN := 1.10           # Region: Anleger kaufen fertige Bautraeger-Haeuser (Preis + 10 %), D0 baut damit weiter
 const REGION_MATERIAL_FACTOR := 0.4   # Region: Hausbau braucht weniger Material je Phase (kleinere Lieferungen, Bauhof reicht laenger)
 const ADVANCE_SHARE := 0.5            # Region: davon zahlen sie die Haelfte schon bei Vertragsschluss an
-const SHOP_PER_RESIDENTS := 25        # Region: ein Laden je 25 Einwohner
-const WORKSHOP_PER_RESIDENTS := 40    # Region: eine Werkstatt/Lagerhalle im Gewerbegebiet je 40 Einwohner
+const SHOP_PER_RESIDENTS := 15        # Region: ein Laden je 15 Einwohner
+const WORKSHOP_PER_RESIDENTS := 25    # Region: eine Werkstatt/Lagerhalle im Gewerbegebiet je 25 Einwohner
 const SHOP_DEFS := ["baeckerei_laden", "getraenkemarkt", "drogerie_laden", "supermarkt"]
 func _developer_town(town: int) -> void:
 	for i in (DEV_STEPS if sim.towns.is_region() else 1):
@@ -848,8 +848,8 @@ func _developer_once(town: int) -> bool:
 			free = sim.parcels.search(crit)
 			if not free.is_empty():
 				break
-	if region and (_next % 3) != 0:   # Region: mehr Haeuser je Euro - meist Doppel-/Einfamilienhaeuser
-		for small in ["doppelhaus", "einfamilienhaus"]:
+	if region and (_next % 3) != 0:   # Region: mehr Haeuser je Euro - meist Einfamilien-/Doppelhaeuser (abwechselnd zuerst)
+		for small in (["einfamilienhaus", "doppelhaus"] if _next % 2 == 0 else ["doppelhaus", "einfamilienhaus"]):
 			if _developer_try(free, small):
 				return true
 	if _developer_try(free.filter(func(p): return int(p.area) >= 40), def_id):

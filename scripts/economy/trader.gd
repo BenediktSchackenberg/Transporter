@@ -258,9 +258,15 @@ func on_ship(order_id: String, fit: int = -1) -> void:
 
 
 # ------------------------------------------------------------------ Tagesablauf
+## Region: ein Bauhof versorgt alle Staedte - Ziel-, Melde- und Hoechstbestand je Stadt.
+func _scale() -> int:
+	return sim.towns.count() if sim.towns != null and sim.towns.is_region() else 1
+
+
 func on_day(_day: int) -> void:
 	if bauhof < 0:
 		return
+	var k := _scale()
 	var now := sim.game_min
 	# Lieferungen frei Depot
 	for d in deliveries.duplicate():
@@ -289,11 +295,13 @@ func on_day(_day: int) -> void:
 			if o.item == it:
 				pending += int(o.qty)
 		pending += sim.prod.incoming("T0", it, bauhof)   # bei Unternehmern bestellt (Auftrag 14)
-		if not Production.art(it).is_empty() and stock_of(it) + pending < int(m.target):
+		var target := int(m.target) * k
+		var low := int(m.min) * k
+		if not Production.art(it).is_empty() and stock_of(it) + pending < target:
 			# Lokale Erzeuger (Stahlwerk, Steinbruch) liefern bis zum Zielbestand, wenn sie frei Bauhof guenstiger sind als der Import
-			pending += sim.prod.order("T0", bauhof, "", it, int(m.target) - stock_of(it) - pending, float(m.base) * IMPORT_FACTOR, false)
-		if stock_of(it) + pending < int(m.min) + (int(m.target) - int(m.min)) / 3:   # Meldebestand
-			var want: int = int(m.target) - stock_of(it) - pending
+			pending += sim.prod.order("T0", bauhof, "", it, target - stock_of(it) - pending, float(m.base) * IMPORT_FACTOR, false)
+		if stock_of(it) + pending < low + (target - low) / 3:   # Meldebestand
+			var want: int = target - stock_of(it) - pending
 			var unit := float(m.base) * IMPORT_FACTOR
 			var afford := int(floor(maxf(0.0, cash() - 20000.0) / unit))   # Barreserve bleibt
 			var qty := mini(want, afford)
@@ -305,7 +313,7 @@ func on_day(_day: int) -> void:
 				_next_order += 1
 	for it in MATERIALS:
 		var m2: Dictionary = MATERIALS[it]
-		var over := stock_of(it) - int(m2.max)
+		var over := stock_of(it) - int(m2.max) * k
 		if over > 0:
 			var qty2 := int(ceil(over * 0.5))
 			if sim.harbor.enabled:   # Kuestenort: Ueberschuss geht zum Kai und faehrt mit dem naechsten Schiff
@@ -321,14 +329,14 @@ func on_day(_day: int) -> void:
 func _produce(pid: String) -> void:
 	var p: Dictionary = PLANTS[pid]
 	var runs := 0
-	for i in int(p.cycles):
+	for i in int(p.cycles) * _scale():   # Region: Werk laeuft fuer alle Staedte
 		var ok := true
 		for it in p["in"]:
 			if stock_of(it) < int(p["in"][it]):
 				ok = false
 		# nur produzieren, solange der Zielbestand des Ausgangs nicht erreicht ist (keine Ueberproduktion auf Vorrat)
 		for it in p.out:
-			if stock_of(it) >= int(MATERIALS[it].target):
+			if stock_of(it) >= int(MATERIALS[it].target) * _scale():
 				ok = false
 		if not ok or cash() < PLANT_ENERGY:
 			break
