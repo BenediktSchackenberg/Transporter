@@ -188,3 +188,15 @@ Station und Lieferart; Tankwagen und Abholungen einer früheren Firmengeneration
 neu gegründete Firma werden ignoriert; Partiedauer zählt volle Echtzeit; JSON-Fehler der Preis-/Nachrichtendienste ohne Parserfehler.
 **Nicht übernommen:** das Tankmodell je Fahrzeug (`VehicleFuel`). Es ersetzt den Betriebsvorrat mit Notbetankung/Tankhof, den
 Annahmeprüfung, Regel-KI und ActionAssist voraussetzen; ein Wechsel wäre ein eigener Auftrag mit neuer Balance. Test: `test_merged_codex_fixes`.
+
+## Wachstumsbremsen behoben (08.11.2026)
+
+Diagnose mit `tests/probe_town_growth.gd` (Seed 21, 60 Tage): Morgenholm und Kieselstrand bauten kein einziges Wohnhaus.
+- Der Regel-Bürgermeister legte alle 2 Tage dieselbe Gewerbe-Umwidmung vor; der Rat lehnte ab, und die abgelehnten Pläne zählten zur
+  Obergrenze (8 bzw. 12 Pläne) - danach war kein Wohnquartier mehr möglich. Jetzt zählen nur nicht abgelehnte Pläne, und eine
+  abgelehnte Umwidmung derselben Zone ruht 30 Tage.
+- Der Bauträger suchte nur in der Zone Wohnen; Städte mit erschlossenem Mischgebiet bekamen nichts. Jetzt Mischgebiet als Ausweichzone.
+- Stadtprojekte warteten wochenlang auf Material: Schüttgut (750 t Schotter) ging per Luftfracht (8 Einheiten je Flug), jedes Projekt
+  bestellte nur für sich, und Ausschuss (2 %) löste für Restmengen einen ganzen Importzyklus aus. Jetzt Luftfracht nur bis zwei
+  Flugladungen, Bestellung über den Bedarf aller offenen Projekte plus 3 % Reserve, offene Vorschläge werden aufgestockt.
+Ergebnis: alle vier Städte bauen Wohnhäuser; Morgenholm schließt bis Tag 60 drei Stadtprojekte ab (vorher keines). Test `test_region_town_growth`.
