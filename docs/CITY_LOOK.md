@@ -122,3 +122,12 @@ Kreuzungsgrafik nur an Ampelkreuzungen.
   nach Bestand (Paletten bei leerem Lager), Leerlaufgrund über dem Kran; Anleger mit Fendern und Festmacherleinen beim Liegen.
 - Tests: `test_harbor_handling` (12 Prüfungen); bestehende Logikprüfungen laufen mit `Harbor.default_instant` (Sofortabfertigung) weiter.
 - Bild: `hafen_arbeit.png` (app_userdata).
+
+### Etappe 4, Teil 1 (08.11.2026)
+
+- Bodenebene `AmbientView.GroundOverlay` (unter Gebäuden, nur sichtbarer Ausschnitt): Flachwasser und auflaufende Schaumkanten an
+  Naturufern (Schaumstärke nach Wind; Kaikanten bleiben gerade ohne Schaum), Hecken oder weiße Lattenzäune um Wohnhäuser mit
+  Gartentor zur Straße und Blumen im Vorgarten.
+- Strand: Dünengras zur Landseite (wiegt im Wind), Steine, Treibholz an der Wasserlinie, Laterne an Strandabschnitten mit Straße
+  (abends warmes Licht).
+- Offen: Bänke/Wege am Strand, Steg, Abendstimmung über die Laternen hinaus, Blockinnenbereiche.

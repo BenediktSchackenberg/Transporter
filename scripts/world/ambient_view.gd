@@ -27,6 +27,7 @@ var wind := Vector2(1, 0)
 var _biz_spots := {}      # Schluessel -> Spot
 var _rescan := 0.0
 var _spots: Array = []
+var ground: GroundOverlay   # Bodenebene unter allen Gebaeuden (Ufer, Flachwasser, Gaerten)
 
 
 func setup(simulation: Simulation, city_view) -> void:
@@ -36,6 +37,9 @@ func setup(simulation: Simulation, city_view) -> void:
 	_build_walkers()
 	_build_harbors()
 	_scan_business()
+	ground = GroundOverlay.new()
+	ground.view = self
+	cv.decor_node.add_child(ground)
 
 
 func _add(kind: String, cell: Vector2, data: Dictionary, parent: Node = self) -> Spot:
@@ -71,7 +75,12 @@ func _build_coast() -> void:
 						if C.inside(q) and C.g(q) == CityData.G.WATER:
 							shore.append(Vector2(dx, dy))
 				if not shore.is_empty():
-					_add("strand", Vector2(c) + Vector2(0.5, 0.5), {"shore": shore.slice(0, 6), "seed": _h(x, y)})
+					var prom := false
+					for dy2 in range(-3, 4):
+						for dx2 in range(-3, 4):
+							var q2 := c + Vector2i(dx2, dy2)
+							prom = prom or (C.inside(q2) and C.is_road(q2))
+					_add("strand", Vector2(c) + Vector2(0.5, 0.5), {"shore": shore.slice(0, 6), "seed": _h(x, y), "promenade": prom})
 					n += 1
 			x += 4
 		y += 4
@@ -235,6 +244,8 @@ func update_view(delta: float) -> void:
 	var cam: Camera2D = cv.camera
 	var half := get_viewport_rect().size / cam.zoom * 0.5 + Vector2(160, 160)
 	var view := Rect2(cam.position - half, half * 2.0)
+	ground.view_rect = view
+	ground.queue_redraw()
 	for s in _spots:
 		var vis: bool = view.has_point(s.position)
 		s.visible = vis
@@ -284,6 +295,37 @@ class Spot extends Node2D:
 			"terrasse":
 				_terrasse()
 
+	## Strandausstattung je Ort (seedstabil): Duenengras zur Landseite, Steine, Treibholz am Wasser, Laterne an der Promenade.
+	func _strand_gut() -> void:
+		var seed: int = data.seed
+		var shore: Array = data.shore
+		var landward := Vector2.ZERO
+		for w in shore:
+			landward -= w
+		landward = landward.normalized() if landward.length() > 0.01 else Vector2(-1, 0)
+		for i in 3:   # Duenengras: Buesche aus Halmen, wiegen sich im Wind
+			var at := landward * (0.9 + 0.35 * float(i)) + Vector2(float((seed >> (i * 4)) % 5) * 0.2 - 0.4, float((seed >> (i * 2)) % 5) * 0.2 - 0.4)
+			var gp := _p(at.x, at.y)
+			var sway := sin(view.t * 1.6 + float(i + seed % 7)) * 2.0 * view.wind.length()
+			for h in 5:
+				var dx := float(h - 2) * 2.5
+				draw_line(gp + Vector2(dx, 0), gp + Vector2(dx * 1.6 + sway, -10.0 - float(h % 3) * 3.0), Color("8aa35a") if h % 2 == 0 else Color("a8b86a"), 1.5)
+		if seed % 3 == 0:   # Steine
+			var rp := _p(landward.x * 0.3 + 0.3, landward.y * 0.3 - 0.2)
+			draw_colored_polygon(PackedVector2Array([rp + Vector2(-7, 0), rp + Vector2(-3, -5), rp + Vector2(5, -4), rp + Vector2(8, 0), rp + Vector2(2, 3)]), Color("8f8a84"))
+			draw_colored_polygon(PackedVector2Array([rp + Vector2(-3, -5), rp + Vector2(5, -4), rp + Vector2(2, -1)]), Color("aaa59e"))
+		if seed % 4 == 1 and not shore.is_empty():   # Treibholz an der Wasserlinie
+			var w0: Vector2 = shore[0] * 0.45
+			draw_line(_p(w0.x - 0.3, w0.y), _p(w0.x + 0.25, w0.y + 0.15), Color("8a6b4a"), 3.0)
+			draw_line(_p(w0.x + 0.05, w0.y + 0.05), _p(w0.x + 0.2, w0.y - 0.15), Color("7a5b3a"), 2.0)
+		if bool(data.get("promenade", false)):   # Laterne an der Promenade, warmes Licht abends
+			var lp := _p(landward.x * 1.4, landward.y * 1.4)
+			draw_line(lp, lp + Vector2(0, -30), Color("2f3a40"), 2.0)
+			draw_rect(Rect2(lp + Vector2(-3, -35), Vector2(6, 5)), Color("2f3a40"))
+			if view.night:
+				draw_circle(lp + Vector2(0, -32), 26.0, Color(1.0, 0.8, 0.45, 0.16))
+				draw_circle(lp + Vector2(0, -32), 3.0, Color("ffe3a0"))
+
 	# ---- Figuren
 	func _at(pt: Vector2) -> void:
 		draw_set_transform(pt, 0.0, Vector2(AmbientView.SC, AmbientView.SC))
@@ -308,6 +350,7 @@ class Spot extends Node2D:
 	# ---- 1) Kueste
 	func _strand() -> void:
 		var shore: Array = data.shore
+		_strand_gut()
 		var tt: float = view.t
 		for i in shore.size():   # Brandung: Schaumkronen laufen auf
 			var w: Vector2 = shore[i]
@@ -617,3 +660,94 @@ class Spot extends Node2D:
 				var col := Color("c8553d") if (i + lvl) % 3 == 0 else (Color("3d7cc8") if (i + lvl) % 3 == 1 else Color("b08a5a"))
 				draw_rect(Rect2(cp + Vector2(-9, 0), Vector2(18, 9)), col)
 				draw_rect(Rect2(cp + Vector2(-9, 0), Vector2(18, 2)), col.lightened(0.3))
+
+
+## Bodenebene (in der Deko-Ebene, also unter allen Gebaeuden und Fahrzeugen): Flachwasser und Schaumkanten an Naturufern
+## (Kaikante bleibt gerade, ohne Schaum), Hecken mit Gartentor und Blumen um Wohnhaeuser. Nur der sichtbare Ausschnitt; seedstabil.
+class GroundOverlay extends Node2D:
+	var view: AmbientView
+	var view_rect := Rect2()
+	const SHALLOW := Color(0.55, 0.85, 0.85, 0.32)
+	const HOUSES := ["house", "semi", "villa"]
+
+	func _cell(q: Vector2, inset: float = 0.0) -> PackedVector2Array:
+		var a := q + Vector2(inset, inset)
+		var b := q + Vector2(1.0 - inset, 1.0 - inset)
+		return PackedVector2Array([Iso.to_screen(a * 32.0), Iso.to_screen(Vector2(b.x, a.y) * 32.0), Iso.to_screen(b * 32.0), Iso.to_screen(Vector2(a.x, b.y) * 32.0)])
+
+	func _draw() -> void:
+		if view == null or view.sim == null or view_rect.size.x <= 0.0:
+			return
+		var C: CityData = view.sim.city
+		var center := Iso.to_world(view_rect.get_center()) / 32.0
+		var rad := int(maxf(view_rect.size.x, view_rect.size.y) / 64.0) + 3
+		var t: float = view.t
+		var foam := 0.45 + 0.35 * clampf(view.wind.length() - 0.6, 0.0, 1.0)
+		for y in range(int(center.y) - rad, int(center.y) + rad):
+			for x in range(int(center.x) - rad, int(center.x) + rad):
+				var q := Vector2i(x, y)
+				if not C.inside(q) or C.g(q) != CityData.G.WATER:
+					continue
+				var shore_dirs: Array = []
+				var quay := false
+				for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+					var n: Vector2i = q + d
+					if C.inside(n):
+						var g: int = C.g(n)
+						if g == CityData.G.QUAY:
+							quay = true
+						elif g != CityData.G.WATER:
+							shore_dirs.append(d)
+				if shore_dirs.is_empty() or quay:
+					continue
+				draw_colored_polygon(_cell(Vector2(q), 0.0), SHALLOW)   # Flachwasser
+				for d in shore_dirs:   # Schaumkante zur Landseite, laeuft leicht auf
+					var k := 0.5 + 0.5 * sin(t * 1.3 + float(x * 7 + y * 13) * 0.3)
+					var off: Vector2 = Vector2(d) * (0.38 + 0.08 * k)
+					var mid := Vector2(q) + Vector2(0.5, 0.5) + off
+					var side: Vector2 = Vector2(-d.y, d.x) * 0.5
+					var jit := float((x * 31 + y * 17) % 5) * 0.03
+					draw_line(Iso.to_screen((mid - side * (0.9 - jit)) * 32.0), Iso.to_screen((mid + side * (0.85 + jit)) * 32.0), Color(1, 1, 1, foam * (0.6 + 0.4 * k)), 2.0)
+		# Gaerten: Hecke um das Baufeld (bzw. 1 Feld um das Haus), Luecke zur Strasse = Gartentor; Blumen im Vorgarten
+		for b in C.buildings:
+			if str(b.type) not in HOUSES:
+				continue
+			var anchor := Iso.to_screen(Vector2(float(b.x) + 1.0, float(b.y) + 1.0) * 32.0)
+			if not view_rect.has_point(anchor):
+				continue
+			var lot := Rect2(float(b.x) - 1.0, float(b.y) - 1.0, float(b.w) + 2.0, float(b.h) + 2.0)
+			if b.has("lot"):
+				lot = Rect2(float(b.lot[0]), float(b.lot[1]), float(b.lot[2]), float(b.lot[3]))
+			var road: Vector2i = b.get("road", Vector2i(-1, -1))
+			var fence: bool = absi(hash(Vector2i(int(b.x), int(b.y)))) % 3 == 0
+			var corners := [lot.position, Vector2(lot.end.x, lot.position.y), lot.end, Vector2(lot.position.x, lot.end.y)]
+			for i in 4:
+				var a: Vector2 = corners[i]
+				var e: Vector2 = corners[(i + 1) % 4]
+				var steps := int(a.distance_to(e) / 0.5)
+				for k2 in steps:
+					var pa := a.lerp(e, float(k2) / float(steps))
+					var pb := a.lerp(e, float(k2 + 1) / float(steps))
+					var mid2 := (pa + pb) * 0.5
+					var cell := Vector2i(floori(mid2.x), floori(mid2.y))
+					if C.inside(cell) and (C.is_road(cell) or C.g(cell) == CityData.G.WATER):
+						continue
+					if road.x >= 0 and (mid2 - (Vector2(road) + Vector2(0.5, 0.5))).length() < 1.6:
+						continue   # Gartentor zur Strasse
+					var sa := Iso.to_screen(pa * 32.0)
+					var sb := Iso.to_screen(pb * 32.0)
+					if fence:   # weisser Lattenzaun
+						draw_line(sa + Vector2(0, -6), sb + Vector2(0, -6), Color("f2efe6"), 1.5)
+						draw_line(sa + Vector2(0, -3), sb + Vector2(0, -3), Color("f2efe6"), 1.5)
+						draw_line(sa, sa + Vector2(0, -9), Color("ffffff"), 2.0)
+					else:       # Hecke mit Hoehe: dunkler Fuss, Flaeche, helle Oberkante
+						draw_colored_polygon(PackedVector2Array([sa, sb, sb + Vector2(0, -8), sa + Vector2(0, -8)]), Color("3d6b2c"))
+						draw_line(sa + Vector2(0, -8), sb + Vector2(0, -8), Color("7fb557"), 3.0)
+			var sd := absi(hash(Vector2i(int(b.x), int(b.y))))
+			for f in 3:   # Blumen im Vorgarten (zur Strasse hin)
+				var fp := Vector2(float(b.x) + float(b.w) * 0.5, float(b.y) + float(b.h) * 0.5)
+				if road.x >= 0:
+					fp = fp.lerp(Vector2(road) + Vector2(0.5, 0.5), 0.55)
+				fp += Vector2(float((sd >> (f * 3)) % 5) * 0.15 - 0.3, float((sd >> (f * 5)) % 5) * 0.15 - 0.3)
+				var fs := Iso.to_screen(fp * 32.0)
+				draw_circle(fs, 2.5, [Color("e8553d"), Color("f2c14e"), Color("d47ad1"), Color("f4f4f4")][(sd + f) % 4])

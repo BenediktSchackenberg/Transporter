@@ -17,4 +17,9 @@ func _initialize() -> void:
 		if sp.kind == "passanten":
 			print("erster Passanten-Ort: Feld ", sp.world / 32.0, " Daten ", sp.data)
 			break
+	var houses: Array = s.city.buildings.filter(func(b): return str(b.type) in ["house", "semi", "villa"])
+	print("Haeuser: ", houses.size(), " Typen gesamt: ", s.city.buildings.map(func(b): return str(b.type)).filter(func(t): return t.begins_with("h") or t == "semi").slice(0, 10))
+	if not houses.is_empty():
+		var b: Dictionary = houses[0]
+		print("erstes Haus: ", b.type, " ", b.x, ",", b.y, " ", b.w, "x", b.h, " road ", b.get("road"), " lot ", b.get("lot", "-"))
 	quit()
