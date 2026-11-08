@@ -1119,6 +1119,8 @@ func _minute_tick() -> void:
 	if minute_index % Workforce.TICK_MIN == 0:
 		workforce.minute_tick()
 	airport.on_minute(game_min)   # Luftfracht: neue Landung + Flugwetter-Gate (Etappe E2, Teil 2)
+	for hb in (towns.harbors if towns != null and not towns.harbors.is_empty() else [harbor]):
+		hb.on_minute(game_min)   # Hafenabfertigung durch Kran und Hafenarbeiter (Auftrag 18)
 	if airport.fire_vehicle != null:
 		airport.update_fire(game_min)   # Feuerwehr: Wehrauto hin und rueck (Etappe E5)
 	if minute_index % 5 == 0:

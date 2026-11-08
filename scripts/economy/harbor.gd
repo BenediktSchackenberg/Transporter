@@ -29,10 +29,23 @@ var stats := {"schiffe": 0, "einheiten_ein": 0, "einheiten_aus": 0, "zurueckgest
 var _next := 1
 var stage := 1                     # Hafenstufe (1..STAGES.size())
 var town := 0                      # Ort dieses Hafens (Auftrag 17)
+# Abfertigung (Auftrag 18, Etappe 3): Ware bleibt an Bord, bis Kran und Hafenarbeiter den Posten abgesetzt haben; Ausfuhrware
+# verlaesst das Lager erst beim Verladen. Leistung je Spielminute aus verfuegbarem Personal (Arbeitgeber "hafen") und Kran.
+const RATE_PER_WORKER := 0.5      # Ladeeinheiten je Spielminute und Arbeitskraft (von Hand)
+const CRANE_FACTOR := 2.5         # mit Kran
+const MIN_STAFF := 2
+const MAX_STAFF := 6
+const WAIT_HIRE_MIN := 90.0       # wartet ein Schiff so lange ohne Fortschritt, stellt die Hafenverwaltung jemanden ein
+static var default_instant := false   # Testlauf setzt true: bestehende Logikpruefungen ohne Zeitablauf
+var instant := false              # Sofortabfertigung (nur Tests)
+var queue: Array = []              # Posten in Arbeit: {dir: ein|aus, m (Einfuhr), fit, item, qty, units}
+var work_acc := 0.0               # geleistete Ladeeinheiten am aktuellen Posten
+var stalled_since := -1.0         # Spielminute, seit der kein Fortschritt mehr moeglich war
 
 
 func setup(simulation) -> void:
 	sim = simulation
+	instant = default_instant
 	enabled = sim.city.coastal()
 	if not enabled:
 		return
@@ -95,7 +108,8 @@ func waiting_units() -> int:
 
 
 func on_day(day: int) -> void:
-	if not ship.is_empty() and ship.status == "am_kai" and day > int(ship.day):
+	_staff_day()
+	if not ship.is_empty() and ship.status == "am_kai" and day > int(ship.day) and queue.is_empty():
 		ship.status = "abgefahren"
 		ship_event.emit("abfahrt", ship)
 	if day % INTERVAL_DAYS == 0:
@@ -103,6 +117,9 @@ func on_day(day: int) -> void:
 
 
 func _arrive(day: int) -> void:
+	if not instant and not ship.is_empty() and ship.status == "am_kai":
+		sim.log_event("Hafen %s: Liegeplatz belegt (%s wird noch abgefertigt) – das nächste Schiff wartet auf Reede." % [_town_label(), ship.name], "warn")
+		return   # ein Liegeplatz: das naechste Schiff legt erst nach der Abfahrt an
 	ship = {"id": "SH%d" % _next, "name": SHIP_NAMES[(_next - 1) % SHIP_NAMES.size()], "day": day, "status": "am_kai", "geloescht": {}, "geladen": {}}
 	_next += 1
 	stats.schiffe = int(stats.schiffe) + 1
@@ -115,9 +132,7 @@ func _arrive(day: int) -> void:
 	for m in manifest:
 		if units_of(str(m.item), int(m.qty)) <= room:
 			room -= units_of(str(m.item), int(m.qty))
-			_unload(m)
-			ship.geloescht[m.item] = int(ship.geloescht.get(m.item, 0)) + int(m.qty)
-			stats.einheiten_ein = int(stats.einheiten_ein) + units_of(str(m.item), int(m.qty))
+			_handle_in(m, -1)
 		else:
 			rest.append(m)
 	for m in rest.duplicate():
@@ -127,18 +142,15 @@ func _arrive(day: int) -> void:
 		var u := units_of(str(m.item), qty)
 		if u <= room:
 			room -= u
-			_unload(m)
-			ship.geloescht[m.item] = int(ship.geloescht.get(m.item, 0)) + qty
-			stats.einheiten_ein = int(stats.einheiten_ein) + u
+			_handle_in(m, -1)
 			rest.erase(m)
 			continue
 		var fit := int(float(qty) * float(room) / float(u))
 		if fit <= 0:
 			continue
 		room -= units_of(str(m.item), fit)
-		_unload(m, fit)
-		ship.geloescht[m.item] = int(ship.geloescht.get(m.item, 0)) + fit
-		stats.einheiten_ein = int(stats.einheiten_ein) + units_of(str(m.item), fit)
+		var part: Dictionary = m.duplicate()
+		_handle_in(part, fit)
 		m.qty = qty - fit
 	stats.zurueckgestellt = int(stats.zurueckgestellt) + rest.size()
 	manifest = rest
@@ -149,18 +161,121 @@ func _arrive(day: int) -> void:
 		var fit := q if units_of(item, q) <= room else q * room / units_of(item, q)   # anteilig, was noch passt
 		if fit <= 0 or room <= 0:
 			continue
-		var gone: int = sim.stock.consume(item, fit, Production.IMPORT, building, "Ausfuhr per Schiff %s" % ship.id, sim.game_min)
-		room -= units_of(item, gone)
-		export_wait[item] = q - gone
-		if int(export_wait[item]) <= 0:
-			export_wait.erase(item)
-		ship.geladen[item] = int(ship.geladen.get(item, 0)) + gone
-		stats.einheiten_aus = int(stats.einheiten_aus) + units_of(item, gone)
-	var msg := "Schiff „%s“ im Hafen: %s gelöscht, %s geladen%s." % [ship.name, _list(ship.geloescht), _list(ship.geladen),
+		room -= units_of(item, fit)
+		if instant:
+			_load_out(item, fit)
+		else:
+			queue.append({"dir": "aus", "item": item, "qty": fit, "units": units_of(item, fit)})
+	var msg := ("Schiff „%s“ im Hafen: %s gelöscht, %s geladen%s." if instant else "Schiff „%s“ legt an: zu löschen %s, zu laden %s%s.") % [ship.name, _list(ship.geloescht) if instant else _queue_list("ein"), _list(ship.geladen) if instant else _queue_list("aus"),
 		"; %d Posten warten auf das nächste Schiff" % rest.size() if not rest.is_empty() else ""]
 	sim.log_event(msg, "info")
 	sim.activity.add("stadt", -1, "sonstiges", "Schiff %s am Kai" % ship.name, msg, sim.city.building(building).road)
 	ship_event.emit("ankunft", ship)
+
+
+## Einfuhrposten: sofort (Test) oder in die Abfertigungsliste; Ware bleibt bis zum Absetzen an Bord (kein Bestand, keine Uebergabe).
+func _handle_in(m: Dictionary, fit: int) -> void:
+	var qty := int(m.qty) if fit <= 0 else fit
+	if instant:
+		_unload(m, fit)
+		ship.geloescht[m.item] = int(ship.geloescht.get(m.item, 0)) + qty
+		stats.einheiten_ein = int(stats.einheiten_ein) + units_of(str(m.item), qty)
+		return
+	queue.append({"dir": "ein", "m": m.duplicate(), "fit": fit, "item": str(m.item), "qty": qty, "units": units_of(str(m.item), qty)})
+
+
+## Ausfuhrposten verladen: Ware verlaesst das Hafenlager (Auslandsbestand) und die Stadt.
+func _load_out(item: String, qty: int) -> void:
+	var gone: int = sim.stock.consume(item, qty, Production.IMPORT, building, "Ausfuhr per Schiff %s" % ship.id, sim.game_min)
+	export_wait[item] = int(export_wait.get(item, 0)) - gone
+	if int(export_wait[item]) <= 0:
+		export_wait.erase(item)
+	ship.geladen[item] = int(ship.geladen.get(item, 0)) + gone
+	stats.einheiten_aus = int(stats.einheiten_aus) + units_of(item, gone)
+
+
+## Je Spielminute: Kran und Hafenarbeiter arbeiten den vordersten Posten ab; ist er geschafft, wird er abgesetzt (Einfuhr: Bestand bzw.
+## Uebergabe an Stadtlager/Bauhof) bzw. verladen (Ausfuhr). Ohne Personal kein Fortschritt (ehrlicher Grund in idle_reason()).
+func on_minute(now: float) -> void:
+	if not enabled or instant or queue.is_empty() or ship.is_empty() or ship.status != "am_kai":
+		return
+	var rate := rate_per_min()
+	if rate <= 0.0:
+		if stalled_since < 0.0:
+			stalled_since = now
+		return
+	stalled_since = -1.0
+	work_acc += rate
+	while not queue.is_empty() and work_acc >= float(queue[0].units):
+		var e: Dictionary = queue.pop_front()
+		work_acc -= float(e.units)
+		if e.dir == "ein":
+			_unload(e.m, int(e.fit))
+			ship.geloescht[e.item] = int(ship.geloescht.get(e.item, 0)) + int(e.qty)
+			stats.einheiten_ein = int(stats.einheiten_ein) + int(e.units)
+		else:
+			_load_out(str(e.item), int(e.qty))
+	if queue.is_empty():
+		work_acc = 0.0
+		sim.log_event("Schiff „%s“ abgefertigt in %s: %s gelöscht, %s geladen." % [ship.name, _town_label(), _list(ship.geloescht), _list(ship.geladen)], "info")
+
+
+func workers() -> Array:
+	return sim.citizens.people.filter(func(p): return p.employer == "hafen" and (sim.towns == null or not sim.towns.is_region() or sim.citizens.home_town(p) == town))
+
+
+func cranes() -> int:
+	return 1 if stage >= 1 else 0   # kleiner Kran am Anleger; Ausbaustufen erhoehen die Ladung je Schiff
+
+
+func rate_per_min() -> float:
+	var n := workers().size()
+	if n <= 0:
+		return 0.0
+	return float(n) * RATE_PER_WORKER * (CRANE_FACTOR if cranes() > 0 else 1.0) * (1.0 + 0.25 * float(stage - 1))
+
+
+## Fortschritt des aktuellen Postens 0..1 (Darstellung: Anschlagen, Heben, Schwenken, Absetzen).
+func current_progress() -> float:
+	return 0.0 if queue.is_empty() else clampf(work_acc / maxf(1.0, float(queue[0].units)), 0.0, 1.0)
+
+
+## Warum gerade nicht gearbeitet wird (oder ""): ehrlich aus dem Zustand.
+func idle_reason() -> String:
+	if not queue.is_empty():
+		return "kein Personal" if workers().is_empty() else ""
+	if ship.is_empty() or ship.status != "am_kai":
+		var wait := INTERVAL_DAYS - GameCalendar.day_of(sim.game_min) % INTERVAL_DAYS
+		return "nächstes Schiff in %d Tag%s" % [wait, "en" if wait != 1 else ""]
+	return "Schiff abgefertigt"
+
+
+## Personal: Grundbesetzung MIN_STAFF; wartet ein Schiff lange ohne Fortschritt (oder kommt kaum voran), stellt die Hafenverwaltung
+## eine Arbeitskraft aus den Arbeitslosen der Stadt ein (bis MAX_STAFF). Lohn ueber die normale Lohnabrechnung (genau einmal).
+func _staff_day() -> void:
+	if not enabled or instant:
+		return
+	var n := workers().size()
+	var slow: bool = not queue.is_empty() and (stalled_since >= 0.0 and sim.game_min - stalled_since > WAIT_HIRE_MIN or float(queue.reduce(func(t, e): return t + float(e.units), 0.0)) > rate_per_min() * 120.0)
+	if n < MIN_STAFF or (slow and n < MAX_STAFF):
+		for p in sim.citizens.people:
+			if p.employer == "" and (sim.towns == null or not sim.towns.is_region() or sim.citizens.home_town(p) == town):
+				sim.citizens._employ(p, "hafen", 0.5)
+				sim.citizens.cap["hafen"] = int(sim.citizens.cap.get("hafen", 0)) + 1
+				sim.log_event("Hafen %s stellt %s als Hafenarbeiter ein%s." % [_town_label(), p.name, " (Schiff wartet auf Abfertigung)" if slow else ""], "info")
+				return
+
+
+func _town_label() -> String:
+	return sim.towns.name_of(town) if sim.towns != null and sim.towns.count() > 0 else ""
+
+
+func _queue_list(dir: String) -> String:
+	var d := {}
+	for e in queue:
+		if e.dir == dir:
+			d[e.item] = int(d.get(e.item, 0)) + int(e.qty)
+	return _list(d)
 
 
 ## Ware ins Ziel uebergeben. `fit` ist die tatsaechlich geloeste (anteilige) Menge; der Rest bleibt im Manifest.
@@ -241,11 +356,13 @@ func summary() -> Dictionary:
 	return {"stufe": stage, "stufe_name": stage_name(), "ladung_je_schiff": capacity(), "rueckstau_schiffsladungen": backlog_ships(), "ausbau_laeuft": expansion_running(),
 		"ausbau": {} if nd.is_empty() else {"ziel": nd.name, "ladung": int(nd.ladung), "kosten": int(nd.kosten), "tage": int(nd.tage)},
 		"aktiv": enabled, "schiff": ship.duplicate(true), "naechstes_in_tagen": INTERVAL_DAYS - GameCalendar.day_of(sim.game_min) % INTERVAL_DAYS,
+		"abfertigung": {"posten": queue.size(), "arbeiter": workers().size(), "leistung_je_min": snappedf(rate_per_min(), 0.1), "grund": idle_reason()},
 		"wartende_einfuhren": manifest.size(), "wartende_einheiten": waiting_units(), "ausfuhr_am_kai": export_wait.duplicate(), "statistik": stats.duplicate()}
 
 
 func to_dict() -> Dictionary:
-	return {"town": town, "stage": stage, "manifest": manifest.duplicate(true), "export_wait": export_wait.duplicate(), "ship": ship.duplicate(true), "stats": stats.duplicate(), "next": _next}
+	return {"town": town, "stage": stage, "manifest": manifest.duplicate(true), "export_wait": export_wait.duplicate(), "ship": ship.duplicate(true), "stats": stats.duplicate(), "next": _next,
+		"queue": queue.duplicate(true), "work_acc": work_acc, "stalled_since": stalled_since}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -262,3 +379,12 @@ func from_dict(d: Dictionary) -> void:
 		ship.day = int(ship.day)
 	stats = d.get("stats", stats).duplicate()
 	_next = int(d.get("next", 1))
+	queue = d.get("queue", []).duplicate(true)   # alte Staende: leer (Schiff galt bei Ankunft schon als geloescht)
+	for e in queue:
+		e.qty = int(e.qty)
+		e.units = int(e.units)
+		e.fit = int(e.get("fit", -1))
+		if e.has("m"):
+			e.m.qty = int(e.m.qty)
+	work_acc = float(d.get("work_acc", 0.0))
+	stalled_since = float(d.get("stalled_since", -1.0))

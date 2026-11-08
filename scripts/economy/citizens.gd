@@ -24,6 +24,7 @@ const EMPLOYERS := {
 	"handel": {"label": "Handel und Gastronomie", "share": 0.25, "wage": 11.0, "payer": "S0", "district": 0},
 	"industrie": {"label": "Industrie und Handwerk", "share": 0.32, "wage": 14.0, "payer": "S0", "district": 2},
 	"stadtlager": {"label": "Stadtlager", "share": 0.008, "wage": 13.0, "payer": "P0", "district": 3},
+	"hafen": {"label": "Hafen", "share": 0.0, "wage": 13.0, "payer": "P0", "district": 3},   # Einstellung durch die Hafenverwaltung (Harbor._staff_day)
 }
 
 var sim: Simulation
