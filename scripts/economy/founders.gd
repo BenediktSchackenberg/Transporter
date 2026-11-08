@@ -197,6 +197,10 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 	if not r.get("ok", false):
 		# Gruendung des Betriebs gescheitert: Firma bleibt mit ihrer Einlage bestehen (kein Rueckbau von IDs), Grund protokolliert
 		_refuse(town, branch, "Betrieb nicht gegründet: %s" % str(r.get("msg", "")).left(120))
+		if c.depots.is_empty():
+			# ohne Sitz brach die Figur jedes Bild mit depots[0] ab (22 841 Fehler im 8-Stunden-Lauf): Buero im Rathaus der Heimatstadt
+			c.depots.append(int(sim.towns.get_t(town).town_hall))
+			sim.personnel.start_staff_small(c.id)
 	else:
 		var b: Dictionary = sim.biz.get_b(str(r.ref))
 		if c.depots.is_empty() and not b.is_empty():

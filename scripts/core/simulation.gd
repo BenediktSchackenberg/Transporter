@@ -1043,6 +1043,8 @@ func _update_avatar(a: Avatar, dt: float) -> void:
 		_:
 			if _resume_visit(a):
 				return
+			if companies[a.owner].depots.is_empty():
+				return   # Firma ohne Sitz: Figur bleibt, wo sie ist
 			var home: Vector2i = operations.yard_layout(int(companies[a.owner].depots[0])).office
 			if a.tile().distance_to(home) > 1.0:
 				walk_avatar(a, home)
