@@ -203,6 +203,7 @@ func _assign_task(cid: int, a: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Unbekannte Aufgabe '%s'. Erlaubt: %s (Sabotage über attempt_vehicle_sabotage)." % [kind,
 			", ".join(WorkerTask.KINDS.keys().filter(func(k): return k != "sabotage"))]}
 	var target := {}
+	var note := ""
 	match kind:
 		"fahren", "reparieren":
 			var v: FleetVehicle = sim.vehicles.get(ActionExecutor._i(a.get("vehicle_id", -1)) if a.get("vehicle_id") != null else -1)
@@ -212,10 +213,12 @@ func _assign_task(cid: int, a: Dictionary) -> Dictionary:
 			if kind == "fahren" and a.get("contract_id") != null and str(a.contract_id) != "":
 				var k: Contract = sim.contracts.get(str(a.contract_id))
 				if k == null or k.owner != cid or k.status != "accepted":
-					return {"ok": false, "msg": "Auftrag %s ist nicht dein angenommener, unzugewiesener Auftrag." % a.contract_id}
-				if not k.vehicle_ok(v.model):
-					return {"ok": false, "msg": "#%d erfüllt nicht: %s." % [v.id, k.requirement_text()]}
-				target.contract_id = k.id
+					# Auftrag schon disponiert oder nicht angenommen: Fahrer trotzdem einteilen (die Disposition verteilt die Fahrten)
+					note = " Auftrag %s ist nicht (mehr) unzugewiesen und wurde nicht verknüpft." % a.contract_id
+				elif not k.vehicle_ok(v.model):
+					note = " #%d passt nicht zu %s (%s) – nur der Fahrer wurde eingeteilt." % [v.id, k.id, k.requirement_text()]
+				else:
+					target.contract_id = k.id
 		"bewachen":
 			if a.get("vehicle_id") != null:
 				var v: FleetVehicle = sim.vehicles.get(ActionExecutor._i(a.vehicle_id))
@@ -271,7 +274,7 @@ func _assign_task(cid: int, a: Dictionary) -> Dictionary:
 	if err != "":
 		return {"ok": false, "msg": err}
 	var t := P.create_task(cid, kind, target, w.id, "", prio, "Unternehmer")
-	return {"ok": true, "msg": "Aufgabe %s: %s übernimmt %s." % [t.id, w.name, t.describe()], "task_id": t.id}
+	return {"ok": true, "msg": "Aufgabe %s: %s übernimmt %s.%s" % [t.id, w.name, t.describe(), note], "task_id": t.id}
 
 
 func _sabotage(cid: int, a: Dictionary) -> Dictionary:

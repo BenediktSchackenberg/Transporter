@@ -862,7 +862,18 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 		if v == null:
 			return _no_vehicle(vid)
 		if not k.vehicle_ok(v.model):
-			return {"ok": false, "msg": "Fahrzeug #%d erfüllt nicht: %s." % [vid, k.requirement_text()]}
+			# Modell hat ein unpassendes Fahrzeug genannt (oft zu klein): das schnellste passende eigene Fahrzeug nehmen, das rechtzeitig liefert
+			var alt := -1
+			var alt_eta := INF
+			for ov in sim.company_vehicles(cid):
+				if ov.operator < 0 and k.vehicle_ok(ov.model) and ov.state not in ["broken", "repairing", "to_workshop"]:
+					var eta: float = sim.logistics.eta_minutes(ov, k)
+					if eta < alt_eta and _too_late(cid, k, ov.id) == "":
+						alt_eta = eta
+						alt = ov.id
+			if alt < 0:
+				return {"ok": false, "msg": "Fahrzeug #%d erfüllt nicht: %s (kein passendes eigenes Fahrzeug frei)." % [vid, k.requirement_text()]}
+			vid = alt
 	k.status = "accepted"
 	k.owner = cid
 	k.accepted_at = sim.game_min

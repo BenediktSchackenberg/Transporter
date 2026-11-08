@@ -48,7 +48,7 @@ var _events: Array = []
 # noch nicht geliefertes Fahrzeug warten, bis es da ist.
 const HOLD_MAX := 8                 # hoechstens so viele Auftraege je Anfrage vormerken
 const HOLD_GAME_MIN := 600.0        # Obergrenze der Vormerkung (5 Spieltage), falls keine Antwort kommt
-const AFTER_BUY_GAME_MIN := 360.0   # so lange warten Aktionen auf das gekaufte Fahrzeug
+const AFTER_BUY_GAME_MIN := 1440.0  # Obergrenze; solange der Kaufbesuch der Figur noch aussteht, warten die Aktionen
 var _held: Array = []
 var _release_later: Array = []
 var _after_buy: Array = []          # [{action, known: [Fahrzeug-IDs beim Kauf], until}]
@@ -612,12 +612,12 @@ func from_dict(d: Dictionary) -> void:
 func _hold_market(obs: Dictionary) -> void:
 	_release_holds(_held)
 	_held.clear()
-	for m in obs.get("markt", []).slice(0, HOLD_MAX):
+	for m in obs.get("markt", []).filter(func(x): return bool(x.get("machbar", true))).slice(0, HOLD_MAX):
 		var k: Contract = sim.contracts.get(str(m.get("id", "")))
 		if k == null or k.status != "open" or k.held_by_other(cid, sim.game_min):
 			continue
 		k.held_for = cid
-		k.held_until = sim.game_min + HOLD_GAME_MIN
+		k.held_until = minf(sim.game_min + HOLD_GAME_MIN, k.deadline - 30.0)   # nie ueber die Lieferfrist hinaus vormerken
 		_held.append(k.id)
 
 
@@ -638,6 +638,17 @@ func _needs_new_vehicle(a: Dictionary) -> bool:
 	return v == null or (v.owner != cid and v.operator != cid)
 
 
+## Steht der Kaufbesuch der Figur noch aus (unterwegs oder eingereiht)?
+func _buy_visit_pending() -> bool:
+	if cid >= sim.avatars.size():
+		return false
+	var a: Avatar = sim.avatars[cid]
+	for v in [a.pending] + a.queue:
+		if v is Dictionary and v.has("action") and str(v.action.get("action", "")) == "buy_vehicle":
+			return true
+	return false
+
+
 ## Gekauftes Fahrzeug ist da: zurueckgehaltene Aktionen mit dessen Nummer ausfuehren; nach Ablauf verwerfen.
 func _after_buy_tick() -> void:
 	if _after_buy.is_empty():
@@ -646,12 +657,13 @@ func _after_buy_tick() -> void:
 	for item in _after_buy:
 		var fresh: Array = sim.company_vehicles(cid).filter(func(v): return not item.known.has(v.id))
 		if fresh.is_empty():
-			if sim.game_min < float(item.until):
+			var buying := _buy_visit_pending()
+			if buying and sim.game_min < float(item.until):
 				keep.append(item)
 			else:
 				_release_holds([item.get("hold", "")])
 				api_log.write({"type": "action", "player": cid, "key": str(item.key) + ":spaet", "source": "Postfach", "action": item.action, "ok": false,
-					"msg": "gekauftes Fahrzeug kam nicht rechtzeitig – Aktion verworfen"})
+					"msg": "Fahrzeugkauf ist gescheitert (Angebot weg oder Geld fehlte) – zurückgehaltene Aktion verworfen" if not buying else "gekauftes Fahrzeug kam nicht rechtzeitig – Aktion verworfen"})
 			continue
 		var a: Dictionary = item.action.duplicate()
 		a["vehicle_id"] = int(fresh[0].id)

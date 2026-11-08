@@ -33,7 +33,7 @@ static func _finance(price: float, cash: float, buffer: float, me: Dictionary, p
 	if float(me.umsatz) <= 0.0 or actions.any(func(a): return a.action in ["take_loan", "request_loan"]):
 		return false
 	var need := maxf(5000.0, ceilf((price + buffer - cash) / 1000.0) * 1000.0)
-	if need > float(me.kreditrahmen_frei) * float(LOAN_APPETITE.get(personality, 0.0)):
+	if need > float(me.kreditrahmen_frei) * float(LOAN_APPETITE.get(personality, 0.0)) or need > float(me.get("kredit_moeglich_bis", INF)):
 		return false
 	actions.insert(0, {"action": "take_loan", "amount": need, "monate": LOAN_MONTHS})
 	reasons.append("finanziere %d EUR per Kredit (%d Monate), weil sich die Anschaffung lohnt" % [int(need), LOAN_MONTHS])
@@ -54,8 +54,8 @@ static func _invest(cost: float, extra: float, cash: float, me: Dictionary, pers
 	var gap := ceilf((cost + minf(extra, PROD_RESERVE) - cash) / 1000.0) * 1000.0   # mit Kredit: nur die Betriebsreserve muss uebrig bleiben
 	if gap <= 0.0:
 		return true   # Betriebsreserve bleibt auch ohne Kredit; nur der volle Puffer fehlt
-	if gap > float(me.get("kreditrahmen_frei", 0.0)) * float(INVEST_APPETITE.get(personality, 0.5)):
-		return false
+	if gap > float(me.get("kreditrahmen_frei", 0.0)) * float(INVEST_APPETITE.get(personality, 0.5)) or gap > float(me.get("kredit_moeglich_bis", INF)):
+		return false   # ohne ausreichendes Pfand lehnt die Bank ab (vorher 18 vergebliche Antraege je Gruender)
 	actions.insert(0, {"action": "take_loan", "amount": gap, "monate": LOAN_MONTHS})
 	reasons.append("finanziere %d EUR der Investition per Kredit (Eigenanteil %d EUR)" % [int(gap), int(cash)])
 	return true
@@ -176,7 +176,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 				reasons.append("frage Partner fuer unbediente Fracht %s an" % k.id)
 				break
 	# Bei voller eigener Flotte kann eine weitere profitable Fracht als Partnerauftrag geplant werden.
-	var partner_pool: Array = market.filter(func(k): return _partner_feasible(k))
+	var partner_pool: Array = market.filter(func(k): return _partner_feasible(k) and bool(k.get("machbar", true)))
 	if ready.is_empty() and active < capacity and cash > buffer + 3000.0 and not partner_pool.is_empty() and not ops.get("hilfeanfragen", []).any(func(r): return r.own):
 		var partner_job: Dictionary = partner_pool[0]
 		if float(partner_job.verguetung) > 500.0 and float(me.reputation) >= float(partner_job.get("min_reputation", 0)):
@@ -573,6 +573,8 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		if au.fehlt.size() == 1 and str(au.fehlt[0]).begins_with("zu wenig Personal"):
 			b["personal_soll"] = maxi(int(b.get("personal_soll", 1)), int(au.personal))
 	for b in own:
+		if str(b.get("status", "")) not in Businesses.RUNNING:
+			continue   # im Bau/geschlossen: Personal erst, wenn der Betrieb laeuft (vorher bis zu 60 abgelehnte Zuweisungen je Partie)
 		if int(b.personal) >= int(b.get("personal_soll", b.get("personal_min", 1))):
 			continue
 		var pool: Array = free_staff.filter(func(w): return str(w.get("betrieb", "")) not in own_ids)
@@ -820,7 +822,7 @@ static func _best_contract(market: Array, v: Dictionary, spec: Dictionary, rep: 
 	for k in market:
 		if k.menge > spec.kapazitaet or (k.kuehlung and not spec.kuehlung) or (k.schwer and not spec.schwer):
 			continue
-		if rep < k.min_reputation:
+		if rep < k.min_reputation or not bool(k.get("machbar", true)):
 			continue
 		var tiles := float(k.strecke) + _dist(k.von_pos, v.pos)
 		var minutes_needed := Logistics.travel_minutes(tiles, float(spec.tempo)) + 2.0 * Catalog.LOADING_MIN   # gleiche Schaetzung wie die Annahmepruefung

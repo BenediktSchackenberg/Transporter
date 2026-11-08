@@ -18,6 +18,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"id": cid, "name": c.player_name, "firma": c.company_name, "fokus": c.focus,
 		"bargeld": int(L.cash), "schulden": int(L.debt), "gewinn": int(L.profit()), "umsatz": int(L.revenue()),
 		"kosten": int(L.costs()), "kreditrahmen_frei": int(sim.max_loan(cid) - L.debt), "einlagen": int(L.deposits),
+		"kredit_moeglich_bis": int(_loan_reach(sim, cid)),
 		"reputation": snappedf(c.reputation, 0.1), "sicherheitsstufe": c.security_level, "versicherung": c.insurance,
 		"stellplaetze": "%d/%d" % [c.vehicle_ids.size(), c.fleet_limit()],
 		"depots": c.depots.map(func(s): return {"id": s, "viertel": Catalog.DISTRICTS[sim.city.building(s).district]}),
@@ -67,6 +68,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 			"verguetung": int(k.reward), "frist_in_min": int(k.deadline - now), "angebot_noch_min": int(k.offer_until - now), "kuehlung": k.needs_cold,
 			"schwer": k.needs_heavy, "min_reputation": int(k.min_rep),
 			"exklusiv_fuer_dich": k.exclusive_for == cid and k.exclusive_until > now,
+			"machbar": sim.executor._too_late(cid, k, -1) == "",   # gleiche Pruefung wie bei accept_contract (Fahrzeuge, Warteschlange, Frist)
 			"praemie_stadt": int(k.bonus),
 			"_score": (k.reward + k.bonus) / float(k.distance + approach + 30)})
 		if k.requester != "":
@@ -505,3 +507,14 @@ static func _loyal(sim: Simulation, cid: int) -> Array:
 		if sim.customers[b].loyal == cid:
 			out.append(sim.city.building(b).name)
 	return out
+
+
+## Hoechster Kredit, den die Geschaeftsbank ohne bzw. mit dem besten freien Fahrzeug als Pfand gewaehrt (Deckungsquote der Bank).
+## Ohne Fahrzeug nur bis zur pfandfreien Grenze - Gruender ohne Fahrzeug beantragten sonst immer wieder zu hohe Kredite.
+static func _loan_reach(sim: Simulation, cid: int) -> float:
+	var B: Dictionary = Banking.BANKS[0]
+	var reach := float(B.free_limit)
+	var vid := sim.banking.best_collateral(cid)
+	if vid >= 0 and float(B.cover) > 0.0:
+		reach = maxf(reach, float(sim.vehicles[vid].book_value) / float(B.cover))
+	return minf(reach, float(sim.max_loan(cid) - sim.company(cid).ledger.debt))

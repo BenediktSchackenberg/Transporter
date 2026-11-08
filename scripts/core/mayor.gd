@@ -304,6 +304,7 @@ func indicators() -> Dictionary:
 			"hinweis": "verfuegbar = Kasse - Mindestreserve - reserviert. Ist verfuegbar 0, scheitert jede Ausgabe: dann Grundstücke verkaufen (offer_parcels), Grundsteuer anpassen oder warten."},
 		"bauantraege": {"warteschlange": sim.permits.queue().size(), "zur_entscheidung": queue_ids, "zur_entscheidung_details": pending, "kapazitaet_je_tag": snappedf(sim.permits.capacity(), 0.1)},
 		"plaene": plans.values().map(func(p): return {"id": p.id, "name": p.name, "status": p.status, "grundstuecke": p.parcels.size(), "zone": p.zone, "tag": int(p.get("day", 0)),
+			"ratsbegruendung": str(p.get("vote", "")).left(200) if p.status == "abgelehnt" else "",
 			"ids_zur_entwicklung": p.parcels.filter(func(id): return sim.parcels.parcel(id).get("state", "") == "zur_entwicklung").slice(0, MAX_CLUSTER),
 			"ids_ohne_anschluss": p.parcels.filter(func(id): return sim.parcels.parcel(id).get("state", "") in ["frei", "zur_entwicklung"] and sim.parcels.utility_level(sim.parcels.parcel(id)) != "voll").slice(0, MAX_CLUSTER),
 			"naechster_schritt": "plan_infrastructure mit ids_ohne_anschluss (baut Straße und Anschlüsse)" if p.status == "beschlossen" else ""}),
@@ -778,6 +779,7 @@ func _proposal_vote(kind: String, cost: float, units: int, area: int) -> Diction
 	return {"needed": true, "passed": r.passed, "text": Council.explain(r), "result": r}
 
 
+const QUARTER_RETRY_DAYS := 10
 func _designate_quarter(a: Dictionary) -> Dictionary:
 	var zone := str(a.zone)
 	if not Parcels.ZONES.has(zone) or not Parcels.ZONES[zone].buildable or zone == "oeffentlich":
@@ -792,6 +794,12 @@ func _designate_quarter(a: Dictionary) -> Dictionary:
 			break
 	if covered != "":
 		return {"ok": false, "msg": "Diese Grundstücke gehören bereits zum beschlossenen Quartier %s (Zone %s): kein zweites Quartier ausweisen, sondern mit offer_parcels vergeben." % [covered, zone]}
+	# Der Rat entscheidet nach der Lage der Stadt, nicht nach Zuschnitt: nach einer Ablehnung ruhen Quartiersantraege einige Tage
+	# (ein Modell-Buergermeister legte sonst dieselben Quartiere als "kleine" Varianten immer wieder vor).
+	for pl in plans.values():
+		if pl.status == "abgelehnt" and _today() - int(pl.get("day", -999)) < QUARTER_RETRY_DAYS:
+			return {"ok": false, "msg": "Der Rat hat am Tag %d das Quartier '%s' abgelehnt (%s). Neue Quartiersanträge frühestens ab Tag %d – bis dahin Bestehendes entwickeln (offer_parcels, plan_infrastructure) oder die Gründe der Ablehnung angehen." % [
+				int(pl.day), pl.name, str(pl.vote).left(160), int(pl.day) + QUARTER_RETRY_DAYS]}
 	var area := 0
 	for p in chk.parcels:
 		area += int(p.area)
