@@ -354,7 +354,7 @@ func _process(delta: float) -> void:
 		ctl.speed = float(speed())
 		ctl.remaining_real_min = sim.remaining_real_min
 	if running:
-		active_seconds += dt
+		active_seconds += delta   # Partiedauer zaehlt volle Echtzeit, auch bei langsamen Bildern
 		_sim_acc += dt * speed()
 		var t0 := Time.get_ticks_usec()
 		while _sim_acc >= SUBSTEP:
@@ -570,3 +570,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_B: _next_mine()
 			KEY_O: _next_town()
 			KEY_M: _next_garbage()
+
+
+## Beim Verlassen laufende KI-Anfragen abbrechen, damit keine Antwort mehr auf die alte Partie trifft.
+func _exit_tree() -> void:
+	for ctl in controllers:
+		ctl.active = false
+		if is_instance_valid(ctl.adapter):
+			ctl.adapter.cancel()

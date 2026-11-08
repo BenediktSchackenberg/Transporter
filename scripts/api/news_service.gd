@@ -84,10 +84,15 @@ func _on_completed(result: int, code: int, _headers: PackedStringArray, body: Pa
 
 ## Antwort verarbeiten (auch fuer Tests mit aufgezeichneten Antworten).
 func handle_body(text: String) -> bool:
-	var parsed := NewsFeed.parse(JSON.parse_string(text))
-	if parsed.is_empty() and not text.contains("\"articles\""):
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		_fail("Ungueltiges JSON des Nachrichtendienstes")
+		return false
+	var data = json.data
+	if not (data is Array or (data is Dictionary and data.get("articles") is Array)):
 		_fail("Unerwartetes Antwortformat des Nachrichtendienstes")
 		return false
+	var parsed := NewsFeed.parse(data)
 	var added := sim.news.ingest(parsed)
 	sim.news.source = "newsapi"
 	sim.news.fetched_unix = Time.get_unix_time_from_system()

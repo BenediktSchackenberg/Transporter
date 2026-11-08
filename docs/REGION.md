@@ -178,3 +178,13 @@ Besucherzufriedenheit sowie Verkehrszählung und genehmigte Autobahnprojekte mit
 - Die Bürgermeisterkarte links zeigt Ort 0; die anderen Bürgermeister stehen im Stadtfenster und in der Regionsübersicht. Die Zoomgrenze
   erlaubt keine Gesamtansicht aller Städte (Minikarte zeigt sie).
 - Live-API (Claude/Ollama) mit mehreren Bürgermeistern nicht getestet.
+
+## Zusammenführung 08.11.2026
+
+Alle Branches sind in `region` zusammengeführt; `unternehmer` und `main` zeigen auf denselben Stand. Aus `codex/fix-ai-finance-refueling`
+(25.10.) wurden die Robustheits-Fixes übernommen: Sondertilgung nur für eigene Kredite mit positiven, endlichen Beträgen und Einzug
+fälliger Zinsen; Einlagen nur mit gültiger Bank/Anlageart; Auszahlung prüft Kapital plus Zinsen; Tankregel/Bestellung prüfen Mengen,
+Station und Lieferart; Tankwagen und Abholungen einer früheren Firmengeneration verfallen; KI-Antworten nach Partieende oder an eine
+neu gegründete Firma werden ignoriert; Partiedauer zählt volle Echtzeit; JSON-Fehler der Preis-/Nachrichtendienste ohne Parserfehler.
+**Nicht übernommen:** das Tankmodell je Fahrzeug (`VehicleFuel`). Es ersetzt den Betriebsvorrat mit Notbetankung/Tankhof, den
+Annahmeprüfung, Regel-KI und ActionAssist voraussetzen; ein Wechsel wäre ein eigener Auftrag mit neuer Balance. Test: `test_merged_codex_fixes`.

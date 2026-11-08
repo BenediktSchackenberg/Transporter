@@ -37,6 +37,7 @@ var speed := 1.0                  # aktuelle Simulationsgeschwindigkeit (die Ver
 var _inflight := -1
 var _inflight_obs_min := 0.0
 var _inflight_sent := 0.0
+var _inflight_generation := 0
 var _abandoned := {}
 var _applied := {}
 var _next_req := 1
@@ -135,6 +136,7 @@ func _start_request() -> void:
 	_next_req += 1
 	_inflight_obs_min = sim.game_min
 	_inflight_sent = real_time
+	_inflight_generation = sim.company(cid).generation
 	stats.requests += 1
 	status = "wartet auf Antwort"
 	adapter.observation = obs
@@ -172,6 +174,10 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 		sim.log_event("%s: ungültige KI-Antwort (%s)" % [sim.company(cid).player_name, parsed.error], "warn", cid)
 		_consecutive_fail += 1
 		_check_fallback()
+		return
+	# Antworten nach Partieende oder fuer eine inzwischen neu gegruendete Firma nicht mehr anwenden.
+	if sim.finished or sim.company(cid).generation != _inflight_generation:
+		api_log.write({"type": "session_ended_ignored", "player": cid, "req": req_id})
 		return
 	var stale_limit := (STALE_GAME_MIN_OLLAMA if config.get("provider", "") == "ollama" else STALE_GAME_MIN) * maxf(speed, 1.0)
 	if sim.game_min - _inflight_obs_min > stale_limit:
@@ -576,6 +582,8 @@ func begin_request_for_test() -> int:
 	_inflight = _next_req
 	_next_req += 1
 	_inflight_obs_min = sim.game_min
+	_inflight_sent = real_time
+	_inflight_generation = sim.company(cid).generation
 	return _inflight
 
 

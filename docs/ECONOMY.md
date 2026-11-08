@@ -54,7 +54,7 @@ monatliche Wirkung (Jahreszins/12) sowie Monatsrate.
 entsteht der vollständige Plan (Zinsanteil, Tilgung, Restschuld je Rate), auf Cent gerundet; die letzte Rate gleicht Rundungsreste aus.
 Fälligkeit am Monatswechsel (erste Rate im Folgemonat); Einzug automatisch, soweit Geld vorhanden. Fehlt Deckung, entsteht ein
 dokumentierter Rückstand mit Verzugszuschlag (1 % der Rate); ab 3 offenen Raten gilt der Kredit als ausgefallen (Kündigung,
-Sicherheitenverwertung). Vorzeitige Rückzahlung: Bank 1 % Gebühr auf die Restschuld, zwischen Spielern nach Vertrag.
+Sicherheitenverwertung). Eine Sondertilgung ist nur für den eigenen Kredit möglich. Der angegebene Betrag ist die gesamte Kapitaltilgung; er muss mindestens die bereits fälligen Kapitalanteile decken. Fällige Zinsen und Verzugszuschläge werden zusätzlich vollständig eingezogen. Nur auf den darüber hinaus vorzeitig getilgten Kapitalanteil fällt 1 % Gebühr an. Die restlichen zukünftigen Raten werden neu berechnet; bei fehlender Deckung bleibt der Vertrag unverändert. Zwischen Spielern gelten die jeweiligen Verträge.
 
 **Spielerkredite:** Unternehmen können einander Geld leihen (`offer_loan` / `accept_loan`, Gegenangebote bis 3 Runden). Der Geber muss
 das Geld besitzen; Auszahlung erst nach Annahme; gleicher Tilgungsplan; optional Sicherheit (Fahrzeug).
@@ -63,7 +63,7 @@ das Geld besitzen; Auszahlung erst nach Annahme; gleicher Tilgungsplan; optional
 `deposit_money`: **Tagesgeld** (täglich verfügbar, Zins = Referenz − 1,5 %, min. 0) oder **Festgeld** (Laufzeit 3–24 Monate,
 Zins = Tagesgeldzins + Laufzeitbonus, aber stets ≤ Referenz − 0,5 %). Kreditzinsen liegen immer ≥ Referenz + 1 %, daher ist
 Kreditaufnahme zum Anlegen nie profitabel. Zinsen zahlt die Bank aus ihrem Bargeld (mindert ihr Eigenkapital); reicht ihr Bargeld
-nicht, zahlt sie verspätet und verliert Reputation. Festgeld ist bis zur Fälligkeit gebunden (vorzeitige Auflösung: Verlust der
+nicht, bleiben die Zinsansprüche bestehen. Die Auflösung einer Einlage wird abgelehnt, solange die Bank Kapital und auszuzahlende Zinsen nicht vollständig bedienen kann. Festgeld ist bis zur Fälligkeit gebunden (vorzeitige Auflösung: Verlust der
 Zinsen der laufenden Periode + 1 % Gebühr).
 
 ## 5. Unternehmensformen (Spielregeln)
