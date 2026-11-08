@@ -65,7 +65,7 @@ und Tourismus. Arbeit auf Branch `region` (Worktree `PTR_e`), Spiel aus `PTR_pla
 | 1 | Platzierungsdiagnose (Daten + Ansicht), Geometrie-/Ankerkorrektur, gemeinsame Bauprüfung, Straßenprojekte ohne Überbauung | fertig (08.11.2026) |
 | 2 | Kompakter Startort, Straßenfunktionen, Viertel; Gebäudevielfalt durch die ganze Asset-Kette | weitgehend (08.11.2026) |
 | 3 | Hafenanlagen, Hafenarbeiter, Kran-Arbeitsablauf an Warenbuch und Personal | fertig (08.11.2026) |
-| 4 | Küste: Übergänge, Wasser, Strandausstattung, Licht, Stadtdetails | offen |
+| 4 | Küste: Übergänge, Wasser, Strandausstattung, Licht, Stadtdetails | fertig (08.11.2026) |
 
 ## Stand
 
@@ -130,4 +130,17 @@ Kreuzungsgrafik nur an Ampelkreuzungen.
   Gartentor zur Straße und Blumen im Vorgarten.
 - Strand: Dünengras zur Landseite (wiegt im Wind), Steine, Treibholz an der Wasserlinie, Laterne an Strandabschnitten mit Straße
   (abends warmes Licht).
-- Offen: Bänke/Wege am Strand, Steg, Abendstimmung über die Laternen hinaus, Blockinnenbereiche.
+
+### Etappe 4, Teil 2 (08.11.2026) – Etappe 4 fertig
+
+- Strand: Bohlenweg durch die Düne und Bank mit Blick aufs Wasser an Strandabschnitten mit Straße.
+- Badestege (bis 5, mind. 14 Felder vom Hafen, 18 Felder auseinander, nur bei 3+ Feldern freiem Wasser): Planken auf Pfählen,
+  Laterne am Kopf, tagsüber ein Angler mit wippendem Schwimmer.
+- Lagerfeuer (bis 6, ruhige Strandstücke): Steinring und Holz immer; abends 19:30–0:30 bei trockenem Wetter über 6 °C Flammen,
+  Funken und vier Leute im Kreis.
+- Abendstimmung: neue Lichtebene `AmbientView.EveningLights` über der Nachtfärbung, blendet mit `CityView.night_factor` ein:
+  Promenadenlaternen, Steglaternen, Lagerfeuer, Restaurant-/Café-Terrassen bis 23 Uhr.
+- Innenhöfe (`_build_courts`, alle 30 s neu geprüft): freie Rasenflächen, die von mind. drei Seiten bebaut und nicht an der Straße sind –
+  Wäscheleine (weht im Wind), Spielplatz (Schaukel mit Kind tagsüber), Gemüsebeet mit Gartenhaus oder Baum mit Bank. Ein Neubau
+  verdrängt den Hof, neue Blöcke bekommen einen.
+- Tests: `test_ambient_view` (8 Prüfungen). Bilder: `e4_steg.png`, `e4_feuer.png`, `e4_hof.png`.

@@ -12,6 +12,10 @@ const SC := 1.8          # Figuren und Fahrzeuge gegenueber Pixelmass (ein Feld 
 const MAX_BEACH := 140
 const MAX_WALK := 180
 const MAX_BOATS := 10
+const MAX_STEG := 5
+const MAX_FIRE := 6
+const MAX_HOF := 120
+const HOF_RESCAN := 15   # alle 15 Geschaeftsscans (30 s) Innenhoefe neu pruefen (Neubauten)
 const RESCAN_S := 2.0
 const SKIN := [Color("f1c7a1"), Color("d9a47c"), Color("a8714f"), Color("7a4e33")]
 const CLOTH := [Color("e8553d"), Color("3d7cc8"), Color("f2c14e"), Color("4f9a5b"), Color("a05cc0"), Color("f08aa8"), Color("2b2b2b"), Color("eeeeee")]
@@ -28,6 +32,11 @@ var _biz_spots := {}      # Schluessel -> Spot
 var _rescan := 0.0
 var _spots: Array = []
 var ground: GroundOverlay   # Bodenebene unter allen Gebaeuden (Ufer, Flachwasser, Gaerten)
+var lights: EveningLights  # Lichtebene ueber der Nachtfaerbung (Laternen, Lagerfeuer, Steglaternen)
+var hour := 12.0
+var temp := 15.0
+var _courts := {}          # Zelle -> Spot (Innenhof)
+var _court_scans := 0
 
 
 func setup(simulation: Simulation, city_view) -> void:
@@ -40,6 +49,10 @@ func setup(simulation: Simulation, city_view) -> void:
 	ground = GroundOverlay.new()
 	ground.view = self
 	cv.decor_node.add_child(ground)
+	_build_courts()
+	lights = EveningLights.new()
+	lights.view = self
+	cv.lights_layer.add_child(lights)
 
 
 func _add(kind: String, cell: Vector2, data: Dictionary, parent: Node = self) -> Spot:
@@ -59,6 +72,88 @@ func _h(a: int, b: int) -> int:
 
 
 # ------------------------------------------------------------------ Kueste
+## Badestege an Promenadenstraenden (weit weg vom Hafen, mind. 18 Felder auseinander) und Lagerfeuerplaetze an ruhigen Strandstuecken.
+func _build_jetties() -> void:
+	var C := sim.city
+	var ports: Array = []
+	if sim.towns != null:
+		for k in sim.towns.count():
+			var H: Harbor = sim.towns.harbor(k)
+			var b: Dictionary = C.building(H.building)
+			if not b.is_empty():
+				ports.append(Vector2(float(b.x), float(b.y)))
+	var placed: Array = []
+	var fires: Array = []
+	for sp in _spots.duplicate():
+		if sp.kind != "strand":
+			continue
+		var c := Vector2i(sp.world / 32.0)
+		var cf := Vector2(c)
+		if ports.any(func(pt): return pt.distance_to(cf) < 14.0):
+			continue
+		var near_road := false
+		for dy in range(-8, 9):
+			for dx in range(-8, 9):
+				var q0 := c + Vector2i(dx, dy)
+				near_road = near_road or (C.inside(q0) and C.is_road(q0))
+		if near_road and placed.size() < MAX_STEG and placed.all(func(pt): return pt.distance_to(cf) >= 18.0):
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n := 0
+				while n < 5 and C.inside(c + d * (n + 1)) and C.g(c + d * (n + 1)) == CityData.G.WATER:
+					n += 1
+				if n >= 3 and C.g(c + d) == CityData.G.WATER:
+					_add("steg", cf + Vector2(0.5, 0.5), {"dir": Vector2(d), "len": float(n), "seed": int(sp.data.seed)})
+					placed.append(cf)
+					break
+		if placed.has(cf):
+			continue
+		if not bool(sp.data.promenade) and fires.size() < MAX_FIRE and int(sp.data.seed) % 5 == 0 and fires.all(func(pt): return pt.distance_to(cf) >= 16.0):
+			_add("feuer", cf + Vector2(0.5, 0.5), {"seed": int(sp.data.seed), "shore": sp.data.shore})
+			fires.append(cf)
+
+
+## Innenhoefe: freie Rasenfelder, die von drei oder vier Seiten (je bis 3 Felder) bebaut und nicht an der Strasse sind - Waescheleine,
+## Spielplatz, Gemuesebeet mit Gartenhaus oder Baum mit Bank. Neubauten verdraengen den Hof, neue Bloecke bekommen einen.
+func _build_courts() -> void:
+	var C := sim.city
+	var seen := {}
+	var y := 3
+	while y < C.size - 3:
+		var x := 3
+		while x < C.size - 3:
+			var c := Vector2i(x, y)
+			if _court_ok(C, c) and (_courts.has(c) or not seen.keys().any(func(o): return absi(o.x - c.x) + absi(o.y - c.y) < 4)):
+				seen[c] = true
+				if not _courts.has(c) and _courts.size() < MAX_HOF:
+					_courts[c] = _add("hof", Vector2(c) + Vector2(0.5, 0.5), {"seed": _h(x * 3, y * 5)})
+			x += 2
+		y += 2
+	for c in _courts.keys():
+		if not seen.has(c):
+			var sp: Spot = _courts[c]
+			_spots.erase(sp)
+			sp.queue_free()
+			_courts.erase(c)
+
+
+func _court_ok(C: CityData, c: Vector2i) -> bool:
+	if C.g(c) != CityData.G.GRASS or C.building_at[C.idx(c)] != -1:
+		return false
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var q := c + Vector2i(dx, dy)
+			if not C.inside(q) or C.is_road(q) or C.building_at[C.idx(q)] != -1 or C.g(q) == CityData.G.WATER:
+				return false
+	var sides := 0
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		for k in range(2, 5):
+			var q2: Vector2i = c + d * k
+			if C.inside(q2) and C.building_at[C.idx(q2)] >= 0:
+				sides += 1
+				break
+	return sides >= 3
+
+
 func _build_coast() -> void:
 	var C := sim.city
 	var n := 0
@@ -102,6 +197,7 @@ func _build_coast() -> void:
 					boats += 1
 			x2 += 23
 		y += 19
+	_build_jetties()
 	# Moewen ueber Straenden (Auswahl) - in der Effektebene ueber allem
 	var k := 0
 	for s in _spots.duplicate():
@@ -228,11 +324,15 @@ func update_view(delta: float) -> void:
 	if _rescan >= RESCAN_S:
 		_rescan = 0.0
 		_scan_business()
-	var hour := Catalog.hour_of_day(sim.game_min)
+		_court_scans += 1
+		if _court_scans >= HOF_RESCAN:
+			_court_scans = 0
+			_build_courts()
+	hour = Catalog.hour_of_day(sim.game_min)
 	night = hour >= 20.5 or hour < 5.5
 	var wx: Weather = sim.wx
 	rain = wx.is_rain() or wx.is_snow()
-	var temp := float(wx.cur.get("temp", 15.0))
+	temp = float(wx.cur.get("temp", 15.0))
 	beach = 0.0 if rain or night or hour < 9.0 or hour > 19.5 else clampf((temp - 15.0) / 10.0, 0.0, 1.0)
 	if beach > 0.0:
 		beach = maxf(beach, 0.25)
@@ -246,6 +346,7 @@ func update_view(delta: float) -> void:
 	var view := Rect2(cam.position - half, half * 2.0)
 	ground.view_rect = view
 	ground.queue_redraw()
+	lights.queue_redraw()
 	for s in _spots:
 		var vis: bool = view.has_point(s.position)
 		s.visible = vis
@@ -294,6 +395,159 @@ class Spot extends Node2D:
 				_weide()
 			"terrasse":
 				_terrasse()
+			"steg":
+				_steg()
+			"feuer":
+				_feuer()
+			"hof":
+				_hof()
+
+	## Lichtpunkte fuer die Abendebene: [lokaler Punkt, Radius, Farbe]. Nur was wirklich leuchtet.
+	func glows() -> Array:
+		match kind:
+			"strand":
+				if bool(data.get("promenade", false)):
+					var lw := _landward()
+					return [[_p(lw.x * 1.4, lw.y * 1.4) + Vector2(0, -32), 34.0, Color(1.0, 0.82, 0.5)]]
+			"steg":
+				var d: Vector2 = data.dir
+				var e := d * (float(data.len) + 0.3)
+				return [[_p(e.x, e.y, 0.3) + Vector2(0, -26), 30.0, Color(1.0, 0.78, 0.45)]]
+			"feuer":
+				if _fire_on():
+					return [[_p(0, 0) + Vector2(0, -6), 70.0 + 6.0 * sin(view.t * 9.0), Color(1.0, 0.55, 0.2)]]
+			"terrasse":
+				if view.is_active(str(data.biz)) and view.hour >= 18.0 and view.hour < 23.0 and not view.rain:
+					return [[_p(0.5, 0.2) + Vector2(0, -16), 40.0, Color(1.0, 0.75, 0.4)]]
+		return []
+
+	func _landward() -> Vector2:
+		var lw := Vector2.ZERO
+		for w in data.get("shore", []):
+			lw -= w
+		return lw.normalized() if lw.length() > 0.01 else Vector2(-1, 0)
+
+	func _fire_on() -> bool:
+		return not view.rain and view.temp > 6.0 and (view.hour >= 19.5 or view.hour < 0.5)
+
+	func _bench(at: Vector2, facing: Vector2) -> void:
+		var bp := _p(at.x, at.y)
+		var side := _p(-facing.y * 0.35, facing.x * 0.35) - _p(0, 0)
+		draw_line(bp - side, bp + side, Color("6b4f36"), 4.0)                                  # Sitz
+		draw_line(bp - side + Vector2(0, -7), bp + side + Vector2(0, -7), Color("7d5c3f"), 3.0)  # Lehne
+		draw_line(bp - side, bp - side + Vector2(0, 4), Color("3a3a3a"), 2.0)
+		draw_line(bp + side, bp + side + Vector2(0, 4), Color("3a3a3a"), 2.0)
+
+	## Badesteg: Holzplanken auf Pfaehlen ins Wasser; tagsueber ein Angler am Kopf, abends Laterne.
+	func _steg() -> void:
+		var d: Vector2 = data.dir
+		var side := Vector2(-d.y, d.x) * 0.28
+		var L := float(data.len) + 0.3
+		var z := 0.3
+		var a := d * 0.2
+		var e := d * L
+		var deck := PackedVector2Array([_p((a - side).x, (a - side).y, z), _p((e - side).x, (e - side).y, z), _p((e + side).x, (e + side).y, z), _p((a + side).x, (a + side).y, z)])
+		var i := 0.6
+		while i < L:   # Pfaehle
+			for sg in [-1.0, 1.0]:
+				var pp: Vector2 = d * i + side * sg
+				draw_line(_p(pp.x, pp.y, 0.0) + Vector2(0, 5), _p(pp.x, pp.y, z), Color("4a3826"), 3.0)
+			i += 1.0
+		draw_colored_polygon(deck, Color("a07a50"))
+		var k := 0.4
+		while k < L:   # Plankenfugen
+			var q := d * k
+			draw_line(_p((q - side).x, (q - side).y, z), _p((q + side).x, (q + side).y, z), Color("7d5c3f"), 1.0)
+			k += 0.25
+		var lp := _p(e.x, e.y, z) + _p(side.x, side.y) - _p(0, 0)
+		draw_line(lp, lp + Vector2(0, -24), Color("2f3a40"), 2.0)
+		draw_rect(Rect2(lp + Vector2(-3, -29), Vector2(6, 6)), Color("ffe3a0") if view.night else Color("2f3a40"))
+		if not view.night and not view.rain and view.hour >= 6.0:   # Angler mit Rute und wippendem Schwimmer
+			var fp := e - side * 0.5 - d * 0.3
+			_person(fp, z, int(data.seed) + 11)
+			var hand := _p(fp.x, fp.y, z) + Vector2(2, -18)
+			var tip := hand + _p(d.x * 1.2, d.y * 1.2) - _p(0, 0) + Vector2(0, -16)
+			draw_line(hand, tip, Color("3a2a1a"), 1.5)
+			var bob := tip + Vector2(0, 30 + 2.0 * sin(view.t * 2.5))
+			draw_line(tip, bob, Color(0.9, 0.9, 0.9, 0.6), 1.0)
+			draw_circle(bob, 2.5, Color("e8553d"))
+
+	## Lagerfeuer am ruhigen Strand: Steinring und Holz immer; abends (trocken, nicht kalt) Flammen, Funken und Leute im Kreis.
+	func _feuer() -> void:
+		var c := _p(0, 0)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.6, 1.6))
+		for i in 8:
+			var ang := TAU * float(i) / 8.0
+			draw_circle(c + Vector2(cos(ang) * 11.0, sin(ang) * 5.5), 2.5, Color("8f8a84"))
+		draw_line(c + Vector2(-7, 2), c + Vector2(7, -2), Color("5a4030"), 3.0)
+		draw_line(c + Vector2(-6, -2), c + Vector2(6, 2), Color("6b4f36"), 3.0)
+		if not _fire_on():
+			_end()
+			return
+		for f in 3:
+			var fl := 10.0 + 5.0 * sin(view.t * (7.0 + f) + f * 2.0)
+			var w := 6.0 - f * 1.5
+			var col: Color = [Color("e8553d"), Color("f28b2c"), Color("ffd35a")][f]
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-w, 0), c + Vector2(sin(view.t * 5.0 + f) * 2.0, -fl - f * 2.0), c + Vector2(w, 0)]), col)
+		for sp in 4:   # Funken steigen auf
+			var k := fmod(view.t * 0.7 + sp * 0.27, 1.0)
+			draw_circle(c + Vector2(sin(k * 9.0 + sp) * 6.0, -14.0 - k * 40.0), 1.2, Color(1.0, 0.8, 0.3, 1.0 - k))
+		_end()
+		for g in 4:   # Leute im Kreis
+			var ang2 := TAU * (float(g) + 0.5) / 4.0
+			_person(Vector2(cos(ang2) * 0.8, sin(ang2) * 0.8), 0.0, int(data.seed) + g * 13)
+
+	## Innenhof (seedstabil eine von vier Nutzungen).
+	func _hof() -> void:
+		var seed: int = data.seed
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.5, 1.5))
+		match seed % 4:
+			0:   # Waescheleine, Waesche weht im Wind
+				var a := _p(-0.6, -0.2)
+				var b := _p(0.6, 0.2)
+				draw_line(a, a + Vector2(0, -20), Color("6b6b6b"), 2.0)
+				draw_line(b, b + Vector2(0, -20), Color("6b6b6b"), 2.0)
+				draw_line(a + Vector2(0, -19), b + Vector2(0, -19), Color("dddddd"), 1.0)
+				if not view.rain:
+					for i in 4:
+						var tp := (a + Vector2(0, -19)).lerp(b + Vector2(0, -19), 0.15 + 0.23 * i)
+						var sway := sin(view.t * 2.2 + i) * 2.5 * view.wind.length()
+						var col: Color = AmbientView.CLOTH[(seed / 3 + i) % AmbientView.CLOTH.size()]
+						draw_colored_polygon(PackedVector2Array([tp + Vector2(-4, 0), tp + Vector2(4, 0), tp + Vector2(4 + sway, 9), tp + Vector2(-4 + sway, 9)]), col)
+			1:   # Spielplatz: Sandkasten und Schaukel, tagsueber mit Kind
+				var sb := _p(-0.4, 0.3)
+				draw_colored_polygon(PackedVector2Array([sb + Vector2(-14, 0), sb + Vector2(0, -7), sb + Vector2(14, 0), sb + Vector2(0, 7)]), Color("e3cf98"))
+				draw_polyline(PackedVector2Array([sb + Vector2(-14, 0), sb + Vector2(0, -7), sb + Vector2(14, 0), sb + Vector2(0, 7), sb + Vector2(-14, 0)]), Color("8a6b4a"), 2.0)
+				var sw := _p(0.5, -0.3)
+				draw_line(sw + Vector2(-10, 0), sw + Vector2(-6, -26), Color("c8553d"), 2.0)
+				draw_line(sw + Vector2(10, 0), sw + Vector2(6, -26), Color("c8553d"), 2.0)
+				draw_line(sw + Vector2(-6, -26), sw + Vector2(6, -26), Color("c8553d"), 2.0)
+				var day := not view.night and not view.rain and view.hour >= 9.0 and view.hour < 19.0
+				var ang := sin(view.t * 2.4) * (0.6 if day else 0.05)
+				var seat := sw + Vector2(0, -26) + Vector2(sin(ang), cos(ang)) * 18.0
+				draw_line(sw + Vector2(0, -26), seat, Color("555555"), 1.0)
+				draw_line(seat + Vector2(-3, 0), seat + Vector2(3, 0), Color("6b4f36"), 2.0)
+				if day:
+					draw_rect(Rect2(seat + Vector2(-2, -6), Vector2(4, 5)), AmbientView.CLOTH[seed % AmbientView.CLOTH.size()])
+					draw_circle(seat + Vector2(0, -8), 1.8, AmbientView.SKIN[seed % AmbientView.SKIN.size()])
+			2:   # Gemuesebeet und Gartenhaus
+				for r in 3:
+					for k in 4:
+						var bp := _p(-0.7 + k * 0.3, -0.2 + r * 0.3)
+						draw_circle(bp, 2.6, Color("4f9a5b") if (r + k) % 2 == 0 else Color("6fb46a"))
+				var hs := _p(0.6, 0.4)
+				draw_rect(Rect2(hs + Vector2(-8, -12), Vector2(16, 12)), Color("8a6b4a"))
+				draw_colored_polygon(PackedVector2Array([hs + Vector2(-10, -12), hs + Vector2(0, -19), hs + Vector2(10, -12)]), Color("a0473a"))
+				draw_rect(Rect2(hs + Vector2(-2, -8), Vector2(4, 8)), Color("5a4030"))
+			_:   # Baum mit Bank, bei schoenem Wetter sitzt jemand
+				var tp2 := _p(0.2, -0.2)
+				draw_line(tp2, tp2 + Vector2(0, -14), Color("6b4f36"), 3.0)
+				draw_circle(tp2 + Vector2(0, -22), 12.0, Color("3f7a3a"))
+				draw_circle(tp2 + Vector2(-4, -26), 7.0, Color("5a9a4a"))
+				_bench(Vector2(-0.4, 0.4), Vector2(1, 0))
+				if view.walk >= 0.6 and not view.rain:
+					_person(Vector2(-0.6, 0.6), 0.0, seed + 5)
+		_end()
 
 	## Strandausstattung je Ort (seedstabil): Duenengras zur Landseite, Steine, Treibholz am Wasser, Laterne an der Promenade.
 	func _strand_gut() -> void:
@@ -323,8 +577,15 @@ class Spot extends Node2D:
 			draw_line(lp, lp + Vector2(0, -30), Color("2f3a40"), 2.0)
 			draw_rect(Rect2(lp + Vector2(-3, -35), Vector2(6, 5)), Color("2f3a40"))
 			if view.night:
-				draw_circle(lp + Vector2(0, -32), 26.0, Color(1.0, 0.8, 0.45, 0.16))
 				draw_circle(lp + Vector2(0, -32), 3.0, Color("ffe3a0"))
+			var wk := 0.2   # Bohlenweg durch die Duene von der Strasse zum Wasser
+			while wk < 1.3:
+				var pa := landward * wk
+				var sd := Vector2(-landward.y, landward.x) * 0.22
+				draw_line(_p((pa - sd).x, (pa - sd).y), _p((pa + sd).x, (pa + sd).y), Color("a07a50"), 3.0)
+				wk += 0.16
+			if seed % 2 == 0:
+				_bench(landward * 1.0 + Vector2(-landward.y, landward.x) * 0.7, -landward)
 
 	# ---- Figuren
 	func _at(pt: Vector2) -> void:
@@ -751,3 +1012,27 @@ class GroundOverlay extends Node2D:
 				fp += Vector2(float((sd >> (f * 3)) % 5) * 0.15 - 0.3, float((sd >> (f * 5)) % 5) * 0.15 - 0.3)
 				var fs := Iso.to_screen(fp * 32.0)
 				draw_circle(fs, 2.5, [Color("e8553d"), Color("f2c14e"), Color("d47ad1"), Color("f4f4f4")][(sd + f) % 4])
+
+
+## Abendstimmung: weiches warmes Licht ueber der Nachtfaerbung (Laternen, Steglaternen, Lagerfeuer, Terrassen am Abend).
+## Staerke folgt CityView.night_factor (Daemmerung blendet ein); nur sichtbare Orte.
+class EveningLights extends Node2D:
+	var view: AmbientView
+
+	func _draw() -> void:
+		if view == null or view.cv == null:
+			return
+		var nf: float = view.cv.night_factor
+		if nf < 0.05:
+			return
+		for s in view._spots:
+			if not s.visible:
+				continue
+			for g in s.glows():
+				var at: Vector2 = s.position + g[0]
+				var r: float = g[1]
+				var col: Color = g[2]
+				for ring in 4:
+					var f := 1.0 - float(ring) / 4.0
+					draw_circle(at, r * f, Color(col.r, col.g, col.b, 0.07 * nf))
+				draw_circle(at, 3.0, Color(col.r, col.g, col.b, 0.9 * nf))

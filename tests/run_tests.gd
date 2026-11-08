@@ -9130,6 +9130,20 @@ func test_ambient_view() -> void:
 	for i in 5:
 		A.update_view(0.1)
 	ok(A.beach >= 0.0 and A.beach <= 1.0 and A.walk > 0.0, "Wetter- und Tageszeitfaktoren gesetzt (Strand %.2f, Passanten %.2f)" % [A.beach, A.walk])
+	# Etappe 4: Stege, Lagerfeuer, Innenhoefe; Hof weicht einem Neubau
+	ok(kinds.has("steg") and kinds.has("feuer") and kinds.has("hof"), "Küste und Höfe angelegt: %s" % str(kinds.keys()))
+	var hc: Vector2i = A._courts.keys()[0]
+	s.city.building_at[s.city.idx(hc)] = 999
+	A._build_courts()
+	ok(not A._courts.has(hc), "Innenhof verschwindet, wenn dort gebaut wird")
+	s.city.building_at[s.city.idx(hc)] = -1
+	A.hour = 21.0
+	A.rain = false
+	A.temp = 18.0
+	var fire = A._spots.filter(func(sp): return sp.kind == "feuer")[0]
+	ok(not fire.glows().is_empty(), "Lagerfeuer leuchtet am Abend")
+	A.hour = 14.0
+	ok(fire.glows().is_empty(), "tagsüber kein Lagerfeuer")
 	cv.queue_free()
 
 ## Auftrag 18, Etappe 1: gemeinsame Bauprüfung. Neubau belegt die Grundfläche seines Bildes straßenseitig im Baufeld, nie Straße/Wasser/
