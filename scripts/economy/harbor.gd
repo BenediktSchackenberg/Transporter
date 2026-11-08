@@ -31,6 +31,7 @@ var stage := 1                     # Hafenstufe (1..STAGES.size())
 var town := 0                      # Ort dieses Hafens (Auftrag 17)
 # Abfertigung (Auftrag 18, Etappe 3): Ware bleibt an Bord, bis Kran und Hafenarbeiter den Posten abgesetzt haben; Ausfuhrware
 # verlaesst das Lager erst beim Verladen. Leistung je Spielminute aus verfuegbarem Personal (Arbeitgeber "hafen") und Kran.
+const APPROACH_MIN := 40.0        # Anfahrt vom Kartenrand bis zum Liegeplatz (ShipView zeigt dieselbe Bewegung)
 const RATE_PER_WORKER := 0.5      # Ladeeinheiten je Spielminute und Arbeitskraft (von Hand)
 const CRANE_FACTOR := 2.5         # mit Kran
 const MIN_STAFF := 2
@@ -197,7 +198,7 @@ func _load_out(item: String, qty: int) -> void:
 ## Je Spielminute: Kran und Hafenarbeiter arbeiten den vordersten Posten ab; ist er geschafft, wird er abgesetzt (Einfuhr: Bestand bzw.
 ## Uebergabe an Stadtlager/Bauhof) bzw. verladen (Ausfuhr). Ohne Personal kein Fortschritt (ehrlicher Grund in idle_reason()).
 func on_minute(now: float) -> void:
-	if not enabled or instant or queue.is_empty() or ship.is_empty() or ship.status != "am_kai":
+	if not enabled or instant or queue.is_empty() or not docked(now):
 		return
 	var rate := rate_per_min()
 	if rate <= 0.0:
@@ -218,6 +219,11 @@ func on_minute(now: float) -> void:
 	if queue.is_empty():
 		work_acc = 0.0
 		sim.log_event("Schiff „%s“ abgefertigt in %s: %s gelöscht, %s geladen." % [ship.name, _town_label(), _list(ship.geloescht), _list(ship.geladen)], "info")
+
+
+## Hat das Schiff angelegt (Anfahrt vorbei)? Erst dann beginnt die Abfertigung.
+func docked(now: float) -> bool:
+	return not ship.is_empty() and ship.status == "am_kai" and now >= GameCalendar.day_start(int(ship.day)) + APPROACH_MIN
 
 
 func workers() -> Array:
@@ -243,6 +249,8 @@ func current_progress() -> float:
 ## Warum gerade nicht gearbeitet wird (oder ""): ehrlich aus dem Zustand.
 func idle_reason() -> String:
 	if not queue.is_empty():
+		if not docked(sim.game_min):
+			return "Schiff legt an"
 		return "kein Personal" if workers().is_empty() else ""
 	if ship.is_empty() or ship.status != "am_kai":
 		var wait := INTERVAL_DAYS - GameCalendar.day_of(sim.game_min) % INTERVAL_DAYS

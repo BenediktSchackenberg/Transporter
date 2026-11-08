@@ -64,7 +64,7 @@ und Tourismus. Arbeit auf Branch `region` (Worktree `PTR_e`), Spiel aus `PTR_pla
 |---|---|---|
 | 1 | Platzierungsdiagnose (Daten + Ansicht), Geometrie-/Ankerkorrektur, gemeinsame Bauprüfung, Straßenprojekte ohne Überbauung | fertig (08.11.2026) |
 | 2 | Kompakter Startort, Straßenfunktionen, Viertel; Gebäudevielfalt durch die ganze Asset-Kette | weitgehend (08.11.2026) |
-| 3 | Hafenanlagen, Hafenarbeiter, Kran-Arbeitsablauf an Warenbuch und Personal | offen |
+| 3 | Hafenanlagen, Hafenarbeiter, Kran-Arbeitsablauf an Warenbuch und Personal | fertig (08.11.2026) |
 | 4 | Küste: Übergänge, Wasser, Strandausstattung, Licht, Stadtdetails | offen |
 
 ## Stand
@@ -108,3 +108,17 @@ Umgesetzt (gilt für neue Welten; bestehende Orte werden beim Laden nicht versch
 
 Offen in Etappe 2: Blockinneres (Gärten/Höfe/Wege), Straßen nach Funktion in der Grafik (Breite/Randgestaltung), Zebrastreifen der
 Kreuzungsgrafik nur an Ampelkreuzungen.
+
+### Etappe 3 (08.11.2026)
+
+- Abfertigung (`Harbor`): Ankunft → Anfahrt (`APPROACH_MIN` 40, gleich der Schiffsansicht) → Anlegen → Posten für Posten durch Kran und
+  Hafenarbeiter (`on_minute`, Leistung = Personal × 0,5 × Kranfaktor 2,5 × Hafenstufe) → Einfuhr erst beim Absetzen ins Warenbuch bzw. an
+  Stadtlager/Bauhof, Ausfuhr verlässt das Lager erst beim Verladen → Abfahrt erst nach getaner Arbeit. Ein Liegeplatz: das nächste Schiff
+  wartet auf Reede. Ehrlicher Leerlaufgrund (`idle_reason`: Schiff legt an, kein Personal, nächstes Schiff in n Tagen, abgefertigt).
+- Personal: Arbeitgeber `hafen` (Bürger der Stadt, Lohn über die normale Lohnabrechnung, genau einmal); Grundbesetzung 2, bei Engpass
+  stellt die Hafenverwaltung bis 6 ein; Kran-/Stufenausbau über die vorhandenen Hafenstufen.
+- Darstellung (`AmbientView`): Kran auf dem Anleger folgt dem aktuellen Posten (Anschlagen, Heben, Schwenken, Absetzen, leer zurück; Last
+  in Farbe der Warengruppe; Ausfuhr umgekehrt), Hafenarbeiter pendeln mit Kisten zwischen Kran und Lager, Lagerplatz mit Kistenstapeln
+  nach Bestand (Paletten bei leerem Lager), Leerlaufgrund über dem Kran; Anleger mit Fendern und Festmacherleinen beim Liegen.
+- Tests: `test_harbor_handling` (12 Prüfungen); bestehende Logikprüfungen laufen mit `Harbor.default_instant` (Sofortabfertigung) weiter.
+- Bild: `hafen_arbeit.png` (app_userdata).

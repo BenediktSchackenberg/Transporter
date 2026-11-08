@@ -176,7 +176,9 @@ func _process(_delta: float) -> void:
 			if not H.enabled:
 				continue
 			for it in ["mehl", "saatgut", "stahl"]:
-				H.ship_in("stock", "", it, 40)
+				H.ship_in("stock", "", it, 400)   # genug Ladung, damit die Abfertigung eine Weile sichtbar ist
+			H._staff_day()
+			H._staff_day()   # Grundbesetzung, damit die Abfertigung sofort sichtbar ist
 			H._arrive(GameCalendar.day_of(session.sim.game_min))
 	if session and args.has("demo-sea") and not args.has("_sea") and session.sim.sea.enabled:   # Sichtpruefung Seeverkehr: Schiffe mitten auf der Fahrt
 		args["_sea"] = true
@@ -245,6 +247,8 @@ func _process(_delta: float) -> void:
 				session.city_view.set_camera_world(focus)
 				session.follow({"kind": "mountain", "id": pid})   # Kamera bleibt am Abbau
 		if args.has("shot-ship"):   # Kamera auf den Liegeplatz des Linienschiffs
+			var H0: Harbor = session.sim.towns.harbor(0)
+			print("AUTOTEST Hafen 0: Spielminute %.1f, Schiff %s Tag %s Status %s, angelegt %s, Posten %d, Grund %s, Tagesbeginn %.1f" % [session.sim.game_min, str(H0.ship.get("name")), str(H0.ship.get("day")), str(H0.ship.get("status")), str(H0.docked(session.sim.game_min)), H0.queue.size(), H0.idle_reason(), GameCalendar.day_start(int(H0.ship.get("day", 0)))])
 			session.set_follow(false)
 			session.city_view.set_camera_world(session.city_view.ship_view.berth + Vector2(110, -110))   # nach rechts versetzt: Seitenleiste verdeckt den rechten Bildrand
 		if args.has("shot-town"):   # Kamera auf das Rathaus eines Orts (Ortskern)

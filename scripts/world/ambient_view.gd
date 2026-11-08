@@ -150,10 +150,16 @@ func _build_harbors() -> void:
 		var H: Harbor = sim.towns.harbor(k)
 		if not H.enabled:
 			continue
-		var b: Dictionary = sim.city.building(H.building)
-		if b.is_empty():
+		var lager: Dictionary = sim.city.building(H.building)
+		var port: Dictionary = cv.ship_view._ports.get(k, {})
+		if lager.is_empty() or port.is_empty():
 			continue
-		_add("kran", Vector2(float(b.x) + float(b.w) + 0.5, float(b.y) + float(b.h) * 0.5), {"town": k})
+		# Kran auf dem Anleger: Schiff liegt suedlich (berth), abgesetzt wird auf dem Anleger, gelagert am Hafenlager
+		var crane := Vector2((float(port.jx0) + float(port.jx1)) * 0.5, float(port.jy) + 0.5)
+		var berth: Vector2 = (port.berth as Vector2) / 32.0
+		var store := Vector2(float(lager.x) + float(lager.w) * 0.5, float(lager.y) + float(lager.h) + 0.6)
+		_add("hafen", crane, {"town": k, "ship": berth - crane, "land": Vector2(0.0, -0.6), "store": store - crane})
+		_add("lagerplatz", store, {"town": k})
 
 
 # ------------------------------------------------------------------ Industrie (Betriebe kommen und gehen)
@@ -261,8 +267,10 @@ class Spot extends Node2D:
 				_moewen()
 			"passanten":
 				_passanten()
-			"kran":
-				_kran()
+			"hafen":
+				_hafen()
+			"lagerplatz":
+				_lagerplatz()
 			"bergwerk":
 				_bergwerk()
 			"huette":
@@ -516,18 +524,96 @@ class Spot extends Node2D:
 			draw_line(cp + Vector2(3, -2), cp + Vector2(3, 0), Color("333333"), 1.0)
 			_end()
 
-	func _kran() -> void:
+	const GROUP_COL := {"baustoffe": Color("9a8f80"), "lebensmittel": Color("d9a441"), "getraenke": Color("4f8fd1"), "kuehlware": Color("e8f0f6"), "moebel": Color("a0673a"), "pakete": Color("c8553d"), "elektronik": Color("6a6f78")}
+
+	func _cargo_col(item: String) -> Color:
+		var a: Dictionary = Production.art(item)
+		return GROUP_COL.get(str(a.get("ladung", "pakete")), Color("c8553d"))
+
+	## Kran und Hafenarbeiter am realen Posten (Harbor.queue[0]): Anschlagen, Heben, Schwenken, Absetzen, leer zurueck; Einfuhr vom Schiff
+	## an Land, Ausfuhr umgekehrt. Ohne Posten ruht der Kran mit dem ehrlichen Grund (naechstes Schiff, kein Personal).
+	func _hafen() -> void:
 		var H: Harbor = view.sim.towns.harbor(int(data.town))
-		var busy: bool = not H.ship.is_empty() and str(H.ship.get("status", "")) == "am_kai"
+		var ship_pt: Vector2 = data.ship
+		var land_pt: Vector2 = data.land
+		var store_pt: Vector2 = data.store
+		var working: bool = not H.queue.is_empty() and H.rate_per_min() > 0.0
+		var pg := H.current_progress()
+		var head: Dictionary = H.queue[0] if not H.queue.is_empty() else {}
+		var inbound: bool = head.get("dir", "ein") == "ein"
+		var src := ship_pt if inbound else land_pt
+		var dst := land_pt if inbound else ship_pt
+		var swing := 1.0   # 0 = ueber der Quelle, 1 = ueber dem Ziel
+		var rope := 18.0
+		var loaded := false
+		if not H.queue.is_empty():
+			if pg < 0.2:
+				swing = 0.0; rope = 18.0 + pg / 0.2 * 30.0; loaded = pg > 0.15              # Anschlagen
+			elif pg < 0.35:
+				swing = 0.0; rope = 48.0 - (pg - 0.2) / 0.15 * 32.0; loaded = true           # Heben
+			elif pg < 0.65:
+				swing = (pg - 0.35) / 0.3; rope = 16.0; loaded = true                         # Schwenken
+			elif pg < 0.8:
+				swing = 1.0; rope = 16.0 + (pg - 0.65) / 0.15 * 30.0; loaded = pg < 0.78      # Absetzen
+			else:
+				swing = 1.0 - (pg - 0.8) / 0.2; rope = 18.0                                   # leer zurueck
+		# Kran: Portal auf dem Anleger, Ausleger zeigt zum Haken
 		var base := _p(0.0, 0.0)
-		var top := base + Vector2(0, -70)
-		draw_line(base + Vector2(-6, 0), top, Color("d9a32c"), 3.0)
-		draw_line(base + Vector2(6, 0), top, Color("d9a32c"), 3.0)
-		var a := sin(view.t * 0.5) * 0.9 if busy else 0.3
-		var tip := top + Vector2(cos(a), sin(a) * 0.5) * 46.0
-		draw_line(top, tip, Color("e0b23a"), 3.0)
-		draw_line(top, top - (tip - top) * 0.3, Color("e0b23a"), 3.0)
-		var hook := 18.0 + (sin(view.t * 1.0) * 10.0 if busy else 0.0)
-		draw_line(tip, tip + Vector2(0, hook), Color("333333"), 1.0)
-		if busy:
-			draw_rect(Rect2(tip + Vector2(-6, hook), Vector2(12, 7)), [Color("c8553d"), Color("3d7cc8"), Color("4f9a5b")][int(view.t / 4.0) % 3])
+		var top := base + Vector2(0, -78)
+		draw_rect(Rect2(base + Vector2(-10, -6), Vector2(20, 6)), Color("4a4a4a"))
+		draw_line(base + Vector2(-8, -6), top, Color("d9a32c"), 3.0)
+		draw_line(base + Vector2(8, -6), top, Color("d9a32c"), 3.0)
+		draw_line(base + Vector2(-5, -30), base + Vector2(5, -50), Color("b8861f"), 1.5)
+		draw_rect(Rect2(top + Vector2(-6, -8), Vector2(12, 8)), Color("e0b23a"))
+		var tip_at := src.lerp(dst, clampf(swing, 0.0, 1.0))
+		var tip := _p(tip_at.x, tip_at.y) + Vector2(0, -74)
+		draw_line(top + Vector2(0, -4), tip, Color("e0b23a"), 3.0)
+		draw_line(top + Vector2(0, -4), top - (tip - top) * 0.25, Color("e0b23a"), 3.0)   # Gegengewicht
+		draw_rect(Rect2(top - (tip - top) * 0.25 + Vector2(-5, -6), Vector2(10, 8)), Color("555555"))
+		draw_line(tip, tip + Vector2(0, rope), Color("333333"), 1.0)
+		if loaded and not head.is_empty():
+			var col := _cargo_col(str(head.item))
+			draw_rect(Rect2(tip + Vector2(-9, rope), Vector2(18, 10)), col)
+			draw_rect(Rect2(tip + Vector2(-9, rope), Vector2(18, 3)), col.lightened(0.25))
+		else:
+			draw_line(tip + Vector2(-3, rope), tip + Vector2(3, rope), Color("333333"), 2.0)
+		# Hafenarbeiter: so viele wie angestellt; bei Arbeit pendeln sie zwischen Kran und Lager (mit Kiste), sonst stehen sie am Lager
+		var n := mini(H.workers().size(), 6)
+		for w in n:
+			if working:
+				var k := fmod(view.t * 0.18 + float(w) * 0.29, 1.0)
+				var u := k * 2.0 if k < 0.5 else 2.0 - k * 2.0
+				var at := (land_pt + Vector2(0.3 * w - 0.6, 0.0)).lerp(store_pt + Vector2(0.4 * w - 0.8, 0.0), u)
+				_person(at, 0.0, 3000 + w * 17, view.t * 7.0 + w)
+				var carry := (k < 0.5) == inbound
+				if carry:
+					var cp := _p(at.x, at.y) + Vector2(-4, -24)
+					draw_rect(Rect2(cp, Vector2(8, 6)), _cargo_col(str(head.get("item", ""))))
+			else:
+				_person(store_pt + Vector2(0.45 * w - 1.0, 0.5), 0.0, 3000 + w * 17)
+		# Leerlaufgrund ueber dem Kran
+		var why := H.idle_reason()
+		if why != "" and not view.night:
+			draw_string(ThemeDB.fallback_font, top + Vector2(-60, -20), why, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.85))
+
+	## Lagerplatz am Hafenlager: Kistenstapel nach Bestand (je Stapel 25 Ladeeinheiten, hoechstens 12); leer = nur Paletten.
+	func _lagerplatz() -> void:
+		var H: Harbor = view.sim.towns.harbor(int(data.town))
+		if Engine.get_process_frames() % 60 == 0 or not data.has("units"):
+			var units := 0
+			for l in view.sim.stock.lots.values():
+				if int(l.loc) == H.building:
+					units += H.units_of(str(l.item), int(l.qty))
+			data["units"] = units
+		var stacks := clampi(int(data.units) / 25, 0, 12)
+		for i in 6:   # Palettenreihe (immer da)
+			var pp := _p(-1.2 + float(i % 3) * 0.8, float(i / 3) * 0.7)
+			draw_colored_polygon(PackedVector2Array([pp + Vector2(-10, 0), pp + Vector2(0, -5), pp + Vector2(10, 0), pp + Vector2(0, 5)]), Color("9a7b52"))
+		for i in stacks:
+			var sp := _p(-1.2 + float(i % 3) * 0.8, float((i / 3) % 2) * 0.7)
+			var h := 1 + i / 6
+			for lvl in h:
+				var cp := sp + Vector2(0, -8 - lvl * 9)
+				var col := Color("c8553d") if (i + lvl) % 3 == 0 else (Color("3d7cc8") if (i + lvl) % 3 == 1 else Color("b08a5a"))
+				draw_rect(Rect2(cp + Vector2(-9, 0), Vector2(18, 9)), col)
+				draw_rect(Rect2(cp + Vector2(-9, 0), Vector2(18, 2)), col.lightened(0.3))

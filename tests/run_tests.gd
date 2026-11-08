@@ -9119,7 +9119,7 @@ func test_ambient_view() -> void:
 	var kinds := {}
 	for sp in A._spots:
 		kinds[sp.kind] = true
-	ok(kinds.has("strand") and kinds.has("boot") and kinds.has("kran") and kinds.has("passanten"), "Orte angelegt: %s" % str(kinds.keys()))
+	ok(kinds.has("strand") and kinds.has("boot") and kinds.has("hafen") and kinds.has("lagerplatz") and kinds.has("passanten"), "Orte angelegt: %s" % str(kinds.keys()))
 	var bld: Dictionary = s.city.buildings.filter(func(b): return int(b.w) >= 2)[3]
 	var bz: Dictionary = s.biz.create(0, "stahlwerk", int(bld.id), "", "aktiv")
 	A._scan_business()
@@ -9208,8 +9208,11 @@ func test_harbor_handling() -> void:
 	H._arrive(even)
 	ok(H.ship.status == "am_kai" and not H.queue.is_empty(), "Schiff liegt am Kai, Ladung in der Abfertigungsliste")
 	ok(H.available("mehl") == 0, "Ware ist noch an Bord, nicht im Lager")
+	ok(H.idle_reason() == "Schiff legt an", "Abfertigung erst nach dem Anlegen (%s)" % H.idle_reason())
+	var t0 := GameCalendar.day_start(even) + Harbor.APPROACH_MIN
+	s.game_min = t0
 	for i in 60:
-		H.on_minute(s.game_min + i)
+		H.on_minute(t0 + i)
 	ok(H.available("mehl") == 0 and H.idle_reason() == "kein Personal", "ohne Personal kein Umschlag (Grund: %s)" % H.idle_reason())
 	H._staff_day()
 	H._staff_day()
@@ -9217,7 +9220,7 @@ func test_harbor_handling() -> void:
 	var r2 := H.rate_per_min()
 	var minutes := 0
 	while not H.queue.is_empty() and minutes < 2000:
-		H.on_minute(s.game_min + minutes)
+		H.on_minute(t0 + 60 + minutes)
 		minutes += 1
 	ok(H.queue.is_empty() and H.available("mehl") >= 120, "nach %d Minuten abgesetzt, Mehl im Hafenlager" % minutes)
 	H._staff_day()
@@ -9237,8 +9240,9 @@ func test_harbor_handling() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(d)))
 	ok(s2.harbor.queue.size() == H.queue.size(), "Speichern/Laden erhaelt die laufende Abfertigung")
 	minutes = 0
+	var t1 := GameCalendar.day_start(even + 2) + Harbor.APPROACH_MIN
 	while not H.queue.is_empty() and minutes < 2000:
-		H.on_minute(s.game_min + minutes)
+		H.on_minute(t1 + minutes)
 		minutes += 1
 	ok(s.stock.qty("schlacke", "X0", H.building) == 0 and int(H.ship.geladen.get("schlacke", 0)) == 30, "Schlacke verladen")
 	ok(s.stock.balance_error() == bal0 and identity_ok(s), "Warenbilanz und Geld stimmen")

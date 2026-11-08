@@ -5,7 +5,7 @@ extends Node2D
 ## Liest nur aus der Simulation; alle Bewegungen sind Funktionen der Spieluhr. Prozedural gezeichnet (ShipNode): echter Rumpf mit Bug,
 ## Wasserlinie und Aufbauten, gedreht in Fahrtrichtung; vier Bauarten (Container, Schuettgut, Kreuzfahrt, Autotransporter).
 
-const SAIL_MIN := 40.0            # Spielminuten fuer An- und Abfahrt des Linienschiffs
+const SAIL_MIN := Harbor.APPROACH_MIN   # Spielminuten fuer An- und Abfahrt des Linienschiffs (= Anlegen fuer die Abfertigung)
 const LEN := 7.0                  # Anlegerlaenge in Feldern (Liegeplatz)
 const BEAM := 2.0
 const STEP := 18.0                # Bildschirmhoehe je Hoehenstufe
@@ -39,6 +39,7 @@ func setup(simulation: Simulation) -> void:
 		liner.visible = false
 		add_child(liner)
 		info["liner"] = liner
+		info["jetty"] = jetty
 		_ports[int(k)] = info
 	if _ports.has(0):
 		berth = _ports[0].berth
@@ -88,6 +89,13 @@ func update_view(_delta: float) -> void:
 func _update_liner(k: int, now: float, night: bool) -> void:
 	var info: Dictionary = _ports[k]
 	var node: ShipNode = info.liner
+	var H0: Harbor = sim.towns.harbor(k) if sim.towns != null and sim.towns.count() > 0 else sim.harbor
+	var jt = info.get("jetty")
+	if jt != null:
+		var dk: bool = H0.docked(now)
+		if dk != jt.docked:
+			jt.docked = dk
+			jt.queue_redraw()
 	var H: Harbor = sim.towns.harbor(k) if sim.towns != null and sim.towns.count() > 0 else sim.harbor
 	var sh: Dictionary = H.ship
 	if sh.is_empty():
@@ -248,6 +256,7 @@ func _ease(k: float) -> float:
 
 
 class JettyNode extends Node2D:
+	var docked := false
 	var from_x := 0.0
 	var to_x := 0.0
 	var y := 0.0
@@ -272,6 +281,14 @@ class JettyNode extends Node2D:
 			k += 0.5
 		for px in [from_x + 2.0, from_x + 5.0, to_x - 0.5]:   # Poller
 			draw_line(_s(px, y + 0.85, z), _s(px, y + 0.85, z + 0.5), Color("2a2a2a"), 6.0)
+		var fx := from_x + 0.6
+		while fx < to_x - 0.3:   # Fender (Autoreifen) an der Kaikante zum Liegeplatz
+			draw_circle(_s(fx, y + 1.02, z - 0.35), 4.0, Color("1c1c1c"))
+			draw_circle(_s(fx, y + 1.02, z - 0.35), 1.8, Color("3a3a3a"))
+			fx += 1.4
+		if docked:   # Festmacherleinen vom Poller zum Schiff
+			for px in [from_x + 2.0, to_x - 0.5]:
+				draw_line(_s(px, y + 0.85, z + 0.4), _s(px + (0.6 if px > from_x + 3.0 else -0.6), y + 1.8, z + 0.2), Color("d8c9a3"), 1.5)
 
 
 ## Ein Schiff, prozedural in Isometrie: Rumpf als Prisma ueber dem Grundriss (Bug spitz, Heck stumpf), sichtbare Seiten per
