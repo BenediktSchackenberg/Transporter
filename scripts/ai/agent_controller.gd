@@ -48,6 +48,7 @@ var _events: Array = []
 # mehrere Spieltage; vorher waren fast alle angenommenen Auftraege bei Ankunft der Antwort weg). Aktionen fuer ein gerade gekauftes,
 # noch nicht geliefertes Fahrzeug warten, bis es da ist.
 const HOLD_MAX := 8                 # hoechstens so viele Auftraege je Anfrage vormerken
+const HOLD_NO_VEHICLE := 4            # ohne machbares Angebot: so viele trotzdem vormerken
 const HOLD_GAME_MIN := 600.0        # Obergrenze der Vormerkung (5 Spieltage), falls keine Antwort kommt
 const AFTER_BUY_GAME_MIN := 1440.0  # Obergrenze; solange der Kaufbesuch der Figur noch aussteht, warten die Aktionen
 var _held: Array = []
@@ -623,7 +624,12 @@ func from_dict(d: Dictionary) -> void:
 func _hold_market(obs: Dictionary) -> void:
 	_release_holds(_held)
 	_held.clear()
-	for m in obs.get("markt", []).filter(func(x): return bool(x.get("machbar", true))).slice(0, HOLD_MAX):
+	var cands: Array = obs.get("markt", []).filter(func(x): return bool(x.get("machbar", true))).slice(0, HOLD_MAX)
+	if cands.is_empty():
+		# noch kein passendes Fahrzeug (z. B. erster Zug): Modelle kaufen oft eins und nehmen im selben Zug Auftraege an -
+		# die ersten Angebote trotzdem vormerken, sonst sind sie weg, bis das Fahrzeug da ist
+		cands = obs.get("markt", []).slice(0, HOLD_NO_VEHICLE)
+	for m in cands:
 		var k: Contract = sim.contracts.get(str(m.get("id", "")))
 		if k == null or k.status != "open" or k.held_by_other(cid, sim.game_min):
 			continue

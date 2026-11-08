@@ -8949,7 +8949,7 @@ func test_learnlist_round2() -> void:
 	ok(acts.is_empty(), "kein vergeblicher take_loan")
 	# 7) Rat lehnt ab -> Ruhezeit fuer neue Quartiere
 	var M: Mayor = s.mayor
-	M.plans["QX"] = {"id": "QX", "name": "Test", "status": "abgelehnt", "zone": "gewerbe", "parcels": [], "vote": "Abstimmung 3:6", "day": GameCalendar.day_of(s.game_min)}
+	M.plans["QX"] = {"id": "QX", "name": "Test", "status": "abgelehnt", "zone": "wohnen", "parcels": [], "vote": "Abstimmung 3:6", "day": GameCalendar.day_of(s.game_min)}
 	var pids: Array = s.parcels.search({"zone": "wohnen", "limit": 3}).map(func(p): return p.id)
 	var rq: Dictionary = M.execute({"action": "designate_quarter", "name": "Neu", "zone": "wohnen", "parcel_ids": pids, "reason": "t"})
 	ok(not rq.ok and str(rq.msg).contains("frühestens"), "Quartier waehrend der Ruhezeit abgewiesen: %s" % str(rq.msg).left(80))
