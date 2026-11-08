@@ -63,7 +63,7 @@ und Tourismus. Arbeit auf Branch `region` (Worktree `PTR_e`), Spiel aus `PTR_pla
 | # | Inhalt | Stand |
 |---|---|---|
 | 1 | Platzierungsdiagnose (Daten + Ansicht), Geometrie-/Ankerkorrektur, gemeinsame Bauprüfung, Straßenprojekte ohne Überbauung | fertig (08.11.2026) |
-| 2 | Kompakter Startort, Straßenfunktionen, Viertel; Gebäudevielfalt durch die ganze Asset-Kette | offen |
+| 2 | Kompakter Startort, Straßenfunktionen, Viertel; Gebäudevielfalt durch die ganze Asset-Kette | weitgehend (08.11.2026) |
 | 3 | Hafenanlagen, Hafenarbeiter, Kran-Arbeitsablauf an Warenbuch und Personal | offen |
 | 4 | Küste: Übergänge, Wasser, Strandausstattung, Licht, Stadtdetails | offen |
 
@@ -90,3 +90,21 @@ Behoben:
 - **Diagnoseansicht** (F8, `scripts/world/placement_overlay.gd`, Autotest `--shot-placement`): Baufeld, belegte Zellen, Bildgrundfläche,
   Eingang, Lieferzugang, Straßen/Gehwege, Asset-Schlüssel.
 - Test `test_building_placement` (17 Prüfungen).
+
+### Etappe 2 (08.11.2026)
+
+Asset-Kette geprüft: 8 Wohnhaus-Bauformen (`tools/vox/residential.py`: Satteldach mit Garage, Bungalow, moderner Kubus, L-Haus, schmales
+Stadthaus, Bauernhaus mit Scheune, Cottage mit Erker, …) je 6 Material-/Farbvarianten (`house<n>s<k>`), Manifest-Grundflächen passen
+(Diagnose `probe_placement`). Die Monotonie kam aus (a) Neubauten immer Variante 0 (Etappe 1 behoben) und (b) zufälliger Streuung der
+Startbebauung über ein großes Rechteck.
+
+Umgesetzt (gilt für neue Welten; bestehende Orte werden beim Laden nicht verschoben):
+- Kompakter Kern: Wohnhäuser von der Ortsmitte nach außen (Radius wächst mit jedem Haus), Freiflächen vor allem am Rand.
+- Marktplatz vor dem Rathaus (Pflaster, nicht bebaubar, Bänke, Laterne).
+- Ortspalette: je Ort 3 der 6 Material-/Farbvarianten, alle 8 Bauformen; nie dasselbe Modell wie ein Nachbar (`CityGenerator._variant`).
+- Ampeln nur an Vierwege-Kreuzungen ≤ 12 Felder von einer Ortsmitte (`CityData.signals`); Fahrzeuge halten nur dort.
+- Autotest `--shot-town=<k>` (Kamera aufs Rathaus).
+- Bilder: `town_vorher.png`/`town_nachher.png`, `core_nachher.png` (app_userdata).
+
+Offen in Etappe 2: Blockinneres (Gärten/Höfe/Wege), Straßen nach Funktion in der Grafik (Breite/Randgestaltung), Zebrastreifen der
+Kreuzungsgrafik nur an Ampelkreuzungen.

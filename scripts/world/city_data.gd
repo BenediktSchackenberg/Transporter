@@ -15,6 +15,7 @@ var trees: Array = []               # [Vector2i, variante]
 var lamps: Array = []               # Vector2i
 var benches: Array = []             # Vector2i
 var intersections: Array = []       # Vector2i
+var signals := {}                   # Vector2i -> true: Kreuzungen mit Ampel (Region: nur Vierwege-Kreuzungen nahe der Ortsmitte)
 var depot_sites: Array = []         # Gebaeude-IDs der Depotstandorte
 var start_depots: Array = []        # Gebaeude-IDs, Reihenfolge = Spieler 0..3
 var world := "stadt"                # Weltart: stadt (Rasterstadt) | kueste (Kuestenort, Auftrag 15)

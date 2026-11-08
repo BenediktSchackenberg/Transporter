@@ -332,11 +332,55 @@ func _free(r: Rect2i) -> bool:
 	return true
 
 
+## Ampeln (Auftrag 18): in der Region nur an Vierwege-Kreuzungen hoechstens 12 Felder von einer Ortsmitte (Hauptstrasse, Kern);
+## kleine Dorfkreuzungen und Einmuendungen bleiben ohne Ampel. Andere Welten: wie bisher an jeder Kreuzung.
+## Variante beim Weltbau: Haeuser aus der Farb-/Materialpalette des Orts (palette: Varianten-Endungen), alle Bauformen gemischt,
+## nie dasselbe Modell wie ein Nachbar (6 Felder) - eine Wohnstrasse besteht nicht aus identischen Haeusern.
+var palette: Array = []
+func _variant(type: String, sprites: Array, r: Rect2i) -> String:
+	var pool := sprites
+	if type == "house" and not palette.is_empty():
+		pool = sprites.filter(func(sp): return _suffix(str(sp)) in palette)
+		if pool.is_empty():
+			pool = sprites
+	var near := {}
+	for y in range(r.position.y - 6, r.end.y + 6, 2):
+		for x in range(r.position.x - 6, r.end.x + 6, 2):
+			var q := Vector2i(x, y)
+			if c.inside(q) and c.building_at[c.idx(q)] >= 0:
+				near[str(c.buildings[c.building_at[c.idx(q)]].sprite)] = true
+	var start := rng.randi() % pool.size()
+	for i in pool.size():
+		var sp := str(pool[(start + i * 3) % pool.size()])
+		if not near.has(sp):
+			return sp
+	return str(pool[start])
+
+
+func _suffix(sp: String) -> String:
+	var i := sp.rfind("s")
+	return sp.substr(i) if i > 0 and sp.substr(i + 1).is_valid_int() else ""
+
+
+func _signals() -> void:
+	c.signals.clear()
+	var centers: Array = []
+	var tw = get("towns_out")
+	if c.world == "region" and tw is Array:
+		for t in tw:
+			centers.append(Vector2i(int(t.center[0]), int(t.center[1])))
+	for p in c.intersections:
+		if centers.is_empty():
+			c.signals[p] = true
+		elif c.road_mask(p) == 15 and centers.any(func(ct): return absi(p.x - ct.x) + absi(p.y - ct.y) <= 12):
+			c.signals[p] = true
+
+
 func _place(type: String, r: Rect2i, role: String = "", name: String = "") -> int:
 	var info: Array = TYPES[type]
 	var id := c.buildings.size()
 	var sprites: Array = info[0]
-	var b := {"id": id, "type": type, "sprite": sprites[rng.randi() % sprites.size()],
+	var b := {"id": id, "type": type, "sprite": _variant(type, sprites, r),
 		"x": r.position.x, "y": r.position.y, "w": r.size.x, "h": r.size.y,
 		"district": c.district_of(r.position), "in": info[3], "out": info[4],
 		"role": role if role != "" else ("customer" if not (info[3].is_empty() and info[4].is_empty()) else "decor"),
@@ -612,6 +656,7 @@ func _finish() -> void:
 					c.lamps.append(p)
 			elif c.g(p) == G.GRASS and c.blocked[c.idx(p)] == 0 and rng.randf() < 0.012 and c.district_of(p) != 0:
 				_tree(p)
+	_signals()
 	_roads_connected()
 	# Zugaenge erst nach Baeumen/Laternen bestimmen, damit sie im Fussnetz liegen
 	# Gebaeudezugaenge: naechste Strassenzelle (Fahrzeuge) und Gehwegzelle (Figuren) im zusammenhaengenden Fussnetz

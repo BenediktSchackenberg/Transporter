@@ -446,6 +446,8 @@ func _build_decor() -> void:
 		lights_layer.add_child(g)
 		_lit_nodes.append(g)
 	for p in c.intersections:
+		if not c.signals.is_empty() and not c.signals.has(p):
+			continue   # Dorfkreuzung ohne Ampel
 		var m := c.road_mask(p)
 		var s := _prop("d_light_red", Vector2(p.x * 32 + 5, p.y * 32 + 5), decor_node)
 		_traffic_lights.append([s, p, true])

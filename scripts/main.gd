@@ -247,6 +247,10 @@ func _process(_delta: float) -> void:
 		if args.has("shot-ship"):   # Kamera auf den Liegeplatz des Linienschiffs
 			session.set_follow(false)
 			session.city_view.set_camera_world(session.city_view.ship_view.berth + Vector2(110, -110))   # nach rechts versetzt: Seitenleiste verdeckt den rechten Bildrand
+		if args.has("shot-town"):   # Kamera auf das Rathaus eines Orts (Ortskern)
+			var th: Dictionary = session.sim.city.building(int(session.sim.towns.get_t(int(args["shot-town"])).town_hall))
+			session.set_follow(false)
+			session.city_view.set_camera_world(Vector2(float(th.x) * 32.0 + 80.0, float(th.y) * 32.0 + 80.0))
 		if args.has("shot-placement"):   # Diagnoseansicht Platzierung einschalten
 			session.city_view.placement_overlay.visible = true
 		if args.has("shot-ambient"):   # Kamera auf das erste Kartenleben-Element einer Art (strand, boot, bergwerk, huette, traktor, passanten, kran, terrasse)

@@ -987,7 +987,7 @@ func _is_blocked(m: Mover) -> bool:
 	if nt != cur and city.road_mask(nt) in [7, 11, 13, 14, 15] and city.road_mask(cur) not in [7, 11, 13, 14, 15]:
 		var dist := m.pos.distance_to(city.tile_center(nt))
 		var dir := Vector2(nt - cur)
-		if dist > 14.0 and dist < 30.0 and not light_green(nt, absf(dir.x) > absf(dir.y)):
+		if dist > 14.0 and dist < 30.0 and (city.signals.is_empty() or city.signals.has(nt)) and not light_green(nt, absf(dir.x) > absf(dir.y)):
 			return true
 	if m.wait_time > 6.0:
 		m.wait_time = 0.0
