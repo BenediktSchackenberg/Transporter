@@ -9024,11 +9024,18 @@ func test_industry_tempo() -> void:
 		ok(str(st.get("schritt", "")) == "zufahrt", "Zufahrt parallel zum laufenden Abbauantrag (%s)" % str(st.get("schritt", "-")))
 		s.mining.permits[ore].status = "genehmigt"
 		ok(s.founders.opportunities().any(func(x): return x.branche == "stahlwerk"), "Stahlwerk-Chance schon bei genehmigtem Eisenerz-Abbau")
+		var M: Mayor = s.towns.mayor(s.towns.of_parcel(ore))
+		var par: Dictionary = s.parcels.parcel(ore).duplicate()
+		par["zone"] = "wohnen"
+		ok(M.business_permit(miner.id, par, "bergwerk").ok, "Bergwerk mit Abbaurecht auch auf Wohnflaeche genehmigt (Lagerstaette ist ortsgebunden)")
+		ok(not M.business_permit(miner.id, par, "stahlwerk").ok, "andere Industrie im Wohngebiet weiter abgelehnt")
 	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
 	ok(obs.has("chancen") and obs.chancen is Array, "Beobachtung enthaelt chancen")
 	ok(obs.chancen.is_empty() or int(obs.chancen[0].kosten) >= 0, "chancen mit Gruendungskosten: %s" % str(obs.chancen.map(func(x): return x.branche)))
 	var ctl := AgentController.new()
 	ctl.setup_for_test(s, 0)
 	ctl.config.provider = "ollama"
+	ok(ActionExecutor.normalize({"action": "found_business(branche=\"baeckerei\", reason=\"Luecke (57 EW),
+Kosten 18k\")"}).action == "found_business", "Funktionsschreibweise mit Zeilenumbruch und Klammern im Text")
 	ok(ctl.system_prompt().contains("UNTERNEHMER") and ctl.system_prompt().contains("found_business"), "Systemprompt fuer lokale Modelle: Unternehmer und found_business")
 	ctl.free()

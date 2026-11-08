@@ -1007,6 +1007,11 @@ const INDUSTRY := ["bergwerk", "kokerei", "stahlwerk", "elektrostahlwerk", "schl
 func business_permit(cid: int, parcel: Dictionary, branch: String) -> Dictionary:
 	var zone := str(parcel.get("zone", ""))
 	var ok := zone not in ["gruen", "korridor"] and not (branch in INDUSTRY and zone in ["wohnen", "mischgebiet"])
+	# Bergwerk: das genehmigte Abbaurecht dieser Firma auf genau dieser Lagerstaette ist die Genehmigung (das Bergwerk kann nur dort stehen;
+	# vorher lehnte das Bauamt Lagerstaetten im Wohngebiet immer wieder ab und die Kette blieb stehen)
+	var pm: Dictionary = sim.mining.permits.get(str(parcel.get("id", "")), {})
+	if branch == "bergwerk" and not pm.is_empty() and pm.status == "genehmigt" and int(pm.cid) == cid:
+		ok = true
 	var who: String = sim.company(cid).company_name if sim.company(cid) != null else "C%d" % cid
 	var foreign: bool = sim.company(cid) != null and int(sim.company(cid).home_town) != town
 	var msg := "Bauamt %s %s %s für %s auf %s (%s%s)." % [town_label(), "genehmigt" if ok else "lehnt ab:", Businesses.branches().get(branch, {}).get("label", branch), who,

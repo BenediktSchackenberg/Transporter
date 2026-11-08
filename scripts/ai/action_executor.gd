@@ -288,7 +288,7 @@ static func normalize(action: Dictionary) -> Dictionary:
 ## -> Aktionsname plus Parameter (Werte in Klammern ergaenzen fehlende Schluessel; Zahlen werden Zahlen).
 static func _unwrap_call(a: Dictionary) -> void:
 	var raw := str(a.get("action", a.get("type", ""))).strip_edges()
-	var m := RegEx.create_from_string("^([A-Za-z_][A-Za-z0-9_]*)\\s*\\((.*)\\)\\s*;?$").search(raw)
+	var m := RegEx.create_from_string("(?s)^([A-Za-z_][A-Za-z0-9_]*)\\s*\\((.*)\\)\\s*;?$").search(raw)   # (?s): Begruendungen mit Zeilenumbruch
 	if m == null:
 		return
 	a["action"] = m.get_string(1)

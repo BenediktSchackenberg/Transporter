@@ -100,6 +100,10 @@ func decide(pid: String, approve: bool, pct: float, reason: String, by: String) 
 		return {"ok": true, "msg": "Abbauantrag %s abgelehnt." % pid, "ref": pid}
 	p.status = "genehmigt"
 	p.abgabe = clampf(pct, ROYALTY_MIN, ROYALTY_MAX)
+	var parcel: Dictionary = sim.parcels.parcel(pid)
+	if not parcel.is_empty() and str(parcel.get("zone", "")) != "industrie":
+		parcel.zone = "industrie"   # Abbauflaeche: mit dem Abbaurecht als Industrieflaeche ausgewiesen
+		sim.parcels.touch(pid)
 	sim.log_event("%s genehmigt %s den Abbau auf %s, Förderabgabe %d %% an die Stadt." % [by, c.company_name, pid, int(round(float(p.abgabe) * 100.0))], "good", int(p.cid))
 	sim.activity.add("buergermeister", -1, "stadt", "Abbaurecht %s für %s" % [pid, c.company_name], "Förderabgabe %d %%" % int(round(float(p.abgabe) * 100.0)), _cell(pid))
 	return {"ok": true, "msg": "Abbau auf %s genehmigt (Förderabgabe %d %%)." % [pid, int(round(float(p.abgabe) * 100.0))], "ref": pid}
