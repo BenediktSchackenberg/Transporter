@@ -145,12 +145,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	end_screen.visible = false
 	ui.add_child(end_screen)
 	end_screen.menu_pressed.connect(back_to_menu)
-	for n in ["click", "cash", "message", "alert", "horn", "sabotage", "deal", "end"]:
-		var pl := AudioStreamPlayer.new()
-		pl.stream = load("res://assets/sfx/%s.wav" % n)
-		pl.volume_db = -14.0 if n in ["cash", "message"] else -9.0
-		add_child(pl)
-		_sounds[n] = pl
+	# Toene abgeschaltet (Benedikt, 08.11.2026): keine Soundplayer, play_sound bleibt damit stumm.
 	sim.sfx.connect(play_sound)
 	sim.logged.connect(_on_logged)
 	if not loaded.is_empty():
