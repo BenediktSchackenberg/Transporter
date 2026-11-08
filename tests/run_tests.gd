@@ -4819,7 +4819,7 @@ func test_city_depot() -> void:
 		var it: Dictionary = CityGoods.get_item(id)
 		complete = complete and it.min <= it.reorder and it.reorder <= it.target and it.target <= it.cap and it.crit >= 1 and it.unit != "" and CityGoods.ZONES.has(it.zone)
 	ok(complete, "Mindest-, Melde-, Ziel- und Kapazitätsbestand je Artikel stimmig")
-	ok(D.stock_of("schotter") == int(CityGoods.get_item("schotter").target * 0.7) and ST.of_owner("P0").size() > 60, "Anfangsbestand im Eigentum der Stadt")
+	ok(D.stock_of("schotter") == int(CityGoods.get_item("schotter").target) and ST.of_owner("P0").size() > 60, "Anfangsbestand (voller Zielbestand) im Eigentum der Stadt")
 	ok(identity_ok(s), "Geld und Waren erhalten (Start)")
 	# Reservierung verhindert doppelte Verkaeufe
 	var free0: int = ST.available("holz", "T0", s.trader.bauhof)
@@ -4887,10 +4887,11 @@ func test_city_depot() -> void:
 	var miss := D.reserve_for_project("P9", need)
 	ok(miss.is_empty() and D.project_complete("P9"), "Material für Projekt reserviert")
 	var free_before: int = D.stock_of("schotter")
-	ok(ST.reserved("schotter", "P0", D.building) == 40, "reservierte Menge Schotter (40)")
+	var sch: int = int(CityDepot.PROJECT_MATERIAL.strasse.schotter) * 2
+	ok(ST.reserved("schotter", "P0", D.building) == sch, "reservierte Menge Schotter (%d)" % sch)
 	var used := D.consume_project("P9", "Baufirma K0")
-	ok(int(used.get("schotter", 0)) == 40 and D.issues.size() >= 1 and D.issues[-1].mode == "ueberlassen", "Auftragsmaterial verbraucht und als überlassen protokolliert")
-	ok(ST.reserved("schotter", "P0", D.building) == 0 and D.on_hand("schotter") == int(CityGoods.get_item("schotter").target * 0.7) - 40, "Bestand um die verwendete Menge gesunken")
+	ok(int(used.get("schotter", 0)) == sch and D.issues.size() >= 1 and D.issues[-1].mode == "ueberlassen", "Auftragsmaterial verbraucht und als überlassen protokolliert")
+	ok(ST.reserved("schotter", "P0", D.building) == 0 and D.on_hand("schotter") == int(CityGoods.get_item("schotter").target) - sch, "Bestand um die verwendete Menge gesunken")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.city_depot.orders.size() == D.orders.size() and s2.city_depot.on_hand("leitkegel") == D.on_hand("leitkegel"), "Lager und Bestellungen nach Laden")
 	ok(identity_ok(s2), "Geld und Waren nach Laden erhalten")
@@ -8830,7 +8831,7 @@ func test_region_town_growth() -> void:
 	s.towns.mayor(k).waiting = 4
 	s.construction._developer_town(k)
 	var apps: Array = s.permits.apps.values().filter(func(a): return a.applicant == Construction.DEVELOPER and s.towns.of_parcel(str(a.parcel)) == k)
-	ok(apps.size() == 1 and s.parcels.parcel(str(apps[0].parcel)).zone == "mischgebiet", "Bautraeger stellt Bauantrag im Mischgebiet")
+	ok(apps.size() >= 1 and apps.all(func(a): return s.parcels.parcel(str(a.parcel)).zone == "mischgebiet"), "Bautraeger stellt Bauantraege im Mischgebiet (%d)" % apps.size())
 	# Stadtlager: zwei Projekte brauchen denselben Artikel -> eine Bestellung deckt beide samt Ausschussreserve
 	var D: CityDepot = s.towns.depot(1)
 	var base := D.stock_of("schotter")

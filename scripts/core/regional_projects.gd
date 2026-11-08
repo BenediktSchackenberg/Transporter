@@ -16,6 +16,7 @@ const COST_BASE := 4000.0
 const COST_CELL := 140.0
 const CELLS_PER_DAY := 12
 const MATERIAL_CELL := {"schotter": 2, "kies": 1}
+const MATERIAL_FACTOR := 0.35   # Wachstum: Schotterstrasse braucht gut ein Drittel der frueheren Menge
 
 var sim
 var items := {}        # "R<n>" -> {id, kind, from, to, initiator, shares: {town: Anteil 0..1}, votes: {town: offen|zugestimmt|abgelehnt},
@@ -156,7 +157,7 @@ func _try_start(r: Dictionary) -> void:
 	var M: Mayor = sim.towns.mayor(int(r.initiator))
 	var mat := {}
 	for it in MATERIAL_CELL:
-		mat[it] = int(MATERIAL_CELL[it]) * r.cells.size()
+		mat[it] = int(ceil(float(MATERIAL_CELL[it]) * r.cells.size() * MATERIAL_FACTOR))
 	var prj: Dictionary = M.add_works_project("verbindung", r.id, float(r.cost), int(r.days), mat, "Gemeinschaftsprojekt %s" % r.id)
 	# add_works_project hat die vollen Kosten beim Initiator reserviert: auf die Anteile umlegen
 	M.commitments = maxf(0.0, M.commitments - float(r.cost))

@@ -233,3 +233,30 @@ Diagnose `tests/probe_closures.gd` (Seed 21, 120 Tage):
   Restaurantterrassen mit Gaesten, Laternenlicht nachts.
 - Autotest: `--demo-ambient --shot-ambient=strand|boot|bergwerk|huette|traktor|passanten|kran|terrasse`; Diagnose `tests/probe_ambient.gd`.
 - Offen: Autobahn (Verkehrszaehlung, genehmigte Projekte mit Fahrspuren, Anschlussstellen und Kreuzungen) ist noch nicht umgesetzt.
+
+
+## Stadtwachstum (08.11.2026)
+
+Anlass: In einer Partie wuchsen die Städte in 63 Spieltagen von 164 auf 179 Gebäude, praktisch ohne neue Straßen. Die Kette
+Quartier → Rat → Erschließung → Material → Grundstück → Bauträger → Haus war an jeder Stelle zu langsam. Messung mit
+`tests/probe_town_growth.gd -- --days=60` (Regel-KI, Seed 21; zeigt Gebäude/Straßen/Einwohner, Bauvorhaben je Status, verlorene Tage,
+Antrag/Start/Ende).
+
+| Engpass | Ursache | Änderung |
+|---|---|---|
+| Baustoffe der Städte 2–4 kamen nie an | Nur der Flughafen von Stadt 1 wurde jede Minute bearbeitet | alle Flughäfen ticken (`simulation.gd`) |
+| Erschließung wartete 20–40 Tage auf Material | sehr große Mengen, Transportaufträge passten in kein Fahrzeug | `PROJECT_MATERIAL` und Schotter je Feld auf ~⅓, voller Anfangsbestand, Transportauftrag ≤ 18 Einheiten |
+| Baubeginn 12–30 Tage nach Vergabe | drei Baufirmen und eine Bauverwaltung für vier Städte, +12 Tage je Überlast, Termin kaum bewertet | Region: Kapazität der Stadt-Baufirmen und der Bauverwaltung × Städte, Überlast +4 Tage, Termin zählt 0,03 je Tag, KI-Bürgermeister-Frist 4 statt 12 Tage |
+| Bautrupps verloren Tage | Fahrt je Bauphase bis 90 Spielminuten | Region: Fahrzeit × 0,35, Hausbaumaterial × 0,4, bis zu zwei Bauphasen je Tag |
+| Bauträger pleite nach 40 Tagen | jedes Haus voll vorfinanziert | Region: Anleger zahlen 50 % bei Vertragsschluss und kaufen das fertige Haus (Preis + 10 %), meist Doppel-/Einfamilienhäuser |
+| Bauträger baute je Stadt 1–3 Häuser | Grenze nach Wartenden, nur voll erschlossene Grundstücke | 4–8 Vorhaben je Stadt, Bauzeit halbiert, auch teilweise erschlossene Grundstücke (Anschlüsse legt das Vorhaben) |
+| kaum Nachfrage | Zuzug 4 % der Haushalte je Monat | Region: Zuzug × 10 (`Mayor.REGION_ARRIVALS`) |
+| Rat lehnte Gewerbegebiete ab | Gewerbe zählte weder als Wachstum noch als Soziales | Gewerbe/Industrie/Mischgebiet = Arbeitsplätze → beide Fraktionen dafür; Sperrfrist nach Ablehnung je Zone, danach kleineres Quartier; KI sieht `neue_quartiere_ab_tag` |
+| kein Gewerbe ohne KI-Gründer | — | Bauträger baut je 25 Einwohner einen Laden und je 40 eine Werkstatt im Gewerbegebiet; Gründer bis 5 je Stadt, Abklingzeit 12 Tage |
+
+Ergebnis (60 Tage, Regel-KI): Einwohner 148 → 334 (vorher 172), Gebäude 167 → 225 (vorher 190), Straßenfelder 1 993 → 3 272 (vorher 2 539),
+36 fertige Bauträger-Häuser (vorher ~3). Mit zwei Bauphasen je Tag an Tag 40: 213 Gebäude, 266 Einwohner. Einwohner verdoppeln sich nach
+etwa 50 Tagen; Gebäude noch nicht (Häuser brauchen weiter 10–15 Tage vom Baubeginn bis zur Übergabe) – nächster Hebel.
+
+KI-Spieler: Ist das gewählte Fahrzeugangebot schon verkauft, kauft der Ausführer ein gleichwertiges Ersatzangebot (≤ 25 % teurer, gleiche
+Eignung). Die Vormerkung von Marktaufträgen hält so lange, wie das Modell zuletzt in Spielminuten brauchte (+50 %, mindestens 600).

@@ -151,11 +151,12 @@ func town_units() -> Array:
 
 ## Region: Zuzug in die eigene Stadt (Einwohner, Beschaeftigung und Glueck dieser Stadt bzw. der Region); Zugezogene ziehen direkt in
 ## freie Wohnungen des eigenen Gebiets. Wer keine Wohnung findet, wartet (Wohnungssuchende dieser Stadt).
+const REGION_ARRIVALS := 10.0  # Region: Zuzug je Monat das Zehnfache der Grundrate (Staedte sollen sichtbar wachsen; Zuzug ist der Taktgeber des Bautraegers)
 func _arrivals_town() -> void:
 	var Z: Citizens = sim.citizens
 	var month := GameCalendar.month_of(sim.game_min)
 	var boost := marketing_boost if month <= marketing_until else 0.0
-	var rate := float(Population.cfg().get("zuzug_je_monat", 0.04)) / float(GameCalendar.DAYS_PER_MONTH)
+	var rate := float(Population.cfg().get("zuzug_je_monat", 0.04)) * REGION_ARRIVALS / float(GameCalendar.DAYS_PER_MONTH)
 	_arrival_acc += float(Z.population_of(town)) / PERSONS_PER_UNIT * rate * (0.5 + Z.employment_rate()) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost)
 	# Sog durch Arbeit: kleine Orte wachsen nicht nur proportional zur Einwohnerzahl. Je besser die Beschaeftigung, desto mehr Haushalte
 	# kommen zusaetzlich (bei 90 % JOB_PULL_MIN je Monat, mehr bei offenen Stellen); unter 70 % kein zusaetzlicher Zuzug.
@@ -330,6 +331,7 @@ func indicators() -> Dictionary:
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 		"zuletzt_abgelehnt": decisions.slice(-12).filter(func(d): return not d.ok).map(func(d): return "%s: %s" % [d.action, d.msg.left(100)]),
+		"neue_quartiere_ab_tag": _quarter_days(),   # je Zone: ab diesem Tag nimmt der Rat wieder Quartiersantraege an
 	}
 
 
@@ -772,14 +774,30 @@ func _city_parcels(ids: Array, states: Array) -> Dictionary:
 	return {"parcels": out}
 
 
-func _proposal_vote(kind: String, cost: float, units: int, area: int) -> Dictionary:
+func _proposal_vote(kind: String, cost: float, units: int, area: int, zone: String = "") -> Dictionary:
 	if not Council.needs_vote(kind, cost):
 		return {"needed": false, "passed": true, "text": "Kein Ratsbeschluss erforderlich (Kosten %s)." % Catalog.money(cost)}
-	var r := Council.vote({"kind": kind, "cost": cost, "units": units, "area": area}, indicators())
+	var r := Council.vote({"kind": kind, "cost": cost, "units": units, "area": area, "zone": zone}, indicators())
 	return {"needed": true, "passed": r.passed, "text": Council.explain(r), "result": r}
 
 
 const QUARTER_RETRY_DAYS := 10
+## Ab welchem Tag nimmt der Rat wieder Quartiersantraege dieser Zone an (nach einer Ablehnung)? Heute oder frueher = jetzt moeglich.
+func quarter_ok_day(zone: String) -> int:
+	var d := _today()
+	for pl in plans.values():
+		if pl.status == "abgelehnt" and str(pl.zone) == zone:
+			d = maxi(d, int(pl.get("day", -999)) + QUARTER_RETRY_DAYS)
+	return d
+
+
+func _quarter_days() -> Dictionary:
+	var out := {}
+	for z in ["wohnen", "mischgebiet", "gewerbe", "industrie"]:
+		out[z] = quarter_ok_day(z)
+	return out
+
+
 func _designate_quarter(a: Dictionary) -> Dictionary:
 	var zone := str(a.zone)
 	if not Parcels.ZONES.has(zone) or not Parcels.ZONES[zone].buildable or zone == "oeffentlich":
@@ -797,13 +815,13 @@ func _designate_quarter(a: Dictionary) -> Dictionary:
 	# Der Rat entscheidet nach der Lage der Stadt, nicht nach Zuschnitt: nach einer Ablehnung ruhen Quartiersantraege einige Tage
 	# (ein Modell-Buergermeister legte sonst dieselben Quartiere als "kleine" Varianten immer wieder vor).
 	for pl in plans.values():
-		if pl.status == "abgelehnt" and _today() - int(pl.get("day", -999)) < QUARTER_RETRY_DAYS:
+		if pl.status == "abgelehnt" and str(pl.zone) == zone and _today() - int(pl.get("day", -999)) < QUARTER_RETRY_DAYS:
 			return {"ok": false, "msg": "Der Rat hat am Tag %d das Quartier '%s' abgelehnt (%s). Neue Quartiersanträge frühestens ab Tag %d – bis dahin Bestehendes entwickeln (offer_parcels, plan_infrastructure) oder die Gründe der Ablehnung angehen." % [
 				int(pl.day), pl.name, str(pl.vote).left(160), int(pl.day) + QUARTER_RETRY_DAYS]}
 	var area := 0
 	for p in chk.parcels:
 		area += int(p.area)
-	var v := _proposal_vote("quartier", 0.0, 0, area)
+	var v := _proposal_vote("quartier", 0.0, 0, area, zone)
 	var plan := {"id": Towns.prefixed(town, "Q", _next_plan), "name": str(a.name).left(60), "zone": zone, "parcels": chk.parcels.map(func(p): return p.id), "area": area,
 		"status": "beschlossen" if v.passed else "abgelehnt", "reason": str(a.reason).left(240), "vote": v.text, "day": _today()}
 	_next_plan += 1

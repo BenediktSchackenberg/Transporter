@@ -128,7 +128,7 @@ func make_offers(base: float, days: int, seed_key: String, remaining: float = 1.
 		if b.status != "aktiv":
 			continue
 		var load := load_of(bid)
-		var wait := maxi(0, load - int(b.capacity) + 1) * 12          # ueber der Kapazitaet beginnt die Firma spaeter
+		var wait := maxi(0, load - int(b.capacity) + 1) * OVERLOAD_WAIT_DAYS   # ueber der Kapazitaet beginnt die Firma spaeter
 		var price := snappedf(base * float(b.price) * rng.randf_range(0.95, 1.05), 10.0)
 		var dur := maxi(2, int(ceil(float(days) * float(b.days) * remaining)))
 		offers.append({"builder": bid, "name": b.name, "price": price, "days": dur, "start": _today() + 1 + wait, "quality": b.quality, "reliability": b.reliability,
@@ -139,7 +139,7 @@ func make_offers(base: float, days: int, seed_key: String, remaining: float = 1.
 
 ## Bewertung eines Angebots (niedriger = besser): guenstig allein reicht nicht, Qualitaet, Zuverlaessigkeit und Termin zaehlen.
 static func score(o: Dictionary, base: float, today: int) -> float:
-	return float(o.price) / maxf(1.0, base) - 0.45 * float(o.quality) - 0.6 * float(o.reliability) + 0.004 * float(int(o.start) - today) + 0.002 * float(o.days)
+	return float(o.price) / maxf(1.0, base) - 0.45 * float(o.quality) - 0.6 * float(o.reliability) + 0.03 * float(int(o.start) - today) + 0.002 * float(o.days)
 
 
 func best_offer(offers: Array, base: float) -> Dictionary:
@@ -183,6 +183,10 @@ func _company_credit(client: String, shortfall: float) -> bool:
 
 
 ## Bauvorhaben aus einer genehmigten Genehmigung anlegen und Angebote einholen.
+func _region_days(days: int) -> int:
+	return maxi(1, int(ceil(float(days) * REGION_BUILD_FACTOR))) if sim.towns.is_region() and days > 0 else days
+
+
 func start_project(app_id: String) -> Dictionary:
 	var a: Dictionary = sim.permits.apps.get(app_id, {})
 	if a.is_empty() or a.status != "entschieden" or a.result not in ["genehmigt", "genehmigt_mit_bedingungen"] or a.get("expired", false):
@@ -195,7 +199,7 @@ func start_project(app_id: String) -> Dictionary:
 	var costs: Dictionary = res.costs
 	var base := float(costs.bau)
 	var pr := {"id": "BP%d" % _next, "client": a.applicant, "parcel": a.parcel, "app": a.id, "def": a.def, "floors": int(a.floors), "status": "angebote",
-		"base": base, "build_days": int(res.days.bau), "dev_days": int(res.days.erschliessung), "missing": res.missing.duplicate(), "dev_cost": float(costs.erschliessung),
+		"base": base, "build_days": _region_days(int(res.days.bau)), "dev_days": _region_days(int(res.days.erschliessung)), "missing": res.missing.duplicate(), "dev_cost": float(costs.erschliessung),
 		"levy": float(costs.erschliessungsbeitrag), "offers": [], "builder": "", "price": 0.0, "reserved": 0.0, "paid": 0.0, "temp_access": false,
 		"phase": 0, "progress": 0.0, "mats": {}, "blockers": [], "defects": 0, "units": [], "history": [], "lost_days": {}, "start": -1, "end_planned": -1, "end": -1,
 		"dev_progress": 0.0, "paid_phases": 0}
@@ -220,6 +224,11 @@ func accept(project_id: String, builder_id: String) -> Dictionary:
 	if builders[builder_id].status != "aktiv":
 		return {"ok": false, "msg": "%s kann keine Aufträge übernehmen." % builders[builder_id].name}
 	var need := float(offer.price) + float(pr.dev_cost) + Planning.TEMP_ACCESS_COST * (1.0 if not pr.missing.is_empty() else 0.0)
+	if pr.client == DEVELOPER and sim.towns.is_region() and not pr.has("advance"):
+		# Anleger zahlen bei Vertragsschluss die Haelfte an (Rest bei Uebergabe): der Bautraeger kann mehrere Haeuser zugleich bauen
+		pr["advance"] = snappedf(need * ADVANCE_SHARE, 1.0)
+		sim.economy.transfer("X0", DEVELOPER, float(pr.advance))
+		_log(pr, "Anleger zahlen %s an" % Catalog.money(float(pr.advance)))
 	if available_funds(pr.client) + 0.5 < need and str(pr.client).begins_with("C"):
 		_company_credit(str(pr.client), need - available_funds(pr.client))
 	if available_funds(pr.client) + 0.5 < need:
@@ -278,7 +287,7 @@ func cancel(project_id: String, reason: String) -> Dictionary:
 # ------------------------------------------------------------------ Material
 func _material_plan(pr: Dictionary) -> Dictionary:
 	var out := {}
-	var value := float(pr.base) * MATERIAL_SHARE
+	var value := float(pr.base) * MATERIAL_SHARE * (REGION_MATERIAL_FACTOR if sim.towns.is_region() else 1.0)
 	for i in PHASES.size():
 		var ph: Dictionary = PHASES[i]
 		if float(ph.mat) <= 0.0:
@@ -425,7 +434,18 @@ func _deliver(d: Dictionary, with_carrier: bool) -> Dictionary:
 
 
 # ------------------------------------------------------------------ Tageslauf
+const OVERLOAD_WAIT_DAYS := 4          # je Vorhaben ueber der Kapazitaet beginnt die Firma so viel spaeter
+## Region: die staedtischen Baufirmen arbeiten fuer alle Orte - Kapazitaet (und damit Bautrupps) je Ort.
+func _scale_region_builders() -> void:
+	if not sim.towns.is_region():
+		return
+	for bid in BUILDERS:
+		if builders.has(bid):
+			builders[bid].capacity = int(BUILDERS[bid].capacity) * sim.towns.count()
+
+
 func on_day(day: int) -> void:
+	_scale_region_builders()
 	sync_company_builders()
 	sim.crews.on_day(day)   # Bautrupps: Fahrten nachholen, freie Trupps neuen Vorhaben zuteilen
 	for pr in projects.values():
@@ -514,10 +534,15 @@ func _day_build(pr: Dictionary, day: int) -> void:
 		_lose(pr, "personal")
 		b.history.verzoegert = int(b.history.verzoegert) + 1
 		return
-	var phase_days := maxf(1.0, float(pr.plan_days) * float(ph.days))
+	var region: bool = sim.towns.is_region()
+	var phase_days := maxf(0.5 if region else 1.0, float(pr.plan_days) * float(ph.days))   # Region: kurze Phasen schaffen zwei je Tag
 	pr.progress += f / phase_days
 	if pr.progress >= 1.0:
 		_finish_phase(pr)
+		if region and pr.status == "im_bau" and not bool(pr.get("_chained", false)) and pr.progress == 0.0:
+			pr["_chained"] = true   # gleicher Tag, naechste Phase (nur einmal; Trupp und Material werden wie immer geprueft)
+			_day_build(pr, day)
+			pr.erase("_chained")
 
 
 func _lose(pr: Dictionary, cause: String, amount: float = 1.0) -> void:
@@ -606,6 +631,11 @@ func _hand_over(pr: Dictionary, day: int) -> void:
 	pr.blockers = []
 	builders[pr.builder].history.fertig = int(builders[pr.builder].history.fertig) + 1
 	_release_reserve_rest(pr)
+	if pr.client == DEVELOPER and sim.towns.is_region():
+		# Anleger von ausserhalb kaufen das fertige Haus (D0 bleibt Verwalter und Vermieter): das Kapital steht fuer das naechste Vorhaben bereit
+		var resale := maxf(0.0, snappedf(float(pr.price) * RESALE_MARGIN - float(pr.get("advance", 0.0)), 1.0))
+		sim.economy.transfer("X0", DEVELOPER, resale)
+		_log(pr, "Anleger übernehmen das Objekt für %s" % Catalog.money(resale))
 	_create_units(pr, parcel)
 	_log(pr, "Übergeben am Tag %d: %s (Gebäude %d)" % [day, d.label, b.id])
 	sim.log_event("Bauvorhaben %s übergeben: %s auf %s (%s)." % [pr.id, d.label, pr.parcel, builders[pr.builder].name], "info")
@@ -748,14 +778,28 @@ func _developer_month() -> void:
 	_developer_town(0)
 
 
-## Region (Auftrag 17): Bautraeger je Stadt - hoechstens ein laufendes Vorhaben je Stadt; ein genehmigter Antrag wird sofort begonnen.
-const DEV_TICK_DAYS := 5
+## Region (Auftrag 17): Bautraeger je Stadt - mehrere Vorhaben gleichzeitig (Wachstum); ein genehmigter Antrag wird sofort begonnen.
+const DEV_TICK_DAYS := 2
+const DEV_STEPS := 3                  # so viele Schritte (Antrag stellen / Bau beginnen) je Stadt und Pruefung
+const REGION_BUILD_FACTOR := 0.5      # Region: Bauzeit und Erschliessungszeit je Vorhaben halbiert (sichtbares Wachstum)
+const RESALE_MARGIN := 1.10           # Region: Anleger kaufen fertige Bautraeger-Haeuser (Preis + 10 %), D0 baut damit weiter
+const REGION_MATERIAL_FACTOR := 0.4   # Region: Hausbau braucht weniger Material je Phase (kleinere Lieferungen, Bauhof reicht laenger)
+const ADVANCE_SHARE := 0.5            # Region: davon zahlen sie die Haelfte schon bei Vertragsschluss an
+const SHOP_PER_RESIDENTS := 25        # Region: ein Laden je 25 Einwohner
+const WORKSHOP_PER_RESIDENTS := 40    # Region: eine Werkstatt/Lagerhalle im Gewerbegebiet je 40 Einwohner
+const SHOP_DEFS := ["baeckerei_laden", "getraenkemarkt", "drogerie_laden", "supermarkt"]
 func _developer_town(town: int) -> void:
+	for i in (DEV_STEPS if sim.towns.is_region() else 1):
+		if not _developer_once(town):
+			return
+
+
+func _developer_once(town: int) -> bool:
 	var region: bool = sim.towns.is_region()
 	var M: Mayor = sim.towns.mayor(town)
 	var mine := func(pid: String) -> bool: return not region or sim.towns.of_parcel(pid) == town
-	# Region: je Stadt 1 Vorhaben, bei vielen Wohnungssuchenden mehr (1 + je 3 Wartende, hoechstens 3); Einzelstadt wie bisher 1
-	var allowed := 1 if not region else clampi(1 + M.waiting / 3, 1, 3)
+	# Region: je Stadt 4 Vorhaben, bei Wohnungssuchenden mehr (4 + je 2 Wartende, hoechstens 8); Einzelstadt wie bisher 1
+	var allowed := 1 if not region else clampi(4 + M.waiting / 2, 4, 8)
 	var running := 0
 	for pr in projects.values():
 		if pr.client == DEVELOPER and pr.status in ["angebote", "erschliessung", "im_bau", "pruefung", "wartet_anschluss"] and mine.call(str(pr.parcel)):
@@ -764,7 +808,7 @@ func _developer_town(town: int) -> void:
 		if a.applicant == DEVELOPER and mine.call(str(a.parcel)) and a.status != "entschieden":
 			running += 1   # Antrag in Pruefung zaehlt mit
 	if running >= allowed:
-		return
+		return false
 	for a in sim.permits.apps.values():
 		if a.applicant != DEVELOPER or not mine.call(str(a.parcel)) or a.status != "entschieden":
 			continue
@@ -776,11 +820,13 @@ func _developer_town(town: int) -> void:
 				var r := start_project(a.id)
 				if r.ok:
 					accept_best(r.id)
-				return
+				return r.ok
 	if town == 0 and _supply_project():
-		return
+		return true
+	if region and _commerce_project(town):
+		return true
 	if M.waiting <= 0 and M.vacancy() > 0.02:
-		return
+		return false
 	var def_id := "mehrfamilienhaus"
 	if sim.tiers.unlocked("stadtvilla") and (_next % 3) == 0:
 		def_id = "stadtvilla"   # gehobener Wohnungsbau, sobald die Wohnstufen der Stadt ihn tragen
@@ -794,11 +840,64 @@ func _developer_town(town: int) -> void:
 		# Kein Wohngebiet erschlossen: Wohnhaeuser sind auch im Mischgebiet zulaessig (Planning.DEFS zones)
 		crit["zone"] = "mischgebiet"
 		free = sim.parcels.search(crit)
+	if free.is_empty() and region:
+		# Region: auch teilweise erschlossene Grundstuecke (Strasse vorhanden) - fehlende Anschluesse legt das Vorhaben selbst (Erschliessungsphase)
+		for z in ["wohnen", "mischgebiet"]:
+			crit["zone"] = z
+			crit["utilities"] = "teilweise"
+			free = sim.parcels.search(crit)
+			if not free.is_empty():
+				break
+	if region and (_next % 3) != 0:   # Region: mehr Haeuser je Euro - meist Doppel-/Einfamilienhaeuser
+		for small in ["doppelhaus", "einfamilienhaus"]:
+			if _developer_try(free, small):
+				return true
 	if _developer_try(free.filter(func(p): return int(p.area) >= 40), def_id):
-		return
+		return true
 	for small in ["doppelhaus", "einfamilienhaus"]:
 		if _developer_try(free, small):
-			return
+			return true
+	return false
+
+
+## Region: Gewerbe folgt den Einwohnern - fehlen Laeden (1 je SHOP_PER_RESIDENTS) oder Werkstaetten im Gewerbegebiet
+## (1 je WORKSHOP_PER_RESIDENTS), baut der Bautraeger sie auf einem erschlossenen Grundstueck der Stadt. Laeden nehmen beim
+## Einzug den Betrieb auf (Retail), die Miete geht an D0.
+func _commerce_project(town: int) -> bool:
+	var pop: int = sim.citizens.population_of(town)
+	var shops := 0
+	var workshops := 0
+	for b in sim.city.buildings:
+		if sim.towns.of_building(int(b.id)) != town:
+			continue
+		if str(b.type) in ["shop", "pharmacy", "restaurant", "cafe", "bakery", "kiosk"]:
+			shops += 1
+		elif str(b.type) in ["warehouse", "workshop_small"]:
+			workshops += 1
+	for a in sim.permits.apps.values():   # beantragte, noch nicht fertige Gewerbebauten mitzaehlen
+		if a.applicant == DEVELOPER and sim.towns.of_parcel(str(a.parcel)) == town and str(a.def) in SHOP_DEFS + ["lager_werkstatt"]:
+			var built := false
+			for pr in projects.values():
+				built = built or (pr.app == a.id and pr.status == "uebergeben")
+			if not built:
+				if str(a.def) == "lager_werkstatt":
+					workshops += 1
+				else:
+					shops += 1
+	if shops < pop / SHOP_PER_RESIDENTS:
+		var def_id: String = SHOP_DEFS[shops % SHOP_DEFS.size()]
+		var d: Dictionary = Planning.DEFS[def_id]
+		for zone in ["mischgebiet", "gewerbe", "wohnen"]:
+			var cands: Array = sim.parcels.search({"zone": zone, "min_area": int(d.w) * int(d.h), "utilities": "voll", "limit": 120, "town": town})
+			if _developer_try(cands, def_id):
+				sim.log_event("%s: Der Bautraeger baut %s (%d Einwohner, %d Laeden)." % [sim.towns.name_of(town), d.label, pop, shops], "info")
+				return true
+	if workshops < pop / WORKSHOP_PER_RESIDENTS:
+		var cands2: Array = sim.parcels.search({"zone": "gewerbe", "min_area": 24, "utilities": "voll", "limit": 120, "town": town})
+		if _developer_try(cands2, "lager_werkstatt"):
+			sim.log_event("%s: Der Bautraeger baut eine Werkstatt im Gewerbegebiet (%d Einwohner)." % [sim.towns.name_of(town), pop], "info")
+			return true
+	return false
 
 
 ## Region: Stadt mit den meisten Wohnungssuchenden (bei Gleichstand geringster Leerstand).
@@ -817,7 +916,8 @@ func _developer_try(cands: Array, def_id: String) -> bool:
 	var probe := {"def": def_id, "floors": floors, "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": 1.0e9}}
 	for p in cands:
 		var chk := Planning.assess(p, probe)
-		if not chk.ok or not chk.questions.is_empty() or float(chk.costs.gesamt) > available_funds(DEVELOPER):
+		var own_share := (1.0 - ADVANCE_SHARE) if sim.towns.is_region() else 1.0   # Region: die Anzahlung der Anleger kommt bei Vertragsschluss
+		if not chk.ok or not chk.questions.is_empty() or float(chk.costs.gesamt) * own_share > available_funds(DEVELOPER):
 			continue
 		var res: Dictionary = sim.parcels.reserve(p.id, DEVELOPER)
 		if not res.ok:

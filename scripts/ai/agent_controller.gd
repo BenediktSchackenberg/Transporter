@@ -36,6 +36,7 @@ var speed := 1.0                  # aktuelle Simulationsgeschwindigkeit (die Ver
 
 var _inflight := -1
 var _inflight_obs_min := 0.0
+var _latency_game := 0.0             # gleitender Mittelwert: Spielminuten von der Beobachtung bis zur Antwort
 var _inflight_sent := 0.0
 var _inflight_generation := 0
 var _abandoned := {}
@@ -197,6 +198,8 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 	if sim.finished or sim.company(cid).generation != _inflight_generation:
 		api_log.write({"type": "session_ended_ignored", "player": cid, "req": req_id})
 		return
+	var age_now := sim.game_min - _inflight_obs_min
+	_latency_game = age_now if _latency_game <= 0.0 else lerpf(_latency_game, age_now, 0.3)
 	var stale_limit := (STALE_GAME_MIN_OLLAMA if config.get("provider", "") == "ollama" else STALE_GAME_MIN) * maxf(speed, 1.0)
 	if sim.game_min - _inflight_obs_min > stale_limit:
 		last_error = "Antwort veraltet – verworfen"
@@ -625,7 +628,8 @@ func _hold_market(obs: Dictionary) -> void:
 		if k == null or k.status != "open" or k.held_by_other(cid, sim.game_min):
 			continue
 		k.held_for = cid
-		k.held_until = minf(sim.game_min + HOLD_GAME_MIN, k.deadline - 30.0)   # nie ueber die Lieferfrist hinaus vormerken
+		# so lange, wie das Modell zuletzt brauchte (+50 % und eine Spielstunde), mindestens HOLD_GAME_MIN, nie ueber die Lieferfrist
+		k.held_until = minf(sim.game_min + maxf(HOLD_GAME_MIN, _latency_game * 1.5 + 60.0), k.deadline - 30.0)
 		_held.append(k.id)
 
 

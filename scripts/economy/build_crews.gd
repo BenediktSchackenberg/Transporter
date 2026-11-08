@@ -10,6 +10,7 @@ extends RefCounted
 const MIN_PER_CELL := 0.4          # Fahrtdauer je Feld (Spielminuten)
 const MIN_TRIP := 6.0
 const MAX_TRIP := 90.0
+const REGION_TRIP_FACTOR := 0.35
 const LOAD_MIN := 20.0             # Laden im Lager
 const RETRY_MIN := 60.0            # fehlt Material, erneut nachsehen
 
@@ -274,7 +275,8 @@ func _drive(t: Dictionary, to: Vector2i, state: String, now: float) -> void:
 	var from := _v(t.at)
 	var cells := absi(to.x - from.x) + absi(to.y - from.y)
 	t.state = state
-	t.next = now + clampf(MIN_TRIP + MIN_PER_CELL * float(cells), MIN_TRIP, MAX_TRIP)
+	var f := REGION_TRIP_FACTOR if sim.towns != null and sim.towns.is_region() else 1.0   # Region: Bautrupps fahren zuegiger (Wachstum)
+	t.next = now + clampf(MIN_TRIP + MIN_PER_CELL * f * float(cells), MIN_TRIP, MAX_TRIP * f)
 	stats.fahrten += 1
 	_show(t, from, to)
 

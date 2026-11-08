@@ -27,10 +27,12 @@ static func vote(proposal: Dictionary, ind: Dictionary) -> Dictionary:
 	var votes := {}
 	# Wachstum: will Flaechen und Wohnraum, solange die Nachfrage besteht
 	var pressure := waiting > 0 or float(housing.get("leerstand", 0.0)) < 0.03 or float(jobs.get("quote", 1.0)) < 0.75
+	var job_zone := str(proposal.get("zone", "")) in ["gewerbe", "industrie", "mischgebiet"]   # Flaechen fuer Arbeitsplaetze und Laeden
+	pressure = pressure or job_zone
 	votes["wachstum"] = {"yes": pressure or str(proposal.get("kind", "")) in ["erschliessung", "strasse"],
 		"text": "Nachfrage und Standortentwicklung rechtfertigen das Vorhaben." if pressure else "Es besteht derzeit kein erkennbarer Entwicklungsdruck."}
 	# Soziales: will bezahlbaren Wohnraum und Arbeitsplaetze; skeptisch bei teuren Vorhaben ohne Wohnnutzen
-	var social := units > 0 or waiting > 0 or float(housing.get("mietindex", 100.0)) > 110.0 or str(proposal.get("kind", "")) == "oeffentlich_bau"
+	var social := units > 0 or waiting > 0 or job_zone or float(housing.get("mietindex", 100.0)) > 110.0 or str(proposal.get("kind", "")) == "oeffentlich_bau"
 	votes["soziales"] = {"yes": social, "text": "Das Vorhaben dient Wohnraum, Arbeit oder öffentlichen Einrichtungen." if social else "Kein erkennbarer Nutzen für Wohnen oder Arbeit."}
 	# Haushalt: nur, wenn die Mittel ohne Schieflage reichen
 	var affordable := cost <= avail * 0.6

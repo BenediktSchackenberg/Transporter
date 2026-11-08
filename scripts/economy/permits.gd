@@ -12,7 +12,7 @@ const REVISION_EFFORT := 1            # Nachpruefung nach einer Rueckfrage
 const PERMIT_DAYS := 180              # Geltungsdauer einer Genehmigung
 const MAYOR_UNITS := 6                # ab so vielen Einheiten oder
 const MAYOR_COST := 400000.0          # ab diesen Gesamtkosten entscheidet die Buergermeisterebene
-const MAYOR_AGENT_WAIT_DAYS := 12    # ist eine Buergermeister-KI angebunden, wartet die Vertretung laenger
+const MAYOR_AGENT_WAIT_DAYS := 4     # ist eine Buergermeister-KI angebunden, wartet die Vertretung etwas laenger
 const MAYOR_WAIT_DAYS := 2            # Frist, bis die regelbasierte Verwaltung entscheidet, wenn keine Buergermeister-KI angebunden ist
 
 var sim
@@ -162,7 +162,8 @@ func withdraw(app_id: String, applicant: String) -> Dictionary:
 # ------------------------------------------------------------------ Bearbeitung
 ## Verwaltungskapazitaet: Bearbeitungspunkte je Tag aus den Rathaus-Beschaeftigten.
 func capacity() -> float:
-	return maxf(1.0, sim.town_hall.permit_points())
+	var towns: int = sim.towns.count() if sim.towns != null and sim.towns.is_region() else 1
+	return maxf(1.0, sim.town_hall.permit_points()) * towns   # Region: jede Stadt hat ihre eigene Bauverwaltung
 
 
 ## Warteschlange in Bearbeitungsreihenfolge (aeltester Antrag zuerst).

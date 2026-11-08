@@ -261,9 +261,15 @@ static func decide(ind: Dictionary) -> Dictionary:
 			actions.append({"action": "tender", "project_id": prj.id, "reason": "Projekt ist beschlossen und finanziert (%s)." % Catalog.money(float(prj.kosten))})
 	# 5) neues Quartier, wenn Bedarf besteht und kein offenes Angebot vorhanden ist
 	var open_plans := plans.filter(func(p): return p.status == "beschlossen" and not p.ids_zur_entwicklung.is_empty()).size()
-	if need and open_plans == 0 and actions.size() < MAX_ACTIONS and not ind.entwicklungsvorschlaege.is_empty() and live_plans < 8:
+	# nach einer Ablehnung: Sperrfrist des Rats abwarten, dann kleiner (halb so viele Grundstuecke) erneut vorlegen
+	var ok_days: Dictionary = ind.get("neue_quartiere_ab_tag", {})
+	var quarter_ok := func(z: String) -> bool: return int(ok_days.get(z, 0)) <= today
+	if need and open_plans == 0 and not ind.entwicklungsvorschlaege.is_empty() and quarter_ok.call(str(ind.entwicklungsvorschlaege[0].zone)) and actions.size() < MAX_ACTIONS and not ind.entwicklungsvorschlaege.is_empty() and live_plans < 8:
 		var c: Dictionary = ind.entwicklungsvorschlaege[0]
-		actions.append({"action": "designate_quarter", "name": "Quartier %d (%s)" % [plans.size() + 1, str(c.zone).capitalize()], "parcel_ids": c.grundstuecke, "zone": c.zone,
+		var ids: Array = c.grundstuecke
+		if plans.any(func(p): return p.status == "abgelehnt" and p.zone == c.zone) and ids.size() > 2:
+			ids = ids.slice(0, maxi(2, ids.size() / 2))
+		actions.append({"action": "designate_quarter", "name": "Quartier %d (%s)" % [plans.size() + 1, str(c.zone).capitalize()], "parcel_ids": ids, "zone": c.zone,
 			"reason": "%d wohnungssuchende Haushalte, Leerstand %.1f %%, Mietindex %.0f; nächstgelegener Vorschlag mit %d erschlossenen Grundstücken." % [waiting, float(housing.leerstand) * 100.0, float(housing.mietindex), int(c.davon_voll_erschlossen)]})
 	# 5b) Flaechenplanung: fehlt eine Zone deutlich (Richtwert -5 Punkte), den Umwidmungsvorschlag ausweisen (hoechstens ein offenes Quartier)
 	var fp: Dictionary = ind.get("flaechenplanung", {})

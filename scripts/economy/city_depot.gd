@@ -36,12 +36,14 @@ const DEFECT := {"T0": 0.005, "X0": 0.02, "C": 0.015}
 const FREIGHT_BASE := 80.0
 const STATUS_ORDER := ["vorschlag", "bestellt", "transport", "unterwegs", "angeliefert", "eingelagert", "bezahlt"]
 ## Material je Erschliessungsteil und Grundstueck (Strassenbau, Stromnetz, Wasser, Abwasser)
+## Material je Grundstueck (Wachstum: ein Drittel der frueheren Mengen - Erschliessung soll in Tagen, nicht Wochen fertig werden)
 const PROJECT_MATERIAL := {
-	"strasse": {"schotter": 20, "kies": 15, "asphalt": 12, "bordstein": 40, "verkehrsschild": 1},
-	"strom": {"kabel": 60, "verteilerkasten": 1, "strassenleuchte": 1},
-	"wasser": {"rohr": 50, "armatur": 2, "dichtung": 10},
-	"abwasser": {"rohr": 50, "kanaldeckel": 2, "dichtung": 10},
+	"strasse": {"schotter": 7, "kies": 5, "asphalt": 4, "bordstein": 14, "verkehrsschild": 1},
+	"strom": {"kabel": 20, "verteilerkasten": 1, "strassenleuchte": 1},
+	"wasser": {"rohr": 17, "armatur": 1, "dichtung": 4},
+	"abwasser": {"rohr": 17, "kanaldeckel": 1, "dichtung": 4},
 }
+const CONTRACT_MAX_UNITS := 18      # groesste Ladung eines Stadtlager-Transportauftrags (Lieferwagen); sonst nimmt ihn niemand an
 
 var sim
 var town := 0                         # Ort dieses Zentrallagers (Auftrag 17); Eigentuemer/Konto = Towns.account_of(town)
@@ -190,7 +192,7 @@ func _seed_stock() -> void:
 	var items := CityGoods.items()
 	for id in items:
 		var it: Dictionary = items[id]
-		var n := int(it.target) if it.class == "geraet" else int(round(float(it.target) * 0.7))
+		var n := int(it.target)   # voller Zielbestand: die ersten Erschliessungen beginnen ohne Bestellung
 		if n > 0:
 			sim.stock.add(id, n, owner(), building, "Anfangsbestand")
 
@@ -551,7 +553,7 @@ func _issue_contract(o: Dictionary) -> void:
 	k.dropoff = building
 	k.cargo = cargo_of(o.item)
 	k.label = "Stadtlager: %d × %s" % [int(o.qty), CityGoods.get_item(o.item).name]
-	k.qty = _cargo_qty(int(o.qty))
+	k.qty = mini(_cargo_qty(int(o.qty)), CONTRACT_MAX_UNITS)
 	k.reward = snappedf(float(o.freight) * float(pool.price) * (1.0 + POOL_URGENT_BONUS if bool(pool.urgent) else 1.0), 1.0)
 	k.status = "open"
 	k.payer = owner()

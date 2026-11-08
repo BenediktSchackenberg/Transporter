@@ -386,7 +386,7 @@ func _start(j: Dictionary, by: String) -> Dictionary:
 	var land := _land(j)
 	var mat := {}
 	for it in ROAD_MATERIAL:
-		mat[it] = int(ROAD_MATERIAL[it]) * land
+		mat[it] = int(ceil(float(ROAD_MATERIAL[it]) * land * 0.35))   # wie Verbindungsstrassen: gut ein Drittel
 	var road_cost := float(j.cost) - float(j.spans.reduce(func(s, x): return s + float(x.cost), 0.0))
 	var prj: Dictionary = _mayor_of(j).add_works_project("zufahrt", j.id, road_cost, maxi(2, ceili(float(land) / CELLS_PER_DAY)), mat,
 		"Zufahrt %s zu %s (%s)" % [j.id, j.parcel, by], str(j.get("award", "")))

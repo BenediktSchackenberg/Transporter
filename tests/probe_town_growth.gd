@@ -49,6 +49,22 @@ func _report(s: Simulation, day: int) -> void:
 		if s.city.ground[i] == CityData.G.ROAD:
 			roads += 1
 	print("GESAMT Gebaeude %d, Strassenfelder %d, Einwohner %d" % [s.city.buildings.size(), roads, s.citizens.people.size()])
+	var st := {}
+	var lost := {}
+	var durs: Array = []
+	for p in s.construction.projects.values():
+		st[p.status] = int(st.get(p.status, 0)) + 1
+		for k in p.lost_days:
+			lost[k] = snappedf(float(lost.get(k, 0.0)) + float(p.lost_days[k]), 0.1)
+		if p.status == "uebergeben":
+			var app: Dictionary = s.permits.apps.get(p.app, {})
+			durs.append("%d/%d/%d" % [int(app.get("filed_day", -1)), int(p.start), int(p.end)])
+	var ast := {}
+	for a2 in s.permits.apps.values():
+		if a2.applicant == Construction.DEVELOPER:
+			ast[a2.status] = int(ast.get(a2.status, 0)) + 1
+	print("  Vorhaben %s | Antraege D0 %s | verlorene Tage %s" % [str(st), str(ast), str(lost)])
+	print("  Antrag/Start/Ende: %s" % str(durs.slice(0, 14)))
 	for k in s.towns.count():
 		var M: Mayor = s.towns.mayor(k)
 		var wohnen: Array = s.parcels.items.values().filter(func(p): return p.zone == "wohnen" and s.towns.of_parcel(str(p.id)) == k)
@@ -61,6 +77,8 @@ func _report(s: Simulation, day: int) -> void:
 			str(frei.slice(0, 8).map(func(p): return int(p.area)))])
 		print("  Bautraeger-Antraege: %s" % str(apps.map(func(a): return "%s %s %s" % [a.parcel, a.status, str(a.get("result", "")).left(60)])))
 		print("  Bauvorhaben: %s" % str(projs.map(func(p): return "%s %s %s" % [p.client, p.status, str(p.get("def", ""))])))
+		for p in projs.filter(func(p): return p.status == "im_bau"):
+			print("    %s %s Phase %d Fortschritt %.2f Tage %d plan %s Start %d Firma %s Blocker %s verloren %s" % [p.id, p.def, int(p.phase), float(p.progress), int(p.build_days), str(p.get("plan_days")), int(p.start), str(p.builder), str(p.blockers), str(p.lost_days)])
 		var ind: Dictionary = M.indicators()
 		print("  Partei %s, Plaene: %s" % [M.party, str(ind.plaene.map(func(pl): return "%s %s %s offen %d" % [pl.name, pl.status, str(pl.get("zone", "")), pl.ids_zur_entwicklung.size()]))])
 		print("  Vorschlaege: %s" % str(ind.entwicklungsvorschlaege.map(func(c): return "%s %d Grundst. voll %d" % [c.zone, c.grundstuecke.size(), int(c.davon_voll_erschlossen)])))

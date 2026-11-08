@@ -569,8 +569,13 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 					return {"ok": false, "msg": "Kein Angebot für Modell '%s' vorrätig. Angebote: siehe ressourcen.fahrzeugangebote." % a.model}
 			else:
 				return {"ok": false, "msg": "offer_id oder model angeben."}
+			var swapped := ""
 			if offer.status != "verfügbar":
-				return {"ok": false, "msg": "Angebot %s ist bereits verkauft." % offer.id}
+				var alt := _substitute_offer(offer)
+				if alt.is_empty():
+					return {"ok": false, "msg": "Angebot %s ist bereits verkauft (kein gleichwertiges Ersatzangebot)." % offer.id}
+				swapped = " (Ersatz für verkauftes %s)" % offer.id
+				offer = alt
 			var spec := Catalog.model(offer.model)
 			if c.vehicle_ids.size() >= c.fleet_limit():
 				return {"ok": false, "msg": "Alle %d Stellplätze belegt – Stellplätze/Halle bauen (place_building) oder Depot anmieten.%s" % [c.fleet_limit(), _yard_hint(cid)]}
@@ -592,8 +597,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			sim.log_event("%s kauft %s %s (%s)." % [c.company_name, "gebrauchten" if offer.condition < 100 else "neuen", spec.name, Catalog.money(offer.price)], "info", cid)
 			c.add_key_event("Kauf: %s" % spec.name, sim.game_min)
 			sim.bark(cid, "kauf")
-			return {"ok": true, "msg": "%s #%d gekauft für %s (Zustand %d %%). Ohne Fahrer – Aufgabe 'fahren' an einen Arbeiter vergeben." % [
-				spec.name, nv.id, Catalog.money(offer.price), offer.condition]}
+			return {"ok": true, "msg": "%s #%d gekauft für %s (Zustand %d %%)%s. Ohne Fahrer – Aufgabe 'fahren' an einen Arbeiter vergeben." % [
+				spec.name, nv.id, Catalog.money(offer.price), offer.condition, swapped]}
 		"sell_vehicle":
 			var v := _own_vehicle(cid, _i(a.vehicle_id))
 			if v == null:
@@ -1157,3 +1162,18 @@ func complete_visit(cid: int, pending: Dictionary) -> void:
 	sim.plans.visit_done(cid, str(pending.get("key", "")), r)
 	sim.decisions.record(cid, str(pending.get("origin", "api")), a, r, str(pending.get("key", "")) + "@vor_ort")
 	sim.agent_event.emit(cid, "Besuch abgeschlossen: " + name)
+
+
+## Gewaehltes Fahrzeugangebot ist schon verkauft (mehrere Spieler wollten dasselbe): gleiches Modell zum hoechstens 25 % hoeheren Preis,
+## sonst ein Modell mit mindestens gleicher Kapazitaet und Eignung (Kuehlung, schwer) im selben Preisrahmen; das guenstigste.
+func _substitute_offer(sold: Dictionary) -> Dictionary:
+	var want := Catalog.model(str(sold.model))
+	var best := {}
+	for o in sim.resources.available_offers():
+		if float(o.price) > float(sold.price) * 1.25:
+			continue
+		var m := Catalog.model(str(o.model))
+		var fits: bool = str(o.model) == str(sold.model) or (int(m.capacity) >= int(want.capacity) and (bool(m.get("refrigerated", false)) or not bool(want.get("refrigerated", false))) and (bool(m.get("heavy", false)) or not bool(want.get("heavy", false))))
+		if fits and (best.is_empty() or float(o.price) < float(best.price)):
+			best = o
+	return best

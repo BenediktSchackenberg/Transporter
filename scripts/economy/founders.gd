@@ -14,8 +14,8 @@ signal company_founded(cid: int)
 
 const CHECK_DAYS := 5
 const STREAK := 3
-const MAX_PER_TOWN := 3              # ursprunglicher Unternehmer + bis zu zwei Gruender (konfigurierbar ueber max_per_town)
-const COOLDOWN_DAYS := 30
+const MAX_PER_TOWN := 5              # ursprunglicher Unternehmer + bis zu vier Gruender (konfigurierbar ueber max_per_town)
+const COOLDOWN_DAYS := 12
 const CAPITAL := 60000.0
 const CAPITAL_BY_BRANCH := {"bergwerk": 120000.0, "stahlwerk": 150000.0, "kokerei": 110000.0}
 const MINING_FROM_DAY := 5           # Bergbau frueh: die Kette Bohrung -> Abbaurecht -> Zufahrt -> Bergwerk -> Stahl braucht Wochen
