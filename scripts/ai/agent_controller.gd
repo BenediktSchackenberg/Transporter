@@ -310,6 +310,12 @@ func _hint() -> String:
 
 
 func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
+	# Fehlende Felder (z. B. wenn die Regel-KI abbrach) nicht als Laufzeitfehler: Standardwerte einsetzen
+	for key in ["summary", "memory", "goal"]:
+		if not parsed.get(key) is String:
+			parsed[key] = ""
+	if not parsed.get("actions") is Array:
+		parsed["actions"] = []
 	var summary: String = parsed.summary
 	if summary != "":
 		summaries.append({"t": sim.game_min, "text": summary, "source": source})
