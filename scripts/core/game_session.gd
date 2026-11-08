@@ -288,6 +288,33 @@ func remaining_seconds() -> float:
 	return 1.0e9 if is_endless() else maxf(0.0, duration_seconds - active_seconds)
 
 
+## Diagnose Speicherverbrauch langer Partien: jede Minute Speicher, Objekt-/Knotenzahlen und die groessten Listen der Simulation
+## (Eigenschaften der Simulation und ihrer Module, eine Ebene tief) ins Partie-Log - zeigt, welche Daten unbegrenzt wachsen.
+const PERF_EVERY_S := 60.0
+var _perf_timer := 0.0
+
+
+func _log_perf() -> void:
+	var sizes := {}
+	for prop in sim.get_property_list():
+		var v = sim.get(prop.name)
+		if v is Array or v is Dictionary:
+			if v.size() >= 50:
+				sizes[prop.name] = v.size()
+		elif v is RefCounted and not v is Simulation:
+			for sub in v.get_property_list():
+				if sub.name in ["sim", "script"]:
+					continue
+				var w = v.get(sub.name)
+				if (w is Array or w is Dictionary) and w.size() >= 50:
+					sizes["%s.%s" % [prop.name, sub.name]] = w.size()
+	api_log.write({"type": "perf", "active_s": int(active_seconds), "game_min": int(sim.game_min),
+		"mem_mb": snappedf(Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0, 0.1),
+		"objects": int(Performance.get_monitor(Performance.OBJECT_COUNT)), "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
+		"orphans": int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)), "resources": int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)),
+		"sizes": sizes})
+
+
 func play_sound(n: String) -> void:
 	var now := Time.get_ticks_msec()
 	if _sounds.has(n) and now - int(_sound_cooldown.get(n, 0)) > 150:
@@ -364,6 +391,10 @@ func _process(delta: float) -> void:
 		elif sim.companies.size() > 1 and sim.game_min > 1440.0 and sim.companies.filter(func(c): return Standings.solvent(c)).size() == 1:
 			end_match("Alle Konkurrenten sind bankrott")   # Hauptziel erreicht: der letzte zahlungsfaehige Spieler gewinnt
 	_camera_keys(delta)
+	_perf_timer += delta
+	if _perf_timer >= PERF_EVERY_S:
+		_perf_timer = 0.0
+		_log_perf()
 	if following:
 		var p := entity_view.selected_position()
 		if p.x > -9000.0:
