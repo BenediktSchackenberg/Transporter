@@ -200,3 +200,13 @@ Diagnose mit `tests/probe_town_growth.gd` (Seed 21, 60 Tage): Morgenholm und Kie
   bestellte nur für sich, und Ausschuss (2 %) löste für Restmengen einen ganzen Importzyklus aus. Jetzt Luftfracht nur bis zwei
   Flugladungen, Bestellung über den Bedarf aller offenen Projekte plus 3 % Reserve, offene Vorschläge werden aufgestockt.
 Ergebnis: alle vier Städte bauen Wohnhäuser; Morgenholm schließt bis Tag 60 drei Stadtprojekte ab (vorher keines). Test `test_region_town_growth`.
+
+## Firmenschließungen und Stadtkassen (08.11.2026)
+
+Diagnose `tests/probe_closures.gd` (Seed 21, 120 Tage):
+- Drei Gründerfirmen gingen an Reparaturkosten von 18–38 T EUR pleite: Abgeschleppte Fahrzeuge fuhren im Modell selbst zur Werkstatt,
+  verschlissen weiter und blieben erneut liegen (Schleife mit je 400 EUR Abschleppgebühr). Behoben: Werkstattfahrt ohne Verschleiß,
+  Panne und Treibstoff. Danach schließt im selben Lauf nur noch eine Firma (Bäckerei nicht tragfähig).
+- Die Bergbau-Gründerin fand nie einen Schritt: Eigentümerprüfungen nutzten `Parcels.CITY` (nur Ort 0). Jetzt `Towns.is_public`.
+- Stadtkassen sinken, weil Lohn-/Gewerbesteuern nur an Ort 0 gehen, Ort 0 dafür das regionale Personal/Dienste allein trägt; die
+  übrigen Städte finanzieren Erschließung und Verbindungsstraßen aus Grundsteuer und Landeszuweisung. Offen: Steuern und Personal je Stadt.

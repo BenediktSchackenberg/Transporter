@@ -67,6 +67,24 @@ func _initialize() -> void:
 		print("   letzte Ergebnisse: %s" % str(s.action_results.get(c.id, []).slice(-10).map(func(r): return str(r.text).left(140))))
 		var obs := ObservationBuilder.build(s, c.id, [], 0.0, 10.0)
 		print("   Regel-KI jetzt: %s" % str(RuleBrain.decide(obs, c.personality, rng).actions.map(func(x): return str(x).left(120))))
+	print("\n--- Geldfluesse der Stadtkassen (seit Beginn) ---")
+	for k in s.towns.count():
+		var acct: String = s.towns.mayor(k).acct()
+		var ins: Array = []
+		var outs: Array = []
+		for fk in s.economy.flows:
+			var parts: PackedStringArray = str(fk).split(">")
+			var amt := float(s.economy.flows[fk])
+			if parts.size() == 2 and parts[1] == acct:
+				ins.append([parts[0], amt])
+			elif parts.size() == 2 and parts[0] == acct:
+				outs.append([parts[1], amt])
+		ins.sort_custom(func(a, b): return a[1] > b[1])
+		outs.sort_custom(func(a, b): return a[1] > b[1])
+		print("%s (%s): ein %d %s" % [s.towns.name_of(k), acct, int(ins.reduce(func(t, x): return t + x[1], 0.0)), str(ins.slice(0, 7).map(func(x): return "%s %d" % [x[0], int(x[1])]))])
+		print("   aus %d %s" % [int(outs.reduce(func(t, x): return t + x[1], 0.0)), str(outs.slice(0, 8).map(func(x): return "%s %d" % [x[0], int(x[1])]))])
+		var M: Mayor = s.towns.mayor(k)
+		print("   Projekte: %s" % str(M.projects.values().map(func(p): return "%s %s %d" % [p.kind, p.status, int(p.cost)])))
 	print("\n--- Stadtkassen ---")
 	for d in town_cash:
 		print("Tag %d: %s" % [d, ", ".join(town_cash[d])])
