@@ -210,3 +210,13 @@ Diagnose `tests/probe_closures.gd` (Seed 21, 120 Tage):
 - Die Bergbau-Gründerin fand nie einen Schritt: Eigentümerprüfungen nutzten `Parcels.CITY` (nur Ort 0). Jetzt `Towns.is_public`.
 - Stadtkassen sinken, weil Lohn-/Gewerbesteuern nur an Ort 0 gehen, Ort 0 dafür das regionale Personal/Dienste allein trägt; die
   übrigen Städte finanzieren Erschließung und Verbindungsstraßen aus Grundsteuer und Landeszuweisung. Offen: Steuern und Personal je Stadt.
+
+## Schiffe und Seeverkehr (08.11.2026)
+
+- Neue Schiffsgrafik (`scripts/world/ship_view.gd`): Rumpf mit Bug, Wasserlinie und Aufbauten, gedreht in Fahrtrichtung; vier Bauarten
+  (Containerschiff, Schüttgutfrachter, Kreuzfahrtschiff, Autotransporter), Fenster nachts beleuchtet. Jeder Hafen der Region hat
+  Anleger und Linienschiff (vorher nur Ort 0).
+- `SeaTraffic` (`sim.sea`): Kreuzfahrtschiff „MS Aurora“ (alle 3 Tage eine Etappe) und „Autocarrier Hansa“ (alle 4 Tage) fahren reihum
+  zwischen den Hafenstädten. Ankunft: Kreuzfahrtgäste buchen Hotels im Zielort (Tourism), der Autotransporter bringt dem Fahrzeughandel
+  zwei Neufahrzeuge. Route: A* über Wasserfelder; liegen die Häfen an verschiedenen Meeren, außerhalb der Karte um das Festland.
+- Autotest: `--demo-ship` (alle Häfen), `--demo-sea=0.3 --shot-sea=KS1|AT1`; Diagnose `tests/probe_sea_route.gd`; Test `test_sea_traffic`.

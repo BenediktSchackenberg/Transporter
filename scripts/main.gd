@@ -171,10 +171,23 @@ func _process(_delta: float) -> void:
 			args["shot-tile"] = "%d,%d" % [int(at[0]), int(at[1])]
 	if session and args.has("demo-ship") and not args.has("_ship") and session.sim.harbor.enabled:   # Sichtpruefung Hafen: Schiff legt sofort an
 		args["_ship"] = true
-		var H: Harbor = session.sim.harbor
-		for it in ["mehl", "saatgut", "stahl"]:
-			H.ship_in("stock", "", it, 40)
-		H._arrive(GameCalendar.day_of(session.sim.game_min))
+		for k in session.sim.towns.count():   # alle Haefen der Region
+			var H: Harbor = session.sim.towns.harbor(k)
+			if not H.enabled:
+				continue
+			for it in ["mehl", "saatgut", "stahl"]:
+				H.ship_in("stock", "", it, 40)
+			H._arrive(GameCalendar.day_of(session.sim.game_min))
+	if session and args.has("demo-sea") and not args.has("_sea") and session.sim.sea.enabled:   # Sichtpruefung Seeverkehr: Schiffe mitten auf der Fahrt
+		args["_sea"] = true
+		var S: SeaTraffic = session.sim.sea
+		var frac := float(args["demo-sea"]) if str(args["demo-sea"]).is_valid_float() else 0.5
+		for i in SeaTraffic.FLEET.size():
+			var sd: Dictionary = SeaTraffic.FLEET[i]
+			var a: int = S.ports[i % S.ports.size()]
+			var b: int = S.ports[(i + 1) % S.ports.size()]
+			var start: float = session.sim.game_min - SeaTraffic.TRIP_MIN * 6.0 * frac   # langsame Demo-Fahrt, Anteil frac schon zurueckgelegt
+			S.legs[sd.id] = {"ship": sd.id, "kind": sd.kind, "name": sd.name, "from": a, "to": b, "depart": start, "arrive": start + SeaTraffic.TRIP_MIN * 6.0, "done": false}
 	if session and args.has("demo-bridge") and not args.has("_bridge"):   # Sichtpruefung Bruecke: Zufahrt mit Bruecke, Bau bis zum Fortschritt (Zahl 0..1, "open" = freigegeben)
 		args["_bridge"] = true
 		_demo_bridge(session.sim, str(args["demo-bridge"]))
@@ -219,6 +232,11 @@ func _process(_delta: float) -> void:
 		if args.has("shot-ship"):   # Kamera auf den Liegeplatz des Linienschiffs
 			session.set_follow(false)
 			session.city_view.set_camera_world(session.city_view.ship_view.berth + Vector2(110, -110))   # nach rechts versetzt: Seitenleiste verdeckt den rechten Bildrand
+		if args.has("shot-sea"):   # Kamera auf ein Schiff des Seeverkehrs (KS1 Kreuzfahrt, AT1 Autotransporter)
+			var sn = session.city_view.ship_view._voyage_nodes.get(str(args["shot-sea"]))
+			if sn != null:
+				session.set_follow(false)
+				session.city_view.set_camera_world(sn.world + Vector2(60, -60))
 		if args.has("shot-crew"):   # Kamera auf das Fahrzeug eines Bautrupps (bevorzugt eines, das gerade baut)
 			var pick := {}
 			for fv in session.sim.fleet.vehicles:
