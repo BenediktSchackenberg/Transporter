@@ -136,6 +136,12 @@ var _cur_key := ""        # Schluessel/Herkunft der gerade ausgefuehrten Aktion 
 var _cur_origin := "api"
 
 
+## Aktion aus einer Modellantwort (Herkunft api mit Ausfuehrungsschluessel)? Nur dann greifen die Ersatzregeln fuer verschwundene
+## Auftraege und verkaufte Fahrzeugangebote - direkte Aufrufe (Oberflaeche, Tests) bekommen die ehrliche Ablehnung.
+func _from_model() -> bool:
+	return _cur_origin == "api" and _cur_key != ""
+
+
 func setup(simulation) -> void:
 	sim = simulation
 	worker_actions.setup(simulation, self)
@@ -570,12 +576,14 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			else:
 				return {"ok": false, "msg": "offer_id oder model angeben."}
 			var swapped := ""
-			if offer.status != "verfügbar":
+			if offer.status != "verfügbar" and _from_model():
 				var alt := _substitute_offer(offer)
 				if alt.is_empty():
 					return {"ok": false, "msg": "Angebot %s ist bereits verkauft (kein gleichwertiges Ersatzangebot)." % offer.id}
 				swapped = " (Ersatz für verkauftes %s)" % offer.id
 				offer = alt
+			if offer.status != "verfügbar":
+				return {"ok": false, "msg": "Angebot %s ist bereits verkauft." % offer.id}
 			var spec := Catalog.model(offer.model)
 			if c.vehicle_ids.size() >= c.fleet_limit():
 				return {"ok": false, "msg": "Alle %d Stellplätze belegt – Stellplätze/Halle bauen (place_building) oder Depot anmieten.%s" % [c.fleet_limit(), _yard_hint(cid)]}
@@ -853,7 +861,8 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 	var c: Company = sim.company(cid)
 	var k: Contract = sim.contracts.get(kid)
 	var note := ""
-	if (k == null or k.status != "open") and _cur_origin == "api":
+	var existed: bool = k != null or (kid.begins_with("A") and kid.substr(1).is_valid_int() and int(kid.substr(1)) < int(sim.market.next_id))
+	if (k == null or k.status != "open") and existed and _from_model():   # nur verschwundene, nicht erfundene Auftragsnummern ersetzen
 		# Modelle nennen oft IDs aus frueheren Runden: den besten sichtbaren, machbaren Ersatz nehmen statt abzulehnen
 		var alt := _substitute_contract(cid, vid)
 		if alt != null:
@@ -1157,7 +1166,13 @@ func complete_visit(cid: int, pending: Dictionary) -> void:
 		return
 	var a: Dictionary = pending.action
 	var name := str(a.get("action", ""))
+	var prev_key := _cur_key
+	var prev_origin := _cur_origin
+	_cur_key = str(pending.get("key", ""))      # Ersatzregeln (Auftrag/Angebot weg) gelten auch bei Ankunft fuer Modellaktionen
+	_cur_origin = str(pending.get("origin", "api"))
 	var r := _do(cid, name, a, true)
+	_cur_key = prev_key
+	_cur_origin = prev_origin
 	sim.record_result(cid, "%s %s (vor Ort): %s" % ["OK" if r.ok else "ABGELEHNT", name, r.msg])
 	sim.plans.visit_done(cid, str(pending.get("key", "")), r)
 	sim.decisions.record(cid, str(pending.get("origin", "api")), a, r, str(pending.get("key", "")) + "@vor_ort")

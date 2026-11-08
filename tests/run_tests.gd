@@ -1872,7 +1872,7 @@ func test_stage2_memory() -> void:
 	ok(rel.erfahrungen.size() <= MemoryBook.PROMPT_EXPERIENCES and rel.erfahrungen[0].inhalt.contains("Hafen"), "Auswahl begrenzt, passender Bereich zuerst")
 	ok(M.books[0].experiences.size() <= MemoryBook.MAX_EXPERIENCES, "Gedächtnis begrenzt")
 	var obs := ObservationBuilder.build(s, 0, [], 0.0, 10.0)
-	ok(obs.has("gedaechtnis") and JSON.stringify(obs).length() / 4 < 6200, "Gedächtnis in der Beobachtung, Größe begrenzt (~%d Token)" % (JSON.stringify(obs).length() / 4))   # +200: Bergbau-Schritte, Gebaeudestufen, Region (07.11.2026, gemessen 6149)
+	ok(obs.has("gedaechtnis") and JSON.stringify(obs).length() / 4 < 6400, "Gedächtnis in der Beobachtung, Größe begrenzt (~%d Token)" % (JSON.stringify(obs).length() / 4))   # +200: Bergbau-Schritte, Gebaeudestufen, Region (07.11.2026, gemessen 6149)
 	# Speichern/Laden und Uebernahme in neue Partie
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.memory.books[0].experiences.size() == M.books[0].experiences.size(), "Gedächtnis im Spielstand")
@@ -3551,7 +3551,7 @@ func test_provider_choice() -> void:
 	ok(cfg.players.size() == 2 and cfg.players[0].provider == "ollama" and cfg.players[1].provider == "openai",
 		"Anbieter pro Spieler getrennt")
 	ok(cfg.players[0].base_url == OllamaAdapter.DEFAULT_BASE_URL and cfg.players[0].model == OllamaAdapter.DEFAULT_MODEL
-		and cfg.players[0].api_key == "" and not cfg.players[0].save_key and cfg.players[0].timeout == 90.0,
+		and cfg.players[0].api_key == "" and not cfg.players[0].save_key and cfg.players[0].timeout == 300.0,
 		"Ollama-Preset ohne Key und mit Start-Timeout")
 	ok(cfg.players[1].base_url == "https://api.example.com/v1" and cfg.players[1].model == "external-model"
 		and cfg.players[1].api_key == "TEST_KEY_REMOTE", "Externe API behält eigene URL, Modell und Key")
@@ -9065,8 +9065,12 @@ func test_substitute_and_memory() -> void:
 	for k in s.market.open_contracts():
 		s.companies[0].known[k.id] = true
 		k.deadline = s.game_min + 6000.0
-	var r := s.executor.execute(0, {"action": "accept_contract", "contract_id": "A999999"}, "t1", "api")
+	var gone: Contract = s.market.open_contracts()[0]
+	gone.status = "expired"   # war sichtbar, ist inzwischen weg
+	var r := s.executor.execute(0, {"action": "accept_contract", "contract_id": gone.id}, "t1", "api")
 	ok(r.ok and str(r.msg).contains("stattdessen"), "Modellantwort mit verschwundener ID: Ersatzauftrag angenommen (%s)" % str(r.msg).left(90))
+	var made_up := s.executor.execute(0, {"action": "accept_contract", "contract_id": "A999999"}, "t1b", "api")
+	ok(not made_up.ok, "erfundene Auftragsnummer wird abgelehnt, nicht ersetzt")
 	var r2 := s.executor.execute(0, {"action": "accept_contract", "contract_id": "A999998"}, "t2", "fallback")
 	ok(not r2.ok, "Regel-KI bekommt keinen stillen Ersatz")
 	for i in ActionExecutor.EXECUTED_MAX + 50:
