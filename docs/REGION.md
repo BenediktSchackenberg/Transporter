@@ -220,3 +220,16 @@ Diagnose `tests/probe_closures.gd` (Seed 21, 120 Tage):
   zwischen den Hafenstädten. Ankunft: Kreuzfahrtgäste buchen Hotels im Zielort (Tourism), der Autotransporter bringt dem Fahrzeughandel
   zwei Neufahrzeuge. Route: A* über Wasserfelder; liegen die Häfen an verschiedenen Meeren, außerhalb der Karte um das Festland.
 - Autotest: `--demo-ship` (alle Häfen), `--demo-sea=0.3 --shot-sea=KS1|AT1`; Diagnose `tests/probe_sea_route.gd`; Test `test_sea_traffic`.
+
+## Kartenleben (08.11.2026)
+
+`scripts/world/ambient_view.gd` (AmbientView, in der Kartenansicht): jede Bewegung haengt an einem echten Zustand.
+- Kueste: Badegaeste mit Handtuch und Sonnenschirm, Schwimmer, Kind mit Ball (nur bei Waerme, trocken, 9-19.30 Uhr), Brandung,
+  Segelboote auf Kreisbahnen ueber offenem Wasser (nachts Positionslicht), Moewen ueber Straenden.
+- Industrie: Bergwerk mit schwenkendem Bagger, pendelnden Muldenkippern, Staub, Halde nach Foerdermenge und Scheinwerfern nachts;
+  Stahlwerk/Kokerei mit Schloten, Hochofenglut und Funken; Muehle, Brauerei, Moebelwerk, Schlachthof mit Schlot; Traktor auf Feldern,
+  Weidetiere; Hafenkran schwenkt, solange ein Schiff am Kai liegt. Alles nur, wenn der Betrieb laeuft.
+- Stadtleben: Passanten an Strassen in bebauten Vierteln (Pendelzeiten mehr, nachts kaum, bei Regen mit Schirm), Cafe- und
+  Restaurantterrassen mit Gaesten, Laternenlicht nachts.
+- Autotest: `--demo-ambient --shot-ambient=strand|boot|bergwerk|huette|traktor|passanten|kran|terrasse`; Diagnose `tests/probe_ambient.gd`.
+- Offen: Autobahn (Verkehrszaehlung, genehmigte Projekte mit Fahrspuren, Anschlussstellen und Kreuzungen) ist noch nicht umgesetzt.

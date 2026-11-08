@@ -1,0 +1,533 @@
+class_name AmbientView
+extends Node2D
+## Leben auf der Karte (liest nur die Simulation; jede Bewegung haengt an einem echten Zustand):
+## 1) Kueste: Badegaeste und Schwimmer (nur bei Waerme, trocken, tagsueber), Brandung, Segelboote, Moewen ueber Hafen und Strand.
+## 2) Industrie: Bergwerk (Bagger, pendelnde Muldenkipper, Staub, Halde nach Foerdermenge), Schlote/Hochofenglut/Funken, Traktor
+##    auf bewirtschafteten Feldern, Weidetiere, Hafenkran bei angelegtem Schiff - nur solange der Betrieb laeuft.
+## 3) Stadtleben: Fussgaenger (Pendelzeiten, bei Regen mit Schirm), Cafe-/Restaurantterrassen, Laternenlicht nachts.
+## Jeder Ort ist ein eigener Knoten (Spot) in der y-sortierten Gebaeudeebene; gezeichnet wird nur, was im Bild liegt.
+
+const STEP := 18.0
+const SC := 1.8          # Figuren und Fahrzeuge gegenueber Pixelmass (ein Feld ist 64 Bildpunkte breit)
+const MAX_BEACH := 140
+const MAX_WALK := 180
+const MAX_BOATS := 10
+const RESCAN_S := 2.0
+const SKIN := [Color("f1c7a1"), Color("d9a47c"), Color("a8714f"), Color("7a4e33")]
+const CLOTH := [Color("e8553d"), Color("3d7cc8"), Color("f2c14e"), Color("4f9a5b"), Color("a05cc0"), Color("f08aa8"), Color("2b2b2b"), Color("eeeeee")]
+
+var sim: Simulation
+var cv
+var t := 0.0
+var beach := 0.0          # 0..1 Strandwetter
+var walk := 0.0           # 0..1 Fussgaengeraufkommen
+var night := false
+var rain := false
+var wind := Vector2(1, 0)
+var _biz_spots := {}      # Schluessel -> Spot
+var _rescan := 0.0
+var _spots: Array = []
+
+
+func setup(simulation: Simulation, city_view) -> void:
+	sim = simulation
+	cv = city_view
+	_build_coast()
+	_build_walkers()
+	_build_harbors()
+	_scan_business()
+
+
+func _add(kind: String, cell: Vector2, data: Dictionary, parent: Node = self) -> Spot:
+	var s := Spot.new()
+	s.view = self
+	s.kind = kind
+	s.world = cell * 32.0
+	s.data = data
+	s.position = Iso.to_screen(s.world)
+	parent.add_child(s)
+	_spots.append(s)
+	return s
+
+
+func _h(a: int, b: int) -> int:
+	return absi(hash(Vector2i(a, b)))
+
+
+# ------------------------------------------------------------------ Kueste
+func _build_coast() -> void:
+	var C := sim.city
+	var n := 0
+	var y := 2
+	while y < C.size - 2 and n < MAX_BEACH:
+		var x := 2
+		while x < C.size - 2 and n < MAX_BEACH:
+			var c := Vector2i(x, y)
+			if C.g(c) == CityData.G.SAND:
+				var shore: Array = []
+				for dy in range(-3, 4):
+					for dx in range(-3, 4):
+						var q := c + Vector2i(dx, dy)
+						if C.inside(q) and C.g(q) == CityData.G.WATER:
+							shore.append(Vector2(dx, dy))
+				if not shore.is_empty():
+					_add("strand", Vector2(c) + Vector2(0.5, 0.5), {"shore": shore.slice(0, 6), "seed": _h(x, y)})
+					n += 1
+			x += 4
+		y += 4
+	# Segelboote: offenes Wasser 5..14 Felder vor der Kueste, Kreisbahn ganz auf Wasser
+	var boats := 0
+	y = 8
+	while y < C.size - 8 and boats < MAX_BOATS:
+		var x2 := 8
+		while x2 < C.size - 8 and boats < MAX_BOATS:
+			var c2 := Vector2i(x2, y)
+			if C.g(c2) == CityData.G.WATER and _near_land(c2, 14) and not _near_land(c2, 5):
+				var r := 3.0 + float(_h(x2, y) % 3)
+				var wet := true
+				for i in 8:
+					var q2 := c2 + Vector2i((Vector2(r, 0).rotated(TAU * i / 8.0)).round())
+					wet = wet and C.inside(q2) and C.g(q2) == CityData.G.WATER
+				if wet:
+					_add("boot", Vector2(c2) + Vector2(0.5, 0.5), {"r": r, "seed": _h(x2, y), "segel": CLOTH[_h(y, x2) % CLOTH.size()]})
+					boats += 1
+			x2 += 23
+		y += 19
+	# Moewen ueber Straenden (Auswahl) - in der Effektebene ueber allem
+	var k := 0
+	for s in _spots.duplicate():
+		if s.kind == "strand" and k % 9 == 0:
+			_add("moewen", s.world / 32.0 + Vector2(1.5, -1.0), {"seed": int(s.data.seed)}, cv.fx_node)
+		k += 1 if s.kind == "strand" else 0
+
+
+func _near_land(c: Vector2i, r: int) -> bool:
+	for dy in range(-r, r + 1, maxi(1, r / 3)):
+		for dx in range(-r, r + 1, maxi(1, r / 3)):
+			var q := c + Vector2i(dx, dy)
+			if sim.city.inside(q) and sim.city.g(q) not in [CityData.G.WATER]:
+				return true
+	return false
+
+
+# ------------------------------------------------------------------ Stadtleben
+func _build_walkers() -> void:
+	var C := sim.city
+	var n := 0
+	var y := 3
+	while y < C.size - 3 and n < MAX_WALK:
+		var x := 3
+		while x < C.size - 3 and n < MAX_WALK:
+			var c := Vector2i(x, y)
+			var walkable := [CityData.G.SIDEWALK, CityData.G.ROAD, CityData.G.PLAZA]
+			if C.g(c) in walkable and _near_houses(c):
+				var dir := Vector2i(1, 0) if C.inside(c + Vector2i(1, 0)) and C.g(c + Vector2i(1, 0)) == C.g(c) else Vector2i(0, 1)
+				var len := 0
+				while len < 7 and C.inside(c + dir * (len + 1)) and C.g(c + dir * (len + 1)) == C.g(c):
+					len += 1
+				if len >= 2:
+					var side := Vector2(-dir.y, dir.x) * (0.42 if C.g(c) == CityData.G.ROAD else 0.0)   # auf der Strasse: am Rand (Gehweg der Grafik)
+					_add("passanten", Vector2(c) + Vector2(0.5, 0.5) + side, {"dir": Vector2(dir), "len": float(len), "seed": _h(x, y), "laterne": (x + y) % 3 == 0})
+					n += 1
+			x += 3
+		y += 3
+
+
+## Wohn-/Geschaeftsgebaeude in der Naehe? (Passanten nur in bebauten Vierteln, nicht auf Landstrassen)
+func _near_houses(c: Vector2i) -> bool:
+	for dy in range(-3, 4, 3):
+		for dx in range(-3, 4, 3):
+			var q := c + Vector2i(dx, dy)
+			if sim.city.inside(q) and sim.city.building_at[sim.city.idx(q)] >= 0:
+				return true
+	return false
+
+
+func _build_harbors() -> void:
+	if sim.towns == null:
+		return
+	for k in sim.towns.count():
+		var H: Harbor = sim.towns.harbor(k)
+		if not H.enabled:
+			continue
+		var b: Dictionary = sim.city.building(H.building)
+		if b.is_empty():
+			continue
+		_add("kran", Vector2(float(b.x) + float(b.w) + 0.5, float(b.y) + float(b.h) * 0.5), {"town": k})
+
+
+# ------------------------------------------------------------------ Industrie (Betriebe kommen und gehen)
+func _scan_business() -> void:
+	var seen := {}
+	for b in sim.biz.items.values():
+		var kind := ""
+		match str(b.branch):
+			"bergwerk":
+				kind = "bergwerk"
+			"stahlwerk", "elektrostahlwerk", "kokerei":
+				kind = "huette"
+			"muehle", "moebelwerk", "brauerei", "schlachthof":
+				kind = "schlot"
+			"feld":
+				kind = "traktor"
+			"tierhaltung":
+				kind = "weide"
+			"restaurant", "baeckerei":
+				kind = "terrasse"
+		if kind == "" or b.status == "geschlossen":
+			continue
+		var bld: Dictionary = sim.city.building(int(b.site))
+		if bld.is_empty():
+			continue
+		var key := "%s:%s" % [kind, b.id]
+		seen[key] = true
+		if _biz_spots.has(key):
+			continue
+		var anchor := Vector2(float(bld.x) + float(bld.w) * 0.5, float(bld.y) + float(bld.h) * 0.5)
+		var data := {"biz": str(b.id), "w": float(bld.w), "h": float(bld.h), "seed": _h(int(bld.x), int(bld.y))}
+		if kind == "traktor" or kind == "weide":
+			var p: Dictionary = sim.parcels.parcel(str(b.get("parcel", "")))
+			if not p.is_empty() and p.has("rect"):
+				data["rect"] = Rect2(float(p.rect[0]), float(p.rect[1]), float(p.rect[2]), float(p.rect[3]))
+				anchor = data.rect.position + data.rect.size * 0.5
+		if kind == "terrasse":
+			anchor = Vector2(float(bld.x) + float(bld.w) + 0.4, float(bld.y) + float(bld.h) - 0.6)
+		if kind in ["bergwerk", "huette", "schlot"]:
+			# Vorderkante des Gebaeudes: so zeichnet die Tiefensortierung Bagger/Halde davor und Schlote ueber das Dach
+			anchor = Vector2(float(bld.x) + float(bld.w) + 0.3, float(bld.y) + float(bld.h) + 0.3)
+		_biz_spots[key] = _add(kind, anchor, data)
+	for key in _biz_spots.keys():
+		if not seen.has(key):
+			var s: Spot = _biz_spots[key]
+			_spots.erase(s)
+			s.queue_free()
+			_biz_spots.erase(key)
+
+
+# ------------------------------------------------------------------ Takt
+func update_view(delta: float) -> void:
+	if sim == null:
+		return
+	t += delta
+	_rescan += delta
+	if _rescan >= RESCAN_S:
+		_rescan = 0.0
+		_scan_business()
+	var hour := Catalog.hour_of_day(sim.game_min)
+	night = hour >= 20.5 or hour < 5.5
+	var wx: Weather = sim.wx
+	rain = wx.is_rain() or wx.is_snow()
+	var temp := float(wx.cur.get("temp", 15.0))
+	beach = 0.0 if rain or night or hour < 9.0 or hour > 19.5 else clampf((temp - 15.0) / 10.0, 0.0, 1.0)
+	if beach > 0.0:
+		beach = maxf(beach, 0.25)
+	walk = 1.0 if (hour >= 7.0 and hour < 9.0) or (hour >= 16.0 and hour < 19.0) else (0.6 if hour >= 9.0 and hour < 16.0 else (0.3 if hour >= 19.0 and hour < 23.0 else 0.05))
+	if rain:
+		walk *= 0.5
+	wind = Vector2(1, -0.3).normalized() * (0.6 + clampf(float(wx.cur.get("wind", 10.0)) / 40.0, 0.0, 1.5))
+	# nur Sichtbares zeichnen
+	var cam: Camera2D = cv.camera
+	var half := get_viewport_rect().size / cam.zoom * 0.5 + Vector2(160, 160)
+	var view := Rect2(cam.position - half, half * 2.0)
+	for s in _spots:
+		var vis: bool = view.has_point(s.position)
+		s.visible = vis
+		if vis:
+			s.queue_redraw()
+
+
+func is_active(biz_id: String) -> bool:
+	var b: Dictionary = sim.biz.get_b(biz_id)
+	return not b.is_empty() and str(b.status) in ["aktiv", "demo"]
+
+
+## Ein belebter Ort; zeichnet relativ zu seinem Ankerpunkt (lokale Koordinaten in Feldern, z in Hoehenstufen).
+class Spot extends Node2D:
+	var view: AmbientView
+	var kind := ""
+	var world := Vector2.ZERO
+	var data := {}
+
+	func _p(dx: float, dy: float, z: float = 0.0) -> Vector2:
+		return Iso.to_screen(world + Vector2(dx, dy) * 32.0) - Iso.to_screen(world) + Vector2(0, -z * AmbientView.STEP)
+
+	func _draw() -> void:
+		match kind:
+			"strand":
+				_strand()
+			"boot":
+				_boot()
+			"moewen":
+				_moewen()
+			"passanten":
+				_passanten()
+			"kran":
+				_kran()
+			"bergwerk":
+				_bergwerk()
+			"huette":
+				_huette()
+			"schlot":
+				_schlot(Vector2(-float(data.w) * 0.5 - 0.3, -float(data.h) * 0.5 - 0.3), 2.8, 4)
+			"traktor":
+				_traktor()
+			"weide":
+				_weide()
+			"terrasse":
+				_terrasse()
+
+	# ---- Figuren
+	func _at(pt: Vector2) -> void:
+		draw_set_transform(pt, 0.0, Vector2(AmbientView.SC, AmbientView.SC))
+
+	func _end() -> void:
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	func _person(at: Vector2, z: float, seed: int, phase: float = 0.0, umbrella: bool = false) -> void:
+		_at(_p(at.x, at.y, z))
+		var base := Vector2.ZERO
+		var step := sin(phase) * 1.5
+		var cloth: Color = AmbientView.CLOTH[seed % AmbientView.CLOTH.size()]
+		draw_line(base + Vector2(-1, 0), base + Vector2(-1 + step, -5), Color("2b2b33"), 1.5)
+		draw_line(base + Vector2(1, 0), base + Vector2(1 - step, -5), Color("2b2b33"), 1.5)
+		draw_rect(Rect2(base + Vector2(-2.5, -11), Vector2(5, 6)), cloth)
+		draw_circle(base + Vector2(0, -13), 2.2, AmbientView.SKIN[(seed / 7) % AmbientView.SKIN.size()])
+		if umbrella:
+			draw_line(base + Vector2(2, -9), base + Vector2(2, -19), Color("333333"), 1.0)
+			draw_colored_polygon(PackedVector2Array([base + Vector2(-5, -18), base + Vector2(2, -23), base + Vector2(9, -18)]), AmbientView.CLOTH[(seed / 3) % AmbientView.CLOTH.size()])
+		_end()
+
+	# ---- 1) Kueste
+	func _strand() -> void:
+		var shore: Array = data.shore
+		var tt: float = view.t
+		for i in shore.size():   # Brandung: Schaumkronen laufen auf
+			var w: Vector2 = shore[i]
+			var k := fmod(tt * 0.35 + float(i) * 0.37, 1.0)
+			var a := Color(1, 1, 1, 0.55 * (1.0 - k))
+			draw_arc(_p(w.x * (1.0 - k * 0.3), w.y * (1.0 - k * 0.3)), 9.0 + k * 6.0, PI * 0.9, PI * 1.9, 8, a, 2.0)
+		var people := int(round(float(view.beach) * float(3 + int(data.seed) % 4)))
+		if people <= 0:
+			return
+		var seed: int = data.seed
+		for i in people:
+			var off := Vector2(float((seed >> (i * 3)) % 7) * 0.22 - 0.7, float((seed >> (i * 5)) % 5) * 0.2 - 0.4)
+			var towel: Color = AmbientView.CLOTH[(seed / (i + 3)) % AmbientView.CLOTH.size()]
+			if i % 2 == 0:   # Handtuch mit Liegenden, Sonnenschirm
+				draw_colored_polygon(PackedVector2Array([_p(off.x - 0.35, off.y - 0.16), _p(off.x + 0.35, off.y - 0.16), _p(off.x + 0.35, off.y + 0.16), _p(off.x - 0.35, off.y + 0.16)]), towel)
+				_at(_p(off.x, off.y))
+				draw_line(Vector2(-6, -2), Vector2(5, 1), AmbientView.SKIN[(seed + i) % 4], 3.0)
+				draw_circle(Vector2(-7, -3), 2.2, AmbientView.SKIN[(seed + i) % 4])
+				draw_line(Vector2(9, -4), Vector2(9, -24), Color("dddddd"), 1.0)
+				draw_colored_polygon(PackedVector2Array([Vector2(-2, -22), Vector2(9, -28), Vector2(20, -22)]), towel.lightened(0.15))
+				draw_colored_polygon(PackedVector2Array([Vector2(-2, -22), Vector2(9, -28), Vector2(9, -22)]), towel.lightened(0.35))
+				_end()
+			else:   # Schwimmer im Wasser (Kopf wippt) oder Kind mit Ball am Ufer
+				if shore.size() > i:
+					var w2: Vector2 = shore[i] * 0.8
+					var bob := sin(view.t * 2.0 + float(i)) * 1.5
+					_at(_p(w2.x, w2.y) + Vector2(0, bob))
+					draw_circle(Vector2.ZERO, 2.6, AmbientView.SKIN[(seed + i) % 4])
+					draw_arc(Vector2(0, 2), 5.0, 0.0, PI, 8, Color(1, 1, 1, 0.6), 1.2)
+					draw_line(Vector2(-6, 1 + sin(view.t * 3.0 + i) * 2.0), Vector2(-3, 0), AmbientView.SKIN[(seed + i) % 4], 1.5)
+					_end()
+				else:
+					_person(off, 0.0, seed + i, view.t * 6.0)
+					var ball := _p(off.x + 0.4, off.y) + Vector2(0, -absf(sin(view.t * 3.0)) * 18.0)
+					draw_circle(ball, 3.5, Color("f24b3a"))
+
+	func _boot() -> void:
+		var tt: float = view.t * 0.08 + float(data.seed % 100) * 0.06
+		var r: float = data.r
+		var pos := Vector2(cos(tt), sin(tt)) * r
+		var head := Vector2(-sin(tt), cos(tt))
+		var bob := sin(view.t * 1.7 + float(data.seed % 7)) * 1.2
+		_at(_p(pos.x, pos.y) + Vector2(0, bob))
+		var c := Vector2.ZERO
+		var f := Iso.to_screen(head * 32.0).normalized() * 9.0
+		var s := Vector2(-f.y, f.x) * 0.35
+		draw_colored_polygon(PackedVector2Array([c + f, c - f + s, c - f - s]), Color("f4efe4"))   # Rumpf
+		draw_line(c - f * 0.9, c - f * 2.2, Color(1, 1, 1, 0.45), 2.0)   # Kielwasser
+		if view.night:
+			draw_circle(c + Vector2(0, -6), 2.0, Color("ffd76a"))
+			_end()
+			return
+		draw_line(c, c + Vector2(0, -22), Color("6b5b48"), 1.5)   # Mast und Segel
+		var sail: Color = data.segel
+		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -21), c + Vector2(0, -3), c + Vector2(10.0 * signf(f.x + 0.01), -4)]), sail)
+		_end()
+
+	func _moewen() -> void:
+		if view.rain and view.night:
+			return
+		for i in 3:
+			var a := view.t * (0.45 + i * 0.1) + float(i) * 2.1 + float(data.seed % 10)
+			var c := Vector2(cos(a) * (40.0 + i * 14.0), sin(a) * (18.0 + i * 6.0) - 70.0 - i * 10.0)
+			var flap := sin(view.t * 9.0 + i) * 3.0
+			draw_polyline(PackedVector2Array([c + Vector2(-6, flap), c, c + Vector2(6, flap)]), Color("f4f4f4"), 1.6)
+
+	# ---- 3) Stadtleben
+	func _passanten() -> void:
+		var seed: int = data.seed
+		var n := int(round(float(view.walk) * float(1 + seed % 3)))
+		var dir: Vector2 = data.dir
+		var length: float = data.len
+		if bool(data.laterne) and view.night:   # Laternenlicht
+			var lp := _p(0.0, 0.0)
+			draw_line(lp, lp + Vector2(0, -24), Color("3a3a3a"), 1.5)
+			draw_circle(lp + Vector2(0, -25), 9.0, Color(1.0, 0.85, 0.45, 0.25))
+			draw_circle(lp + Vector2(0, -25), 2.5, Color("ffe08a"))
+		for i in n:
+			var speed := 0.12 + float((seed >> i) % 5) * 0.03
+			var k := fmod(view.t * speed + float(i) * 0.37 + float(seed % 13) * 0.07, 2.0)
+			var u := k if k <= 1.0 else 2.0 - k
+			var at := dir * u * length + Vector2(-dir.y, dir.x) * (0.25 * float(i % 2) - 0.1)
+			_person(at, 0.0, seed + i * 11, view.t * 8.0 + i, view.rain)
+
+	func _terrasse() -> void:
+		var open: bool = view.is_active(str(data.biz)) and not view.night and not view.rain
+		for i in 2:
+			_at(_p(0.15 + i * 0.7, 0.2))
+			var tp := Vector2.ZERO
+			draw_line(tp, tp + Vector2(0, -6), Color("6b4f36"), 1.5)
+			draw_line(tp + Vector2(-5, -6), tp + Vector2(5, -6), Color("6b4f36"), 2.0)
+			if open:
+				draw_line(tp, tp + Vector2(0, -20), Color("dddddd"), 1.0)
+				draw_colored_polygon(PackedVector2Array([tp + Vector2(-11, -18), tp + Vector2(0, -24), tp + Vector2(11, -18)]), Color("d94f3d") if i == 0 else Color("f2f2f2"))
+				for g in 2:
+					var sway := sin(view.t * 1.3 + g + i) * 0.6
+					var base := Vector2(-9.0 + 18.0 * g, 2.0)
+					draw_rect(Rect2(base + Vector2(-2.5, -9 + sway), Vector2(5, 5)), AmbientView.CLOTH[(int(data.seed) + g + i * 3) % AmbientView.CLOTH.size()])
+					draw_circle(base + Vector2(0, -11 + sway), 2.0, AmbientView.SKIN[(int(data.seed) + g) % 4])
+			_end()
+
+	# ---- 2) Industrie
+	func _smoke(from: Vector2, puffs: int, col: Color, size: float) -> void:
+		var w: Vector2 = view.wind
+		for i in puffs:
+			var k := fmod(view.t * 0.25 + float(i) / float(puffs), 1.0)
+			var p := from + Vector2(w.x * k * 46.0, -k * 64.0 + w.y * k * 20.0)
+			draw_circle(p, size * (0.5 + k * 1.6), Color(col.r, col.g, col.b, 0.55 * (1.0 - k)))
+
+	func _schlot(at: Vector2, z: float, puffs: int) -> void:
+		var top := _p(at.x, at.y, z)
+		draw_rect(Rect2(top + Vector2(-3, 0), Vector2(6, 14)), Color("7a4a3a"))
+		draw_rect(Rect2(top + Vector2(-3.5, -1), Vector2(7, 3)), Color("4a2e25"))
+		if view.is_active(str(data.biz)):
+			_smoke(top, puffs, Color("bdbdbd") if not view.night else Color("8d8d99"), 4.0)
+
+	func _huette() -> void:
+		var active: bool = view.is_active(str(data.biz))
+		var cx := -float(data.w) * 0.5 - 0.3
+		var cy := -float(data.h) * 0.5 - 0.3
+		for sx in [-0.6, 0.4]:
+			var top := _p(cx + sx, cy, 3.4)
+			draw_rect(Rect2(top + Vector2(-3.5, 0), Vector2(7, 30)), Color("5e5a56"))
+			if active:
+				_smoke(top, 5, Color("9a9590"), 5.0)
+		var front := _p(cx, -0.3, 0.6)
+		var glow := 0.55 + 0.45 * sin(view.t * 3.0) if active else 0.0
+		draw_rect(Rect2(front + Vector2(-9, -8), Vector2(18, 9)), Color(0.12, 0.1, 0.1))
+		if active:
+			draw_rect(Rect2(front + Vector2(-8, -7), Vector2(16, 7)), Color(1.0, 0.45 + glow * 0.3, 0.1, 0.85))
+			draw_circle(front + Vector2(0, -4), 16.0, Color(1.0, 0.5, 0.1, 0.12 * glow))
+			for i in 6:   # Funken beim Abstich
+				var k := fmod(view.t * 1.4 + float(i) * 0.17, 1.0)
+				var dir := Vector2(cos(float(i) * 1.7), -1.0).normalized()
+				draw_circle(front + dir * k * 22.0 + Vector2(0, k * k * 14.0), 1.3, Color(1.0, 0.85, 0.3, 1.0 - k))
+
+	func _bergwerk() -> void:
+		var active: bool = view.is_active(str(data.biz))
+		var b: Dictionary = view.sim.biz.get_b(str(data.biz))
+		var total := float(b.get("total", 0)) if not b.is_empty() else 0.0
+		# Halde waechst mit der Foerdermenge
+		var heap := clampf(sqrt(total) / 16.0, 0.4, 3.2)
+		var hp := _p(0.9, -1.6)   # Halde neben dem Hof
+		draw_colored_polygon(PackedVector2Array([hp + Vector2(-26 * heap, 0), hp + Vector2(0, -16 * heap), hp + Vector2(26 * heap, 0)]), Color("6d5d50"))
+		draw_colored_polygon(PackedVector2Array([hp + Vector2(-26 * heap, 0), hp + Vector2(0, -16 * heap), hp + Vector2(0, 0)]), Color("85735f"))
+		# Muldenkipper pendeln zwischen Abbaufront und Halde (hinten zuerst)
+		for i in 2:
+			var k := fmod(view.t * 0.12 + float(i) * 0.5, 1.0) if active else float(i) * 0.5
+			var u := k * 2.0 if k < 0.5 else 2.0 - k * 2.0
+			var at := Vector2(-0.9, -0.3).lerp(Vector2(0.5, -1.3), u)   # Front <-> Halde, am Hofrand
+			_at(_p(at.x, at.y))
+			draw_rect(Rect2(Vector2(-8, -9), Vector2(16, 7)), Color("e8a33d"))
+			draw_rect(Rect2(Vector2(4, -13), Vector2(5, 5)), Color("d9d9d9"))
+			if k < 0.5 and active:   # beladen auf dem Weg zur Halde
+				draw_rect(Rect2(Vector2(-7, -12), Vector2(10, 3)), Color("6d5d50"))
+			draw_circle(Vector2(-5, -1), 2.5, Color("222222"))
+			draw_circle(Vector2(5, -1), 2.5, Color("222222"))
+			_end()
+		# Bagger an der Abbaufront: Arm schwenkt, Staub, nachts Scheinwerfer
+		_at(_p(-1.4, -0.5))
+		draw_rect(Rect2(Vector2(-9, -7), Vector2(18, 7)), Color("2f2f2f"))
+		draw_rect(Rect2(Vector2(-7, -15), Vector2(13, 8)), Color("f2b632"))
+		draw_rect(Rect2(Vector2(1, -21), Vector2(5, 6)), Color("9ec6e0"))
+		var swing := sin(view.t * 1.1) * 0.7 if active else 0.0
+		var arm_end := Vector2(-6, -14) + Vector2(cos(PI + 0.4 + swing), sin(PI + 0.4 + swing) - 0.6) * 24.0
+		draw_line(Vector2(-4, -14), arm_end, Color("e0a52a"), 3.0)
+		draw_rect(Rect2(arm_end + Vector2(-4, -2), Vector2(8, 6)), Color("5a4a38"))
+		if active:
+			for i in 4:
+				var k2 := fmod(view.t * 0.3 + float(i) * 0.25, 1.0)
+				draw_circle(arm_end + Vector2(k2 * 14.0, -k2 * 18.0), 4.0 + k2 * 8.0, Color(0.75, 0.7, 0.62, 0.35 * (1.0 - k2)))
+			if view.night:
+				draw_circle(Vector2(0, -22), 24.0, Color(1.0, 0.95, 0.75, 0.14))
+				draw_circle(Vector2(0, -22), 2.5, Color("fff3c4"))
+		_end()
+
+	func _traktor() -> void:
+		if not data.has("rect") or not view.is_active(str(data.biz)) or view.night:
+			return
+		var r: Rect2 = data.rect
+		var lanes := maxi(2, int(r.size.y))
+		var k := fmod(view.t * 0.03 + float(int(data.seed) % 10) * 0.1, 1.0) * float(lanes)
+		var lane := int(k)
+		var u := k - float(lane)
+		if lane % 2 == 1:
+			u = 1.0 - u
+		var at := Vector2(r.position.x + 0.5 + u * (r.size.x - 1.0), r.position.y + 0.5 + float(lane)) - world / 32.0
+		_at(_p(at.x, at.y))
+		var tp := Vector2.ZERO
+		draw_rect(Rect2(tp + Vector2(-7, -9), Vector2(11, 7)), Color("3f8f3a"))
+		draw_rect(Rect2(tp + Vector2(-1, -15), Vector2(6, 6)), Color("2f6e2b"))
+		draw_circle(tp + Vector2(-5, -1), 3.5, Color("222222"))
+		draw_circle(tp + Vector2(4, -2), 2.5, Color("222222"))
+		for i in 3:   # Staub hinter dem Traktor
+			var d := float(i + 1) * 6.0
+			draw_circle(tp + Vector2((-d if lane % 2 == 0 else d), -2), 2.0 + i, Color(0.7, 0.6, 0.45, 0.3 - i * 0.08))
+		_end()
+
+	func _weide() -> void:
+		if not data.has("rect"):
+			return
+		var r: Rect2 = data.rect
+		for i in 5:
+			var s := (int(data.seed) >> i) % 97
+			var base := Vector2(r.position.x + 0.5 + float(s % 9) / 9.0 * (r.size.x - 1.0), r.position.y + 0.5 + float(s % 7) / 7.0 * (r.size.y - 1.0))
+			var drift := Vector2(sin(view.t * 0.05 + i), cos(view.t * 0.04 + i * 2.0)) * 0.4
+			var at := base + drift - world / 32.0
+			_at(_p(at.x, at.y))
+			var cp := Vector2.ZERO
+			var body := Color("f2f2ee") if i % 2 == 0 else Color("6b4a32")
+			draw_rect(Rect2(cp + Vector2(-5, -7), Vector2(10, 5)), body)
+			draw_rect(Rect2(cp + Vector2(4, -9), Vector2(4, 4)), body.darkened(0.2))
+			draw_line(cp + Vector2(-3, -2), cp + Vector2(-3, 0), Color("333333"), 1.0)
+			draw_line(cp + Vector2(3, -2), cp + Vector2(3, 0), Color("333333"), 1.0)
+			_end()
+
+	func _kran() -> void:
+		var H: Harbor = view.sim.towns.harbor(int(data.town))
+		var busy: bool = not H.ship.is_empty() and str(H.ship.get("status", "")) == "am_kai"
+		var base := _p(0.0, 0.0)
+		var top := base + Vector2(0, -70)
+		draw_line(base + Vector2(-6, 0), top, Color("d9a32c"), 3.0)
+		draw_line(base + Vector2(6, 0), top, Color("d9a32c"), 3.0)
+		var a := sin(view.t * 0.5) * 0.9 if busy else 0.3
+		var tip := top + Vector2(cos(a), sin(a) * 0.5) * 46.0
+		draw_line(top, tip, Color("e0b23a"), 3.0)
+		draw_line(top, top - (tip - top) * 0.3, Color("e0b23a"), 3.0)
+		var hook := 18.0 + (sin(view.t * 1.0) * 10.0 if busy else 0.0)
+		draw_line(tip, tip + Vector2(0, hook), Color("333333"), 1.0)
+		if busy:
+			draw_rect(Rect2(tip + Vector2(-6, hook), Vector2(12, 7)), [Color("c8553d"), Color("3d7cc8"), Color("4f9a5b")][int(view.t / 4.0) % 3])

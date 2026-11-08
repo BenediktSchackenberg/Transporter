@@ -188,6 +188,21 @@ func _process(_delta: float) -> void:
 			var b: int = S.ports[(i + 1) % S.ports.size()]
 			var start: float = session.sim.game_min - SeaTraffic.TRIP_MIN * 6.0 * frac   # langsame Demo-Fahrt, Anteil frac schon zurueckgelegt
 			S.legs[sd.id] = {"ship": sd.id, "kind": sd.kind, "name": sd.name, "from": a, "to": b, "depart": start, "arrive": start + SeaTraffic.TRIP_MIN * 6.0, "done": false}
+	if session and args.has("demo-ambient") and not args.has("_ambient"):   # Sichtpruefung Kartenleben: Betriebe an vorhandenen Gebaeuden (nur Anzeige)
+		args["_ambient"] = true
+		var S: Simulation = session.sim
+		var near: Array = S.city.buildings.filter(func(b): return S.towns.of_building(int(b.id)) == 0 and int(b.w) >= 2).slice(5, 12)
+		var kinds := ["bergwerk", "stahlwerk", "restaurant", "feld", "tierhaltung"]
+		for i in mini(kinds.size(), near.size()):
+			var bz: Dictionary = S.biz.create(0, kinds[i], int(near[i].id), "", "demo")   # "demo": Produktion ignoriert ihn, die Ansicht zeigt ihn arbeitend
+			bz["total"] = 4000
+			bz["deposit"] = {"art": "eisenerz", "qualitaet": 0.9}   # Felder, die die Betriebsanzeige erwartet
+			bz["field"] = {"phase": "wachsen", "day": 1, "area": 20, "cycles": 0, "last_yield": 0}
+			if kinds[i] in ["feld", "tierhaltung"]:
+				var pp: Array = S.parcels.search({"min_area": 20, "limit": 50}).filter(func(p): return S.towns.of_parcel(str(p.id)) == 0)
+				if not pp.is_empty():
+					bz["parcel"] = str(pp[i % pp.size()].id)
+		session.city_view.ambient_view._scan_business()
 	if session and args.has("demo-bridge") and not args.has("_bridge"):   # Sichtpruefung Bruecke: Zufahrt mit Bruecke, Bau bis zum Fortschritt (Zahl 0..1, "open" = freigegeben)
 		args["_bridge"] = true
 		_demo_bridge(session.sim, str(args["demo-bridge"]))
@@ -232,6 +247,12 @@ func _process(_delta: float) -> void:
 		if args.has("shot-ship"):   # Kamera auf den Liegeplatz des Linienschiffs
 			session.set_follow(false)
 			session.city_view.set_camera_world(session.city_view.ship_view.berth + Vector2(110, -110))   # nach rechts versetzt: Seitenleiste verdeckt den rechten Bildrand
+		if args.has("shot-ambient"):   # Kamera auf das erste Kartenleben-Element einer Art (strand, boot, bergwerk, huette, traktor, passanten, kran, terrasse)
+			for sp in session.city_view.ambient_view._spots:
+				if sp.kind == str(args["shot-ambient"]):
+					session.set_follow(false)
+					session.city_view.set_camera_world(sp.world + Vector2(40, -40))
+					break
 		if args.has("shot-sea"):   # Kamera auf ein Schiff des Seeverkehrs (KS1 Kreuzfahrt, AT1 Autotransporter)
 			var sn = session.city_view.ship_view._voyage_nodes.get(str(args["shot-sea"]))
 			if sn != null:
