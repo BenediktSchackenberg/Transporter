@@ -377,9 +377,15 @@ func _loan_hint(cid: int, missing: float) -> String:
 	return ""
 
 
+const EXECUTED_MAX := 4000
+
+
 func _done(cid: int, key: String, name: String, r: Dictionary) -> Dictionary:
 	if key != "":
 		executed[key] = true
+		if executed.size() > EXECUTED_MAX:   # nur juengste Schluessel halten (Schutz vor Doppelzustellung), aelteste zuerst raus
+			for old in executed.keys().slice(0, EXECUTED_MAX / 4):
+				executed.erase(old)
 	if name != "wait":
 		sim.record_result(cid, "%s %s: %s" % ["OK" if r.ok else "ABGELEHNT", name, r.msg])
 	return r
@@ -841,6 +847,14 @@ func _no_vehicle(vid) -> Dictionary:
 func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 	var c: Company = sim.company(cid)
 	var k: Contract = sim.contracts.get(kid)
+	var note := ""
+	if (k == null or k.status != "open") and _cur_origin == "api":
+		# Modelle nennen oft IDs aus frueheren Runden: den besten sichtbaren, machbaren Ersatz nehmen statt abzulehnen
+		var alt := _substitute_contract(cid, vid)
+		if alt != null:
+			note = " (%s war nicht mehr verfügbar – stattdessen %s)" % [kid, alt.id]
+			k = alt
+			kid = alt.id
 	if k == null or k.status != "open":
 		return {"ok": false, "msg": "Auftrag %s ist nicht (mehr) verfügbar." % kid}
 	if k.exclusive_for >= 0 and k.exclusive_for != cid and k.exclusive_until > sim.game_min:
@@ -883,11 +897,34 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 		if loyal >= 0 and loyal != cid:
 			sim.rivalry.add_tension(cid, loyal, "stammkunde_bedient", sim.city.building(bid).get("name", ""))
 			break
-	var msg := "Auftrag %s angenommen (%s, Frist %s)." % [kid, Catalog.money(k.reward), Catalog.game_minutes_to_text(k.deadline)]
+	var msg := "Auftrag %s angenommen (%s, Frist %s)%s." % [kid, Catalog.money(k.reward), Catalog.game_minutes_to_text(k.deadline), note]
 	if vid >= 0:
 		var r := _assign(cid, vid, kid)
 		msg += " " + r.msg
 	return {"ok": true, "msg": msg}
+
+
+## Ersatz fuer einen verschwundenen Auftrag: bekannt, offen, nicht fuer andere vorgemerkt oder exklusiv, Reputation reicht,
+## rechtzeitig machbar (mit dem genannten Fahrzeug, falls es passt) - bester nach Verguetung je Strecke.
+func _substitute_contract(cid: int, vid: int) -> Contract:
+	var c: Company = sim.company(cid)
+	var v := _own_vehicle(cid, vid) if vid >= 0 else null
+	var best: Contract = null
+	var best_score := 0.0
+	for x in sim.market.open_contracts():
+		if not c.known.has(x.id) or x.held_by_other(cid, sim.game_min) or c.reputation < x.min_rep:
+			continue
+		if x.exclusive_for >= 0 and x.exclusive_for != cid and x.exclusive_until > sim.game_min:
+			continue
+		if v != null and not x.vehicle_ok(v.model):
+			continue
+		if _too_late(cid, x, v.id if v != null else -1) != "":
+			continue
+		var score: float = (x.reward + x.bonus) / float(x.distance + 30)
+		if score > best_score:
+			best_score = score
+			best = x
+	return best
 
 
 ## Machbarkeit vor der Annahme: Kann ein eigenes passendes Fahrzeug (das genannte oder das schnellste) nach seinen geplanten Fahrten

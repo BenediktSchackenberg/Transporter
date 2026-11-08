@@ -75,7 +75,9 @@ func tick(now: float) -> void:
 	# beendete Auftraege nach einer Weile aus dem Speicher entfernen
 	for id in sim.contracts.keys():
 		var k: Contract = sim.contracts[id]
-		if k.status in ["expired", "delivered", "failed", "cancelled"] and now - k.deadline > 600:
+		# nie angenommene, abgelaufene Angebote frueher entfernen (ihre Lieferfrist liegt oft weit in der Zukunft)
+		var gone_since: float = k.offer_until if k.status == "expired" and k.owner < 0 else k.deadline
+		if k.status in ["expired", "delivered", "failed", "cancelled"] and now - gone_since > 600:
 			sim.contracts.erase(id)
 			for c in sim.companies:
 				c.known.erase(id)
