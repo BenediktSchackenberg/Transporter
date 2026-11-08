@@ -65,5 +65,13 @@ func _report(s: Simulation, day: int) -> void:
 			for pid in prj.get("parcels", []):
 				var pp: Dictionary = s.parcels.parcel(str(pid))
 				zones[str(pp.get("zone", "?")) + "/" + s.parcels.utility_level(pp)] = int(zones.get(str(pp.get("zone", "?")) + "/" + s.parcels.utility_level(pp), 0)) + 1
+			var D: CityDepot = s.towns.depot(k)
+			var res: Dictionary = D.project_res.get(prj.id, {})
+			if not res.is_empty() and not D.project_complete(prj.id):
+				var miss := {}
+				for it in res.items:
+					if int(res.reserved.get(it, 0)) < int(res.items[it]):
+						miss[it] = "%d/%d Lager %d" % [int(res.reserved.get(it, 0)), int(res.items[it]), D.stock_of(it)]
+				print("    fehlt %s; Bestellungen: %s" % [str(miss), str(D.orders.values().filter(func(o): return miss.has(o.item) and o.status not in ["eingelagert", "bezahlt"]).map(func(o): return "%s %s %d %s seit %d %s" % [o.id, o.item, int(o.qty), o.status, int(o.day), str(o.get("supplier", ""))]))])
 			print("  Projekt %s %s %s Teile %s Grundstuecke %s | Bau: start %s rest %s/%s warten '%s' Firma %s" % [prj.id, prj.kind, prj.status, str(prj.get("parts", [])), str(zones),
 				str(e.get("start", "-")), str(e.get("days_left", "-")), str(e.get("days", "-")), str(e.get("waiting", "")), str(e.get("builder", "-"))])

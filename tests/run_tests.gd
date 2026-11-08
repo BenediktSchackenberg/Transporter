@@ -8583,7 +8583,7 @@ func test_air_cargo() -> void:
 	set_wx(s, 15.0, 0)   # zurueck zu klarem Himmel
 	ok(A.flight_ok(), "nach dem Wetterwechsel ist das Fliegen wieder moeglich")
 	# Angebot: kritische Ware hat neben dem Hafenimport auch die Luftfracht als Anbieter
-	var quotes := D.quote("rohr", 20, 3)
+	var quotes := D.quote("rohr", 12, 3)
 	var air: Dictionary = {}
 	for q in quotes:
 		if str(q.supplier) == "X0" and bool(q.get("via_air", false)):
@@ -8593,10 +8593,11 @@ func test_air_cargo() -> void:
 		return
 	ok(float(air.unit_price) > float(CityGoods.get_item("rohr").price) * CityGoods.IMPORT_FACTOR, "Luftfracht kostet mehr als der Seeweg (Zuschlag fuer die Dringlichkeit)")
 	ok(bool(quotes[0].get("via_air", false)), "dringende Ware (Kritikalitaet 3) nimmt die Luftfracht, weil der Seeweg zu langsam ist")
-	ok(not bool(D.quote("rohr", 20, 1)[0].get("via_air", false)), "ohne Eile siegt der guenstigere Seeweg (Lieferzeit zaehlt weniger)")
+	ok(not bool(D.quote("rohr", 12, 1)[0].get("via_air", false)), "ohne Eile siegt der guenstigere Seeweg (Lieferzeit zaehlt weniger)")
+	ok(not D.quote("schotter", 500, 3).any(func(q): return bool(q.get("via_air", false))), "Schuettgut ueber zwei Flugladungen geht nicht per Luftfracht")
 	# Bestellung: genehmigt (Lieferzeit 1 Tag) -> ab dem Tag danach in der Luft -> naechste Landung
 	var cash_x0 := float(s.economy.accounts.get("X0", 0.0))
-	var ord := D._new_order("rohr", 20, "Luftfracht-Test", "")
+	var ord := D._new_order("rohr", 12, "Luftfracht-Test", "")
 	ord.crit = 3
 	D.orders[ord.id] = ord
 	var r := D.approve(ord.id, "Buergermeister", "Luftfracht")
@@ -8605,11 +8606,11 @@ func test_air_cargo() -> void:
 	ok(bool(o.get("via_air", false)) and int(o.loc) == A.cargo_building, "Bestellung ist als Luftfracht erfasst (Abhollage = Frachtterminal)")
 	run(s, 155.0)   # ueber die Lieferzeit (2 Tage) und die darauffolgenden Landungen
 	ok(A.manifest.is_empty(), "das Flugzeug ist gelandet und hat das Fracht-Manifest geleert")
-	ok(int(A.stats.fluege) >= 1 and int(A.stats.einheiten_ein) >= 20, "Flug-Statistik: %d Fluege, %d Einheiten" % [int(A.stats.fluege), int(A.stats.einheiten_ein)])
+	ok(int(A.stats.fluege) >= 1 and int(A.stats.einheiten_ein) >= 12, "Flug-Statistik: %d Fluege, %d Einheiten" % [int(A.stats.fluege), int(A.stats.einheiten_ein)])
 	ok(float(s.economy.accounts.get("X0", 0.0)) > cash_x0, "die Stadtkasse hat die Luftfracht-Pauschale an den Flughafen bezahlt")
 	# Wetter-Gate: Gewitter beim Fliegen – die Ware bleibt liegen, bis klarer Himmel
 	set_wx(s, 10.0, 95, 6.0)   # Gewitter
-	var o2 := D._new_order("asphalt", 40, "Luftfracht-Gate", "")
+	var o2 := D._new_order("asphalt", 12, "Luftfracht-Gate", "")
 	o2.crit = 3
 	D.orders[o2.id] = o2
 	var r2 := D.approve(o2.id, "Buergermeister", "Luftfracht-Gate")
@@ -8829,3 +8830,13 @@ func test_region_town_growth() -> void:
 	s.construction._developer_town(k)
 	var apps: Array = s.permits.apps.values().filter(func(a): return a.applicant == Construction.DEVELOPER and s.towns.of_parcel(str(a.parcel)) == k)
 	ok(apps.size() == 1 and s.parcels.parcel(str(apps[0].parcel)).zone == "mischgebiet", "Bautraeger stellt Bauantrag im Mischgebiet")
+	# Stadtlager: zwei Projekte brauchen denselben Artikel -> eine Bestellung deckt beide samt Ausschussreserve
+	var D: CityDepot = s.towns.depot(1)
+	var base := D.stock_of("schotter")
+	D.reserve_for_project("TXA", {"schotter": base + 100})
+	D.reserve_for_project("TXB", {"schotter": 50})
+	var ordered := 0
+	for o in D.orders.values():
+		if o.item == "schotter" and o.status in ["vorschlag", "bestellt"]:
+			ordered += int(o.qty)
+	ok(ordered >= 150 and ordered <= 160, "Bestellung deckt den Bedarf beider Projekte plus Reserve (%d)" % ordered)

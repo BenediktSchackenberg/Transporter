@@ -334,7 +334,8 @@ func quote(item: String, qty: int, crit: int = 1) -> Array:
 	out.append({"supplier": "X0", "unit_price": snappedf(cat_price * CityGoods.IMPORT_FACTOR, 0.01), "lead": int(it.lead) + CityGoods.IMPORT_LEAD, "loc": port, "name": "Import (Ausland)"})
 	# Luftfracht (Flughafen, nur Kuestenort): 30 % teurer, liefert ab naechster Landung – steht fuer
 	# kritische Ware oder eilige Auftraege zur Wahl; der Preisvorteil des Seewegs siegt, wenn es keine Eile hat.
-	if airport().enabled and (int(it.crit) >= 3 or crit >= 3):
+	# Nur, wenn die Menge in hoechstens zwei Fluege passt: Schuettgut (Schotter, Kies) in Hunderten Tonnen wartete sonst wochenlang am Flughafen.
+	if airport().enabled and (int(it.crit) >= 3 or crit >= 3) and qty <= 2 * airport().cargo_cap():
 		out.append({"supplier": "X0", "via_air": true, "unit_price": snappedf(cat_price * CityGoods.IMPORT_FACTOR * AIRFREIGHT_FACTOR, 0.01),
 			"lead": 1, "loc": airport().cargo_building, "name": "Luftfracht (Flughafen)"})
 	for of in offers.values():
@@ -946,11 +947,41 @@ func reserve_for_project(project_id: String, items: Dictionary, mode: String = "
 	res.value = value
 	project_res[project_id] = res
 	for it in missing:
-		if not open_proposal(it) and incoming(it) < int(missing[it]):
-			var o := _new_order(it, maxi(int(missing[it]) - incoming(it), 1), "Material für Projekt %s fehlt" % project_id, project_id)
-			o.crit = 3
-			orders[o.id] = o
+		# Bedarf aller offenen Projekte fuer diesen Artikel gegen das Unterwegs-Material rechnen (sonst warten Projekte nacheinander),
+		# dazu 3 % Reserve fuer Ausschuss bei der Wareneingangspruefung (sonst loest jeder Rest einen ganzen Importzyklus aus).
+		var need := _project_need(it)
+		var proposed := 0
+		var prop: Dictionary = {}
+		for o in orders.values():
+			if o.item == it and o.status == "vorschlag":
+				proposed += int(o.qty)
+				prop = o
+		var gap := need - incoming(it) - proposed
+		if gap <= 0:
+			continue
+		gap += int(ceil(float(gap) * PROJECT_DEFECT_MARGIN))
+		if not prop.is_empty():
+			prop.qty = int(prop.qty) + gap   # offenen Vorschlag aufstocken statt einen weiteren Tag auf die Freigabe zu warten
+			prop.crit = 3
+			_log(prop, "um %d aufgestockt: Material für Projekt %s" % [gap, project_id])
+			continue
+		var o := _new_order(it, gap, "Material für Projekt %s fehlt" % project_id, project_id)
+		o.crit = 3
+		orders[o.id] = o
 	return missing
+
+
+const PROJECT_DEFECT_MARGIN := 0.03
+
+
+## Noch nicht reservierte Menge eines Artikels ueber alle offenen Projektreservierungen.
+func _project_need(item: String) -> int:
+	var n := 0
+	for res in project_res.values():
+		if res.get("done", false) or not res.items.has(item):
+			continue
+		n += maxi(0, int(res.items[item]) - int(res.reserved.get(item, 0)))
+	return n
 
 
 func project_complete(project_id: String) -> bool:
