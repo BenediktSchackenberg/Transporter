@@ -18,7 +18,8 @@ const MAX_PER_TOWN := 3              # ursprunglicher Unternehmer + bis zu zwei 
 const COOLDOWN_DAYS := 30
 const CAPITAL := 60000.0
 const CAPITAL_BY_BRANCH := {"bergwerk": 120000.0, "stahlwerk": 150000.0, "kokerei": 110000.0}
-const MINING_FROM_DAY := 20          # Bergbau als Chance erst, wenn die Orte angelaufen sind
+const MINING_FROM_DAY := 5           # Bergbau frueh: die Kette Bohrung -> Abbaurecht -> Zufahrt -> Bergwerk -> Stahl braucht Wochen
+const INDUSTRY := ["bergwerk", "stahlwerk", "elektrostahlwerk", "kokerei"]   # regionale Aufgaben: ohne Abklingzeit der Stadt, sofort statt nach STREAK Pruefungen
 const FOCUS_BRANCHES := ["bergwerk"] # mehrstufige Gruendung (Probebohrung, Abbaurecht, Zufahrt): die Regel-KI geht die Schritte selbst
 const FIRST := ["Jana", "Tom", "Aylin", "Malte", "Greta", "Kemal", "Ronja", "Lars", "Mira", "Nils", "Selin", "Arne"]
 const LAST := ["Brückner", "Seidel", "Kaya", "Wendt", "Lorenz", "Ahrens", "Petersen", "Yilmaz", "Haas", "Voss", "Engel", "Kruse"]
@@ -49,7 +50,7 @@ func on_day(day: int) -> void:
 		var key := "%d|%s" % [int(chance.stadt), chance.branche]
 		seen[key] = true
 		streaks[key] = int(streaks.get(key, 0)) + 1
-		if int(streaks[key]) >= STREAK:
+		if int(streaks[key]) >= STREAK or str(chance.branche) in INDUSTRY:
 			var r := try_found(int(chance.stadt), str(chance.branche), str(chance.anlass))
 			streaks[key] = 0 if r.ok else int(streaks[key])
 	for key in streaks.keys():
@@ -105,9 +106,11 @@ func opportunities() -> Array:
 			if not dep.is_empty():
 				out.append({"stadt": k, "branche": "bergwerk", "anlass": "Lagerstätte %s (%s) ungenutzt – Bergbau mit Zufahrt in die Berge" % [dep.grundstueck, Production.item_name(str(dep.art))]})
 		# Weiterverarbeitung: Erz wird gefoerdert, aber kein Stahlwerk in der Region -> Industrie
-		if k == _mining_town() and running.any(func(b): return b.branch == "bergwerk" and str(b.get("deposit", {}).get("art", "")) == "eisenerz" and int(b.get("total", 0)) > 0) \
-				and not running.any(func(b): return b.branch in ["stahlwerk", "elektrostahlwerk"]):
-			out.append({"stadt": k, "branche": "stahlwerk", "anlass": "Eisenerz wird gefördert, aber in der Region nicht verarbeitet – Stahlwerk"})
+		# (schon sobald ein Eisenerz-Abbaurecht genehmigt ist: Bergwerk und Stahlwerk entstehen parallel)
+		var ore_ready: bool = running.any(func(b): return b.branch == "bergwerk" and str(b.get("deposit", {}).get("art", "")) == "eisenerz") \
+				or sim.mining.permits.keys().any(func(pid): return sim.mining.permits[pid].status == "genehmigt" and str(sim.prod.deposit_of(str(pid)).get("art", "")) == "eisenerz")
+		if k == _mining_town() and ore_ready and not running.any(func(b): return b.branch in ["stahlwerk", "elektrostahlwerk"]):
+			out.append({"stadt": k, "branche": "stahlwerk", "anlass": "Eisenerz-Abbau genehmigt bzw. in Förderung, aber kein Stahlwerk in der Region – parallel zum Bergwerk bauen"})
 		# Bauvorhaben ohne Baufirma vor Ort
 		var waiting: int = sim.construction.works.values().filter(func(w): return w.status == "laufend" and str(w.waiting).contains("Bautrupp") and T.of_building(int(w.building)) == k).size()
 		var today := GameCalendar.day_of(sim.game_min)
@@ -158,7 +161,7 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 	var day := GameCalendar.day_of(sim.game_min)
 	if active_home(town) >= max_per_town:
 		return _refuse(town, branch, "Gründerquote erreicht (%d aktive Unternehmen mit Heimat %s)" % [active_home(town), sim.towns.name_of(town)])
-	if last_found.has(town) and day - int(last_found[town]) < COOLDOWN_DAYS:
+	if branch not in INDUSTRY and last_found.has(town) and day - int(last_found[town]) < COOLDOWN_DAYS:
 		return _refuse(town, branch, "Abklingzeit nach der letzten Gründung (bis Tag %d)" % (int(last_found[town]) + COOLDOWN_DAYS))
 	var spec: Dictionary = Businesses.branches().get(branch, {})
 	if spec.is_empty():
@@ -183,7 +186,8 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 		c.personality = "wachstum"
 		c.depots.append(int(sim.towns.get_t(town).town_hall))   # vorlaeufiger Sitz: Buero im Rathaus der Heimatstadt
 		sim.personnel.start_staff_small(c.id)
-		last_found[town] = day
+		if branch not in INDUSTRY:
+			last_found[town] = day
 		history.append({"tag": day, "stadt": town, "firma": c.id, "branche": branch, "anlass": reason, "kapital": need})
 		sim.log_event("Neue Bergbaufirma in %s: %s (%s) – Anlass: %s. Einlage %s vom Kapitalgeberpool; nächste Schritte: Probebohrung, Abbaurecht, Zufahrt, Bergwerk." % [
 			sim.towns.name_of(town), c.player_name, c.company_name, reason, Catalog.money(need)], "good", c.id)
@@ -199,7 +203,8 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 			c.depots.append(int(b.site))   # Hauptsitz am ersten Betrieb
 		if not c.depots.is_empty():
 			sim.personnel.start_staff_small(c.id)   # zwei Allrounder am Hauptsitz, wie beim Startunternehmer
-	last_found[town] = day
+	if branch not in INDUSTRY:
+		last_found[town] = day
 	history.append({"tag": day, "stadt": town, "firma": c.id, "branche": branch, "anlass": reason, "kapital": need})
 	sim.log_event("Neue Unternehmerin/neuer Unternehmer in %s: %s (%s) gründet %s – Anlass: %s. Einlage %s vom Kapitalgeberpool." % [sim.towns.name_of(town),
 		c.player_name, c.company_name, spec.get("label", branch), reason, Catalog.money(need)], "good", c.id)

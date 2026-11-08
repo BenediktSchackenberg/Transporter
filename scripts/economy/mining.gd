@@ -11,7 +11,7 @@ extends RefCounted
 
 const EXPLORE_COST := 6000.0
 const EXPLORE_DAYS := 2
-const PERMIT_DAYS := 3
+const PERMIT_DAYS := 1                # ohne Entscheidung genehmigt das Bauamt am Folgetag
 const DEFAULT_ROYALTY := 0.08
 const ROYALTY_MIN := 0.03
 const ROYALTY_MAX := 0.15
@@ -182,9 +182,13 @@ func next_step(cid: int, kind: String) -> Dictionary:
 		if not enabled:
 			step = "gruenden" if road else "zufahrt"
 			rank = 4 if road else 3
-		elif drillings.has(pid) or (pm.get("status", "") == "antrag"):
+		elif drillings.has(pid):
 			step = "warten"
 			rank = 2
+		elif pm.get("status", "") == "antrag":
+			# Abbauantrag laeuft: Zufahrt schon parallel beantragen (sonst wartet die Kette Tage auf jede Entscheidung)
+			step = "warten" if road else "zufahrt"
+			rank = 2 if road else 3
 		elif explored.has(pid) and pm.get("status", "") == "genehmigt":
 			step = "gruenden" if road else "zufahrt"
 			rank = 4 if road else 3
