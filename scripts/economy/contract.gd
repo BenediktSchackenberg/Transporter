@@ -22,6 +22,8 @@ var owner := -1
 var vehicle_id := -1
 var exclusive_for := -1
 var exclusive_until := 0.0
+var held_for := -1          # KI-Postfach: fuer diesen Spieler vorgemerkt, solange sein Modell nachdenkt
+var held_until := 0.0
 var distance := 0
 var paid := 0.0
 var picked := 0              # an der Abholung bereits geladene Menge
@@ -61,7 +63,7 @@ func to_dict() -> Dictionary:
 		"created": created, "deadline": deadline, "offer_until": offer_until, "min_rep": min_rep,
 		"needs_cold": needs_cold, "needs_heavy": needs_heavy, "size_class": size_class, "status": status,
 		"owner": owner, "vehicle_id": vehicle_id, "exclusive_for": exclusive_for,
-		"exclusive_until": exclusive_until, "distance": distance, "paid": paid, "picked": picked,
+		"exclusive_until": exclusive_until, "held_for": held_for, "held_until": held_until, "distance": distance, "paid": paid, "picked": picked,
 		"delivered_qty": delivered_qty, "fuel_cost": fuel_cost, "accepted_at": accepted_at, "done_at": done_at, "internal": internal,
 		"requester": requester, "concern": concern, "cause": cause, "payer": payer, "order_ref": order_ref, "bonus": bonus}
 
@@ -74,4 +76,10 @@ static func from_dict(d: Dictionary) -> Contract:
 	k.delivered_qty = int(d.get("delivered_qty", 0))
 	for key in ["pickup", "dropoff", "qty", "owner", "vehicle_id", "exclusive_for", "distance"]:
 		k.set(key, int(d[key]))
+	k.held_for = int(d.get("held_for", -1))
 	return k
+
+
+## Fuer einen anderen Spieler im KI-Postfach vorgemerkt?
+func held_by_other(cid: int, now: float) -> bool:
+	return held_for >= 0 and held_for != cid and held_until > now

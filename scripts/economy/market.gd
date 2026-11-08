@@ -65,7 +65,7 @@ func open_contracts() -> Array:
 ## Wird einmal pro Spielminute aufgerufen.
 func tick(now: float) -> void:
 	for k in sim.contracts.values():
-		if k.status == "open" and now > k.offer_until:
+		if k.status == "open" and now > k.offer_until and not (k.held_for >= 0 and k.held_until > now):   # vorgemerkt: laeuft nicht ab
 			k.status = "expired"
 	for i in saturation.size():
 		saturation[i] = minf(1.0, saturation[i] + 0.002)

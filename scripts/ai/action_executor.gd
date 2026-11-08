@@ -166,6 +166,7 @@ const KIND_ALIASES := {"repair_vehicle": "reparieren", "repair": "reparieren", "
 
 static func normalize(action: Dictionary) -> Dictionary:
 	var a := action.duplicate()
+	_unwrap_call(a)
 	for nest in ["parameters", "params", "args", "arguments", "details", "data", "payload", "input", "action_input"]:
 		if a.get(nest) is Dictionary:
 			for k in a[nest]:
@@ -281,6 +282,33 @@ static func normalize(action: Dictionary) -> Dictionary:
 	elif name == "assign_worker_task" and not a.has("kind") and a.has("vehicle_id"):
 		a["kind"] = "fahren"
 	return a
+
+
+## Funktionsschreibweise kleiner Modelle: "collect_contracts()" oder "assign_worker_task(kind='fahren', worker_id='W17', vehicle_id=1)"
+## -> Aktionsname plus Parameter (Werte in Klammern ergaenzen fehlende Schluessel; Zahlen werden Zahlen).
+static func _unwrap_call(a: Dictionary) -> void:
+	var raw := str(a.get("action", a.get("type", ""))).strip_edges()
+	var m := RegEx.create_from_string("^([A-Za-z_][A-Za-z0-9_]*)\\s*\\((.*)\\)\\s*;?$").search(raw)
+	if m == null:
+		return
+	a["action"] = m.get_string(1)
+	var re := RegEx.create_from_string("([A-Za-z_][A-Za-z0-9_]*)\\s*[=:]\\s*(\"[^\"]*\"|'[^']*'|[^,]+)")
+	for p in re.search_all(m.get_string(2)):
+		var key := p.get_string(1)
+		var val := p.get_string(2).strip_edges()
+		if a.has(key):
+			continue
+		if (val.begins_with("'") and val.ends_with("'")) or (val.begins_with("\"") and val.ends_with("\"")):
+			a[key] = val.substr(1, val.length() - 2)
+		elif val.is_valid_int():
+			a[key] = int(val)
+		elif val.is_valid_float():
+			a[key] = float(val)
+		elif val in ["true", "false"]:
+			a[key] = val == "true"
+		else:
+			a[key] = val
+
 
 
 func execute(cid: int, action: Dictionary, key: String = "", origin: String = "api", ctx: Dictionary = {}) -> Dictionary:
@@ -817,6 +845,8 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 		return {"ok": false, "msg": "Auftrag %s ist nicht (mehr) verfügbar." % kid}
 	if k.exclusive_for >= 0 and k.exclusive_for != cid and k.exclusive_until > sim.game_min:
 		return {"ok": false, "msg": "Auftrag %s ist noch exklusiv für einen Stammkunden-Partner reserviert." % kid}
+	if k.held_by_other(cid, sim.game_min):
+		return {"ok": false, "msg": "Auftrag %s ist für eine andere Firma vorgemerkt (deren Entscheidung steht aus)." % kid}
 	if not c.known.has(kid):
 		return {"ok": false, "msg": "Auftrag %s ist dir unbekannt – zuerst collect_contracts (Jobbörse oder Büro mit Internet)." % kid}
 	if c.reputation < k.min_rep:

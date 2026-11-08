@@ -53,7 +53,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	var market: Array = []
 	var unknown := 0
 	for k in sim.market.open_contracts():
-		if k.exclusive_for >= 0 and k.exclusive_for != cid and k.exclusive_until > now:
+		if (k.exclusive_for >= 0 and k.exclusive_for != cid and k.exclusive_until > now) or k.held_by_other(cid, now):
 			continue
 		if not c.known.has(k.id):
 			unknown += 1   # nur gesammelte Auftraege (Jobboerse/Internet/Stammkunden) sind sichtbar
@@ -221,7 +221,7 @@ static func _available(sim: Simulation, cid: int) -> Dictionary:
 	var P := sim.personnel
 	var out := {}
 	var driven: Array = sim.company_vehicles(cid).filter(func(v): return sim.driver_of(v) != null and v.state not in ["broken", "repairing", "to_workshop"])
-	var known_open: Array = sim.market.open_contracts().filter(func(k): return c.known.has(k.id) and (k.exclusive_for < 0 or k.exclusive_for == cid or k.exclusive_until <= sim.game_min) and c.reputation >= k.min_rep)
+	var known_open: Array = sim.market.open_contracts().filter(func(k): return c.known.has(k.id) and (k.exclusive_for < 0 or k.exclusive_for == cid or k.exclusive_until <= sim.game_min) and not k.held_by_other(cid, sim.game_min) and c.reputation >= k.min_rep)
 	var active := sim.executor.active_contracts(cid)
 	out["accept_contract"] = {"ziele": known_open.map(func(k): return k.id).slice(0, 12)} if active < c.contract_capacity() \
 		else {"nicht_moeglich": "Auftragskapazität %d/%d erschöpft" % [active, c.contract_capacity()]}

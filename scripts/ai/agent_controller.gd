@@ -43,6 +43,15 @@ var _applied := {}
 var _next_req := 1
 var _since := 1000.0
 var _events: Array = []
+# KI-Postfach: Auftraege aus der Beobachtung bleiben fuer diesen Spieler vorgemerkt, bis seine Antwort da ist (das Modell braucht
+# mehrere Spieltage; vorher waren fast alle angenommenen Auftraege bei Ankunft der Antwort weg). Aktionen fuer ein gerade gekauftes,
+# noch nicht geliefertes Fahrzeug warten, bis es da ist.
+const HOLD_MAX := 8                 # hoechstens so viele Auftraege je Anfrage vormerken
+const HOLD_GAME_MIN := 600.0        # Obergrenze der Vormerkung (5 Spieltage), falls keine Antwort kommt
+const AFTER_BUY_GAME_MIN := 360.0   # so lange warten Aktionen auf das gekaufte Fahrzeug
+var _held: Array = []
+var _release_later: Array = []
+var _after_buy: Array = []          # [{action, known: [Fahrzeug-IDs beim Kauf], until}]
 var _backoff_until := 0.0
 var _consecutive_fail := 0
 var _last_obs_min := 0.0
@@ -92,16 +101,22 @@ func _process(delta: float) -> void:
 	if not active or sim == null or sim.finished:
 		return
 	real_time += delta
+	if not _release_later.is_empty():
+		_release_holds(_release_later)
+		_release_later.clear()
 	_since += delta
 	while not _deferred.is_empty():
 		var d: Array = _deferred.pop_front()
 		handle_result(d[0], d[1])
 	_dispatch_tick()
+	_after_buy_tick()
 	if _inflight >= 0:
 		# Wachhund: falls der Adapter nie antwortet
 		if real_time - _inflight_sent > float(config.get("timeout", 45.0)) + 5.0:
 			_abandoned[_inflight] = true
 			adapter.cancel()
+			_release_holds(_held)
+			_held.clear()
 			var id := _inflight
 			_inflight = -1
 			_on_failure(id, {"error": "Zeitüberschreitung (keine Antwort)"})
@@ -137,6 +152,7 @@ func _start_request() -> void:
 	_inflight_obs_min = sim.game_min
 	_inflight_sent = real_time
 	_inflight_generation = sim.company(cid).generation
+	_hold_market(obs)
 	stats.requests += 1
 	status = "wartet auf Antwort"
 	adapter.observation = obs
@@ -158,6 +174,8 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 		return
 	_inflight = -1
 	_applied[req_id] = true
+	_release_later = _held.duplicate()   # Vormerkungen gelten bis nach der Ausfuehrung dieser Antwort (Ende _apply bzw. naechstes Bild)
+	_held.clear()
 	var usage: Dictionary = r.get("usage", {}) if r.get("usage") is Dictionary else {}
 	stats.tokens += int(usage.get("total_tokens", 0))
 	api_log.write({"type": "response", "player": cid, "req": req_id, "ok": r.get("ok", false),
@@ -316,6 +334,7 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 			actions = [pa] + actions   # Nur einen geaenderten Plan erneut festlegen
 	var origin := "api" if source == "KI" else "fallback"
 	sim.decisions.set_context(cid, _perceived, parsed.goal if parsed.get("goal", "") != "" else goal, summary)
+	var bought_pending := false
 	for a in actions:
 		if not a is Dictionary:
 			continue
@@ -331,7 +350,24 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 			continue
 		if config.get("provider", "") == "ollama" and bool(config.get("dispatch_help", true)):
 			sim.executor.auto_split[cid] = true
+		if bought_pending and _needs_new_vehicle(actual):
+			var kept := str(actual.get("contract_id", ""))
+			if kept != "" and _release_later.has(kept):
+				_release_later.erase(kept)   # Auftrag bleibt vorgemerkt, bis das Fahrzeug da ist
+				var hk: Contract = sim.contracts.get(kept)
+				if hk != null and hk.held_for == cid:
+					hk.held_until = maxf(hk.held_until, sim.game_min + AFTER_BUY_GAME_MIN)
+			else:
+				kept = ""
+			_after_buy.append({"action": actual, "known": sim.company_vehicles(cid).map(func(v): return v.id), "until": sim.game_min + AFTER_BUY_GAME_MIN,
+				"key": "%s:a%d" % [key_prefix, i], "hold": kept})
+			api_log.write({"type": "action", "player": cid, "key": "%s:a%d" % [key_prefix, i], "source": source, "action": actual, "ok": true,
+				"msg": "wartet auf das gekaufte Fahrzeug"})
+			i += 1
+			continue
 		var res := sim.executor.execute(cid, actual, "p%d:%s:a%d" % [cid, key_prefix, i], origin)
+		if res.ok and bool(res.get("pending", false)) and str(actual.get("action", "")) == "buy_vehicle":
+			bought_pending = true
 		i += 1
 		if res.ok:
 			stats.actions_ok += 1
@@ -346,6 +382,8 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 		api_log.write({"type": "action", "player": cid, "key": "%s:a%d" % [key_prefix, i - 1], "source": source,
 			"action": actual, "original_action": a if actual != a else {}, "ok": res.ok, "msg": res.msg})
 	sim.decisions.clear_context(cid)
+	_release_holds(_release_later)
+	_release_later.clear()
 	passive_streak = 0 if effective > 0 else passive_streak + 1
 	if effective > 0 or _events.is_empty():
 		_rapid_retry_count = 0
@@ -570,6 +608,59 @@ func from_dict(d: Dictionary) -> void:
 
 
 # ------------------------------------------------------------------ Testhilfen
+## Postfach: die Auftraege der Beobachtung fuer diesen Spieler vormerken (nicht fuer Fremde reservierte, hoechstens HOLD_MAX).
+func _hold_market(obs: Dictionary) -> void:
+	_release_holds(_held)
+	_held.clear()
+	for m in obs.get("markt", []).slice(0, HOLD_MAX):
+		var k: Contract = sim.contracts.get(str(m.get("id", "")))
+		if k == null or k.status != "open" or k.held_by_other(cid, sim.game_min):
+			continue
+		k.held_for = cid
+		k.held_until = sim.game_min + HOLD_GAME_MIN
+		_held.append(k.id)
+
+
+func _release_holds(ids: Array) -> void:
+	for kid in ids:
+		var k: Contract = sim.contracts.get(kid) if sim != null else null
+		if k != null and k.held_for == cid:
+			k.held_for = -1
+			k.held_until = 0.0
+
+
+## Bezieht sich die Aktion auf ein Fahrzeug, das der Firma (noch) nicht gehoert? (Modell hat die Nummer des gekauften Fahrzeugs geraten)
+func _needs_new_vehicle(a: Dictionary) -> bool:
+	if a.get("vehicle_id") == null:
+		return false
+	var vid := int(a.vehicle_id) if (a.vehicle_id is int or a.vehicle_id is float or str(a.vehicle_id).is_valid_int()) else -1
+	var v: FleetVehicle = sim.vehicles.get(vid)
+	return v == null or (v.owner != cid and v.operator != cid)
+
+
+## Gekauftes Fahrzeug ist da: zurueckgehaltene Aktionen mit dessen Nummer ausfuehren; nach Ablauf verwerfen.
+func _after_buy_tick() -> void:
+	if _after_buy.is_empty():
+		return
+	var keep: Array = []
+	for item in _after_buy:
+		var fresh: Array = sim.company_vehicles(cid).filter(func(v): return not item.known.has(v.id))
+		if fresh.is_empty():
+			if sim.game_min < float(item.until):
+				keep.append(item)
+			else:
+				_release_holds([item.get("hold", "")])
+				api_log.write({"type": "action", "player": cid, "key": str(item.key) + ":spaet", "source": "Postfach", "action": item.action, "ok": false,
+					"msg": "gekauftes Fahrzeug kam nicht rechtzeitig – Aktion verworfen"})
+			continue
+		var a: Dictionary = item.action.duplicate()
+		a["vehicle_id"] = int(fresh[0].id)
+		var res := sim.executor.execute(cid, a, "p%d:%s:nachkauf" % [cid, str(item.key)], "api")
+		_release_holds([item.get("hold", "")])
+		api_log.write({"type": "action", "player": cid, "key": str(item.key) + ":nachkauf", "source": "Postfach", "action": a, "ok": res.ok, "msg": res.msg})
+	_after_buy = keep
+
+
 func setup_for_test(simulation: Simulation, company_id: int) -> void:
 	sim = simulation
 	cid = company_id
