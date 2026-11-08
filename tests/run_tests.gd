@@ -23,6 +23,13 @@ func _initialize() -> void:
 			quit(1)
 			return
 		test_names = [requested]
+	if args.size() == 1 and str(args[0]).begins_with("--part="):
+		# Teil k von n (1-basiert): grosse Laeufe in Portionen, damit der Speicher neben einem laufenden Spiel reicht
+		var kn := str(args[0]).trim_prefix("--part=").split("/")
+		var k := int(kn[0])
+		var n := maxi(1, int(kn[1]))
+		var per := int(ceil(float(test_names.size()) / float(n)))
+		test_names = test_names.slice((k - 1) * per, k * per)
 	for name in test_names:
 		var before := checks
 		var fails := failures
@@ -8530,7 +8537,8 @@ func test_region_town_roads() -> void:
 func test_reservation_holds_during_application() -> void:
 	var s := region_sim(2)
 	var P := s.parcels
-	var free: Array = P.search({"zone": "wohnen", "town": 0, "utilities": "voll", "min_area": 12, "limit": 50})
+	# beliebige Stadt, mindestens teilweise erschlossen (der kompakte Ortskern laesst nicht in jeder Stadt ein voll erschlossenes Grundstueck frei)
+	var free: Array = P.search({"zone": "wohnen", "utilities": "teilweise", "min_area": 12, "limit": 200})
 	var pid := ""
 	var probe := {}
 	for p in free:
