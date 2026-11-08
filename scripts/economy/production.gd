@@ -887,8 +887,19 @@ func freight(from_loc: int, to_loc: int, item: String, qty: int) -> float:
 	var a: Dictionary = sim.city.building(from_loc)
 	var z: Dictionary = sim.city.building(to_loc)
 	var dist: int = absi(a.road.x - z.road.x) + absi(a.road.y - z.road.y)
+	if item in BULK:
+		return freight_dist(dist, item, qty)
 	# Einheitlicher Stadtliefertarif wie beim Grosshandel (Retail._freight): kurze Stadtfahrten uebernehmen Transportfirmen kaum
 	# (Messung probe_bottlenecks: 0-2 von ueber 100), sonst der Lieferdienst; Erzeuger und Grosshandel liefern zu gleichen Bedingungen.
+	return snappedf(Retail.FREIGHT_BASE + float(dist) * (1.0 + float(units(item, qty)) / 8.0), 1.0)
+
+
+## Massengut (Rohstoffe der Schwerindustrie): Kipper/Ganzzug statt Stadtlieferdienst - je Ladeeinheit und Feld deutlich guenstiger,
+## sonst kostete Erz ueber 380 Felder rund 10 EUR Fracht je Einheit (mehr als der Erzpreis) und das Stahlwerk kaufte Import.
+const BULK := ["eisenerz", "kohle", "kalkstein", "rohmaterial", "koks", "schlacke"]
+func freight_dist(dist: int, item: String, qty: int) -> float:
+	if item in BULK:
+		return snappedf(Retail.FREIGHT_BASE + float(dist) * (0.3 + float(units(item, qty)) / 30.0), 1.0)
 	return snappedf(Retail.FREIGHT_BASE + float(dist) * (1.0 + float(units(item, qty)) / 8.0), 1.0)
 
 
@@ -1154,6 +1165,75 @@ func cancel_deals_of(acct: String) -> void:
 ## zahlt der Verkaeufer. Nur wenn mindestens EXPORT_MIN_UNITS Ladeeinheiten frei sind und nach Fracht mindestens die Haelfte des
 ## Exportpreises bleibt und der Ueberschuss EXPORT_WAIT_DAYS Tage unverkauft lag. Eine Ladeeinheit bleibt fuer Kaeufer in der Stadt zurueck.
 const EXPORT_MIN_UNITS := 2
+
+
+## Fehlmenge der Verarbeiter in der Region fuer einen Rohstoff: laufende/blockierte Betriebe mit dem Artikel im Rezept,
+## die auf den Artikel warten (Einkauf scheiterte) oder keinen Bestand (inkl. unterwegs) haben.
+func regional_need(item: String) -> int:
+	var need := 0
+	for b in sim.biz.items.values():
+		if b.status not in Businesses.RUNNING:
+			continue
+		var r: Dictionary = Businesses.branches().get(b.branch, {}).get("rezept", {})
+		if not r.get("ein", {}).has(item):
+			continue
+		var acct := "C%d" % int(b.owner)
+		var have: int = sim.stock.available(item, acct, int(b.site)) + incoming(acct, item, int(b.site))
+		if str(b.get("waiting_for", "")) == item or have <= 0:   # Betrieb wartet bzw. ist leer (belieferte Betriebe halten ihr Lager bewusst klein)
+			need += maxi(1, int(r.ein[item]) * 20 - have)
+	return need
+
+
+## 1) Standorthinweise fuer eine Gruendung (die KI entscheidet): freie, erschlossene Grundstuecke nach den Zutatenkosten einer
+## Charge (Preis + Fracht von der guenstigsten Quelle: Betrieb der Region - auch im Bau - oder Import ueber den Hafen der Stadt).
+## Gibt bis zu `n` Vorschlaege {grundstueck, stadt, zutaten_je_charge, quellen} zurueck, guenstigste zuerst.
+func site_hints(branch: String, n: int = 3, town_only: int = -1) -> Array:
+	var spec: Dictionary = Businesses.branches().get(branch, {})
+	var ein: Dictionary = spec.get("rezept", {}).get("ein", {})
+	if ein.is_empty() or spec.has("abbau") or spec.has("feld"):
+		return []
+	var bsize: Array = CityGenerator.TYPES[str(spec.get("gebaeude", "factory"))]
+	var min_area: int = int(bsize[1]) * int(bsize[2]) + 4
+	var need_power := float(spec.get("strom_kw", 0.0)) > 0.0
+	var sources := {}   # Artikel -> [{name, cell, price}]
+	for item in ein:
+		sources[item] = []
+		for b in sim.biz.items.values():
+			if b.status not in Businesses.RUNNING and b.status != "im_bau":
+				continue
+			var bs: Dictionary = Businesses.branches().get(b.branch, {})
+			var makes: bool = bs.get("rezept", {}).get("aus", {}).has(item) or (bs.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
+			if makes:
+				sources[item].append({"name": "%s %s" % [b.id, bs.get("label", b.branch)], "cell": sim.city.building(int(b.site)).road, "price": float(art(item).get("basispreis", 10.0))})
+	var cands: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse) and p.zone in ["industrie", "gewerbe"] \
+			and (not need_power or bool(p.get("erschliessung", {}).get("strom", true))))
+	if town_only >= 0 and sim.towns.is_region():
+		cands = cands.filter(func(p): return sim.towns.of_parcel(str(p.id)) == town_only)   # Endkundenbetriebe gehoeren in ihre Stadt
+	var out: Array = []
+	for p in cands.slice(0, 300):
+		var cell := Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)
+		var town: int = sim.towns.of_parcel(str(p.id)) if sim.towns.is_region() else 0
+		var H: Harbor = sim.towns.harbor(town) if sim.towns.is_region() else sim.harbor
+		var port_cell: Vector2i = sim.city.building(H.building if H.enabled else int(sim.retail.wholesale_building)).road
+		var total := 0.0
+		var notes: Array = []
+		for item in ein:
+			var q := int(ein[item]) * 20   # 20 Chargen als Liefermenge
+			var ip = art(item).get("importpreis")
+			var best := INF if ip == null else float(ip) + freight_dist(absi(cell.x - port_cell.x) + absi(cell.y - port_cell.y), item, q) / float(q)
+			var from := "Import"
+			for src in sources[item]:
+				var u: float = float(src.price) + freight_dist(absi(cell.x - src.cell.x) + absi(cell.y - src.cell.y), item, q) / float(q)
+				if u < best:
+					best = u
+					from = str(src.name)
+			if best == INF:
+				continue
+			total += best * float(ein[item])
+			notes.append("%s %.1f EUR/E (%s)" % [item_name(item), best, from])
+		out.append({"grundstueck": str(p.id), "stadt": sim.towns.name_of(town) if sim.towns.is_region() else "", "zutaten_je_charge": snappedf(total, 0.1), "quellen": ", ".join(notes)})
+	out.sort_custom(func(a, b): return float(a.zutaten_je_charge) < float(b.zutaten_je_charge))
+	return out.slice(0, n)
 const EXPORT_WAIT_DAYS := 3
 func _export_surplus() -> void:
 	for item in articles():
@@ -1174,6 +1254,8 @@ func _export_surplus() -> void:
 				sb[key] = today
 			if today - int(sb[key]) < EXPORT_WAIT_DAYS:
 				continue   # erst den Kaeufern in der Stadt Zeit lassen
+			if regional_need(item) > 0:
+				continue   # Vorrang fuer die eigene Kette: solange ein Betrieb der Region den Rohstoff braucht, nicht ausfuehren
 			sb.erase(key)
 			var fr := freight(int(s.loc), port, item, q)
 			if float(ep) - fr / float(q) < float(ep) * 0.5:

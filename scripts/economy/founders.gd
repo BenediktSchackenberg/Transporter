@@ -193,7 +193,12 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 			sim.towns.name_of(town), c.player_name, c.company_name, reason, Catalog.money(need)], "good", c.id)
 		company_founded.emit(c.id)
 		return {"ok": true, "msg": "%s gegründet (Firma %d, Ziel Bergbau)." % [c.company_name, c.id], "ref": c.id}
-	var r: Dictionary = sim.executor.execute(c.id, {"action": "found_business", "branche": branch, "stadt": str(town), "reason": reason})
+	var act := {"action": "found_business", "branche": branch, "stadt": str(town), "reason": reason}
+	var hints: Array = sim.prod.site_hints(branch, 1) if branch in INDUSTRY else []
+	if not hints.is_empty():
+		act["standort"] = str(hints[0].grundstueck)   # Regel-Gruender: Standort mit den geringsten Zutatenkosten (Naehe zur Quelle)
+		act.erase("stadt")
+	var r: Dictionary = sim.executor.execute(c.id, act)
 	if not r.get("ok", false):
 		# Gruendung des Betriebs gescheitert: Firma bleibt mit ihrer Einlage bestehen (kein Rueckbau von IDs), Grund protokolliert
 		_refuse(town, branch, "Betrieb nicht gegründet: %s" % str(r.get("msg", "")).left(120))
