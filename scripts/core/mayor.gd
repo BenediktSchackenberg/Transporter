@@ -303,7 +303,7 @@ func indicators() -> Dictionary:
 			"defizit": cash() < reserve_cash(), "mindestreserve": int(reserve_cash()), "landeszuweisung_monat": int(grant_last),
 			"hinweis": "verfuegbar = Kasse - Mindestreserve - reserviert. Ist verfuegbar 0, scheitert jede Ausgabe: dann Grundstücke verkaufen (offer_parcels), Grundsteuer anpassen oder warten."},
 		"bauantraege": {"warteschlange": sim.permits.queue().size(), "zur_entscheidung": queue_ids, "zur_entscheidung_details": pending, "kapazitaet_je_tag": snappedf(sim.permits.capacity(), 0.1)},
-		"plaene": plans.values().map(func(p): return {"id": p.id, "name": p.name, "status": p.status, "grundstuecke": p.parcels.size(), "zone": p.zone,
+		"plaene": plans.values().map(func(p): return {"id": p.id, "name": p.name, "status": p.status, "grundstuecke": p.parcels.size(), "zone": p.zone, "tag": int(p.get("day", 0)),
 			"ids_zur_entwicklung": p.parcels.filter(func(id): return sim.parcels.parcel(id).get("state", "") == "zur_entwicklung").slice(0, MAX_CLUSTER),
 			"ids_ohne_anschluss": p.parcels.filter(func(id): return sim.parcels.parcel(id).get("state", "") in ["frei", "zur_entwicklung"] and sim.parcels.utility_level(sim.parcels.parcel(id)) != "voll").slice(0, MAX_CLUSTER),
 			"naechster_schritt": "plan_infrastructure mit ids_ohne_anschluss (baut Straße und Anschlüsse)" if p.status == "beschlossen" else ""}),

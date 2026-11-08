@@ -243,6 +243,9 @@ static func decide(ind: Dictionary) -> Dictionary:
 			need = waiting > 0 or float(housing.mietindex) > 105.0
 	var budget := float(ind.haushalt.verfuegbar)
 	var plans: Array = ind.plaene
+	# Vom Rat abgelehnte Plaene zaehlen nicht gegen die Obergrenze, sonst sperren wiederholte Ablehnungen jede weitere Quartiersplanung.
+	var live_plans: int = plans.filter(func(p): return p.status != "abgelehnt").size()
+	var today: int = int(ind.buergermeister.get("tag", 0))
 	# 3) beschlossene Quartiere: Grundstuecke zur Vergabe freigeben
 	for pl in plans:
 		if actions.size() >= MAX_ACTIONS:
@@ -258,16 +261,19 @@ static func decide(ind: Dictionary) -> Dictionary:
 			actions.append({"action": "tender", "project_id": prj.id, "reason": "Projekt ist beschlossen und finanziert (%s)." % Catalog.money(float(prj.kosten))})
 	# 5) neues Quartier, wenn Bedarf besteht und kein offenes Angebot vorhanden ist
 	var open_plans := plans.filter(func(p): return p.status == "beschlossen" and not p.ids_zur_entwicklung.is_empty()).size()
-	if need and open_plans == 0 and actions.size() < MAX_ACTIONS and not ind.entwicklungsvorschlaege.is_empty() and plans.size() < 8:
+	if need and open_plans == 0 and actions.size() < MAX_ACTIONS and not ind.entwicklungsvorschlaege.is_empty() and live_plans < 8:
 		var c: Dictionary = ind.entwicklungsvorschlaege[0]
 		actions.append({"action": "designate_quarter", "name": "Quartier %d (%s)" % [plans.size() + 1, str(c.zone).capitalize()], "parcel_ids": c.grundstuecke, "zone": c.zone,
 			"reason": "%d wohnungssuchende Haushalte, Leerstand %.1f %%, Mietindex %.0f; nächstgelegener Vorschlag mit %d erschlossenen Grundstücken." % [waiting, float(housing.leerstand) * 100.0, float(housing.mietindex), int(c.davon_voll_erschlossen)]})
 	# 5b) Flaechenplanung: fehlt eine Zone deutlich (Richtwert -5 Punkte), den Umwidmungsvorschlag ausweisen (hoechstens ein offenes Quartier)
 	var fp: Dictionary = ind.get("flaechenplanung", {})
-	if open_plans == 0 and actions.size() < MAX_ACTIONS and not fp.is_empty() and not fp.umwidmung_vorschlaege.is_empty() and plans.size() < 12 			and not actions.any(func(x): return x.action == "designate_quarter"):
+	if open_plans == 0 and actions.size() < MAX_ACTIONS and not fp.is_empty() and not fp.umwidmung_vorschlaege.is_empty() and live_plans < 12 			and not actions.any(func(x): return x.action == "designate_quarter"):
 		var rz: Dictionary = fp.umwidmung_vorschlaege[0]
 		var zi: Dictionary = fp.zonen[rz.zone]
-		actions.append({"action": "designate_quarter", "name": "%s %d" % [Parcels.ZONES[rz.zone].label, plans.size() + 1], "parcel_ids": rz.grundstuecke, "zone": rz.zone,
+		# Hat der Rat diese Umwidmung in den letzten 30 Tagen abgelehnt, nicht sofort erneut vorlegen.
+		var refused_recently: bool = plans.any(func(p): return p.status == "abgelehnt" and p.zone == rz.zone and today - int(p.get("tag", 0)) < 30)
+		if not refused_recently:
+			actions.append({"action": "designate_quarter", "name": "%s %d" % [Parcels.ZONES[rz.zone].label, plans.size() + 1], "parcel_ids": rz.grundstuecke, "zone": rz.zone,
 			"reason": "%s nur %.0f %% der Fläche (Richtwert %.0f %%): mehr Geschäfte, Arbeitsplätze und Steuern; Lage %d Felder vom Rathaus." % [Parcels.ZONES[rz.zone].label,
 				float(zi.anteil) * 100.0, float(zi.richtwert) * 100.0, int(rz.entfernung_rathaus)]})
 	# 6) Erschliessung planen fuer beschlossene Quartiere ohne Projekt

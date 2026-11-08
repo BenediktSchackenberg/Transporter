@@ -790,6 +790,10 @@ func _developer_town(town: int) -> void:
 	if region:
 		crit["town"] = town   # in der Stadt, deren Wohnungssuchende warten
 	var free: Array = sim.parcels.search(crit)   # erst filtern, dann begrenzen (billigste sind oft unerschlossen)
+	if free.is_empty():
+		# Kein Wohngebiet erschlossen: Wohnhaeuser sind auch im Mischgebiet zulaessig (Planning.DEFS zones)
+		crit["zone"] = "mischgebiet"
+		free = sim.parcels.search(crit)
 	if _developer_try(free.filter(func(p): return int(p.area) >= 40), def_id):
 		return
 	for small in ["doppelhaus", "einfamilienhaus"]:
