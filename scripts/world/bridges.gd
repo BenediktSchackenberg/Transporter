@@ -221,7 +221,7 @@ func proposals(limit: int = 3) -> Array:
 	var deposits: Dictionary = sim.prod._deposits
 	var seen := 0
 	for p in sim.parcels.search({"limit": 4000}):
-		if p.state != "frei" or p.owner != Parcels.CITY or deposits.has(p.id) or bool(sim.parcels.utilities_of(p).strasse):
+		if p.state != "frei" or not Towns.is_public(str(p.owner)) or deposits.has(p.id) or bool(sim.parcels.utilities_of(p).strasse):
 			continue
 		if str(p.get("zone", "")) not in ["wohnen", "mischgebiet", "gewerbe"]:
 			continue

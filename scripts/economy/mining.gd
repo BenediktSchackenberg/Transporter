@@ -79,7 +79,7 @@ func request(cid: int, pid: String, reason: String) -> Dictionary:
 	if not p.is_empty() and p.status in ["antrag", "genehmigt"]:
 		return {"ok": false, "msg": "Für %s liegt schon ein Abbauantrag bzw. -recht vor (%s, Firma %d)." % [pid, p.status, int(p.cid)]}
 	var parcel: Dictionary = sim.parcels.parcel(pid)
-	if parcel.is_empty() or parcel.owner != Parcels.CITY:
+	if parcel.is_empty() or not Towns.is_public(str(parcel.owner)):
 		return {"ok": false, "msg": "%s gehört nicht mehr der Stadt." % pid}
 	permits[pid] = {"cid": cid, "status": "antrag", "abgabe": DEFAULT_ROYALTY, "day": GameCalendar.day_of(sim.game_min), "reason": reason.left(200), "decision": ""}
 	var c: Company = sim.company(cid)
@@ -110,7 +110,7 @@ func permitted_for(cid: int, kind: String) -> String:
 	for pid in permits:
 		var p: Dictionary = permits[pid]
 		if int(p.cid) == cid and p.status == "genehmigt" and (kind == "" or str(sim.prod.deposit_of(pid).get("art", "")) == kind):
-			if sim.parcels.parcel(pid).get("owner", "") == Parcels.CITY:
+			if Towns.is_public(str(sim.parcels.parcel(pid).get("owner", ""))):
 				return pid
 	return ""
 
@@ -169,7 +169,7 @@ func next_step(cid: int, kind: String) -> Dictionary:
 	for pid in sim.prod._deposits:
 		var d: Dictionary = sim.prod.deposit_of(pid)
 		var p: Dictionary = sim.parcels.parcel(pid)
-		if str(d.art) != kind or int(d.menge) <= 0 or p.is_empty() or p.owner != Parcels.CITY:
+		if str(d.art) != kind or int(d.menge) <= 0 or p.is_empty() or not Towns.is_public(str(p.owner)):
 			continue
 		var pm: Dictionary = permits.get(pid, {})
 		if not pm.is_empty() and int(pm.cid) != cid and pm.status in ["antrag", "genehmigt"]:

@@ -64,7 +64,7 @@ func color_of(p: Dictionary) -> Color:
 				"genehmigt", "in_erschliessung", "im_bau": return Color(0.95, 0.55, 0.15, 0.55)
 		2:
 			var o := str(p.owner)
-			if o == Parcels.CITY:
+			if Towns.is_public(o):   # auch Grundstuecke der anderen Staedte (stadt<k>)
 				return Color(0.3, 0.55, 0.95, 0.5)
 			if o.begins_with("H"):
 				return Color(0.3, 0.8, 0.3, 0.5)

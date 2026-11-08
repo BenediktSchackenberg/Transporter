@@ -555,7 +555,7 @@ func best_deposit(kind: String, pid: String = "") -> Dictionary:
 		var p: Dictionary = sim.parcels.parcel(id)
 		var d := deposit_of(id)
 		var free_land: bool = p.get("state", "") == "frei" or (p.get("state", "") == "privat_gehalten" and str(p.get("use", "")) == "berg")
-		if p.is_empty() or not free_land or p.owner != Parcels.CITY or int(d.menge) <= 0 or (kind != "" and d.art != kind):
+		if p.is_empty() or not free_land or not Towns.is_public(str(p.owner)) or int(d.menge) <= 0 or (kind != "" and d.art != kind):
 			continue
 		if not bool(sim.parcels.utilities_of(p).strasse):
 			continue
@@ -575,7 +575,7 @@ func remote_deposit(kind: String) -> Dictionary:
 	for id in _deposits:
 		var p: Dictionary = sim.parcels.parcel(id)
 		var d := deposit_of(id)
-		if p.is_empty() or p.get("state", "") != "frei" or p.owner != Parcels.CITY or int(d.menge) <= 0 or (kind != "" and d.art != kind):
+		if p.is_empty() or p.get("state", "") != "frei" or not Towns.is_public(str(p.owner)) or int(d.menge) <= 0 or (kind != "" and d.art != kind):
 			continue
 		if bool(sim.parcels.utilities_of(p).strasse) or sim.access.jobs.values().any(func(j): return j.parcel == id and j.status in ["antrag", "im_bau"]):
 			continue

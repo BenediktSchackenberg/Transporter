@@ -62,6 +62,11 @@ func _initialize() -> void:
 			print("   Reparaturen (letzte %d): %s" % [rep.size(), str(rep.slice(-8).map(func(e): return "T%d %s %d" % [GameCalendar.day_of(float(e.t)), str(e.note).left(40), int(e.amount)]))])
 		var vs: Array = s.vehicles.values().filter(func(v): return v.owner == c.id)
 		print("   Fahrzeuge: %s" % str(vs.map(func(v): return "#%d %s Preis %d Zustand %d km %d %s" % [v.id, v.model, int(v.purchase_price), int(v.condition), int(v.odometer), v.state])))
+	for c in s.companies.filter(func(c): return c.focus != ""):
+		print("Fokus %s Firma %d: Schritte %s" % [c.focus, c.id, str(["eisenerz", "kohle", "kalkstein", "rohmaterial"].map(func(art): return "%s=%s" % [art, str(s.mining.next_step(c.id, art).get("schritt", "-"))]))])
+		print("   letzte Ergebnisse: %s" % str(s.action_results.get(c.id, []).slice(-10).map(func(r): return str(r.text).left(140))))
+		var obs := ObservationBuilder.build(s, c.id, [], 0.0, 10.0)
+		print("   Regel-KI jetzt: %s" % str(RuleBrain.decide(obs, c.personality, rng).actions.map(func(x): return str(x).left(120))))
 	print("\n--- Stadtkassen ---")
 	for d in town_cash:
 		print("Tag %d: %s" % [d, ", ".join(town_cash[d])])
