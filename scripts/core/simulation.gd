@@ -613,6 +613,11 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 	var before := v.tiles_moved
 	v.advance(dt, _speed_factor(v) * _flow_step(v, dt) * (0.35 if not city.is_road(v.tile()) else 1.0))
 	var moved := v.tiles_moved - before
+	if moved > 0 and v.state == "to_workshop":
+		# Fahrt zur Werkstatt (abgeschleppt bzw. auf dem Weg zur Reparatur): kein weiterer Verschleiss, keine neue Panne und kein
+		# Treibstoff - sonst blieb das Fahrzeug unterwegs erneut liegen und wurde wieder und wieder fuer je 400 EUR abgeschleppt.
+		v.odometer += moved
+		moved = 0
 	if moved > 0:
 		var spec := v.spec()
 		v.odometer += moved
