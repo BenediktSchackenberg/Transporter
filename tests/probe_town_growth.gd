@@ -44,6 +44,11 @@ func _initialize() -> void:
 
 func _report(s: Simulation, day: int) -> void:
 	print("=== Tag %d · Bautraeger-Mittel %d" % [day, int(s.construction.available_funds(Construction.DEVELOPER))])
+	var roads := 0
+	for i in s.city.ground.size():
+		if s.city.ground[i] == CityData.G.ROAD:
+			roads += 1
+	print("GESAMT Gebaeude %d, Strassenfelder %d, Einwohner %d" % [s.city.buildings.size(), roads, s.citizens.people.size()])
 	for k in s.towns.count():
 		var M: Mayor = s.towns.mayor(k)
 		var wohnen: Array = s.parcels.items.values().filter(func(p): return p.zone == "wohnen" and s.towns.of_parcel(str(p.id)) == k)

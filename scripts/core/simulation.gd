@@ -1118,7 +1118,8 @@ func _minute_tick() -> void:
 		FuelPlanner.run_rules(self)
 	if minute_index % Workforce.TICK_MIN == 0:
 		workforce.minute_tick()
-	airport.on_minute(game_min)   # Luftfracht: neue Landung + Flugwetter-Gate (Etappe E2, Teil 2)
+	for ap in (towns.airports if towns != null and not towns.airports.is_empty() else [airport]):   # Luftfracht je Stadt (Landung + Flugwetter)
+		ap.on_minute(game_min)
 	for hb in (towns.harbors if towns != null and not towns.harbors.is_empty() else [harbor]):
 		hb.on_minute(game_min)   # Hafenabfertigung durch Kran und Hafenarbeiter (Auftrag 18)
 	if airport.fire_vehicle != null:
