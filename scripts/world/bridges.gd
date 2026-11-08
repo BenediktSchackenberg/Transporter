@@ -179,8 +179,8 @@ func _open(b: Dictionary) -> void:
 	for a in b.cells:
 		var q := Vector2i(int(a[0]), int(a[1]))
 		var i := city.idx(q)
-		if city.ground[i] == CityData.G.ROAD:
-			continue
+		if city.ground[i] == CityData.G.ROAD or city.building_at[i] >= 0:
+			continue   # schon Strasse bzw. bebaut: nie unter ein Gebaeude legen
 		city.ground[i] = CityData.G.ROAD
 		city.blocked[i] = 0
 		sim.nav.road.set_point_solid(q, false)

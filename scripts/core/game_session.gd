@@ -592,6 +592,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_ESCAPE: entity_view.selected = {}
 			KEY_F5: save_game()
 			KEY_TAB: hud.toggle_panels()
+			KEY_F8: city_view.placement_overlay.visible = not city_view.placement_overlay.visible   # Diagnose Gebaeudeplatzierung
 			KEY_L: sim.log_event(city_view.parcel_layer.cycle(), "info")
 			KEY_B: _next_mine()
 			KEY_O: _next_town()

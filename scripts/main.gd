@@ -247,6 +247,8 @@ func _process(_delta: float) -> void:
 		if args.has("shot-ship"):   # Kamera auf den Liegeplatz des Linienschiffs
 			session.set_follow(false)
 			session.city_view.set_camera_world(session.city_view.ship_view.berth + Vector2(110, -110))   # nach rechts versetzt: Seitenleiste verdeckt den rechten Bildrand
+		if args.has("shot-placement"):   # Diagnoseansicht Platzierung einschalten
+			session.city_view.placement_overlay.visible = true
 		if args.has("shot-ambient"):   # Kamera auf das erste Kartenleben-Element einer Art (strand, boot, bergwerk, huette, traktor, passanten, kran, terrasse)
 			for sp in session.city_view.ambient_view._spots:
 				if sp.kind == str(args["shot-ambient"]):

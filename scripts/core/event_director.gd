@@ -209,25 +209,110 @@ func _free(r: Rect2i) -> bool:
 	return near_road
 
 
-func _add_building(type: String, r: Rect2i, name: String) -> Dictionary:
+## Gemeinsame Bau- und Platzierungspruefung fuer alle Gebaeude, die waehrend des Spiels entstehen (Bauvorhaben, Betriebe, Laeden,
+## Ereignisse; Auftrag 18). `r` ist das Baufeld. Das Gebaeude belegt die Grundflaeche seines Bildes (CityGenerator.TYPES w/h) und steht
+## strassenseitig im Baufeld - der Rest bleibt Garten/Hof des Grundstuecks. Vorher belegte ein Einfamilienhaus 5x4 Felder, gezeichnet
+## wurde ein 2x2-Bild an der hinteren Ecke (leere Rasenflaeche, falsche Tiefensortierung) und jedes neue Haus bekam dieselbe Variante.
+## Keine Zelle der Grundflaeche darf Strasse, Wasser oder ein anderes Gebaeude sein; Belegung erst nach allen Pruefungen.
+## Variante: seedstabil aus Lage, moeglichst verschieden von den Nachbarn. `replay`: Eintrag aus dem Spielstand exakt wiederherstellen.
+func _add_building(type: String, r: Rect2i, name: String, replay: Dictionary = {}) -> Dictionary:
 	var c: CityData = sim.city
 	var info: Array = CityGenerator.TYPES[type]
-	var b := {"id": c.buildings.size(), "type": type, "sprite": info[0][0], "x": r.position.x, "y": r.position.y,
-		"w": r.size.x, "h": r.size.y, "district": c.district_of(r.position), "in": info[3], "out": info[4], "role": "customer",
-		"name": name}
-	for y in range(r.position.y, r.end.y):
-		for x in range(r.position.x, r.end.x):
+	var fp := r
+	var sprite := ""
+	if replay.is_empty() or int(replay.get("v", 1)) >= 2:
+		if replay.is_empty():
+			fp = _footprint_in(r, Vector2i(int(info[1]), int(info[2])))
+			if fp.size.x <= 0:
+				return {}
+		sprite = str(replay.get("sprite", "")) if not replay.is_empty() else _pick_variant(type, fp)
+	if sprite == "":
+		sprite = _pick_variant(type, fp)   # alter Spielstand (v1): Grundflaeche wie gespeichert, Variante nur fuer die Darstellung
+	if replay.is_empty():
+		for y in range(fp.position.y, fp.end.y):
+			for x in range(fp.position.x, fp.end.x):
+				var q := Vector2i(x, y)
+				if not c.inside(q) or c.building_at[c.idx(q)] != -1 or c.g(q) in [CityData.G.ROAD, CityData.G.WATER, CityData.G.RAIL, CityData.G.RUNWAY]:
+					return {}
+				if sim.access != null and sim.access.reserved(q):
+					return {}   # geplante Zufahrt freihalten
+	var road := _nearest(fp, func(p): return c.is_road(p))
+	if not c.is_road(road):
+		return {}
+	var b := {"id": c.buildings.size(), "type": type, "sprite": sprite, "x": fp.position.x, "y": fp.position.y,
+		"w": fp.size.x, "h": fp.size.y, "district": c.district_of(fp.position), "in": info[3], "out": info[4], "role": "customer",
+		"name": name, "lot": [r.position.x, r.position.y, r.size.x, r.size.y]}
+	for y in range(fp.position.y, fp.end.y):
+		for x in range(fp.position.x, fp.end.x):
 			var p := Vector2i(x, y)
 			c.building_at[c.idx(p)] = b.id
 			c.blocked[c.idx(p)] = 1
 			sim.nav.walk.set_point_solid(p, true)
-	b["road"] = _nearest(r, func(p): return c.is_road(p))
-	b["walk"] = _nearest(r, func(p): return c.walkable(p) and c.g(p) != CityData.G.ROAD)
-	if not c.is_road(b.road):
-		return {}
+	b["road"] = road
+	b["walk"] = _nearest(fp, func(p): return c.walkable(p) and c.g(p) != CityData.G.ROAD)
 	c.buildings.append(b)
-	added_buildings.append({"type": type, "x": r.position.x, "y": r.position.y, "w": r.size.x, "h": r.size.y, "name": name})
+	added_buildings.append({"v": 2, "type": type, "x": fp.position.x, "y": fp.position.y, "w": fp.size.x, "h": fp.size.y, "name": name,
+		"sprite": sprite, "lot": b.lot})
 	return b
+
+
+## Grundflaeche `size` im Baufeld `r`: die freie Lage mit dem kuerzesten Weg zur Strasse (straßenseitig, Garten dahinter).
+## Ist das Baufeld nicht groesser als die Grundflaeche, bleibt es unveraendert (Betriebe, Felder, exakt geplante Bauten).
+func _footprint_in(r: Rect2i, size: Vector2i) -> Rect2i:
+	if r.size.x <= size.x and r.size.y <= size.y:
+		return r
+	var c: CityData = sim.city
+	var sz := size
+	if sz.x > r.size.x or sz.y > r.size.y:
+		sz = Vector2i(mini(size.x, r.size.x), mini(size.y, r.size.y))
+	var roads: Array = []
+	for y in range(r.position.y - 2, r.end.y + 2):
+		for x in range(r.position.x - 2, r.end.x + 2):
+			var q := Vector2i(x, y)
+			if c.inside(q) and c.is_road(q):
+				roads.append(q)
+	var best := Rect2i()
+	var best_d := 1 << 30
+	for oy in range(0, r.size.y - sz.y + 1):
+		for ox in range(0, r.size.x - sz.x + 1):
+			var cand := Rect2i(r.position + Vector2i(ox, oy), sz)
+			var free := true
+			for y in range(cand.position.y, cand.end.y):
+				for x in range(cand.position.x, cand.end.x):
+					var q := Vector2i(x, y)
+					if c.building_at[c.idx(q)] != -1 or c.g(q) in [CityData.G.ROAD, CityData.G.WATER, CityData.G.RAIL]:
+						free = false
+			if not free:
+				continue
+			var d := 1 << 20
+			for q in roads:
+				var dx: int = maxi(0, maxi(cand.position.x - q.x, q.x - (cand.end.x - 1)))
+				var dy: int = maxi(0, maxi(cand.position.y - q.y, q.y - (cand.end.y - 1)))
+				d = mini(d, dx + dy)
+			if d < best_d:
+				best_d = d
+				best = cand
+	return best
+
+
+## Seedstabile Variante: Startindex aus der Lage, dann die erste Variante, die kein Nachbar (6 Felder) schon zeigt.
+func _pick_variant(type: String, fp: Rect2i) -> String:
+	var variants: Array = CityGenerator.TYPES[type][0]
+	if variants.size() <= 1:
+		return str(variants[0])
+	var near := {}
+	var c: CityData = sim.city
+	for y in range(fp.position.y - 6, fp.end.y + 6, 2):
+		for x in range(fp.position.x - 6, fp.end.x + 6, 2):
+			var q := Vector2i(x, y)
+			if c.inside(q) and c.building_at[c.idx(q)] >= 0:
+				near[str(c.buildings[c.building_at[c.idx(q)]].get("sprite", ""))] = true
+	var start: int = absi(hash(Vector3i(fp.position.x, fp.position.y, sim.city.seed_value))) % variants.size()
+	for i in variants.size():
+		var v := str(variants[(start + i * 3) % variants.size()])   # Schrittweite 3: auch die Bauform wechselt, nicht nur die Farbe
+		if not near.has(v):
+			return v
+	return str(variants[start])
 
 
 func _nearest(r: Rect2i, pred: Callable) -> Vector2i:
@@ -292,7 +377,7 @@ func to_dict() -> Dictionary:
 
 func from_dict(d: Dictionary) -> void:
 	for ab in d.get("added_buildings", []):   # zur Laufzeit entstandene Gebaeude in gleicher Reihenfolge (= gleiche IDs) neu anlegen
-		_add_building(ab.type, Rect2i(int(ab.x), int(ab.y), int(ab.w), int(ab.h)), ab.name)
+		_add_building(ab.type, Rect2i(int(ab.x), int(ab.y), int(ab.w), int(ab.h)), ab.name, ab)   # exakt wie gespeichert (v1: alte Grundflaeche)
 	events = d.get("events", [])
 	next_id = int(d.get("next_id", 1))
 	demand = d.get("demand", {})

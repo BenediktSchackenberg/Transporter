@@ -34,6 +34,7 @@ var site_view := SiteView.new()
 var depot_view := DepotView.new()
 var parcel_layer := ParcelLayer.new()
 var mountain_view := MountainView.new()   # Berge und Bergbau (Auftrag 14)
+var placement_overlay := PlacementOverlay.new()   # Diagnose Gebaeudeplatzierung (F8)
 var ambient_view := AmbientView.new()     # Leben auf der Karte: Strand, Boote, Moewen, Industrie, Passanten
 var ship_view := ShipView.new()           # Linienschiff im Hafen (Kuestenort)
 var bridge_view := BridgeView.new()       # Bruecken im Bau und freigegeben (Kuestenort)
@@ -134,6 +135,8 @@ func build(simulation: Simulation) -> void:
 	bridge_view.setup(sim)
 	buildings_node.add_child(ambient_view)
 	ambient_view.setup(sim, self)
+	fx_node.add_child(placement_overlay)
+	placement_overlay.setup(sim, self)
 	add_child(air_view)
 	air_view.setup(sim, self)
 	_build_decor()
@@ -286,6 +289,19 @@ func refresh_wear() -> void:
 		_apply_wear(id)
 
 
+## Zelle der hinteren Bildecke: deckt sich die Bildgrundflaeche (Manifest w/h) nicht mit dem Gebaeuderechteck (Neubauten alter
+## Spielstaende: Baufeld 5x4, Bild 2x2), steht das Bild strassenseitig im Rechteck; Sortierung und Streifen nutzen die Bildgroesse.
+func sprite_cell(b: Dictionary, info: Dictionary) -> Vector2i:
+	var sw := int(info.get("w", b.w))
+	var sh := int(info.get("h", b.h))
+	if sw >= int(b.w) and sh >= int(b.h):
+		return Vector2i(int(b.x), int(b.y))
+	var road: Vector2i = b.get("road", Vector2i(int(b.x), int(b.y) + int(b.h)))
+	var ox := clampi(road.x - int(b.x) - sw / 2, 0, maxi(0, int(b.w) - sw))
+	var oy := clampi(road.y - int(b.y) - sh / 2, 0, maxi(0, int(b.h) - sh))
+	return Vector2i(int(b.x) + ox, int(b.y) + oy)
+
+
 func add_building_sprite(b: Dictionary) -> void:
 	if b.type == "plot":
 		return   # Firmengrundstuecke zeichnet EstateView
@@ -305,9 +321,10 @@ func add_building_sprite(b: Dictionary) -> void:
 	var info: Dictionary = man.buildings.get(b.sprite, {})
 	if info.is_empty():
 		return
-	var origin := Iso.tile_origin(Vector2i(b.x, b.y))
+	var cell := sprite_cell(b, info)
+	var origin := Iso.tile_origin(cell)
 	var key: String = "b_" + b.sprite
-	var parts := add_iso_object(buildings_node, key, info, origin, int(b.w), int(b.h), true, key + "_mask" if b.sprite == "depot" else "")
+	var parts := add_iso_object(buildings_node, key, info, origin, int(info.get("w", b.w)), int(info.get("h", b.h)), true, key + "_mask" if b.sprite == "depot" else "")
 	_building_parts[int(b.id)] = parts
 	_apply_wear(int(b.id))
 	var anchor := Vector2(info.anchor[0], info.anchor[1])

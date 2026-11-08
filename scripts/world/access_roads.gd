@@ -496,6 +496,16 @@ func _maybe_finish(j: Dictionary) -> void:
 	sim.log_event("Zufahrt %s zu %s ist fertig – die Lagerstätte hat jetzt Straßenanschluss." % [j.id, j.parcel], "good", int(j.company))
 
 
+## Freizuhaltender Verkehrskorridor: Zelle einer beantragten oder im Bau befindlichen Zufahrt (Neubauten duerfen sie nicht belegen).
+func reserved(q: Vector2i) -> bool:
+	for j in jobs.values():
+		if str(j.get("status", "")) in ["antrag", "im_bau"]:
+			for a in j.cells:
+				if int(a[0]) == q.x and int(a[1]) == q.y:
+					return true
+	return false
+
+
 ## Zellen zu Strasse machen (Rodung, Wegfindung, Darstellung).
 func _apply_cells(cells: Array) -> void:
 	var city: CityData = sim.city
@@ -504,6 +514,10 @@ func _apply_cells(cells: Array) -> void:
 		var i := city.idx(q)
 		if city.ground[i] == CityData.G.ROAD:
 			continue   # Bruecke (bei der Abnahme schon freigegeben)
+		if city.building_at[i] >= 0:
+			# nie eine Strasse unter ein Haus malen (Auftrag 18): Zelle bleibt, die Blockade wird gemeldet
+			sim.log_event("Straßenbau: Feld %d,%d ist bebaut (%s) – dort wird keine Straße angelegt." % [q.x, q.y, str(city.building(city.building_at[i]).get("name", "Gebäude"))], "warn")
+			continue
 		city.ground[i] = CityData.G.ROAD
 		if city.blocked[i] == 1:
 			city.blocked[i] = 0
