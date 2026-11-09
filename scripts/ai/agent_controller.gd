@@ -253,13 +253,20 @@ func _run_fallback() -> void:
 	_next_req += 1
 
 
+## Regel-Disposition fuer Modellspieler mit offenen Modellen (lokal per Ollama oder gehostet bei IONOS): in der Partie vom 09.11.
+## lief sie mit IONOS gar nicht, Fahrzeuge mit angenommenem Auftrag standen ohne Fahrer.
+const DISPATCH_PROVIDERS := ["ollama", "ionos"]
+func _dispatch_help_on() -> bool:
+	return config.get("provider", "") in DISPATCH_PROVIDERS and bool(config.get("dispatch_help", true))
+
+
 const DISPATCH_EVERY_MIN := 60.0   # Spielminuten zwischen zwei Hofrunden der Disposition (Marktangebote verfallen nach 90-160 Minuten)
 
 
 ## Die Disposition wartet nicht auf das Modell: Marktangebote verfallen nach 90 bis 160 Spielminuten, eine Modellrunde dauert laenger.
 ## Steht ein Fahrzeug mit Fahrer ohne Auftrag still, uebernimmt sie in kurzem Takt die Annahme und Zuweisung (auch waehrend ein Modellaufruf laeuft).
 func _dispatch_tick() -> void:
-	if config.get("provider", "") != "ollama" or not bool(config.get("dispatch_help", true)) or fallback_active:
+	if not _dispatch_help_on() or fallback_active:
 		return
 	if sim.game_min - _dispatch_min < DISPATCH_EVERY_MIN:
 		return
@@ -360,7 +367,7 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 				"msg": "übergangen: Aufträge verteilt der Disponent"})
 			i += 1
 			continue
-		if config.get("provider", "") == "ollama" and bool(config.get("dispatch_help", true)):
+		if _dispatch_help_on():
 			sim.executor.auto_split[cid] = true
 		if bought_pending and _needs_new_vehicle(actual):
 			var kept := str(actual.get("contract_id", ""))
@@ -410,7 +417,7 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 	sim.memory.add_event(cid, "ausfuehrung", "%d Aktionen ausgeführt, %d abgelehnt" % [effective, actions.size() - effective])
 	# Kleine lokale Modelle scheitern oft an Pflichtangaben: blieb die Runde wirkungslos oder steht ein Fahrzeug still, setzt die Disposition (Regeln) die
 	# Fahrzeuge und Arbeiter ein, damit sie nicht untaetig herumstehen. Eigene Strategie und Investitionen bleiben beim Modell.
-	if source == "KI" and config.get("provider", "") == "ollama" and bool(config.get("dispatch_help", true)):
+	if source == "KI" and _dispatch_help_on():
 		var idle_vehicle: bool = sim.company_vehicles(cid).any(func(v): return v.state == "idle" and v.stops.is_empty() and v.contract_id == "")
 		if effective == 0 or idle_vehicle:   # auch wenn nur "abgewartet"-Aktionen gelangen, aber Fahrzeuge herumstehen
 			_run_dispatch_help()

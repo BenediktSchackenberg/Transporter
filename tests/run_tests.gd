@@ -1674,6 +1674,14 @@ func test_dispatch_help() -> void:
 	s2.game_min += 200.0
 	c2._dispatch_tick()
 	ok(int(c2.stats.get("dispatch_help", 0)) == 2, "Takt: Disposition auch für ein Fahrzeug ohne Fahrer")
+	c2.config["provider"] = "ionos"   # gehostete offene Modelle bekommen dieselbe Disposition (Partie 09.11.: lief dort nie)
+	s2.game_min += 200.0
+	c2._dispatch_tick()
+	ok(int(c2.stats.get("dispatch_help", 0)) == 3, "Takt: Disposition auch bei IONOS")
+	c2.config["provider"] = "openai"
+	s2.game_min += 200.0
+	c2._dispatch_tick()
+	ok(int(c2.stats.get("dispatch_help", 0)) == 3, "Takt: andere Anbieter unverändert ohne Disposition")
 	s2.vehicles[v2.id].contract_id = ""
 	c2.free()
 	# Anwerbesperre fuer Modellaktionen: nicht mehr Leute ohne Fahrzeug als Flotte + SPARE_STAFF
