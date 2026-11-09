@@ -745,6 +745,17 @@ func test_rule_brain_finance() -> void:
 	ok(not RuleBrain._finance(30000.0, 10000.0, 6000.0, me, "wachstum", acts, why), "ohne Umsatz kein Investitionskredit")
 	me.umsatz = 20000
 	ok(RuleBrain._finance(5000.0, 20000.0, 6000.0, me, "kostenoptimierer", acts, why) and acts.is_empty(), "genug Bargeld: Kauf ohne Kredit")
+	# Ausbau nicht moeglich: kein Kredit (Partie 08.11.: 97x Aufnahme + Tilgung im Wechsel)
+	var pme := {"bargeld": 20000, "umsatz": 5000, "kreditrahmen_frei": 60000, "kredit_moeglich_bis": 60000, "schulden": 0}
+	var bk := {"id": "B1", "branche": "baeckerei", "status": "aktiv", "personal": 3, "personal_soll": 3,
+		"ausbau": {"kosten": 25000, "moeglich": false, "fehlt": ["Nachfrage zu gering"], "personal": 3, "ziel": "Stufe 2"}}
+	acts = []
+	RuleBrain._production({"produktion_markt": {"baeckereien": 1, "muehlen": 1, "felder": 1}, "betriebe": [bk]}, pme, 20000.0, 5000.0, "wachstum", [], ["found_business"], acts, [])
+	ok(not acts.any(func(a): return a.action == "take_loan"), "kein Kredit fuer unmoeglichen Ausbau (%s)" % str(acts))
+	bk.ausbau.moeglich = true
+	acts = []
+	RuleBrain._production({"produktion_markt": {"baeckereien": 1, "muehlen": 1, "felder": 1}, "betriebe": [bk]}, pme, 20000.0, 5000.0, "wachstum", [], ["found_business"], acts, [])
+	ok(acts.map(func(a): return a.action).slice(0, 2) == ["take_loan", "upgrade_business"], "moeglicher Ausbau wird per Kredit finanziert (%s)" % str(acts))
 	# echter Kredit ueber die Bank
 	var c0 := s.company(0)
 	var debt0 := c0.ledger.debt

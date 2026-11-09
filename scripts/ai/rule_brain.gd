@@ -453,7 +453,7 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		var amount := minf(15000.0, floorf(float(me.kreditrahmen_frei) * 0.5 / 1000.0) * 1000.0)
 		actions.insert(0, {"action": "take_loan", "amount": amount, "monate": 6})
 		reasons.append("nehme %d EUR Kredit auf, weil die Kasse knapp ist" % int(amount))
-	elif debt > 0.0 and cash > buffer * 2.0 + debt:
+	elif debt > 0.0 and cash > buffer * 2.0 + debt and not actions.any(func(a): return a.action == "take_loan"):
 		actions.insert(0, {"action": "repay_loan", "amount": debt})
 		reasons.append("tilge %d EUR Schulden aus Überschuss" % int(debt))
 	var overstaffed: bool = workers_n > obs.fahrzeuge.size() + 2 and cash < buffer * 1.5
@@ -564,7 +564,11 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	# wird zuerst aufgestockt (Soll = Personal der naechsten Stufe).
 	for b in own:
 		var au: Dictionary = b.get("ausbau", {})
-		if au.is_empty() or not _invest(float(au.kosten), buffer + PROD_RESERVE, cash, me, personality, actions, reasons):
+		if au.is_empty():
+			continue
+		# Kredit nur, wenn der Ausbau jetzt auch moeglich ist (sonst Aufnahme + Tilgung in jeder Runde, 97x in einer Partie);
+		# die Personalpruefung rechnet mit einer Kopie der Aktionsliste.
+		if not _invest(float(au.kosten), buffer + PROD_RESERVE, cash, me, personality, actions if bool(au.moeglich) else actions.duplicate(), reasons if bool(au.moeglich) else []):
 			continue
 		if bool(au.moeglich):
 			actions.append({"action": "upgrade_business", "business_id": b.id, "reason": "Nachfrage %d %%, Ausbau zu %s" % [int(float(b.get("nachfrage", 0.0)) * 100.0), au.ziel]})

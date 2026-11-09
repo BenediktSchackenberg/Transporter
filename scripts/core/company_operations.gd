@@ -520,7 +520,7 @@ func summary(cid: int) -> Dictionary:
 		if r.status != "offen" or sim.game_min >= float(r.expires) or int(r.generation) != sim.company(int(r.owner)).generation:
 			continue
 		var k: Contract = sim.contracts.get(str(r.contract))
-		if k == null or not sim.company(int(r.owner)).is_active():
+		if k == null or not sim.company(int(r.owner)).is_active() or (int(r.owner) != cid and sim.logistics.available(k, Logistics.PICKUP) <= 0):   # verplante Fracht nicht fremd anbieten (190 vergebliche Angebote je Partie)
 			continue
 		inquiries.append({"id": r.id, "owner": r.owner, "contract_id": k.id, "cargo": k.cargo, "qty": k.qty, "needs_cold": k.needs_cold, "needs_heavy": k.needs_heavy, "max_fee": r.max_fee, "pickup": k.pickup, "dropoff": k.dropoff, "own": int(r.owner) == cid, "quote_pending": r.offers.any(func(oid): return sim.social.offers.get(oid, {}).get("status", "") == "open")})
 	return {"routine": policies.get(cid, {"auto_driver": true, "return_home": true, "yard_checks": true}), "linien": own, "hilfeanfragen": inquiries, "funk": dialogue.filter(func(d): return int(d.company) == cid).slice(-6)}
