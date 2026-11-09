@@ -214,7 +214,9 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 		return
 	var age_now := sim.game_min - _inflight_obs_min
 	_latency_game = age_now if _latency_game <= 0.0 else lerpf(_latency_game, age_now, 0.3)
-	var stale_limit := (STALE_GAME_MIN_OLLAMA if config.get("provider", "") == "ollama" else STALE_GAME_MIN) * maxf(speed, 1.0)
+	# Offene Modelle mit langer Denkphase (Ollama lokal, IONOS gehostet: Qwen ~2 min) bekommen die lange Frist - Partie 09.11.:
+	# mit 90 Spielminuten wurden bei IONOS alle Antworten von Viktor verworfen. Aktionen werden bei der Ausfuehrung ohnehin neu geprueft.
+	var stale_limit := (STALE_GAME_MIN_OLLAMA if config.get("provider", "") in DISPATCH_PROVIDERS else STALE_GAME_MIN) * maxf(speed, 1.0)
 	if sim.game_min - _inflight_obs_min > stale_limit:
 		last_error = "Antwort veraltet – verworfen"
 		status = last_error

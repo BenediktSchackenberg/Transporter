@@ -426,6 +426,11 @@ func test_controller_idempotency() -> void:
 	s.game_min += AgentController.STALE_GAME_MIN_OLLAMA + 1.0
 	ctl.handle_result(too_old, {"ok": true, "content": content, "usage": {}})
 	ok(ctl.last_error.contains("veraltet"), "Antwort auf mehr als einen Spieltag alten Zustand bleibt gesperrt")
+	ctl.config.provider = "ionos"   # gehostetes Qwen denkt ~2 min: dieselbe lange Frist (Partie 09.11.: alle Antworten von Viktor verworfen)
+	var hosted := ctl.begin_request_for_test()
+	s.game_min += 500.0
+	ctl.handle_result(hosted, {"ok": true, "content": '{"goal":"IONOS-Ziel","summary":"Ich plane.","actions":[{"action":"wait"}]}', "usage": {}})
+	ok(ctl.goal == "IONOS-Ziel", "IONOS-Antwort nach 500 Spielminuten wird übernommen")
 	ctl.free()
 
 
