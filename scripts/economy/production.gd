@@ -127,6 +127,8 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 				var ctr: Vector2i = sim.towns.get_t(tk).center
 				var px := int(p.rect[0]) + int(p.rect[2]) / 2
 				return sim.city.coastal() and absi(px - ctr.x) <= (28 if branch == "hotel" else 20) and p.zone != "strand")
+		if cands.is_empty() and pid != "":
+			return {"ok": false, "msg": "Grundstück %s (%s) ist nicht frei, kleiner als %d Felder, ohne Straßenzugang oder nicht bebaubar - ein Grundstück aus den Standorthinweisen wählen." % [pid, sim.towns.name_of(sim.towns.of_parcel(pid)), min_area]}
 		if cands.is_empty():
 			return {"ok": false, "msg": "Kein freies Grundstück mit Straßenzugang und mindestens %d Feldern verfügbar%s." % [min_area, (" in " + sim.towns.name_of(town)) if town >= 0 else ""]}
 		parcel = cands[0]
@@ -229,6 +231,30 @@ func _market_candidates(min_area: int, near_to: int = -1) -> Array:
 	var out: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse) 		and bool(p.get("erschliessung", {}).get("strom", true)))   # Strom fuer Muehle/Baeckerei (PowerGrid.connected)
 	out.sort_custom(func(a, b): return absi(int(a.rect[0]) - t.x) + absi(int(a.rect[1]) - t.y) < absi(int(b.rect[0]) - t.x) + absi(int(b.rect[1]) - t.y))
 	return out.slice(0, 40)
+
+
+## Trockenlauf von _place_field: Gibt es auf der Parzelle eine Stelle fuer das Gebaeude mit Strassenzugang direkt daneben?
+## Gleiche Pruefungen wie EventDirector._free/_add_building, ohne etwas zu belegen.
+func placeable(p: Dictionary, btype: String) -> bool:
+	var info: Array = CityGenerator.TYPES[btype]
+	var w := int(info[1])
+	var h := int(info[2])
+	var c: CityData = sim.city
+	var r0 := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
+	for y in range(r0.position.y, r0.end.y - h + 1):
+		for x in range(r0.position.x, r0.end.x - w + 1):
+			var r := Rect2i(x, y, w, h)
+			if not sim.events._free(r):
+				continue
+			var fits := true
+			for yy in range(r.position.y, r.end.y):
+				for xx in range(r.position.x, r.end.x):
+					var q := Vector2i(xx, yy)
+					if c.g(q) in [CityData.G.RAIL, CityData.G.RUNWAY] or (sim.access != null and sim.access.reserved(q)):
+						fits = false
+			if fits:
+				return true
+	return false
 
 
 ## Betriebsgebaeude (Kartenbild nach Branche, z. B. "farm" 3x3) an einer Stelle der Parzelle mit Strassenzugang.
@@ -1219,13 +1245,17 @@ func site_hints(branch: String, n: int = 3, town_only: int = -1) -> Array:
 			var makes: bool = bs.get("rezept", {}).get("aus", {}).has(item) or (bs.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
 			if makes:
 				sources[item].append({"name": "%s %s" % [b.id, bs.get("label", b.branch)], "cell": sim.city.building(int(b.site)).road, "price": float(art(item).get("basispreis", 10.0))})
-	var cands: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return p.zone in ["industrie", "gewerbe"] \
+	var zones: Array = ["industrie", "gewerbe"] if branch in Mayor.INDUSTRY else ["industrie", "gewerbe", "mischgebiet"]   # wie Mayor.business_permit
+	var cands: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return p.zone in zones \
 			and (not need_power or bool(p.get("erschliessung", {}).get("strom", true))))
 	if town_only >= 0 and sim.towns.is_region():
 		cands = cands.filter(func(p): return sim.towns.of_parcel(str(p.id)) == town_only)   # Endkundenbetriebe gehoeren in ihre Stadt
 	cands = cands.filter(func(p): return bool(sim.parcels.utilities_of(p).strasse))   # teure Feldabtastung erst nach den billigen Filtern
+	var btype := str(spec.get("gebaeude", "factory"))
 	var out: Array = []
 	for p in cands.slice(0, 300):
+		if not placeable(p, btype):
+			continue   # nur Grundstuecke vorschlagen, auf denen die Gruendung das Gebaeude auch setzen kann
 		var cell := Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)
 		var town: int = sim.towns.of_parcel(str(p.id)) if sim.towns.is_region() else 0
 		var H: Harbor = sim.towns.harbor(town) if sim.towns.is_region() else sim.harbor
