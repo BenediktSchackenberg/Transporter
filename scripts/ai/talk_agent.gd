@@ -41,6 +41,12 @@ func budget_left() -> bool:
 
 
 func _process(delta: float) -> void:
+	var _pt := Time.get_ticks_usec()
+	_process_timed(delta)
+	ProcTimer.add("gespraeche_ki", _pt)
+
+
+func _process_timed(delta: float) -> void:
 	real_time += delta
 	if _inflight >= 0 and real_time - _inflight_sent > float(config.get("timeout", 45.0)):
 		adapter.cancel()

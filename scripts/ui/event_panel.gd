@@ -86,6 +86,12 @@ func _trigger() -> void:
 
 
 func _process(delta: float) -> void:
+	var _pt := Time.get_ticks_usec()
+	_process_timed(delta)
+	ProcTimer.add("ereignisfenster", _pt)
+
+
+func _process_timed(delta: float) -> void:
 	if not visible or session == null:
 		return
 	_refresh -= delta

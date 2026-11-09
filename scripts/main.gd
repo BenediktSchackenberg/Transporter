@@ -144,7 +144,50 @@ func _start_autotest() -> void:
 	_start(cfg)
 
 
+## Ruckler-Suche (--draw-probe): ab Sekunde 150 alle 15 s eine Ebene ausblenden und die mittlere Godot-Prozesszeit protokollieren.
+const PROBE_LAYERS := ["keine", "site_view", "ambient_view", "mountain_view", "ship_view", "bridge_view", "air_view", "waste_view",
+	"tourist_view", "estate_view", "depot_view", "parcel_layer", "entity_view", "activity_layer", "decor_node", "buildings_node", "keine"]
+var _probe := {"i": -1, "t": 0.0, "sum": 0.0, "n": 0}
+func _probe_node(name: String) -> CanvasItem:
+	if name == "keine":
+		return null
+	if name in ["entity_view", "activity_layer"]:
+		return session.get(name)
+	return session.city_view.get(name)
+func _draw_probe(delta: float) -> void:
+	if session == null or session.active_seconds < 150.0:
+		return
+	_probe.t += delta
+	_probe.sum += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+	_probe.n += 1
+	if _probe.i >= 0 and _probe.t < 15.0:
+		return
+	if _probe.i >= 0:
+		session.api_log.write({"type": "draw_probe", "ausgeblendet": PROBE_LAYERS[_probe.i], "prozess_ms": snappedf(_probe.sum / maxf(1.0, _probe.n), 0.1), "bilder": _probe.n})
+		var old := _probe_node(PROBE_LAYERS[_probe.i])
+		if old != null:
+			old.visible = true
+	_probe.i += 1
+	_probe.t = 0.0
+	_probe.sum = 0.0
+	_probe.n = 0
+	if _probe.i >= PROBE_LAYERS.size():
+		get_tree().quit()
+		return
+	var cur := _probe_node(PROBE_LAYERS[_probe.i])
+	if cur != null:
+		cur.visible = false
+
+
 func _process(_delta: float) -> void:
+	var _pt := Time.get_ticks_usec()
+	_process_timed(_delta)
+	ProcTimer.add("main", _pt)
+
+
+func _process_timed(_delta: float) -> void:
+	if args.has("draw-probe"):
+		_draw_probe(_delta)
 	if session and args.has("demo-mine") and not args.has("_mine"):   # Sichtpruefung Bergbau: Firma 0 eroeffnet ein Bergwerk mit Personal
 		args["_mine"] = true
 		var c0: Company = session.sim.companies[0]

@@ -48,6 +48,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	var _pt := Time.get_ticks_usec()
+	_process_timed(delta)
+	ProcTimer.add("dienste", _pt)
+
+
+func _process_timed(delta: float) -> void:
 	if not enabled or sim == null or sim.finished or _key == "":
 		return
 	_since += delta

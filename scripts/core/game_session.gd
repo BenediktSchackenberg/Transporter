@@ -40,6 +40,8 @@ var ended := false
 var end_reason := ""
 var _frames_reported := {}
 var _interval_max_ms := 0.0
+var _wall_last := 0           # Wanduhr des letzten Bildes (usec): delta ist von Godot gedeckelt und verdeckt echte Haenger
+var _wall := {"max_ms": 0.0, "ueber_500ms": 0, "ueber_2s": 0, "haenger_s": 0.0}
 var frame_stats := {"frames": 0, "max_ms": 0.0, "sum_ms": 0.0, "over_100ms": 0, "sim_ms": 0.0, "city_ms": 0.0, "entity_ms": 0.0, "hud_ms": 0.0}
 var _sounds := {}
 var _sound_cooldown := {}
@@ -325,6 +327,14 @@ func _frame_report() -> Dictionary:
 		out[k.trim_suffix("_ms") + "_ms_je_bild"] = snappedf((float(frame_stats[k]) - float(_frames_reported.get(k, 0.0))) / n, 0.1)
 	out["ueber_100ms"] = int(frame_stats.over_100ms) - int(_frames_reported.get("over_100ms", 0))
 	out["max_ms"] = snappedf(_interval_max_ms, 0.1)
+	out["knoten_ms_je_bild"] = ProcTimer.report(n)
+	out["wanduhr"] = {"max_ms": snappedf(float(_wall.max_ms), 1.0), "ueber_500ms": _wall.ueber_500ms, "ueber_2s": _wall.ueber_2s, "haenger_s": snappedf(float(_wall.haenger_s), 0.1)}
+	_wall = {"max_ms": 0.0, "ueber_500ms": 0, "ueber_2s": 0, "haenger_s": 0.0}
+	# Godot-Zaehler des letzten Bildes: Prozesszeit aller Knoten und Zeichenaufwand (_draw laeuft ausserhalb der Messpunkte oben)
+	out["prozess_ms"] = snappedf(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, 0.1)
+	out["draw_calls"] = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	out["objekte_gezeichnet"] = int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
+	out["primitive"] = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 	_frames_reported = frame_stats.duplicate()
 	_interval_max_ms = 0.0
 	return out
@@ -374,7 +384,23 @@ func _on_logged(e: Dictionary) -> void:
 
 
 func _process(delta: float) -> void:
+	var _pt := Time.get_ticks_usec()
+	_process_timed(delta)
+	ProcTimer.add("spielsitzung", _pt)
+
+
+func _process_timed(delta: float) -> void:
 	var ms := delta * 1000.0
+	var now_us := Time.get_ticks_usec()
+	if _wall_last > 0:
+		var wall_ms := (now_us - _wall_last) / 1000.0
+		_wall.max_ms = maxf(float(_wall.max_ms), wall_ms)
+		if wall_ms > 500.0:
+			_wall.ueber_500ms = int(_wall.ueber_500ms) + 1
+			_wall.haenger_s = float(_wall.haenger_s) + wall_ms / 1000.0
+		if wall_ms > 2000.0:
+			_wall.ueber_2s = int(_wall.ueber_2s) + 1
+	_wall_last = now_us
 	frame_stats.frames += 1
 	frame_stats.sum_ms += ms
 	if frame_stats.frames > 30:   # Ladephase nicht mitzaehlen

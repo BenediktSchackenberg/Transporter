@@ -64,6 +64,12 @@ func budget_left() -> bool:
 
 
 func _process(delta: float) -> void:
+	var _pt := Time.get_ticks_usec()
+	_process_timed(delta)
+	ProcTimer.add("disponent_ki", _pt)
+
+
+func _process_timed(delta: float) -> void:
 	if not active or sim == null or sim.finished or adapter == null:
 		return
 	real_time += delta

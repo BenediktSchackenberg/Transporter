@@ -16,6 +16,12 @@ func setup(simulation: Simulation, city_view) -> void:
 
 
 func _process(_delta: float) -> void:
+	var _pt := Time.get_ticks_usec()
+	_process_timed(_delta)
+	ProcTimer.add("platzierung", _pt)
+
+
+func _process_timed(_delta: float) -> void:
 	if visible:
 		queue_redraw()
 
