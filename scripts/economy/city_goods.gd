@@ -46,6 +46,12 @@ const GROUPS := {
 	"reinigung": {"label": "Reinigung und Abfall", "zone": "regal", "class": "verbrauch", "crit": 1, "items": [
 		["muellbehaelter", "Müllbehälter", "Stk", 48.0, 150, {"class": "lager"}], ["muellsack", "Säcke", "Pack", 6.0, 600], ["besen", "Besen", "Stk", 7.0, 80, {"class": "geraet"}],
 		["reinigungsgeraet", "Reinigungsgeräte", "Stk", 190.0, 12, {"class": "geraet", "zone": "geraete"}], ["hygiene", "Reinigungs- und Hygieneartikel", "Pack", 12.0, 400]]},
+	"anlagen": {"label": "Öffentliche Anlagen und Denkmäler", "zone": "regal", "class": "verbrauch", "crit": 1, "items": [   # Auftrag 19: nur fuer Bauprojekte
+		["naturstein", "Naturstein", "t", 95.0, 0, {"use": 0.0, "zone": "schuettgut"}], ["bronze", "Bronze", "t", 480.0, 0, {"use": 0.0}],
+		["kunstwerk", "Kunstwerke", "Stk", 2400.0, 0, {"use": 0.0}], ["dekoration", "Dekorationsmaterial", "Set", 35.0, 0, {"use": 0.0}],
+		["marktstand", "Marktstände", "Stk", 380.0, 0, {"use": 0.0}], ["flutlicht", "Flutlichtmasten", "Stk", 900.0, 0, {"use": 0.0}],
+		["tribuenenteil", "Tribünenelemente", "Stk", 650.0, 0, {"use": 0.0}], ["sportbelag", "Sportbelag", "m²", 14.0, 0, {"use": 0.0}],
+		["zaun", "Zaunelemente", "m", 22.0, 0, {"use": 0.0}]]},
 	"verwaltung": {"label": "Verwaltung und öffentliche Gebäude", "zone": "regal", "class": "verbrauch", "crit": 1, "items": [
 		["papier", "Papier", "Pal", 90.0, 30], ["buero", "Büromaterial", "Pack", 14.0, 200], ["computer", "Computer", "Stk", 640.0, 20, {"class": "lager"}],
 		["moebel", "Möbel", "Stk", 180.0, 40, {"class": "lager"}], ["lampe", "Beleuchtung (Gebäude)", "Stk", 32.0, 120], ["gebaeudeteil", "Ersatzteile Gebäudetechnik", "Stk", 55.0, 80]]},
@@ -83,7 +89,7 @@ static func items() -> Dictionary:
 				"lead": int(extra.get("lead", 3)), "shelf": int(extra.get("shelf", 0))}
 			var geraet: bool = d["class"] == "geraet"
 			d["use"] = float(extra.get("use", 0.0 if geraet else maxf(0.05, float(target) / 90.0)))   # erwarteter Verbrauch je Tag
-			d["reorder"] = maxi(1, int(round(float(target) * 0.5)))
+			d["reorder"] = maxi(1 if target > 0 else 0, int(round(float(target) * 0.5)))   # Projektware (Ziel 0) wird nie auf Vorrat bestellt
 			d["min"] = maxi(0, int(round(float(target) * 0.25)))
 			d["cap"] = maxi(target, int(round(float(target) * 2.0)))
 			_cache[row[0]] = d

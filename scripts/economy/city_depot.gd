@@ -334,6 +334,8 @@ func quote(item: String, qty: int, crit: int = 1) -> Array:
 	if Trader.MATERIALS.has(item) and sim.trader.stock_of(item) >= qty:
 		out.append({"supplier": "T0", "unit_price": sim.trader.price(item, qty), "lead": 0, "loc": sim.trader.bauhof, "name": "Bauhof (privater Großhandel)"})
 	out.append({"supplier": "X0", "unit_price": snappedf(cat_price * CityGoods.IMPORT_FACTOR, 0.01), "lead": int(it.lead) + CityGoods.IMPORT_LEAD, "loc": port, "name": "Import (Ausland)"})
+	if sim.hub != null and sim.hub.enabled and sim.hub.stock_of(item) >= qty:   # Auftrag 19: zentrales Grosslager, sofort ab Lager
+		out.append({"supplier": CentralHub.ACCT, "unit_price": sim.hub.price(item), "lead": 0, "loc": sim.hub.loc, "name": "Großlager (Kartenmitte)"})
 	# Luftfracht (Flughafen, nur Kuestenort): 30 % teurer, liefert ab naechster Landung – steht fuer
 	# kritische Ware oder eilige Auftraege zur Wahl; der Preisvorteil des Seewegs siegt, wenn es keine Eile hat.
 	# Nur, wenn die Menge in hoechstens zwei Fluege passt: Schuettgut (Schotter, Kies) in Hunderten Tonnen wartete sonst wochenlang am Flughafen.

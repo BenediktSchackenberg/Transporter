@@ -23,6 +23,10 @@ const SCHEMA := {
 		"auto_repair": "bool?", "reassign_blocked": "bool?", "darf_teile_kaufen": "bool?", "repair_budget": "number?"},
 		"desc": "Ziel und Befugnisse: prioritaet fristgerecht|kosten|auslastung; Fahrer einteilen, Reparaturen veranlassen, Aufgaben umverteilen, Ersatzteile kaufen; repair_budget = Geld für Routine. Investitionen/Sabotage nie."},
 	"request_progress_report": {"params": {"foreman_id": "string"}, "desc": "Sofortigen Bericht des Vorarbeiters anfordern."},
+	"hub_buy": {"params": {"item": "string", "qty": "int"},
+		"desc": "Ware im zentralen Großlager kaufen (Preise unter grosslager). Bezahlt sofort; abholen musst du mit eigenem Fahrzeug (exklusiver Auftrag zum eigenen Depot)."},
+	"hub_sell": {"params": {"item": "string", "qty": "int"},
+		"desc": "Ware aus deinem Depot an das Großlager verkaufen (Ankaufpreis). Du lieferst mit eigenem Fahrzeug, Zahlung bei Anlieferung."},
 	"buy_supplies": {"params": {"resource_id": "string", "amount": "number", "lieferung": "string?"},
 		"desc": "Treibstoff (Liter) an einer Tankstelle oder Ersatzteile in einer Werkstatt kaufen. Diesel wird gezapft (belegte Zapfsäulen = Wartezeit) und kommt erst später im Depot an: lieferung=liefern (Tankwagen, Gebühr, Standard) oder abholen (eigener Transportauftrag Tankstelle→Depot, ein Fahrzeug muss fahren). Ersatzteile sofort."},
 	"guard_target": {"params": {"worker_id": "string", "site_id": "int?", "vehicle_id": "int?"},
@@ -193,6 +197,13 @@ func run(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 				return {"ok": false, "msg": "%s ist kein eigener Vorarbeiter." % a.foreman_id}
 			P.send_report(f)
 			return {"ok": true, "msg": "Bericht von %s angefordert (siehe Ergebnisse)." % f.name}
+		"hub_buy":
+			var hc = sim.company(cid)
+			if hc == null or hc.depots.is_empty():
+				return {"ok": false, "msg": "Ohne Depot gibt es keinen Lieferort."}
+			return sim.hub.buy("C%d" % cid, str(a.get("item", "")), ActionExecutor._i(a.get("qty", 0)), int(hc.depots[0]))
+		"hub_sell":
+			return sim.hub.sell(cid, str(a.get("item", "")), ActionExecutor._i(a.get("qty", 0)))
 		"buy_supplies":
 			return sim.resources.buy_supplies(cid, str(a.resource_id), ActionExecutor._f(a.amount), "abholen" if str(a.get("lieferung", "liefern")) == "abholen" else "liefern")
 		"attempt_vehicle_sabotage":
