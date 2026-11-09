@@ -1666,7 +1666,27 @@ func test_dispatch_help() -> void:
 	ok(int(c2.stats.get("dispatch_help", 0)) == 1, "Takt: Disposition läuft ohne Modellaufruf (Fahrzeug steht still)")
 	c2._dispatch_tick()
 	ok(int(c2.stats.get("dispatch_help", 0)) == 1, "Takt: nicht erneut innerhalb von %d Spielminuten" % int(AgentController.DISPATCH_EVERY_MIN))
+	# Fahrzeug ohne Fahrer: die Disposition laeuft trotzdem und setzt jemanden ein (Partie 08.11.: 27 Runden ohne Fahrer)
+	var nv2 := s2.add_vehicle(0, "van", 5000.0, s2.depot_road(0))
+	nv2.state = "idle"
+	nv2.path.clear()
+	s2.vehicles[v2.id].contract_id = "busy"   # das erste Fahrzeug zaehlt nicht als frei
+	s2.game_min += 200.0
+	c2._dispatch_tick()
+	ok(int(c2.stats.get("dispatch_help", 0)) == 2, "Takt: Disposition auch für ein Fahrzeug ohne Fahrer")
+	s2.vehicles[v2.id].contract_id = ""
 	c2.free()
+	# Anwerbesperre fuer Modellaktionen: nicht mehr Leute ohne Fahrzeug als Flotte + SPARE_STAFF
+	var s3 := new_sim(2)
+	s3.company(0).ledger.inject(50000.0)
+	for i in 6:
+		hire_free(s3, 0, "loader")
+	var cand3: Worker = s3.personnel.spawn_available("driver")
+	teleport_avatar(s3, 0, cand3.tile())
+	var rm: Dictionary = s3.executor.execute(0, {"action": "recruit_worker", "worker_id": cand3.id}, "k1", "api")
+	ok(not rm.ok and rm.msg.contains("ohne Fahrzeug"), "Modell: keine Anwerbung auf Vorrat (%s)" % rm.msg)
+	var rr: Dictionary = s3.executor.execute(0, {"action": "recruit_worker", "worker_id": cand3.id})
+	ok(rr.ok, "Regeln/Spieler dürfen weiter anwerben (%s)" % rr.msg)
 
 
 ## Testhilfe: zusaetzliches Fahrzeug mit Fahrer direkt am Depot (ohne Kauf-/Anwerbewege).

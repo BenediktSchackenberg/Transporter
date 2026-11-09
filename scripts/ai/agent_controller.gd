@@ -264,7 +264,7 @@ func _dispatch_tick() -> void:
 	if sim.game_min - _dispatch_min < DISPATCH_EVERY_MIN:
 		return
 	_dispatch_min = sim.game_min
-	var idle: bool = sim.company_vehicles(cid).any(func(v): return v.state == "idle" and v.stops.is_empty() and v.contract_id == "" and sim.driver_of(v) != null)
+	var idle: bool = sim.company_vehicles(cid).any(func(v): return v.state == "idle" and v.stops.is_empty() and v.contract_id == "")   # auch ohne Fahrer: die Regeln setzen einen ein (Partie 08.11.: Fahrzeug 27 Runden ohne Fahrer)
 	if idle:
 		_run_dispatch_help()
 
@@ -279,7 +279,9 @@ const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", 
 func _run_dispatch_help() -> void:
 	var obs := ObservationBuilder.build(sim, cid, [], _last_obs_min, remaining_real_min, goal, "")
 	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng, sim.strategy.params_of(cid))
-	d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) in DISPATCH)
+	# Fahrer anwerben gehoert zum Tagesbetrieb, solange ein eigenes Fahrzeug ohne Fahrer dasteht (sonst bleibt die Anwerbung beim Modell)
+	var allowed: Array = DISPATCH + (["recruit_worker"] if sim.company_vehicles(cid).any(func(v): return sim.driver_of(v) == null) else [])
+	d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) in allowed)
 	if sim.dispatcher != null and sim.dispatcher.covers(cid):   # Auftragszuweisung macht der Claude-Disponent; die Regeln bleiben fuer Fahrer, Reparatur, Tanken und Hofaufbau
 		d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) not in ["accept_contract", "assign_transport"] \
 			or (str(a.get("action", "")) == "assign_transport" and sim.contracts.has(str(a.get("contract_id", ""))) and sim.contracts[str(a.contract_id)].internal != ""))   # eigene Materialtransporte bleiben bei den Regeln

@@ -3,6 +3,8 @@ extends RefCounted
 ## Aktionen rund um Personal, Ressourcen und Arbeiter-Sabotage. Wird vom ActionExecutor zuerst gefragt;
 ## liefert {} zurueck, wenn die Aktion nicht hierher gehoert.
 
+const SPARE_STAFF := 2   # Leute ohne Fahrzeug ueber die Flottengroesse hinaus (Verlader, Mechaniker), bevor das Modell nicht weiter anwerben darf
+
 const SCHEMA := {
 	"inspect_resource": {"params": {"resource_id": "string"},
 		"desc": "Details zu Arbeiter (W..), Fahrzeugangebot (F..), Bezugsquelle (S..), Auftrag (A..) oder Depotstandort (D<id>)."},
@@ -96,6 +98,11 @@ func run(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 				return {"ok": false, "msg": "%s ist %s." % [w.name, "Vorarbeiter (recruit_foreman)" if w.role == "foreman" else "kein Vorarbeiter (recruit_worker)"]}
 			if c.ledger.cash < w.hire_fee:
 				return {"ok": false, "msg": "Anwerbung kostet %s." % Catalog.money(w.hire_fee)}
+			# Modelle werben oft auf Vorrat an (Partie 08.11.: 18 Leute fuer 1 Fahrzeug, Lohnkosten > 400 EUR je Tag)
+			var spare: int = P.employed(cid).filter(func(x): return x.vehicle_id < 0 and x.business == "").size()
+			var fleet: int = sim.company_vehicles(cid).size()
+			if ex._from_model() and name == "recruit_worker" and spare >= fleet + SPARE_STAFF:
+				return {"ok": false, "msg": "Schon %d Leute ohne Fahrzeug bei %d Fahrzeugen – erst Fahrzeuge kaufen oder vorhandenes Personal einsetzen." % [spare, fleet]}
 			if not on_site and not ex._near(cid, w.tile()):
 				return ex._start_visit(cid, a, w.tile(), -1, "%s (%s)" % [w.name, w.id])
 			P.hire(cid, w)
