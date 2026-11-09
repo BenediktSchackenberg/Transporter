@@ -13,16 +13,46 @@ const IONOS_PARAMS := {"temperature": 1.0, "top_p": 0.95, "reasoning_effort": "m
 
 var http: HTTPRequest
 var _req_id := -1
+var _sent_at := 0          # Ticks (ms) der laufenden Anfrage, fuer die eigene Zeitgrenze
+## IONOS/Qwen denkt oft laenger als 45 s. Partie 09.11.: beim Abbruch nach 50 s stand das ganze Spiel, weil
+## HTTPRequest.cancel_request() bei use_threads auf das Ende des HTTP-Threads wartet (wait_to_finish), der in der
+## TLS-Verbindung haengt. Deshalb: nie blockierend abbrechen - die Anfrage wird verlassen und laeuft im Hintergrund aus.
+const IONOS_MIN_TIMEOUT := 180.0
 var _messages: Array = []
 var _compat := {}          # "drop:<parameter>" oder "max_completion_tokens"
 var _compat_retries := 0
 
 
 func _ready() -> void:
-	http = HTTPRequest.new()
-	http.use_threads = true
-	add_child(http)
-	http.request_completed.connect(_on_completed)
+	http = _new_http()
+	set_process(true)
+
+
+func _new_http() -> HTTPRequest:
+	var h := HTTPRequest.new()
+	h.use_threads = true
+	h.timeout = 0.0   # Godots eigene Zeitgrenze bricht blockierend ab; die Zeitgrenze fuehrt _process (nicht blockierend)
+	add_child(h)
+	h.request_completed.connect(_on_completed.bind(h))
+	return h
+
+
+## Laufende Anfrage verlassen statt abbrechen: der Knoten bleibt, bis sein Thread von selbst fertig ist, dann wird er entsorgt.
+func _abandon() -> void:
+	if http != null and http.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
+		http.set_meta("verlassen", true)
+		http = _new_http()
+
+
+func timeout_s() -> float:
+	var t := float(config.get("timeout", 45.0))
+	return maxf(t, IONOS_MIN_TIMEOUT) if config.get("provider", "") == "ionos" else t
+
+
+func _process(_delta: float) -> void:
+	if _req_id >= 0 and _sent_at > 0 and (Time.get_ticks_msec() - _sent_at) / 1000.0 > timeout_s():
+		_abandon()
+		_finish({"ok": false, "error": "Zeitüberschreitung (%d s)" % int(timeout_s())})
 
 
 func display_name() -> String:
@@ -37,9 +67,9 @@ func send(req_id: int, messages: Array) -> void:
 
 
 func cancel() -> void:
-	if http:
-		http.cancel_request()
+	_abandon()
 	_req_id = -1
+	_sent_at = 0
 
 
 ## Baut den Anfragekoerper (oeffentlich fuer Tests).
@@ -63,8 +93,8 @@ func build_body(messages: Array) -> Dictionary:
 
 
 func _post() -> void:
-	var ionos: bool = config.get("provider", "") == "ionos"
-	http.timeout = maxf(float(config.get("timeout", 45.0)), 45.0 if ionos else 0.0)
+	_abandon()   # noch belegter Knoten (verlassene Anfrage): neuen nehmen
+	_sent_at = Time.get_ticks_msec()
 	var body := build_body(_messages)
 	var url := str(config.get("base_url", "")).strip_edges().trim_suffix("/") + "/chat/completions"
 	var headers := PackedStringArray(["Content-Type: application/json"])
@@ -76,7 +106,10 @@ func _post() -> void:
 		_finish({"ok": false, "error": "Anfrage konnte nicht gestartet werden (Fehler %d). URL prüfen." % err})
 
 
-func _on_completed(result: int, code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_completed(result: int, code: int, headers: PackedStringArray, body: PackedByteArray, from: HTTPRequest = null) -> void:
+	if from != null and from.has_meta("verlassen"):
+		from.queue_free()   # verlassene Anfrage ist von selbst fertig geworden
+		return
 	if _req_id < 0:
 		return   # abgebrochen
 	var text := body.get_string_from_utf8()
@@ -131,5 +164,6 @@ func _error_message(text: String) -> String:
 func _finish(r: Dictionary) -> void:
 	var id := _req_id
 	_req_id = -1
+	_sent_at = 0
 	r["error"] = ApiLog.redact(str(r.get("error", "")))
 	completed.emit(id, r)

@@ -122,7 +122,7 @@ func _process_timed(delta: float) -> void:
 	_after_buy_tick()
 	if _inflight >= 0:
 		# Wachhund: falls der Adapter nie antwortet
-		if real_time - _inflight_sent > float(config.get("timeout", 45.0)) + 5.0:
+		if real_time - _inflight_sent > adapter.timeout_s() + 5.0:   # Zeitgrenze des Adapters (IONOS laenger)
 			_abandoned[_inflight] = true
 			adapter.cancel()
 			_release_holds(_held)

@@ -22,6 +22,11 @@ func display_name() -> String:
 	return "Basis"
 
 
+## Wartezeit auf eine Antwort in Sekunden (der Wachhund der Firmen-KI bricht danach ab).
+func timeout_s() -> float:
+	return float(config.get("timeout", 45.0))
+
+
 static func create(provider: String) -> LLMAdapter:
 	match provider:
 		"ollama":
