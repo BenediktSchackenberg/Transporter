@@ -1184,6 +1184,20 @@ func regional_need(item: String) -> int:
 	return need
 
 
+## Standorthinweise fuer die Modell-Beobachtung, je Spieltag zwischengespeichert: site_hints durchsucht bis zu 2000 Grundstuecke und
+## kostete auf der Regionskarte ~570 ms je Beobachtung (Partie 09.11.: Spiel stockte bei jeder Modell- und Dispositionsrunde).
+## Hinweise sind nur Vorschlaege; die Gruendung selbst prueft das Grundstueck.
+var _hint_cache := {}
+func site_hints_cached(branch: String, n: int = 3, town_only: int = -1) -> Array:
+	var key := "%s|%d|%d" % [branch, n, town_only]
+	var day := GameCalendar.day_of(sim.game_min)
+	var hit: Dictionary = _hint_cache.get(key, {})
+	if hit.is_empty() or int(hit.day) != day:
+		hit = {"day": day, "out": site_hints(branch, n, town_only)}
+		_hint_cache[key] = hit
+	return hit.out
+
+
 ## 1) Standorthinweise fuer eine Gruendung (die KI entscheidet): freie, erschlossene Grundstuecke nach den Zutatenkosten einer
 ## Charge (Preis + Fracht von der guenstigsten Quelle: Betrieb der Region - auch im Bau - oder Import ueber den Hafen der Stadt).
 ## Gibt bis zu `n` Vorschlaege {grundstueck, stadt, zutaten_je_charge, quellen} zurueck, guenstigste zuerst.
@@ -1205,10 +1219,11 @@ func site_hints(branch: String, n: int = 3, town_only: int = -1) -> Array:
 			var makes: bool = bs.get("rezept", {}).get("aus", {}).has(item) or (bs.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
 			if makes:
 				sources[item].append({"name": "%s %s" % [b.id, bs.get("label", b.branch)], "cell": sim.city.building(int(b.site)).road, "price": float(art(item).get("basispreis", 10.0))})
-	var cands: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse) and p.zone in ["industrie", "gewerbe"] \
+	var cands: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return p.zone in ["industrie", "gewerbe"] \
 			and (not need_power or bool(p.get("erschliessung", {}).get("strom", true))))
 	if town_only >= 0 and sim.towns.is_region():
 		cands = cands.filter(func(p): return sim.towns.of_parcel(str(p.id)) == town_only)   # Endkundenbetriebe gehoeren in ihre Stadt
+	cands = cands.filter(func(p): return bool(sim.parcels.utilities_of(p).strasse))   # teure Feldabtastung erst nach den billigen Filtern
 	var out: Array = []
 	for p in cands.slice(0, 300):
 		var cell := Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)

@@ -205,7 +205,7 @@ static func _chances(sim: Simulation) -> Array:
 		var br := str(ch.branche)
 		var entry := {"branche": br, "stadt": sim.towns.name_of(int(ch.stadt)), "anlass": str(ch.anlass).left(110), "kosten": int(costs.get(br, 0)),
 			"aktion": "explore_deposit (dann request_mining, build_access, found_business)" if br == "bergwerk" else "found_business branche=%s standort=G.." % br}
-		var hints: Array = sim.prod.site_hints(br, 2, -1 if br in Founders.INDUSTRY else int(ch.stadt))
+		var hints: Array = sim.prod.site_hints_cached(br, 2, -1 if br in Founders.INDUSTRY else int(ch.stadt))
 		if not hints.is_empty():
 			entry["standort_hinweise"] = hints   # Zutatenkosten je Charge an diesem Standort - du entscheidest
 		out.append(entry)
