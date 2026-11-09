@@ -157,14 +157,14 @@ func _arrivals_town() -> void:
 	var month := GameCalendar.month_of(sim.game_min)
 	var boost := marketing_boost if month <= marketing_until else 0.0
 	var rate := float(Population.cfg().get("zuzug_je_monat", 0.04)) * REGION_ARRIVALS / float(GameCalendar.DAYS_PER_MONTH)
-	_arrival_acc += float(Z.population_of(town)) / PERSONS_PER_UNIT * rate * (0.5 + Z.employment_rate()) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost)
+	_arrival_acc += float(Z.population_of(town)) / PERSONS_PER_UNIT * rate * (0.5 + Z.employment_rate_of(town)) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost)
 	# Sog durch Arbeit: kleine Orte wachsen nicht nur proportional zur Einwohnerzahl. Je besser die Beschaeftigung, desto mehr Haushalte
 	# kommen zusaetzlich (bei 90 % JOB_PULL_MIN je Monat, mehr bei offenen Stellen); unter 70 % kein zusaetzlicher Zuzug.
 	var open_jobs := 0
 	for v in Z._vacancies().values():
 		open_jobs += maxi(0, int(v))
 	open_jobs = open_jobs / maxi(1, sim.towns.count())
-	var pull := clampf((Z.employment_rate() - 0.7) / 0.2, 0.0, 1.0)   # 70 % Beschaeftigung: kein Sog, 90 %: voller Sog
+	var pull := clampf((Z.employment_rate_of(town) - 0.7) / 0.2, 0.0, 1.0)   # 70 % Beschaeftigung: kein Sog, 90 %: voller Sog
 	if pull > 0.0:
 		_arrival_acc += maxf(JOB_PULL_MIN, float(open_jobs) / PERSONS_PER_UNIT) * pull / float(GameCalendar.DAYS_PER_MONTH) * (1.0 + boost)
 	var new_h := int(_arrival_acc)
@@ -292,7 +292,7 @@ func indicators() -> Dictionary:
 			"bezahlbarkeit_miete_anteil_netto": snappedf(rent / maxf(1.0, net_wage), 0.01),
 			"zufriedenheit": snappedf(sim.contentment.mean, 0.1), "zufriedenheit_viertel": sim.contentment.by_district.duplicate(),
 			"wohnungslos": sim.housing.homeless_count(), "raeumungen": int(sim.housing.stats.evictions), "planung": sim.housing.planning_aids()},
-		"arbeit": {"quote": snappedf(Z.employment_rate(), 0.001), "arbeitslos": Z.unemployed_total(), "offene_stellen": vac_jobs,
+		"arbeit": {"quote": snappedf(Z.employment_rate_of(town), 0.001), "arbeitslos": Z.unemployed_of(town), "offene_stellen": vac_jobs,
 			"offene_stellen_nach_arbeitgeber": by_vac},
 		"gewerbe": {"freie_gewerbeflaeche": free_by_zone.get("gewerbe", {}), "freie_industrieflaeche": free_by_zone.get("industrie", {}),
 			"nachfrage_stellen_baufirma_industrie": int(by_vac.get("baufirma", 0)) + int(by_vac.get("industrie", 0))},
@@ -565,7 +565,9 @@ func on_month(month: int) -> void:
 func _update_approval() -> void:
 	var Z: Citizens = sim.citizens
 	var target := 55.0
-	target += 20.0 * (Z.employment_rate() - Citizens.employment_target()) / 0.1
+	# Beschaeftigung der eigenen Stadt, gedeckelt: vorher drueckte sie bei hoher Arbeitslosigkeit jeden Zielwert auf 0 und
+	# alle Staedte lagen bei genau 38,5 % - Wohnungsnot, Kasse, Plaene und Antraege spielten keine Rolle mehr.
+	target += clampf(20.0 * (Z.employment_rate_of(town) - Citizens.employment_target()) / 0.1, -30.0, 15.0)
 	target -= 250.0 * float(waiting) / maxf(1.0, float(stock_units)) * 10.0 / 10.0
 	if cash() < reserve_cash():
 		target -= 10.0

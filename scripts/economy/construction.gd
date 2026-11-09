@@ -647,7 +647,7 @@ func _create_units(pr: Dictionary, parcel: Dictionary) -> void:
 	var n := Planning.units_of(pr.def, int(pr.floors))
 	if d.use not in ["wohnen", "misch"]:
 		return
-	sim.towns.mayor(0).stock_units += n   # Zwischenstand Auftrag 17: Wohnungsmarkt regional (Etappe 6 trennt je Ort)
+	sim.towns.mayor(sim.towns.of_building(int(pr.building))).stock_units += n   # Bestand der Stadt, in der das Haus steht (vorher immer Ort 0)
 	for i in n:
 		var u := {"id": "W%d" % _next_unit, "building": int(pr.building), "project": pr.id, "owner": pr.client, "tenant": "", "rent": RENT_PER_UNIT_MONTH, "area": 60 + 10 * i % 3 * 5, "move_in_day": -1}
 		_next_unit += 1

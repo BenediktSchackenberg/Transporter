@@ -152,22 +152,49 @@ func population_of(town: int) -> int:
 		return population()
 	# Ein Durchlauf fuer alle Staedte, gepuffert je Spielminute und Kopfzahl: der Stadtbauhof fragte je Warenart einzeln
 	# (4 Staedte x ~80 ms im Tageswechsel, Partie 09.11.).
-	var key := "%d|%d|%d" % [int(sim.game_min), people.size(), sim.personnel.workers.size()]
-	if _pop_key != key:
-		_pop_key = key
-		_pop_by_town = {}
-		for p in people:
-			var k := home_town(p)
-			_pop_by_town[k] = int(_pop_by_town.get(k, 0)) + 1
-		for w in sim.personnel.workers.values():
-			if not w.lost:
-				var k := worker_town(w)
-				_pop_by_town[k] = int(_pop_by_town.get(k, 0)) + 1
+	_count_towns()
 	return int(_pop_by_town.get(town, 0))
+
+
+## Beschaeftigungsquote einer Stadt (Region) bzw. der Region. Vorher nutzten Zustimmung, Lagebericht und Zuzug jeder Stadt die
+## Quote der ganzen Region - alle vier Buergermeister lagen deshalb bei genau 38,5 % Zustimmung (Partie 09.11.).
+func employment_rate_of(town: int) -> float:
+	if not sim.towns.is_region():
+		return employment_rate()
+	_count_towns()
+	return float(_emp_by_town.get(town, 0)) / maxf(1.0, float(_pop_by_town.get(town, 0)))
+
+
+func unemployed_of(town: int) -> int:
+	if not sim.towns.is_region():
+		return unemployed_total()
+	_count_towns()
+	return int(_pop_by_town.get(town, 0)) - int(_emp_by_town.get(town, 0))
+
+
+func _count_towns() -> void:
+	var key := "%d|%d|%d" % [int(sim.game_min), people.size(), sim.personnel.workers.size()]
+	if _pop_key == key:
+		return
+	_pop_key = key
+	_pop_by_town = {}
+	_emp_by_town = {}
+	for p in people:
+		var k := home_town(p)
+		_pop_by_town[k] = int(_pop_by_town.get(k, 0)) + 1
+		if p.employer != "":
+			_emp_by_town[k] = int(_emp_by_town.get(k, 0)) + 1
+	for w in sim.personnel.workers.values():
+		if not w.lost:
+			var k := worker_town(w)
+			_pop_by_town[k] = int(_pop_by_town.get(k, 0)) + 1
+			if int(w.employer) >= 0:
+				_emp_by_town[k] = int(_emp_by_town.get(k, 0)) + 1
 
 
 var _pop_key := ""
 var _pop_by_town := {}
+var _emp_by_town := {}
 
 
 func worker_town(w) -> int:
