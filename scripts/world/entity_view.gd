@@ -622,6 +622,9 @@ func _view_rect(margin: float) -> Rect2:
 	return Rect2(cv.camera.get_screen_center_position() - size * 0.5, size).grow(margin)
 
 
+const DEALER_SHOWN := 2   # Bestandsfahrzeuge je Haendler auf der Karte
+
+
 ## Sichtbare Ressourcen: Fahrzeuge im Haendlerbestand, wartende Waren an Abholorten, Vorraete an Tankstellen/Werkstaetten.
 func _update_markers() -> void:
 	for ch in marker_node.get_children():
@@ -631,9 +634,11 @@ func _update_markers() -> void:
 		var b: Dictionary = sim.city.building(o.dealer)
 		var i: int = per_dealer.get(o.dealer, 0)
 		per_dealer[o.dealer] = i + 1
+		if i >= DEALER_SHOWN:
+			continue   # voller Bestand steht im Haendlerfenster; auf der Karte reihten sich bis zu 5 Lkw ueberlappend an der Strasse
 		var key := "%s_0" % o.model
 		var node := Node2D.new()
-		node.position = Iso.to_screen(Vector2(b.x * 32 + 18 + i * 28, (b.y + b.h) * 32 + 14))
+		node.position = Iso.to_screen(Vector2(b.x * 32 + 18 + i * 64, (b.y + b.h) * 32 + 14))
 		var body := Sprite2D.new()
 		body.texture = cv.tex("v_" + key)
 		body.centered = false

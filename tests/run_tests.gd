@@ -3791,6 +3791,13 @@ func test_wage_arrears_in_insolvency() -> void:
 	ok(identity_ok(s), "Geld, Waren und Bilanzen stimmen")
 
 
+## Beobachtung fuer RuleBrain mit vorgegebenem Vorrat und Flotte (Diesel-Entscheidung isoliert pruefen).
+func _fuel_obs(s: Simulation, cid: int, vorraete: Dictionary) -> Dictionary:
+	var obs := ObservationBuilder.build(s, cid, [], 0.0, 10.0, "", "")
+	obs.ich.vorraete = vorraete
+	return obs
+
+
 func test_fuel_planner() -> void:
 	GameCalendar.configure(60.0)
 	var s := new_sim(2)
@@ -3828,6 +3835,27 @@ func test_fuel_planner() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.companies[0].fuel_rule.below == 200.0, "Regel nach Laden")
 	ok(s.executor.execute(0, {"action": "schedule_refueling", "below_l": 0, "buy_l": 0}).ok and c.fuel_rule.is_empty(), "Regel löschen")
+	# Keine Kleinstlieferungen (Partie 09.11.: Schwelle 250 l je Fahrzeug lag ueber dem Tank -> Tankwagen fuer 100 l)
+	c.fuel_rule = {"below": c.fuel_cap * 1.5, "buy": 1000.0, "station": ""}
+	c.fuel = c.fuel_cap - 120.0
+	var p0: float = s.resources.pending_fuel(0)
+	FuelPlanner.run_rules(s)
+	ok(is_equal_approx(s.resources.pending_fuel(0), p0), "Regel über Tankgröße bestellt keine 120 l nach")
+	c.fuel = c.fuel_cap * 0.3
+	FuelPlanner.run_rules(s)
+	ok(s.resources.pending_fuel(0) >= FuelPlanner.min_order(c.fuel_cap), "unter halbem Tank: Bestellung mindestens %d l (%d l)" % [int(FuelPlanner.min_order(c.fuel_cap)), int(s.resources.pending_fuel(0))])
+	c.fuel_rule = {}
+	# Regel-KI: 6 Fahrzeuge, Tank fast voll -> kein Diesel
+	var obs := {"vorraete": {"treibstoff_l": int(c.fuel_cap) - 150, "treibstoff_unterwegs_l": 0, "tank_kapazitaet_l": int(c.fuel_cap), "nachtank_regel": true}}
+	c.ledger.inject(200000.0)
+	while s.company_vehicles(0).size() < 6:
+		vehicle_with_driver(s, 0, "van")   # mit Fahrer: sonst fuellen Fahrerzuweisungen die 6 Aktionen der Regel-KI
+	var near_full := RuleBrain.decide(_fuel_obs(s, 0, obs.vorraete), c.personality, RandomNumberGenerator.new(), {})
+	ok(not near_full.actions.any(func(a): return a.action == "buy_supplies"), "Regel-KI: fast voller Tank, 6 Fahrzeuge -> keine Kleinstbestellung")
+	var low_obs := {"treibstoff_l": 100, "treibstoff_unterwegs_l": 0, "tank_kapazitaet_l": int(c.fuel_cap), "nachtank_regel": true}
+	var low := RuleBrain.decide(_fuel_obs(s, 0, low_obs), c.personality, RandomNumberGenerator.new(), {})
+	var buys: Array = low.actions.filter(func(a): return a.action == "buy_supplies")
+	ok(not buys.is_empty() and int(buys[0].amount) >= int(FuelPlanner.min_order(c.fuel_cap)), "Regel-KI: fast leerer Tank -> Bestellung ab Mindestmenge (%s)" % str(buys.map(func(a): return a.amount)))
 	# Wetter erhoeht den Verbrauch
 	var w := Weather.new()
 	ok(is_equal_approx(w.fuel_factor(), 1.0) or w.fuel_factor() >= 1.0, "Verbrauchsfaktor ohne Wetter nicht unter 1")

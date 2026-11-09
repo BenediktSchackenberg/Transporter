@@ -223,8 +223,10 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 		actions.append({"action": "schedule_refueling", "below_l": 250 * fuel_vehicles, "buy_l": 500 * mini(2, fuel_vehicles)})
 		planned.append("schedule_refueling")
 		reasons.append("lege eine feste Nachtank-Regel an")
-	var tank_room := int(me.vorraete.get("tank_kapazitaet_l", 1000)) - fuel_have - 5   # mehr passt nicht in den Tank (Rundung der Anzeige abfangen)
-	if fuel_have < 300 * fuel_vehicles and cash > 3000.0 and tank_room >= 100:
+	var tank_cap := float(me.vorraete.get("tank_kapazitaet_l", 1000))
+	var tank_room := int(tank_cap) - fuel_have - 5   # mehr passt nicht in den Tank (Rundung der Anzeige abfangen)
+	# Schwelle hoechstens halber Tank, Bestellung erst ab der Mindestmenge (sonst bei 6 Fahrzeugen 1800 l > Tank: jede Hofrunde Kleinstlieferung)
+	if fuel_have < mini(300 * fuel_vehicles, int(tank_cap * 0.5)) and cash > 3000.0 and tank_room >= FuelPlanner.min_order(tank_cap):
 		var fuel := _supply(res, "Treibstoff", 400)
 		if not fuel.is_empty() and float(fuel.preis) < float(res.nachtanken_ohne_vorrat_preis_l):
 			actions.append({"action": "buy_supplies", "resource_id": fuel.id, "amount": mini(400 * mini(2, fuel_vehicles), tank_room)})
