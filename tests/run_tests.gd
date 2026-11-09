@@ -533,7 +533,16 @@ func test_kinggamer_features() -> void:
 	ad.config = {"provider": "ionos", "model": OpenAIAdapter.IONOS_MODEL}
 	var body := ad.build_body([])
 	ok(body.top_p == 0.95 and body.reasoning_effort == "medium" and body.presence_penalty == 1.5 and body.temperature == 1.0
-		and not body.has("response_format") and body.max_tokens >= 1200, "IONOS-Parameter korrekt: " + str(body))
+		and not body.has("response_format") and body.max_tokens >= OpenAIAdapter.IONOS_MIN_TOKENS, "IONOS-Parameter korrekt: " + str(body))
+	ad.config = {"provider": "ionos", "model": OpenAIAdapter.IONOS_MODEL, "max_tokens_per_request": 2000}
+	ok(int(ad.build_body([]).max_tokens) >= OpenAIAdapter.IONOS_MIN_TOKENS, "IONOS: 2000 Tokens werden auf das Denkbudget angehoben (sonst leere Antwort)")
+	# Leere, abgeschnittene Antwort (nur Denken) ist ein Fehler, keine stille "ok"-Antwort
+	var got := {}
+	ad.completed.connect(func(_id, r2): got.merge(r2))
+	ad._req_id = 7
+	var cut := JSON.stringify({"choices": [{"message": {"content": ""}, "finish_reason": "length"}], "usage": {"completion_tokens": 2000}})
+	ad._on_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), cut.to_utf8_buffer())
+	ok(not got.get("ok", true) and str(got.get("error", "")).contains("abgeschnitten") and not got.get("usage", {}).is_empty(), "abgeschnittene leere Antwort -> Fehler mit Verbrauch: " + str(got.get("error", "")))
 	ad.config = {"provider": "openai", "model": "x"}
 	ok(ad.build_body([]).has("response_format"), "Standardprofil nutzt response_format")
 	ad.free()

@@ -18,6 +18,8 @@ var _sent_at := 0          # Ticks (ms) der laufenden Anfrage, fuer die eigene Z
 ## HTTPRequest.cancel_request() bei use_threads auf das Ende des HTTP-Threads wartet (wait_to_finish), der in der
 ## TLS-Verbindung haengt. Deshalb: nie blockierend abbrechen - die Anfrage wird verlassen und laeuft im Hintergrund aus.
 const IONOS_MIN_TIMEOUT := 180.0
+## Qwen denkt vor jeder Antwort 3500-6000 Tokens (reasoning_tokens); mit 2000 blieb die Antwort leer (Partie 09.11., Viktor/Bodo).
+const IONOS_MIN_TOKENS := 8000
 var _messages: Array = []
 var _compat := {}          # "drop:<parameter>" oder "max_completion_tokens"
 var _compat_retries := 0
@@ -76,7 +78,7 @@ func cancel() -> void:
 func build_body(messages: Array) -> Dictionary:
 	var ionos: bool = config.get("provider", "") == "ionos"
 	var body := {"model": config.get("model", ""), "messages": messages}
-	var max_tok := maxi(int(config.get("max_tokens_per_request", 700)), 1200 if ionos else 0)
+	var max_tok := maxi(int(config.get("max_tokens_per_request", 700)), IONOS_MIN_TOKENS if ionos else 0)
 	if _compat.has("max_completion_tokens"):
 		body["max_completion_tokens"] = max_tok
 	else:
@@ -151,6 +153,9 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 		return
 	var msg: Dictionary = data.choices[0].get("message", {})
 	var content = msg.get("content", "")
+	if (not content is String or str(content).strip_edges() == "") and str(data.choices[0].get("finish_reason", "")) == "length":
+		_finish({"ok": false, "error": "Antwort abgeschnitten – Denkbudget erschöpft (max_tokens_per_request erhöhen)", "usage": data.get("usage", {})})
+		return
 	_finish({"ok": true, "content": content if content is String else "", "usage": data.get("usage", {})})
 
 
