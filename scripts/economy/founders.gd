@@ -83,6 +83,16 @@ func _topup_focus(day: int) -> void:
 		sim.log_event("Kapitalgeber schießen %s für %s nach: Abbaurecht und Zufahrt stehen, das Bergwerk kann gebaut werden." % [Catalog.money(gap), c.company_name], "good", c.id)
 
 
+## Fuer die Beobachtung der Firmen: dieselben Chancen, je Spielstunde nur einmal berechnet (kostet in der Region 40 ms,
+## Beobachtung und Hofrunde fragen sie mehrmals je Stunde ab - Partie 09.11.: Ruckler). Die Gruendungspruefung (on_day) rechnet frisch.
+var _opp_cache := {"slot": -1, "out": []}
+func opportunities_cached() -> Array:
+	var slot := int(sim.game_min / 60.0)
+	if int(_opp_cache.slot) != slot:
+		_opp_cache = {"slot": slot, "out": opportunities()}
+	return _opp_cache.out
+
+
 ## Erkannte Chancen je Stadt: [{stadt, branche, anlass}].
 func opportunities() -> Array:
 	var out: Array = []

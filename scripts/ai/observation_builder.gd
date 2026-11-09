@@ -201,7 +201,7 @@ static func _chances(sim: Simulation) -> Array:
 	for b in Businesses.available():
 		costs[b.branche] = int(b.kosten)
 	var out: Array = []
-	for ch in sim.founders.opportunities().slice(0, 6):
+	for ch in sim.founders.opportunities_cached().slice(0, 6):
 		var br := str(ch.branche)
 		var entry := {"branche": br, "stadt": sim.towns.name_of(int(ch.stadt)), "anlass": str(ch.anlass).left(110), "kosten": int(costs.get(br, 0)),
 			"aktion": "explore_deposit (dann request_mining, build_access, found_business)" if br == "bergwerk" else "found_business branche=%s standort=G.." % br}
@@ -338,9 +338,20 @@ static func _financed_vehicles(sim: Simulation, cid: int, known_open: Array) -> 
 ## exakte IDs. Der vollstaendige Zustand bleibt fuer andere Provider erhalten.
 ## Region (Auftrag 17): eigene Heimatstadt, die anderen Staedte knapp (Einwohner, fehlende Versorgung, freies erschlossenes Land), Flugnetz.
 ## Leer in der Einzelstadt (keine zusaetzlichen Token). Standorte fremder Staedte: found_business mit stadt=<Name>.
+## Regionsuebersicht je Spielstunde einmal berechnet (25 ms; gilt fuer alle Firmen bis auf "heimat").
+static var _region_cache := {}
 static func _region(sim: Simulation, cid: int) -> Dictionary:
 	if not sim.towns.is_region():
 		return {}
+	var key := "%d|%d" % [sim.get_instance_id(), int(sim.game_min / 60.0)]
+	if not _region_cache.has(key):
+		_region_cache = {key: _region_all(sim)}   # nur der aktuelle Eintrag bleibt
+	var out: Dictionary = _region_cache[key].duplicate()
+	out["heimat"] = sim.towns.name_of(int(sim.company(cid).home_town))
+	return out
+
+
+static func _region_all(sim: Simulation) -> Dictionary:
 	var T: Towns = sim.towns
 	var running: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING)
 	var towns: Array = []
@@ -350,7 +361,7 @@ static func _region(sim: Simulation, cid: int) -> Dictionary:
 		var missing: Array = ["baeckerei", "restaurant", "hotel", "strandbar", "kneipe", "disco"].filter(func(br): return not here.any(func(b): return b.branch == br))
 		towns.append({"stadt": t.name, "einwohner": sim.citizens.population_of(k), "fehlt": missing,
 			"tourismus": sim.tourism.summary(k), "freie_grundstuecke": sim.parcels.search({"town": k, "utilities": "voll", "limit": 50}).size()})
-	var out := {"heimat": T.name_of(int(sim.company(cid).home_town)), "staedte": towns}
+	var out := {"staedte": towns}
 	if sim.air.enabled:
 		out["flugnetz"] = {"strecken": sim.air.summary().strecken, "fracht_je_flug_le": AirNetwork.CARGO_UNITS, "entgelt": "%d EUR + %d EUR/LE" % [int(AirNetwork.CARGO_BASE), int(AirNetwork.CARGO_UNIT)]}
 	return out

@@ -289,8 +289,35 @@ func _dispatch_tick() -> void:
 		return
 	_dispatch_min = sim.game_min
 	var idle: bool = sim.company_vehicles(cid).any(func(v): return v.state == "idle" and v.stops.is_empty() and v.contract_id == "")   # auch ohne Fahrer: die Regeln setzen einen ein (Partie 08.11.: Fahrzeug 27 Runden ohne Fahrer)
-	if idle:
-		_run_dispatch_help()
+	if not idle:
+		return
+	# Gleiche Lage wie bei der letzten Hofrunde (dieselben Fahrzeuge stehen, keine neuen Auftraege, Kasse kaum veraendert): auslassen,
+	# hoechstens DISPATCH_IDLE_MAX_MIN lang. Jede Runde baut eine volle Beobachtung (60-100 ms) - Partie 09.11.: 4 Firmen, stuendlich, Ruckler.
+	var sig := _dispatch_signature()
+	if sig == _dispatch_sig and sim.game_min - _dispatch_run_min < DISPATCH_IDLE_MAX_MIN:
+		return
+	_dispatch_sig = sig
+	_dispatch_run_min = sim.game_min
+	_run_dispatch_help()
+
+
+const DISPATCH_IDLE_MAX_MIN := 240.0
+var _dispatch_sig := ""
+var _dispatch_run_min := -1.0e9
+
+
+func _dispatch_signature() -> String:
+	var c := sim.company(cid)
+	var parts: Array = []
+	for v in sim.company_vehicles(cid):
+		parts.append("%d:%s:%s:%s" % [v.id, v.state, v.contract_id, "f" if sim.driver_of(v) != null else "-"])
+	var known := 0
+	for k in sim.market.open_contracts():
+		if c.known.has(k.id):
+			known += 1
+	parts.append("k%d" % known)
+	parts.append("g%d" % int(c.ledger.cash / 5000.0))
+	return ",".join(parts)
 
 
 const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", "collect_contracts", "repair_vehicle", "buy_supplies",
