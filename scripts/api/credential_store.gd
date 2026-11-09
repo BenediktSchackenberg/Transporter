@@ -5,6 +5,8 @@ extends RefCounted
 ## Der Schluessel wird per kurzzeitig gesetzter Umgebungsvariable an PowerShell vererbt, nie als Kommandozeilenargument.
 
 const PREFIX := "PixelTransportRivals/"
+const CHUNK := 1200       # Zeichen je Tresoreintrag (Grenze der Windows-Anmeldeinformationsverwaltung: 1280)
+const MAX_PARTS := 8     # bis 9600 Zeichen
 
 const CS := """
 using System; using System.Runtime.InteropServices; using System.Text;
@@ -50,7 +52,8 @@ static func save_key(slot: String, secret: String) -> bool:
 	# Uebergabe per vererbter Umgebungsvariable (nur fuer diesen Aufruf gesetzt), nie per Kommandozeile
 	OS.set_environment("PTR_CRED_SECRET", secret)
 	var output: Array = []
-	OS.execute("powershell.exe", _script("if([PtrCred]::Write('%s', $env:PTR_CRED_SECRET)){'OK'}else{'FAIL'}" % (PREFIX + slot)), output, true)
+	# Ein Tresoreintrag fasst hoechstens 1280 Zeichen (2560 Byte UTF-16); IONOS-Schluessel (JWT) sind laenger -> in Teile <Ziel>, <Ziel>#1, ...
+	OS.execute("powershell.exe", _script(("$t='%s'; $s=$env:PTR_CRED_SECRET; $n=[math]::Ceiling($s.Length/%d); $ok=$true; " 		+ "for($i=0;$i -lt $n;$i++){ $z=$t; if($i -gt 0){$z=$t+'#'+$i}; if(-not [PtrCred]::Write($z,$s.Substring($i*%d,[math]::Min(%d,$s.Length-$i*%d)))){$ok=$false} }; " 		+ "for($i=$n;$i -lt %d;$i++){ [void][PtrCred]::Delete($t+'#'+$i) }; if($ok){'OK'}else{'FAIL'}") % [PREFIX + slot, CHUNK, CHUNK, CHUNK, CHUNK, MAX_PARTS]), output, true)
 	OS.unset_environment("PTR_CRED_SECRET")
 	return str(output).contains("OK")
 
@@ -59,7 +62,7 @@ static func read_key(slot: String) -> String:
 	if not available():
 		return ""
 	var output: Array = []
-	OS.execute("powershell.exe", _script("$r=[PtrCred]::Read('%s'); if($r -ne $null){'KEY:'+$r}else{'NONE'}" % (PREFIX + slot)), output, true)
+	OS.execute("powershell.exe", _script(("$t='%s'; $r=[PtrCred]::Read($t); if($r -ne $null){ $i=1; while($i -lt %d){ $p=[PtrCred]::Read($t+'#'+$i); if($p -eq $null){break}; $r+=$p; $i++ }; 'KEY:'+$r }else{'NONE'}") % [PREFIX + slot, MAX_PARTS]), output, true)
 	for chunk in output:
 		for line in str(chunk).split("\n"):
 			if line.begins_with("KEY:"):
@@ -69,4 +72,4 @@ static func read_key(slot: String) -> String:
 
 static func delete_key(slot: String) -> void:
 	if available():
-		OS.execute("powershell.exe", _script("[void][PtrCred]::Delete('%s')" % (PREFIX + slot)), [], true)
+		OS.execute("powershell.exe", _script("$t='%s'; [void][PtrCred]::Delete($t); for($i=1;$i -lt %d;$i++){ [void][PtrCred]::Delete($t+'#'+$i) }" % [PREFIX + slot, MAX_PARTS]), [], true)
