@@ -112,6 +112,9 @@ var _refresh := 0.0
 var _toast_time := 0.0
 
 
+var control_center: ControlCenter
+
+
 func build(s: GameSession) -> void:
 	session = s
 	sim = s.sim
@@ -138,6 +141,17 @@ func build(s: GameSession) -> void:
 	toast.add_theme_constant_override("outline_size", 5)
 	add_child(toast)
 	_build_entrepreneur_window()
+	control_center = ControlCenter.new()
+	add_child(control_center)
+	control_center.build(session)
+	set_expert(control_center.expert)
+
+
+## Leitstelle (neue Oberflaeche) ist Standard; der Expertenmodus zeigt zusaetzlich die alten Protokollansichten rechts.
+func set_expert(on: bool) -> void:
+	right_box.visible = on
+	if on:
+		control_center.set_expanded(false)
 
 
 func _build_top() -> void:
@@ -230,8 +244,10 @@ func toggle_panels() -> void:
 	if entrepreneur_window.visible:
 		_close_entrepreneur()
 		return
-	for n in [left_scroll, right_box, minimap, sel_panel]:
+	for n in [left_scroll, minimap, sel_panel, control_center]:
 		n.visible = not n.visible
+	if control_center.expert:
+		right_box.visible = control_center.visible
 
 
 func _build_left() -> void:

@@ -445,9 +445,55 @@ func _process_timed(_delta: float) -> void:
 			session.city_view.set_camera_world(Vector2(float(xy2[0]) * 32.0 + 16.0, float(xy2[1]) * 32.0 + 16.0))
 			for i in 4:
 				await get_tree().process_frame
+		if args.has("shot-ui"):   # Leitstelle: je Angabe (Komma-getrennt) ein eigenes Bild <screenshot>_<Angabe>.png
+			for spec in str(args["shot-ui"]).split(","):
+				_apply_shot_ui(spec)
+				for i in 30:
+					await get_tree().process_frame
+				var path := str(args["screenshot"]).get_basename() + "_" + spec.replace(":", "-") + ".png"
+				get_viewport().get_texture().get_image().save_png(path)
+				print("AUTOTEST: Screenshot gespeichert: ", ProjectSettings.globalize_path(path))
+			return
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(args["screenshot"])
 		print("AUTOTEST: Screenshot gespeichert: ", ProjectSettings.globalize_path(args["screenshot"]))
+
+
+## Leitstelle fuer Screenshots: Bereich bzw. Detail oeffnen (ki, welt, gespraeche, firmen, firma:N[:tab], staedte, stadt:N, finanzen, technik, warum, suche:Text, zu)
+func _apply_shot_ui(spec: String) -> void:
+	var cc: ControlCenter = session.hud.control_center
+	var parts: PackedStringArray = spec.split(":")
+	match parts[0]:
+		"firma":
+			cc.open_area("firmen")
+			cc.show_company(int(parts[1]), parts[2] if parts.size() > 2 else "ueberblick")
+		"stadt":
+			cc.open_area("staedte")
+			cc.show_town(int(parts[1]))
+		"gespraeche":
+			cc.welt_tab = "gespraeche"
+			cc.open_area("welt")
+		"warum":
+			cc.open_area("ki")
+			var last := session.sim.decisions.entries.filter(func(d): return str(d.herkunft) in ["api", "fallback", "plan"] and str(d.pruefung) == "ok")
+			if not last.is_empty():
+				cc.show_decision(str(last[-1].id))
+		"suche":
+			cc.open_area("ki")
+			cc.search.text = parts[1]
+			cc._search(parts[1])
+		"zu":
+			cc.set_expanded(false)
+		"sprung":   # erstes wichtiges Ereignis mit Ort: Kamera springt, Ring markiert den Ort
+			for e in session.sim.center.query({"min_sev": 2}, 50):
+				if not (e.cell as Array).is_empty():
+					cc.jump_event(e)
+					print("AUTOTEST Sprung zu ", e.title, " ", e.cell)
+					break
+		"skala":
+			cc.set_ui_scale(float(parts[1]))
+		_:
+			cc.open_area(parts[0])
 
 
 ## Sichtpruefung der Baustellengrafik: ein Haushalt baut ein Mehrfamilienhaus; die Zeit wird bis zur gewuenschten Bauphase vorgespult.

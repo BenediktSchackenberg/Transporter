@@ -49,12 +49,23 @@ func record(cid: int, origin: String, action: Dictionary, result: Dictionary, ke
 		"wahrgenommen": ctx.get("wahrgenommen", []), "ziel": ctx.get("ziel", ""), "begruendung": ctx.get("begruendung", ""),
 		"aktion": _compact(action), "pruefung": "ok" if result.ok else "abgelehnt", "ergebnis": str(result.get("msg", "")).left(200),
 		"ausgefuehrt": "vorgemerkt (Besuch)" if result.get("pending", false) else ("ausgeführt" if result.ok else "nicht ausgeführt"),
-		"key": key, "refs": refs, "plan": sim.plans.current(cid).get("id", "")}
+		"key": key, "refs": refs, "plan": sim.plans.current(cid).get("id", ""), "lage": _snapshot(cid)}
 	next_id += 1
 	entries.append(e)
 	if entries.size() > MAX:
 		entries.pop_front()
 	sim.activity.from_decision(cid, origin, action, result, str(e.begruendung))
+
+
+## Lage der Firma zum Entscheidungszeitpunkt (fuer die Erklaerung "Warum?"; nur gemessene Werte).
+func _snapshot(cid: int) -> Dictionary:
+	var c = sim.company(cid)
+	if c == null:
+		return {}
+	var fleet: Array = sim.company_vehicles(cid)
+	return {"bargeld": int(c.ledger.cash), "schulden": int(c.ledger.debt), "gewinn": int(c.ledger.profit()), "fahrzeuge": fleet.size(),
+		"frei": fleet.filter(func(v): return v.state == "idle" and v.contract_id == "").size(), "auftraege": sim.executor.active_contracts(cid),
+		"kapazitaet": c.contract_capacity(), "personal": sim.personnel.employed(cid).size(), "ruf": snappedf(c.reputation, 0.1)}
 
 
 ## Vorgang ohne KI-Entscheidung (Vorarbeiter, Simulation, Zuschauer).
