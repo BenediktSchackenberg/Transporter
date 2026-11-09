@@ -42,6 +42,8 @@ func budget_left() -> bool:
 
 func _process(delta: float) -> void:
 	var _pt := Time.get_ticks_usec()
+	ProcTimer.mark("gespraeche_ki")
+	ProcTimer.sub("-")
 	_process_timed(delta)
 	ProcTimer.add("gespraeche_ki", _pt)
 

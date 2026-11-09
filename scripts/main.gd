@@ -11,8 +11,55 @@ var args := {}
 var _shot_done := false
 
 
+## Haenger-Melder: eigener Thread prueft jede halbe Sekunde, ob Bilder fertig werden. Steht das Spiel laenger als 3 s,
+## schreibt er die letzte Markierung des Hauptthreads (ProcTimer.text) nach user://logs/haenger.txt (Partie 09.11.: Haenger mit IONOS).
+const HANG_S := 3.0
+var _wd: Thread
+var _wd_stop := false
+
+
+func _watchdog() -> void:
+	var last := Engine.get_process_frames()
+	var since := Time.get_ticks_msec()
+	var reported := 0.0
+	while not _wd_stop:
+		OS.delay_msec(500)
+		var f := Engine.get_process_frames()
+		var now := Time.get_ticks_msec()
+		if f != last:
+			if reported > 0.0:
+				_hang_note("weiter nach %.1f s" % ((now - since) / 1000.0))
+			last = f
+			since = now
+			reported = 0.0
+			continue
+		var stuck := (now - since) / 1000.0
+		if stuck >= HANG_S and stuck - reported >= 10.0 or (reported == 0.0 and stuck >= HANG_S):
+			reported = stuck
+			_hang_note("steht seit %.1f s bei: %s" % [stuck, ProcTimer.text()])
+
+
+func _hang_note(text: String) -> void:
+	var path := "user://logs/haenger.txt"
+	var f := FileAccess.open(path, FileAccess.READ_WRITE if FileAccess.file_exists(path) else FileAccess.WRITE)
+	if f == null:
+		return
+	f.seek_end()
+	f.store_line("%s %s" % [Time.get_datetime_string_from_system(), text])
+	f.close()
+
+
+func _exit_tree() -> void:
+	_wd_stop = true
+	if _wd != null and _wd.is_started():
+		_wd.wait_to_finish()
+
+
 func _ready() -> void:
 	get_window().title = "Pixel Transport Rivals"
+	DirAccess.make_dir_recursive_absolute("user://logs")
+	_wd = Thread.new()
+	_wd.start(_watchdog)
 	for a in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = a.trim_prefix("--").split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else "true"
@@ -40,6 +87,8 @@ func _show_menu() -> void:
 
 
 func _start(cfg: Dictionary, loaded: Dictionary = {}) -> void:
+	ProcTimer.mark("main", -1)
+	ProcTimer.sub("Partie wird aufgebaut (Karte, Ansicht)")
 	if menu:
 		menu.queue_free()
 		menu = null
@@ -116,6 +165,8 @@ func _scenario_yard(sim: Simulation) -> void:
 
 
 func _load() -> void:
+	ProcTimer.mark("main", -1)
+	ProcTimer.sub("Partie wird aufgebaut (Karte, Ansicht)")
 	var d := GameSession.read_save()
 	if d.is_empty():
 		return
@@ -202,6 +253,8 @@ func _draw_probe(delta: float) -> void:
 
 func _process(_delta: float) -> void:
 	var _pt := Time.get_ticks_usec()
+	ProcTimer.mark("main")
+	ProcTimer.sub("-")
 	_process_timed(_delta)
 	ProcTimer.add("main", _pt)
 
@@ -209,6 +262,10 @@ func _process(_delta: float) -> void:
 func _process_timed(_delta: float) -> void:
 	if args.has("draw-probe"):
 		_draw_probe(_delta)
+	if session and args.has("hang-test") and not args.has("_hung") and session.active_seconds >= 5.0:   # Pruefung des Haenger-Melders
+		args["_hung"] = true
+		ProcTimer.sub("Leistungslog")
+		OS.delay_msec(5000)
 	if session and args.has("demo-mine") and not args.has("_mine"):   # Sichtpruefung Bergbau: Firma 0 eroeffnet ein Bergwerk mit Personal
 		args["_mine"] = true
 		var c0: Company = session.sim.companies[0]

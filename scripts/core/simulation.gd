@@ -1138,7 +1138,10 @@ func _minute_tick() -> void:
 		road_care.on_day(day)
 		access.on_day(day)
 		rivalry.on_day()
+		var _ph := ProcTimer.detail
+		ProcTimer.sub("Simulation: Tageswechsel")
 		day_changed.emit(day)
+		ProcTimer.detail = _ph
 		if new_month:
 			month_changed.emit(GameCalendar.month_of(now))
 	for c in companies:

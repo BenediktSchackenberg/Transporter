@@ -49,6 +49,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	var _pt := Time.get_ticks_usec()
+	ProcTimer.mark("dienste")
+	ProcTimer.sub("-")
 	_process_timed(delta)
 	ProcTimer.add("dienste", _pt)
 

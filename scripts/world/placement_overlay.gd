@@ -17,6 +17,8 @@ func setup(simulation: Simulation, city_view) -> void:
 
 func _process(_delta: float) -> void:
 	var _pt := Time.get_ticks_usec()
+	ProcTimer.mark("platzierung")
+	ProcTimer.sub("-")
 	_process_timed(_delta)
 	ProcTimer.add("platzierung", _pt)
 

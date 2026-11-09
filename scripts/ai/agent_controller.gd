@@ -101,6 +101,8 @@ func budget_left() -> bool:
 
 func _process(delta: float) -> void:
 	var _pt := Time.get_ticks_usec()
+	ProcTimer.mark("firmen_ki", cid)
+	ProcTimer.sub("-")
 	_process_timed(delta)
 	ProcTimer.add("firmen_ki", _pt)
 
@@ -150,12 +152,14 @@ func _process_timed(delta: float) -> void:
 
 
 func _start_request() -> void:
+	ProcTimer.sub("KI: Beobachtung", cid)
 	var t_obs := Time.get_ticks_usec()
 	var obs := ObservationBuilder.build(sim, cid, _events, _last_obs_min, remaining_real_min, goal, _hint())
 	_slow("beobachtung", t_obs)
 	_perceived = _events.duplicate()
 	_events.clear()
 	_last_obs_min = sim.game_min
+	ProcTimer.sub("KI: Anfrage senden", cid)
 	var messages := [{"role": "system", "content": system_prompt()}, {"role": "user", "content": user_prompt(obs)}]
 	_inflight = _next_req
 	_next_req += 1
@@ -173,6 +177,7 @@ func _start_request() -> void:
 
 ## Verarbeitet eine Adapter-Antwort. Oeffentlich fuer Tests.
 func handle_result(req_id: int, r: Dictionary) -> void:
+	ProcTimer.sub("KI: Antwort verarbeiten", cid)
 	if not active and sim != null and not sim.finished and _inflight == req_id:
 		_deferred.append([req_id, r])   # pausiert: nach Fortsetzen verarbeiten
 		return
@@ -253,6 +258,7 @@ func _check_fallback() -> void:
 
 
 func _run_fallback() -> void:
+	ProcTimer.sub("KI: Ersatzmodus", cid)
 	var obs := ObservationBuilder.build(sim, cid, _events, _last_obs_min, remaining_real_min, goal, _hint())
 	_perceived = _events.duplicate()
 	_events.clear()
@@ -328,6 +334,7 @@ const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", 
 
 ## Nur der Tagesbetrieb aus der Regel-KI: Auftraege annehmen und zuweisen, Fahrer einsetzen, reparieren, tanken.
 func _run_dispatch_help() -> void:
+	ProcTimer.sub("KI: Hofrunde", cid)
 	var t_dp := Time.get_ticks_usec()
 	var obs := ObservationBuilder.build(sim, cid, [], _last_obs_min, remaining_real_min, goal, "")
 	_slow("disposition_beobachtung", t_dp)
@@ -369,6 +376,7 @@ func _hint() -> String:
 
 
 func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
+	ProcTimer.sub("KI: Aktionen ausfuehren", cid)
 	# Fehlende Felder (z. B. wenn die Regel-KI abbrach) nicht als Laufzeitfehler: Standardwerte einsetzen
 	for key in ["summary", "memory", "goal"]:
 		if not parsed.get(key) is String:
@@ -726,6 +734,7 @@ func _buy_visit_pending() -> bool:
 func _after_buy_tick() -> void:
 	if _after_buy.is_empty():
 		return
+	ProcTimer.sub("KI: Nachkauf", cid)
 	var keep: Array = []
 	for item in _after_buy:
 		var fresh: Array = sim.company_vehicles(cid).filter(func(v): return not item.known.has(v.id))

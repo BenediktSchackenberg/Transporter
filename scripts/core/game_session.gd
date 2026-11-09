@@ -385,6 +385,8 @@ func _on_logged(e: Dictionary) -> void:
 
 func _process(delta: float) -> void:
 	var _pt := Time.get_ticks_usec()
+	ProcTimer.mark("spielsitzung")
+	ProcTimer.sub("-")
 	_process_timed(delta)
 	ProcTimer.add("spielsitzung", _pt)
 
@@ -421,6 +423,7 @@ func _process_timed(delta: float) -> void:
 		active_seconds += delta   # Partiedauer zaehlt volle Echtzeit, auch bei langsamen Bildern
 		_sim_acc += dt * speed()
 		var t0 := Time.get_ticks_usec()
+		ProcTimer.sub("Simulation")
 		while _sim_acc >= SUBSTEP:
 			sim.step(SUBSTEP)
 			_sim_acc -= SUBSTEP
@@ -436,18 +439,24 @@ func _process_timed(delta: float) -> void:
 	_perf_timer += delta
 	if _perf_timer >= PERF_EVERY_S:
 		_perf_timer = 0.0
+		ProcTimer.sub("Leistungslog")
 		_log_perf()
 	if following:
 		var p := entity_view.selected_position()
 		if p.x > -9000.0:
 			city_view.camera.position = city_view.camera.position.lerp(Iso.to_screen(p), minf(1.0, delta * 6.0))
 	var t1 := Time.get_ticks_usec()
+	ProcTimer.sub("Stadtansicht")
 	city_view.update_view(delta)
 	var t2 := Time.get_ticks_usec()
+	ProcTimer.sub("Fahrzeuge/Figuren")
 	entity_view.update_view(delta, 0.0 if not running else float(speed()), city_view.camera.zoom.x)
+	ProcTimer.sub("Aktivitaeten")
 	activity_layer.update_view(delta, city_view.camera.zoom.x)
+	ProcTimer.sub("Betriebshof")
 	city_view.depot_view.update_view(delta, entity_view.selected)
 	var t3 := Time.get_ticks_usec()
+	ProcTimer.sub("Oberflaeche")
 	hud.update_hud(delta)
 	var t4 := Time.get_ticks_usec()
 	frame_stats.city_ms += (t2 - t1) / 1000.0
