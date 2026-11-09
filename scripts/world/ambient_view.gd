@@ -31,7 +31,11 @@ var wind := Vector2(1, 0)
 var _biz_spots := {}      # Schluessel -> Spot
 var _rescan := 0.0
 var _spots: Array = []
-var ground: GroundOverlay   # Bodenebene unter allen Gebaeuden (Ufer, Flachwasser, Gaerten)
+var ground: GroundOverlay   # Bodenebene unter allen Gebaeuden (Flachwasser, Gaerten): statisch, nur bei neuem Ausschnitt neu gezeichnet
+var foam: FoamOverlay       # Schaumkanten am Ufer: bewegt, je Bild, nur ueber die gemerkten Uferzellen
+var shore: Array = []       # [Zelle, [Richtungen zur Landseite]] - einmal gesucht, beim Innenhof-Rescan erneuert
+var _shore_key := 0
+const GROUND_MIN_ZOOM := 0.3   # darunter waeren Schaum, Hecken und Blumen 1-2 Bildpunkte gross (Partie 09.11.: halbe Bildzeit)
 var lights: EveningLights  # Lichtebene ueber der Nachtfaerbung (Laternen, Lagerfeuer, Steglaternen)
 var hour := 12.0
 var temp := 15.0
@@ -49,6 +53,10 @@ func setup(simulation: Simulation, city_view) -> void:
 	ground = GroundOverlay.new()
 	ground.view = self
 	cv.decor_node.add_child(ground)
+	foam = FoamOverlay.new()
+	foam.view = self
+	cv.decor_node.add_child(foam)
+	_scan_shore()
 	_build_courts()
 	lights = EveningLights.new()
 	lights.view = self
@@ -315,6 +323,33 @@ func _scan_business() -> void:
 			_biz_spots.erase(key)
 
 
+## Uferzellen (Wasser mit Land daneben, kein Kai) einmal suchen: der Schaum lief vorher je Bild ueber jede Zelle des Ausschnitts.
+func _scan_shore() -> void:
+	var C: CityData = sim.city
+	var key := hash(C.ground)   # nativ und schnell; neu suchen nur, wenn sich Boden/Wasser/Kai geaendert hat
+	if key == _shore_key:
+		return
+	_shore_key = key
+	shore = []
+	for y in C.size:
+		for x in C.size:
+			var q := Vector2i(x, y)
+			if C.g(q) != CityData.G.WATER:
+				continue
+			var dirs: Array = []
+			var quay := false
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n: Vector2i = q + d
+				if C.inside(n):
+					var g: int = C.g(n)
+					if g == CityData.G.QUAY:
+						quay = true
+					elif g != CityData.G.WATER:
+						dirs.append(d)
+			if not dirs.is_empty() and not quay:
+				shore.append([q, dirs])
+
+
 # ------------------------------------------------------------------ Takt
 func update_view(delta: float) -> void:
 	if sim == null:
@@ -328,6 +363,8 @@ func update_view(delta: float) -> void:
 		if _court_scans >= HOF_RESCAN:
 			_court_scans = 0
 			_build_courts()
+			_scan_shore()
+			ground.drawn = Rect2()   # Neubauten (Gaerten) beim naechsten Bild zeichnen
 	hour = Catalog.hour_of_day(sim.game_min)
 	night = hour >= 20.5 or hour < 5.5
 	var wx: Weather = sim.wx
@@ -344,8 +381,18 @@ func update_view(delta: float) -> void:
 	var cam: Camera2D = cv.camera
 	var half := get_viewport_rect().size / cam.zoom * 0.5 + Vector2(160, 160)
 	var view := Rect2(cam.position - half, half * 2.0)
-	ground.view_rect = view
-	ground.queue_redraw()
+	var zoom_ok := cam.zoom.x >= GROUND_MIN_ZOOM
+	ground.visible = zoom_ok
+	foam.visible = zoom_ok
+	if zoom_ok:
+		# statische Ebene: nur neu zeichnen, wenn der Ausschnitt die gezeichnete Flaeche verlaesst oder der Zoom sich deutlich aendert
+		if not ground.drawn.encloses(view) or absf(ground.drawn_zoom - cam.zoom.x) > cam.zoom.x * 0.15:
+			ground.view_rect = view.grow(maxf(view.size.x, view.size.y) * 0.25)
+			ground.drawn = ground.view_rect
+			ground.drawn_zoom = cam.zoom.x
+			ground.queue_redraw()
+		foam.view_rect = view
+		foam.queue_redraw()
 	lights.queue_redraw()
 	for s in _spots:
 		var vis: bool = view.has_point(s.position)
@@ -928,6 +975,8 @@ class Spot extends Node2D:
 class GroundOverlay extends Node2D:
 	var view: AmbientView
 	var view_rect := Rect2()
+	var drawn := Rect2()       # zuletzt gezeichnete Flaeche (Bildschirmkoordinaten)
+	var drawn_zoom := 0.0
 	const SHALLOW := Color(0.55, 0.85, 0.85, 0.32)
 	const HOUSES := ["house", "semi", "villa"]
 
@@ -940,35 +989,10 @@ class GroundOverlay extends Node2D:
 		if view == null or view.sim == null or view_rect.size.x <= 0.0:
 			return
 		var C: CityData = view.sim.city
-		var center := Iso.to_world(view_rect.get_center()) / 32.0
-		var rad := int(maxf(view_rect.size.x, view_rect.size.y) / 64.0) + 3
-		var t: float = view.t
-		var foam := 0.45 + 0.35 * clampf(view.wind.length() - 0.6, 0.0, 1.0)
-		for y in range(int(center.y) - rad, int(center.y) + rad):
-			for x in range(int(center.x) - rad, int(center.x) + rad):
-				var q := Vector2i(x, y)
-				if not C.inside(q) or C.g(q) != CityData.G.WATER:
-					continue
-				var shore_dirs: Array = []
-				var quay := false
-				for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-					var n: Vector2i = q + d
-					if C.inside(n):
-						var g: int = C.g(n)
-						if g == CityData.G.QUAY:
-							quay = true
-						elif g != CityData.G.WATER:
-							shore_dirs.append(d)
-				if shore_dirs.is_empty() or quay:
-					continue
-				draw_colored_polygon(_cell(Vector2(q), 0.0), SHALLOW)   # Flachwasser
-				for d in shore_dirs:   # Schaumkante zur Landseite, laeuft leicht auf
-					var k := 0.5 + 0.5 * sin(t * 1.3 + float(x * 7 + y * 13) * 0.3)
-					var off: Vector2 = Vector2(d) * (0.38 + 0.08 * k)
-					var mid := Vector2(q) + Vector2(0.5, 0.5) + off
-					var side: Vector2 = Vector2(-d.y, d.x) * 0.5
-					var jit := float((x * 31 + y * 17) % 5) * 0.03
-					draw_line(Iso.to_screen((mid - side * (0.9 - jit)) * 32.0), Iso.to_screen((mid + side * (0.85 + jit)) * 32.0), Color(1, 1, 1, foam * (0.6 + 0.4 * k)), 2.0)
+		for e in view.shore:   # Flachwasser an der Uferkante
+			var q: Vector2i = e[0]
+			if view_rect.has_point(Iso.to_screen((Vector2(q) + Vector2(0.5, 0.5)) * 32.0)):
+				draw_colored_polygon(_cell(Vector2(q), 0.0), SHALLOW)
 		# Gaerten: Hecke um das Baufeld (bzw. 1 Feld um das Haus), Luecke zur Strasse = Gartentor; Blumen im Vorgarten
 		for b in C.buildings:
 			if str(b.type) not in HOUSES:
@@ -1012,6 +1036,31 @@ class GroundOverlay extends Node2D:
 				fp += Vector2(float((sd >> (f * 3)) % 5) * 0.15 - 0.3, float((sd >> (f * 5)) % 5) * 0.15 - 0.3)
 				var fs := Iso.to_screen(fp * 32.0)
 				draw_circle(fs, 2.5, [Color("e8553d"), Color("f2c14e"), Color("d47ad1"), Color("f4f4f4")][(sd + f) % 4])
+
+
+## Schaumkanten am Ufer (bewegt): je Bild, aber nur die gemerkten Uferzellen im Ausschnitt.
+class FoamOverlay extends Node2D:
+	var view: AmbientView
+	var view_rect := Rect2()
+
+	func _draw() -> void:
+		if view == null or view.sim == null or view_rect.size.x <= 0.0:
+			return
+		var t: float = view.t
+		var foam := 0.45 + 0.35 * clampf(view.wind.length() - 0.6, 0.0, 1.0)
+		for e in view.shore:
+			var q: Vector2i = e[0]
+			var x := q.x
+			var y := q.y
+			if not view_rect.has_point(Iso.to_screen((Vector2(q) + Vector2(0.5, 0.5)) * 32.0)):
+				continue
+			for d in e[1]:   # Schaumkante zur Landseite, laeuft leicht auf
+				var k := 0.5 + 0.5 * sin(t * 1.3 + float(x * 7 + y * 13) * 0.3)
+				var off: Vector2 = Vector2(d) * (0.38 + 0.08 * k)
+				var mid := Vector2(q) + Vector2(0.5, 0.5) + off
+				var side: Vector2 = Vector2(-d.y, d.x) * 0.5
+				var jit := float((x * 31 + y * 17) % 5) * 0.03
+				draw_line(Iso.to_screen((mid - side * (0.9 - jit)) * 32.0), Iso.to_screen((mid + side * (0.85 + jit)) * 32.0), Color(1, 1, 1, foam * (0.6 + 0.4 * k)), 2.0)
 
 
 ## Abendstimmung: weiches warmes Licht ueber der Nachtfaerbung (Laternen, Steglaternen, Lagerfeuer, Terrassen am Abend).

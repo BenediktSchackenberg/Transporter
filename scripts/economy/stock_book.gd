@@ -12,12 +12,38 @@ var log: Array = []     # letzte Bewegungen [{t, item, qty, von, nach, grund}]
 var created := {}       # Artikel -> insgesamt entstanden (Import, Produktion, Rueckbau)
 var consumed := {}      # Artikel -> insgesamt verbraucht (Verbrauch, Export)
 var _next := 1
+var _idx := {}          # "Artikel|Eigentuemer" -> {Posten-ID: true} in Anlagereihenfolge (Abfragen je Kunde/Ware liefen ueber alle Posten der Region)
+
+
+func _ids(item: String, owner: String) -> Array:
+	return _idx.get(item + "|" + owner, {}).keys()
+
+
+func _put(l: Dictionary) -> void:
+	lots[l.id] = l
+	var k: String = str(l.item) + "|" + str(l.owner)
+	if not _idx.has(k):
+		_idx[k] = {}
+	_idx[k][l.id] = true
+
+
+func _erase(id: String) -> void:
+	var l: Dictionary = lots.get(id, {})
+	if l.is_empty():
+		return
+	lots.erase(id)
+	var k: String = str(l.item) + "|" + str(l.owner)
+	if _idx.has(k):
+		_idx[k].erase(id)
+		if _idx[k].is_empty():
+			_idx.erase(k)
 
 
 func qty(item: String, owner: String, loc: int = -2) -> int:
 	var n := 0
-	for l in lots.values():
-		if l.item == item and l.owner == owner and (loc == -2 or l.loc == loc):
+	for id in _ids(item, owner):
+		var l: Dictionary = lots[id]
+		if loc == -2 or l.loc == loc:
 			n += int(l.qty)
 	return n
 
@@ -25,8 +51,9 @@ func qty(item: String, owner: String, loc: int = -2) -> int:
 ## Menge im Zustand `state` (z. B. "ok" = freigegebene Ware; "pruefung" = noch im Wareneingang).
 func qty_state(item: String, owner: String, loc: int, state: String) -> int:
 	var n := 0
-	for l in lots.values():
-		if l.item == item and l.owner == owner and (loc == -2 or l.loc == loc) and l.get("state", "ok") == state:
+	for id in _ids(item, owner):
+		var l: Dictionary = lots[id]
+		if (loc == -2 or l.loc == loc) and l.get("state", "ok") == state:
 			n += int(l.qty)
 	return n
 
@@ -96,18 +123,18 @@ func has_reservation(ref: String) -> bool:
 func set_state(item: String, amount: int, owner: String, loc: int, from_state: String, to_state: String) -> int:
 	var left := amount
 	var changed := 0
-	for id in lots.keys():
+	for id in _ids(item, owner):
 		var l: Dictionary = lots[id]
 		if left <= 0:
 			break
-		if l.item == item and l.owner == owner and l.loc == loc and l.get("state", "ok") == from_state:
+		if l.loc == loc and l.get("state", "ok") == from_state:
 			var take := mini(left, int(l.qty))
 			l.qty = int(l.qty) - take
 			left -= take
 			changed += take
 			var src: String = l.source
 			if int(l.qty) <= 0:
-				lots.erase(id)
+				_erase(id)
 			_merge(item, take, owner, loc, src, to_state)
 	return changed
 
@@ -124,7 +151,7 @@ func add(item: String, amount: int, owner: String, loc: int, source: String, now
 	assert(amount > 0)
 	var id := "P%d" % _next
 	_next += 1
-	lots[id] = {"id": id, "item": item, "qty": amount, "owner": owner, "loc": loc, "source": source, "state": state}
+	_put({"id": id, "item": item, "qty": amount, "owner": owner, "loc": loc, "source": source, "state": state})
 	created[item] = int(created.get(item, 0)) + amount
 	_note(now, item, amount, "-", "%s@%d" % [owner, loc], source)
 	return id
@@ -134,17 +161,17 @@ func add(item: String, amount: int, owner: String, loc: int, source: String, now
 func consume(item: String, amount: int, owner: String, loc: int, reason: String, now: float = 0.0) -> int:
 	var left := _free_limit(item, amount, owner, loc)
 	var done := 0
-	for id in lots.keys():
+	for id in _ids(item, owner):
 		var l: Dictionary = lots[id]
 		if left <= 0:
 			break
-		if l.item == item and l.owner == owner and (loc == -2 or l.loc == loc):
+		if loc == -2 or l.loc == loc:
 			var take := mini(left, int(l.qty))
 			l.qty = int(l.qty) - take
 			left -= take
 			done += take
 			if int(l.qty) <= 0:
-				lots.erase(id)
+				_erase(id)
 	if done > 0:
 		consumed[item] = int(consumed.get(item, 0)) + done
 		_note(now, item, done, "%s@%d" % [owner, loc], "-", reason)
@@ -155,18 +182,18 @@ func consume(item: String, amount: int, owner: String, loc: int, reason: String,
 func move(item: String, amount: int, owner: String, loc: int, to_owner: String, to_loc: int, reason: String, now: float = 0.0, to_state: String = "ok") -> int:
 	var left := _free_limit(item, amount, owner, loc)
 	var moved := 0
-	for id in lots.keys():
+	for id in _ids(item, owner):
 		var l: Dictionary = lots[id]
 		if left <= 0:
 			break
-		if l.item == item and l.owner == owner and (loc == -2 or l.loc == loc):
+		if loc == -2 or l.loc == loc:
 			var take := mini(left, int(l.qty))
 			var src: String = l.source
 			l.qty = int(l.qty) - take
 			left -= take
 			moved += take
 			if int(l.qty) <= 0:
-				lots.erase(id)
+				_erase(id)
 			_merge(item, take, to_owner, to_loc, src, to_state)
 	if moved > 0:
 		_note(now, item, moved, "%s@%d" % [owner, loc], "%s@%d" % [to_owner, to_loc], reason)
@@ -181,13 +208,14 @@ func _free_limit(item: String, amount: int, owner: String, loc: int) -> int:
 
 
 func _merge(item: String, amount: int, owner: String, loc: int, source: String, state: String = "ok") -> void:
-	for l in lots.values():
-		if l.item == item and l.owner == owner and l.loc == loc and l.source == source and l.get("state", "ok") == state:
+	for lid in _ids(item, owner):
+		var l: Dictionary = lots[lid]
+		if l.loc == loc and l.source == source and l.get("state", "ok") == state:
 			l.qty = int(l.qty) + amount
 			return
 	var id := "P%d" % _next
 	_next += 1
-	lots[id] = {"id": id, "item": item, "qty": amount, "owner": owner, "loc": loc, "source": source, "state": state}
+	_put({"id": id, "item": item, "qty": amount, "owner": owner, "loc": loc, "source": source, "state": state})
 
 
 func _note(t: float, item: String, amount: int, from_s: String, to_s: String, reason: String) -> void:
@@ -221,11 +249,13 @@ func to_dict() -> Dictionary:
 
 func from_dict(d: Dictionary) -> void:
 	lots = {}
+	_idx = {}
 	for id in d.get("lots", {}):
 		var l: Dictionary = d.lots[id]
 		l.qty = int(l.qty)
 		l.loc = int(l.loc)
-		lots[id] = l
+		l["id"] = str(id)
+		_put(l)
 	reservations = d.get("reservations", {})
 	for r in reservations.values():
 		r.qty = int(r.qty)

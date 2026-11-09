@@ -150,11 +150,24 @@ func by_town(list: Array) -> Dictionary:
 func population_of(town: int) -> int:
 	if not sim.towns.is_region():
 		return population()
-	var n := people.filter(func(p): return home_town(p) == town).size()
-	for w in sim.personnel.workers.values():
-		if not w.lost and worker_town(w) == town:
-			n += 1
-	return n
+	# Ein Durchlauf fuer alle Staedte, gepuffert je Spielminute und Kopfzahl: der Stadtbauhof fragte je Warenart einzeln
+	# (4 Staedte x ~80 ms im Tageswechsel, Partie 09.11.).
+	var key := "%d|%d|%d" % [int(sim.game_min), people.size(), sim.personnel.workers.size()]
+	if _pop_key != key:
+		_pop_key = key
+		_pop_by_town = {}
+		for p in people:
+			var k := home_town(p)
+			_pop_by_town[k] = int(_pop_by_town.get(k, 0)) + 1
+		for w in sim.personnel.workers.values():
+			if not w.lost:
+				var k := worker_town(w)
+				_pop_by_town[k] = int(_pop_by_town.get(k, 0)) + 1
+	return int(_pop_by_town.get(town, 0))
+
+
+var _pop_key := ""
+var _pop_by_town := {}
 
 
 func worker_town(w) -> int:

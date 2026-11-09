@@ -144,10 +144,13 @@ func _start_autotest() -> void:
 	_start(cfg)
 
 
-## Ruckler-Suche (--draw-probe): ab Sekunde 150 alle 15 s eine Ebene ausblenden und die mittlere Godot-Prozesszeit protokollieren.
 const PROBE_LAYERS := ["keine", "site_view", "ambient_view", "mountain_view", "ship_view", "bridge_view", "air_view", "waste_view",
-	"tourist_view", "estate_view", "depot_view", "parcel_layer", "entity_view", "activity_layer", "decor_node", "buildings_node", "keine"]
-var _probe := {"i": -1, "t": 0.0, "sum": 0.0, "n": 0}
+	"tourist_view", "estate_view", "depot_view", "parcel_layer", "entity_view", "activity_layer", "decor_node", "buildings_node", "ground", "keine"]
+## Ruckler-Suche ab Sekunde 150, je Schritt 12 s. --draw-probe: blendet nacheinander je eine Ebene aus. --draw-probe=zoom: dasselbe fuer die Zoomstufen ZOOM_PROBE (kuerzere Liste).
+## Gemessen wird Wanduhrzeit je Bild (Godot deckelt delta) plus Godots Zaehler fuer gezeichnete Objekte und Draw Calls.
+const ZOOM_PROBE := [0.5, 0.3, 0.2]
+const ZOOM_LAYERS := ["keine", "entity_view", "buildings_node", "decor_node", "ambient_view", "ground", "keine"]
+var _probe := {"i": -1, "t": 0.0, "n": 0, "us": 0, "obj": 0.0, "dc": 0.0, "steps": []}
 func _probe_node(name: String) -> CanvasItem:
 	if name == "keine":
 		return null
@@ -157,24 +160,42 @@ func _probe_node(name: String) -> CanvasItem:
 func _draw_probe(delta: float) -> void:
 	if session == null or session.active_seconds < 150.0:
 		return
+	if _probe.steps.is_empty():
+		if str(args["draw-probe"]) == "zoom":
+			for z in ZOOM_PROBE:
+				for l in ZOOM_LAYERS:
+					_probe.steps.append([z, l])
+		else:
+			for l in PROBE_LAYERS:
+				_probe.steps.append([0.0, l])
 	_probe.t += delta
-	_probe.sum += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
 	_probe.n += 1
-	if _probe.i >= 0 and _probe.t < 15.0:
+	_probe.obj += Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
+	_probe.dc += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+	if _probe.i >= 0 and _probe.t < 12.0:
 		return
+	var now := Time.get_ticks_usec()
 	if _probe.i >= 0:
-		session.api_log.write({"type": "draw_probe", "ausgeblendet": PROBE_LAYERS[_probe.i], "prozess_ms": snappedf(_probe.sum / maxf(1.0, _probe.n), 0.1), "bilder": _probe.n})
-		var old := _probe_node(PROBE_LAYERS[_probe.i])
+		var st: Array = _probe.steps[_probe.i]
+		var n := maxf(1.0, _probe.n)
+		session.api_log.write({"type": "draw_probe", "zoom": st[0] if st[0] > 0.0 else session.city_view.camera.zoom.x, "ausgeblendet": st[1],
+			"ms_je_bild": snappedf((now - int(_probe.us)) / 1000.0 / n, 0.1), "objekte": int(_probe.obj / n), "draw_calls": int(_probe.dc / n), "bilder": _probe.n})
+		var old := _probe_node(st[1])
 		if old != null:
 			old.visible = true
 	_probe.i += 1
 	_probe.t = 0.0
-	_probe.sum = 0.0
 	_probe.n = 0
-	if _probe.i >= PROBE_LAYERS.size():
+	_probe.obj = 0.0
+	_probe.dc = 0.0
+	_probe.us = now
+	if _probe.i >= _probe.steps.size():
 		get_tree().quit()
 		return
-	var cur := _probe_node(PROBE_LAYERS[_probe.i])
+	var cur_step: Array = _probe.steps[_probe.i]
+	if cur_step[0] > 0.0:
+		session.city_view.camera.zoom = Vector2.ONE * float(cur_step[0])
+	var cur := _probe_node(cur_step[1])
 	if cur != null:
 		cur.visible = false
 

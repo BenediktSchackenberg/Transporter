@@ -710,6 +710,10 @@ func _update_filter() -> void:
 	var detail := camera.zoom.x >= DETAIL_ZOOM
 	for n in _detail_nodes:
 		n.visible = detail
+	# Wind-Shader nur im Detailzoom: jeder Baum mit Material bricht die Stapelung der Draw Calls (Zoom 0.2: ~8000 Draw Calls)
+	for s in _tree_sprites.values():
+		if is_instance_valid(s):
+			s.material = _sway_mat if detail else null
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if camera.zoom.x >= 1.0 else CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 
