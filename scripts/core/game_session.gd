@@ -38,6 +38,8 @@ var duration_seconds := 1800.0
 var following := false
 var ended := false
 var end_reason := ""
+var _frames_reported := {}
+var _interval_max_ms := 0.0
 var frame_stats := {"frames": 0, "max_ms": 0.0, "sum_ms": 0.0, "over_100ms": 0, "sim_ms": 0.0, "city_ms": 0.0, "entity_ms": 0.0, "hud_ms": 0.0}
 var _sounds := {}
 var _sound_cooldown := {}
@@ -312,7 +314,20 @@ func _log_perf() -> void:
 		"mem_mb": snappedf(Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0, 0.1),
 		"objects": int(Performance.get_monitor(Performance.OBJECT_COUNT)), "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		"orphans": int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)), "resources": int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)),
-		"sizes": sizes})
+		"sizes": sizes, "bild": _frame_report()})
+
+
+## Bildzeiten seit dem letzten perf-Eintrag (Ruckler-Suche): Mittel/Maximum, Anzahl Bilder ueber 100 ms und Anteile je Bereich.
+func _frame_report() -> Dictionary:
+	var n := maxi(1, int(frame_stats.frames) - int(_frames_reported.get("frames", 0)))
+	var out := {"bilder": n}
+	for k in ["sum_ms", "sim_ms", "city_ms", "entity_ms", "hud_ms"]:
+		out[k.trim_suffix("_ms") + "_ms_je_bild"] = snappedf((float(frame_stats[k]) - float(_frames_reported.get(k, 0.0))) / n, 0.1)
+	out["ueber_100ms"] = int(frame_stats.over_100ms) - int(_frames_reported.get("over_100ms", 0))
+	out["max_ms"] = snappedf(_interval_max_ms, 0.1)
+	_frames_reported = frame_stats.duplicate()
+	_interval_max_ms = 0.0
+	return out
 
 
 func play_sound(n: String) -> void:
@@ -364,6 +379,7 @@ func _process(delta: float) -> void:
 	frame_stats.sum_ms += ms
 	if frame_stats.frames > 30:   # Ladephase nicht mitzaehlen
 		frame_stats.max_ms = maxf(frame_stats.max_ms, ms)
+		_interval_max_ms = maxf(_interval_max_ms, ms)
 		if ms > 100.0:
 			frame_stats.over_100ms += 1
 	var dt := minf(delta, MAX_FRAME_DT)

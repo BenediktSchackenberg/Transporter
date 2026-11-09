@@ -20,6 +20,18 @@ func _init() -> void:
 		RuleBrain.decide(obs, s.company(cid).personality, RandomNumberGenerator.new(), s.strategy.params_of(cid))
 		var t2 := Time.get_ticks_usec()
 		print("Firma %d: Beobachtung %.1f ms, Regel-KI %.1f ms" % [cid, (t1 - t0) / 1000.0, (t2 - t1) / 1000.0])
+	for k in s.towns.count():
+		var tm := Time.get_ticks_usec()
+		var mobs: Dictionary = s.towns.mayor(k).indicators()
+		var tj := Time.get_ticks_usec()
+		var mj := JSON.stringify(mobs)
+		print("Buergermeister %d: indicators %.1f ms, JSON %.1f ms (%d Zeichen)" % [k, (tj - tm) / 1000.0, (Time.get_ticks_usec() - tj) / 1000.0, mj.length()])
+	for rep in 3:
+		var tr := Time.get_ticks_usec()
+		s.towns.mayor(0).indicators()
+		print("Buergermeister 0 erneut (Runde %d): %.1f ms" % [rep, (Time.get_ticks_usec() - tr) / 1000.0])
+		for i in 240:
+			s.step(0.5)
 	var cid := 0
 	var parts := {
 		"_available": func(): return ObservationBuilder._available(s, cid),

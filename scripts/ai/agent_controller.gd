@@ -144,7 +144,9 @@ func _process(delta: float) -> void:
 
 
 func _start_request() -> void:
+	var t_obs := Time.get_ticks_usec()
 	var obs := ObservationBuilder.build(sim, cid, _events, _last_obs_min, remaining_real_min, goal, _hint())
+	_slow("beobachtung", t_obs)
 	_perceived = _events.duplicate()
 	_events.clear()
 	_last_obs_min = sim.game_min
@@ -215,7 +217,9 @@ func handle_result(req_id: int, r: Dictionary) -> void:
 		fallback_active = false
 		sim.log_event("%s: API wieder erreichbar – Ersatzmodus beendet." % sim.company(cid).player_name, "good", cid)
 	status = "bereit"
+	var t_apply := Time.get_ticks_usec()
 	_apply(parsed, "r%d" % req_id, "KI")
+	_slow("antwort_ausfuehren", t_apply)
 
 
 func _on_failure(req_id: int, r: Dictionary) -> void:
@@ -260,6 +264,13 @@ func _dispatch_help_on() -> bool:
 	return config.get("provider", "") in DISPATCH_PROVIDERS and bool(config.get("dispatch_help", true))
 
 
+## Ruckler-Suche: KI-Verarbeitung im Hauptthread ueber 50 ms protokollieren (Spiel stockte am 09.11.)
+func _slow(what: String, t0: int) -> void:
+	var ms := (Time.get_ticks_usec() - t0) / 1000.0
+	if ms > 50.0 and api_log != null:
+		api_log.write({"type": "slow", "player": cid, "what": what, "ms": snappedf(ms, 0.1), "game_min": int(sim.game_min)})
+
+
 const DISPATCH_EVERY_MIN := 60.0   # Spielminuten zwischen zwei Hofrunden der Disposition (Marktangebote verfallen nach 90-160 Minuten)
 
 
@@ -284,7 +295,9 @@ const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", 
 
 ## Nur der Tagesbetrieb aus der Regel-KI: Auftraege annehmen und zuweisen, Fahrer einsetzen, reparieren, tanken.
 func _run_dispatch_help() -> void:
+	var t_dp := Time.get_ticks_usec()
 	var obs := ObservationBuilder.build(sim, cid, [], _last_obs_min, remaining_real_min, goal, "")
+	_slow("disposition_beobachtung", t_dp)
 	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng, sim.strategy.params_of(cid))
 	# Fahrer anwerben gehoert zum Tagesbetrieb, solange ein eigenes Fahrzeug ohne Fahrer dasteht (sonst bleibt die Anwerbung beim Modell)
 	var allowed: Array = DISPATCH + (["recruit_worker"] if sim.company_vehicles(cid).any(func(v): return sim.driver_of(v) == null) else [])

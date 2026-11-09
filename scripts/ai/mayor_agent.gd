@@ -112,7 +112,11 @@ func think() -> void:
 		return
 	_server_busy[server] = town
 	global_requests += 1
+	var t_obs := Time.get_ticks_usec()
 	var obs := mayor().indicators()
+	var ms_obs := (Time.get_ticks_usec() - t_obs) / 1000.0
+	if ms_obs > 50.0:
+		api_log.write({"type": "slow", "player": _who(), "what": "beobachtung", "ms": snappedf(ms_obs, 0.1), "game_min": int(sim.game_min)})
 	var messages := [{"role": "system", "content": system_prompt()}, {"role": "user", "content": user_prompt(obs)}]
 	_inflight = _next_req
 	_next_req += 1
