@@ -6578,6 +6578,18 @@ func test_contract_feasibility() -> void:
 	k.deadline = s.game_min + eta * Logistics.ETA_BUFFER * 1.5
 	r = s.executor.execute(0, {"action": "accept_contract", "contract_id": k.id, "vehicle_id": v.id})
 	ok(r.ok and k.owner == 0, "ausreichende Frist angenommen (%s)" % r.get("msg", ""))
+	# ohne passendes eigenes Fahrzeug (Kuehlware, nur Kleintransporter): Kauf + Fahrt vom Hof zaehlt (Partie 09.11.)
+	var k2: Contract = s.market.open_contracts().filter(func(x): return x.status == "open" and x.exclusive_for < 0 and x.id != k.id)[0]
+	k2.needs_cold = true
+	k2.min_rep = 0.0
+	c0.known[k2.id] = true
+	ok(not s.company_vehicles(0).any(func(x): return k2.vehicle_ok(x.model)), "Ausgangslage: kein Kühlfahrzeug")
+	k2.deadline = s.game_min + 60.0
+	r = s.executor.execute(0, {"action": "accept_contract", "contract_id": k2.id})
+	ok(not r.ok and r.msg.contains("ohne eigenes passendes Fahrzeug") and k2.status == "open", "ohne Fahrzeug knappe Frist abgelehnt (%s)" % r.msg)
+	k2.deadline = s.game_min + 5000.0
+	r = s.executor.execute(0, {"action": "accept_contract", "contract_id": k2.id})
+	ok(r.ok, "ohne Fahrzeug lange Frist angenommen – Kauf möglich (%s)" % r.get("msg", ""))
 	ok(identity_ok(s), "Geld erhalten")
 
 

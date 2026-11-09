@@ -941,17 +941,37 @@ func _substitute_contract(cid: int, vid: int) -> Contract:
 	return best
 
 
+const PURCHASE_LEAD_MIN := 120.0   # Spielminuten fuer Weg zum Autohaus, Kauf und Bereitstellung (1 Spieltag)
+
+
 ## Machbarkeit vor der Annahme: Kann ein eigenes passendes Fahrzeug (das genannte oder das schnellste) nach seinen geplanten Fahrten
-## vor der Frist liefern (mit 20 % Puffer)? Ohne passendes Fahrzeug keine Pruefung (Fremdvergabe/Transporthilfe bleibt moeglich).
+## vor der Frist liefern (mit 20 % Puffer)? Ohne passendes Fahrzeug wird Kauf + Fahrt vom Hof geschaetzt.
 func _too_late(cid: int, k: Contract, vid: int) -> String:
 	var best := INF
 	for v in sim.company_vehicles(cid):
 		if (vid >= 0 and v.id != vid) or not k.vehicle_ok(v.model) or v.state in ["broken", "repairing"]:
 			continue
 		best = minf(best, sim.logistics.eta_minutes(v, k))
-	if best == INF:
-		return ""
 	var left: float = k.deadline - sim.game_min
+	if best == INF:
+		# Ohne passendes eigenes Fahrzeug: Kauf (Besuch im Autohaus) plus Fahrt vom Hof schaetzen, mit dem schnellsten passenden Modell.
+		# Partie 09.11.: Auftraege mit Frist am naechsten Tag vor dem ersten Fahrzeugkauf angenommen -> gescheitert, Reputation 50 -> 0.
+		if sim.company(cid).depots.is_empty():
+			return ""
+		var speed := 0.0
+		for m in Catalog.VEHICLE_MODELS:
+			if k.vehicle_ok(m):
+				speed = maxf(speed, float(Catalog.VEHICLE_MODELS[m].speed))
+		if speed <= 0.0:
+			return ""
+		var home: Vector2i = sim.depot_road(cid)
+		var pick: Vector2i = sim.city.building(k.pickup).road
+		var drop: Vector2i = sim.city.building(k.dropoff).road
+		var est: float = PURCHASE_LEAD_MIN + Logistics.travel_minutes(absi(pick.x - home.x) + absi(pick.y - home.y), speed) \
+			+ Logistics.travel_minutes(absi(drop.x - pick.x) + absi(drop.y - pick.y), speed) + 2.0 * Catalog.LOADING_MIN
+		if est * Logistics.ETA_BUFFER > left:
+			return "Auftrag %s ist ohne eigenes passendes Fahrzeug nicht rechtzeitig machbar: Kauf und Fahrt dauern ~%d Spielminuten, Frist in %d. Erst ein Fahrzeug kaufen oder einen Auftrag mit längerer Frist wählen." % [k.id, int(est * Logistics.ETA_BUFFER), int(left)]
+		return ""
 	if best * Logistics.ETA_BUFFER > left:
 		return "Auftrag %s ist nicht rechtzeitig machbar: Lieferung frühestens in ~%d Spielminuten, Frist in %d. Nimm einen näheren Auftrag oder vergib ihn weiter." % [k.id, int(best * Logistics.ETA_BUFFER), int(left)]
 	return ""
