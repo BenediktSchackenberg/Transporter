@@ -5,6 +5,12 @@ extends RegionGenerator
 
 const CORNERS := ["NW", "NO", "SW", "SO"]
 var west_coast := PackedInt32Array()
+## Zentrales Grosslager (Auftrag 19) in der Kartenmitte: Gelaende, Zufahrt je Himmelsrichtung, Strasse zu jeder Stadt.
+const HUB_W := 44
+const HUB_H := 30
+const HUB_EXIT_OF := {"NW": "W", "NO": "N", "SO": "O", "SW": "S"}   # jede Stadt kommt aus ihrer Richtung an
+var hub_rect := Rect2i()
+var hub_out := {}
 
 
 func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: float = 0.0) -> CityData:
@@ -75,6 +81,8 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 	_mountains_corners()
 	_lakes_corners()
 	_river_corners()
+	hub_rect = _find_hub_site()   # nach Bergen/Seen/Fluss: die Zufallsfolge (und damit die Staedte) bleibt unveraendert
+	_clear_hub_site()
 	var chars: Array = CHARACTERS.duplicate()
 	for i in range(chars.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
@@ -87,10 +95,13 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 			_build_mirrored_town(k)
 		else:
 			_build_town(k)
+	_build_hub()
 	_connect_towns()
+	_connect_hub()
 	_land_cover_region()
 	c.height = heights
 	_finish()
+	c.hub = hub_out
 	c.towns = towns_out
 	c.town_name = str(towns_out[0].name)
 	c.airport = towns_out[0].get("airport", {})
@@ -225,9 +236,219 @@ func _build_mirrored_town(k: int) -> void:
 	town_rect = actual_rect
 
 
+# ------------------------------------------------------------------ Grosslager (Auftrag 19)
+## Standort nahe der Kartenmitte ohne Wasser (Seen, Fluss) und mit moeglichst wenig Berg; Berge werden danach eingeebnet.
+func _find_hub_site() -> Rect2i:
+	var best := Rect2i()
+	var best_s := INF
+	var mid := Vector2(n * 0.5, n * 0.5)
+	for y in range(int(n * 0.36), int(n * 0.64) - HUB_H, 4):
+		for x in range(int(n * 0.30), int(n * 0.62) - HUB_W, 4):
+			var r := Rect2i(x, y, HUB_W, HUB_H)
+			var g := r.grow(10)
+			var score := 0.0
+			for yy in range(g.position.y, g.end.y, 2):
+				for xx in range(g.position.x, g.end.x, 2):
+					var i := c.idx(Vector2i(xx, yy))
+					if c.ground[i] == G.WATER:
+						score += 1000.0
+					elif heights[i] > 0:
+						score += 1.0
+			score += Vector2(r.get_center()).distance_to(mid) * 0.5
+			if score < best_s:
+				best_s = score
+				best = r
+	return best
+
+
+## Gelaende freiraeumen: Berge werden eingeebnet (Wasser meidet schon die Standortwahl).
+func _clear_hub_site() -> void:
+	var area := hub_rect.grow(10)
+	var river := {}
+	for p in c.river:
+		river[p] = true
+	for y in range(area.position.y, area.end.y):
+		for x in range(area.position.x, area.end.x):
+			var p := Vector2i(x, y)
+			if not c.inside(p) or river.has(p):
+				continue
+			var i := c.idx(p)
+			if c.ground[i] == G.WATER:
+				continue
+			heights[i] = 0
+			c.blocked[i] = 0
+
+
+## Lagergelaende: Ringstrasse, Achsen mit Zufahrten aus allen vier Himmelsrichtungen, vier Bereiche (Lager, Hallen, Handel, Fahrzeuge).
+func _build_hub() -> void:
+	var R := hub_rect
+	var cx := R.position.x + R.size.x / 2
+	var cy := R.position.y + R.size.y / 2
+	for y in range(R.position.y, R.end.y):
+		for x in range(R.position.x, R.end.x):
+			c.ground[c.idx(Vector2i(x, y))] = G.CONCRETE   # befestigter Hof
+	var x0 := R.position.x + 1
+	var x1 := R.end.x - 2
+	var y0 := R.position.y + 1
+	var y1 := R.end.y - 2
+	_road(Vector2i(x0, y0), Vector2i(x1, y0))
+	_road(Vector2i(x0, y1), Vector2i(x1, y1))
+	_road(Vector2i(x0, y0), Vector2i(x0, y1))
+	_road(Vector2i(x1, y0), Vector2i(x1, y1))
+	_road(Vector2i(cx, R.position.y - 4), Vector2i(cx, R.end.y + 3))   # Nord-Sued-Achse mit Zufahrten
+	_road(Vector2i(R.position.x - 4, cy), Vector2i(R.end.x + 3, cy))   # West-Ost-Achse mit Zufahrten
+	var exits := {"N": [cx, R.position.y - 4], "S": [cx, R.end.y + 3], "W": [R.position.x - 4, cy], "O": [R.end.x + 3, cy]}
+	var keep_town := town
+	var keep_rect := town_rect
+	town = Vector2i(n * 2, cy)   # _district_at: kein Hafenbezirk im Lager
+	var q_nw := Rect2i(x0 + 1, y0 + 1, cx - x0 - 1, cy - y0 - 1)
+	var q_ne := Rect2i(cx + 1, y0 + 1, x1 - cx - 1, cy - y0 - 1)
+	var q_sw := Rect2i(x0 + 1, cy + 1, cx - x0 - 1, y1 - cy - 1)
+	var q_se := Rect2i(cx + 1, cy + 1, x1 - cx - 1, y1 - cy - 1)
+	var B := {}
+	# Nordwest: Hauptlager mit Warenannahme und Hochregallager
+	town_rect = q_nw
+	B["hauptlager"] = _put("freight_shed", q_nw.position + Vector2i(3, 2), "hub_main", "Großlager – Hauptlager")
+	B["hochregal"] = _put("warehouse", q_nw.position + Vector2i(12, 2), "hub_rack", "Großlager – Hochregallager")
+	B["annahme"] = _put("freight_shed", q_nw.position + Vector2i(4, 9), "hub_in", "Großlager – Warenannahme")
+	B["container0"] = _put("containers", q_nw.position + Vector2i(14, 9), "decor", "Containerlager")
+	# Nordost: Warenhallen und Warenausgang
+	town_rect = q_ne
+	for i in 3:
+		B["halle%d" % (i + 1)] = _put("warehouse", q_ne.position + Vector2i(2 + i * 6, 2), "hub_hall", "Großlager – Warenhalle %d" % (i + 1))
+	B["ausgang"] = _put("freight_shed", q_ne.position + Vector2i(10, 9), "hub_out", "Großlager – Warenausgang")
+	# Suedwest: Baustoffhandel, Grosshandelsmarkt, Verwaltung, Haendler-Marktplatz
+	town_rect = q_sw
+	B["baustoffe"] = _put("freight_shed", q_sw.position + Vector2i(3, 2), "hub_materials", "Großlager – Baustoffhandel")
+	B["grosshandel"] = _put("warehouse", q_sw.position + Vector2i(12, 2), "hub_wholesale", "Großlager – Großhandelsmarkt")
+	B["verwaltung"] = _put("office", q_sw.position + Vector2i(16, 9), "hub_admin", "Großlager – Verwaltung")
+	var plaza := _hub_area(q_sw, Vector2i(7, 5), q_sw.position + Vector2i(3, 8), G.PLAZA)
+	if plaza.size.x > 0:
+		B["brunnen"] = _put_in("fountain", Rect2i(plaza.position + Vector2i(2, 1), Vector2i(2, 2)), "decor", "Brunnen am Händlermarkt")
+		c.benches.append(plaza.position + Vector2i(1, 4))
+		c.benches.append(plaza.position + Vector2i(5, 4))
+		c.lamps.append(plaza.position)
+		c.lamps.append(plaza.position + Vector2i(6, 0))
+	# Suedost: Fahrzeug- und Maschinenhandel, Lkw-Parkplatz, Dienstwagen-Stellplaetze, Containerlager
+	town_rect = q_se
+	B["fahrzeughandel"] = _put("dealer", q_se.position + Vector2i(3, 2), "dealer", "Großlager – Fahrzeug- und Maschinenhandel")
+	var trucks := _hub_area(q_se, Vector2i(9, 4), q_se.position + Vector2i(11, 2), G.PARKING)
+	var officials := _hub_area(q_se, Vector2i(6, 2), q_se.position + Vector2i(3, 10), G.PARKING)
+	B["container1"] = _put("containers", q_se.position + Vector2i(13, 10), "decor", "Containerlager")
+	B["container2"] = _put("containers", q_se.position + Vector2i(16, 10), "decor", "Containerlager")
+	town = keep_town
+	town_rect = keep_rect
+	for y in range(R.position.y - 4, R.end.y + 4):
+		for x in range(R.position.x - 4, R.end.x + 4):
+			var p := Vector2i(x, y)
+			if c.inside(p):
+				c.district[c.idx(p)] = 2   # Industriegebiet
+	for k in B.keys():
+		if int(B[k]) < 0:
+			B.erase(k)
+		else:
+			c.buildings[int(B[k])]["hub"] = true
+	hub_out = {"rect": [R.position.x, R.position.y, R.size.x, R.size.y], "center": [cx, cy], "exits": exits, "buildings": B,
+		"parking": [trucks.position.x, trucks.position.y, trucks.size.x, trucks.size.y],
+		"official_parking": [officials.position.x, officials.position.y, officials.size.x, officials.size.y],
+		"plaza": [plaza.position.x, plaza.position.y, plaza.size.x, plaza.size.y], "links": []}
+
+
+## Freie Flaeche (Parkplatz, Pflaster) mit Strassenanschluss nahe `near` im Bereich `area`; Zellen bekommen `gtype`, bleiben unbebaut.
+func _hub_area(area: Rect2i, size: Vector2i, near: Vector2i, gtype: int) -> Rect2i:
+	var best := Rect2i()
+	var best_d := INF
+	for y in range(area.position.y, area.end.y - size.y + 1):
+		for x in range(area.position.x, area.end.x - size.x + 1):
+			var r := Rect2i(Vector2i(x, y), size)
+			if not _free(r) or not _touches_road(r):
+				continue
+			var d := Vector2(r.position).distance_to(Vector2(near))
+			if d < best_d:
+				best_d = d
+				best = r
+	if best_d == INF:
+		return Rect2i()
+	for y in range(best.position.y, best.end.y):
+		for x in range(best.position.x, best.end.x):
+			var i := c.idx(Vector2i(x, y))
+			c.ground[i] = gtype
+			c.building_at[i] = -2   # nicht bebauen (_finish gibt die Zellen frei, der Boden bleibt)
+	return best
+
+
+func _put_in(type: String, r: Rect2i, role: String, name: String) -> int:
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			c.building_at[c.idx(Vector2i(x, y))] = -1
+	return _place(type, r, role, name)
+
+
+## Strasse von jeder Zufahrt zur naechstgelegenen Ortsstrasse der zugehoerigen Stadt (A* wie die Landstrassen).
+func _connect_hub() -> void:
+	if hub_out.is_empty():
+		return
+	var astar := AStarGrid2D.new()
+	astar.region = Rect2i(0, 0, n, n)
+	astar.cell_size = Vector2.ONE
+	astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
+	astar.update()
+	var R := hub_rect
+	for y in n:
+		for x in n:
+			var p := Vector2i(x, y)
+			var i := c.idx(p)
+			if c.ground[i] in [G.WATER, G.QUAY, G.RUNWAY, G.APRON] or heights[i] > 0 or c.building_at[i] >= 0 or (R.has_point(p) and c.ground[i] != G.ROAD):
+				astar.set_point_solid(p, true)
+			elif c.ground[i] == G.ROAD:
+				astar.set_point_weight_scale(p, 0.5)
+			else:
+				astar.set_point_weight_scale(p, 1.0 + 0.6 * (noise.get_noise_2d(x * 2 + 900, y * 2) + 1.0))
+	for k in towns_out.size():
+		var corner := str(towns_out[k].get("ecke", ""))
+		var ex: Array = hub_out.exits[HUB_EXIT_OF.get(corner, "N")]
+		var a := Vector2i(int(ex[0]), int(ex[1]))
+		var b := _hub_target(k, a)
+		var path := astar.get_id_path(a, b)
+		var cells := 0
+		for p in path:
+			if c.ground[c.idx(p)] != G.ROAD:
+				c.ground[c.idx(p)] = G.ROAD
+				c.district[c.idx(p)] = 4
+				cells += 1
+		hub_out.links.append({"stadt": k, "zufahrt": HUB_EXIT_OF.get(corner, "N"), "zellen": cells, "laenge": path.size(), "verbunden": not path.is_empty()})
+
+
+## Ziel der Zufahrt: naechstgelegene Ortsstrasse, die nachweislich mit der Ortsmitte verbunden ist (sonst endete die Zufahrt
+## neben dem Ortsnetz und Gebaeude am Ortsrand galten als unerreichbar).
+func _hub_target(k: int, from: Vector2i) -> Vector2i:
+	var ctr := Vector2i(int(towns_out[k].center[0]), int(towns_out[k].center[1]))
+	var cands: Array = []
+	var r: Rect2i = _rects[k].grow(4)
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var p := Vector2i(x, y)
+			if c.inside(p) and c.ground[c.idx(p)] == G.ROAD:
+				cands.append(p)
+	cands.sort_custom(func(p, q): return absi(p.x - from.x) + absi(p.y - from.y) < absi(q.x - from.x) + absi(q.y - from.y))
+	for p in cands.slice(0, 40):
+		if _road_path_exists(p, ctr):
+			return p
+	return _edge_road(k, from.y > ctr.y)
+
+
 func validate(cd: CityData) -> Dictionary:
 	var out := super.validate(cd)
 	var errs: Array = out.fehler
+	if cd.hub.is_empty():
+		errs.append("Großlager fehlt")
+	else:
+		for l in cd.hub.links:
+			if not bool(l.verbunden):
+				errs.append("Großlager ohne Straße zu Ort %d" % int(l.stadt))
+		for key in ["hauptlager", "baustoffe", "fahrzeughandel", "verwaltung"]:
+			if not cd.hub.buildings.has(key):
+				errs.append("Großlager ohne %s" % key)
 	for t in cd.towns:
 		var corner: String = str(t.get("ecke", ""))
 		var x := int(t.center[0])

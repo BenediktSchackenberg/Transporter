@@ -372,6 +372,10 @@ func _process_timed(_delta: float) -> void:
 			print("AUTOTEST Hafen 0: Spielminute %.1f, Schiff %s Tag %s Status %s, angelegt %s, Posten %d, Grund %s, Tagesbeginn %.1f" % [session.sim.game_min, str(H0.ship.get("name")), str(H0.ship.get("day")), str(H0.ship.get("status")), str(H0.docked(session.sim.game_min)), H0.queue.size(), H0.idle_reason(), GameCalendar.day_start(int(H0.ship.get("day", 0)))])
 			session.set_follow(false)
 			session.city_view.set_camera_world(session.city_view.ship_view.berth + Vector2(110, -110))   # nach rechts versetzt: Seitenleiste verdeckt den rechten Bildrand
+		if args.has("shot-hub") and not session.sim.city.hub.is_empty():   # Kamera auf das zentrale Grosslager (Auftrag 19)
+			var hc: Array = session.sim.city.hub.center
+			session.set_follow(false)
+			session.city_view.set_camera_world(Vector2(float(hc[0]) * 32.0, float(hc[1]) * 32.0))
 		if args.has("shot-town"):   # Kamera auf das Rathaus eines Orts (Ortskern)
 			var th: Dictionary = session.sim.city.building(int(session.sim.towns.get_t(int(args["shot-town"])).town_hall))
 			session.set_follow(false)

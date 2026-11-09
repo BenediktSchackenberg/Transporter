@@ -108,6 +108,8 @@ func _is_free(p: Vector2i) -> bool:
 		return false
 	if city.height.size() > 0 and city.height[i] > 0:
 		return false   # Berggebiet: kein Bauland (Auftrag 15)
+	if not city.hub.is_empty() and Rect2i(int(city.hub.rect[0]), int(city.hub.rect[1]), int(city.hub.rect[2]), int(city.hub.rect[3])).has_point(p):
+		return false   # Grosslager-Gelaende (Auftrag 19): neutral, kein staedtisches Bauland
 	return city.ground[i] in [G.GRASS, G.CONCRETE, G.GRAVEL, G.PLAZA, G.FIELD, G.CROP, G.PARKING, G.PARK]
 
 

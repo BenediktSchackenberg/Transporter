@@ -30,6 +30,7 @@ var road_count := 0
 var airport: Dictionary = {}        # {rect, run_x0, run_x1, run_y, dir, apron: [[x,y],...], road, walk} (leer, wenn kein Flughafen)
 # Region (Auftrag 17): Orte auf derselben Karte. Leer in alten Welten (dann eine Stadt aus town_name, siehe Towns).
 var towns: Array = []               # [{id, name, center: [x, y], rect: [x, y, w, h], town_hall, bauhof, harbor, port_office, start_plot, airport}]
+var hub: Dictionary = {}            # Zentrales Grosslager (Auftrag 19): {rect, center, exits, buildings, parking, official_parking, plaza, links}
 var region_roads: Array = []        # Verbindungsstrassen der Startinfrastruktur [{id, von, nach, zellen, laenge, verbunden, eigentum, wartung}]
 
 
