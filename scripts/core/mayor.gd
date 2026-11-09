@@ -6,6 +6,11 @@ extends RefCounted
 
 const SCHEMA := {
 	"wait": {"params": {}, "desc": "Nichts tun."},
+	"propose_project": {"params": {"project": "string", "category": "string", "reason": "string", "priority": "int?", "desiredDistrict": "string?",
+		"features": "array?", "size": "string?"},
+		"desc": "Eigene Bauidee für die Stadt (Auftrag 19): z. B. Spielplatz, Stadtpark, Marktplatz, Bolzplatz, Stadion, Kindergarten, eine Statue von dir. category recreation|familie|gruen|markt|sport|prestige|bildung; size klein|mittel|groß. Die Engine wählt Bauvorlage, Standort und Material (obs.stadtentwicklung.bauvorlagen); entschieden und beschafft wird beim nächsten Besuch im Großlager."},
+	"set_vision": {"params": {"vision": "string", "reason": "string"},
+		"desc": "Langfristiges Ziel der Stadtentwicklung festlegen (gespeichert, prägt die Auswahl der Bauprojekte)."},
 	"remember": {"params": {"inhalt": "string"}, "desc": "Eine Erfahrung oder Notiz im Gedächtnis des Amtes festhalten."},
 	"designate_quarter": {"params": {"name": "string", "parcel_ids": "array", "zone": "string", "reason": "string"},
 		"desc": "Neues Quartier vorschlagen: städtische, freie Grundstücke (siehe entwicklungsvorschlaege) werden einer Zone zugewiesen. Braucht Ratsbeschluss; danach zur Entwicklung vorgesehen."},
@@ -157,7 +162,8 @@ func _arrivals_town() -> void:
 	var month := GameCalendar.month_of(sim.game_min)
 	var boost := marketing_boost if month <= marketing_until else 0.0
 	var rate := float(Population.cfg().get("zuzug_je_monat", 0.04)) * REGION_ARRIVALS / float(GameCalendar.DAYS_PER_MONTH)
-	_arrival_acc += float(Z.population_of(town)) / PERSONS_PER_UNIT * rate * (0.5 + Z.employment_rate_of(town)) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost)
+	var fam: float = sim.civic.family_factor(town) if sim.civic != null and sim.civic.enabled() else 1.0   # Spielplaetze, Parks, Kitas ziehen Familien an
+	_arrival_acc += float(Z.population_of(town)) / PERSONS_PER_UNIT * rate * (0.5 + Z.employment_rate_of(town)) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost) * fam
 	# Sog durch Arbeit: kleine Orte wachsen nicht nur proportional zur Einwohnerzahl. Je besser die Beschaeftigung, desto mehr Haushalte
 	# kommen zusaetzlich (bei 90 % JOB_PULL_MIN je Monat, mehr bei offenen Stellen); unter 70 % kein zusaetzlicher Zuzug.
 	var open_jobs := 0
@@ -292,6 +298,7 @@ func indicators() -> Dictionary:
 			"bezahlbarkeit_miete_anteil_netto": snappedf(rent / maxf(1.0, net_wage), 0.01),
 			"zufriedenheit": snappedf(sim.contentment.mean, 0.1), "zufriedenheit_viertel": sim.contentment.by_district.duplicate(),
 			"wohnungslos": sim.housing.homeless_count(), "raeumungen": int(sim.housing.stats.evictions), "planung": sim.housing.planning_aids()},
+		"stadtentwicklung": sim.civic.mayor_obs(town) if sim.civic != null else {},
 		"arbeit": {"quote": snappedf(Z.employment_rate_of(town), 0.001), "arbeitslos": Z.unemployed_of(town), "offene_stellen": vac_jobs,
 			"offene_stellen_nach_arbeitgeber": by_vac},
 		"gewerbe": {"freie_gewerbeflaeche": free_by_zone.get("gewerbe", {}), "freie_industrieflaeche": free_by_zone.get("industrie", {}),
@@ -568,6 +575,8 @@ func _update_approval() -> void:
 	# Beschaeftigung der eigenen Stadt, gedeckelt: vorher drueckte sie bei hoher Arbeitslosigkeit jeden Zielwert auf 0 und
 	# alle Staedte lagen bei genau 38,5 % - Wohnungsnot, Kasse, Plaene und Antraege spielten keine Rolle mehr.
 	target += clampf(20.0 * (Z.employment_rate_of(town) - Citizens.employment_target()) / 0.1, -30.0, 15.0)
+	if sim.civic != null and sim.civic.enabled():
+		target += sim.civic.approval_bonus(town)   # Auftrag 19: Anlagen und Denkmaeler (Prunk bei fehlender Grundversorgung kostet)
 	target -= 250.0 * float(waiting) / maxf(1.0, float(stock_units)) * 10.0 / 10.0
 	if cash() < reserve_cash():
 		target -= 10.0
@@ -614,6 +623,14 @@ func execute(action: Dictionary) -> Dictionary:
 			"remember":
 				remember(str(a.inhalt))
 				res = {"ok": true, "msg": "Notiz gespeichert."}
+			"propose_project":
+				res = sim.civic.propose(town, a) if sim.civic != null else {"ok": false, "msg": "Keine Stadtentwicklung."}
+			"set_vision":
+				if sim.civic != null and sim.civic.profiles.has(town):
+					sim.civic.profiles[town].vision = str(a.vision).left(200)
+					res = {"ok": true, "msg": "Neue Vision: %s" % str(a.vision).left(200)}
+				else:
+					res = {"ok": false, "msg": "Keine Stadtentwicklung."}
 			"designate_quarter":
 				res = _designate_quarter(a)
 			"offer_parcels":
@@ -776,10 +793,32 @@ func _city_parcels(ids: Array, states: Array) -> Dictionary:
 	return {"parcels": out}
 
 
+## Kennzahlen fuer den Rat (Council.vote liest nur diese): statt des vollstaendigen Lageberichts (indicators kostet bis 800 ms;
+## Ruckler bei der Ankunft eines Buergermeisters im Grosslager, Auftrag 19).
+func vote_inputs() -> Dictionary:
+	return {"wohnen": {"wohnungssuchende_haushalte": waiting, "leerstand": vacancy(), "mietindex": rent_index()},
+		"haushalt": {"verfuegbar": available_budget()}, "arbeit": {"quote": sim.citizens.employment_rate_of(town)}}
+
+
+## Ratsbeschluss fuer ein Projekt der Stadtentwicklung (Auftrag 19); Denkmaeler und Stadion als "denkmal" (Soziales skeptisch).
+func civic_vote(kind: String, cost: float) -> Dictionary:
+	return _proposal_vote(kind, cost, 0, 0)
+
+
+## Projekt der Stadtentwicklung beim Bauamt anlegen (Status "geplant": Ausschreibung erst nach der Rueckkehr des Buergermeisters).
+func add_civic_project(ref: String, parcel_ids: Array, cost: float, days: int, material: Dictionary, reason: String) -> Dictionary:
+	commitments += cost
+	var prj := {"id": Towns.prefixed(town, "P", _next_project), "kind": "anlage", "ref": ref, "parcels": parcel_ids, "parts": [], "cost": snappedf(cost, 1.0),
+		"days": days, "material": material, "status": "geplant", "reason": reason.left(240), "day": _today(), "tender": {}}
+	_next_project += 1
+	projects[prj.id] = prj
+	return prj
+
+
 func _proposal_vote(kind: String, cost: float, units: int, area: int, zone: String = "") -> Dictionary:
 	if not Council.needs_vote(kind, cost):
 		return {"needed": false, "passed": true, "text": "Kein Ratsbeschluss erforderlich (Kosten %s)." % Catalog.money(cost)}
-	var r := Council.vote({"kind": kind, "cost": cost, "units": units, "area": area, "zone": zone}, indicators())
+	var r := Council.vote({"kind": kind, "cost": cost, "units": units, "area": area, "zone": zone}, vote_inputs())
 	return {"needed": true, "passed": r.passed, "text": Council.explain(r), "result": r}
 
 

@@ -90,6 +90,8 @@ const NAV := [
 	{"name": "Stadt", "hint": "Bürger, Wohnen, Bauen und Versorgung", "pages": [
 		{"label": "Ort", "tab": "Wirtschaft", "view": 16, "hint": "Stadtfenster der gewählten Stadt (Taste O wechselt und springt hin): Einwohner, Gebäude, Entwicklung, Finanzen, Projekte, Hafen, Unternehmen, Betriebe."},
 		{"label": "Region", "tab": "Wirtschaft", "view": 17, "hint": "Alle Städte im Vergleich, Verbindungen, Flüge, Gemeinschaftsprojekte, Gründer, Pendler, Binnen- und Außenhandel."},
+		{"label": "Stadtentwicklung", "tab": "Wirtschaft", "view": 18, "hint": "Die vier Bürgermeister: Persönlichkeit, Vision, Projekte mit Begründung, Baustellen, Materialbestellungen, Fahrten zum Großlager, Lernen und Sticheleien."},
+		{"label": "Großlager", "tab": "Wirtschaft", "view": 19, "hint": "Zentrales Großlager in der Kartenmitte: Bestand, Preise, Knappheit, Handel und Importe."},
 		{"label": "Bürger", "tab": "Wirtschaft", "view": 6, "hint": "Bevölkerung, Arbeitsmarkt und Löhne."},
 		{"label": "Wohnen", "tab": "Wirtschaft", "view": 12, "hint": "Wohnungen, Mieten, Leerstand und Zufriedenheit je Viertel."},
 		{"label": "Bürgermeister", "tab": "Wirtschaft", "view": 9, "hint": "Stadtplanung, Kennzahlen und Beschlüsse."},
@@ -100,7 +102,7 @@ const NAV := [
 		{"label": "Stadtlager", "tab": "Wirtschaft", "view": 11, "hint": "Bestand, Bestellungen und Personal des Zentrallagers."},
 		{"label": "Bauhof", "tab": "Wirtschaft", "view": 3, "hint": "Großhändler: Material, Preise und Bestand."}]},
 ]
-const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat", "Bürger", "Grundstücke", "Bauanträge", "Bürgermeister", "Bauvorhaben", "Stadtlager", "Wohnen", "Zentralbank", "Unternehmen", "Strom", "Ort", "Region"]
+const ECONOMY_VIEWS := ["Rangliste", "Banken", "Firmen", "Bauhof", "Haushalte", "Staat", "Bürger", "Grundstücke", "Bauanträge", "Bürgermeister", "Bauvorhaben", "Stadtlager", "Wohnen", "Zentralbank", "Unternehmen", "Strom", "Ort", "Region", "Stadtentwicklung", "Großlager"]
 var decision_company := -1
 var decision_company_opt: OptionButton
 var sel_panel: PanelContainer
@@ -732,6 +734,8 @@ func _economy_text() -> String:
 		15: return LiveText.power(sim)
 		16: return LiveText.town(sim, maxi(0, session.selected_town))
 		17: return LiveText.region(sim)
+		18: return LiveText.civic(sim)
+		19: return LiveText.hub(sim)
 	return LiveText.standings(sim)
 
 

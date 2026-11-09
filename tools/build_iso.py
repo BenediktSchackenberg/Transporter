@@ -24,6 +24,7 @@ import commercial as C
 import industrial as I
 import airport as A
 import tourism as TU
+import civic as CV
 
 OUT = os.path.join(HERE, "..", "assets", "iso")
 os.makedirs(OUT, exist_ok=True)
@@ -41,6 +42,7 @@ def init():
     V.init()
     F.init()
     PR.init()
+    CV.init()
     A.init()
 
 
@@ -294,6 +296,29 @@ def build_props():
     prop("blockade", PR.blockade())
     prop("flag", PR.flag(), (8, 8), keep_mask=True)
     prop("fac_site", PR.site_fence())
+    # Auftrag 19: oeffentliche Anlagen, Denkmaeler (Farbmaske = Buergermeister), Grosslager
+    prop("d_swing", CV.swing())
+    prop("d_slide", CV.slide())
+    prop("d_climber", CV.climber())
+    prop("d_sandbox", CV.sandbox())
+    prop("d_seesaw", CV.seesaw())
+    for i in range(4):
+        prop("d_stall%d" % i, CV.market_stall(i))
+    prop("d_flowerbed", CV.flowerbed())
+    prop("d_picnic", CV.picnic())
+    prop("d_goal", CV.goal())
+    prop("d_floodlight", CV.floodlight())
+    prop("d_tribune", CV.tribune(), (32, 16))
+    prop("d_hoop", CV.basket_hoop())
+    prop("m_bust", CV.statue_bust(), keep_mask=True)
+    prop("m_bronze", CV.statue_bronze(), keep_mask=True)
+    prop("m_rider", CV.statue_rider(), keep_mask=True)
+    prop("m_obelisk", CV.obelisk(), keep_mask=True)
+    prop("m_giant", CV.statue_giant(), (32, 32), keep_mask=True)
+    prop("m_fountain", CV.fountain_monument(), (32, 32), keep_mask=True)
+    prop("m_arch", CV.triumph_arch(), (32, 16), keep_mask=True)
+    prop("d_forklift", CV.forklift())
+    prop("d_rack", CV.pallet_rack())
     for c in ("pakete", "lebensmittel", "medikamente", "getraenke", "elektronik", "moebel", "baustoffe", "maschinenteile", "container"):
         r = engine.render(PR.crate(c), shadow_len=0, ground_shadow=False)
         info = save_result("c_" + c, r, lit=False, top=False)

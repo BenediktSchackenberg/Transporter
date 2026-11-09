@@ -3891,6 +3891,390 @@
     46,
     49
    ]
+  },
+  "d_swing": {
+   "anchor": [
+    38,
+    35
+   ],
+   "size": [
+    78,
+    85
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    38,
+    67
+   ]
+  },
+  "d_slide": {
+   "anchor": [
+    30,
+    28
+   ],
+   "size": [
+    68,
+    71
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    30,
+    60
+   ]
+  },
+  "d_climber": {
+   "anchor": [
+    46,
+    34
+   ],
+   "size": [
+    94,
+    89
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    46,
+    66
+   ]
+  },
+  "d_sandbox": {
+   "anchor": [
+    54,
+    2
+   ],
+   "size": [
+    108,
+    60
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    54,
+    34
+   ]
+  },
+  "d_seesaw": {
+   "anchor": [
+    34,
+    4
+   ],
+   "size": [
+    68,
+    42
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    34,
+    36
+   ]
+  },
+  "d_stall0": {
+   "anchor": [
+    52,
+    39
+   ],
+   "size": [
+    106,
+    94
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    52,
+    71
+   ]
+  },
+  "d_stall1": {
+   "anchor": [
+    52,
+    39
+   ],
+   "size": [
+    106,
+    94
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    52,
+    71
+   ]
+  },
+  "d_stall2": {
+   "anchor": [
+    52,
+    39
+   ],
+   "size": [
+    106,
+    94
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    52,
+    71
+   ]
+  },
+  "d_stall3": {
+   "anchor": [
+    52,
+    39
+   ],
+   "size": [
+    106,
+    94
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    52,
+    71
+   ]
+  },
+  "d_flowerbed": {
+   "anchor": [
+    50,
+    0
+   ],
+   "size": [
+    100,
+    56
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    50,
+    32
+   ]
+  },
+  "d_picnic": {
+   "anchor": [
+    38,
+    -2
+   ],
+   "size": [
+    76,
+    44
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    38,
+    30
+   ]
+  },
+  "d_goal": {
+   "anchor": [
+    32,
+    10
+   ],
+   "size": [
+    62,
+    57
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    32,
+    42
+   ]
+  },
+  "d_floodlight": {
+   "anchor": [
+    20,
+    103
+   ],
+   "size": [
+    40,
+    137
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    20,
+    135
+   ]
+  },
+  "d_tribune": {
+   "anchor": [
+    50,
+    52
+   ],
+   "size": [
+    176,
+    140
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    82,
+    100
+   ]
+  },
+  "d_hoop": {
+   "anchor": [
+    24,
+    42
+   ],
+   "size": [
+    28,
+    85
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    24,
+    74
+   ]
+  },
+  "m_bust": {
+   "anchor": [
+    30,
+    31
+   ],
+   "size": [
+    60,
+    77
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    30,
+    63
+   ]
+  },
+  "m_bronze": {
+   "anchor": [
+    34,
+    72
+   ],
+   "size": [
+    68,
+    120
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    34,
+    104
+   ]
+  },
+  "m_rider": {
+   "anchor": [
+    42,
+    65
+   ],
+   "size": [
+    84,
+    117
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    42,
+    97
+   ]
+  },
+  "m_obelisk": {
+   "anchor": [
+    38,
+    168
+   ],
+   "size": [
+    76,
+    218
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    38,
+    200
+   ]
+  },
+  "m_giant": {
+   "anchor": [
+    130,
+    166
+   ],
+   "size": [
+    260,
+    294
+   ],
+   "lit": true,
+   "mask": true,
+   "pivot": [
+    130,
+    230
+   ]
+  },
+  "m_fountain": {
+   "anchor": [
+    82,
+    50
+   ],
+   "size": [
+    164,
+    155
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    82,
+    114
+   ]
+  },
+  "m_arch": {
+   "anchor": [
+    42,
+    156
+   ],
+   "size": [
+    148,
+    240
+   ],
+   "lit": false,
+   "mask": true,
+   "pivot": [
+    74,
+    204
+   ]
+  },
+  "d_forklift": {
+   "anchor": [
+    40,
+    32
+   ],
+   "size": [
+    70,
+    78
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    40,
+    64
+   ]
+  },
+  "d_rack": {
+   "anchor": [
+    44,
+    114
+   ],
+   "size": [
+    90,
+    168
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    44,
+    146
+   ]
   }
  },
  "projection": {

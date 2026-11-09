@@ -30,6 +30,7 @@ var wind := 0.0
 var _fog := 0.0
 var _heat := 0.0
 var estate_view := EstateView.new()
+var civic_view := CivicView.new()         # Auftrag 19: Anlagen und Denkmaeler der Buergermeister, Leben im Grosslager
 var site_view := SiteView.new()
 var depot_view := DepotView.new()
 var parcel_layer := ParcelLayer.new()
@@ -117,6 +118,10 @@ func build(simulation: Simulation) -> void:
 	_build_buildings()
 	buildings_node.add_child(estate_view)
 	estate_view.setup(sim, self)
+	add_child(civic_view)
+	civic_view.setup(sim, self)
+	if sim.civic != null:
+		sim.civic.ground_changed.connect(repaint_cells)
 	buildings_node.add_child(site_view)
 	site_view.setup(sim)
 	buildings_node.add_child(depot_view)
@@ -407,6 +412,25 @@ func _prop(name: String, world: Vector2, parent: Node2D, sway := false) -> Sprit
 		s.material = _sway_mat
 	parent.add_child(s)
 	return s
+
+
+## Boden einzelner Zellen neu zeichnen (Auftrag 19: Spielplatz-Sand, Parkrasen, Marktpflaster einer neuen Anlage).
+func repaint_cells(cells: Array) -> void:
+	var tiles: Dictionary = man.ground.tiles
+	var G := CityData.G
+	for q in cells:
+		var name := ""
+		match sim.city.g(q):
+			G.GRASS: name = "grass%d" % (absi(hash(q)) % 3)
+			G.PARK: name = "park%d" % (absi(hash(q)) % 2)
+			G.GRAVEL: name = "gravel"
+			G.PLAZA: name = "plaza"
+			G.CONCRETE: name = "concrete"
+			G.SAND: name = "sand"
+			G.PARKING: name = "parking"
+		if name != "" and tiles.has(name):
+			var at: Array = tiles[name]
+			ground.set_cell(q, 0, Vector2i(int(at[0]), int(at[1])))
 
 
 ## Neue Wegzellen (Zufahrten): Strassenkacheln samt Nachbarn neu setzen (Einmuendungen), gerodete Baeume entfernen.

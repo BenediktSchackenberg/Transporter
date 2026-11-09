@@ -51,7 +51,8 @@ const GROUPS := {
 		["kunstwerk", "Kunstwerke", "Stk", 2400.0, 0, {"use": 0.0}], ["dekoration", "Dekorationsmaterial", "Set", 35.0, 0, {"use": 0.0}],
 		["marktstand", "Marktstände", "Stk", 380.0, 0, {"use": 0.0}], ["flutlicht", "Flutlichtmasten", "Stk", 900.0, 0, {"use": 0.0}],
 		["tribuenenteil", "Tribünenelemente", "Stk", 650.0, 0, {"use": 0.0}], ["sportbelag", "Sportbelag", "m²", 14.0, 0, {"use": 0.0}],
-		["zaun", "Zaunelemente", "m", 22.0, 0, {"use": 0.0}]]},
+		["zaun", "Zaunelemente", "m", 22.0, 0, {"use": 0.0}], ["stahl", "Stahl", "t", 55.0, 0, {"use": 0.0}],
+		["beton", "Betonbauteile", "Stk", 40.0, 0, {"use": 0.0}]]},
 	"verwaltung": {"label": "Verwaltung und öffentliche Gebäude", "zone": "regal", "class": "verbrauch", "crit": 1, "items": [
 		["papier", "Papier", "Pal", 90.0, 30], ["buero", "Büromaterial", "Pack", 14.0, 200], ["computer", "Computer", "Stk", 640.0, 20, {"class": "lager"}],
 		["moebel", "Möbel", "Stk", 180.0, 40, {"class": "lager"}], ["lampe", "Beleuchtung (Gebäude)", "Stk", 32.0, 120], ["gebaeudeteil", "Ersatzteile Gebäudetechnik", "Stk", 55.0, 80]]},

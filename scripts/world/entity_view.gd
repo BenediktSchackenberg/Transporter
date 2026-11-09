@@ -138,6 +138,17 @@ func _update_fleet() -> void:
 			if v.kind == "muell":   # Muellwagen: orange Lackierung, gelbe Rundumleuchte
 				n = _make_vehicle_node("truck", "", WasteView.ORANGE, true)
 				_add_beacon(n, -56.0)
+			elif v.kind == "dienstwagen":   # Auftrag 19: Limousine des Buergermeisters in seiner Farbe, mit Aufgabe als Beschriftung
+				n = _make_vehicle_node("car", _car_color(str(v.get("color", ""))), Color.WHITE, false)
+				var lb := Label.new()
+				lb.name = "task"
+				lb.add_theme_font_size_override("font_size", 13)
+				lb.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+				lb.add_theme_constant_override("outline_size", 4)
+				lb.position = Vector2(-60, -64)
+				n.add_child(lb)
+			elif v.kind == "stadtlkw":   # kommunaler Lkw (Lieferung ans Stadtlager)
+				n = _make_vehicle_node("truck", "", Color.WHITE, false)
 			else:
 				n = _make_vehicle_node("roadcrew" if v.kind in ["bautrupp", "kolonne"] else "moving", "", Color.WHITE, false)
 			if v.kind in ["bautrupp", "kolonne"]:
@@ -147,6 +158,9 @@ func _update_fleet() -> void:
 		var m: Mover = v.mover
 		n.position = Iso.to_screen(m.pos)
 		_set_vehicle_dir(n, m.heading)
+		var tl: Label = n.get_node_or_null("task")
+		if tl != null and tl.text != str(v.label):
+			tl.text = str(v.label)
 		var siren: Sprite2D = n.get_node_or_null("siren")
 		if siren:
 			var on := int(anim_time * 4.0) % 2 == 0
@@ -155,6 +169,23 @@ func _update_fleet() -> void:
 		if not seen.has(id):
 			fleet_nodes[id].queue_free()
 			fleet_nodes.erase(id)
+
+
+## Naechste vorhandene Autofarbe zur Buergermeisterfarbe.
+static func _car_color(html: String) -> String:
+	if html == "":
+		return "black"
+	var c := Color(html)
+	var best := "black"
+	var best_d := INF
+	var opts := {"gold": Color("#d4a017"), "violet": Color("#8e44ad"), "green": Color("#16a085"), "red": Color("#c0392b"), "blue": Color("#3d6fb3"),
+		"silver": Color("#b8bcc2"), "white": Color("#f2f0ea"), "black": Color("#22242a")}
+	for k in opts:
+		var d: float = Vector3(c.r - opts[k].r, c.g - opts[k].g, c.b - opts[k].b).length()
+		if d < best_d:
+			best_d = d
+			best = k
+	return best
 
 
 static func _dir_of(h: Vector2) -> int:

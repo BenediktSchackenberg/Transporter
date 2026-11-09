@@ -87,6 +87,14 @@ func send_crew(site: Vector2i, until: float, label: String) -> void:
 	stats.bautrupps += 1
 
 
+## Kommunaler Lkw (Auftrag 19): bringt Ware eines Stadtlager-Auftrags vom Lieferort zum Stadtlager; meldet die Ankunft dem Stadtlager.
+func send_city_truck(from: Vector2i, to: Vector2i, town: int, order_id: String, label: String) -> bool:
+	var v := _spawn("stadtlkw", from, to, 0.0, from, label)
+	v["town"] = town
+	v["order"] = order_id
+	return true
+
+
 ## Umzugswagen fuer einen zugezogenen Haushalt: vom Stadtrand zur Wohnung (Gebaeude-ID), dann wieder hinaus.
 func send_moving(building_id: int, label: String) -> void:
 	if _edges.is_empty() or vehicles.filter(func(v): return v.kind == "umzug").size() >= MAX_MOVING:
@@ -109,10 +117,17 @@ func update(dt: float) -> void:
 			else:
 				m.advance(dt, 1.0)
 			continue
-		if v.kind == "kolonne":
-			continue   # Bautrupps (BuildCrews) steuern Ziel und Zustand selbst
+		if v.kind in ["kolonne", "dienstwagen"]:
+			continue   # Bautrupps (BuildCrews) und Dienstwagen der Buergermeister (CivicWorks) steuern Ziel und Zustand selbst
 		if v.kind == "muell":
 			_garbage(v, now)
+			continue
+		if v.kind == "stadtlkw" and str(v.phase) == "anfahrt":
+			var D = sim.towns.depot(int(v.town)) if sim.towns != null else sim.city_depot
+			D.city_truck_arrived(str(v.order))
+			v.phase = "rueckfahrt"
+			if not sim.route(m, v.back):
+				vehicles.erase(v)
 			continue
 		match str(v.phase):
 			"anfahrt":

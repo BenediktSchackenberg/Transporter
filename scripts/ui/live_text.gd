@@ -950,6 +950,68 @@ static func town_score(sim: Simulation, k: int) -> Dictionary:
 
 
 ## Regionsuebersicht (Auftrag 17, Abschnitt 14): Staedte, Verbindungen, Fluege, Gemeinschaftsprojekte, Gruender, Pendler, Handel.
+## Auftrag 19: Buergermeisterfenster - je Stadt Persoenlichkeit, Vision, Projekte mit Begruendung und Fortschritt, Bestellungen, Fahrt.
+static func civic(sim: Simulation) -> String:
+	if sim.civic == null or not sim.civic.enabled():
+		return "Autonome Stadtentwicklung gibt es nur in der Region mit Großlager (neue Partie)."
+	var txt := "[b][color=#f2c14e]STADTENTWICKLUNG[/color][/b] – alle %d Tage fährt jeder Bürgermeister zum Großlager und entscheidet über neue Projekte.
+
+" % CivicWorks.VISIT_EVERY
+	for k in sim.civic.profiles:
+		var w: Dictionary = sim.civic.window(int(k))
+		txt += "[b][color=%s]■[/color] %s – Bürgermeister %s[/b] (%s)
+" % ["#" + str(w.farbe), esc(w.stadt), esc(w.name), esc(w.persoenlichkeit)]
+		txt += "  Ziel: [i]%s[/i]
+" % esc(w.vision)
+		txt += "  Zustimmung %.0f %% · Kasse %s (verfügbar %s) · %s · nächster Besuch Tag %d
+" % [float(w.zustimmung), Catalog.money(float(w.kasse)), Catalog.money(float(w.verfuegbar)), esc(w.unterwegs), int(w.naechster_besuch)]
+		for p in w.projekte.slice(-6):
+			var st: String = {"geplant": "geplant", "material": "Material wird geliefert", "im_bau": "im Bau %d %%" % int(float(p.fortschritt) * 100.0), "eroeffnet": "eröffnet", "abgelehnt": "vom Rat abgelehnt"}.get(str(p.status), str(p.status))
+			txt += "  • [b]%s[/b] – %s%s
+    Begründung: %s%s
+" % [esc(p.titel), st, " (eigene KI-Idee)" if p.herkunft == "ki" else "", esc(p.grund).left(180), ("
+    Ergebnis: " + esc(p.ergebnis)) if str(p.ergebnis) != "" else ""]
+		if not w.bestellungen.is_empty():
+			txt += "  Bestellungen: %s
+" % esc(", ".join(w.bestellungen.slice(0, 6)))
+		for l in w.lernen:
+			txt += "  [color=#9fd8ff]Gelernt:[/color] %s
+" % esc(l)
+		txt += "
+"
+	if not sim.civic.comments.is_empty():
+		txt += "[b]Sticheleien unter Bürgermeistern[/b]
+"
+		for c in sim.civic.comments.slice(-6):
+			txt += "  Tag %d, %s: „%s“
+" % [int(c.day), esc(sim.towns.name_of(int(c.from))), esc(c.text)]
+	return txt
+
+
+## Auftrag 19: zentrales Grosslager - Bestand, Preise, Knappheit, Handel.
+static func hub(sim: Simulation) -> String:
+	if sim.hub == null or not sim.hub.enabled:
+		return "Auf dieser Karte gibt es kein Großlager (neue Region-Partie)."
+	var H: CentralHub = sim.hub
+	var txt := "[b][color=#f2c14e]GROSSLAGER[/color][/b] (Kartenmitte) – Kasse %s, frei %d von %d Einheiten
+" % [Catalog.money(float(sim.economy.accounts.get(CentralHub.ACCT, 0.0))), H.free_capacity(), CentralHub.CAPACITY]
+	txt += "Verkäufe %d (%s) · Ankäufe %d (%s) · Importe über den Flughafen %d (%s)
+
+" % [int(H.stats.verkaeufe), Catalog.money(float(H.stats.umsatz)), int(H.stats.ankaeufe), Catalog.money(float(H.stats.ankauf)), int(H.stats.importe), Catalog.money(float(H.stats.import))]
+	for w in H.summary().waren:
+		txt += "  %s%-22s %5d  Kauf %8s  Ankauf %8s%s
+" % ["[color=#ff8a6a]" if w.knapp else "", esc(w.name), int(w.bestand), Catalog.money(float(w.kaufpreis)), Catalog.money(float(w.ankaufpreis)), "  knapp[/color]" if w.knapp else ""]
+	var open: Array = H.deals.values().filter(func(d): return d.status not in ["geliefert", "storniert"])
+	if not open.is_empty():
+		txt += "
+[b]Unterwegs[/b]
+"
+		for d in open.slice(-10):
+			txt += "  %s %s: %d × %s (%s)
+" % [d.id, d.kind, int(d.qty), esc(CentralHub.item_name(str(d.item))), d.status]
+	return txt
+
+
 static func region(sim: Simulation) -> String:
 	var T: Towns = sim.towns
 	if not T.is_region():

@@ -376,6 +376,14 @@ func _process_timed(_delta: float) -> void:
 			var hc: Array = session.sim.city.hub.center
 			session.set_follow(false)
 			session.city_view.set_camera_world(Vector2(float(hc[0]) * 32.0, float(hc[1]) * 32.0))
+		if args.has("shot-anlage") and session.sim.civic != null:   # Kamera auf eine Anlage der Buergermeister (Auftrag 19), Nr. = Reihenfolge
+			var opened: Array = session.sim.civic.anlagen.values().filter(func(a): return a.status in ["eroeffnet", "im_bau"])
+			print("AUTOTEST Anlagen: ", session.sim.civic.anlagen.values().map(func(a): return "%s %s %s" % [a.id, a.title, a.status]))
+			if not opened.is_empty():
+				var an: Dictionary = opened[clampi(int(args["shot-anlage"]) if str(args["shot-anlage"]).is_valid_int() else 0, 0, opened.size() - 1)]
+				session.set_follow(false)
+				session.city_view.set_camera_world(Vector2((float(an.rect[0]) + float(an.rect[2]) * 0.5) * 32.0, (float(an.rect[1]) + float(an.rect[3]) * 0.5) * 32.0))
+				print("AUTOTEST Kamera auf ", an.title, " (", an.status, ")")
 		if args.has("shot-town"):   # Kamera auf das Rathaus eines Orts (Ortskern)
 			var th: Dictionary = session.sim.city.building(int(session.sim.towns.get_t(int(args["shot-town"])).town_hall))
 			session.set_follow(false)

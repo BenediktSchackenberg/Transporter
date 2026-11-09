@@ -228,9 +228,15 @@ func _parcel_candidates(pid: String, min_area: int, need_power: bool = false) ->
 func _market_candidates(min_area: int, near_to: int = -1) -> Array:
 	var target: Dictionary = sim.city.building(near_to if near_to >= 0 else sim.retail.wholesale_building)
 	var t := Vector2i(int(target.x), int(target.y))
-	var out: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(sim.parcels.utilities_of(p).strasse) 		and bool(p.get("erschliessung", {}).get("strom", true)))   # Strom fuer Muehle/Baeckerei (PowerGrid.connected)
-	out.sort_custom(func(a, b): return absi(int(a.rect[0]) - t.x) + absi(int(a.rect[1]) - t.y) < absi(int(b.rect[0]) - t.x) + absi(int(b.rect[1]) - t.y))
-	return out.slice(0, 40)
+	var all: Array = sim.parcels.search({"min_area": min_area, "limit": 2000}).filter(func(p): return bool(p.get("erschliessung", {}).get("strom", true)))   # Strom fuer Muehle/Baeckerei (PowerGrid.connected)
+	all.sort_custom(func(a, b): return absi(int(a.rect[0]) - t.x) + absi(int(a.rect[1]) - t.y) < absi(int(b.rect[0]) - t.x) + absi(int(b.rect[1]) - t.y))
+	var out: Array = []
+	for p in all:   # teure Strassenpruefung erst nach dem Sortieren, nur bis 40 Treffer (Gruendung im Tageswechsel: 420 -> wenige ms)
+		if bool(sim.parcels.utilities_of(p).strasse):
+			out.append(p)
+			if out.size() >= 40:
+				break
+	return out
 
 
 ## Trockenlauf von _place_field: Gibt es auf der Parzelle eine Stelle fuer das Gebaeude mit Strassenzugang direkt daneben?
@@ -241,8 +247,12 @@ func placeable(p: Dictionary, btype: String) -> bool:
 	var h := int(info[2])
 	var c: CityData = sim.city
 	var r0 := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
-	for y in range(r0.position.y, r0.end.y - h + 1):
-		for x in range(r0.position.x, r0.end.x - w + 1):
+	var xmax := r0.end.x - w
+	var ymax := r0.end.y - h
+	for y in range(r0.position.y, ymax + 1):
+		for x in range(r0.position.x, xmax + 1):
+			if x != r0.position.x and x != xmax and y != r0.position.y and y != ymax:
+				continue   # Strassen liegen ausserhalb der Parzelle: nur Lagen am Parzellenrand koennen angeschlossen sein
 			var r := Rect2i(x, y, w, h)
 			if not sim.events._free(r):
 				continue
@@ -1254,8 +1264,6 @@ func site_hints(branch: String, n: int = 3, town_only: int = -1) -> Array:
 	var btype := str(spec.get("gebaeude", "factory"))
 	var out: Array = []
 	for p in cands.slice(0, 300):
-		if not placeable(p, btype):
-			continue   # nur Grundstuecke vorschlagen, auf denen die Gruendung das Gebaeude auch setzen kann
 		var cell := Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)
 		var town: int = sim.towns.of_parcel(str(p.id)) if sim.towns.is_region() else 0
 		var H: Harbor = sim.towns.harbor(town) if sim.towns.is_region() else sim.harbor
@@ -1278,7 +1286,14 @@ func site_hints(branch: String, n: int = 3, town_only: int = -1) -> Array:
 			notes.append("%s %.1f EUR/E (%s)" % [item_name(item), best, from])
 		out.append({"grundstueck": str(p.id), "stadt": sim.towns.name_of(town) if sim.towns.is_region() else "", "zutaten_je_charge": snappedf(total, 0.1), "quellen": ", ".join(notes)})
 	out.sort_custom(func(a, b): return float(a.zutaten_je_charge) < float(b.zutaten_je_charge))
-	return out.slice(0, n)
+	# nur Grundstuecke vorschlagen, auf denen die Gruendung das Gebaeude auch setzen kann (teure Pruefung erst nach dem Sortieren)
+	var ok: Array = []
+	for h in out:
+		if placeable(sim.parcels.parcel(str(h.grundstueck)), btype):
+			ok.append(h)
+			if ok.size() >= n:
+				break
+	return ok
 const EXPORT_WAIT_DAYS := 3
 func _export_surplus() -> void:
 	for item in articles():

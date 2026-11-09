@@ -314,7 +314,8 @@ func _propose(day: int) -> void:
 
 
 func _new_order(item: String, qty: int, reason: String, project: String = "") -> Dictionary:
-	var o := {"id": "B%d" % _next_order, "item": item, "qty": qty, "status": "vorschlag", "reason": reason, "project": project, "day": _today(), "crit": 1,
+	# ID je Stadt eindeutig (Reservierung "order:<id>", Zuordnung der Anlieferung zur richtigen Stadt)
+	var o := {"id": Towns.prefixed(town, "B", _next_order), "item": item, "qty": qty, "status": "vorschlag", "reason": reason, "project": project, "day": _today(), "crit": 1,
 		"supplier": "", "unit_price": 0.0, "price": 0.0, "freight": 0.0, "committed": 0.0, "contract": "", "reissued": 0, "due": -1, "decision": "", "decided_by": "",
 		"good": 0, "bad": 0, "history": []}
 	_next_order += 1
@@ -410,6 +411,10 @@ func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 	if quotes.is_empty():
 		return {"ok": false, "msg": "Kein Anbieter für %s." % o.item}
 	var best: Dictionary = quotes[0]
+	for q in quotes:
+		if str(o.get("prefer", "")) != "" and q.supplier == str(o.prefer):
+			best = q   # Buergermeister bestellt vor Ort im Grosslager (Auftrag 19)
+			break
 	var freight := _freight(o.item, qty, int(best.loc))
 	var cost := float(best.total) + freight
 	var M: Mayor = mayor()
@@ -492,6 +497,9 @@ static func cargo_of(item: String) -> String:
 # ------------------------------------------------------------------ Transport
 func _advance_orders(day: int) -> void:
 	for o in orders.values():
+		if o.status == "stadt_lkw" and sim.game_min > float(o.get("truck_until", 0.0)):
+			_receive(o, "order:" + str(o.id))   # Fahrzeug nach dem Laden nicht mehr vorhanden
+			continue
 		match o.status:
 			"bestellt":
 				if o.supplier == "X0":
@@ -606,15 +614,28 @@ func _watch_contract(o: Dictionary, day: int) -> void:
 
 ## Stadtfuhrpark fuehrt den Transport aus, wenn kein Unternehmen ihn uebernommen hat. Lohn an S0.
 func _fallback_trip(o: Dictionary) -> void:
-	var ref := "order:" + str(o.id)
 	var pay := minf(float(o.freight) * 0.7, maxf(0.0, float(sim.economy.accounts.get(owner(), 0.0))))
 	sim.economy.transfer(owner(), "S0", pay)
 	stats.freight += pay
 	stats.fallback_trips += 1
 	fallback_days.append(_today())
 	o.freight_paid = pay
+	# Auftrag 19: der Stadtfuhrpark faehrt sichtbar mit einem kommunalen Lkw vom Lieferort zum Stadtlager; eingelagert wird bei Ankunft
+	var src: Dictionary = sim.city.building(int(o.get("loc", port)))
+	if sim.fleet != null and not src.is_empty() and sim.fleet.send_city_truck(src.road, sim.city.building(building).road, town, str(o.id), "Stadt-Lkw %s: %s" % [sim.towns.name_of(town) if sim.towns != null else "", CityGoods.get_item(o.item).name]):
+		o.status = "stadt_lkw"
+		o["truck_until"] = sim.game_min + GameCalendar.days_to_min(1.5)   # Sicherung, falls das Fahrzeug (nicht gespeichert) fehlt
+		_log(o, "Stadtfuhrpark liefert mit eigenem Lkw (Kosten %s)" % Catalog.money(pay))
+		return
 	_log(o, "Stadtfuhrpark liefert (Kosten %s)" % Catalog.money(pay))
-	_receive(o, ref)
+	_receive(o, "order:" + str(o.id))
+
+
+## Kommunaler Lkw ist am Stadtlager angekommen (CityFleet).
+func city_truck_arrived(order_id: String) -> void:
+	var o: Dictionary = orders.get(order_id, {})
+	if not o.is_empty() and o.status == "stadt_lkw":
+		_receive(o, "order:" + str(o.id))
 
 
 ## Vom Simulationskern aufgerufen, wenn ein Unternehmen den Transport abgeliefert hat. `paid` = ausgezahlte Verguetung.

@@ -273,7 +273,7 @@ func _generate_demand(day: int) -> void:
 		if has_future:
 			continue
 		var price := float(b.get("room_price", 65.0))
-		var persons := 1 + posmod(day + int(b.site), 3)
+		var persons := 1 + posmod(day + int(b.site), 3) + (mini(3, sim.civic.attraction(town) / 2) if sim.civic != null and sim.civic.enabled() else 0)   # Auftrag 19: Sehenswuerdigkeiten
 		var nights := 1 + posmod(day + int(b.owner), 3)
 		book(str(b.id), persons, nights, price * ceili(float(persons) / BEDS_PER_ROOM) * nights + 120.0)
 		for p in sim.citizens.people:

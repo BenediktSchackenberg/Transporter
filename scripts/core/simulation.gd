@@ -89,7 +89,8 @@ var inspections := Inspections.new()   # Pruefungen des Pruefdienstes (Auftrag 9
 var access := AccessRoads.new()   # Zufahrten zu abgelegenen Lagerstaetten (Auftrag 15, Etappe B)
 var stages := BusinessStages.new()   # Gebaeudestufen der Betriebe (Auftrag 15, Etappe E)
 var mining := Mining.new()        # Bergwerk-Story: Probebohrung, Abbaurecht, Foerderabgabe
-var hub := CentralHub.new()        # Zentrales Grosslager (Auftrag 19): Handelsplatz in der Kartenmitte
+var hub := CentralHub.new()
+var civic := CivicWorks.new()      # Auftrag 19: autonome Stadtentwicklung der Buergermeister (Besuche im Grosslager, Anlagen, Denkmaeler)        # Zentrales Grosslager (Auftrag 19): Handelsplatz in der Kartenmitte
 var crews := BuildCrews.new()     # Bautrupps der Baufirmen: Material holen, bauen, zurueck zum Bauhof
 var bridges := Bridges.new()      # Bruecken ueber Fluss und See, gesperrt bis zur Abnahme (Auftrag 15, Etappe D)
 var road_care := RoadCare.new()   # Strassenzustand und Bautrupps (Auftrag 9, Etappe 4)
@@ -196,6 +197,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	month_changed.connect(func(_m): mining.on_month())
 	prod.setup(self)
 	hub.setup(self)
+	civic.setup(self)
 	plant.setup(self)
 	it.setup(self)
 	retail.setup(self)
@@ -735,8 +737,9 @@ func _on_arrival(v: FleetVehicle) -> void:
 			var k: Contract = contracts.get(st.contract_id)
 			if not _bay_free(v):
 				v.state = "waiting_bay"   # alle Laderampen des Hofes belegt
-				if k != null and k.order_ref != "":
-					city_depot.truck_waits(v)
+				var wd := _depot_for(k)
+				if wd != null:
+					wd.truck_waits(v)
 				return
 			var yard_site := Logistics.store_site(str(st.ort))
 			if yard_site >= 0 and operations.approach_dock(v, yard_site):
@@ -748,8 +751,8 @@ func _on_arrival(v: FleetVehicle) -> void:
 				v.timer *= 2.0
 			if k:
 				v.timer *= personnel.loading_factor(v.owner, logistics.place_building(k, st.ort), driver_of(v))
-			if k != null and k.order_ref != "" and v.state == "unloading":
-				v.timer *= city_depot.unload_factor()      # Lagerpersonal und Stapler bestimmen die Entladedauer
+			if v.state == "unloading" and _depot_for(k) != null:
+				v.timer *= _depot_for(k).unload_factor()      # Lagerpersonal und Stapler bestimmen die Entladedauer
 			var site := Logistics.store_site(str(st.ort))
 			if site >= 0 and estate.is_plot(site) and estate.has_ramp(site):
 				v.timer *= 0.6   # Laderampe statt offener Ladeflaeche
@@ -844,7 +847,7 @@ func deliver_contract(v: FleetVehicle, k: Contract) -> void:
 	elif k.order_ref.begins_with("deal:"):
 		prod.contract_delivered(k)
 	elif k.order_ref != "":
-		city_depot.contract_delivered(k)
+		(towns.depot(Towns.town_of_id(k.order_ref)) if towns != null and not towns.depots.is_empty() else city_depot).contract_delivered(k)   # Bestellung der Stadt, zu der sie gehoert
 	memory.record_contract(c.id, k, late_h <= 0.0, pay)
 	decisions.note(c.id, "auto", "Auftrag %s geliefert: %s%s" % [k.id, Catalog.money(pay), "" if late_h <= 0.0 else " (verspätet)"], {"contract_id": k.id})
 	c.stats.completed += 1
@@ -871,13 +874,24 @@ func deliver_contract(v: FleetVehicle, k: Contract) -> void:
 	bark(c.id, "lieferung")
 
 
+## Stadtlager, das Ziel eines Stadtlager-Auftrags ist (Region: Lager der jeweiligen Stadt); sonst null.
+func _depot_for(k: Contract) -> CityDepot:
+	if k == null or k.order_ref == "" or k.order_ref.contains(":"):
+		return null
+	if towns != null:
+		for d in towns.depots:
+			if d != null and d.building == k.dropoff:
+				return d
+	return city_depot if k.dropoff == city_depot.building else null
+
+
 ## Am eigenen Hof begrenzen Laderampen die gleichzeitige Abfertigung.
 func _bay_free(v: FleetVehicle) -> bool:
 	if v.stops.is_empty():
 		return true
 	var k0: Contract = contracts.get(v.stops[0].contract_id)
-	if k0 != null and k0.order_ref != "" and k0.dropoff == city_depot.building and v.stops[0].art != "laden":
-		return city_depot.ramps_free() > 0          # Entladerampen des Stadtlagers
+	if _depot_for(k0) != null and v.stops[0].art != "laden":
+		return _depot_for(k0).ramps_free() > 0          # Entladerampen des Stadtlagers (der Stadt des Ziels)
 	var site := Logistics.store_site(str(v.stops[0].ort))
 	if site < 0 or not estate.is_plot(site):
 		return true
@@ -1132,6 +1146,7 @@ func _minute_tick() -> void:
 		crews.tick(game_min)
 	air.tick(game_min)
 	sea.tick(game_min)
+	civic.tick()
 	tourism.tick()
 	var now := game_min
 	var day := GameCalendar.day_of(now)
@@ -1314,7 +1329,7 @@ func to_dict() -> Dictionary:
 		owners[str(s)] = depot_owner[s]
 	return {"world": city.world, "town_name": city.town_name, "population_target": population_target, "seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
-		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "access": access.to_dict(), "bridges": bridges.to_dict(), "crews": crews.to_dict(), "hub": hub.to_dict(), "regional": regional.to_dict(), "air": air.to_dict(), "sea": sea.to_dict(), "founders": founders.to_dict(), "commute": commute.to_dict(), "mining": mining.to_dict(), "stages": stages.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
+		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "access": access.to_dict(), "bridges": bridges.to_dict(), "crews": crews.to_dict(), "hub": hub.to_dict(), "civic": civic.to_dict(), "regional": regional.to_dict(), "air": air.to_dict(), "sea": sea.to_dict(), "founders": founders.to_dict(), "commute": commute.to_dict(), "mining": mining.to_dict(), "stages": stages.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "tourism": tourism.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "region": _region_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
@@ -1453,6 +1468,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.commute.from_dict(d.get("commute", {}))
 	s.crews.from_dict(d.get("crews", {}))
 	s.hub.from_dict(d.get("hub", {}))
+	s.civic.from_dict(d.get("civic", {}))
 	s.mining.from_dict(d.get("mining", {}))
 	s.stages.from_dict(d.get("stages", {}))
 	s.population.from_dict(d.get("population", {}))
