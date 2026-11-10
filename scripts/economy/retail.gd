@@ -21,7 +21,7 @@ const PFAND := 0.25
 const RETURN_SHARE := 0.3            # Anteil des ausstehenden Leerguts, der taeglich zurueckkommt
 const REFILL_COST := 0.4             # Wiederbefuellen kostet so viel wie dieser Anteil des Neupreises
 const SPOIL_RATE := 0.08             # Anteil verderblicher Ware, der taeglich verdirbt
-const MAX_PER_KIND := {"restaurant": 5, "baeckerei": 2, "lebensmittel": 2, "getraenke": 1, "drogerie": 1, "moebel": 1, "technik": 1, "baumarkt": 1}
+const MAX_PER_KIND := {"restaurant": 5, "baeckerei": 2, "metzgerei": 2, "lebensmittel": 2, "getraenke": 1, "drogerie": 1, "moebel": 1, "technik": 1, "baumarkt": 1}
 const START_CAPITAL := 7000.0
 const WHOLESALER_CAPITAL := 25000.0
 const POP_REFERENCE := 1200.0
@@ -34,6 +34,7 @@ const GOODS := {
 	"milch_zutat": {"name": "Milchprodukte", "unit": "Port.", "cost": 1.0, "price": 0.0, "shelf": 6, "cargo": "lebensmittel"},
 	"fassgetraenk": {"name": "Fassgetränke", "unit": "Port.", "cost": 0.7, "price": 0.0, "shelf": 0, "cargo": "getraenke"},
 	"brot": {"name": "Brot und Brötchen", "unit": "Stk", "cost": 0.9, "price": 2.2, "shelf": 3, "cargo": "pakete", "basket": 4},
+	"wurst": {"name": "Wurst und Aufschnitt", "unit": "Port.", "cost": 2.8, "price": 5.4, "shelf": 6, "cargo": "lebensmittel", "basket": 2},   # Metzgerei (Auftrag 21 Teil 2)
 	"obst": {"name": "Obst und Gemüse", "unit": "kg", "cost": 1.4, "price": 3.0, "shelf": 5, "cargo": "lebensmittel", "basket": 3},
 	"milch": {"name": "Milch und Käse", "unit": "Stk", "cost": 0.9, "price": 1.9, "shelf": 6, "cargo": "lebensmittel", "basket": 3},
 	"konserve": {"name": "Konserven", "unit": "Stk", "cost": 0.8, "price": 1.9, "shelf": 0, "cargo": "pakete", "basket": 4},
@@ -57,6 +58,7 @@ const DISHES := {
 const KINDS := {
 	"restaurant": {"label": "Restaurant", "base": 38, "staff": 3, "rent": 1100.0, "goods": ["gemuese", "fleisch", "teigwaren", "milch_zutat", "fassgetraenk"], "dishes": ["gemuesepfanne", "nudelgericht", "braten", "getraenk"]},
 	"baeckerei": {"label": "Bäckerei", "base": 60, "staff": 2, "rent": 800.0, "goods": ["brot"]},
+	"metzgerei": {"label": "Metzgerei", "base": 34, "staff": 2, "rent": 850.0, "goods": ["wurst"]},   # Auftrag 21 Teil 2: Theken der Unternehmer-Metzgereien
 	"lebensmittel": {"label": "Lebensmittelgeschäft", "base": 80, "staff": 2, "rent": 1200.0, "goods": ["brot", "obst", "milch", "konserve", "flasche"]},
 	"getraenke": {"label": "Getränkemarkt", "base": 40, "staff": 2, "rent": 900.0, "goods": ["flasche", "konserve"]},
 	"drogerie": {"label": "Drogerie", "base": 36, "staff": 2, "rent": 900.0, "goods": ["hygiene", "haushalt"]},
@@ -267,7 +269,7 @@ func on_day(day: int) -> void:
 	_stock_wholesale(day)
 	var counters := counters()
 	_share = {}
-	for kind in ["baeckerei", "restaurant"]:
+	for kind in ["baeckerei", "restaurant", "metzgerei"]:
 		_share[kind] = kind_share(kind, counters)
 	for s in shops.values():
 		if s.status == "geschlossen":

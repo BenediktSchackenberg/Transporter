@@ -8059,6 +8059,266 @@
    "w": 3,
    "h": 3,
    "height": 60
+  },
+  "pig_farm_0": {
+   "anchor": [
+    194,
+    38
+   ],
+   "size": [
+    452,
+    264
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pig_farm_1": {
+   "anchor": [
+    194,
+    39
+   ],
+   "size": [
+    452,
+    265
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pig_farm_2": {
+   "anchor": [
+    194,
+    47
+   ],
+   "size": [
+    452,
+    273
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pig_farm_3": {
+   "anchor": [
+    194,
+    38
+   ],
+   "size": [
+    452,
+    264
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "cattle_farm_0": {
+   "anchor": [
+    258,
+    45
+   ],
+   "size": [
+    516,
+    303
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 56
+  },
+  "cattle_farm_1": {
+   "anchor": [
+    258,
+    44
+   ],
+   "size": [
+    516,
+    302
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 56
+  },
+  "cattle_farm_2": {
+   "anchor": [
+    258,
+    37
+   ],
+   "size": [
+    516,
+    295
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 56
+  },
+  "cattle_farm_3": {
+   "anchor": [
+    258,
+    6
+   ],
+   "size": [
+    516,
+    264
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 4,
+   "height": 56
+  },
+  "slaughterhouse_0": {
+   "anchor": [
+    194,
+    48
+   ],
+   "size": [
+    452,
+    274
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 60,
+   "smoke": [
+    52,
+    14,
+    48
+   ]
+  },
+  "slaughterhouse_1": {
+   "anchor": [
+    194,
+    40
+   ],
+   "size": [
+    452,
+    266
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 60,
+   "smoke": [
+    52,
+    14,
+    48
+   ]
+  },
+  "slaughterhouse_2": {
+   "anchor": [
+    194,
+    43
+   ],
+   "size": [
+    452,
+    269
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 60,
+   "smoke": [
+    52,
+    14,
+    48
+   ]
+  },
+  "slaughterhouse_3": {
+   "anchor": [
+    194,
+    45
+   ],
+   "size": [
+    452,
+    271
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 60,
+   "smoke": [
+    52,
+    14,
+    48
+   ]
+  },
+  "butcher_0": {
+   "anchor": [
+    130,
+    59
+   ],
+   "size": [
+    260,
+    189
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 46
+  },
+  "butcher_1": {
+   "anchor": [
+    130,
+    65
+   ],
+   "size": [
+    260,
+    195
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 46
+  },
+  "butcher_2": {
+   "anchor": [
+    130,
+    64
+   ],
+   "size": [
+    260,
+    194
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 46
+  },
+  "butcher_3": {
+   "anchor": [
+    130,
+    59
+   ],
+   "size": [
+    260,
+    189
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 2,
+   "h": 2,
+   "height": 46
   }
  },
  "facilities": {
@@ -11610,6 +11870,22 @@
    "pivot": [
     44,
     146
+   ]
+  },
+  "c_tiere": {
+   "anchor": [
+    26,
+    20
+   ],
+   "size": [
+    52,
+    46
+   ],
+   "lit": false,
+   "mask": false,
+   "pivot": [
+    26,
+    34
    ]
   }
  },

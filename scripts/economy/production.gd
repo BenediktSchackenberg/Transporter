@@ -21,7 +21,8 @@ const MAX_DEALS_KEPT := 300
 const COLD_SPOIL := 0.08             # Kuehlware je Tag im gekuehlten Lager
 const WARM_SPOIL := 0.5              # Kuehlware je Tag ohne Strom
 const START_BATCHES := 4
-const UPSTREAM := {"getreide": "feld", "holz": "forst", "mehl": "muehle", "schlachttier": "tierhaltung", "koks": "kokerei", "eisenerz": "bergwerk", "kohle": "bergwerk", "kalkstein": "bergwerk"}
+const UPSTREAM := {"getreide": "feld", "holz": "forst", "mehl": "muehle", "schlachttier": "tierhaltung", "mastschwein": "schweinemast",
+	"mastrind": "rindermast", "fleisch": "schlachthof", "koks": "kokerei", "eisenerz": "bergwerk", "kohle": "bergwerk", "kalkstein": "bergwerk"}
 ## Lagerstaetten (Abschnitt 5, vereinfacht): ausgewaehlte freie Parzellen ausserhalb von Wohn- und Mischgebiet tragen ein Vorkommen.
 ## Deterministisch aus Stadtsamen und Parzellen-ID; Menge in Einheiten (100 kg), Qualitaet 0,6-1,0 (Foerderung je Person).
 const DEPOSIT_KINDS := ["eisenerz", "kohle", "kalkstein", "rohmaterial"]
@@ -678,8 +679,54 @@ func growth_factor() -> float:
 	return 1.0
 
 
+## Rezept-Varianten einer Branche (Auftrag 21 Teil 2): Hauptrezept plus rezept_varianten, z. B. Schlachthof fuer Schweine und Rinder.
+static func variants(spec: Dictionary) -> Array:
+	if not spec.has("rezept"):
+		return []
+	return [spec.rezept] + spec.get("rezept_varianten", [])
+
+
+## Alle Zutaten bzw. Erzeugnisse ueber alle Varianten (Beschaffung, Quellen, Anzeige).
+static func recipe_in(spec: Dictionary) -> Dictionary:
+	var out := {}
+	for V in variants(spec):
+		for k in V.ein:
+			out[k] = V.ein[k]
+	return out
+
+
+static func recipe_out(spec: Dictionary) -> Dictionary:
+	var out := {}
+	for V in variants(spec):
+		for k in V.aus:
+			out[k] = V.aus[k]
+	return out
+
+
+## Variante fuer heute: die mit den meisten verfuegbaren Chargen; ohne Zutaten abwechselnd je Tag (damit der Betrieb fuer jede Linie
+## sichtbar wartet und die Vorstufen beider Linien entstehen koennen).
+func _pick_variant(b: Dictionary, spec: Dictionary) -> Dictionary:
+	var vs: Array = variants(spec)
+	if vs.size() <= 1:
+		return spec.rezept
+	var acct := "C%d" % int(b.owner)
+	var best: Dictionary = {}
+	var best_n := 0
+	for V in vs:
+		var n := 1 << 30
+		for item in V.ein:
+			n = mini(n, sim.stock.available(item, acct, int(b.site)) / int(V.ein[item]))
+		if n > best_n:
+			best_n = n
+			best = V
+	if best.is_empty():
+		best = vs[GameCalendar.day_of(sim.game_min) % mini(2, vs.size())]
+	b["linie"] = str(best.ein.keys()[0])
+	return best
+
+
 func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
-	var R: Dictionary = spec.rezept
+	var R: Dictionary = _pick_variant(b, spec)
 	var cid := int(b.owner)
 	var acct := "C%d" % cid
 	var site := int(b.site)
@@ -715,11 +762,13 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 	for item in R.aus:
 		if sim.stock.qty(item, acct, site) >= int(R.lager_max) * 4 / 5:
 			plan = 0
-	# Beschaffung fuer die naechsten Tage (auch ohne Personal, damit der Betrieb anlaufen kann)
-	for item in R.ein:
-		var per_day := plan * int(R.ein[item])
-		if per_day > 0:
-			_ensure_input(b, item, per_day * int(R.lager_tage), per_day * int(R.lager_tage) / 2, _input_cap(b, R, acct, site))
+	# Beschaffung fuer die naechsten Tage (auch ohne Personal, damit der Betrieb anlaufen kann); bei mehreren Linien fuer jede ihren Teil
+	var vs: Array = variants(spec)
+	for V in vs:
+		for item in V.ein:
+			var per_day := maxi(1, plan * int(V.chargen_je_person_tag) / maxi(1, int(R.chargen_je_person_tag)) / vs.size()) * int(V.ein[item]) if vs.size() > 1 else plan * int(V.ein[item])
+			if per_day > 0:
+				_ensure_input(b, item, per_day * int(V.lager_tage), per_day * int(V.lager_tage) / 2, _input_cap(b, V, acct, site))
 	b["today"] = 0
 	if staff <= 0:
 		return
@@ -798,7 +847,7 @@ func _use(b: Dictionary, item: String, qty: int, acct: String, site: int) -> voi
 
 
 func _spoil(b: Dictionary, spec: Dictionary) -> void:
-	var out: Array = spec.get("rezept", {}).get("aus", {}).keys()
+	var out: Array = recipe_out(spec).keys()
 	if spec.get("laden", {}).get("gerichte", false):
 		out = kitchen_items()
 	for item in out:
@@ -891,7 +940,7 @@ func sellers(item: String) -> Array:
 		if b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
 		var spec: Dictionary = Businesses.branches().get(b.branch, {})
-		var makes: bool = spec.get("rezept", {}).get("aus", {}).has(item) or (spec.has("feld") and str(spec.feld.get("artikel", "getreide")) == item) or (spec.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
+		var makes: bool = recipe_out(spec).has(item) or (spec.has("feld") and str(spec.feld.get("artikel", "getreide")) == item) or (spec.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
 		if not makes:
 			continue
 		var acct := "C%d" % int(b.owner)
@@ -1210,13 +1259,13 @@ func regional_need(item: String) -> int:
 	for b in sim.biz.items.values():
 		if b.status not in Businesses.RUNNING:
 			continue
-		var r: Dictionary = Businesses.branches().get(b.branch, {}).get("rezept", {})
-		if not r.get("ein", {}).has(item):
+		var ins: Dictionary = recipe_in(Businesses.branches().get(b.branch, {}))
+		if not ins.has(item):
 			continue
 		var acct := "C%d" % int(b.owner)
 		var have: int = sim.stock.available(item, acct, int(b.site)) + incoming(acct, item, int(b.site))
 		if str(b.get("waiting_for", "")) == item or have <= 0:   # Betrieb wartet bzw. ist leer (belieferte Betriebe halten ihr Lager bewusst klein)
-			need += maxi(1, int(r.ein[item]) * 20 - have)
+			need += maxi(1, int(ins[item]) * 20 - have)
 	return need
 
 
@@ -1239,7 +1288,7 @@ func site_hints_cached(branch: String, n: int = 3, town_only: int = -1) -> Array
 ## Gibt bis zu `n` Vorschlaege {grundstueck, stadt, zutaten_je_charge, quellen} zurueck, guenstigste zuerst.
 func site_hints(branch: String, n: int = 3, town_only: int = -1) -> Array:
 	var spec: Dictionary = Businesses.branches().get(branch, {})
-	var ein: Dictionary = spec.get("rezept", {}).get("ein", {})
+	var ein: Dictionary = recipe_in(spec)
 	if ein.is_empty() or spec.has("abbau") or spec.has("feld"):
 		return []
 	var bsize: Array = CityGenerator.TYPES[str(spec.get("gebaeude", "factory"))]
@@ -1252,7 +1301,7 @@ func site_hints(branch: String, n: int = 3, town_only: int = -1) -> Array:
 			if b.status not in Businesses.RUNNING and b.status != "im_bau":
 				continue
 			var bs: Dictionary = Businesses.branches().get(b.branch, {})
-			var makes: bool = bs.get("rezept", {}).get("aus", {}).has(item) or (bs.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
+			var makes: bool = recipe_out(bs).has(item) or (bs.has("abbau") and str(b.get("deposit", {}).get("art", "")) == item)
 			if makes:
 				sources[item].append({"name": "%s %s" % [b.id, bs.get("label", b.branch)], "cell": sim.city.building(int(b.site)).road, "price": float(art(item).get("basispreis", 10.0))})
 	var zones: Array = ["industrie", "gewerbe"] if branch in Mayor.INDUSTRY else ["industrie", "gewerbe", "mischgebiet"]   # wie Mayor.business_permit
@@ -1372,12 +1421,12 @@ func detail(b: Dictionary) -> Dictionary:
 			"laden": ("offen, %d Gäste gestern" % int(b.get("counter_customers", 0))) if bool(b.get("counter", false)) else "geschlossen (Servicekraft oder Strom fehlt)"}
 	elif spec.has("rezept"):
 		var bs := {}
-		for item in spec.rezept.ein:
+		for item in recipe_in(spec):
 			bs[item] = sim.stock.qty(item, acct, int(b.site))
-		for item in spec.rezept.aus:
+		for item in recipe_out(spec):
 			bs[item] = sim.stock.qty(item, acct, int(b.site))
 		var pr := {}
-		for item in spec.rezept.aus:
+		for item in recipe_out(spec):
 			pr[item] = price_of(b, item)
 		e = {"chargen_heute": int(b.get("today", 0)), "chargen_gesamt": int(b.get("total", 0)), "bestand": bs, "preise": pr, "absatz_tag": int(b.get("sales_avg", 0.0))}
 		if spec.rezept.has("mast_tage"):

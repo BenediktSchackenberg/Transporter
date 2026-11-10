@@ -128,9 +128,9 @@
   },
   "schlachthof": {
     "label": "Schlachthof",
-    "beschreibung": "Schlachtet angelieferte Tiere; Fleisch kommt in den Kühlraum und geht gekühlt an Restaurants, Großhandel oder in die Ausfuhr.",
+    "beschreibung": "Schlachtet angelieferte Mastschweine und Mastrinder (Viehrampe, Wartestall); Fleisch kommt ins Kühlhaus und geht gekühlt an Metzgereien, Restaurants, Großhandel oder in die Ausfuhr.",
     "standort": "markt",
-    "gebaeude": "factory",
+    "gebaeude": "slaughterhouse",
     "gruendungskosten": 0,
     "ausstattung": 22000,
     "abschreibung_tag": 0.002,
@@ -141,15 +141,39 @@
     ],
     "rezept": {
       "ein": {
-        "schlachttier": 1
+        "mastschwein": 1
       },
       "aus": {
-        "fleisch": 80
+        "fleisch": 90
       },
-      "chargen_je_person_tag": 2,
+      "chargen_je_person_tag": 3,
       "lager_tage": 8,
-      "lager_max": 1200
-    }
+      "lager_max": 1500
+    },
+    "rezept_varianten": [
+      {
+        "ein": {
+          "mastrind": 1
+        },
+        "aus": {
+          "fleisch": 380
+        },
+        "chargen_je_person_tag": 1,
+        "lager_tage": 8,
+        "lager_max": 1500
+      },
+      {
+        "ein": {
+          "schlachttier": 1
+        },
+        "aus": {
+          "fleisch": 80
+        },
+        "chargen_je_person_tag": 2,
+        "lager_tage": 8,
+        "lager_max": 1500
+      }
+    ]
   },
   "restaurant": {
     "label": "Restaurant",
@@ -183,23 +207,60 @@
     "abschreibung_tag": 0.002,
     "strom_kw": 8.0,
     "personal_min": 1,
-    "rollen": ["rezeption", "reinigung", "kueche", "service", "hausmeister"],
+    "rollen": [
+      "rezeption",
+      "reinigung",
+      "kueche",
+      "service",
+      "hausmeister"
+    ],
     "dienste": {}
   },
   "kneipe": {
-    "label": "Hafenkneipe", "beschreibung": "Abendliche Gaststaette mit echten Gaesten, Personal und gelieferten Fassgetraenken.",
-    "standort": "markt", "gebaeude": "kneipe", "ausstattung": 14000, "abschreibung_tag": 0.002,
-    "strom_kw": 4.0, "personal_min": 1, "rollen": ["ausschank", "service"], "dienste": {}
+    "label": "Hafenkneipe",
+    "beschreibung": "Abendliche Gaststaette mit echten Gaesten, Personal und gelieferten Fassgetraenken.",
+    "standort": "markt",
+    "gebaeude": "kneipe",
+    "ausstattung": 14000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 4.0,
+    "personal_min": 1,
+    "rollen": [
+      "ausschank",
+      "service"
+    ],
+    "dienste": {}
   },
   "strandbar": {
-    "label": "Strandbar", "beschreibung": "Bar an der Promenade fuer Touristen und Einheimische, mit sichtbaren Besuchern und Warenlieferungen.",
-    "standort": "markt", "gebaeude": "strandbar", "ausstattung": 19000, "abschreibung_tag": 0.002,
-    "strom_kw": 5.0, "personal_min": 1, "rollen": ["ausschank", "service"], "dienste": {}
+    "label": "Strandbar",
+    "beschreibung": "Bar an der Promenade fuer Touristen und Einheimische, mit sichtbaren Besuchern und Warenlieferungen.",
+    "standort": "markt",
+    "gebaeude": "strandbar",
+    "ausstattung": 19000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 5.0,
+    "personal_min": 1,
+    "rollen": [
+      "ausschank",
+      "service"
+    ],
+    "dienste": {}
   },
   "disco": {
-    "label": "Diskothek", "beschreibung": "Nachtbetrieb fuer Touristen und Einheimische; braucht Personal, Strom und gelieferte Getraenke.",
-    "standort": "markt", "gebaeude": "disco", "ausstattung": 38000, "abschreibung_tag": 0.002,
-    "strom_kw": 15.0, "personal_min": 2, "rollen": ["einlass", "service", "technik"], "dienste": {}
+    "label": "Diskothek",
+    "beschreibung": "Nachtbetrieb fuer Touristen und Einheimische; braucht Personal, Strom und gelieferte Getraenke.",
+    "standort": "markt",
+    "gebaeude": "disco",
+    "ausstattung": 38000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 15.0,
+    "personal_min": 2,
+    "rollen": [
+      "einlass",
+      "service",
+      "technik"
+    ],
+    "dienste": {}
   },
   "immobilien": {
     "label": "Immobilienbetrieb",
@@ -440,6 +501,92 @@
         "wirkung": 0.25,
         "je_betrieb": true
       }
+    }
+  },
+  "schweinemast": {
+    "label": "Schweinemast",
+    "beschreibung": "Maststall mit Auslauf: Ferkel werden mit Getreide gemästet (Futtersilos) und nach der Mastzeit als Mastschweine an den Schlachthof verkauft. Braucht Futter vom Ackerbau und Ferkel (Zukauf).",
+    "standort": "parzelle",
+    "gebaeude": "pig_farm",
+    "gruendungskosten": 0,
+    "ausstattung": 16000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 4.0,
+    "personal_min": 1,
+    "rollen": [
+      "tierpflege"
+    ],
+    "rezept": {
+      "ein": {
+        "ferkel": 1,
+        "getreide": 2
+      },
+      "aus": {
+        "mastschwein": 1
+      },
+      "chargen_je_person_tag": 4,
+      "mast_tage": 10,
+      "plaetze": 60,
+      "lager_tage": 6,
+      "lager_max": 60
+    }
+  },
+  "rindermast": {
+    "label": "Rindermast",
+    "beschreibung": "Laufstall mit Weide: Kälber wachsen mit Getreide und Weidegras zu Mastrindern heran; lange Mastzeit, hoher Erlös je Tier.",
+    "standort": "parzelle",
+    "gebaeude": "cattle_farm",
+    "gruendungskosten": 0,
+    "ausstattung": 22000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 2.0,
+    "personal_min": 1,
+    "rollen": [
+      "tierpflege"
+    ],
+    "rezept": {
+      "ein": {
+        "kalb": 1,
+        "getreide": 6
+      },
+      "aus": {
+        "mastrind": 1
+      },
+      "chargen_je_person_tag": 2,
+      "mast_tage": 20,
+      "plaetze": 24,
+      "lager_tage": 8,
+      "lager_max": 24
+    }
+  },
+  "metzgerei": {
+    "label": "Metzgerei",
+    "beschreibung": "Fleischerfachgeschäft: verarbeitet Fleisch vom Schlachthof zu Wurst und Aufschnitt. Mit Verkaufskraft öffnet die Theke: Verkauf an Haushalte (teilt sich die Kundschaft mit den anderen Metzgereien der Stadt); Rest an Läden und Großhandel.",
+    "standort": "markt",
+    "gebaeude": "butcher",
+    "gruendungskosten": 0,
+    "ausstattung": 14000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 6.0,
+    "personal_min": 1,
+    "rollen": [
+      "metzgern"
+    ],
+    "rezept": {
+      "ein": {
+        "fleisch": 20
+      },
+      "aus": {
+        "wurst": 50
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 6,
+      "lager_max": 600
+    },
+    "laden": {
+      "personal": 1,
+      "artikel": "wurst",
+      "kundschaft": "metzgerei"
     }
   }
 }

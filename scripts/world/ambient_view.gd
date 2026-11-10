@@ -289,8 +289,10 @@ func _scan_business() -> void:
 				kind = "schlot"
 			"feld":
 				kind = "traktor"
-			"tierhaltung":
+			"tierhaltung", "rindermast":
 				kind = "weide"
+			"schweinemast":
+				kind = "schweine"   # Auftrag 21 Teil 2: Schweine im Auslauf
 			"restaurant", "baeckerei":
 				kind = "terrasse"
 		if kind == "" or b.status == "geschlossen":
@@ -304,7 +306,7 @@ func _scan_business() -> void:
 			continue
 		var anchor := Vector2(float(bld.x) + float(bld.w) * 0.5, float(bld.y) + float(bld.h) * 0.5)
 		var data := {"biz": str(b.id), "w": float(bld.w), "h": float(bld.h), "seed": _h(int(bld.x), int(bld.y))}
-		if kind == "traktor" or kind == "weide":
+		if kind == "traktor" or kind == "weide" or kind == "schweine":
 			var p: Dictionary = sim.parcels.parcel(str(b.get("parcel", "")))
 			if not p.is_empty() and p.has("rect"):
 				data["rect"] = Rect2(float(p.rect[0]), float(p.rect[1]), float(p.rect[2]), float(p.rect[3]))
@@ -440,6 +442,8 @@ class Spot extends Node2D:
 				_traktor()
 			"weide":
 				_weide()
+			"schweine":
+				_schweine()
 			"terrasse":
 				_terrasse()
 			"steg":
@@ -857,11 +861,37 @@ class Spot extends Node2D:
 			draw_circle(tp + Vector2((-d if lane % 2 == 0 else d), -2), 2.0 + i, Color(0.7, 0.6, 0.45, 0.3 - i * 0.08))
 		_end()
 
+	## Tiere im Stall laut Betrieb (Mast-Pipeline plus fertige Tiere), fuer die Zahl der sichtbaren Tiere; ohne Betrieb 5.
+	func _herd(cap: int) -> int:
+		var b: Dictionary = view.sim.biz.get_b(str(data.get("biz", ""))) if view.sim != null else {}
+		if b.is_empty():
+			return 5
+		var n := 0
+		for m in b.get("pipeline", []):
+			n += int(m.n)
+		return clampi(n, 0, cap)
+
+	func _schweine() -> void:
+		if not data.has("rect"):
+			return
+		var r: Rect2 = data.rect
+		for i in _herd(8):
+			var s := (int(data.seed) >> (i % 8)) % 89 + i * 13
+			var base := Vector2(r.position.x + 0.5 + float(s % 11) / 11.0 * (r.size.x - 1.0), r.position.y + r.size.y * 0.6 + float(s % 5) / 5.0 * (r.size.y * 0.35))
+			var drift := Vector2(sin(view.t * 0.09 + i * 1.7), cos(view.t * 0.07 + i)) * 0.35
+			var at := base + drift - world / 32.0
+			_at(_p(at.x, at.y))
+			draw_rect(Rect2(Vector2(-4, -5), Vector2(8, 4)), Color("e9a9a1"))
+			draw_rect(Rect2(Vector2(3, -5), Vector2(3, 3)), Color("d98f88"))
+			draw_line(Vector2(-3, -1), Vector2(-3, 0), Color("8a5a55"), 1.0)
+			draw_line(Vector2(2, -1), Vector2(2, 0), Color("8a5a55"), 1.0)
+			_end()
+
 	func _weide() -> void:
 		if not data.has("rect"):
 			return
 		var r: Rect2 = data.rect
-		for i in 5:
+		for i in _herd(6):
 			var s := (int(data.seed) >> i) % 97
 			var base := Vector2(r.position.x + 0.5 + float(s % 9) / 9.0 * (r.size.x - 1.0), r.position.y + 0.5 + float(s % 7) / 7.0 * (r.size.y - 1.0))
 			var drift := Vector2(sin(view.t * 0.05 + i), cos(view.t * 0.04 + i * 2.0)) * 0.4

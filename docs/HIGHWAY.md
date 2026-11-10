@@ -22,11 +22,28 @@ Arbeit im Worktree `PTR_hub`, Veröffentlichung auf `region`, `main`, `unternehm
 * **Leitstelle** (Öffentliche Dienste & Regionalpolitik): Verkehrszählung, Nutzungsanteile, Autobahn mit Status, Kosten, Bund, Baufortschritt,
   Sprung zur Trasse. Lagebericht der Bürgermeister: `kommunale_dienste.autobahn`.
 
-## Teil 2: Fleischkette (geplant)
+## Teil 2: Fleischkette (fertig 10.11.2026) – Test `test_meat_chain2`, Sichtprüfung `--demo-meat=schweinemast|rindermast|schlachthof|metzgerei`
 
-Schweinemast und Rindermast als eigene Betriebe (Ställe, Weide, sichtbare Tiere, Futter aus Getreide), Viehtransport zum Schlachthof,
-Metzgerei als Laden; Fleisch und Wurst gehen an Restaurants, Bürger (Einkauf) und Großlager. Wirkung auf den Kreislauf: Getreidenachfrage
-der Bauern, Arbeitsplätze, Kühltransporte für die Transportfirmen, Preise und Versorgung der Bürger, Gründungsanreize.
+* **Betriebe** (`config/branches.json`): Schweinemast (Maststall, Futtersilos, Güllebehälter, Auslauf; Ferkel + 2 dt Getreide →
+  Mastschwein nach 10 Tagen, 60 Plätze), Rindermast (Laufstall bzw. Offenstall, Weide, Fahrsilo, Heuballen; Kalb + 6 dt Getreide →
+  Mastrind nach 20 Tagen, 24 Plätze), Schlachthof mit zwei Linien (`rezept_varianten`: Mastschwein → 90 Portionen Fleisch, Mastrind →
+  380 Portionen; alte Schlachttiere weiter), Metzgerei (Fleisch → Wurst und Aufschnitt; mit Verkaufskraft öffnet die Theke für Haushalte).
+* **Waren** (`config/articles.json`): Ferkel, Kälber (Zukauf von außerhalb), Mastschweine, Mastrinder (neue Ladungsart **Lebendvieh**
+  in `Catalog.CARGO`, eigene Ladungskiste), Wurst (gekühlt, 6 Tage haltbar).
+* **Gebäude** (`tools/vox/meat.py`): je 4 strukturell verschiedene Varianten für Schweinemast (4×3), Rindermast (4×4), Schlachthof (4×3,
+  Kühlhaus mit Kälteaggregaten, Viehrampe, Kühl-Lkw-Rampen, Schornstein) und Metzgerei (2×2, Schaufenster mit Auslage, rot-weiße Markise,
+  Schild, teils Wurststand). Tiere stehen im Bild; zusätzlich laufen Rinder auf der Weide und Schweine im Auslauf (Kartenleben), ihre
+  Zahl folgt dem tatsächlichen Stallbestand.
+* **Kreislauf**: Mastbetriebe kaufen Getreide (Ackerbau der Region oder Import) und Jungtiere, verkaufen per Liefervertrag an den
+  Schlachthof (Lebendvieh-Transporte als Aufträge für die Transportfirmen); der Schlachthof wählt täglich die Linie mit Tieren auf Lager und
+  liefert gekühlt an Metzgereien, Restaurants (Braten), Großhandel oder Ausfuhr; die Metzgerei verkauft Wurst an die Haushalte (Kundschaft
+  wie Bäckereien, geteilt zwischen Metzgereien einer Stadt). Gründer erkennen fehlende Metzgereien ab 80 Einwohnern und fehlende Vorstufen
+  (Restaurant wartet auf Fleisch → Schlachthof; Schlachthof wartet auf Mastschweine/-rinder → Mastbetrieb). Einkauf nur unter dem
+  Erlöswert (Rind: 380 Portionen ≈ 1 160 EUR gegen 900 EUR je Mastrind).
+* **Test**: Gründung aller vier Betriebe, Mastzeiten (Schweine Tag 13, Rinder Tag 23), Verbrauch (37 Ferkel, 24 Kälber, 218 dt Getreide),
+  beide Schlachtlinien, Lebendvieh-Aufträge, 2 550 Portionen Wurst, Thekenverkauf ≈ 5 500 EUR, Geld- und Warenbilanz erhalten.
+* **Grenze**: Wurst liegt nicht im Sortiment der allgemeinen Lebensmittelläden (das verschob deren Einkauf und Verkauf); sie verkauft
+  sich über die Metzgerei-Theke und den Großhandel.
 
 ## Teil 3: Eisenbahn (geplant)
 

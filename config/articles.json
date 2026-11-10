@@ -298,5 +298,54 @@
     "haltbar_tage": 0,
     "basispreis": 650.0,
     "importpreis": 600.0
+  },
+  "ferkel": {
+    "name": "Ferkel",
+    "einheit": "Stk",
+    "ladung": "tiere",
+    "je_ladeeinheit": 40,
+    "haltbar_tage": 0,
+    "basispreis": 55.0,
+    "importpreis": 62.0
+  },
+  "kalb": {
+    "name": "Kälber",
+    "einheit": "Stk",
+    "ladung": "tiere",
+    "je_ladeeinheit": 8,
+    "haltbar_tage": 0,
+    "basispreis": 180.0,
+    "importpreis": 210.0
+  },
+  "mastschwein": {
+    "name": "Mastschweine",
+    "einheit": "Stk",
+    "ladung": "tiere",
+    "je_ladeeinheit": 30,
+    "haltbar_tage": 0,
+    "basispreis": 190.0,
+    "importpreis": 240.0,
+    "exportpreis": 150.0
+  },
+  "mastrind": {
+    "name": "Mastrinder",
+    "einheit": "Stk",
+    "ladung": "tiere",
+    "je_ladeeinheit": 6,
+    "haltbar_tage": 0,
+    "basispreis": 900.0,
+    "importpreis": 1150.0,
+    "exportpreis": 720.0
+  },
+  "wurst": {
+    "name": "Wurst und Aufschnitt",
+    "einheit": "Port.",
+    "ladung": "lebensmittel",
+    "je_ladeeinheit": 400,
+    "haltbar_tage": 6,
+    "kuehlung": true,
+    "basispreis": 2.6,
+    "importpreis": 3.6,
+    "exportpreis": 1.8
   }
 }

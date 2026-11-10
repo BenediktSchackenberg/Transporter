@@ -371,6 +371,25 @@ func _process_timed(_delta: float) -> void:
 			var c: Array = cs[clampi(int(float(cs.size()) * float(args.get("highway-at", "0.04"))), 0, cs.size() - 1)]
 			print("AUTOTEST Autobahn-Ansicht: im Baum %s, Felder %d, Ziel %s, erste %s" % [str(session.city_view.highway_view.is_inside_tree()), cs.size(), str(c), str(cs.slice(0, 4))])
 			args["shot-tile"] = "%d,%d" % [int(c[0]), int(c[1])]
+	if session and args.has("demo-meat") and not args.has("_meat"):   # Sichtpruefung Fleischkette (Auftrag 21 Teil 2): Mastbetriebe, Schlachthof, Metzgerei
+		args["_meat"] = true
+		var sim: Simulation = session.sim
+		sim.grid.capacity = maxf(sim.grid.capacity, 100000.0)
+		var focus := -1
+		for e in [[0, "schweinemast"], [1, "rindermast"], [2, "schlachthof"], [3, "metzgerei"]]:
+			var r: Dictionary = sim.executor.execute(int(e[0]), {"action": "found_business", "branche": e[1]})
+			print("AUTOTEST Fleisch: ", e[1], " ", r.get("msg", ""))
+			if r.get("ok", false):
+				var b: Dictionary = sim.biz.get_b(str(r.ref))
+				b.status = "aktiv"
+				for p in sim.personnel.employed(int(e[0])).slice(-2):
+					sim.biz.assign(int(e[0]), p.id, b.id)
+				b["pipeline"] = [{"due": GameCalendar.day_of(sim.game_min) + 5, "n": 8}]
+				if str(e[1]) == str(args.get("demo-meat", "schweinemast")) or (focus < 0 and str(args.get("demo-meat", "")) == "true"):
+					focus = int(b.site)
+		if focus >= 0:
+			var fb: Dictionary = sim.city.building(focus)
+			args["shot-tile"] = "%d,%d" % [int(fb.x) + int(fb.w) / 2, int(fb.y) + int(fb.h) / 2]
 	if session and args.has("demo-ship") and not args.has("_ship") and session.sim.harbor.enabled:   # Sichtpruefung Hafen: Schiff legt sofort an
 		args["_ship"] = true
 		for k in session.sim.towns.count():   # alle Haefen der Region

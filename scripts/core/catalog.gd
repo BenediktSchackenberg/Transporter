@@ -87,6 +87,7 @@ const CARGO := {
 	"baustoffe": {"name": "Baustoffe", "value": 0.85, "refrigerated": false, "heavy_from": 15},
 	"maschinenteile": {"name": "Maschinenteile", "value": 1.3, "refrigerated": false, "heavy_from": 15},
 	"container": {"name": "Container", "value": 1.0, "refrigerated": false, "heavy_from": 1},
+	"tiere": {"name": "Lebendvieh", "value": 1.2, "refrigerated": false, "heavy_from": 10},   # Ferkel, Kaelber, Mastvieh (Auftrag 21 Teil 2)
 }
 
 ## Bueros: erstes Buero = Zentrale (Stufe 1). Gleichzeitig laufende Auftraege (angenommen bis unterwegs)

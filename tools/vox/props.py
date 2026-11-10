@@ -172,6 +172,15 @@ def crate(cargo):
         m.box(1, 1, 1, 13, 13, 5, M("steel_dark"))
         m.box(3, 3, 5, 11, 11, 11, M("orange_m"))
         m.box(6, 6, 11, 8, 8, 14, M("steel"))
+    elif cargo == "tiere":   # Viehtransportbox: Lattenkiste, darin Schweine (Auftrag 21 Teil 2)
+        m.box(1, 1, 1, 13, 13, 2, M("wood"))
+        for x in (1, 12):
+            m.box(x, 1, 2, x + 1, 13, 10, M("timber"))
+        for y in (1, 12):
+            for z in (3, 6, 9):
+                m.box(1, y, z, 13, y + 1, z + 1, M("wood"))
+        for (x, y) in ((3, 3), (7, 7)):
+            m.box(x, y, 2, x + 5, y + 3, 6, M("pig"))   # Material aus meat.init
     else:   # container
         m.box(0, 3, 1, 14, 11, 10, M("red"))
         for x in range(1, 14, 2):

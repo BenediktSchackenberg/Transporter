@@ -101,8 +101,8 @@ func opportunities() -> Array:
 	for k in T.count():
 		var pop: int = sim.citizens.population_of(k)
 		var in_town := running.filter(func(b): return T.of_building(int(b.site)) == k)
-		for br in ["baeckerei", "restaurant"]:
-			if pop >= 40 and not in_town.any(func(b): return b.branch == br):
+		for br in ["baeckerei", "restaurant", "metzgerei"]:
+			if pop >= (80 if br == "metzgerei" else 40) and not in_town.any(func(b): return b.branch == br):
 				out.append({"stadt": k, "branche": br, "anlass": "Keine %s in %s bei %d Einwohnern" % [Businesses.branches()[br].label, T.name_of(k), pop]})
 		# Vorstufe fehlt: Betriebe dieser Stadt warten auf eine Ware, die niemand in der Region herstellt
 		for b in in_town:

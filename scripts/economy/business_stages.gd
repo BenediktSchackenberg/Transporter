@@ -71,8 +71,9 @@ func spec_of(b: Dictionary) -> Dictionary:
 		var pf := float(d.get("produktion", 1.0))
 		var lf := float(d.get("lager", 1.0))
 		if spec.has("rezept"):
-			spec.rezept.chargen_je_person_tag = int(round(float(spec.rezept.chargen_je_person_tag) * pf))
-			spec.rezept.lager_max = int(round(float(spec.rezept.lager_max) * lf))
+			for V in [spec.rezept] + spec.get("rezept_varianten", []):   # Varianten (Schlachthof Schwein/Rind) wachsen mit
+				V.chargen_je_person_tag = int(round(float(V.chargen_je_person_tag) * pf))
+				V.lager_max = int(round(float(V.lager_max) * lf))
 		if spec.has("abbau"):
 			spec.abbau.je_person_tag = int(round(float(spec.abbau.je_person_tag) * pf))
 			spec.abbau.lager_max = int(round(float(spec.abbau.lager_max) * lf))

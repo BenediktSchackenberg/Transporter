@@ -26,6 +26,7 @@ import airport as A
 import tourism as TU
 import civic as CV
 import public as PB
+import meat as MT
 
 OUT = os.path.join(HERE, "..", "assets", "iso")
 os.makedirs(OUT, exist_ok=True)
@@ -46,6 +47,7 @@ def init():
     CV.init()
     A.init()
     PB.init()
+    MT.init()
 
 
 def bake(im, mask, tint):
@@ -172,6 +174,7 @@ def building_specs():
     s["airport_tower"] = lambda: A.tower(1)
     s["airport_hangar"] = lambda: A.hangar(1)
     s["airport_fire"] = lambda: A.fire(1)
+    s.update(MT.specs())   # Fleischkette (Auftrag 21 Teil 2): Schweinemast, Rindermast, Schlachthof, Metzgerei
     s.update(PB.specs())   # kommunale Gebaeude (Auftrag 20): je Typ 6 Grundvarianten x 4 Stadtstile
     return s
 
@@ -323,7 +326,7 @@ def build_props():
     prop("m_arch", CV.triumph_arch(), (32, 16), keep_mask=True)
     prop("d_forklift", CV.forklift())
     prop("d_rack", CV.pallet_rack())
-    for c in ("pakete", "lebensmittel", "medikamente", "getraenke", "elektronik", "moebel", "baustoffe", "maschinenteile", "container"):
+    for c in ("pakete", "lebensmittel", "medikamente", "getraenke", "elektronik", "moebel", "baustoffe", "maschinenteile", "container", "tiere"):
         r = engine.render(PR.crate(c), shadow_len=0, ground_shadow=False)
         info = save_result("c_" + c, r, lit=False, top=False)
         info["pivot"] = [r["anchor"][0], r["anchor"][1] + 14]
