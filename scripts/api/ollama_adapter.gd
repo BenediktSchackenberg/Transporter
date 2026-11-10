@@ -30,7 +30,10 @@ var _req_id := -1
 
 func _ready() -> void:
 	http = HTTPRequest.new()
-	http.use_threads = true
+	# Ohne eigenen Netzwerk-Thread: Partie 10.11. stuerzte zweimal kurz nach dem Absenden einer Ollama-Anfrage ab (Godot 4.4.1,
+	# "FATAL: Index p_index = 1 is out of bounds", Illegal instruction); Autotest ohne Netzwerk-KI stabil. Der Abruf laeuft jetzt
+	# Bild fuer Bild im Hauptthread (nicht blockierend), cancel_request wartet auf keinen Thread mehr.
+	http.use_threads = false
 	add_child(http)
 	http.request_completed.connect(_on_completed)
 
