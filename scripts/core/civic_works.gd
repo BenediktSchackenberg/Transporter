@@ -298,6 +298,10 @@ func validate(k: int, tid: String, district: String = "") -> Dictionary:
 	var cost := float(t.cost)
 	if cost > M.available_budget():
 		return {"ok": false, "msg": "%s kostet %s, verfügbar %s." % [t.label, Catalog.money(cost), Catalog.money(M.available_budget())], "grund": "geld"}
+	var keep := housing_reserve(k)
+	if keep > 0.0 and str(t.cat) not in ["familie", "bildung"] and cost > M.available_budget() - keep:
+		return {"ok": false, "msg": "Wohnungsbau hat Vorrang: %d Haushalte suchen Wohnraum, %s bleiben für die Erschließung von Bauland reserviert (verfügbar %s)." % [
+			int(M.waiting), Catalog.money(keep), Catalog.money(M.available_budget())], "grund": "geld"}
 	if sim.construction.make_offers(cost, int(t.days), "civic%d" % k).is_empty():
 		return {"ok": false, "msg": "Keine Baufirma kann %s bauen." % t.label, "grund": "baufirma"}
 	var site := _find_site(k, int(t.w), int(t.h), district)
@@ -317,6 +321,23 @@ func validate(k: int, tid: String, district: String = "") -> Dictionary:
 
 ## Bauplatz: rechteckiger Ausschnitt eines freien, stadteigenen Grundstuecks; alle Zellen frei (kein Gebaeude, keine Strasse, kein Wasser,
 ## keine andere Anlage, keine geplante Zufahrt), eine Strasse direkt am Rand. Wunschviertel: Zentrum (Rathaus), Wohngebiet oder Rand.
+## Analyse 10.11.: Die Staedte bauten Denkmaeler und Sportplaetze, waehrend Hunderte Haushalte auf Wohnungen warteten und das Bauland
+## unerschlossen blieb. Suchen mehr Haushalte Wohnraum, als Wohnungen frei sind, und gibt es freies Wohnbauland, bleibt eine Ruecklage fuer
+## die Erschliessung stehen; Prestige-, Sport-, Gruen- und Marktanlagen muessen daneben noch bezahlbar sein (Familie und Bildung nicht).
+const HOUSING_RESERVE := 40000.0
+
+
+func housing_reserve(k: int) -> float:
+	var M: Mayor = sim.towns.mayor(k)
+	var vacant: int = sim.housing.vacant_units().filter(func(u): return sim.towns.of_building(int(u.building)) == k).size()
+	if int(M.waiting) <= vacant:   # Wohnungsnot: mehr Suchende als freie Wohnungen im Ort
+		return 0.0
+	for z in ["wohnen", "mischgebiet"]:
+		if not sim.parcels.search({"zone": z, "min_area": 12, "utilities": "keine", "limit": 1, "town": k}).is_empty():
+			return HOUSING_RESERVE
+	return 0.0
+
+
 func _find_site(k: int, w: int, h: int, district: String = "") -> Dictionary:
 	var C: CityData = sim.city
 	var th: Dictionary = C.building(int(sim.towns.get_t(k).town_hall))

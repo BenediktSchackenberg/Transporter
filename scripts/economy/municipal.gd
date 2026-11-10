@@ -43,7 +43,7 @@ const BERUFE := {
 const TYPES := {
 	"FW-01": {"label": "Freiwillige Feuerwehr", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_station", "cost": 420000.0,
 		"upkeep": 140.0, "capacity": 2, "staff": {"feuerwehr": 8}, "min_staff": {"feuerwehr": 1}, "volunteers": 8, "power": 60.0, "water": 12.0,
-		"vehicles": ["HLF 20", "DLK 23"], "vehicles_from_pop": {"DLK 23": 500}},
+		"vehicles": ["HLF 20", "DLK 23"], "vehicles_from_pop": {"DLK 23": 500}, "pro_from_pop": 500},
 	"RW-01": {"label": "Rettungswache", "dienst": "rettung", "ressort": "Gesundheit", "building": "rescue_station", "cost": 260000.0,
 		"upkeep": 90.0, "capacity": 2, "staff": {"rettung": 5, "notarzt": 1}, "min_staff": {"rettung": 2}, "power": 30.0, "water": 4.0,
 		"vehicles": ["RTW", "NEF"], "vehicles_from_pop": {"NEF": 500}},
@@ -88,7 +88,7 @@ const TYPES := {
 		"vehicles": ["KdoW", "ELW 1", "HLF 20", "HLF 20", "LF 10", "DLK 23", "TLF 3000", "RW", "GW-L"], "leitstelle": true, "werkstatt": true},
 	"FW-05": {"label": "Flughafenfeuerwehr", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_airport", "cost": 2200000.0,
 		"upkeep": 300.0, "capacity": 3, "staff": {"feuerwehr": 12}, "min_staff": {"feuerwehr": 4}, "power": 120.0, "water": 30.0,
-		"vehicles": ["FLF", "FLF", "HLF 20"], "flughafen": true},
+		"vehicles": ["FLF", "FLF", "HLF 20"], "flughafen": true, "refinanziert": "Flughafenentgelte"},
 	"FW-06": {"label": "Feuerwehrausbildungszentrum", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_school", "cost": 2500000.0,
 		"upkeep": 280.0, "capacity": 12, "staff": {"feuerwehr": 4}, "min_staff": {"feuerwehr": 2}, "regional": true, "power": 90.0, "water": 15.0,
 		"vehicles": [], "ausbildung": true},
@@ -127,6 +127,18 @@ const STYLES := {
 }
 const STYLE_OF_CHARACTER := {"Marktflecken": "backstein", "Handwerkerort": "industrie", "Fischerdorf": "gruen", "Bauerndorf": "gruen"}
 const START_KIT := ["FW-01", "RW-01", "BH-01"]
+## Finanzierung (Analyse 10.11.: die Dienste kosteten kleine Orte mehr als Landeszuweisung und Steuern zusammen):
+## Rettungsdienst und Kliniken refinanzieren die Krankenkassen, die Flughafenfeuerwehr die Flughafenentgelte (ausserhalb der Region, X0) kostendeckend - Sachkosten, Fahrzeuge und
+## Loehne kommen taeglich zurueck in die Stadtkasse (bzw. nach den Anteilen des Zweckverbands). Die Freiwillige Feuerwehr hat erst ab
+## pro_from_pop Einwohnern Hauptamtliche; in kleineren Orten wechseln sie ins Ehrenamt.
+const REFINANCED := ["rettung"]
+
+
+## Kostentraeger ausserhalb der Stadtkasse: "Krankenkassen" (Rettungsdienst, Kliniken), "Flughafenentgelte" (Flughafenfeuerwehr), sonst "".
+static func refinanced(code: String) -> String:
+	if str(TYPES[code].dienst) in REFINANCED:
+		return "Krankenkassen"
+	return str(TYPES[code].get("refinanziert", ""))
 const REGIONAL_KIT := ["KH-01", "FW-06", "FW-05"]   # einmal je Region: Kreiskrankenhaus und Ausbildungszentrum in der einwohnerstaerksten Stadt,
                                                   # Flughafenfeuerwehr in der Wache des Flughafens (nur wenn es einen gibt)
 
@@ -268,6 +280,10 @@ static func staff_need(code: String, pop: int) -> Dictionary:
 	var t: Dictionary = TYPES[code]
 	var mins: Dictionary = t.get("min_staff", {})
 	var out := {}
+	if pop < int(t.get("pro_from_pop", 0)):
+		for b in t.staff:
+			out[b] = 0   # kleiner Ort: nur Ehrenamtliche
+		return out
 	for b in t.staff:
 		out[b] = maxi(int(mins.get(b, 1 if mins.is_empty() else 0)), roundi(float(t.staff[b]) * float(pop) / REF_POP))
 	return out
@@ -399,12 +415,29 @@ func on_day(day: int) -> void:
 			continue
 		var need := staff_need(f.code, served(f.code, int(f.town)))
 		f.capacity = maxi(int(f.capacity), capacity_for(f.code, served(f.code, int(f.town))))
+		if _pop(int(f.town)) < int(TYPES[f.code].get("pro_from_pop", 0)):
+			_to_volunteers(f, by_id)
 		for b in need:   # waechst mit der Stadt; schrumpft sie, wird niemand entlassen, nur nicht nachbesetzt
-			f.staff_need[b] = maxi(int(f.staff_need.get(b, 0)), int(need[b]))
+			f.staff_need[b] = maxi(int(f.staff_need.get(b, 0)), int(need[b])) if int(need[b]) > 0 or not TYPES[f.code].has("pro_from_pop") else 0
 		_hire(f, by_id)
 		_volunteers(f, vol)
 		_drivers(f, by_id)
 	_costs()
+
+
+## Kleiner Ort (unter pro_from_pop): Hauptamtliche wechseln mit ihrem Platz ins Ehrenamt der Wache; die Stelle entfaellt.
+func _to_volunteers(f: Dictionary, by_id: Dictionary) -> void:
+	for p in staff_of(f.id, by_id):
+		p.employer = ""
+		p.wage = 0.0
+		p.erase("dienst")
+		p.erase("beruf")
+		p["ehrenamt"] = f.id
+		by_id.erase(int(p.id))
+		stats.abgang = int(stats.abgang) + 1
+		sim.activity.add("stadt", -1, "personal", "%s: %s wechselt ins Ehrenamt" % [f.name, p.name], "Ort unter %d Einwohnern: Freiwillige Feuerwehr ohne Hauptamtliche" % int(TYPES[f.code].pro_from_pop), _cell(f))
+	f.staff_need = staff_need(f.code, 0)
+	sim.citizens.cap[EMPLOYER] = sim.citizens.employed_count(EMPLOYER)
 
 
 ## Buerger-ID -> Person fuer alle kommunal Beschaeftigten; Abgaenge (Kuendigung, Wegzug, Haft) werden hier erkannt.
@@ -563,10 +596,15 @@ func _volunteers(f: Dictionary, vol: Dictionary) -> void:
 ## Jedes Fahrzeug bekommt einen Fahrer aus dem Personal der Einrichtung (einer je Fahrzeug, solange Personal reicht).
 func _drivers(f: Dictionary, by_id: Dictionary) -> void:
 	var staff: Array = by_id.values().filter(func(p): return str(p.dienst) == str(f.id))
+	var vol: Array = volunteers_of(f.id)   # Freiwillige Feuerwehr ohne Hauptamtliche: Ehrenamtliche fahren (Maschinist)
+	var ok_ids := {}
+	for p in staff + vol:
+		ok_ids[int(p.id)] = true
+	staff = staff + vol
 	var used := {}
 	for vid in f.vehicles:
 		var v: Dictionary = vehicles[vid]
-		if by_id.has(int(v.driver)) and str(by_id[int(v.driver)].dienst) == str(f.id):
+		if ok_ids.has(int(v.driver)):
 			used[int(v.driver)] = true
 		else:
 			v.driver = -1
@@ -581,11 +619,12 @@ func _drivers(f: Dictionary, by_id: Dictionary) -> void:
 				break
 
 
-## Laufende Kosten der Dienste einer Stadt je Tag (Sach- und Fahrzeugkosten nach Anteilen plus Loehne des Personals).
+## Laufende Kosten der Dienste einer Stadt je Tag (Sach- und Fahrzeugkosten nach Anteilen plus Loehne des Personals), ohne die von den
+## Krankenkassen refinanzierten Dienste (REFINANCED).
 func daily_cost(k: int) -> float:
 	var x := 0.0
 	for f in facilities.values():
-		if f.status != "in_betrieb":
+		if f.status != "in_betrieb" or refinanced(f.code) != "":
 			continue
 		var share := float(f.get("shares", {"%d" % int(f.town): 1.0}).get(str(k), 0.0))
 		if share <= 0.0:
@@ -612,6 +651,13 @@ func _costs() -> void:
 		var shares: Dictionary = f.get("shares", {"%d" % int(f.town): 1.0})   # Zweckverband (Regionalrat): Kosten nach Anteilen
 		for sk in shares:
 			sim.economy.transfer(Towns.account_of(int(sk)), "S0", x * float(shares[sk]))
+		if refinanced(f.code) != "":   # Krankenkassen bzw. Flughafenentgelte erstatten Sachkosten und Loehne (Loehne zahlt Citizens._pay der Wohnstadt)
+			var refund := x
+			for p in staff_of(f.id):
+				refund += float(p.wage) * Citizens.HOURS_PER_MONTH / 30.0
+			for sk in shares:
+				sim.economy.transfer("X0", Towns.account_of(int(sk)), refund * float(shares[sk]))
+			stats["erstattung"] = float(stats.get("erstattung", 0.0)) + refund
 		var dep: Dictionary = sim.public_sector.departments
 		var ressort := str(TYPES[f.code].ressort)
 		dep[ressort] = float(dep.get(ressort, 0.0)) + x

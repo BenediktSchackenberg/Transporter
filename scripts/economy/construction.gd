@@ -835,19 +835,16 @@ func _developer_once(town: int) -> bool:
 	var crit := {"zone": "wohnen", "min_area": 12, "utilities": "voll", "limit": 160}
 	if region:
 		crit["town"] = town   # in der Stadt, deren Wohnungssuchende warten
-	var free: Array = sim.parcels.search(crit)   # erst filtern, dann begrenzen (billigste sind oft unerschlossen)
-	if free.is_empty():
-		# Kein Wohngebiet erschlossen: Wohnhaeuser sind auch im Mischgebiet zulaessig (Planning.DEFS zones)
-		crit["zone"] = "mischgebiet"
-		free = sim.parcels.search(crit)
-	if free.is_empty() and region:
-		# Region: auch teilweise erschlossene Grundstuecke (Strasse vorhanden) - fehlende Anschluesse legt das Vorhaben selbst (Erschliessungsphase)
+	# Alle Kandidaten in Reihenfolge der Eignung: erschlossenes Wohngebiet, erschlossenes Mischgebiet (Wohnhaeuser zulaessig), in der
+	# Region zusaetzlich teilweise erschlossene Grundstuecke (Strasse vorhanden; fehlende Anschluesse legt das Vorhaben selbst).
+	# Frueher galt die erste nicht leere Liste: blieben dort nur Restflaechen (1 Feld breite Streifen), baute der Bautraeger gar nicht mehr
+	# (Analyse 10.11.: 753.000 EUR beim Bautraeger, 500 Wohnungssuchende, je Stadt 27-41 bebaubare, teilweise erschlossene Grundstuecke).
+	var free: Array = []   # erst filtern, dann begrenzen (billigste sind oft unerschlossen); _developer_try prueft die Bebaubarkeit
+	for u in (["voll", "teilweise"] if region else ["voll"]):
 		for z in ["wohnen", "mischgebiet"]:
 			crit["zone"] = z
-			crit["utilities"] = "teilweise"
-			free = sim.parcels.search(crit)
-			if not free.is_empty():
-				break
+			crit["utilities"] = u
+			free += sim.parcels.search(crit)
 	if region and (_next % 3) != 0:   # Region: mehr Haeuser je Euro - meist Einfamilien-/Doppelhaeuser (abwechselnd zuerst)
 		for small in (["einfamilienhaus", "doppelhaus"] if _next % 2 == 0 else ["doppelhaus", "einfamilienhaus"]):
 			if _developer_try(free, small):

@@ -23,6 +23,7 @@ var builds := {}          # Projekt-ID -> {town, code, rect, parcel, reason, by,
 var log: Array = []       # [{day, town, text, by}]
 var auto := true          # Regel-Buergermeister entscheiden selbst
 var saving := {}          # Stadt -> Monat der letzten Spar-Meldung
+var cash_hist := {}       # Stadt -> [Kasse je Tag, letzte 31 Tage] (Trend: traegt die Kasse neue Dauerkosten?)
 var _day := -1
 
 
@@ -159,6 +160,9 @@ func build(k: int, code: String, reason: String, by: String) -> Dictionary:
 	var M: Mayor = sim.towns.mayor(k)
 	var cost := build_cost(code, k)
 	var reserve: float = RESERVE_DAYS * sim.municipal.daily_cost(k)   # laufende Dienste muessen bezahlbar bleiben
+	var trend := cash_trend(k)
+	if trend < 0.0 and Municipal.refinanced(code) == "":   # schrumpfende Kasse: keine neuen Dauerkosten
+		return {"ok": false, "budget": true, "msg": "Die Stadtkasse sinkt (%s in 30 Tagen); neue Dauerkosten für %s trägt sie nicht." % [Catalog.money(trend), Municipal.TYPES[code].label]}
 	if M.available_budget() < cost + reserve:
 		return {"ok": false, "budget": true, "msg": "Verfügbare Mittel %s reichen nicht für %s (%s) plus Rücklage für %d Tage Dienstbetrieb (%s)." % [
 			Catalog.money(M.available_budget()), Municipal.TYPES[code].label, Catalog.money(cost), RESERVE_DAYS, Catalog.money(reserve)]}
@@ -245,8 +249,25 @@ func close(fid: String, reason: String, by: String) -> Dictionary:
 	return {"ok": true, "msg": "%s geschlossen." % f.name}
 
 
+## Veraenderung der Stadtkasse in den letzten 30 Tagen (0, solange weniger als 30 Tage beobachtet).
+func cash_trend(k: int) -> float:
+	var h: Array = cash_hist.get(k, [])
+	return float(h[-1]) - float(h[0]) if h.size() >= 31 else 0.0
+
+
+func _track_cash() -> void:
+	for t in sim.towns.list:
+		var k := int(t.id)
+		if not cash_hist.has(k):
+			cash_hist[k] = []
+		cash_hist[k].append(float(sim.economy.accounts[Towns.account_of(k)]))
+		if cash_hist[k].size() > 31:
+			cash_hist[k].pop_front()
+
+
 # ------------------------------------------------------------------ Regel-Buergermeister
 func on_day(day: int) -> void:
+	_track_cash()
 	if day == _day:
 		return
 	_day = day
