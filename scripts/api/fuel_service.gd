@@ -42,7 +42,8 @@ func has_key() -> bool:
 func _ready() -> void:
 	http = HTTPRequest.new()
 	http.timeout = TIMEOUT_S
-	http.use_threads = true
+	# Ohne eigenen Netzwerk-Thread wie Ollama/IONOS: Partie 10.11. stuerzte auch nach der Ollama-Umstellung ab (Godot 4.4.1, FATAL Index).
+	http.use_threads = false
 	add_child(http)
 	http.request_completed.connect(_on_completed)
 

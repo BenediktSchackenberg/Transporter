@@ -9,7 +9,8 @@ static var acc := {}
 const PHASES := ["-", "main", "spielsitzung", "firmen_ki", "buergermeister_ki", "disponent_ki", "gespraeche_ki", "dienste", "ereignisfenster",
 	"platzierung", "Simulation", "Simulation: Tageswechsel", "Stadtansicht", "Fahrzeuge/Figuren", "Aktivitaeten", "Betriebshof", "Oberflaeche",
 	"Leistungslog", "KI: Beobachtung", "KI: Anfrage senden", "KI: Antwort verarbeiten", "KI: Aktionen ausfuehren", "KI: Hofrunde",
-	"KI: Ersatzmodus", "KI: Nachkauf", "Partie wird aufgebaut (Karte, Ansicht)"]
+	"KI: Ersatzmodus", "KI: Nachkauf", "Partie wird aufgebaut (Karte, Ansicht)",
+	"nach _process (Layout, _draw)", "Rendern", "nach Rendern"]
 static var phase := 0
 static var detail := 0
 static var who := -1

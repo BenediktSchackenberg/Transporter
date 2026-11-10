@@ -14,6 +14,7 @@ var _shot_done := false
 ## Haenger-Melder: eigener Thread prueft jede halbe Sekunde, ob Bilder fertig werden. Steht das Spiel laenger als 3 s,
 ## schreibt er die letzte Markierung des Hauptthreads (ProcTimer.text) nach user://logs/haenger.txt (Partie 09.11.: Haenger mit IONOS).
 const HANG_S := 3.0
+const _AFTER_PROCESS := preload("res://scripts/core/after_process_mark.gd")
 var _wd: Thread
 var _wd_stop := false
 
@@ -22,11 +23,18 @@ func _watchdog() -> void:
 	var last := Engine.get_process_frames()
 	var since := Time.get_ticks_msec()
 	var reported := 0.0
+	var tick := 0
 	while not _wd_stop:
-		OS.delay_msec(500)
+		OS.delay_msec(25)
 		var f := Engine.get_process_frames()
 		var now := Time.get_ticks_msec()
-		_breadcrumb(f)
+		_crumbs.append("%d Bild %d: %s" % [now, f, ProcTimer.text()])
+		if _crumbs.size() > 12:
+			_crumbs.pop_front()
+		tick += 1
+		if tick % 4 != 0:
+			continue
+		_breadcrumb()
 		if f != last:
 			if reported > 0.0:
 				_hang_note("weiter nach %.1f s" % ((now - since) / 1000.0))
@@ -40,11 +48,18 @@ func _watchdog() -> void:
 			_hang_note("steht seit %.1f s bei: %s" % [stuck, ProcTimer.text()])
 
 
-## Brotkrume fuer fatale Abstuerze (Godot nennt dann keine Skriptzeile): letzte Markierung des Hauptthreads, halbsekuendlich ueberschrieben.
-func _breadcrumb(frame: int) -> void:
+## Brotkrume fuer fatale Abstuerze (Godot nennt dann keine Skriptzeile): Markierungen des Hauptthreads alle 25 ms, die letzten 12
+## alle 0,1 s nach zuletzt.txt (Zeit in ms seit Start). Eigene Marken fuer die Zeit nach allen _process (Layout, _draw) und das
+## Rendern, damit ein Absturz in der Engine nicht der zuletzt markierten Spiellogik zugeschrieben wird (Abstuerze 10.11.).
+var _crumbs: Array = []
+
+
+func _breadcrumb() -> void:
 	var f := FileAccess.open("user://logs/zuletzt.txt", FileAccess.WRITE)
 	if f != null:
-		f.store_line("%s Bild %d: %s" % [Time.get_datetime_string_from_system(), frame, ProcTimer.text()])
+		f.store_line(Time.get_datetime_string_from_system())
+		for c in _crumbs:
+			f.store_line(c)
 		f.close()
 
 
@@ -58,7 +73,19 @@ func _hang_note(text: String) -> void:
 	f.close()
 
 
+func _mark_render() -> void:
+	ProcTimer.mark("Rendern", -1)
+	ProcTimer.sub("-")
+
+
+func _mark_rendered() -> void:
+	ProcTimer.mark("nach Rendern", -1)
+	ProcTimer.sub("-")
+
+
 func _exit_tree() -> void:
+	RenderingServer.frame_pre_draw.disconnect(_mark_render)
+	RenderingServer.frame_post_draw.disconnect(_mark_rendered)
 	_wd_stop = true
 	if _wd != null and _wd.is_started():
 		_wd.wait_to_finish()
@@ -69,6 +96,13 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute("user://logs")
 	_wd = Thread.new()
 	_wd.start(_watchdog)
+	var after := Node.new()   # laeuft als letzter _process im Bild: danach folgen Layout, _draw und das Rendern
+	after.name = "SpurNachProcess"
+	after.process_priority = 100000
+	after.set_script(_AFTER_PROCESS)
+	add_child(after)
+	RenderingServer.frame_pre_draw.connect(_mark_render)
+	RenderingServer.frame_post_draw.connect(_mark_rendered)
 	for a in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = a.trim_prefix("--").split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else "true"
