@@ -176,27 +176,18 @@ func _update_fleet() -> void:
 ## Feuerwehr (Auftrag 20, Etappe 4): HLF mit Blaulicht auf der Fahrt und am Einsatzort (in der Wache unsichtbar = in der Halle);
 ## Flammen und Rauch am brennenden Gebaeude nach Brandstaerke, Loeschwasser waehrend des Loeschangriffs, danach kurz Restrauch.
 func _update_fires() -> void:
-	if sim.fire == null or sim.fire.fires.is_empty() and fire_fx.is_empty() and muni_nodes.is_empty():
+	if sim.fire == null or sim.fire.fires.is_empty() and fire_fx.is_empty() and muni_nodes.is_empty() and sim.rescue.missions.is_empty():
 		return
 	var seen_v := {}
+	for e in sim.rescue.on_road():   # Rettungsdienst (Etappe 5): RTW und NEF mit Blaulicht auf Anfahrt und Transport
+		seen_v[e.vid] = true
+		_place_muni(str(e.vid), e.mover, bool(e.siren))
 	var seen_f := {}
 	for f in sim.fire.fires.values():
 		var vid := str(f.vehicle)
 		if vid != "" and f.phase in ["anfahrt", "loeschen", "rueckfahrt"] and sim.fire.movers.has(vid):
 			seen_v[vid] = true
-			var n: Node2D = muni_nodes.get(vid)
-			if n == null:
-				var vt := str(sim.municipal.vehicles[vid].type)
-				n = _make_vehicle_node(str(Municipal.VEHICLES[vt].sprite), "", Color.WHITE, false)
-				_add_beacon(n, -62.0)
-				add_child(n)
-				muni_nodes[vid] = n
-			var m: Mover = sim.fire.movers[vid]
-			n.position = Iso.to_screen(m.pos)
-			_set_vehicle_dir(n, m.heading)
-			var siren: Sprite2D = n.get_node("siren")
-			siren.visible = f.phase != "rueckfahrt"
-			siren.modulate = Color(0.3, 0.5, 1.0, 0.95) if int(anim_time * 7.0) % 2 == 0 else Color(0.6, 0.8, 1.0, 0.3)
+			_place_muni(vid, sim.fire.movers[vid], f.phase != "rueckfahrt")
 		var smoking: bool = f.status == "brennt" or (f.has("end") and sim.game_min - float(f.end) < 30.0)
 		if not smoking:
 			continue
@@ -219,6 +210,22 @@ func _update_fires() -> void:
 		if not seen_f.has(id):
 			fire_fx[id].queue_free()
 			fire_fx.erase(id)
+
+
+## Kommunales Einsatzfahrzeug (Municipal) an seiner Fahrtposition, Blaulicht nach Einsatzphase.
+func _place_muni(vid: String, m: Mover, siren_on: bool) -> void:
+	var n: Node2D = muni_nodes.get(vid)
+	if n == null:
+		var vt := str(sim.municipal.vehicles[vid].type)
+		n = _make_vehicle_node(str(Municipal.VEHICLES[vt].sprite), "", Color.WHITE, false)
+		_add_beacon(n, -62.0)
+		add_child(n)
+		muni_nodes[vid] = n
+	n.position = Iso.to_screen(m.pos)
+	_set_vehicle_dir(n, m.heading)
+	var siren: Sprite2D = n.get_node("siren")
+	siren.visible = siren_on
+	siren.modulate = Color(0.3, 0.5, 1.0, 0.95) if int(anim_time * 7.0) % 2 == 0 else Color(0.6, 0.8, 1.0, 0.3)
 
 
 func _make_fire_fx(bid: int) -> FireFx:

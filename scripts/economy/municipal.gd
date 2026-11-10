@@ -43,7 +43,8 @@ const TYPES := {
 		"upkeep": 90.0, "capacity": 2, "staff": {"rettung": 5, "notarzt": 1}, "min_staff": {"rettung": 2}, "power": 30.0, "water": 4.0,
 		"vehicles": ["RTW", "NEF"], "vehicles_from_pop": {"NEF": 500}},
 	"KH-01": {"label": "Krankenhaus", "dienst": "rettung", "ressort": "Gesundheit", "building": "hospital", "cost": 2400000.0,
-		"upkeep": 900.0, "capacity": 40, "staff": {"arzt": 6, "pflege": 20}, "power": 400.0, "water": 60.0, "vehicles": []},
+		"upkeep": 900.0, "capacity": 40, "staff": {"arzt": 6, "pflege": 20}, "min_staff": {"arzt": 1, "pflege": 2}, "regional": true,
+		"min_capacity": 6, "power": 400.0, "water": 60.0, "vehicles": []},
 	"BH-01": {"label": "Bauhof", "dienst": "bauhof", "ressort": "Verkehr", "building": "municipal_yard", "cost": 300000.0,
 		"upkeep": 110.0, "capacity": 2, "staff": {"bauhof": 6}, "power": 40.0, "water": 6.0, "vehicles": ["Kipper", "Streuwagen"]},
 	"VB-01": {"label": "Busbetriebshof", "dienst": "oepnv", "ressort": "Verkehr", "building": "bus_depot", "cost": 380000.0,
@@ -77,12 +78,14 @@ const STYLES := {
 }
 const STYLE_OF_CHARACTER := {"Marktflecken": "backstein", "Handwerkerort": "industrie", "Fischerdorf": "gruen", "Bauerndorf": "gruen"}
 const START_KIT := ["FW-01", "RW-01"]
+const REGIONAL_KIT := ["KH-01"]   # einmal je Region, in der einwohnerstaerksten Stadt (Kreiskrankenhaus)
 
 var sim
 var facilities := {}     # "M<n>" -> Einrichtung
 var vehicles := {}       # "MV<n>" -> Fahrzeug
 var tasks := {}          # "E<n>" -> Aufgabe/Einsatz
 var started := false     # Startausstattung angelegt (oder versucht)
+var regional_started := false   # regionale Startausstattung (Kreiskrankenhaus) angelegt oder versucht
 var stats := {"eingestellt": 0, "abgang": 0, "kosten": 0.0, "einsaetze": 0}
 var _next := {"M": 1, "MV": 1, "E": 1}
 
@@ -175,7 +178,7 @@ func register(k: int, code: String, building_id: int) -> Dictionary:
 	var v := pick_variant(code, st, sd)
 	var f := {"id": _id("M"), "code": code, "town": k, "name": _name(k, code, cell), "building": building_id, "cell": [cell.x, cell.y],
 		"style": st, "seed": sd, "variant": v, "size": [int(b.w), int(b.h)], "cost": float(t.cost), "upkeep": float(t.upkeep),
-		"capacity": int(t.capacity), "staff_need": staff_need(code, _pop(k)), "volunteer_need": int(t.get("volunteers", 0)), "power": float(t.power), "water": float(t.water),
+		"capacity": capacity_for(code, served(code, k)), "staff_need": staff_need(code, served(code, k)), "volunteer_need": int(t.get("volunteers", 0)), "power": float(t.power), "water": float(t.water),
 		"condition": 100.0, "inventory": {}, "owner": Towns.owner_of(k), "status": "in_betrieb", "opened": _today(), "vehicles": []}
 	facilities[f.id] = f
 	b["role"] = "municipal"
@@ -196,6 +199,17 @@ func register(k: int, code: String, building_id: int) -> Dictionary:
 
 func _pop(k: int) -> int:
 	return sim.citizens.population_of(k)
+
+
+## Einwohner, fuer die eine Einrichtung zustaendig ist: regionale Typen versorgen die ganze Region.
+func served(code: String, k: int) -> int:
+	return sim.citizens.population() if bool(TYPES[code].get("regional", false)) else _pop(k)
+
+
+## Plaetze/Betten nach versorgter Bevoelkerung (Werte gelten fuer REF_POP), mindestens min_capacity.
+static func capacity_for(code: String, pop: int) -> int:
+	var t: Dictionary = TYPES[code]
+	return maxi(int(t.get("min_capacity", t.capacity)), roundi(float(t.capacity) * float(pop) / REF_POP)) if t.has("min_capacity") else int(t.capacity)
 
 
 ## Hauptamtlicher Bedarf je Beruf fuer eine Stadt mit `pop` Einwohnern.
@@ -240,6 +254,22 @@ func ensure_start() -> void:
 				_place(k, code)
 
 
+## Regionale Einrichtungen (Kreiskrankenhaus): einmal je Region, in der einwohnerstaerksten Stadt mit passendem Bauplatz.
+## Auch fuer Spielstaende, die vor Etappe 5 entstanden sind (eigenes Merkmal).
+func ensure_regional() -> void:
+	if regional_started:
+		return
+	regional_started = true
+	var order: Array = sim.towns.list.map(func(t): return int(t.id))
+	order.sort_custom(func(a, b): return _pop(a) > _pop(b))
+	for code in REGIONAL_KIT:
+		if facilities.values().any(func(f): return str(f.code) == code):
+			continue
+		for k in order:
+			if not _place(k, code).is_empty():
+				break
+
+
 func _place(k: int, code: String) -> Dictionary:
 	var bt: String = TYPES[code].building
 	var info: Array = CityGenerator.TYPES[bt]
@@ -266,12 +296,15 @@ func _place(k: int, code: String) -> Dictionary:
 func on_day(day: int) -> void:
 	if not started:
 		ensure_start()
+	if not regional_started:
+		ensure_regional()
 	var by_id := _staff_index()
 	var vol := _volunteer_index()
 	for f in facilities.values():
 		if f.status != "in_betrieb":
 			continue
-		var need := staff_need(f.code, _pop(int(f.town)))
+		var need := staff_need(f.code, served(f.code, int(f.town)))
+		f.capacity = maxi(int(f.capacity), capacity_for(f.code, served(f.code, int(f.town))))
 		for b in need:   # waechst mit der Stadt; schrumpft sie, wird niemand entlassen, nur nicht nachbesetzt
 			f.staff_need[b] = maxi(int(f.staff_need.get(b, 0)), int(need[b]))
 		_hire(f, by_id)
@@ -327,7 +360,7 @@ func _hire(f: Dictionary, by_id: Dictionary) -> void:
 		var missing := int(f.staff_need[beruf]) - int(have.get(beruf, 0))
 		if missing <= 0:
 			continue
-		for p in _candidates(int(f.town), beruf, day):
+		for p in _candidates(-1 if bool(TYPES[f.code].get("regional", false)) else int(f.town), beruf, day):
 			if hired >= HIRE_PER_DAY or missing <= 0:
 				break
 			var old := str(p.employer)
@@ -358,7 +391,7 @@ func _candidates(k: int, beruf: String, day: int) -> Array:
 	for p in sim.citizens.people:
 		if p.has("course_until") or PublicSafety.absent(p, day) or int(p.get("education", 0)) < int(BERUFE[beruf].bildung):
 			continue
-		if sim.citizens.home_town(p) != k:
+		if k >= 0 and sim.citizens.home_town(p) != k:
 			continue
 		if p.employer == "":
 			free.append(p)
@@ -537,6 +570,7 @@ func summary(k: int = -1) -> Array:
 
 func to_dict() -> Dictionary:
 	return {"facilities": facilities.duplicate(true), "vehicles": vehicles.duplicate(true), "tasks": tasks.duplicate(true), "started": started,
+		"regional_started": regional_started,
 		"stats": stats.duplicate(), "next": _next.duplicate()}
 
 
@@ -547,6 +581,7 @@ func from_dict(d: Dictionary) -> void:
 	vehicles = d.get("vehicles", {})
 	tasks = d.get("tasks", {})
 	started = bool(d.get("started", false))
+	regional_started = bool(d.get("regional_started", false))
 	stats = d.get("stats", stats)
 	for k in d.get("next", {}):
 		_next[k] = int(d.next[k])

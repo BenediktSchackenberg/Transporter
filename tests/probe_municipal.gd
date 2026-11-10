@@ -17,6 +17,11 @@ func _init() -> void:
 	s.setup(4242, pl, Catalog.MAP_SIZE, 0.5)
 	for i in int(days * 600):
 		s.step(0.1)
+		if i % 600 == 0:
+			for f in s.rescue.hospitals():
+				if s.rescue.beds(f) > 0 and not has_meta("beds"):
+					set_meta("beds", true)
+					print("Krankenhaus betriebsbereit ab Tag ", GameCalendar.day_of(s.game_min))
 	var day: int = GameCalendar.day_of(s.game_min)
 	for t in s.towns.list:
 		var k := int(t.id)
@@ -35,4 +40,10 @@ func _init() -> void:
 		print("Stadt %d %s: Buerger %d, arbeitslos nach Bildung 0-3 %s, im Kurs %d" % [k, t.name, pop, str(jobless), course])
 		for f in s.municipal.of_town(k):
 			print("   ", f.name, " Personal ", s.municipal.staff_count(f.id), " Bedarf ", f.staff_need)
+	print("Rettungsdienst: ", s.rescue.summary(), " Notfaelle-Statistik: ", s.rescue.stats)
+	print("Feuerwehr: ", s.fire.summary())
+	for m in s.rescue.missions.values():
+		print("  Notfall %s Tag %d Stadt %d Hilfsfrist %.1f Ziel %s" % [m.id, GameCalendar.day_of(float(m.alarm)), int(m.town), float(m.get("hilfsfrist", -1)), m.hospital if m.hospital != "" else "Arztpraxis"])
+	for f in s.rescue.hospitals():
+		print("Krankenhaus ", f.name, " Betten ", s.rescue.beds(f), "/", f.capacity, " Personal ", s.municipal.staff_count(f.id), " Bedarf ", f.staff_need)
 	quit()

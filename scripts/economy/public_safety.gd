@@ -111,7 +111,14 @@ func on_day(day: int) -> void:
 			if Citizens.roll(pid, day, 71) < risk:
 				stats.erkrankt += 1
 				var severe := Citizens.roll(pid, day, 72) < float(c.schwer_anteil) or float(doc_today) >= doc_capacity
-				if severe and hospital >= 0:
+				if severe and sim.rescue != null and sim.rescue.enabled():   # Region: Rettungsdienst (Auftrag 20 Etappe 5)
+					var days := 3 + int(Citizens.roll(pid, day, 73) * 8.0)
+					p.sick_until = day + days
+					p.in_hospital = false   # Aufnahme erst bei der Uebergabe in der Klinik
+					costs += float(c.kosten_krankenhaus_tag) * days
+					stats.krankenhaus += 1
+					sim.rescue.emergency(p, sim.rescue.home_road(p))
+				elif severe and hospital >= 0:
 					var days := 3 + int(Citizens.roll(pid, day, 73) * 8.0)
 					p.sick_until = day + days
 					p.in_hospital = true

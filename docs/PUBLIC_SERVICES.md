@@ -63,7 +63,8 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 | 2 Gebäude-Baukasten | **fertig** (10.11.2026) – `tools/vox/public.py`, Test `test_public_buildings` (Abnahme A) |
 | 3 Fahrzeuge | **fertig** (10.11.2026) – `tools/vox/vehicles.py` (`MUNICIPAL`), Prüfung in `test_public_buildings` |
 | 4 Feuerwehr | **fertig** (10.11.2026) – `scripts/economy/fire_service.gd` (`sim.fire`), `scripts/world/fire_fx.gd`, Test `test_fire_service` (Abnahme B) |
-| 5–12 | offen |
+| 5 Rettungsdienst/Krankenhäuser | **fertig** (10.11.2026) – `scripts/economy/rescue_service.gd` (`sim.rescue`), Test `test_rescue_service` (Abnahme C) |
+| 6–12 | offen |
 
 **Etappe 1 im Detail**
 
@@ -136,3 +137,26 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 * Laden während eines Einsatzes: Fahrzeuge stehen wieder in der Wache, der Brand wird neu alarmiert.
 * Sichtprüfung: `--demo-fire` (Brand 25–45 Felder von der ersten Wache, Kamera dorthin), z. B.
   `--autotest --speed=2 --seed=21 --demo-fire --screenshot=user://f.png --shot-at=37`. Probe `tests/probe_fire.gd` (Fahrzeiten zwischen den Wachen, Brandstatistik).
+
+**Etappe 5 im Detail**
+
+* `scripts/economy/rescue_service.gd` (`sim.rescue`): Schwere Erkrankungen (PublicSafety, 25 % der Erkrankungen bzw. wenn die
+  Arztpraxen ausgelastet sind) lösen in der Region einen Notruf aus. Alarm an die Rettungswache mit der kürzesten Ankunftszeit und
+  freiem RTW; lebensbedrohliche Fälle (25 %) bekommen zusätzlich das NEF, wenn die Wache eines und einen Notarzt hat.
+* Hilfsfrist (Notruf bis Eintreffen) wird je Einsatz und je Stadt erfasst, Ziel 15 Spielminuten; Übersicht `RescueService.summary(k)`
+  mit mittlerer Hilfsfrist und Anteil eingehalten.
+* Versorgung vor Ort 10 Minuten; sie verbraucht 1 Pack Sanitätsverbrauchsmaterial aus dem Stadtlager (fehlt es: +5 Minuten, Statistik).
+* Transport in das nächste Krankenhaus mit freiem Bett, Übergabe 5 Minuten, Rückfahrt. Ohne freies Bett: Notversorgung in der
+  Arztpraxis der Stadt (Meldung).
+* **Kreiskrankenhaus** (`KH-01`, regional): einmal je Region in der einwohnerstärksten Stadt mit Bauplatz; Betten und Personal nach der
+  Einwohnerzahl der ganzen Region (40 Betten je 1000 Einwohner, mindestens 6), Personal aus allen Städten (Pendler). Betriebsbereite
+  Betten = min(Plätze, 4 je Pflegekraft) und nur mit mindestens einem Arzt (Bildung 3) – fehlt er, nimmt das Haus niemanden auf.
+* Kosten: Behandlung wie bisher über PublicSafety (Stadtkasse → Dienstleister, Ressort Gesundheit), Betrieb über Municipal.
+* Darstellung: RTW/NEF mit Blaulicht auf Anfahrt und Transport, ohne auf der Rückfahrt (gemeinsam mit der Feuerwehr über
+  `EntityView._place_muni`).
+* Laden während eines Einsatzes: der Einsatz wird abgeschlossen, die Fahrzeuge stehen in der Wache.
+* Prüfanpassung: `test_region_flight` prüft die Landegebühr jetzt am Geldfluss Flugbetrieb → Stadt, weil die Stadtkasse im Testzeitraum
+  zugleich ihre Wachen bezahlt.
+* Messung (Probe `tests/probe_municipal.gd -- --days=30`, Seed 4242): Kreiskrankenhaus ab Tag 14 betriebsbereit (Ärzte mit Bildung 3
+  sind selten; bis dahin Notversorgung in der Arztpraxis), danach Aufnahme im Krankenhaus; 4 Notfälle in 30 Tagen, mittlere Hilfsfrist
+  11 Minuten, 50 % innerhalb von 15 Minuten.
