@@ -1178,6 +1178,8 @@ func _finish_public(e: Dictionary) -> void:
 			sim.log_event("%s: neue Straße (%d Felder) zu %d Grundstücken fertig." % [sim.towns.name_of(M.town), prj.road_cells.size(), prj.parcels.size()], "good")
 	if prj.kind == "anlage":
 		sim.civic.on_finished(prj)   # Auftrag 19: Anlage/Denkmal eroeffnen
+	if prj.kind == "dienst":
+		sim.services.on_finished(prj)   # Auftrag 20: kommunale Einrichtung in Betrieb nehmen
 	if prj.kind == "hafenausbau":
 		sim.towns.harbor(M.town).finish_expansion()
 	if prj.kind == "flughafenausbau":

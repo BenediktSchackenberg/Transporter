@@ -485,8 +485,9 @@ func _costs() -> void:
 		for vid in f.vehicles:
 			if vehicles[vid].status != "ausser_dienst":
 				x += float(vehicles[vid].cost)
-		var acct := Towns.account_of(int(f.town))
-		sim.economy.transfer(acct, "S0", x)
+		var shares: Dictionary = f.get("shares", {"%d" % int(f.town): 1.0})   # Zweckverband (Regionalrat): Kosten nach Anteilen
+		for sk in shares:
+			sim.economy.transfer(Towns.account_of(int(sk)), "S0", x * float(shares[sk]))
 		var dep: Dictionary = sim.public_sector.departments
 		var ressort := str(TYPES[f.code].ressort)
 		dep[ressort] = float(dep.get(ressort, 0.0)) + x

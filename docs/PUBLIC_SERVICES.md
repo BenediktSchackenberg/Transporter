@@ -68,7 +68,9 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 | 7 ÖPNV | **fertig** (10.11.2026) – `transit_service.gd`, Test `test_transit` (Abnahme E) |
 | 8 Bildung | **fertig** (10.11.2026) – `education.gd`, Test `test_education` (Abnahme F) |
 | 9 Recycling | **fertig** (10.11.2026) – `recycling.gd`, Test `test_recycling` (Abnahme G) |
-| 10–12 | offen |
+| 10 Regionalrat | **fertig** (10.11.2026) – `regional_council.gd`, Test `test_regional_council` (Abnahme H) |
+| 11 Entscheidungen und Leitstelle | **fertig** (10.11.2026) – `service_planner.gd`, Leitstelle „Öffentliche Dienste & Regionalpolitik“, Test `test_service_planner` (Abnahme I) |
+| 12 Leistung, Abnahme | offen – Probe `tests/probe_services.gd` |
 
 **Etappe 1 im Detail**
 
@@ -217,3 +219,27 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 * Hinweis: Die Orte sind klein (≈ 40 Einwohner, ≈ 18 kg Wertstoffe am Tag); eine volle 100-kg-Einheit entsteht erst nach einigen Tagen.
   Private Recyclingfirmen sind noch nicht umgesetzt (Firmen können den Schrott im Großlager kaufen). Test `test_recycling` (Abnahme G).
 
+**Etappe 10 im Detail (Regionalrat)**
+
+* `scripts/core/regional_council.gd` (`sim.council`): Ratsgebäude nahe dem Großlager (Bild vorerst wie die Bank). Sitzung alle 30 Tage
+  (ab Tag 15): die Bürgermeister reisen im Dienstwagen an; Beginn, wenn alle da sind (spätestens nach 3 Stunden), danach Rückfahrt.
+* Anträge (je Stadt höchstens einer): verbindung (Straße zwischen zwei Orten, gebaut über RegionalProjects), kh_ausbau (+50 % Betten und
+  Personal des Kreiskrankenhauses), drehleiter (DLK 23 für eine Wache), zweckverband (Kreiskrankenhaus in gemeinsamer Trägerschaft,
+  Unterhalt nach Einwohneranteilen), kkw_anteile (unzulässig: bleibt 25/25/25/25).
+* Abstimmung: 3 von 4 (bei n Städten aufgerundet 75 %), Eigentumsfragen einstimmig. Stimmverhalten nach Nutzen und Kostenanteil
+  (höchstens die Hälfte der verfügbaren Mittel). Verhandlung: bis zu zwei Runden, in denen der Antragsteller 15 Prozentpunkte mehr trägt.
+  Beschlüsse werden sofort finanziert und umgesetzt; Protokoll mit Stimmen und Anteilen.
+* KI-Bürgermeister: Aktion `regionalrat_antrag`; Regel-Bürgermeister nach Lage. Test `test_regional_council` (Abnahme H).
+
+**Etappe 11 im Detail (Entscheidungen und Leitstelle)**
+
+* `scripts/core/service_planner.gd` (`sim.services`): Bedarfsanalyse je Stadt (Kinder ohne Schul-/Kitaplatz, Hilfsfrist, ausgebrannte
+  Gebäude, fehlende Busanbindung ab 60 Einwohnern, Deponie ab 50 %, Einrichtungen 30 Tage ohne Personal). Maßnahmen: Neubau über Bauplatz
+  der Stadtentwicklung, Ratsbeschluss, Ausschreibung, Baufirma und Bautrupp (Projektart „dienst“; bei der Abnahme entsteht die Einrichtung
+  mit eigenem Bild, ein Busbetriebshof plant gleich seine Linie), Fahrzeugkauf, Schließung. Baukosten skaliert mit der Ortsgröße (12 % des Stadtpreises plus Anteil nach Einwohnern: Dorfschule statt Stadtschule).
+* Alle 5 Tage entscheidet das Bauamt nach Regeln (höchstens eine Maßnahme je Stadt); KI-Bürgermeister zusätzlich über `kommunal_bauen`,
+  `kommunal_fahrzeug`, `kommunal_schliessen`, `regionalrat_antrag`. Lagebericht `kommunale_dienste` mit Einrichtungen, Kennzahlen,
+  Bedarf, Baukosten und Regionalrat.
+* Leitstelle: neuer Bereich **„Öffentliche Dienste & Regionalpolitik“** (✚) – Region (Kreiskrankenhaus, Regionalrat mit letzten
+  Beschlüssen und Stimmen) und je Stadt Einrichtungen (Personal, Ehrenamtliche, Fahrzeuge, Kartensprung), Kennzahlen aller Dienste,
+  Bedarf mit nächstem Schritt, Neubauten im Bau und letzte Entscheidungen mit Begründung. Test `test_service_planner` (Abnahme I).

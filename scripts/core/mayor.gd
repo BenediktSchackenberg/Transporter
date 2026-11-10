@@ -6,6 +6,13 @@ extends RefCounted
 
 const SCHEMA := {
 	"wait": {"params": {}, "desc": "Nichts tun."},
+	"kommunal_bauen": {"params": {"typ": "string", "reason": "string"},
+		"desc": "Kommunale Einrichtung neu bauen (Auftrag 20): typ FW-01 Feuerwache|RW-01 Rettungswache|KH-01 Krankenhaus|BH-01 Bauhof|VB-01 Busbetriebshof|SC-01 Schule|KI-01 Kita|RC-01 Recyclinghof. Ratsbeschluss, Ausschreibung, Baufirma; Kosten und Bedarf siehe obs.kommunale_dienste."},
+	"kommunal_fahrzeug": {"params": {"einrichtung": "string", "fahrzeug": "string", "reason": "string"},
+		"desc": "Fahrzeug für eine Einrichtung kaufen (einrichtung = ID M<n>, fahrzeug HLF 20|DLK 23|RTW|NEF|Kipper|Streuwagen|Linienbus|Wertstoffwagen)."},
+	"kommunal_schliessen": {"params": {"einrichtung": "string", "reason": "string"}, "desc": "Kommunale Einrichtung schließen (Personal frei, keine Kosten mehr)."},
+	"regionalrat_antrag": {"params": {"art": "string", "partner": "int?", "reason": "string"},
+		"desc": "Antrag für die nächste Sitzung des Regionalrats: art verbindung (mit partner = Stadt-Nr.)|kh_ausbau|drehleiter|zweckverband. Mehrheit 3 von 4, Eigentumsfragen einstimmig; Kraftwerksanteile bleiben 25/25/25/25."},
 	"propose_project": {"params": {"project": "string", "category": "string", "reason": "string", "priority": "int?", "desiredDistrict": "string?",
 		"features": "array?", "size": "string?"},
 		"desc": "Eigene Bauidee für die Stadt (Auftrag 19): z. B. Spielplatz, Stadtpark, Marktplatz, Bolzplatz, Stadion, Kindergarten, eine Statue von dir. category recreation|familie|gruen|markt|sport|prestige|bildung; size klein|mittel|groß. Die Engine wählt Bauvorlage, Standort und Material (obs.stadtentwicklung.bauvorlagen); entschieden und beschafft wird beim nächsten Besuch im Großlager."},
@@ -301,6 +308,7 @@ func indicators() -> Dictionary:
 			"zufriedenheit": snappedf(sim.contentment.mean, 0.1), "zufriedenheit_viertel": sim.contentment.by_district.duplicate(),
 			"wohnungslos": sim.housing.homeless_count(), "raeumungen": int(sim.housing.stats.evictions), "planung": sim.housing.planning_aids()},
 		"stadtentwicklung": sim.civic.mayor_obs(town) if sim.civic != null else {},
+		"kommunale_dienste": sim.services.mayor_obs(town) if sim.services != null and sim.municipal.enabled() else {},
 		"arbeit": {"quote": snappedf(Z.employment_rate_of(town), 0.001), "arbeitslos": Z.unemployed_of(town), "offene_stellen": vac_jobs,
 			"offene_stellen_nach_arbeitgeber": by_vac},
 		"gewerbe": {"freie_gewerbeflaeche": free_by_zone.get("gewerbe", {}), "freie_industrieflaeche": free_by_zone.get("industrie", {}),
@@ -629,6 +637,18 @@ func execute(action: Dictionary) -> Dictionary:
 				res = {"ok": true, "msg": "Notiz gespeichert."}
 			"propose_project":
 				res = sim.civic.propose(town, a) if sim.civic != null else {"ok": false, "msg": "Keine Stadtentwicklung."}
+			"kommunal_bauen":
+				res = sim.services.build(town, str(a.typ), str(a.reason), "Bürgermeister %s" % name) if sim.services != null and sim.municipal.enabled() else {"ok": false, "msg": "Keine kommunalen Dienste."}
+			"kommunal_fahrzeug":
+				var mf: Dictionary = sim.municipal.facilities.get(str(a.einrichtung), {})
+				res = {"ok": false, "msg": "Einrichtung %s gehört nicht zu dieser Stadt." % str(a.einrichtung)} if mf.is_empty() or int(mf.town) != town \
+					else sim.services.buy_vehicle(str(a.einrichtung), str(a.fahrzeug), str(a.reason), "Bürgermeister %s" % name)
+			"kommunal_schliessen":
+				var mc: Dictionary = sim.municipal.facilities.get(str(a.einrichtung), {})
+				res = {"ok": false, "msg": "Einrichtung %s gehört nicht zu dieser Stadt." % str(a.einrichtung)} if mc.is_empty() or int(mc.town) != town \
+					else sim.services.close(str(a.einrichtung), str(a.reason), "Bürgermeister %s" % name)
+			"regionalrat_antrag":
+				res = sim.council.queue_proposal(town, str(a.art), int(a.get("partner", -1)) if a.get("partner") != null else -1, str(a.reason)) if sim.council != null and sim.council.enabled() else {"ok": false, "msg": "Kein Regionalrat."}
 			"set_vision":
 				if sim.civic != null and sim.civic.profiles.has(town):
 					sim.civic.profiles[town].vision = str(a.vision).left(200)

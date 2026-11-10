@@ -11,6 +11,7 @@ const AREAS := [
 	{"key": "welt", "label": "Welt & Ereignisse", "icon": "✦"},
 	{"key": "firmen", "label": "Unternehmen", "icon": "▣"},
 	{"key": "staedte", "label": "Städte", "icon": "▲"},
+	{"key": "dienste", "label": "Öffentliche Dienste & Regionalpolitik", "icon": "✚"},
 	{"key": "finanzen", "label": "Wirtschaft & Finanzen", "icon": "€"},
 	{"key": "technik", "label": "Einstellungen & Technik", "icon": "⚙"},
 ]
@@ -196,6 +197,7 @@ func _rebuild() -> void:
 		"welt": _view_welt()
 		"firmen": _view_firmen()
 		"staedte": _view_staedte()
+		"dienste": _view_dienste()
 		"finanzen": _view_finanzen()
 		"technik": _view_technik()
 
@@ -608,6 +610,59 @@ func _view_staedte() -> void:
 		var acts := _row(v)
 		acts.add_child(_btn("Stadt öffnen", func(): show_town(k), true))
 		acts.add_child(_btn("⌖ Auf Karte", func(): _jump_cell(sim.city.building(int(sim.towns.get_t(k).town_hall)).road), true))
+
+
+## Oeffentliche Dienste und Regionalpolitik (Auftrag 20): je Stadt Einrichtungen mit Personal und Fahrzeugen, Kennzahlen der Dienste,
+## Bedarf mit naechster Massnahme, geplante Neubauten und letzte Entscheidungen; dazu Kreiskrankenhaus und Regionalrat.
+func _view_dienste() -> void:
+	if sim.municipal == null or not sim.municipal.enabled():
+		content.add_child(_t("Kommunale Dienste gibt es nur in der Region.", 15, C_MUTED))
+		return
+	var M: Municipal = sim.municipal
+	var rv := _card(content, C_INFO)
+	rv.add_child(_h("Region", 20, C_INFO))
+	for f in sim.rescue.hospitals():
+		rv.add_child(_t("✚ %s (%s): %d/%d Betten belegt%s" % [f.name, sim.towns.name_of(int(f.town)), sim.rescue.occupied(f), sim.rescue.beds(f),
+			" · Zweckverband" if f.has("shares") else ""], 15))
+	var cs: Dictionary = sim.council.summary() if sim.council.enabled() else {}
+	if not cs.is_empty():
+		rv.add_child(_t("Regionalrat: nächste Sitzung Tag %d%s" % [int(cs.naechste_sitzung_tag), (" · läuft: " + str(cs.laufend)) if str(cs.laufend) != "" else ""], 15))
+		var last: Dictionary = cs.letzte
+		for x in last.get("antraege", []):
+			var col := C_OK if x.result == "beschlossen" else C_BAD
+			rv.add_child(_t("%s %s (%s): %s · Stimmen %s" % ["✔" if x.result == "beschlossen" else "✖", str(x.kind), x.von, x.text, str(x.votes)], 14, col))
+	for k in sim.towns.count():
+		var v := _card(content, C_INFO)
+		v.add_child(_h(sim.towns.name_of(k), 20, C_INFO.lightened(0.2)))
+		for f in M.of_town(k):
+			var r := _row(v)
+			var need := 0
+			for b in f.staff_need:
+				need += int(f.staff_need[b])
+			r.add_child(_t("%s %s · %s · Personal %d/%d%s · %s" % ["●" if f.status == "in_betrieb" else "○", f.name, Municipal.STYLES[f.style], M.staff_count(f.id), need,
+				(" + %d ehrenamtlich" % M.volunteers_of(f.id).size()) if not M.volunteers_of(f.id).is_empty() else "",
+				", ".join(f.vehicles.map(func(vid): return "%s (%s)" % [M.vehicles[vid].type, M.vehicles[vid].status]))], 14))
+			var cell := Vector2i(int(f.cell[0]), int(f.cell[1]))
+			r.add_child(_btn("⌖", func(): _jump_cell(cell), true))
+		var rs: Dictionary = sim.rescue.summary(k)
+		var es: Dictionary = sim.education.summary(k)
+		var ws: Dictionary = sim.winter.summary(k)
+		var fs: Dictionary = sim.fire.summary(k)
+		v.add_child(_t("Rettung: %d Notfälle, Hilfsfrist Ø %.1f min (%d %% ≤ 15 min) · Feuer: %d aktiv · Schnee: %d Abschnitte (Rettungswege %d) · Schlaglöcher %d" % [
+			int(rs.notfaelle), float(rs.mittlere_hilfsfrist_min), roundi(float(rs.hilfsfrist_eingehalten_anteil) * 100.0), fs.brennt.size(),
+			int(ws.verschneit), int(ws.rettungswege_verschneit), int(ws.schlagloecher)], 14))
+		v.add_child(_t("Bildung: Kita %d/%d Plätze, Schule %d/%d Plätze, Lehrkräfte %d %%" % [int(es.kinder_kita), int(es.kitaplaetze), int(es.kinder_schule), int(es.schulplaetze),
+			roundi(float(es.lehrkraefte_quote) * 100.0)], 14))
+		for l in sim.transit.summary(k):
+			v.add_child(_t("Bus %s: %d Fahrgäste, Takt %d min, Kostendeckung %d %%, Anbindung %d %%" % [l.linie, int(l.fahrgaeste), int(l.takt_min),
+				roundi(float(l.kostendeckung) * 100.0), roundi(float(l.anbindung) * 100.0)], 14))
+		for n in sim.services.needs(k).slice(0, 3):
+			v.add_child(_t("⚠ Bedarf: %s – nächster Schritt: %s" % [n.grund, {"bauen": "Neubau " + str(n.get("typ", "")), "fahrzeug": "Fahrzeug " + str(n.get("fahrzeug", "")),
+				"schliessen": "Schließung"}.get(n.massnahme, n.massnahme)], 14, C_WARN))
+		for b in sim.services.builds.values().filter(func(b): return int(b.town) == k):
+			v.add_child(_t("▲ Neubau %s im Bau (%s)" % [Municipal.TYPES[b.code].label, b.reason], 14, C_INFO))
+		for e in sim.services.log.filter(func(e): return int(e.town) == k).slice(-3):
+			v.add_child(_t("Tag %d · %s: %s" % [int(e.day), e.by, e.text], 13, C_AI))
 
 
 func _anlage_status(a: Dictionary) -> String:
