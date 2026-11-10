@@ -384,6 +384,14 @@ func _process_timed(_delta: float) -> void:
 				session.set_follow(false)
 				session.city_view.set_camera_world(Vector2((float(an.rect[0]) + float(an.rect[2]) * 0.5) * 32.0, (float(an.rect[1]) + float(an.rect[3]) * 0.5) * 32.0))
 				print("AUTOTEST Kamera auf ", an.title, " (", an.status, ")")
+		if args.has("shot-dienst") and session.sim.municipal != null:   # Kamera auf eine kommunale Einrichtung (Auftrag 20), Nr. = Reihenfolge
+			var fs: Array = session.sim.municipal.facilities.values()
+			print("AUTOTEST Einrichtungen: ", fs.map(func(f): return "%s %s %s" % [f.id, f.name, Municipal.sprite_of(f)]))
+			if not fs.is_empty():
+				var mf: Dictionary = fs[clampi(int(args["shot-dienst"]) if str(args["shot-dienst"]).is_valid_int() else 0, 0, fs.size() - 1)]
+				var mb: Dictionary = session.sim.city.building(int(mf.building))
+				session.set_follow(false)
+				session.city_view.set_camera_world(Vector2((float(mb.x) + float(mb.w) * 0.5) * 32.0, (float(mb.y) + float(mb.h) * 0.5) * 32.0))
 		if args.has("shot-town"):   # Kamera auf das Rathaus eines Orts (Ortskern)
 			var th: Dictionary = session.sim.city.building(int(session.sim.towns.get_t(int(args["shot-town"])).town_hall))
 			session.set_follow(false)

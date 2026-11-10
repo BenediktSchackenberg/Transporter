@@ -1939,6 +1939,2886 @@
    "w": 3,
    "h": 3,
    "height": 50
+  },
+  "pub_fw_0_backstein": {
+   "anchor": [
+    194,
+    120
+   ],
+   "size": [
+    452,
+    346
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_0_modern": {
+   "anchor": [
+    194,
+    106
+   ],
+   "size": [
+    452,
+    332
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_0_gruen": {
+   "anchor": [
+    194,
+    106
+   ],
+   "size": [
+    452,
+    332
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_0_industrie": {
+   "anchor": [
+    194,
+    106
+   ],
+   "size": [
+    452,
+    332
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_1_backstein": {
+   "anchor": [
+    194,
+    45
+   ],
+   "size": [
+    452,
+    271
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_1_modern": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_1_gruen": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_1_industrie": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_2_backstein": {
+   "anchor": [
+    194,
+    66
+   ],
+   "size": [
+    452,
+    292
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_2_modern": {
+   "anchor": [
+    194,
+    50
+   ],
+   "size": [
+    452,
+    276
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_2_gruen": {
+   "anchor": [
+    194,
+    50
+   ],
+   "size": [
+    452,
+    276
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_2_industrie": {
+   "anchor": [
+    194,
+    50
+   ],
+   "size": [
+    452,
+    276
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_3_backstein": {
+   "anchor": [
+    194,
+    79
+   ],
+   "size": [
+    452,
+    305
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_3_modern": {
+   "anchor": [
+    194,
+    74
+   ],
+   "size": [
+    452,
+    300
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_3_gruen": {
+   "anchor": [
+    194,
+    74
+   ],
+   "size": [
+    452,
+    300
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_3_industrie": {
+   "anchor": [
+    194,
+    74
+   ],
+   "size": [
+    452,
+    300
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_4_backstein": {
+   "anchor": [
+    194,
+    56
+   ],
+   "size": [
+    452,
+    282
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_4_modern": {
+   "anchor": [
+    194,
+    50
+   ],
+   "size": [
+    452,
+    276
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_4_gruen": {
+   "anchor": [
+    194,
+    50
+   ],
+   "size": [
+    452,
+    276
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_4_industrie": {
+   "anchor": [
+    194,
+    49
+   ],
+   "size": [
+    452,
+    275
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_5_backstein": {
+   "anchor": [
+    194,
+    32
+   ],
+   "size": [
+    452,
+    258
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_5_modern": {
+   "anchor": [
+    194,
+    18
+   ],
+   "size": [
+    452,
+    244
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_5_gruen": {
+   "anchor": [
+    194,
+    18
+   ],
+   "size": [
+    452,
+    244
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_fw_5_industrie": {
+   "anchor": [
+    194,
+    18
+   ],
+   "size": [
+    452,
+    244
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 70
+  },
+  "pub_rw_0_backstein": {
+   "anchor": [
+    130,
+    32
+   ],
+   "size": [
+    324,
+    194
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_0_modern": {
+   "anchor": [
+    130,
+    28
+   ],
+   "size": [
+    324,
+    190
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_0_gruen": {
+   "anchor": [
+    130,
+    28
+   ],
+   "size": [
+    324,
+    190
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_0_industrie": {
+   "anchor": [
+    130,
+    27
+   ],
+   "size": [
+    324,
+    189
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_1_backstein": {
+   "anchor": [
+    130,
+    49
+   ],
+   "size": [
+    324,
+    211
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_1_modern": {
+   "anchor": [
+    130,
+    46
+   ],
+   "size": [
+    324,
+    208
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_1_gruen": {
+   "anchor": [
+    130,
+    46
+   ],
+   "size": [
+    324,
+    208
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_1_industrie": {
+   "anchor": [
+    130,
+    46
+   ],
+   "size": [
+    324,
+    208
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_2_backstein": {
+   "anchor": [
+    130,
+    14
+   ],
+   "size": [
+    324,
+    176
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_2_modern": {
+   "anchor": [
+    130,
+    14
+   ],
+   "size": [
+    324,
+    176
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_2_gruen": {
+   "anchor": [
+    130,
+    14
+   ],
+   "size": [
+    324,
+    176
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_2_industrie": {
+   "anchor": [
+    130,
+    14
+   ],
+   "size": [
+    324,
+    176
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_3_backstein": {
+   "anchor": [
+    130,
+    79
+   ],
+   "size": [
+    324,
+    241
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_3_modern": {
+   "anchor": [
+    130,
+    64
+   ],
+   "size": [
+    324,
+    226
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_3_gruen": {
+   "anchor": [
+    130,
+    64
+   ],
+   "size": [
+    324,
+    226
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_3_industrie": {
+   "anchor": [
+    130,
+    64
+   ],
+   "size": [
+    324,
+    226
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_4_backstein": {
+   "anchor": [
+    130,
+    70
+   ],
+   "size": [
+    324,
+    232
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_4_modern": {
+   "anchor": [
+    130,
+    66
+   ],
+   "size": [
+    324,
+    228
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_4_gruen": {
+   "anchor": [
+    130,
+    66
+   ],
+   "size": [
+    324,
+    228
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_4_industrie": {
+   "anchor": [
+    130,
+    66
+   ],
+   "size": [
+    324,
+    228
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_5_backstein": {
+   "anchor": [
+    130,
+    38
+   ],
+   "size": [
+    324,
+    200
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_5_modern": {
+   "anchor": [
+    130,
+    34
+   ],
+   "size": [
+    324,
+    196
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_5_gruen": {
+   "anchor": [
+    130,
+    34
+   ],
+   "size": [
+    324,
+    196
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_rw_5_industrie": {
+   "anchor": [
+    130,
+    33
+   ],
+   "size": [
+    324,
+    195
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 3,
+   "h": 2,
+   "height": 46
+  },
+  "pub_kh_0_backstein": {
+   "anchor": [
+    258,
+    124
+   ],
+   "size": [
+    580,
+    414
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_0_modern": {
+   "anchor": [
+    258,
+    124
+   ],
+   "size": [
+    580,
+    414
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_0_gruen": {
+   "anchor": [
+    258,
+    124
+   ],
+   "size": [
+    580,
+    414
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_0_industrie": {
+   "anchor": [
+    258,
+    124
+   ],
+   "size": [
+    580,
+    414
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_1_backstein": {
+   "anchor": [
+    258,
+    76
+   ],
+   "size": [
+    580,
+    366
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_1_modern": {
+   "anchor": [
+    258,
+    76
+   ],
+   "size": [
+    580,
+    366
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_1_gruen": {
+   "anchor": [
+    258,
+    76
+   ],
+   "size": [
+    580,
+    366
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_1_industrie": {
+   "anchor": [
+    258,
+    76
+   ],
+   "size": [
+    580,
+    366
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_2_backstein": {
+   "anchor": [
+    258,
+    144
+   ],
+   "size": [
+    580,
+    434
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_2_modern": {
+   "anchor": [
+    258,
+    144
+   ],
+   "size": [
+    580,
+    434
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_2_gruen": {
+   "anchor": [
+    258,
+    144
+   ],
+   "size": [
+    580,
+    434
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_2_industrie": {
+   "anchor": [
+    258,
+    144
+   ],
+   "size": [
+    580,
+    434
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_3_backstein": {
+   "anchor": [
+    258,
+    66
+   ],
+   "size": [
+    580,
+    356
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_3_modern": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    580,
+    350
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_3_gruen": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    580,
+    350
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_3_industrie": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    580,
+    350
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_4_backstein": {
+   "anchor": [
+    258,
+    82
+   ],
+   "size": [
+    580,
+    372
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_4_modern": {
+   "anchor": [
+    258,
+    82
+   ],
+   "size": [
+    580,
+    372
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_4_gruen": {
+   "anchor": [
+    258,
+    82
+   ],
+   "size": [
+    580,
+    372
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_4_industrie": {
+   "anchor": [
+    258,
+    82
+   ],
+   "size": [
+    580,
+    372
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_5_backstein": {
+   "anchor": [
+    258,
+    144
+   ],
+   "size": [
+    580,
+    434
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_5_modern": {
+   "anchor": [
+    258,
+    144
+   ],
+   "size": [
+    580,
+    434
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_5_gruen": {
+   "anchor": [
+    258,
+    144
+   ],
+   "size": [
+    580,
+    434
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_kh_5_industrie": {
+   "anchor": [
+    258,
+    144
+   ],
+   "size": [
+    580,
+    434
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 4,
+   "height": 110
+  },
+  "pub_bh_0_backstein": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_0_modern": {
+   "anchor": [
+    194,
+    38
+   ],
+   "size": [
+    452,
+    264
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_0_gruen": {
+   "anchor": [
+    194,
+    38
+   ],
+   "size": [
+    452,
+    264
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_0_industrie": {
+   "anchor": [
+    194,
+    37
+   ],
+   "size": [
+    452,
+    263
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_1_backstein": {
+   "anchor": [
+    194,
+    45
+   ],
+   "size": [
+    452,
+    271
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_1_modern": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_1_gruen": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_1_industrie": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_2_backstein": {
+   "anchor": [
+    194,
+    28
+   ],
+   "size": [
+    452,
+    254
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_2_modern": {
+   "anchor": [
+    194,
+    28
+   ],
+   "size": [
+    452,
+    254
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_2_gruen": {
+   "anchor": [
+    194,
+    28
+   ],
+   "size": [
+    452,
+    254
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_2_industrie": {
+   "anchor": [
+    194,
+    28
+   ],
+   "size": [
+    452,
+    254
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_3_backstein": {
+   "anchor": [
+    194,
+    37
+   ],
+   "size": [
+    452,
+    263
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_3_modern": {
+   "anchor": [
+    194,
+    32
+   ],
+   "size": [
+    452,
+    258
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_3_gruen": {
+   "anchor": [
+    194,
+    32
+   ],
+   "size": [
+    452,
+    258
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_3_industrie": {
+   "anchor": [
+    194,
+    31
+   ],
+   "size": [
+    452,
+    257
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_4_backstein": {
+   "anchor": [
+    194,
+    46
+   ],
+   "size": [
+    452,
+    272
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_4_modern": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_4_gruen": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_4_industrie": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_5_backstein": {
+   "anchor": [
+    194,
+    27
+   ],
+   "size": [
+    452,
+    253
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_5_modern": {
+   "anchor": [
+    194,
+    22
+   ],
+   "size": [
+    452,
+    248
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_5_gruen": {
+   "anchor": [
+    194,
+    22
+   ],
+   "size": [
+    452,
+    248
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_bh_5_industrie": {
+   "anchor": [
+    194,
+    21
+   ],
+   "size": [
+    452,
+    247
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_0_backstein": {
+   "anchor": [
+    194,
+    48
+   ],
+   "size": [
+    516,
+    306
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_0_modern": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    516,
+    300
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_0_gruen": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    516,
+    300
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_0_industrie": {
+   "anchor": [
+    194,
+    41
+   ],
+   "size": [
+    516,
+    299
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_1_backstein": {
+   "anchor": [
+    194,
+    67
+   ],
+   "size": [
+    516,
+    325
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_1_modern": {
+   "anchor": [
+    194,
+    64
+   ],
+   "size": [
+    516,
+    322
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_1_gruen": {
+   "anchor": [
+    194,
+    64
+   ],
+   "size": [
+    516,
+    322
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_1_industrie": {
+   "anchor": [
+    194,
+    64
+   ],
+   "size": [
+    516,
+    322
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_2_backstein": {
+   "anchor": [
+    194,
+    28
+   ],
+   "size": [
+    516,
+    286
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_2_modern": {
+   "anchor": [
+    194,
+    28
+   ],
+   "size": [
+    516,
+    286
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_2_gruen": {
+   "anchor": [
+    194,
+    28
+   ],
+   "size": [
+    516,
+    286
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_2_industrie": {
+   "anchor": [
+    194,
+    28
+   ],
+   "size": [
+    516,
+    286
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_3_backstein": {
+   "anchor": [
+    194,
+    45
+   ],
+   "size": [
+    516,
+    303
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_3_modern": {
+   "anchor": [
+    194,
+    40
+   ],
+   "size": [
+    516,
+    298
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_3_gruen": {
+   "anchor": [
+    194,
+    40
+   ],
+   "size": [
+    516,
+    298
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_3_industrie": {
+   "anchor": [
+    194,
+    39
+   ],
+   "size": [
+    516,
+    297
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_4_backstein": {
+   "anchor": [
+    194,
+    48
+   ],
+   "size": [
+    516,
+    306
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_4_modern": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    516,
+    300
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_4_gruen": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    516,
+    300
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_4_industrie": {
+   "anchor": [
+    194,
+    41
+   ],
+   "size": [
+    516,
+    299
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_5_backstein": {
+   "anchor": [
+    194,
+    69
+   ],
+   "size": [
+    516,
+    327
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_5_modern": {
+   "anchor": [
+    194,
+    64
+   ],
+   "size": [
+    516,
+    322
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_5_gruen": {
+   "anchor": [
+    194,
+    64
+   ],
+   "size": [
+    516,
+    322
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_vb_5_industrie": {
+   "anchor": [
+    194,
+    64
+   ],
+   "size": [
+    516,
+    322
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 5,
+   "h": 3,
+   "height": 50
+  },
+  "pub_sc_0_backstein": {
+   "anchor": [
+    258,
+    65
+   ],
+   "size": [
+    644,
+    387
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_0_modern": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    644,
+    382
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_0_gruen": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    644,
+    382
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_0_industrie": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    644,
+    382
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_1_backstein": {
+   "anchor": [
+    258,
+    64
+   ],
+   "size": [
+    644,
+    386
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_1_modern": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    644,
+    382
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_1_gruen": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    644,
+    382
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_1_industrie": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    644,
+    382
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_2_backstein": {
+   "anchor": [
+    258,
+    42
+   ],
+   "size": [
+    644,
+    364
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_2_modern": {
+   "anchor": [
+    258,
+    38
+   ],
+   "size": [
+    644,
+    360
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_2_gruen": {
+   "anchor": [
+    258,
+    38
+   ],
+   "size": [
+    644,
+    360
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_2_industrie": {
+   "anchor": [
+    258,
+    38
+   ],
+   "size": [
+    644,
+    360
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_3_backstein": {
+   "anchor": [
+    258,
+    40
+   ],
+   "size": [
+    644,
+    362
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_3_modern": {
+   "anchor": [
+    258,
+    36
+   ],
+   "size": [
+    644,
+    358
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_3_gruen": {
+   "anchor": [
+    258,
+    36
+   ],
+   "size": [
+    644,
+    358
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_3_industrie": {
+   "anchor": [
+    258,
+    36
+   ],
+   "size": [
+    644,
+    358
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_4_backstein": {
+   "anchor": [
+    258,
+    89
+   ],
+   "size": [
+    644,
+    411
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_4_modern": {
+   "anchor": [
+    258,
+    82
+   ],
+   "size": [
+    644,
+    404
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_4_gruen": {
+   "anchor": [
+    258,
+    82
+   ],
+   "size": [
+    644,
+    404
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_4_industrie": {
+   "anchor": [
+    258,
+    82
+   ],
+   "size": [
+    644,
+    404
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_5_backstein": {
+   "anchor": [
+    258,
+    64
+   ],
+   "size": [
+    644,
+    386
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_5_modern": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    644,
+    382
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_5_gruen": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    644,
+    382
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_sc_5_industrie": {
+   "anchor": [
+    258,
+    60
+   ],
+   "size": [
+    644,
+    382
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 6,
+   "h": 4,
+   "height": 80
+  },
+  "pub_ki_0_backstein": {
+   "anchor": [
+    194,
+    20
+   ],
+   "size": [
+    452,
+    246
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_0_modern": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_0_gruen": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_0_industrie": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_1_backstein": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_1_modern": {
+   "anchor": [
+    194,
+    38
+   ],
+   "size": [
+    452,
+    264
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_1_gruen": {
+   "anchor": [
+    194,
+    38
+   ],
+   "size": [
+    452,
+    264
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_1_industrie": {
+   "anchor": [
+    194,
+    38
+   ],
+   "size": [
+    452,
+    264
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_2_backstein": {
+   "anchor": [
+    194,
+    20
+   ],
+   "size": [
+    452,
+    246
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_2_modern": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_2_gruen": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_2_industrie": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_3_backstein": {
+   "anchor": [
+    194,
+    20
+   ],
+   "size": [
+    452,
+    246
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_3_modern": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_3_gruen": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_3_industrie": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_4_backstein": {
+   "anchor": [
+    194,
+    19
+   ],
+   "size": [
+    452,
+    245
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_4_modern": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_4_gruen": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_4_industrie": {
+   "anchor": [
+    194,
+    16
+   ],
+   "size": [
+    452,
+    242
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_5_backstein": {
+   "anchor": [
+    194,
+    8
+   ],
+   "size": [
+    452,
+    234
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_5_modern": {
+   "anchor": [
+    194,
+    4
+   ],
+   "size": [
+    452,
+    230
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_5_gruen": {
+   "anchor": [
+    194,
+    4
+   ],
+   "size": [
+    452,
+    230
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_ki_5_industrie": {
+   "anchor": [
+    194,
+    4
+   ],
+   "size": [
+    452,
+    230
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_0_backstein": {
+   "anchor": [
+    194,
+    26
+   ],
+   "size": [
+    452,
+    252
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_0_modern": {
+   "anchor": [
+    194,
+    26
+   ],
+   "size": [
+    452,
+    252
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_0_gruen": {
+   "anchor": [
+    194,
+    26
+   ],
+   "size": [
+    452,
+    252
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_0_industrie": {
+   "anchor": [
+    194,
+    26
+   ],
+   "size": [
+    452,
+    252
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_1_backstein": {
+   "anchor": [
+    194,
+    41
+   ],
+   "size": [
+    452,
+    267
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_1_modern": {
+   "anchor": [
+    194,
+    36
+   ],
+   "size": [
+    452,
+    262
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_1_gruen": {
+   "anchor": [
+    194,
+    36
+   ],
+   "size": [
+    452,
+    262
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_1_industrie": {
+   "anchor": [
+    194,
+    35
+   ],
+   "size": [
+    452,
+    261
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_2_backstein": {
+   "anchor": [
+    194,
+    4
+   ],
+   "size": [
+    452,
+    230
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_2_modern": {
+   "anchor": [
+    194,
+    4
+   ],
+   "size": [
+    452,
+    230
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_2_gruen": {
+   "anchor": [
+    194,
+    4
+   ],
+   "size": [
+    452,
+    230
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_2_industrie": {
+   "anchor": [
+    194,
+    4
+   ],
+   "size": [
+    452,
+    230
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_3_backstein": {
+   "anchor": [
+    194,
+    10
+   ],
+   "size": [
+    452,
+    236
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_3_modern": {
+   "anchor": [
+    194,
+    6
+   ],
+   "size": [
+    452,
+    232
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_3_gruen": {
+   "anchor": [
+    194,
+    6
+   ],
+   "size": [
+    452,
+    232
+   ],
+   "lit": false,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_3_industrie": {
+   "anchor": [
+    194,
+    5
+   ],
+   "size": [
+    452,
+    231
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_4_backstein": {
+   "anchor": [
+    194,
+    24
+   ],
+   "size": [
+    452,
+    250
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_4_modern": {
+   "anchor": [
+    194,
+    24
+   ],
+   "size": [
+    452,
+    250
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_4_gruen": {
+   "anchor": [
+    194,
+    24
+   ],
+   "size": [
+    452,
+    250
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_4_industrie": {
+   "anchor": [
+    194,
+    24
+   ],
+   "size": [
+    452,
+    250
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_5_backstein": {
+   "anchor": [
+    194,
+    45
+   ],
+   "size": [
+    452,
+    271
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_5_modern": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_5_gruen": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
+  },
+  "pub_rc_5_industrie": {
+   "anchor": [
+    194,
+    42
+   ],
+   "size": [
+    452,
+    268
+   ],
+   "lit": true,
+   "mask": false,
+   "w": 4,
+   "h": 3,
+   "height": 40
   }
  },
  "facilities": {

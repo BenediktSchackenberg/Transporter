@@ -60,7 +60,8 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 | Etappe | Stand |
 |---|---|
 | 1 Fundament | **fertig** (10.11.2026) – `scripts/economy/municipal.gd`, `sim.municipal`, Test `test_municipal`, Probe `tests/probe_municipal.gd` |
-| 2–12 | offen |
+| 2 Gebäude-Baukasten | **fertig** (10.11.2026) – `tools/vox/public.py`, Test `test_public_buildings` (Abnahme A) |
+| 3–12 | offen |
 
 **Etappe 1 im Detail**
 
@@ -85,5 +86,18 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
   (Sicherheit, Gesundheit, Verkehr, Bildung, Umwelt).
 * Startausstattung: am ersten Spieltag je Stadt Feuerwache und Rettungswache auf freiem städtischem Bauland nahe dem Rathaus (Bauplatzsuche
   der Stadtentwicklung), als Laufzeitgebäude – alte Spielstände bekommen sie beim nächsten Tageswechsel, neue legen sie beim Laden genau wieder an.
-* Vorläufige Darstellung: Feuerwache nutzt das Sprite der Flughafenfeuerwehr, Rettungswache das der Arztpraxis; eigene Varianten folgen in Etappe 2.
 * Nur in der Weltart Region aktiv (wie die Stadtentwicklung).
+
+**Etappe 2 im Detail**
+
+* `tools/vox/public.py`: Bausteine Halle (Sektionaltore in Kennfarbe, Traufband), Mehrgeschosser (auch als Aufbau), Turm
+  (Schlauch-/Übungsturm, Silo), Unterstand, Salzkuppel, Schüttguthaufen, Wertstoffcontainer, Hubschrauberlandeplatz, Rotkreuzschild,
+  Blaulicht, Spielfeld/Spielgeräte. Stile: Backstein (Klinker, Satteldach, Sprossenfenster, Hecken), modern (Putz, Flachdach mit Technik,
+  Fensterbänder), grün (Lärchenholz, Gründach mit Solar, hohe Fenster, Bäume), Industrie (Blechverkleidung, Sheddach, dunkles Glas, Asphalt).
+* Je Typ sechs strukturell verschiedene Grundvarianten, z. B. Feuerwache: Hallenzeile mit Turm, L-Form, Zentralturm zwischen zwei Hallen,
+  Tore unten/Büros oben, Halle mit freistehendem Übungsturm, lange Halle mit Kopfbau. Größen: Feuerwache 4×3, Rettungswache 3×2,
+  Krankenhaus 5×4, Bauhof 4×3, Busbetriebshof 5×3, Schule 6×4, Kita 4×3, Recyclinghof 4×3.
+* 8 Typen × 6 Varianten × 4 Stile = 192 Gebäudebilder (`assets/iso/b_pub_<typ>_<v>_<stil>.png`, Bau: `python tools/build_iso.py public`).
+* `Municipal.pick_variant`: Grundvariante aus dem gespeicherten Seed, schon vergebene Kombinationen aus Typ und Stil werden übersprungen,
+  solange eine freie existiert – zehn Feuerwachen in der Region sehen verschieden aus. Das Bild wird im Laufzeitgebäude gespeichert.
+* Kamera für Sichtprüfung: `--shot-dienst=<n>` (n-te Einrichtung).

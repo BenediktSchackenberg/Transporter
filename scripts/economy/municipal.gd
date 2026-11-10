@@ -42,15 +42,15 @@ const TYPES := {
 	"RW-01": {"label": "Rettungswache", "dienst": "rettung", "ressort": "Gesundheit", "building": "rescue_station", "cost": 260000.0,
 		"upkeep": 90.0, "capacity": 2, "staff": {"rettung": 5, "notarzt": 1}, "min_staff": {"rettung": 2}, "power": 30.0, "water": 4.0,
 		"vehicles": ["RTW", "NEF"], "vehicles_from_pop": {"NEF": 500}},
-	"KH-01": {"label": "Krankenhaus", "dienst": "rettung", "ressort": "Gesundheit", "building": "clinic", "cost": 2400000.0,
+	"KH-01": {"label": "Krankenhaus", "dienst": "rettung", "ressort": "Gesundheit", "building": "hospital", "cost": 2400000.0,
 		"upkeep": 900.0, "capacity": 40, "staff": {"arzt": 6, "pflege": 20}, "power": 400.0, "water": 60.0, "vehicles": []},
 	"BH-01": {"label": "Bauhof", "dienst": "bauhof", "ressort": "Verkehr", "building": "municipal_yard", "cost": 300000.0,
 		"upkeep": 110.0, "capacity": 2, "staff": {"bauhof": 6}, "power": 40.0, "water": 6.0, "vehicles": ["Kipper", "Streuwagen"]},
 	"VB-01": {"label": "Busbetriebshof", "dienst": "oepnv", "ressort": "Verkehr", "building": "bus_depot", "cost": 380000.0,
 		"upkeep": 120.0, "capacity": 2, "staff": {"fahrdienst": 6}, "power": 50.0, "water": 6.0, "vehicles": ["Linienbus", "Linienbus"]},
-	"SC-01": {"label": "Grundschule", "dienst": "bildung", "ressort": "Bildung", "building": "school", "cost": 1500000.0,
+	"SC-01": {"label": "Grundschule", "dienst": "bildung", "ressort": "Bildung", "building": "public_school", "cost": 1500000.0,
 		"upkeep": 260.0, "capacity": 240, "staff": {"lehrkraft": 12}, "power": 120.0, "water": 20.0, "vehicles": []},
-	"KI-01": {"label": "Kita", "dienst": "bildung", "ressort": "Bildung", "building": "kindergarten", "cost": 600000.0,
+	"KI-01": {"label": "Kita", "dienst": "bildung", "ressort": "Bildung", "building": "public_kita", "cost": 600000.0,
 		"upkeep": 110.0, "capacity": 60, "staff": {"erzieher": 6}, "power": 40.0, "water": 10.0, "vehicles": []},
 	"RC-01": {"label": "Recyclinghof", "dienst": "recycling", "ressort": "Umwelt", "building": "recycling_yard", "cost": 350000.0,
 		"upkeep": 100.0, "capacity": 2, "staff": {"recycling": 4}, "power": 80.0, "water": 4.0, "vehicles": ["Wertstoffwagen"]},
@@ -68,7 +68,7 @@ const VEHICLES := {
 	"Wertstoffwagen": {"label": "Wertstoffsammelfahrzeug", "crew": 2, "cost": 35.0, "price": 230000.0, "sprite": "rc_wagen"},
 }
 
-## Stadtstile: welche Bauformen ein Ort bevorzugt (Etappe 2 waehlt danach die Grundvarianten).
+## Stadtstile (tools/vox/public.py): Wandmaterial, Dachform, Fenster und Gruen; je Typ 6 Grundvarianten in jedem Stil.
 const STYLES := {
 	"backstein": "Backstein, traditionell",
 	"modern": "modern, Glas und Beton",
@@ -137,6 +137,29 @@ func _name(k: int, code: String, cell: Vector2i) -> String:
 	return name
 
 
+## Bildname aus Typ, Grundvariante und Stil (CityGenerator.TYPES, tools/vox/public.py): pub_<kuerzel>_<v>_<stil>.
+static func sprite_of(f: Dictionary) -> String:
+	var first := str(CityGenerator.TYPES[TYPES[f.code].building][0][0])   # z. B. pub_fw_0_backstein
+	return "%s_%d_%s" % [first.left(first.find("_", 4)), int(f.variant), str(f.style)]
+
+
+## Grundvariante aus dem Seed; schon vergebene Kombinationen aus Typ und Stil werden uebersprungen, solange noch eine frei ist
+## (zehn Feuerwachen in der Region sehen verschieden aus).
+func pick_variant(code: String, st: String, sd: int) -> int:
+	var used := {}
+	for f in facilities.values():
+		if str(f.code) == code and str(f.style) == st:
+			used[int(f.variant)] = int(used.get(int(f.variant), 0)) + 1
+	var least := 1 << 30
+	for v in 6:
+		least = mini(least, int(used.get(v, 0)))
+	for i in 6:
+		var v := (sd + i) % 6
+		if int(used.get(v, 0)) <= least:
+			return v
+	return sd % 6
+
+
 static func visual_seed(world_seed: int, k: int, code: String, cell: Vector2i) -> int:
 	return absi(hash([world_seed, k, code, cell.x, cell.y]))
 
@@ -148,14 +171,20 @@ func register(k: int, code: String, building_id: int) -> Dictionary:
 	var b: Dictionary = sim.city.building(building_id)
 	var cell := Vector2i(int(b.x), int(b.y))
 	var sd := visual_seed(int(sim.city.seed_value), k, code, cell)
+	var st := style_of(k)
+	var v := pick_variant(code, st, sd)
 	var f := {"id": _id("M"), "code": code, "town": k, "name": _name(k, code, cell), "building": building_id, "cell": [cell.x, cell.y],
-		"style": style_of(k), "seed": sd, "variant": sd % 6, "size": [int(b.w), int(b.h)], "cost": float(t.cost), "upkeep": float(t.upkeep),
+		"style": st, "seed": sd, "variant": v, "size": [int(b.w), int(b.h)], "cost": float(t.cost), "upkeep": float(t.upkeep),
 		"capacity": int(t.capacity), "staff_need": staff_need(code, _pop(k)), "volunteer_need": int(t.get("volunteers", 0)), "power": float(t.power), "water": float(t.water),
 		"condition": 100.0, "inventory": {}, "owner": Towns.owner_of(k), "status": "in_betrieb", "opened": _today(), "vehicles": []}
 	facilities[f.id] = f
 	b["role"] = "municipal"
 	b["town"] = k
 	b["name"] = "%s, %s" % [f.name, sim.towns.name_of(k)]
+	b["sprite"] = sprite_of(f)
+	for ab in sim.events.added_buildings:   # Laden legt das Gebaeude mit genau diesem Bild wieder an
+		if int(ab.x) == int(b.x) and int(ab.y) == int(b.y) and str(ab.type) == str(b.type):
+			ab["sprite"] = b.sprite
 	var nr := 1
 	for vt in t.vehicles:
 		if _pop(k) >= int(t.get("vehicles_from_pop", {}).get(vt, 0)):

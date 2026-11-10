@@ -25,6 +25,7 @@ import industrial as I
 import airport as A
 import tourism as TU
 import civic as CV
+import public as PB
 
 OUT = os.path.join(HERE, "..", "assets", "iso")
 os.makedirs(OUT, exist_ok=True)
@@ -44,6 +45,7 @@ def init():
     PR.init()
     CV.init()
     A.init()
+    PB.init()
 
 
 def bake(im, mask, tint):
@@ -170,6 +172,7 @@ def building_specs():
     s["airport_tower"] = lambda: A.tower(1)
     s["airport_hangar"] = lambda: A.hangar(1)
     s["airport_fire"] = lambda: A.fire(1)
+    s.update(PB.specs())   # kommunale Gebaeude (Auftrag 20): je Typ 6 Grundvarianten x 4 Stadtstile
     return s
 
 
@@ -360,6 +363,8 @@ def main():
         build_ground()
     if "buildings" in what:
         build_buildings()
+    if "public" in what:
+        build_buildings(only=list(PB.specs().keys()))
     if "tourism" in what:
         build_buildings(only=["hotel_pension", "hotel_strand", "hotel_grand", "kneipe", "strandbar", "disco"])
     if "facilities" in what:
