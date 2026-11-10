@@ -6591,7 +6591,7 @@ func test_public_safety() -> void:
 	for d in range(day + 1, day + 40):
 		S.on_day(d)
 	ok(int(S.stats.erkrankt) > 0 and int(S.stats.arzt) > 0, "Bürger erkranken und gehen zum Arzt (%d Fälle, %d Arztbesuche, %d Krankenhaus)" % [int(S.stats.erkrankt), int(S.stats.arzt), int(S.stats.krankenhaus)])
-	ok(float(S.stats.kosten) > 0.0 and float(s.economy.accounts.P0) < p0, "Behandlungskosten trägt die Stadtkasse")
+	ok(float(S.stats.kosten) > 0.0 and float(s.economy.accounts.P0) >= p0 - 0.01, "Behandlungskosten tragen die Krankenkassen, nicht die Stadtkasse (%.0f EUR)" % float(S.stats.kosten))
 	# Polizei sichert eine Sperrung ab
 	var rw: Vector2i = s._straight_road()
 	s.nav.add_roadwork(rw, s.game_min + 500.0)

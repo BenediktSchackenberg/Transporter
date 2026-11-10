@@ -3,7 +3,7 @@ extends RefCounted
 ## Sicherheit und Gesundheit (Auftrag 10, Etappe 3, docs/RESIDENTS.md). Baut auf den Buergern aus `Citizens` auf (gleiche Datensaetze):
 ##  - Gesundheit: Buerger erkranken (eher bei Unglueck und im Alter). Leichte Faelle gehen zur Arztpraxis und fehlen ein paar Tage;
 ##    schwere Faelle (oder wenn die Praxen ueberlastet sind) holt der Krankenwagen ins Krankenhaus. Behandlungskosten zahlt die
-##    Stadtkasse (Ressort Gesundheit) an die Dienstleister (P0 -> S0).
+##    Krankenkassen an die Dienstleister (X0 -> S0; bis 10.11. Stadtkasse P0).
 ##  - Kriminalitaet: Geldnot, Arbeitslosigkeit und Unglueck machen Ladendiebstahl wahrscheinlicher (Beute S0 -> Konto des Taeters).
 ##    Die Polizei findet Taeter abhaengig von ihrer Personalstaerke; Festnahme mit Streifenwagen, Beute wird erstattet (R0 -> S0),
 ##    Haft 30-90 Tage: Arbeit weg; Mieter verlieren bei langer Haft die Wohnung, Eigentuemer mit Steuerrueckstand ihr Haus.
@@ -149,8 +149,9 @@ func on_day(day: int) -> void:
 		if Citizens.roll(pid, day, 75) < float(c.kriminalitaet_je_tag) * f:
 			_crime(p, day)
 	if costs > 0.0:
-		sim.economy.transfer("P0", "S0", costs)
-		sim.public_sector.departments.Gesundheit = float(sim.public_sector.departments.get("Gesundheit", 0.0)) + costs
+		# Behandlungskosten (Arzt, Klinik) tragen die Krankenkassen (X0, ausserhalb der Region). Frueher zahlte immer die Kasse der ersten
+		# Stadt (P0) fuer die ganze Region - Analyse 10.11.: Muschelbucht 127.000 EUR im Monat. Kein Ressort der Stadt.
+		sim.economy.transfer("X0", "S0", costs)
 		stats.kosten += costs
 	_police_work(day, police_n)
 

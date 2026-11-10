@@ -12,6 +12,7 @@ const QUIT_CHANCE := 0.02          # freiwilliger Stellenwechsel je Monat
 const DROP_CHANCE := 0.004         # Kuendigung ohne neue Stelle
 const DEMAND_SWING := 0.12         # Schwankung des Personalbedarfs je Arbeitgeber und Monat (+/-)
 const BENEFIT_RATE := 0.6          # Arbeitslosengeld in Anteil des mittleren Nettolohns
+const TOWN_BENEFIT_SHARE := 0.3   # Anteil der Wohnstadt an der Grundsicherung (Kosten der Unterkunft); den Rest traegt der Bund (X0)
 const SPEND_SHARE := 0.8           # Anteil des Nettos, der an S0 geht
 const IMPORT_SHARE := 0.1          # Anteil fuer Importe (X0); der Rest wird gespart
 ## Arbeitgeber der uebrigen Buerger: Anteil an den Stellen, Stundenlohn, zahlendes Konto, Arbeitsviertel (Index in Catalog.DISTRICTS)
@@ -450,10 +451,15 @@ func _pay(month: int = 0) -> void:
 	if employed > 0 and not jobless.is_empty():
 		benefit_each = BENEFIT_RATE * net / employed
 		var jb := by_town(jobless)
+		var town_part := 0.0
 		for k in jb:
-			benefit += P.pay_in(Towns.account_of(int(k)), jb[k].map(func(q): return [q, benefit_each]))   # Grundsicherung der Wohnstadt
+			# Grundsicherung: den Regelsatz traegt der Bund (X0, ausserhalb der Region), die Wohnstadt die Unterkunftskosten (TOWN_BENEFIT_SHARE).
+			# Analyse 10.11.: zahlte die Stadt alles, kostete Zuzug ohne neue Arbeitsplaetze die Staedte 70-160 Tsd. EUR im Monat.
+			var town_amt: float = P.pay_in(Towns.account_of(int(k)), jb[k].map(func(q): return [q, benefit_each * TOWN_BENEFIT_SHARE]))
+			town_part += town_amt
+			benefit += town_amt + P.pay_in("X0", jb[k].map(func(q): return [q, benefit_each * (1.0 - TOWN_BENEFIT_SHARE)]))
 		sim.public_sector.benefits_total += benefit
-		sim.public_sector.departments.Soziales += benefit
+		sim.public_sector.departments.Soziales += town_part   # Ressortausgaben der Staedte: nur ihr Anteil
 	stats.benefits = benefit
 	_set_net_income(net_share, benefit_each)
 	# 3) Miete (Mieter -> Eigentuemer bzw. Vermietersektor), 4) Grundsteuer der Eigentuemer
