@@ -288,7 +288,7 @@ Der vollständige Auftragstext kam am 10.11. erneut. Etappen 1–12 setzen je Di
 
 | Etappe | Inhalt | Abnahme |
 |---|---|---|
-| 13 Feuerwehr-Ausbau | FW-02 Feuerwache, FW-03 Hauptfeuerwache, FW-04 BF-Zentrale, FW-05 Flughafenfeuerwehr (übernimmt den Flughafenbrand), FW-06 Ausbildungszentrum (Lehrgänge heben die Qualifikation); Fahrzeuge KdoW, ELW 1, KLF, LF 10, TLF 3000, GW-L, RW, FLF; Einsatzarten (Wohnung, Küche, Fahrzeug, Industrie, Lagerhalle, Verkehrsunfall, technische Hilfe, Unwetter, Wasserschaden, Gefahrstoff, Flughafen) mit Alarm- und Ausrückeordnung (passendes Fahrzeug je Einsatzart); Funktionen im Personal (Maschinist, Gruppenführer, Zugführer, Wachleiter, Gerätewart) mit Arbeitszeit und Erschöpfung | A, B |
+| 13 Feuerwehr-Ausbau **(fertig 10.11.)** | FW-02 Feuerwache, FW-03 Hauptfeuerwache, FW-04 BF-Zentrale, FW-05 Flughafenfeuerwehr (übernimmt den Flughafenbrand), FW-06 Ausbildungszentrum (Lehrgänge heben die Qualifikation); Fahrzeuge KdoW, ELW 1, KLF, LF 10, TLF 3000, GW-L, RW, FLF; Einsatzarten (Wohnung, Küche, Fahrzeug, Industrie, Lagerhalle, Verkehrsunfall, technische Hilfe, Unwetter, Wasserschaden, Gefahrstoff, Flughafen) mit Alarm- und Ausrückeordnung (passendes Fahrzeug je Einsatzart); Funktionen im Personal (Maschinist, Gruppenführer, Zugführer, Wachleiter, Gerätewart) mit Arbeitszeit und Erschöpfung | A, B |
 | 14 Rettung/Kliniken | RD-02 zentrale Rettungswache, KH-01 Stadtklinik je Stadt, KH-02/KH-03 als Ausbaustufen, KH-04 MVZ; KTW, ELW RD, ITW; Betten je Klinik, Verlegung bei Überlastung, medizinische Güter aus dem Großlager verbraucht | C |
 | 15 Bauhof/Straßen | BH-02 bis BH-05; Fahrzeuge Pritsche, Transporter, Kehrmaschine, Asphaltfertiger, Walze, Bagger, Radlader, Mobilkran, Hubsteiger, Schneepflug, Salz-Lkw, Inspektionsfahrzeug; Reparatur mit Sperrung des Abschnitts und Material aus dem Lager, Tempo-Abschlag an Schlaglöchern, Straßenreinigung | D |
 | 16 ÖPNV-Ausbau | ÖPNV-02/03 (Betriebshof, Busbahnhof), Haltestellen als sichtbare Bauten (ÖPNV-04/05), Umsteigepunkt am Bahnhof (06); mehrere Linien je Stadt, Linien zum Bahnhof/Flughafen/zur Nachbarstadt, Busgrößen (Klein-, Midi-, Standard-, Gelenk-, E-, Überlandbus), Fahrplan mit Verspätungen, Verstärker bei Nachfrage, Subvention statt Streichung | E |
@@ -303,3 +303,28 @@ Der vollständige Auftragstext kam am 10.11. erneut. Etappen 1–12 setzen je Di
 
 Jeder neue Gebäudetyp bekommt ≥ 6 Grundvarianten × 4 Stile im Baukasten (`tools/vox/public.py`) **und** eine Funktion; keine Typen
 ohne Aufgabe.
+
+**Etappe 13 im Detail (Feuerwehr-Ausbau)** – Test `test_fire_stages`, Probe `tests/probe_fire13.gd`
+
+* Typen: FW-01 heißt jetzt „Freiwillige Feuerwehr“; neu FW-02 Feuerwache (5×3), FW-03 Hauptfeuerwache mit Leitstelle (6×4), FW-04
+  Berufsfeuerwehr-Zentrale mit Leitstelle und Werkstatt (7×5), FW-05 Flughafenfeuerwehr (3×2, in der vorhandenen Flughafenwache),
+  FW-06 Feuerwehrausbildungszentrum (5×4, regional, Kosten nach Einwohneranteilen). Je Typ 6 Grundvarianten × 4 Stile
+  (`tools/vox/public.py`: Hallenkämme, Winkel- und Hofanlagen, Glaskanzel, Funkmast, Übungsturm, Brandhaus, Wrack- und Containerplatz).
+* Fahrzeuge (`tools/vox/vehicles.py`): KdoW (Pkw), ELW 1 (Hochdach, Antennenmast), KLF, LF 10 (Saugschlauch), TLF 3000 (Tank, Werfer),
+  GW-L (Ladebordwand), RW (Kran, Lichtmast, Seilwinde), FLF (drei Achsen, Panoramakabine, Dach- und Frontwerfer). Jedes Fahrzeug hat
+  Rollen (`Municipal.VEHICLES.roles`) und Löschleistung.
+* Einsatzarten mit Alarm- und Ausrückeordnung (`FireService.KINDS`): Wohnungs-, Küchen-, Gebäude-, Industrie-, Lagerhallen-, Fahrzeug- und
+  Flughafenbrand; Verkehrsunfall (alarmiert parallel den Rettungsdienst für einen verletzten Bürger), technische Hilfeleistung,
+  Unwetterschaden (schadet der Straße, bis geräumt ist), Wasserschaden (schadet dem Gebäude → Reparatur), Gefahrstoffeinsatz. Pflichtrollen
+  müssen frei sein, Ergänzungen fahren mit, wenn frei (Drehleiter beim hohen Wohnhaus: weniger Schaden; Tank: ×1,5 Löschleistung;
+  Einsatzleitung: ×1,2). Technische Einsätze je Stadt und Tag, Wetter verstärkt (Sturm/Starkregen, Schnee/Nebel).
+* Personal: drei Wachabteilungen im 24-Stunden-Dienst ab 6 Hauptamtlichen, sonst Tagdienst 7–17 Uhr (außerhalb wie Freiwillige
+  alarmierbar, 8 Minuten Ausrückzeit); Leitstelle in der Stadt −1 Minute. Funktionen Wachleiter, Zugführer, Gruppenführer, Maschinist,
+  Gerätewart, Disponent, Feuerwehrtechniker. Erschöpfung 0,4 je Einsatzminute, ab 80 nicht einsetzbar, −50 je Tag. Lehrgänge im
+  Ausbildungszentrum (10 Tage, Plätze = Kapazität): ausgebildete Kräfte löschen mit 1,5 statt 1,0.
+* Flughafenbrand: mit FW-05 rückt die Flughafenfeuerwehr mit FLF aus; Warenschaden und Versicherung rechnet weiter der Flughafen ab.
+* Bauamt: Ausbau FW-01 → FW-02 → FW-03 → FW-04 ab 10/25/45 Einsätzen in 30 Tagen oder 1 500/4 000/10 000 Einwohnern; fehlt für eine
+  Einsatzart, auf die gewartet werden musste, die Fahrzeugrolle in der ganzen Stadt, kauft es das günstigste passende Fahrzeug.
+* Leitstelle: je Wache im Dienst/einsatzbereit/Lehrgang/erschöpft und Funktionen; laufende Einsätze mit Fahrzeugkennungen, anklickbar.
+* 30-Tage-Probe (Seed 4242): 6 Brände (alle gelöscht), 13 technische Einsätze, 24 Lehrgänge, Invarianten exakt 0, Feuerwehr-Update 0,006 ms je Schritt.
+

@@ -644,12 +644,27 @@ func _view_dienste() -> void:
 				", ".join(f.vehicles.map(func(vid): return "%s (%s)" % [M.vehicles[vid].type, M.vehicles[vid].status]))], 14))
 			var cell := Vector2i(int(f.cell[0]), int(f.cell[1]))
 			r.add_child(_btn("⌖", func(): _jump_cell(cell), true))
+			if FireService.is_station(f) and f.status == "in_betrieb":   # Etappe 13: Dienstplan, Funktionen, Lehrgaenge, Erschoepfung
+				var crew: Array = M.staff_of(f.id) + M.volunteers_of(f.id)
+				var fn := {}
+				for p in M.staff_of(f.id):
+					fn[str(p.get("funktion", "Feuerwehrmann/-frau"))] = int(fn.get(str(p.get("funktion", "Feuerwehrmann/-frau")), 0)) + 1
+				var tired := crew.filter(func(p): return float(p.get("erschoepfung", 0.0)) >= FireService.TIRED).size()
+				v.add_child(_t("    im Dienst %d · einsatzbereit %d · Lehrgang %d/%d · erschöpft %d · %s" % [sim.fire._pros_on_duty(f), sim.fire._crew_free(f),
+					crew.filter(func(p): return bool(p.get("lehrgang", false))).size(), crew.size(), tired,
+					", ".join(fn.keys().map(func(x): return "%d %s" % [int(fn[x]), x]))], 13))
+		for e in sim.fire.active().filter(func(e): return int(e.town) == k):   # laufende Einsaetze, anklickbar zur Einsatzstelle
+			var r := _row(v)
+			r.add_child(_t("🚒 %s: %s (%s) · %s · %s" % [e.kind, e.name, e.cause, e.phase,
+				", ".join(e.vehicles.map(func(vid): return str(M.vehicles[vid].label) if M.vehicles.has(vid) else vid)) if not e.vehicles.is_empty() else "keine Wache frei"], 14, C_WARN))
+			var ecell := Vector2i(int(e.cell[0]), int(e.cell[1]))
+			r.add_child(_btn("⌖", func(): _jump_cell(ecell), true))
 		var rs: Dictionary = sim.rescue.summary(k)
 		var es: Dictionary = sim.education.summary(k)
 		var ws: Dictionary = sim.winter.summary(k)
 		var fs: Dictionary = sim.fire.summary(k)
-		v.add_child(_t("Rettung: %d Notfälle, Hilfsfrist Ø %.1f min (%d %% ≤ 15 min) · Feuer: %d aktiv · Schnee: %d Abschnitte (Rettungswege %d) · Schlaglöcher %d" % [
-			int(rs.notfaelle), float(rs.mittlere_hilfsfrist_min), roundi(float(rs.hilfsfrist_eingehalten_anteil) * 100.0), fs.brennt.size(),
+		v.add_child(_t("Rettung: %d Notfälle, Hilfsfrist Ø %.1f min (%d %% ≤ 15 min) · Feuerwehr: %d Einsätze aktiv · Schnee: %d Abschnitte (Rettungswege %d) · Schlaglöcher %d" % [
+			int(rs.notfaelle), float(rs.mittlere_hilfsfrist_min), roundi(float(rs.hilfsfrist_eingehalten_anteil) * 100.0), fs.aktiv.size(),
 			int(ws.verschneit), int(ws.rettungswege_verschneit), int(ws.schlagloecher)], 14))
 		v.add_child(_t("Bildung: Kita %d/%d Plätze, Schule %d/%d Plätze, Lehrkräfte %d %%" % [int(es.kinder_kita), int(es.kitaplaetze), int(es.kinder_schule), int(es.schulplaetze),
 			roundi(float(es.lehrkraefte_quote) * 100.0)], 14))

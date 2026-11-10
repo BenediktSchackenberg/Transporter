@@ -36,7 +36,7 @@ const BERUFE := {
 ## volunteers: Ehrenamtliche (Freiwillige Feuerwehr: Buerger mit eigenem Beruf, alarmierbar, ohne Lohn);
 ## vehicles_from_pop: Fahrzeuge, die erst ab dieser Einwohnerzahl zur Erstausstattung gehoeren.
 const TYPES := {
-	"FW-01": {"label": "Feuerwache", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_station", "cost": 420000.0,
+	"FW-01": {"label": "Freiwillige Feuerwehr", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_station", "cost": 420000.0,
 		"upkeep": 140.0, "capacity": 2, "staff": {"feuerwehr": 8}, "min_staff": {"feuerwehr": 1}, "volunteers": 8, "power": 60.0, "water": 12.0,
 		"vehicles": ["HLF 20", "DLK 23"], "vehicles_from_pop": {"DLK 23": 500}},
 	"RW-01": {"label": "Rettungswache", "dienst": "rettung", "ressort": "Gesundheit", "building": "rescue_station", "cost": 260000.0,
@@ -56,12 +56,38 @@ const TYPES := {
 		"upkeep": 110.0, "capacity": 60, "min_capacity": 10, "staff": {"erzieher": 6}, "power": 40.0, "water": 10.0, "vehicles": []},
 	"RC-01": {"label": "Recyclinghof", "dienst": "recycling", "ressort": "Umwelt", "building": "recycling_yard", "cost": 350000.0,
 		"upkeep": 100.0, "capacity": 2, "staff": {"recycling": 4}, "power": 80.0, "water": 4.0, "vehicles": ["Wertstoffwagen"]},
+	# Ausbaustufen der Feuerwehr (Etappe 13): capacity = Stellplaetze. Hauptamtliche in drei Wachabteilungen (24-Stunden-Dienst), sobald
+	# genug Personal da ist (FireService.on_duty); FW-03/04 mit Leitstelle (schnellere Alarmierung), FW-04 mit Werkstatt.
+	"FW-02": {"label": "Feuerwache", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_station_m", "cost": 1600000.0,
+		"upkeep": 260.0, "capacity": 4, "staff": {"feuerwehr": 18}, "min_staff": {"feuerwehr": 6}, "volunteers": 10, "power": 110.0, "water": 20.0,
+		"vehicles": ["HLF 20", "LF 10", "TLF 3000", "ELW 1"], "vehicles_from_pop": {"ELW 1": 800}},
+	"FW-03": {"label": "Hauptfeuerwache", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_station_l", "cost": 4500000.0,
+		"upkeep": 520.0, "capacity": 7, "staff": {"feuerwehr": 30}, "min_staff": {"feuerwehr": 10}, "power": 220.0, "water": 35.0,
+		"vehicles": ["KdoW", "ELW 1", "HLF 20", "HLF 20", "DLK 23", "TLF 3000", "RW"], "leitstelle": true},
+	"FW-04": {"label": "Berufsfeuerwehr-Zentrale", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_hq", "cost": 9000000.0,
+		"upkeep": 900.0, "capacity": 10, "staff": {"feuerwehr": 45}, "min_staff": {"feuerwehr": 16}, "power": 400.0, "water": 60.0,
+		"vehicles": ["KdoW", "ELW 1", "HLF 20", "HLF 20", "LF 10", "DLK 23", "TLF 3000", "RW", "GW-L"], "leitstelle": true, "werkstatt": true},
+	"FW-05": {"label": "Flughafenfeuerwehr", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_airport", "cost": 2200000.0,
+		"upkeep": 300.0, "capacity": 3, "staff": {"feuerwehr": 12}, "min_staff": {"feuerwehr": 4}, "power": 120.0, "water": 30.0,
+		"vehicles": ["FLF", "FLF", "HLF 20"], "flughafen": true},
+	"FW-06": {"label": "Feuerwehrausbildungszentrum", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_school", "cost": 2500000.0,
+		"upkeep": 280.0, "capacity": 12, "staff": {"feuerwehr": 4}, "min_staff": {"feuerwehr": 2}, "regional": true, "power": 90.0, "water": 15.0,
+		"vehicles": [], "ausbildung": true},
 }
 
 ## Fahrzeugtypen: Kurzbezeichnung -> Beschreibung, Besatzung, Kosten je Tag, Kaufpreis, Sprite-Familie (Etappe 3).
 const VEHICLES := {
-	"HLF 20": {"label": "Hilfeleistungslöschfahrzeug", "crew": 6, "cost": 45.0, "price": 420000.0, "sprite": "fw_hlf"},
-	"DLK 23": {"label": "Drehleiter", "crew": 2, "cost": 55.0, "price": 750000.0, "sprite": "fw_dlk"},
+	# Feuerwehr: roles = Aufgaben laut Alarm- und Ausrueckeordnung (FireService.KINDS), power = Loeschleistung (Brandstaerke je Minute)
+	"HLF 20": {"label": "Hilfeleistungslöschfahrzeug", "crew": 6, "cost": 45.0, "price": 420000.0, "sprite": "fw_hlf", "roles": ["loeschen", "thl"], "power": 3.0},
+	"DLK 23": {"label": "Drehleiter", "crew": 2, "cost": 55.0, "price": 750000.0, "sprite": "fw_dlk", "roles": ["hoehe"], "power": 0.5},
+	"KdoW": {"label": "Kommandowagen", "crew": 1, "cost": 12.0, "price": 60000.0, "sprite": "fw_kdow", "roles": ["fuehrung"], "power": 0.0},
+	"ELW 1": {"label": "Einsatzleitwagen", "crew": 2, "cost": 20.0, "price": 180000.0, "sprite": "fw_elw", "roles": ["fuehrung"], "power": 0.0},
+	"KLF": {"label": "Kleinlöschfahrzeug", "crew": 3, "cost": 18.0, "price": 120000.0, "sprite": "fw_klf", "roles": ["loeschen_klein"], "power": 1.5},
+	"LF 10": {"label": "Löschgruppenfahrzeug", "crew": 6, "cost": 35.0, "price": 330000.0, "sprite": "fw_lf10", "roles": ["loeschen"], "power": 2.5},
+	"TLF 3000": {"label": "Tanklöschfahrzeug", "crew": 3, "cost": 38.0, "price": 360000.0, "sprite": "fw_tlf", "roles": ["loeschen", "wasser"], "power": 4.0},
+	"GW-L": {"label": "Gerätewagen Logistik", "crew": 2, "cost": 25.0, "price": 200000.0, "sprite": "fw_gwl", "roles": ["logistik", "gefahrstoff"], "power": 0.0},
+	"RW": {"label": "Rüstwagen", "crew": 3, "cost": 32.0, "price": 450000.0, "sprite": "fw_rw", "roles": ["thl", "thl_schwer", "gefahrstoff"], "power": 0.0},
+	"FLF": {"label": "Flugfeldlöschfahrzeug", "crew": 3, "cost": 70.0, "price": 950000.0, "sprite": "fw_flf", "roles": ["flugfeld", "loeschen"], "power": 8.0},
 	"RTW": {"label": "Rettungswagen", "crew": 2, "cost": 30.0, "price": 160000.0, "sprite": "rd_rtw"},
 	"NEF": {"label": "Notarzteinsatzfahrzeug", "crew": 2, "cost": 20.0, "price": 90000.0, "sprite": "rd_nef"},
 	"Kipper": {"label": "Kipper", "crew": 2, "cost": 25.0, "price": 120000.0, "sprite": "bh_kipper"},
@@ -79,7 +105,8 @@ const STYLES := {
 }
 const STYLE_OF_CHARACTER := {"Marktflecken": "backstein", "Handwerkerort": "industrie", "Fischerdorf": "gruen", "Bauerndorf": "gruen"}
 const START_KIT := ["FW-01", "RW-01", "BH-01"]
-const REGIONAL_KIT := ["KH-01"]   # einmal je Region, in der einwohnerstaerksten Stadt (Kreiskrankenhaus)
+const REGIONAL_KIT := ["KH-01", "FW-06", "FW-05"]   # einmal je Region: Kreiskrankenhaus und Ausbildungszentrum in der einwohnerstaerksten Stadt,
+                                                  # Flughafenfeuerwehr in der Wache des Flughafens (nur wenn es einen gibt)
 
 var sim
 var facilities := {}     # "M<n>" -> Einrichtung
@@ -268,19 +295,37 @@ func ensure_kit() -> void:
 ## Regionale Einrichtungen (Kreiskrankenhaus): einmal je Region, in der einwohnerstaerksten Stadt mit passendem Bauplatz.
 ## Auch fuer Spielstaende, die vor Etappe 5 entstanden sind (eigenes Merkmal).
 func ensure_regional() -> void:
-	if regional_started:
+	if regional_started and REGIONAL_KIT.all(func(c): return kit_tried.has("R|" + c)):
 		return
+	if regional_started:
+		kit_tried["R|KH-01"] = true   # Spielstand vor Etappe 13: Kreiskrankenhaus wurde schon versucht
 	regional_started = true
 	var order: Array = sim.towns.list.map(func(t): return int(t.id))
 	order.sort_custom(func(a, b): return _pop(a) > _pop(b))
 	for code in REGIONAL_KIT:
+		if kit_tried.has("R|" + code):
+			continue
+		kit_tried["R|" + code] = true
 		if facilities.values().any(func(f): return str(f.code) == code):
+			continue
+		if code == "FW-05":
+			_airport_fire()
 			continue
 		for k in order:
 			var f := _place(k, code)
 			if not f.is_empty():
 				_share_regional(f)
 				break
+
+
+## Flughafenfeuerwehr (Etappe 13): die vorhandene Wache am Flughafen (gleiche Grundflaeche 3x2) wird Einrichtung FW-05 der Stadt des
+## Flughafens, mit Personal, Flugfeldloeschfahrzeugen und eigenem Bild; Flughafenbraende uebernimmt danach die Feuerwehr (FireService).
+func _airport_fire() -> void:
+	var a = sim.airport
+	if a == null or not a.enabled or int(a.fire_station) < 0 or sim.city.building(int(a.fire_station)).is_empty():
+		return
+	var bid := int(a.fire_station)
+	register(sim.towns.of_building(bid), "FW-05", bid)
 
 
 ## Regionale Einrichtung (Kreiskrankenhaus): Traeger ist der Landkreis, die Kosten tragen alle Staedte nach Einwohneranteilen.
@@ -321,7 +366,7 @@ func _place(k: int, code: String) -> Dictionary:
 func on_day(day: int) -> void:
 	if not started:
 		ensure_start()
-	if not regional_started:
+	if not regional_started or not REGIONAL_KIT.all(func(c): return kit_tried.has("R|" + c)):
 		ensure_regional()
 	if kit_tried.size() < sim.towns.count() * START_KIT.size():
 		ensure_kit()
@@ -538,13 +583,13 @@ func open_task(fid: String, kind: String, cell: Vector2i, priority: int = 1, nee
 
 
 ## Freie Fahrzeuge und Personal zuteilen. Schlaegt fehl (Aufgabe bleibt offen), wenn ein Fahrzeugtyp fehlt oder zu wenig Personal da ist.
-func dispatch(tid: String) -> Dictionary:
+func dispatch(tid: String, crew_ok: Callable = Callable(), pick: Array = []) -> Dictionary:
 	var t: Dictionary = tasks.get(tid, {})
 	if t.is_empty() or t.status != "offen":
 		return {"ok": false, "msg": "Aufgabe %s ist nicht offen." % tid}
 	var f: Dictionary = facilities[t.facility]
-	var picked: Array = []
-	for vt in t.need_vehicles:
+	var picked: Array = pick.duplicate()
+	for vt in ([] if not pick.is_empty() else t.need_vehicles):
 		var found := ""
 		for vid in f.vehicles:
 			var v: Dictionary = vehicles[vid]
@@ -559,7 +604,7 @@ func dispatch(tid: String) -> Dictionary:
 		if o.status == "unterwegs" and str(o.facility) == str(f.id):
 			for pid in o.staff:
 				busy[int(pid)] = true
-	var crew: Array = (staff_of(f.id) + volunteers_of(f.id)).filter(func(p): return not busy.has(int(p.id)) and not PublicSafety.absent(p, _today()))
+	var crew: Array = (staff_of(f.id) + volunteers_of(f.id)).filter(func(p): return not busy.has(int(p.id)) and not PublicSafety.absent(p, _today()) and (not crew_ok.is_valid() or crew_ok.call(p, f)))
 	if crew.size() < int(t.need_staff):
 		return {"ok": false, "msg": "%s: zu wenig Personal (%d von %d)." % [f.name, crew.size(), int(t.need_staff)]}
 	t.staff = crew.slice(0, int(t.need_staff)).map(func(p): return int(p.id))
@@ -638,3 +683,4 @@ func from_dict(d: Dictionary) -> void:
 			b["role"] = "municipal"
 			b["town"] = int(f.town)
 			b["name"] = "%s, %s" % [f.name, sim.towns.name_of(int(f.town))]
+			b["sprite"] = sprite_of(f)

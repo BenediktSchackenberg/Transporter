@@ -10,9 +10,12 @@ extends RefCounted
 ##    handeln zusaetzlich ueber ihre Aktionen kommunal_bauen, kommunal_fahrzeug, kommunal_schliessen und regionalrat_antrag. Jede Entscheidung steht mit Begruendung im Protokoll.
 
 const EVERY := 5
-const BUILD_DAYS := {"FW-01": 20, "RW-01": 14, "KH-01": 40, "BH-01": 14, "VB-01": 16, "SC-01": 30, "KI-01": 16, "RC-01": 14}
+const BUILD_DAYS := {"FW-01": 20, "RW-01": 14, "KH-01": 40, "BH-01": 14, "VB-01": 16, "SC-01": 30, "KI-01": 16, "RC-01": 14,
+	"FW-02": 30, "FW-03": 45, "FW-04": 60, "FW-05": 30, "FW-06": 40}
 const IDLE_CLOSE_DAYS := 30
 const RESERVE_DAYS := 60            # Ruecklage fuer den laufenden Dienstbetrieb vor einem Neubau
+## Ausbau der Feuerwehr (Etappe 13): naechste Stufe ab dieser Einsatzlast (Einsaetze in 30 Tagen) oder Einwohnerzahl.
+const FIRE_STAGES := [["FW-01", "FW-02", 10, 1500], ["FW-02", "FW-03", 25, 4000], ["FW-03", "FW-04", 45, 10000]]
 
 var sim
 var builds := {}          # Projekt-ID -> {town, code, rect, parcel, reason, by, day}
@@ -62,9 +65,10 @@ func needs(k: int) -> Array:
 			out.append({"massnahme": "fahrzeug", "einrichtung": rw[0].id, "fahrzeug": "RTW", "grund": "Hilfsfrist nur in %d %% eingehalten" % roundi(float(rs.hilfsfrist_eingehalten_anteil) * 100.0), "prio": 1})
 	var burnt: int = sim.fire.fires.values().filter(func(f): return int(f.town) == k and f.status == "ausgebrannt" and _today() - GameCalendar.day_of(float(f.start)) <= 30).size()
 	if burnt > 0:
-		var fw: Array = M.of_town(k, "feuerwehr")
+		var fw: Array = M.of_town(k, "feuerwehr").filter(func(f): return FireService.is_station(f))
 		if not fw.is_empty() and fw[0].vehicles.filter(func(v): return str(M.vehicles[v].type) == "HLF 20").size() < 2:
 			out.append({"massnahme": "fahrzeug", "einrichtung": fw[0].id, "fahrzeug": "HLF 20", "grund": "%d Gebäude in 30 Tagen ausgebrannt" % burnt, "prio": 1})
+	out += _fire_needs(k, has)
 	if sim.citizens.population_of(k) >= 60 and not has.call("VB-01"):
 		out.append({"massnahme": "bauen", "typ": "VB-01", "grund": "keine Busanbindung bei %d Einwohnern" % sim.citizens.population_of(k), "prio": 3})
 	if sim.waste.fill_share() >= 0.5 and not M.facilities.values().any(func(f): return f.code == "RC-01") and not _planned(-1, "RC-01"):
@@ -74,6 +78,45 @@ func needs(k: int) -> Array:
 				and f.code not in Municipal.START_KIT and f.code != "KH-01":
 			out.append({"massnahme": "schliessen", "einrichtung": f.id, "grund": "%s seit %d Tagen ohne Personal" % [f.name, _today() - int(f.opened)], "prio": 3})
 	out.sort_custom(func(a, b): return int(a.prio) < int(b.prio))
+	return out
+
+
+## Feuerwehr (Etappe 13): naechste Ausbaustufe nach Einsatzlast oder Einwohnern; fehlt fuer eine Einsatzart, auf die gewartet werden
+## musste, in der ganzen Stadt die passende Fahrzeugrolle (z. B. Gefahrstoff), wird das guenstigste geeignete Fahrzeug beschafft.
+func _fire_needs(k: int, has: Callable) -> Array:
+	var out: Array = []
+	var M: Municipal = sim.municipal
+	var load: int = sim.fire.load_of(k, 30)
+	var pop: int = sim.citizens.population_of(k)
+	for st in FIRE_STAGES:
+		if has.call(st[0]) and not has.call(st[1]) and (load >= int(st[2]) or pop >= int(st[3])):
+			var next: String = st[1]
+			var later: Array = FIRE_STAGES.map(func(x): return str(x[1])).slice(FIRE_STAGES.map(func(x): return str(x[1])).find(next) + 1)
+			if later.any(func(c): return has.call(c)):
+				continue
+			out.append({"massnahme": "bauen", "typ": next, "grund": "%d Feuerwehreinsätze in 30 Tagen, %d Einwohner" % [load, pop], "prio": 2})
+	var stations: Array = M.of_town(k, "feuerwehr").filter(func(f): return FireService.is_station(f) and f.status == "in_betrieb")
+	if stations.is_empty():
+		return out
+	var roles := {}
+	for st in stations:
+		for vid in st.vehicles:
+			for r in Municipal.VEHICLES[M.vehicles[vid].type].get("roles", []):
+				roles[r] = true
+	var d0 := _today() - 30
+	for f in sim.fire.fires.values():
+		if int(f.town) != k or not bool(f.get("waited", false)) or GameCalendar.day_of(float(f.start)) < d0 or not FireService.KINDS.has(str(f.kind)):
+			continue
+		for alts in FireService.KINDS[f.kind].need:
+			if alts.any(func(r): return roles.has(r)):
+				continue
+			var best := ""
+			for vt in Municipal.VEHICLES:
+				if str(alts[0]) in Municipal.VEHICLES[vt].get("roles", []) and (best == "" or float(Municipal.VEHICLES[vt].price) < float(Municipal.VEHICLES[best].price)):
+					best = vt
+			if best != "" and not out.any(func(o): return str(o.get("fahrzeug", "")) == best):
+				out.append({"massnahme": "fahrzeug", "einrichtung": stations[0].id, "fahrzeug": best, "grund": "%s ohne passendes Fahrzeug (%s)" % [f.kind, alts[0]], "prio": 2})
+				roles[alts[0]] = true
 	return out
 
 

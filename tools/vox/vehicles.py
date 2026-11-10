@@ -490,3 +490,188 @@ def rc_wagen():
 
 
 MUNICIPAL = ["fw_hlf", "fw_dlk", "rd_rtw", "rd_nef", "bh_kipper", "bh_streu", "bus", "rc_wagen"]
+
+
+# ------------------------------------------------------------------ Auftrag 20 Etappe 13: weitere Feuerwehrfahrzeuge
+SIZES.update({"fw_kdow": 40, "fw_elw": 50, "fw_klf": 54, "fw_lf10": 62, "fw_tlf": 66, "fw_gwl": 70, "fw_rw": 66, "fw_flf": 90})
+
+
+def _red_body(m, x0, y0, L, W, h, shutters=True, band=True):
+    """Roter Geraeteaufbau mit Fahrgestell; Rolllaeden der Geraeteraeume und weisse Bauchbinde."""
+    m.box(x0, y0, 4, x0 + L, y0 + W, h, M("signal_red"))
+    m.box(x0, y0, 4, x0 + L, y0 + W, 7, M("black"))
+    if shutters:
+        for xx in range(x0 + 2, x0 + L - 2, 8):
+            for yy in (y0, y0 + W - 1):
+                m.box(xx, yy, 9, xx + 7, yy + 1, h - 4, M("steel"))
+                for z in range(10, h - 4, 3):
+                    m.box(xx, yy, z, xx + 7, yy + 1, z + 1, M("steel_dark"))
+    if band:
+        m.box(x0, y0, h - 3, x0 + L, y0 + 1, h - 1, M("hazard_white"))
+        m.box(x0, y0 + W - 1, h - 3, x0 + L, y0 + W, h - 1, M("hazard_white"))
+
+
+def fw_kdow():
+    """Kommandowagen: roter Kombi (Pkw), Lichtbalken, weisse Seitenstreifen."""
+    S = SIZES["fw_kdow"]
+    m = _square(S)
+    x0, y0 = (S - 30) // 2, (S - 14) // 2
+    m.box(x0, y0, 2, x0 + 30, y0 + 14, 8, M("signal_red"))
+    m.box(x0 + 3, y0 + 1, 8, x0 + 22, y0 + 13, 13, M("glass_dark"))
+    m.box(x0 + 4, y0 + 2, 12, x0 + 21, y0 + 12, 13, M("signal_red"))
+    m.box(x0, y0, 5, x0 + 30, y0 + 1, 6, M("hazard_white"))
+    m.box(x0, y0 + 13, 5, x0 + 30, y0 + 14, 6, M("hazard_white"))
+    m.box(x0 + 11, y0 + 3, 13, x0 + 16, y0 + 11, 15, M("beacon_blue"))
+    for wx in (x0 + 6, x0 + 24):
+        _wheel(m, wx, y0, 3, 1, 1)
+        _wheel(m, wx, y0 + 13, 3, 1, 0)
+    _lights(m, x0 + 30, x0, y0, 14, 4)
+    return m
+
+
+def fw_elw():
+    """Einsatzleitwagen 1: Kastenwagen mit Hochdach, Antennenmast und Lichtbalken, Fenster im Fuehrungsraum."""
+    S = SIZES["fw_elw"]
+    m = _square(S)
+    L, W = 40, 18
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 3, x0 + 28, y0 + W, 24, M("signal_red"))
+    m.box(x0, y0, 3, x0 + 28, y0 + W, 5, M("black"))
+    for yy in (y0, y0 + W - 1):
+        m.box(x0 + 6, yy, 14, x0 + 22, yy + 1, 19, M("glass_dark"))
+        m.box(x0, yy, 9, x0 + 28, yy + 1, 11, M("hazard_white"))
+    m.box(x0 + 3, y0 + 3, 24, x0 + 5, y0 + 5, 40, M("steel"))      # Antennenmast
+    _cab(m, x0 + 28, y0, W, 17, 12, "signal_red")
+    m.box(x0 + 30, y0 + 3, 17, x0 + 34, y0 + W - 3, 19, M("beacon_blue"))
+    for wx in (x0 + 7, x0 + 33):
+        _wheel(m, wx, y0, 4, 1, 1)
+        _wheel(m, wx, y0 + W - 1, 4, 1, 0)
+    _lights(m, x0 + L, x0, y0, W, 5)
+    return m
+
+
+def fw_klf():
+    """Kleinloeschfahrzeug: Transporter-Fahrgestell, kurzer Geraeteaufbau, Steckleiter auf dem Dach."""
+    S = SIZES["fw_klf"]
+    m = _square(S)
+    L, W = 44, 18
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    _red_body(m, x0, y0, 30, W, 22)
+    m.box(x0 + 3, y0 + 7, 22, x0 + 28, y0 + 9, 23, M("steel"))
+    m.box(x0 + 3, y0 + 10, 22, x0 + 28, y0 + 12, 23, M("steel"))
+    _cab(m, x0 + 30, y0, W, 17, 14, "signal_red")
+    m.box(x0 + 34, y0 + 3, 17, x0 + 38, y0 + W - 3, 19, M("beacon_blue"))
+    _axles(m, (x0 + 8, x0 + 36), y0, W, 4)
+    _lights(m, x0 + L, x0, y0, W, 5)
+    return m
+
+
+def fw_lf10():
+    """Loeschgruppenfahrzeug LF 10: mittlerer Aufbau, Saugschlauch seitlich, Leiter quer auf dem Dach."""
+    S = SIZES["fw_lf10"]
+    m = _square(S)
+    L, W = 52, 20
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    _red_body(m, x0, y0, 34, W, 27)
+    m.box(x0 + 2, y0 - 1, 10, x0 + 30, y0, 12, M("black"))          # Saugschlauch
+    m.box(x0 + 2, y0 + 4, 27, x0 + 30, y0 + 16, 28, M("steel_dark"))
+    m.box(x0 + 4, y0 + 7, 28, x0 + 28, y0 + 9, 29, M("steel"))
+    m.box(x0 + 4, y0 + 11, 28, x0 + 28, y0 + 13, 29, M("steel"))
+    _cab(m, x0 + 34, y0, W, 22, 18, "signal_red")
+    m.box(x0 + 42, y0 + 3, 22, x0 + 46, y0 + W - 3, 24, M("beacon_blue"))
+    _axles(m, (x0 + 9, x0 + 42), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+def fw_tlf():
+    """Tankloeschfahrzeug TLF 3000: runder Wassertank hinten, Wasserwerfer (Monitor) auf dem Dach, kurze Kabine."""
+    S = SIZES["fw_tlf"]
+    m = _square(S)
+    L, W = 56, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 4, x0 + 38, y0 + W, 7, M("black"))
+    for z in range(7, 27):                                           # Tank mit gerundeten Kanten
+        inset = 2 if z in (7, 26) else (1 if z in (8, 25) else 0)
+        m.box(x0 + 1, y0 + inset, z, x0 + 30, y0 + W - inset, z + 1, M("signal_red"))
+    m.box(x0 + 30, y0, 7, x0 + 38, y0 + W, 26, M("steel"))           # Pumpenraum
+    m.box(x0 + 1, y0, 17, x0 + 30, y0 + 1, 19, M("hazard_white"))
+    m.box(x0 + 1, y0 + W - 1, 17, x0 + 30, y0 + W, 19, M("hazard_white"))
+    m.box(x0 + 33, y0 + 8, 26, x0 + 37, y0 + 14, 29, M("steel_dark"))   # Monitor
+    m.box(x0 + 37, y0 + 10, 28, x0 + 43, y0 + 12, 29, M("steel"))
+    _cab(m, x0 + 38, y0, W, 22, 18, "signal_red")
+    m.box(x0 + 46, y0 + 3, 22, x0 + 50, y0 + W - 3, 24, M("beacon_blue"))
+    _axles(m, (x0 + 8, x0 + 20, x0 + 48), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+def fw_gwl():
+    """Geraetewagen Logistik: Lkw mit Ladebordwand und Rollcontainern, Plane in Signalrot, Kennstreifen."""
+    S = SIZES["fw_gwl"]
+    m = _square(S)
+    L, W = 60, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 4, x0 + 40, y0 + W, 7, M("black"))
+    m.box(x0, y0, 7, x0 + 40, y0 + W, 30, M("signal_red"))
+    m.box(x0, y0 + 2, 9, x0 + 1, y0 + W - 2, 28, M("steel_dark"))     # Heckklappe
+    m.box(x0 - 3, y0 + 2, 5, x0, y0 + W - 2, 6, M("steel"))           # Ladebordwand
+    for xx in range(x0 + 4, x0 + 38, 9):
+        m.box(xx, y0, 12, xx + 1, y0 + W, 28, M("signal_red"))
+    m.box(x0, y0, 22, x0 + 40, y0 + 1, 25, M("hazard_white"))
+    m.box(x0, y0 + W - 1, 22, x0 + 40, y0 + W, 25, M("hazard_white"))
+    _cab(m, x0 + 40, y0, W, 22, 18, "signal_red")
+    m.box(x0 + 48, y0 + 3, 22, x0 + 52, y0 + W - 3, 24, M("beacon_blue"))
+    _axles(m, (x0 + 10, x0 + 50), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+def fw_rw():
+    """Ruestwagen: kantiger Kofferaufbau, Lichtmast und Seilwinde vorne, Ladekran hinten."""
+    S = SIZES["fw_rw"]
+    m = _square(S)
+    L, W = 56, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    _red_body(m, x0 + 6, y0, 32, W, 30)
+    m.box(x0, y0 + 3, 4, x0 + 6, y0 + W - 3, 7, M("black"))
+    m.box(x0, y0 + 6, 7, x0 + 6, y0 + W - 6, 18, M("steel_dark"))     # Kransaeule
+    m.box(x0 + 1, y0 + 9, 18, x0 + 26, y0 + 13, 21, M("hazard_white"))   # Kranausleger, abgelegt
+    m.box(x0 + 26, y0 + 9, 30, x0 + 28, y0 + 11, 40, M("steel"))      # Lichtmast
+    m.box(x0 + 24, y0 + 7, 40, x0 + 30, y0 + 13, 42, M("head_lamp"))
+    _cab(m, x0 + 38, y0, W, 22, 16, "signal_red")
+    m.box(x0 + 54, y0 + 6, 4, x0 + 56, y0 + W - 6, 9, M("steel_dark"))  # Seilwinde
+    m.box(x0 + 44, y0 + 3, 22, x0 + 48, y0 + W - 3, 24, M("beacon_blue"))
+    _axles(m, (x0 + 14, x0 + 46), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+def fw_flf():
+    """Flugfeldloeschfahrzeug: sehr grosser Allrad-Aufbau, Panoramakabine vorn, Dach- und Frontwerfer, drei Achsen mit grossen Raedern."""
+    S = SIZES["fw_flf"]
+    m = _square(S)
+    L, W = 78, 28
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 6, x0 + 60, y0 + W, 10, M("black"))
+    m.box(x0, y0, 10, x0 + 60, y0 + W, 34, M("signal_red"))
+    for xx in range(x0 + 3, x0 + 56, 10):
+        for yy in (y0, y0 + W - 1):
+            m.box(xx, yy, 13, xx + 8, yy + 1, 30, M("steel"))
+    m.box(x0, y0, 30, x0 + 60, y0 + 1, 33, M("hazard_white"))
+    m.box(x0, y0 + W - 1, 30, x0 + 60, y0 + W, 33, M("hazard_white"))
+    m.box(x0 + 40, y0 + 10, 34, x0 + 48, y0 + 18, 38, M("steel_dark"))   # Dachwerfer
+    m.box(x0 + 48, y0 + 12, 37, x0 + 58, y0 + 16, 39, M("steel"))
+    m.box(x0 + 60, y0, 6, x0 + 78, y0 + W, 10, M("black"))
+    m.box(x0 + 60, y0, 10, x0 + 76, y0 + W, 28, M("signal_red"))
+    m.box(x0 + 66, y0 + 1, 18, x0 + 76, y0 + W - 1, 27, M("glass_dark"))  # Panoramascheibe
+    m.box(x0 + 62, y0, 18, x0 + 66, y0 + 1, 27, M("glass_dark"))
+    m.box(x0 + 62, y0 + W - 1, 18, x0 + 66, y0 + W, 27, M("glass_dark"))
+    m.box(x0 + 76, y0 + 11, 6, x0 + 80, y0 + 17, 9, M("steel_dark"))      # Frontwerfer
+    m.box(x0 + 64, y0 + 3, 28, x0 + 70, y0 + W - 3, 30, M("beacon_blue"))
+    _axles(m, (x0 + 12, x0 + 30, x0 + 66), y0, W, 7)
+    _lights(m, x0 + L, x0, y0, W, 8)
+    return m
+
+
+MUNICIPAL += ["fw_kdow", "fw_elw", "fw_klf", "fw_lf10", "fw_tlf", "fw_gwl", "fw_rw", "fw_flf"]

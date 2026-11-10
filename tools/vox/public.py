@@ -520,6 +520,249 @@ BUILDERS = {"fire_station": fire_station, "rescue_station": rescue_station, "hos
             "bus_depot": bus_depot, "public_school": public_school, "public_kita": public_kita, "recycling_yard": recycling_yard}
 
 
+# ------------------------------------------------------------------ Auftrag 20 Etappe 13: Feuerwehr-Ausbaustufen
+def _yard_marks(m, x0, y0, x1, y1):
+    """Aufstellflaeche vor den Toren: gelbe Sperrmarkierung (Ausfahrt freihalten)."""
+    for x in range(x0, x1, 6):
+        m.box(x, y0, 1, x + 3, y1, 2, M("pub_yellow"))
+
+
+def _mast(m, x, y, h):
+    """Funkmast der Leitstelle."""
+    m.box(x, y, 1, x + 2, y + 2, h, M("steel"))
+    m.box(x - 2, y - 2, h - 10, x + 4, y + 4, h - 9, M("steel"))
+    m.box(x, y, h, x + 2, y + 2, h + 2, M("pub_red"))
+
+
+def _burn_house(m, x0, y0, s, h):
+    """Brandhaus der Ausbildung: dunkler Beton, verrusste Fensteroeffnungen."""
+    m.box(x0, y0, 1, x0 + s, y0 + s, h, M("concrete2"))
+    for z in range(6, h - 4, 9):
+        m.box(x0 + 3, y0 + s - 1, z, x0 + 7, y0 + s, z + 5, M("black"))
+        m.box(x0 + s - 1, y0 + 3, z, x0 + s, y0 + 7, z + 5, M("black"))
+    m.box(x0, y0, h, x0 + s, y0 + s, h + 1, M("steel_dark"))
+
+
+def fire_station_m(v, st, seed):
+    """FW-02 Feuerwache 5x3: drei bis vier Stellplaetze, Einsatzleitung, Sozialraeume, Werkstatt."""
+    rng = random.Random(seed)
+    W, H = 5 * T, 3 * T
+    m = Model(W, H, 90)
+    ground(m, st, W, H, seed)
+    d = "pub_red"
+    if v == 0:      # vier Tore in einer Zeile, zweigeschossige Wache links
+        house(m, st, 4, 26, 40, 76, 2, rng)
+        hall(m, st, 42, 26, 154, 76, 26, 4, d, rng, band="pub_red", door_w=16)
+        tower(m, st, 140, 4, 12, 56, rng)
+    elif v == 1:    # Halle hinten, Werkstatt und Wache vorne versetzt
+        hall(m, st, 4, 4, 110, 48, 26, 3, d, rng, band="pub_red")
+        house(m, st, 112, 4, 156, 64, 2, rng)
+        hall(m, st, 60, 54, 108, 90, 18, 1, "pub_door_w", rng, roof_kind="flat", door_w=12)
+        _yard_marks(m, 8, 52, 56, 56)
+    elif v == 2:    # zwei Hallenbloecke beidseits eines Wachgebaeudes mit Turm
+        hall(m, st, 4, 30, 58, 80, 24, 2, d, rng, band="pub_red")
+        house(m, st, 60, 20, 100, 80, 3, rng)
+        hall(m, st, 102, 30, 156, 80, 24, 2, d, rng, band="pub_red")
+        tower(m, st, 74, 4, 12, 66, rng)
+    elif v == 3:    # Wache ueber der Halle, Werkstatt als Anbau rechts
+        hall(m, st, 6, 22, 118, 74, 24, 3, d, rng, roof_kind="flat", band="pub_red", door_w=18)
+        house(m, st, 6, 22, 80, 56, 2, rng, z0=25)
+        hall(m, st, 120, 34, 156, 74, 16, 1, "pub_door_w", rng, door_w=10)
+    elif v == 4:    # L-Form: Halle quer vorne, Wachfluegel hinten laengs, Uebungsturm im Winkel
+        hall(m, st, 4, 46, 120, 90, 24, 4, d, rng, band="pub_red", door_w=14)
+        house(m, st, 4, 4, 156, 40, 2, rng, entrance=False)
+        house(m, st, 122, 46, 156, 86, 1, rng)
+        tower(m, st, 130, 8, 14, 64, rng)
+    else:           # Pultdach-Halle schraeg gestaffelt, Kopfbau mit drei Geschossen
+        hall(m, st, 4, 36, 60, 84, 22, 2, d, rng, band="pub_red")
+        hall(m, st, 62, 28, 118, 76, 26, 2, d, rng, band="pub_red")
+        house(m, st, 120, 14, 156, 76, 3, rng)
+    beacon(m, W // 2, H - 3, 1)
+    greenery(m, st, [(150, 90), (4, 90)], rng)
+    lamp_post(m, 2, H - 3, 1, h=14)
+    return m, {"w": 5, "h": 3, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": 70, "blink": [W // 2, H - 4]}
+
+
+def fire_station_l(v, st, seed):
+    """FW-03 Hauptfeuerwache 6x4: mehrere Hallen, Verwaltung, Leitstelle mit Funkmast, Ausbildungsflaeche, Uebungsturm."""
+    rng = random.Random(seed)
+    W, H = 6 * T, 4 * T
+    m = Model(W, H, 110)
+    ground(m, st, W, H, seed)
+    d = "pub_red"
+    if v == 0:      # Hallenkamm vorne, Verwaltungsriegel hinten, Turm im Hof
+        hall(m, st, 6, 70, 186, 122, 26, 5, d, rng, band="pub_red", door_w=16)
+        house(m, st, 6, 6, 140, 50, 3, rng, entrance=False)
+        tower(m, st, 160, 10, 16, 80, rng)
+        _mast(m, 120, 54, 70)
+    elif v == 1:    # Winkelbau um einen Uebungshof
+        hall(m, st, 6, 60, 110, 120, 26, 3, d, rng, band="pub_red", door_w=18)
+        house(m, st, 112, 6, 186, 120, 4, rng)
+        house(m, st, 6, 6, 110, 40, 2, rng, entrance=False)
+        tower(m, st, 20, 42, 14, 70, rng)
+        _mast(m, 170, 6, 96)
+    elif v == 2:    # zwei Hallen mit Leitstellenturm (Glaskanzel) dazwischen
+        hall(m, st, 4, 50, 80, 120, 28, 3, d, rng, band="pub_red")
+        house(m, st, 82, 30, 112, 120, 6, rng, roof_kind="flat", fh=10)
+        hall(m, st, 114, 50, 188, 120, 28, 3, d, rng, band="pub_red")
+        house(m, st, 4, 4, 188, 40, 2, rng, entrance=False)
+        _mast(m, 94, 34, 100)
+    elif v == 3:    # gestaffelte Hallen, Verwaltung als Hochbau rechts vorne
+        hall(m, st, 4, 10, 120, 58, 28, 4, d, rng, band="pub_red", door_w=14)
+        hall(m, st, 4, 66, 120, 118, 24, 4, d, rng, band="pub_red", door_w=14)
+        house(m, st, 124, 50, 188, 120, 5, rng)
+        tower(m, st, 150, 8, 16, 78, rng)
+    elif v == 4:    # Wache ueber der Halle (zwei Geschosse), seitlicher Werkstatthof
+        hall(m, st, 6, 40, 140, 110, 26, 5, d, rng, roof_kind="flat", band="pub_red", door_w=16)
+        house(m, st, 6, 40, 140, 84, 2, rng, z0=27)
+        hall(m, st, 144, 56, 188, 110, 18, 1, "pub_door_w", rng, door_w=14)
+        tower(m, st, 160, 8, 14, 74, rng)
+        _mast(m, 20, 10, 80)
+    else:           # Halbrund aus drei Hallen um den Turm (Ausbildungsflaeche)
+        hall(m, st, 4, 70, 70, 122, 24, 3, d, rng, band="pub_red", door_w=14)
+        hall(m, st, 120, 70, 188, 122, 24, 3, d, rng, band="pub_red", door_w=14)
+        house(m, st, 40, 6, 150, 46, 3, rng, entrance=False)
+        tower(m, st, 88, 60, 16, 84, rng)
+    beacon(m, W // 2, H - 3, 1)
+    greenery(m, st, [(184, 124), (4, 124), (96, 4)], rng)
+    lamp_post(m, 2, H - 3, 1, h=16)
+    return m, {"w": 6, "h": 4, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": 96, "blink": [W // 2, H - 4]}
+
+
+def fire_hq(v, st, seed):
+    """FW-04 Berufsfeuerwehr-Zentrale 7x5: Einsatzleitung, Werkstaetten, mehrere Fahrzeughallen, Personalgebaeude."""
+    rng = random.Random(seed)
+    W, H = 7 * T, 5 * T
+    m = Model(W, H, 130)
+    ground(m, st, W, H, seed)
+    d = "pub_red"
+    if v == 0:      # Campus: Hallenreihe vorn, Hochhaus der Verwaltung hinten, Werkstatt rechts
+        hall(m, st, 6, 100, 160, 154, 28, 6, d, rng, band="pub_red", door_w=16)
+        house(m, st, 30, 8, 120, 60, 7, rng, roof_kind="flat", entrance=False, fh=10)
+        hall(m, st, 164, 60, 220, 154, 20, 2, "pub_door_w", rng, door_w=16)
+        tower(m, st, 180, 8, 18, 96, rng)
+        _mast(m, 130, 20, 110)
+    elif v == 1:    # Doppelhalle mit Personalhaus dazwischen, Leitstelle als Kubus vorne rechts
+        hall(m, st, 4, 70, 96, 150, 30, 4, d, rng, band="pub_red", door_w=16)
+        house(m, st, 98, 10, 130, 150, 4, rng)
+        hall(m, st, 132, 70, 220, 150, 30, 4, d, rng, band="pub_red", door_w=16)
+        house(m, st, 4, 8, 96, 60, 3, rng, entrance=False)
+        house(m, st, 140, 8, 220, 60, 5, rng, roof_kind="flat", entrance=False)
+        _mast(m, 210, 12, 120)
+    elif v == 2:    # Hofanlage (geschlossen) mit Uebungsturm in der Mitte
+        hall(m, st, 6, 110, 220, 156, 28, 7, d, rng, band="pub_red", door_w=14)
+        house(m, st, 6, 6, 220, 40, 3, rng, entrance=False)
+        house(m, st, 6, 40, 40, 108, 3, rng, entrance=False)
+        hall(m, st, 186, 40, 220, 108, 22, 0, d, rng)
+        tower(m, st, 104, 60, 18, 100, rng)
+    elif v == 3:    # gestaffelter Komplex: drei Hallen nach hinten versetzt, Hochhaus vorne rechts
+        hall(m, st, 4, 10, 80, 60, 26, 3, d, rng, band="pub_red")
+        hall(m, st, 4, 64, 110, 112, 26, 4, d, rng, band="pub_red")
+        hall(m, st, 4, 116, 140, 156, 22, 5, d, rng, band="pub_red", door_w=14)
+        house(m, st, 150, 80, 220, 156, 8, rng, roof_kind="flat", fh=10)
+        tower(m, st, 120, 10, 16, 90, rng)
+        _mast(m, 200, 10, 110)
+    elif v == 4:    # Wache ueber Hallen auf ganzer Laenge, Werkstatthof hinten
+        hall(m, st, 6, 80, 220, 150, 28, 7, d, rng, roof_kind="flat", band="pub_red", door_w=16)
+        house(m, st, 6, 80, 220, 120, 3, rng, z0=29)
+        hall(m, st, 40, 6, 150, 60, 22, 0, d, rng)
+        tower(m, st, 180, 10, 18, 96, rng)
+    else:           # Ringbau mit Glaskanzel, freistehende Hallen links und rechts vorn
+        hall(m, st, 4, 96, 90, 156, 26, 3, d, rng, band="pub_red", door_w=18)
+        hall(m, st, 136, 96, 222, 156, 26, 3, d, rng, band="pub_red", door_w=18)
+        house(m, st, 50, 10, 180, 80, 4, rng)
+        house(m, st, 96, 96, 130, 150, 2, rng)
+        tower(m, st, 10, 10, 16, 92, rng)
+        _mast(m, 200, 20, 116)
+    beacon(m, W // 2, H - 3, 1)
+    greenery(m, st, [(218, 4), (4, 90), (120, 90)], rng)
+    lamp_post(m, 2, H - 3, 1, h=18)
+    lamp_post(m, W - 4, H - 3, 1, h=18)
+    return m, {"w": 7, "h": 5, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": 110, "blink": [W // 2, H - 4]}
+
+
+def fire_airport(v, st, seed):
+    """FW-05 Flughafenfeuerwehr 3x2 (Grundflaeche der Flughafenwache): hohe, breite Tore fuer Flugfeldloeschfahrzeuge, Beobachtungskanzel."""
+    rng = random.Random(seed)
+    W, H = 3 * T, 2 * T
+    m = Model(W, H, 90)
+    slab(m, 0, 0, W, H, paving_fn(8, "concrete2", "concrete"))
+    d = "pub_yellow"
+    if v == 0:      # zwei Riesentore, Kanzel auf Stelzen rechts
+        hall(m, st, 2, 10, 70, 54, 30, 2, d, rng, roof_kind="flat", band="pub_red", door_w=26)
+        m.box(80, 30, 1, 84, 34, 44, M("steel"))
+        house(m, st, 72, 20, 94, 42, 1, rng, roof_kind="flat", z0=44, entrance=False)
+    elif v == 1:    # Halle mit Kanzel als Kopfbau links
+        house(m, st, 2, 14, 22, 56, 4, rng, roof_kind="flat", fh=11)
+        hall(m, st, 24, 14, 94, 56, 30, 2, d, rng, roof_kind="flat", band="pub_red", door_w=26)
+    elif v == 2:    # Halle mit Hallendach (Sheds), Sozialtrakt hinten
+        house(m, st, 2, 2, 94, 18, 1, rng, entrance=False)
+        hall(m, st, 2, 20, 94, 60, 28, 2, d, rng, roof_kind="saw", band="pub_red", door_w=30)
+    elif v == 3:    # ein Tor, Kanzelturm und Schaummitteltank
+        hall(m, st, 2, 8, 56, 58, 30, 1, d, rng, roof_kind="flat", band="pub_red", door_w=34)
+        tower(m, st, 62, 34, 14, 62, rng, cap="pub_yellow")
+        m.box(78, 6, 1, 92, 20, 24, M("pub_white"))
+    elif v == 4:    # versetzte Doppelhalle
+        hall(m, st, 2, 4, 48, 46, 28, 1, d, rng, roof_kind="flat", band="pub_red", door_w=30)
+        hall(m, st, 50, 16, 94, 60, 28, 1, d, rng, roof_kind="flat", band="pub_red", door_w=30)
+    else:           # drei Tore, Kanzel auf dem Dach
+        hall(m, st, 2, 12, 94, 58, 28, 3, d, rng, roof_kind="flat", band="pub_red", door_w=22)
+        house(m, st, 34, 18, 62, 40, 1, rng, roof_kind="flat", z0=29, entrance=False)
+    _yard_marks(m, 4, H - 4, W - 4, H - 2)
+    beacon(m, W // 2, H - 3, 1)
+    return m, {"w": 3, "h": 2, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": 70, "blink": [W // 2, H - 4]}
+
+
+def fire_school(v, st, seed):
+    """FW-06 Feuerwehrausbildungszentrum 5x4: Lehrgebaeude, Uebungsturm, Brandhaus, Uebungsgelaende mit Wrack und Gefahrgutcontainer."""
+    rng = random.Random(seed)
+    W, H = 5 * T, 4 * T
+    m = Model(W, H, 100)
+    ground(m, st, W, H, seed)
+    slab(m, 70, 60, 156, 124, paving_fn(6, "concrete2", "concrete"))   # Uebungsgelaende
+    if v == 0:      # Lehrgebaeude quer hinten, Turm und Brandhaus auf dem Gelaende
+        house(m, st, 6, 6, 120, 50, 3, rng)
+        tower(m, st, 130, 10, 16, 84, rng)
+        _burn_house(m, 80, 70, 26, 30)
+        car(m, 120, 100, 1, color="black")
+    elif v == 1:    # Winkelbau Lehrsaele, Uebungshalle, Turm vorne
+        house(m, st, 6, 6, 60, 120, 2, rng)
+        hall(m, st, 64, 6, 156, 54, 22, 2, "pub_red", rng, band="pub_red")
+        tower(m, st, 100, 80, 14, 76, rng)
+        _burn_house(m, 126, 70, 24, 26)
+    elif v == 2:    # Campus: zwei Lehrhaeuser, Atemschutzstrecke, Brandhaus gross
+        house(m, st, 6, 6, 70, 46, 2, rng)
+        house(m, st, 6, 60, 60, 120, 3, rng)
+        _burn_house(m, 90, 10, 40, 44)
+        m.box(80, 86, 1, 150, 100, 12, M("steel_dark"))   # Atemschutzuebungsstrecke
+    elif v == 3:    # Hochbau mit Turm angebaut, Wrack- und Containerplatz
+        house(m, st, 10, 10, 70, 60, 5, rng, roof_kind="flat", fh=10)
+        tower(m, st, 72, 10, 16, 92, rng)
+        m.box(96, 70, 1, 140, 84, 14, M("pub_orange"))     # Gefahrgutcontainer
+        car(m, 90, 100, 1, color="black")
+        car(m, 120, 104, 1, color="blue")
+    elif v == 4:    # Halle mit Lehrtrakt obenauf, Brandhaus und Turm getrennt
+        hall(m, st, 6, 6, 100, 56, 22, 3, "pub_red", rng, roof_kind="flat", band="pub_red")
+        house(m, st, 6, 6, 100, 36, 1, rng, z0=23, entrance=False)
+        house(m, st, 104, 6, 156, 56, 2, rng)
+        _burn_house(m, 76, 72, 30, 34)
+        tower(m, st, 130, 72, 14, 70, rng)
+    else:           # Pavillons um den Platz, Turm in der Mitte
+        for (x0, y0) in ((6, 6), (56, 6), (106, 6)):
+            house(m, st, x0, y0, x0 + 44, y0 + 40, 2, rng)
+        tower(m, st, 100, 76, 18, 96, rng)
+        _burn_house(m, 20, 70, 30, 28)
+    greenery(m, st, [(4, 124), (60, 124)], rng)
+    lamp_post(m, 2, H - 3, 1, h=16)
+    return m, {"w": 5, "h": 4, "entrance": [30, H], "delivery": [30, H], "height": 90, "blink": [30, H - 4]}
+
+
+TYPES.update({"fire_station_m": ("fw2", 5, 3), "fire_station_l": ("fw3", 6, 4), "fire_hq": ("fw4", 7, 5), "fire_airport": ("fw5", 3, 2),
+              "fire_school": ("fw6", 5, 4)})
+BUILDERS.update({"fire_station_m": fire_station_m, "fire_station_l": fire_station_l, "fire_hq": fire_hq, "fire_airport": fire_airport,
+                 "fire_school": fire_school})
+
+
 def sprite_name(btype, v, st):
     return "pub_%s_%d_%s" % (TYPES[btype][0], v, st)
 

@@ -246,6 +246,12 @@ func _fire_dispatch(day: int) -> void:
 	var cell: Vector2i = sim.city.building(cargo_building).road if sim.city.building(cargo_building).has("road") else _fire_road_near(Vector2i(int(track.run_x0) + 2, int(track.run_y) + 3))
 	fire_task = {"target": cargo_building, "cell": [cell.x, cell.y], "phase": "hin", "burned": 0, "insured": 0.0}
 	stats.einsaetze = int(stats.einsaetze) + 1
+	# Auftrag 20 Etappe 13: gibt es die Flughafenfeuerwehr (FW-05), rueckt sie mit Flugfeldloeschfahrzeugen aus (FireService);
+	# Warenschaden und Abrechnung folgen nach dem Loeschen (fire_done_by_service).
+	if sim.fire != null and sim.fire.enabled() and not sim.fire.airport_station().is_empty():
+		fire_task.phase = "feuerwehr"
+		sim.fire.open_incident("Flughafenbrand", cell, town, -1, {"airport": true, "cause": "Brand im Frachtbereich", "name": "Frachtbereich Flughafen"})
+		return
 	sim.route(fire_vehicle, cell)
 	sim.log_event("Feuerwehr am Flughafen: Alarm am Tag %d – das Wehrauto ruestet sich (Einsatzort Frachtbereich)." % day, "warn")
 	sim.activity.add("stadt", cargo_building, "feuerwehr", "Feuerwehreinsatz am Flughafen",
@@ -266,7 +272,7 @@ func _fire_road_near(cell: Vector2i) -> Vector2i:
 ## Bewegung des Wehrautos (Minute-Tick): Einsatz anfahren -> Schaden und Abrechnung -> Rueckfahrt zur Wache.
 ## 1 Minute = 0,5 Sim-Sekunden (1 Sim-Sekunde = 2 Minuten).
 func update_fire(now: float) -> void:
-	if fire_vehicle == null or fire_task.is_empty():
+	if fire_vehicle == null or fire_task.is_empty() or fire_task.phase == "feuerwehr":
 		return
 	if fire_task.phase == "zurueck":
 		if fire_vehicle.arrived():
@@ -281,6 +287,13 @@ func update_fire(now: float) -> void:
 	_fire_damage(now)
 	if fire_station >= 0 and sim.city.building(fire_station).has("road"):
 		sim.route(fire_vehicle, sim.city.building(fire_station).road)
+
+## Flughafenfeuerwehr (FireService) hat geloescht: Warenschaden und Abrechnung wie beim eigenen Wehrauto.
+func fire_done_by_service(now: float) -> void:
+	if fire_task.is_empty() or fire_task.phase != "feuerwehr":
+		return
+	_fire_damage(now)
+	fire_task = {}
 
 ## Schaden am Frachtterminal und Abrechnung: verbrannte Ware wird vernichtet und abgeschrieben, die Versicherung
 ## ersetzt 40 % des Basispreises (S0 -> P0), die Stadt zahlt die Einsatzkosten (P0 -> S0).

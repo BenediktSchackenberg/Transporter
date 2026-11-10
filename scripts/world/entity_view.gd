@@ -191,19 +191,19 @@ func _update_fires() -> void:
 	for e in sim.rescue.on_road():   # Rettungsdienst (Etappe 5): RTW und NEF mit Blaulicht auf Anfahrt und Transport
 		seen_v[e.vid] = true
 		_place_muni(str(e.vid), e.mover, bool(e.siren))
+	for e in sim.fire.on_road():   # Feuerwehr (Etappen 4/13): alle Fahrzeuge eines Einsatzes, Blaulicht bis zur Rueckfahrt
+		seen_v[e.vid] = true
+		_place_muni(str(e.vid), e.mover, bool(e.siren))
 	var seen_f := {}
 	for f in sim.fire.fires.values():
 		var vid := str(f.vehicle)
-		if vid != "" and f.phase in ["anfahrt", "loeschen", "rueckfahrt"] and sim.fire.movers.has(vid):
-			seen_v[vid] = true
-			_place_muni(vid, sim.fire.movers[vid], f.phase != "rueckfahrt")
-		var smoking: bool = f.status == "brennt" or (f.has("end") and sim.game_min - float(f.end) < 30.0)
+		var smoking: bool = bool(f.get("fire", true)) and (f.status == "brennt" or (f.has("end") and sim.game_min - float(f.end) < 30.0))
 		if not smoking:
 			continue
 		seen_f[f.id] = true
 		var fx: FireFx = fire_fx.get(f.id)
 		if fx == null:
-			fx = _make_fire_fx(int(f.building))
+			fx = _make_fire_fx(int(f.building), Vector2i(int(f.cell[0]), int(f.cell[1])) if f.has("cell") else Vector2i.ZERO)
 			cv.fx_node.add_child(fx)
 			fire_fx[f.id] = fx
 		fx.intensity = float(f.intensity) / 100.0
@@ -237,9 +237,13 @@ func _place_muni(vid: String, m: Mover, siren_on: bool) -> void:
 	siren.modulate = Color(0.3, 0.5, 1.0, 0.95) if int(anim_time * 7.0) % 2 == 0 else Color(0.6, 0.8, 1.0, 0.3)
 
 
-func _make_fire_fx(bid: int) -> FireFx:
-	var b: Dictionary = sim.city.building(bid)
+func _make_fire_fx(bid: int, cell: Vector2i = Vector2i.ZERO) -> FireFx:
+	var b: Dictionary = sim.city.building(bid) if bid >= 0 else {}
 	var fx := FireFx.new()
+	if b.is_empty():   # Fahrzeug- oder Vorfeldbrand: kleiner Brandherd auf der Strasse
+		fx.position = Iso.to_screen((Vector2(cell) + Vector2(0.5, 0.5)) * 32.0) + Vector2(0, -8.0)
+		fx.width = 12.0
+		return fx
 	fx.position = Iso.to_screen(Vector2((float(b.x) + float(b.w) * 0.5) * 32.0, (float(b.y) + float(b.h) * 0.5) * 32.0)) + Vector2(0, -22.0 * float(maxi(int(b.w), int(b.h))))
 	fx.width = 14.0 * float(maxi(int(b.w), int(b.h)))
 	return fx

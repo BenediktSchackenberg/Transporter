@@ -104,7 +104,7 @@ func priorities(k: int) -> Dictionary:
 	var RC: RoadCare = sim.road_care
 	var vital := {}
 	for f in sim.municipal.facilities.values():
-		if f.code in ["FW-01", "RW-01", "KH-01"]:
+		if str(f.code).begins_with("FW-") or f.code in ["RW-01", "KH-01"]:
 			vital[RoadCare.seg_of(sim.city.building(int(f.building)).road)] = true
 	var th := int(sim.towns.get_t(k).get("town_hall", -1))
 	if th >= 0:
