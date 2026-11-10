@@ -64,7 +64,8 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 | 3 Fahrzeuge | **fertig** (10.11.2026) – `tools/vox/vehicles.py` (`MUNICIPAL`), Prüfung in `test_public_buildings` |
 | 4 Feuerwehr | **fertig** (10.11.2026) – `scripts/economy/fire_service.gd` (`sim.fire`), `scripts/world/fire_fx.gd`, Test `test_fire_service` (Abnahme B) |
 | 5 Rettungsdienst/Krankenhäuser | **fertig** (10.11.2026) – `scripts/economy/rescue_service.gd` (`sim.rescue`), Test `test_rescue_service` (Abnahme C) |
-| 6–12 | offen |
+| 6 Bauhof/Straßen/Winterdienst | **fertig** (10.11.2026) – `scripts/economy/winter_service.gd` (`sim.winter`), `scripts/world/road_state_view.gd`, Test `test_winter_service` (Abnahme D) |
+| 7–12 | offen |
 
 **Etappe 1 im Detail**
 
@@ -160,3 +161,21 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 * Messung (Probe `tests/probe_municipal.gd -- --days=30`, Seed 4242): Kreiskrankenhaus ab Tag 14 betriebsbereit (Ärzte mit Bildung 3
   sind selten; bis dahin Notversorgung in der Arztpraxis), danach Aufnahme im Krankenhaus; 4 Notfälle in 30 Tagen, mittlere Hilfsfrist
   11 Minuten, 50 % innerhalb von 15 Minuten.
+
+**Etappe 6 im Detail**
+
+* Bauhof (`BH-01`) gehört jetzt zur Startausstattung jeder Stadt (Mindestbesetzung 2, Streuwagen und Kipper); ältere Spielstände
+  bekommen fehlende Typen der Startausstattung einmal nachgebaut (`Municipal.ensure_kit`).
+* Schnee je Straßenabschnitt (16 × 16, wie RoadCare): wächst bei Schneefall um 0,5 je Spielminute (auf gestreuten Abschnitten ein Fünftel),
+  taut über 2 °C ohne Schneefall. Ab Schneehöhe 30 gilt dort das Schnee-Tempo; geräumte Abschnitte fahren sich bei Schneefall/Glätte
+  wie bei Regen (`Simulation._speed_factor` → `WinterService.drive_factor`).
+* Räumplan je Stadt: Priorität 1 Rettungswege (Abschnitte an Feuerwache, Rettungswache, Krankenhaus, Rathaus), 2 Hauptachsen
+  (≥ 20 Straßenfelder im Abschnitt), 3 übrige Straßen im Ortsgebiet; innerhalb der Stufe nach Entfernung. Verbindungsstraßen
+  außerhalb der Orte räumt niemand. Der Streuwagen fährt sichtbar von Abschnitt zu Abschnitt (15 Minuten je Abschnitt), verbraucht
+  1 t Streusalz aus dem Stadtlager (ohne Salz hält die Wirkung halb so lange) und kehrt erst zurück, wenn nichts mehr verschneit ist.
+  Reihenfolge im `order_log`.
+* Schlaglöcher: Abschnitte unter 35 % Zustand. Der Kipper flickt den schlechtesten Abschnitt der Stadt (60 Minuten, +25 Zustand,
+  1 t Asphaltmischung aus dem Stadtlager, 400 € aus der Stadtkasse, Ressort Verkehr). Grundsanierung bleibt `RoadCare.order` des Bürgermeisters.
+* Darstellung (`RoadStateView`, Bodenebene): Schneedecke auf ungeräumten Straßen, geräumte Straßen dunkel mit Salzkörnern,
+  Schlaglöcher als dunkle Flecken; Streuwagen mit Rundumleuchte, Kipper zu den Flickstellen. Sichtprüfung `--demo-snow` (Kamera auf
+  den Bauhof) bzw. `--demo-snow=wache` (Kamera auf die Feuerwache, deren Abschnitt zuerst geräumt wird).

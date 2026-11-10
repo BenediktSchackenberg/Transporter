@@ -46,7 +46,8 @@ const TYPES := {
 		"upkeep": 900.0, "capacity": 40, "staff": {"arzt": 6, "pflege": 20}, "min_staff": {"arzt": 1, "pflege": 2}, "regional": true,
 		"min_capacity": 6, "power": 400.0, "water": 60.0, "vehicles": []},
 	"BH-01": {"label": "Bauhof", "dienst": "bauhof", "ressort": "Verkehr", "building": "municipal_yard", "cost": 300000.0,
-		"upkeep": 110.0, "capacity": 2, "staff": {"bauhof": 6}, "power": 40.0, "water": 6.0, "vehicles": ["Kipper", "Streuwagen"]},
+		"upkeep": 110.0, "capacity": 2, "staff": {"bauhof": 6}, "min_staff": {"bauhof": 2}, "power": 40.0, "water": 6.0,
+		"vehicles": ["Kipper", "Streuwagen"]},
 	"VB-01": {"label": "Busbetriebshof", "dienst": "oepnv", "ressort": "Verkehr", "building": "bus_depot", "cost": 380000.0,
 		"upkeep": 120.0, "capacity": 2, "staff": {"fahrdienst": 6}, "power": 50.0, "water": 6.0, "vehicles": ["Linienbus", "Linienbus"]},
 	"SC-01": {"label": "Grundschule", "dienst": "bildung", "ressort": "Bildung", "building": "public_school", "cost": 1500000.0,
@@ -77,7 +78,7 @@ const STYLES := {
 	"industrie": "Industrie, Stahl und Wellblech",
 }
 const STYLE_OF_CHARACTER := {"Marktflecken": "backstein", "Handwerkerort": "industrie", "Fischerdorf": "gruen", "Bauerndorf": "gruen"}
-const START_KIT := ["FW-01", "RW-01"]
+const START_KIT := ["FW-01", "RW-01", "BH-01"]
 const REGIONAL_KIT := ["KH-01"]   # einmal je Region, in der einwohnerstaerksten Stadt (Kreiskrankenhaus)
 
 var sim
@@ -86,6 +87,7 @@ var vehicles := {}       # "MV<n>" -> Fahrzeug
 var tasks := {}          # "E<n>" -> Aufgabe/Einsatz
 var started := false     # Startausstattung angelegt (oder versucht)
 var regional_started := false   # regionale Startausstattung (Kreiskrankenhaus) angelegt oder versucht
+var kit_tried := {}      # "Stadt|Typcode" -> true: Startausstattung versucht (spaeter hinzugekommene Typen auch fuer alte Staende)
 var stats := {"eingestellt": 0, "abgang": 0, "kosten": 0.0, "einsaetze": 0}
 var _next := {"M": 1, "MV": 1, "E": 1}
 
@@ -247,9 +249,18 @@ func ensure_start() -> void:
 	if started:
 		return
 	started = true
+	ensure_kit()
+
+
+## Fehlende Typen der Startausstattung je Stadt einmal nachbauen (z. B. Bauhof fuer Spielstaende vor Etappe 6).
+func ensure_kit() -> void:
 	for t in sim.towns.list:
 		var k := int(t.id)
 		for code in START_KIT:
+			var key := "%d|%s" % [k, code]
+			if kit_tried.has(key):
+				continue
+			kit_tried[key] = true
 			if not of_town(k).any(func(f): return str(f.code) == code):
 				_place(k, code)
 
@@ -298,6 +309,8 @@ func on_day(day: int) -> void:
 		ensure_start()
 	if not regional_started:
 		ensure_regional()
+	if kit_tried.size() < sim.towns.count() * START_KIT.size():
+		ensure_kit()
 	var by_id := _staff_index()
 	var vol := _volunteer_index()
 	for f in facilities.values():
@@ -570,7 +583,7 @@ func summary(k: int = -1) -> Array:
 
 func to_dict() -> Dictionary:
 	return {"facilities": facilities.duplicate(true), "vehicles": vehicles.duplicate(true), "tasks": tasks.duplicate(true), "started": started,
-		"regional_started": regional_started,
+		"regional_started": regional_started, "kit_tried": kit_tried.duplicate(),
 		"stats": stats.duplicate(), "next": _next.duplicate()}
 
 
@@ -582,6 +595,7 @@ func from_dict(d: Dictionary) -> void:
 	tasks = d.get("tasks", {})
 	started = bool(d.get("started", false))
 	regional_started = bool(d.get("regional_started", false))
+	kit_tried = d.get("kit_tried", {})
 	stats = d.get("stats", stats)
 	for k in d.get("next", {}):
 		_next[k] = int(d.next[k])

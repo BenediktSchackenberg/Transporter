@@ -290,6 +290,21 @@ func _process_timed(_delta: float) -> void:
 			var j: Dictionary = sim.access.jobs[str(r.ref)]
 			var at: Array = j.cells[j.cells.size() - int(j.built)]
 			args["shot-tile"] = "%d,%d" % [int(at[0]), int(at[1])]
+	if session and args.has("demo-snow") and not args.has("_snow") and session.sim.municipal.started:   # Sichtpruefung Winterdienst: Schneefall, Kamera auf den ersten Bauhof
+		args["_snow"] = true
+		var st0: Dictionary = session.sim.wx.cur.duplicate()
+		st0.cond = "Schnee"
+		st0.temp = -3.0
+		st0.snow_cm = 2.0
+		st0.source = "demo"
+		session.sim.wx.cur = st0
+		session.sim.wx.hold_simulation = true
+		for s0 in session.sim.road_care.cells:   # schon liegender Schnee, damit die Raeumung sofort sichtbar ist
+			session.sim.winter.snow[s0] = 60.0
+		var yard: Array = session.sim.municipal.of_town(0, "feuerwehr") if args.get("demo-snow") == "wache" else session.sim.municipal.of_town(0, "bauhof")
+		if not yard.is_empty():
+			var yb: Dictionary = session.sim.city.building(int(yard[0].building))
+			args["shot-tile"] = "%d,%d" % [int(yb.x), int(yb.y)]
 	if session and args.has("demo-fire") and not args.has("_fire") and session.sim.municipal.started:   # Sichtpruefung Feuerwehr: Brand nahe der ersten Wache
 		args["_fire"] = true
 		var st: Dictionary = session.sim.municipal.of_town(0, "feuerwehr")[0]

@@ -94,6 +94,7 @@ var civic := CivicWorks.new()
 var municipal := Municipal.new()
 var fire := FireService.new()      # Feuerwehr: Braende, Einsaetze, Reparatur (Auftrag 20 Etappe 4)
 var rescue := RescueService.new()  # Rettungsdienst und Krankenhaeuser (Auftrag 20 Etappe 5)
+var winter := WinterService.new()  # Bauhof: Winterdienst und Flickarbeiten (Auftrag 20 Etappe 6)
 var center := EventCenter.new()       # Gemeinsames Ereignismodell der Oberflaeche (KI-Zentrale, Ereigniszentrale, Marker)
 var finance := FinanceHistory.new()   # Finanzverlauf je Spieltag (Finanzdashboard)      # Auftrag 19: autonome Stadtentwicklung der Buergermeister (Besuche im Grosslager, Anlagen, Denkmaeler)        # Zentrales Grosslager (Auftrag 19): Handelsplatz in der Kartenmitte
 var crews := BuildCrews.new()     # Bautrupps der Baufirmen: Material holen, bauen, zurueck zum Bauhof
@@ -206,6 +207,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	municipal.setup(self)
 	fire.setup(self)
 	rescue.setup(self)
+	winter.setup(self)
 	center.setup(self)
 	finance.setup(self)
 	plant.setup(self)
@@ -553,7 +555,7 @@ func _speed_factor(v: FleetVehicle) -> float:
 		f *= 0.8   # uebermuedeter Fahrer
 	if nav.jams.has(v.tile()):
 		f *= 0.5
-	return f * road_care.factor(v.tile())
+	return winter.drive_factor(v.tile(), f) * road_care.factor(v.tile())   # Winterdienst: geraeumte Abschnitte fahren sich wie bei Regen
 
 
 func _update_vehicle(v: FleetVehicle, dt: float) -> void:
@@ -1127,6 +1129,7 @@ func step(dt: float) -> void:
 	safety.update(dt)
 	fire.update(dt)
 	rescue.update(dt)
+	winter.update(dt)
 	fleet.update(dt)
 	for v in vehicles.values():
 		_update_vehicle(v, dt)
@@ -1342,7 +1345,7 @@ func to_dict() -> Dictionary:
 		owners[str(s)] = depot_owner[s]
 	return {"world": city.world, "town_name": city.town_name, "population_target": population_target, "seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
-		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "access": access.to_dict(), "bridges": bridges.to_dict(), "crews": crews.to_dict(), "hub": hub.to_dict(), "civic": civic.to_dict(), "municipal": municipal.to_dict(), "fire": fire.to_dict(), "rescue": rescue.to_dict(), "center": center.to_dict(), "finance": finance.to_dict(), "regional": regional.to_dict(), "air": air.to_dict(), "sea": sea.to_dict(), "founders": founders.to_dict(), "commute": commute.to_dict(), "mining": mining.to_dict(), "stages": stages.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
+		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "access": access.to_dict(), "bridges": bridges.to_dict(), "crews": crews.to_dict(), "hub": hub.to_dict(), "civic": civic.to_dict(), "municipal": municipal.to_dict(), "fire": fire.to_dict(), "rescue": rescue.to_dict(), "winter": winter.to_dict(), "center": center.to_dict(), "finance": finance.to_dict(), "regional": regional.to_dict(), "air": air.to_dict(), "sea": sea.to_dict(), "founders": founders.to_dict(), "commute": commute.to_dict(), "mining": mining.to_dict(), "stages": stages.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "tourism": tourism.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "region": _region_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
@@ -1485,6 +1488,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.municipal.from_dict(d.get("municipal", {}))
 	s.fire.from_dict(d.get("fire", {}))
 	s.rescue.from_dict(d.get("rescue", {}))
+	s.winter.from_dict(d.get("winter", {}))
 	s.center.from_dict(d.get("center", {}))
 	s.finance.from_dict(d.get("finance", {}))
 	s.mining.from_dict(d.get("mining", {}))
