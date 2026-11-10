@@ -53,6 +53,8 @@ const TYPES := {
 	"police": [["office0"], 3, 3, [], []],     # Polizeiwache (Rolle police)
 	"prison": [["warehouse"], 4, 3, [], []],  # Gefaengnis (Rolle prison)
 	"doctor": [["pharmacy"], 2, 2, [], []],   # Arztpraxis (Rolle doctor)
+	"fire_station": [["airport_fire"], 3, 2, [], []],     # Feuerwache (Rolle municipal, Auftrag 20; eigene Varianten folgen in Etappe 2)
+	"rescue_station": [["pharmacy"], 2, 2, [], []],      # Rettungswache (Rolle municipal; eigene Varianten folgen in Etappe 2)
 }
 
 const LOTS := [

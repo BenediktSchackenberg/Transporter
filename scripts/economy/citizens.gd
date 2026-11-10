@@ -25,6 +25,7 @@ const EMPLOYERS := {
 	"industrie": {"label": "Industrie und Handwerk", "share": 0.32, "wage": 14.0, "payer": "S0", "district": 2},
 	"stadtlager": {"label": "Stadtlager", "share": 0.008, "wage": 13.0, "payer": "P0", "district": 3},
 	"hafen": {"label": "Hafen", "share": 0.0, "wage": 13.0, "payer": "P0", "district": 3},   # Einstellung durch die Hafenverwaltung (Harbor._staff_day)
+	"kommunal": {"label": "Kommunale Dienste", "share": 0.0, "wage": 16.0, "payer": "P0", "district": 0, "managed": true},   # Einstellung und Bedarf: Municipal
 }
 
 var sim: Simulation
@@ -334,6 +335,9 @@ func _dynamics(month: int) -> void:
 	var keys: Array = EMPLOYERS.keys()
 	for i in keys.size():
 		var k: String = keys[i]
+		if EMPLOYERS[k].get("managed", false):
+			cap[k] = employed_count(k)   # Bedarf und Einstellung steuert die Einrichtung selbst (Municipal), keine Entlassungswelle
+			continue
 		cap[k] = maxi(0, roundi(float(base_cap[k]) * (1.0 + DEMAND_SWING * (roll(i, month, 1) * 2.0 - 1.0))))
 		if k == "rathaus":
 			cap[k] = sim.town_hall.total_target()   # der Buergermeister legt den Bedarf fest, keine Zufallsschwankung
@@ -524,6 +528,9 @@ func from_dict(d: Dictionary) -> void:
 		base_cap[k] = int(base_cap[k])
 	for k in cap:
 		cap[k] = int(cap[k])
+	for k in EMPLOYERS:   # aeltere Staende kennen spaeter hinzugekommene Arbeitgeber nicht
+		base_cap[k] = int(base_cap.get(k, 0))
+		cap[k] = int(cap.get(k, 0))
 	start_cap = {}
 	var sc: Dictionary = d.get("start_cap", base_cap)
 	for k in sc:
