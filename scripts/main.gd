@@ -26,6 +26,7 @@ func _watchdog() -> void:
 		OS.delay_msec(500)
 		var f := Engine.get_process_frames()
 		var now := Time.get_ticks_msec()
+		_breadcrumb(f)
 		if f != last:
 			if reported > 0.0:
 				_hang_note("weiter nach %.1f s" % ((now - since) / 1000.0))
@@ -37,6 +38,14 @@ func _watchdog() -> void:
 		if stuck >= HANG_S and stuck - reported >= 10.0 or (reported == 0.0 and stuck >= HANG_S):
 			reported = stuck
 			_hang_note("steht seit %.1f s bei: %s" % [stuck, ProcTimer.text()])
+
+
+## Brotkrume fuer fatale Abstuerze (Godot nennt dann keine Skriptzeile): letzte Markierung des Hauptthreads, halbsekuendlich ueberschrieben.
+func _breadcrumb(frame: int) -> void:
+	var f := FileAccess.open("user://logs/zuletzt.txt", FileAccess.WRITE)
+	if f != null:
+		f.store_line("%s Bild %d: %s" % [Time.get_datetime_string_from_system(), frame, ProcTimer.text()])
+		f.close()
 
 
 func _hang_note(text: String) -> void:
