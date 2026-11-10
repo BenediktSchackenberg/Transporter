@@ -9710,6 +9710,9 @@ func test_public_buildings() -> void:
 		ok(vs.size() == 24 and vs.all(func(n): return man.buildings.has(n)), "%s: 6 Grundvarianten x 4 Stile im Manifest" % bt)
 		var info: Dictionary = man.buildings.get(vs[0], {})
 		ok(int(info.get("w", 0)) == int(CityGenerator.TYPES[bt][1]) and int(info.get("h", 0)) == int(CityGenerator.TYPES[bt][2]), "%s: Bildgroesse passt zur Grundflaeche" % bt)
+	for vt in Municipal.VEHICLES:   # Etappe 3: jedes kommunale Fahrzeug hat ein eigenes Modell in vier Fahrtrichtungen
+		var sp := str(Municipal.VEHICLES[vt].sprite)
+		ok(range(4).all(func(d): return man.vehicles.has("%s_%d" % [sp, d])), "Fahrzeug %s: Bild %s in 4 Richtungen" % [vt, sp])
 	var s := region_sim(4)
 	var M: Municipal = s.municipal
 	M.ensure_start()

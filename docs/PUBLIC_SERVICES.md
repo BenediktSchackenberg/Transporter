@@ -61,7 +61,8 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 |---|---|
 | 1 Fundament | **fertig** (10.11.2026) – `scripts/economy/municipal.gd`, `sim.municipal`, Test `test_municipal`, Probe `tests/probe_municipal.gd` |
 | 2 Gebäude-Baukasten | **fertig** (10.11.2026) – `tools/vox/public.py`, Test `test_public_buildings` (Abnahme A) |
-| 3–12 | offen |
+| 3 Fahrzeuge | **fertig** (10.11.2026) – `tools/vox/vehicles.py` (`MUNICIPAL`), Prüfung in `test_public_buildings` |
+| 4–12 | offen |
 
 **Etappe 1 im Detail**
 
@@ -101,3 +102,11 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 * `Municipal.pick_variant`: Grundvariante aus dem gespeicherten Seed, schon vergebene Kombinationen aus Typ und Stil werden übersprungen,
   solange eine freie existiert – zehn Feuerwachen in der Region sehen verschieden aus. Das Bild wird im Laufzeitgebäude gespeichert.
 * Kamera für Sichtprüfung: `--shot-dienst=<n>` (n-te Einrichtung).
+
+**Etappe 3 im Detail**
+
+* Eigene Voxelmodelle in vier Fahrtrichtungen (`assets/iso/v_<name>_<0-3>.png`, Bau: `python tools/build_iso.py vehicles`), feste
+  Farben ohne Firmenmaske: `fw_hlf` (HLF 20: Mannschaftskabine, Geräteräume mit Rollläden, Dachkasten mit Steckleiter), `fw_dlk`
+  (Drehleiter mit Drehkranz und Rettungskorb, drei Achsen), `rd_rtw` (Rettungswagen), `rd_nef` (Notarzt-Kombi), `bh_kipper` (Kipper mit
+  Schotter), `bh_streu` (Streuwagen mit Salztrichter, Räumschild, Streuteller), `bus` (Linienbus mit Fensterband, drei Türen,
+  Zielanzeige), `rc_wagen` (Wertstoffsammler mit Pressaufbau). Zuordnung über `Municipal.VEHICLES[typ].sprite`.

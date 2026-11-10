@@ -29,6 +29,9 @@ def init():
     mat("hazard_white", "#f2f0ea", noise=0.02)
     mat("moving_blue", "#3a6fb8", noise=0.03)
     mat("box_brown", "#b88a58", noise=0.06)
+    mat("bus_body", "#ece6d2", noise=0.03)
+    mat("bus_stripe", "#c0392f", noise=0.03)
+    mat("recycle_green", "#4c9a5a", noise=0.04)
 
 
 def _wheel(m, cx, cy, r=4, z0=1, side=0):
@@ -315,3 +318,175 @@ def semi(seed=0):
         _wheel(m, wx, y0 + W - 1, 5, 1, 0)
     _lights(m, x0 + L, x0, y0, W, 8)
     return m
+
+
+# ------------------------------------------------------------------ Kommunale Fahrzeuge (Auftrag 20, Etappe 3)
+# Sprite-Namen = Municipal.VEHICLES[...].sprite: fw_hlf, fw_dlk, rd_rtw, rd_nef, bh_kipper, bh_streu, bus, rc_wagen.
+SIZES.update({"fw_hlf": 66, "fw_dlk": 76, "rd_rtw": 60, "rd_nef": 44, "bh_kipper": 66, "bh_streu": 70, "bus": 80, "rc_wagen": 70})
+
+
+def _axles(m, xs, y0, W, r=5):
+    for wx in xs:
+        _wheel(m, wx, y0, r, 1, 1)
+        _wheel(m, wx, y0 + W - 1, r, 1, 0)
+
+
+def fw_hlf():
+    """Hilfeleistungsloeschfahrzeug: rote Mannschaftskabine, Geraeteraeume mit Rollladen, weisse Bauchbinde, Blaulicht."""
+    S = SIZES["fw_hlf"]
+    m = _square(S)
+    L, W = 58, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 4, x0 + 38, y0 + W, 30, M("signal_red"))
+    m.box(x0, y0, 4, x0 + 38, y0 + W, 7, M("black"))
+    for xx in range(x0 + 2, x0 + 36, 8):            # Rolllaeden der Geraeteraeume
+        for yy in (y0, y0 + W - 1):
+            m.box(xx, yy, 9, xx + 7, yy + 1, 26, M("steel"))
+            for z in range(10, 26, 3):
+                m.box(xx, yy, z, xx + 7, yy + 1, z + 1, M("steel_dark"))
+    m.box(x0, y0, 27, x0 + 38, y0 + 1, 29, M("hazard_white"))
+    m.box(x0, y0 + W - 1, 27, x0 + 38, y0 + W, 29, M("hazard_white"))
+    m.box(x0 + 2, y0 + 3, 30, x0 + 34, y0 + W - 3, 32, M("steel_dark"))     # Dachkasten mit Steckleiter
+    m.box(x0 + 4, y0 + 8, 32, x0 + 30, y0 + 10, 33, M("steel"))
+    m.box(x0 + 4, y0 + 12, 32, x0 + 30, y0 + 14, 33, M("steel"))
+    _cab(m, x0 + 38, y0, W, 24, 20, "signal_red")
+    m.box(x0 + 38, y0, 13, x0 + 58, y0 + 1, 15, M("hazard_white"))
+    m.box(x0 + 38, y0 + W - 1, 13, x0 + 58, y0 + W, 15, M("hazard_white"))
+    m.box(x0 + 48, y0 + 3, 24, x0 + 52, y0 + W - 3, 26, M("beacon_blue"))
+    m.box(x0 + 1, y0 + 2, 30, x0 + 3, y0 + 5, 32, M("beacon_blue"))
+    _axles(m, (x0 + 10, x0 + 46), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+def fw_dlk():
+    """Drehleiter: rotes Fahrgestell, Drehkranz hinten, Leiterpark ueber der Kabine nach vorn ausgelegt, Rettungskorb."""
+    S = SIZES["fw_dlk"]
+    m = _square(S)
+    L, W = 66, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 4, x0 + 46, y0 + W, 18, M("signal_red"))
+    m.box(x0, y0, 4, x0 + 46, y0 + W, 7, M("black"))
+    m.box(x0, y0, 15, x0 + 46, y0 + 1, 17, M("hazard_white"))
+    m.box(x0, y0 + W - 1, 15, x0 + 46, y0 + W, 17, M("hazard_white"))
+    m.box(x0 + 4, y0 + 5, 18, x0 + 16, y0 + W - 5, 24, M("steel_dark"))     # Drehkranz
+    a, b = x0 + 6, x0 + 62
+    m.box(a, y0 + 6, 25, b, y0 + 8, 28, M("steel"))                          # Leiterholme
+    m.box(a, y0 + W - 8, 25, b, y0 + W - 6, 28, M("steel"))
+    for xx in range(a, b, 4):
+        m.box(xx, y0 + 8, 26, xx + 1, y0 + W - 8, 27, M("hazard_white"))
+    m.box(x0 + 60, y0 + 5, 22, x0 + 66, y0 + W - 5, 28, M("signal_red"))     # Rettungskorb
+    _cab(m, x0 + 46, y0, W, 22, 18, "signal_red")
+    m.box(x0 + 52, y0 + 3, 22, x0 + 56, y0 + W - 3, 24, M("beacon_blue"))
+    _axles(m, (x0 + 8, x0 + 22, x0 + 54), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+def rd_rtw():
+    """Rettungswagen der Rettungswache (Modell wie der Krankenwagen, eigener Name fuer die Leitstelle)."""
+    return ambulance()
+
+
+def rd_nef():
+    """Notarzteinsatzfahrzeug: weisser Kombi mit roter Bauchbinde und Lichtbalken."""
+    S = SIZES["rd_nef"]
+    m = _square(S)
+    x0, y0 = (S - 34) // 2, (S - 15) // 2
+    m.box(x0, y0, 2, x0 + 34, y0 + 15, 8, M("cargo_white"))
+    m.box(x0 + 2, y0 + 1, 8, x0 + 24, y0 + 14, 14, M("cargo_white"))
+    m.box(x0 + 3, y0 + 1, 8, x0 + 24, y0 + 14, 13, M("glass_dark"))
+    m.box(x0 + 4, y0 + 2, 13, x0 + 23, y0 + 13, 14, M("cargo_white"))
+    m.box(x0, y0, 5, x0 + 34, y0 + 1, 7, M("signal_red"))
+    m.box(x0, y0 + 14, 5, x0 + 34, y0 + 15, 7, M("signal_red"))
+    m.box(x0 + 14, y0 + 3, 14, x0 + 19, y0 + 12, 16, M("beacon_blue"))
+    m.box(x0 + 32, y0, 2, x0 + 34, y0 + 15, 4, M("black"))
+    for wx in (x0 + 6, x0 + 27):
+        _wheel(m, wx, y0, 3, 1, 1)
+        _wheel(m, wx, y0 + 14, 3, 1, 0)
+    _lights(m, x0 + 34, x0, y0, 15, 4)
+    return m
+
+
+def bh_kipper():
+    """Bauhof-Kipper: orange Kabine, Kippmulde mit Schotter, Rundumleuchte."""
+    S = SIZES["bh_kipper"]
+    m = _square(S)
+    L, W = 58, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 5, x0 + 38, y0 + W, 8, M("steel_dark"))
+    m.box(x0, y0, 8, x0 + 38, y0 + W, 20, M("signal_orange"))
+    m.box(x0 + 2, y0 + 2, 10, x0 + 36, y0 + W - 2, 20, 0)
+    m.box(x0 + 2, y0 + 2, 10, x0 + 36, y0 + W - 2, 17, M("gravel"))
+    for xx in range(x0 + 4, x0 + 34, 6):
+        m.box(xx, y0 + 4, 17, xx + 4, y0 + W - 4, 19, M("gravel"))
+    _cab(m, x0 + 40, y0, W, 24, 18, "signal_orange")
+    m.box(x0 + 46, y0 + 9, 24, x0 + 50, y0 + 13, 27, M("beacon_amber"))
+    _axles(m, (x0 + 8, x0 + 20, x0 + 48), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+def bh_streu():
+    """Streu- und Raeumfahrzeug: orange, Salztrichter auf der Ladeflaeche, Raeumschild vorn, Streuteller hinten."""
+    S = SIZES["bh_streu"]
+    m = _square(S)
+    L, W = 56, 22
+    x0, y0 = (S - L) // 2 - 2, (S - W) // 2
+    m.box(x0, y0, 5, x0 + 36, y0 + W, 8, M("steel_dark"))
+    for k in range(10):                                  # Trichter, nach unten schmaler
+        m.box(x0 + 2 + k // 2, y0 + 2 + k // 2, 8 + k, x0 + 34 - k // 2, y0 + W - 2 - k // 2, 9 + k, M("signal_orange"))
+    m.box(x0 + 2, y0 + 2, 18, x0 + 34, y0 + W - 2, 20, M("signal_orange"))
+    m.box(x0 + 5, y0 + 5, 19, x0 + 31, y0 + W - 5, 20, M("white"))   # Streusalz
+    m.box(x0 - 3, y0 + 7, 3, x0, y0 + W - 7, 5, M("steel"))          # Streuteller
+    _cab(m, x0 + 38, y0, W, 24, 18, "signal_orange")
+    m.box(x0 + 44, y0 + 9, 24, x0 + 48, y0 + 13, 27, M("beacon_amber"))
+    m.box(x0 + 57, y0 - 4, 2, x0 + 60, y0 + W + 4, 10, M("signal_orange"))   # Raeumschild
+    for yy in range(y0 - 4, y0 + W + 4, 4):
+        m.box(x0 + 59, yy, 3, x0 + 60, yy + 2, 9, M("hazard_white"))
+    _axles(m, (x0 + 8, x0 + 46), y0, W)
+    _lights(m, x0 + 56, x0, y0, W, 6)
+    return m
+
+
+def bus():
+    """Linienbus: cremeweiss mit Fensterband und roter Zierlinie, Tueren rechts, Klimaanlage, Zielanzeige."""
+    S = SIZES["bus"]
+    m = _square(S)
+    L, W = 72, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 3, x0 + L, y0 + W, 28, M("bus_body"))
+    m.box(x0, y0, 3, x0 + L, y0 + W, 6, M("black"))
+    for yy in (y0, y0 + W - 1):
+        m.box(x0 + 2, yy, 13, x0 + L - 2, yy + 1, 24, M("glass_dark"))
+        m.box(x0 + 2, yy, 7, x0 + L - 2, yy + 1, 10, M("bus_stripe"))
+    for dx in (x0 + 14, x0 + 44, x0 + 62):              # Tueren (rechte Seite = +y)
+        m.box(dx, y0 + W - 1, 6, dx + 6, y0 + W, 24, M("glass_lit"))
+    m.box(x0 + L - 1, y0 + 1, 12, x0 + L, y0 + W - 1, 25, M("glass_dark"))
+    m.box(x0 + L - 1, y0 + 4, 25, x0 + L, y0 + W - 4, 27, M("beacon_amber"))   # Zielanzeige
+    m.box(x0 + 10, y0 + 4, 28, x0 + 30, y0 + W - 4, 31, M("steel"))             # Klimaanlage
+    _axles(m, (x0 + 12, x0 + L - 14), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+def rc_wagen():
+    """Wertstoffsammelfahrzeug: weisse Kabine, gruener Pressaufbau mit Schuettung hinten, Rundumleuchte."""
+    S = SIZES["rc_wagen"]
+    m = _square(S)
+    L, W = 60, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0 + 4, y0, 5, x0 + 42, y0 + W, 30, M("recycle_green"))
+    m.box(x0 + 4, y0, 5, x0 + 42, y0 + W, 8, M("black"))
+    for yy in (y0, y0 + W - 1):
+        m.box(x0 + 6, yy, 18, x0 + 40, yy + 1, 21, M("hazard_white"))
+    m.box(x0, y0 + 1, 5, x0 + 6, y0 + W - 1, 26, M("steel_dark"))     # Pressheck
+    m.box(x0, y0 + 4, 6, x0 + 2, y0 + W - 4, 12, M("steel"))           # Schuettung
+    _cab(m, x0 + 42, y0, W, 24, 18)
+    m.box(x0 + 48, y0 + 9, 24, x0 + 52, y0 + 13, 27, M("beacon_amber"))
+    _axles(m, (x0 + 12, x0 + 26, x0 + 50), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+MUNICIPAL = ["fw_hlf", "fw_dlk", "rd_rtw", "rd_nef", "bh_kipper", "bh_streu", "bus", "rc_wagen"]

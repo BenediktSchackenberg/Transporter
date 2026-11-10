@@ -217,12 +217,13 @@ def build_facilities():
 # ------------------------------------------------------------------ Fahrzeuge
 def build_vehicles():
     out = manifest.setdefault("vehicles", {})
-    for name in ("cargobike", "van", "transporter", "reefer", "truck", "semi", "police", "ambulance", "firetruck", "roadcrew", "moving"):
+    for name in ["cargobike", "van", "transporter", "reefer", "truck", "semi", "police", "ambulance", "firetruck", "roadcrew", "moving"] + V.MUNICIPAL:
         base = getattr(V, name)()
         n = base.size[0]
         for k in range(4):
             r = engine.render(base.rotated(k), shadow_len=0, ground_shadow=False)
-            info = save_result("v_%s_%d" % (name, k), r, keep_mask=name not in ("police", "ambulance", "firetruck", "roadcrew", "moving"), top=False)
+            plain = name in ("police", "ambulance", "firetruck", "roadcrew", "moving") or name in V.MUNICIPAL   # feste Farben, keine Firmenmaske
+            info = save_result("v_%s_%d" % (name, k), r, keep_mask=not plain, top=False)
             info["pivot"] = [r["anchor"][0], r["anchor"][1] + n]   # (cx, cy, z=0) mit cx = cy = n / 2 -> y-Versatz = n
             out["%s_%d" % (name, k)] = info
     for cname in V.CAR_COLORS:
