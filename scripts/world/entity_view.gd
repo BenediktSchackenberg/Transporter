@@ -176,9 +176,15 @@ func _update_fleet() -> void:
 ## Feuerwehr (Auftrag 20, Etappe 4): HLF mit Blaulicht auf der Fahrt und am Einsatzort (in der Wache unsichtbar = in der Halle);
 ## Flammen und Rauch am brennenden Gebaeude nach Brandstaerke, Loeschwasser waehrend des Loeschangriffs, danach kurz Restrauch.
 func _update_fires() -> void:
-	if sim.fire == null or sim.fire.fires.is_empty() and fire_fx.is_empty() and muni_nodes.is_empty() and sim.rescue.missions.is_empty() and sim.winter.jobs.is_empty():
+	if sim.fire == null or sim.fire.fires.is_empty() and fire_fx.is_empty() and muni_nodes.is_empty() and sim.rescue.missions.is_empty() and sim.winter.jobs.is_empty() and sim.transit.lines.is_empty() and sim.recycling.trips.is_empty():
 		return
 	var seen_v := {}
+	for e in sim.recycling.on_road():   # Wertstoffwagen (Etappe 9)
+		seen_v[e.vid] = true
+		_place_muni(str(e.vid), e.mover, false)
+	for e in sim.transit.on_road():   # Buslinien (Etappe 7)
+		seen_v[e.vid] = true
+		_place_muni(str(e.vid), e.mover, false)
 	for e in sim.winter.on_road():   # Bauhof (Etappe 6): Streuwagen mit Rundumleuchte, Kipper zu den Flickstellen
 		seen_v[e.vid] = true
 		_place_muni(str(e.vid), e.mover, bool(e.siren))

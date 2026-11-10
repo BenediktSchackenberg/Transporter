@@ -24,6 +24,7 @@ const GOODS := {
 	"moebel": {"g": "handel", "t": 60}, "computer": {"g": "handel", "t": 30}, "erstehilfe": {"g": "handel", "t": 120},
 	"hygiene": {"g": "handel", "t": 200}, "werkzeug": {"g": "handel", "t": 60}, "reifen": {"g": "handel", "t": 60},
 	"schutzkleidung": {"g": "handel", "t": 60},
+	"schrott": {"g": "baumaterial", "t": 0},   # nur Ankauf von den Recyclinghoefen (Auftrag 20), kein Nachschub per Import
 	"spielgeraet": {"g": "anlagen", "t": 40}, "sportmaterial": {"g": "anlagen", "t": 40}, "pflanzen": {"g": "anlagen", "t": 600},
 	"jungbaum": {"g": "anlagen", "t": 80}, "strassenleuchte": {"g": "anlagen", "t": 40}, "kunstwerk": {"g": "anlagen", "t": 6},
 	"dekoration": {"g": "anlagen", "t": 120}, "marktstand": {"g": "anlagen", "t": 24}, "flutlicht": {"g": "anlagen", "t": 16},
@@ -53,7 +54,8 @@ func setup(simulation) -> void:
 	if not sim.economy.accounts.has(ACCT):
 		sim.economy.accounts[ACCT] = 0.0
 	for item in GOODS:
-		sim.stock.add(item, int(GOODS[item].t), ACCT, loc, "Erstausstattung Großlager")
+		if int(GOODS[item].t) > 0:   # Waren ohne Zielbestand (Schrott) kommen nur ueber Ankauf
+			sim.stock.add(item, int(GOODS[item].t), ACCT, loc, "Erstausstattung Großlager")
 	sim.day_changed.connect(on_day)
 
 

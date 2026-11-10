@@ -25,7 +25,7 @@ const BERUFE := {
 	"arzt": {"label": "Ärzte", "wage": 26.0, "bildung": 3},
 	"bauhof": {"label": "Bauhofmitarbeiter", "wage": 14.0, "bildung": 0},
 	"fahrdienst": {"label": "Busfahrer", "wage": 14.0, "bildung": 1},
-	"lehrkraft": {"label": "Lehrkräfte", "wage": 19.0, "bildung": 3},
+	"lehrkraft": {"label": "Lehrkräfte", "wage": 19.0, "bildung": 2},   # Stufe 3 ist selten und geht an die Kliniken
 	"erzieher": {"label": "Erzieher", "wage": 14.0, "bildung": 2},
 	"recycling": {"label": "Wertstoffwerker", "wage": 13.0, "bildung": 0},
 }
@@ -51,9 +51,9 @@ const TYPES := {
 	"VB-01": {"label": "Busbetriebshof", "dienst": "oepnv", "ressort": "Verkehr", "building": "bus_depot", "cost": 380000.0,
 		"upkeep": 120.0, "capacity": 2, "staff": {"fahrdienst": 6}, "power": 50.0, "water": 6.0, "vehicles": ["Linienbus", "Linienbus"]},
 	"SC-01": {"label": "Grundschule", "dienst": "bildung", "ressort": "Bildung", "building": "public_school", "cost": 1500000.0,
-		"upkeep": 260.0, "capacity": 240, "staff": {"lehrkraft": 12}, "power": 120.0, "water": 20.0, "vehicles": []},
+		"upkeep": 260.0, "capacity": 240, "min_capacity": 20, "staff": {"lehrkraft": 12}, "power": 120.0, "water": 20.0, "vehicles": []},
 	"KI-01": {"label": "Kita", "dienst": "bildung", "ressort": "Bildung", "building": "public_kita", "cost": 600000.0,
-		"upkeep": 110.0, "capacity": 60, "staff": {"erzieher": 6}, "power": 40.0, "water": 10.0, "vehicles": []},
+		"upkeep": 110.0, "capacity": 60, "min_capacity": 10, "staff": {"erzieher": 6}, "power": 40.0, "water": 10.0, "vehicles": []},
 	"RC-01": {"label": "Recyclinghof", "dienst": "recycling", "ressort": "Umwelt", "building": "recycling_yard", "cost": 350000.0,
 		"upkeep": 100.0, "capacity": 2, "staff": {"recycling": 4}, "power": 80.0, "water": 4.0, "vehicles": ["Wertstoffwagen"]},
 }

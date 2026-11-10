@@ -163,6 +163,8 @@ func _arrivals_town() -> void:
 	var boost := marketing_boost if month <= marketing_until else 0.0
 	var rate := float(Population.cfg().get("zuzug_je_monat", 0.04)) * REGION_ARRIVALS / float(GameCalendar.DAYS_PER_MONTH)
 	var fam: float = sim.civic.family_factor(town) if sim.civic != null and sim.civic.enabled() else 1.0   # Spielplaetze, Parks, Kitas ziehen Familien an
+	if sim.education != null and sim.education.enabled():
+		fam *= sim.education.family_factor(town)   # Auftrag 20: Kitaplaetze
 	_arrival_acc += float(Z.population_of(town)) / PERSONS_PER_UNIT * rate * (0.5 + Z.employment_rate_of(town)) * (0.5 + sim.population.mean_need("glueck") / 100.0) * (1.0 + boost) * fam
 	# Sog durch Arbeit: kleine Orte wachsen nicht nur proportional zur Einwohnerzahl. Je besser die Beschaeftigung, desto mehr Haushalte
 	# kommen zusaetzlich (bei 90 % JOB_PULL_MIN je Monat, mehr bei offenen Stellen); unter 70 % kein zusaetzlicher Zuzug.
@@ -577,6 +579,8 @@ func _update_approval() -> void:
 	target += clampf(20.0 * (Z.employment_rate_of(town) - Citizens.employment_target()) / 0.1, -30.0, 15.0)
 	if sim.civic != null and sim.civic.enabled():
 		target += sim.civic.approval_bonus(town)   # Auftrag 19: Anlagen und Denkmaeler (Prunk bei fehlender Grundversorgung kostet)
+	if sim.transit != null:
+		target += sim.transit.approval_bonus(town)   # Auftrag 20: Busanbindung
 	target -= 250.0 * float(waiting) / maxf(1.0, float(stock_units)) * 10.0 / 10.0
 	if cash() < reserve_cash():
 		target -= 10.0

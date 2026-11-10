@@ -19,7 +19,7 @@ func _process(delta: float) -> void:
 		return
 	_poll = 0.5
 	var r := _view_cells()
-	var key := "%s|%d|%d|%d" % [str(r), int(_sum(sim.winter.snow) / 20.0), sim.winter.salted.size(), sim.winter.potholes().size()]
+	var key := "%s|%d|%d|%d|%d" % [str(r), int(_sum(sim.winter.snow) / 20.0), sim.winter.salted.size(), sim.winter.potholes().size(), sim.transit.lines.size()]
 	if key != _key:
 		_key = key
 		queue_redraw()
@@ -61,6 +61,7 @@ func _draw() -> void:
 	var holes := {}
 	for seg in W.potholes():
 		holes[seg] = true
+	_draw_stops()
 	if W.snow.is_empty() and holes.is_empty() and W.salted.is_empty():
 		return
 	var r := _view_cells()
@@ -85,3 +86,14 @@ func _draw() -> void:
 				var h := Iso.to_screen((Vector2(q) + Vector2(0.35 + 0.3 * float(absi(hash(q)) % 10) / 10.0, 0.5)) * 32.0)
 				draw_colored_polygon(PackedVector2Array([h + Vector2(-7, 0), h + Vector2(0, -3), h + Vector2(7, 0), h + Vector2(0, 3)]), Color(0.1, 0.1, 0.11, 0.85))
 				draw_line(h + Vector2(-6, 1), h + Vector2(5, 2), Color(0.35, 0.33, 0.3, 0.8), 1.0)
+
+
+## Bushaltestellen (Etappe 7): Mast mit gelbem H-Schild am Strassenrand.
+func _draw_stops() -> void:
+	for l in sim.transit.lines.values():
+		for st in l.stops:
+			var p := Iso.to_screen((Vector2(float(st[0]), float(st[1])) + Vector2(0.85, 0.15)) * 32.0)
+			draw_line(p, p + Vector2(0, -26), Color(0.3, 0.32, 0.35), 2.0)
+			draw_rect(Rect2(p + Vector2(-6, -36), Vector2(12, 12)), Color(0.95, 0.78, 0.15))
+			draw_rect(Rect2(p + Vector2(-6, -36), Vector2(12, 12)), Color(0.15, 0.4, 0.2), false, 1.5)
+			draw_string(ThemeDB.fallback_font, p + Vector2(-4, -26), "H", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.1, 0.35, 0.15))

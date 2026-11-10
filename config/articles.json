@@ -164,6 +164,46 @@
     "importpreis": 36.0,
     "exportpreis": 18.0
   },
+  "altpapier": {
+    "name": "Altpapier",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 9.0,
+    "importpreis": null,
+    "exportpreis": 7.0
+  },
+  "altglas": {
+    "name": "Altglas",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 5.0,
+    "importpreis": null,
+    "exportpreis": 3.5
+  },
+  "kunststoffgranulat": {
+    "name": "Kunststoffgranulat",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 30.0,
+    "importpreis": null,
+    "exportpreis": 22.0
+  },
+  "kompost": {
+    "name": "Kompost",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 3.0,
+    "importpreis": null,
+    "exportpreis": 2.0
+  },
   "schrott": {
     "name": "Stahlschrott",
     "einheit": "Einheit (100 kg)",

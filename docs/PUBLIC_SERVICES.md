@@ -65,7 +65,10 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 | 4 Feuerwehr | **fertig** (10.11.2026) – `scripts/economy/fire_service.gd` (`sim.fire`), `scripts/world/fire_fx.gd`, Test `test_fire_service` (Abnahme B) |
 | 5 Rettungsdienst/Krankenhäuser | **fertig** (10.11.2026) – `scripts/economy/rescue_service.gd` (`sim.rescue`), Test `test_rescue_service` (Abnahme C) |
 | 6 Bauhof/Straßen/Winterdienst | **fertig** (10.11.2026) – `scripts/economy/winter_service.gd` (`sim.winter`), `scripts/world/road_state_view.gd`, Test `test_winter_service` (Abnahme D) |
-| 7–12 | offen |
+| 7 ÖPNV | **fertig** (10.11.2026) – `transit_service.gd`, Test `test_transit` (Abnahme E) |
+| 8 Bildung | **fertig** (10.11.2026) – `education.gd`, Test `test_education` (Abnahme F) |
+| 9 Recycling | **fertig** (10.11.2026) – `recycling.gd`, Test `test_recycling` (Abnahme G) |
+| 10–12 | offen |
 
 **Etappe 1 im Detail**
 
@@ -179,3 +182,38 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 * Darstellung (`RoadStateView`, Bodenebene): Schneedecke auf ungeräumten Straßen, geräumte Straßen dunkel mit Salzkörnern,
   Schlaglöcher als dunkle Flecken; Streuwagen mit Rundumleuchte, Kipper zu den Flickstellen. Sichtprüfung `--demo-snow` (Kamera auf
   den Bauhof) bzw. `--demo-snow=wache` (Kamera auf die Feuerwache, deren Abschnitt zuerst geräumt wird).
+
+**Etappe 7 im Detail (ÖPNV)**
+
+* `scripts/economy/transit_service.gd` (`sim.transit`): ein Busbetriebshof (VB-01) betreibt eine Linie in seiner Stadt. Haltestellen aus
+  den Daten: bis zu 3 Wohnschwerpunkte (Wohneinheiten je 8 × 8 Felder), 2 Arbeitsschwerpunkte (Geschäfte, Betriebe), Rathaus; Rundkurs
+  ab dem Betriebshof (nächster Nachbar). Betrieb 6–22 Uhr, 2 Minuten Halt; Takt = gemessene Umlaufzeit.
+* Fahrgäste: je Betriebsstunde 0,03 Fahrtwünsche je bewohnter Einheit im Umkreis 8 einer Haltestelle; Einsteigen bis 40 Plätze, die
+  Hälfte steigt an jeder Haltestelle aus. Jeder Fahrgast zahlt 2 € von seinem eigenen Guthaben (R0 → Stadtkasse); ohne Guthaben fährt
+  niemand umsonst (Statistik „nicht bezahlt“).
+* Kennzahlen je Linie: Fahrgäste, Erlöse, Kostendeckung (Erlöse / Sachkosten + Bus + Löhne des Fahrpersonals), Anbindung (Anteil der
+  Wohneinheiten im Einzugsbereich). Wirkung: bis zu +3 Punkte Zustimmung nach Anbindung.
+* Darstellung: Bus fährt sichtbar, Haltestellen als gelbe H-Schilder (`RoadStateView`). Test `test_transit` (Abnahme E).
+
+**Etappe 8 im Detail (Bildung)**
+
+* `scripts/economy/education.gd` (`sim.education`): Erwachsene von 22–45 Jahren haben 0/1/2 Kinder (55/30/15 %), einmal bestimmt und
+  am Bürger gespeichert; Kinder altern mit dem Kalender (360 Tage/Jahr). Kita 1–5, Schule 6–17 Jahre.
+* Plätze aus Kitas (KI-01) und Schulen (SC-01) der Wohnstadt (60 bzw. 240 je 1000 Einwohner, mindestens 10/20). Unterrichtsqualität =
+  Lehrkräfte / Bedarf; Lehrkräfte brauchen Bildungsstufe 2 (Stufe 3 ist selten und geht an die Kliniken).
+* Lernstand je Kind: jeden Monat Schulquote × Qualität (ohne Schulplatz Heimunterricht 0,2). Mit 18 wird das Kind ein neuer Bürger der
+  Stadt (wohnt bei den Eltern): Bildung 2 ab 90 % des Lernstands, 1 ab 50 %, sonst 0 – Schulen wirken so über Jahre auf den Arbeitsmarkt.
+* Kitas fördern den Familienzuzug (+15 % × Betreuungsquote auf den Zuzugsfaktor des Bürgermeisters). Engpässe in der Übersicht.
+  Test `test_education` (Abnahme F).
+
+**Etappe 9 im Detail (Recycling)**
+
+* `scripts/economy/recycling.gd` (`sim.recycling`): ein Recyclinghof (RC-01) sortiert die Wertstoffe seiner Stadt (Müll der Einwohner ×
+  Recyclingquote + 15 % zusätzlich getrennter Abfall, der sonst auf die Deponie ginge), bis 1 t je Mitarbeiter und Tag.
+* Ströme: Papier 35 %, Glas 20 %, Kunststoff 20 %, Metall 10 %, Bio 15 % → echte Waren im Warenbuch (Altpapier, Altglas,
+  Kunststoffgranulat, Stahlschrott, Kompost; neue Artikel in `config/articles.json`).
+* Wöchentlich fährt der Wertstoffwagen sichtbar zum Großlager: Stahlschrott geht in den Großlagerbestand (L0 zahlt den Ankaufspreis;
+  Stahlwerke können ihn dort kaufen; kein Nachschub per Import), die übrigen Stoffe übernimmt ein Verwerter außerhalb (Ausfuhrpreis).
+* Hinweis: Die Orte sind klein (≈ 40 Einwohner, ≈ 18 kg Wertstoffe am Tag); eine volle 100-kg-Einheit entsteht erst nach einigen Tagen.
+  Private Recyclingfirmen sind noch nicht umgesetzt (Firmen können den Schrott im Großlager kaufen). Test `test_recycling` (Abnahme G).
+
