@@ -26,6 +26,8 @@ var traffic_nodes: Array = []
 var service_nodes: Array = []         # Streifen- und Krankenwagen (PublicSafety.vehicles)
 var fire_node: Node2D = null    # Feuerwehrwehrauto (Airport.fire_vehicle, Etappe E5)
 var fleet_nodes := {}                 # CityFleet: Bautrupps und Umzugswagen (ID -> Node2D)
+var muni_nodes := {}                  # Einsatzfahrzeuge der Feuerwehr (Municipal-Fahrzeug-ID -> Node2D, Auftrag 20)
+var fire_fx := {}                     # Brand-ID -> FireFx (Flammen, Rauch, Loeschwasser)
 var avatar_nodes := {}
 var _people_timer := 0.0
 var _people_cache: Array = []
@@ -169,6 +171,62 @@ func _update_fleet() -> void:
 		if not seen.has(id):
 			fleet_nodes[id].queue_free()
 			fleet_nodes.erase(id)
+
+
+## Feuerwehr (Auftrag 20, Etappe 4): HLF mit Blaulicht auf der Fahrt und am Einsatzort (in der Wache unsichtbar = in der Halle);
+## Flammen und Rauch am brennenden Gebaeude nach Brandstaerke, Loeschwasser waehrend des Loeschangriffs, danach kurz Restrauch.
+func _update_fires() -> void:
+	if sim.fire == null or sim.fire.fires.is_empty() and fire_fx.is_empty() and muni_nodes.is_empty():
+		return
+	var seen_v := {}
+	var seen_f := {}
+	for f in sim.fire.fires.values():
+		var vid := str(f.vehicle)
+		if vid != "" and f.phase in ["anfahrt", "loeschen", "rueckfahrt"] and sim.fire.movers.has(vid):
+			seen_v[vid] = true
+			var n: Node2D = muni_nodes.get(vid)
+			if n == null:
+				var vt := str(sim.municipal.vehicles[vid].type)
+				n = _make_vehicle_node(str(Municipal.VEHICLES[vt].sprite), "", Color.WHITE, false)
+				_add_beacon(n, -62.0)
+				add_child(n)
+				muni_nodes[vid] = n
+			var m: Mover = sim.fire.movers[vid]
+			n.position = Iso.to_screen(m.pos)
+			_set_vehicle_dir(n, m.heading)
+			var siren: Sprite2D = n.get_node("siren")
+			siren.visible = f.phase != "rueckfahrt"
+			siren.modulate = Color(0.3, 0.5, 1.0, 0.95) if int(anim_time * 7.0) % 2 == 0 else Color(0.6, 0.8, 1.0, 0.3)
+		var smoking: bool = f.status == "brennt" or (f.has("end") and sim.game_min - float(f.end) < 30.0)
+		if not smoking:
+			continue
+		seen_f[f.id] = true
+		var fx: FireFx = fire_fx.get(f.id)
+		if fx == null:
+			fx = _make_fire_fx(int(f.building))
+			cv.fx_node.add_child(fx)
+			fire_fx[f.id] = fx
+		fx.intensity = float(f.intensity) / 100.0
+		fx.burning = f.status == "brennt"
+		fx.spraying = f.phase == "loeschen" and f.status == "brennt" and sim.fire.movers.has(vid)
+		if fx.spraying:
+			fx.spray_from = Iso.to_screen(sim.fire.movers[vid].pos) + Vector2(0, -34) - fx.position
+	for vid in muni_nodes.keys():
+		if not seen_v.has(vid):
+			muni_nodes[vid].queue_free()
+			muni_nodes.erase(vid)
+	for id in fire_fx.keys():
+		if not seen_f.has(id):
+			fire_fx[id].queue_free()
+			fire_fx.erase(id)
+
+
+func _make_fire_fx(bid: int) -> FireFx:
+	var b: Dictionary = sim.city.building(bid)
+	var fx := FireFx.new()
+	fx.position = Iso.to_screen(Vector2((float(b.x) + float(b.w) * 0.5) * 32.0, (float(b.y) + float(b.h) * 0.5) * 32.0)) + Vector2(0, -22.0 * float(maxi(int(b.w), int(b.h))))
+	fx.width = 14.0 * float(maxi(int(b.w), int(b.h)))
+	return fx
 
 
 ## Naechste vorhandene Autofarbe zur Buergermeisterfarbe.
@@ -437,6 +495,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		fsiren.visible = in_action
 		fsiren.modulate = Color(1.0, 0.3, 0.3, 0.95) if fblink else Color(0.3, 0.5, 1.0, 0.95)
 	_update_fleet()
+	_update_fires()
 	for i in sim.traffic.size():
 		var m: Mover = sim.traffic[i]
 		var n: Node2D = traffic_nodes[i]

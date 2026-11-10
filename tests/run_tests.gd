@@ -12,7 +12,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service"]
 	test_names.append("test_tourism_hotel")
 	test_names.append("test_tourism_venues")
 	var args := OS.get_cmdline_user_args()
@@ -8421,7 +8421,7 @@ func test_region_flight() -> void:
 	var people0 := s.citizens.people.size()
 	var rt: Dictionary = A.book_trip(person, 1, "Familienbesuch")
 	ok(rt.ok and is_equal_approx(float(person.balance), bal0 - AirNetwork.TICKET), "Reise gebucht, Ticket aus dem eigenen Guthaben")
-	var p1 := T.mayor(1).cash()
+	var fee1 := float(s.economy.flows.get(AirNetwork.ACCOUNT + ">" + Towns.account_of(1), 0.0))   # Stadtkasse zahlt zugleich ihre Wachen: Landegebuehr am Geldfluss pruefen
 	var saw_air := false
 	var saved := {}
 	var t := 0.0
@@ -8441,7 +8441,7 @@ func test_region_flight() -> void:
 			break
 	ok(A.bookings[str(rb.ref)].status == "angekommen" and saw_air, "Flug gestartet, sichtbar in der Luft, gelandet")
 	ok(s.stock.qty("mehl", "C0", dest) == 30 and T.of_building(dest) == 1 and s.stock.qty("mehl", "C0", hof) == 0, "Fracht im Frachtterminal von %s (Eigentum Firma 0)" % T.name_of(1))
-	ok(T.mayor(1).cash() >= p1 + AirNetwork.LANDING_FEE - 0.01 and float(A.stats.kosten) > 0.0 and float(A.stats.erloese) > 0.0, "Landegebühr an %s, Kosten und Erlöse des Betreibers verbucht" % T.name_of(1))
+	ok(float(s.economy.flows.get(AirNetwork.ACCOUNT + ">" + Towns.account_of(1), 0.0)) >= fee1 + AirNetwork.LANDING_FEE - 0.01 and float(A.stats.kosten) > 0.0 and float(A.stats.erloese) > 0.0, "Landegebühr an %s, Kosten und Erlöse des Betreibers verbucht" % T.name_of(1))
 	ok(s.citizens.people.size() == people0 and s.citizens.population() == pop0 and s.citizens.home_town(person) == 0 and int(person.get("reise_ort", -1)) == 1, "Reise erzeugt keine Person; Wohnstadt bleibt %s, Aufenthalt in %s" % [T.name_of(0), T.name_of(1)])
 	ok(identity_ok(s), "Geld und Waren erhalten")
 	# Laden mitten im Flug und zu Ende fliegen: keine Verdopplung
@@ -9736,3 +9736,91 @@ func test_public_buildings() -> void:
 	ok(variants.size() >= 6, "mindestens sechs Grundvarianten genutzt (%d)" % variants.size())
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.municipal.facilities.values().all(func(f): return s2.city.building(int(f.building)).sprite == Municipal.sprite_of(f)), "nach dem Laden gleiche Bilder")
+
+
+## Auftrag 20 Etappe 4 / Abnahme B: Brand -> Alarm der eigenen Wache -> Ausruecken, Anfahrt, Loeschen -> Schaden am Gebaeudezustand ->
+## Reparaturauftrag (bezahlt, Zustand wieder hergestellt); Nachbarschaftshilfe mit Kostenerstattung; ohne Feuerwehr brennt es aus;
+## Laden waehrend eines Brandes alarmiert neu; Geldkonservierung.
+func test_fire_service() -> void:
+	var s := region_sim(4)
+	var F: FireService = s.fire
+	var M: Municipal = s.municipal
+	F.random_fires = false
+	run(s, 60.0 * 2.0)
+	ok(F.enabled() and M.facilities.values().any(func(f): return f.code == "FW-01"), "Feuerwehr aktiv, Wachen vorhanden")
+	var house := func(k: int) -> int:
+		for b in s.city.buildings:
+			if b.role == "customer" and b.type == "house" and s.towns.of_building(int(b.id)) == k and s.care.condition.has(int(b.id)):
+				return int(b.id)
+		return -1
+	# 1) eigener Einsatz
+	var b0: int = house.call(0)
+	var cond0 := float(s.care.condition[b0])
+	var f: Dictionary = F.ignite(b0)
+	ok(f.phase == "ausruecken" and not f.helper and int(M.facilities[f.station].town) == 0, "Alarm an die eigene Wache (%s)" % f.phase)
+	ok(M.vehicles[f.vehicle].status == "im_einsatz", "HLF im Einsatz")
+	var t := 0.0
+	while f.status == "brennt" and t < 120.0:
+		run(s, 1.0)
+		t += 1.0
+	ok(f.status == "gelöscht" and float(f.damage) > 0.0 and float(f.damage) < FireService.MAX_DAMAGE, "Brand geloescht, Teilschaden %d %%" % int(f.damage))
+	ok(float(s.care.condition[b0]) < cond0, "Gebaeudezustand sinkt durch den Brand (%.1f -> %.1f)" % [cond0, float(s.care.condition[b0])])
+	ok(F.damaged(b0), "Reparaturauftrag offen")
+	while f.phase != "fertig" and t < 240.0:
+		run(s, 1.0)
+		t += 1.0
+	ok(f.phase == "fertig" and M.vehicles[f.vehicle].status == "bereit", "HLF zurueck in der Wache")
+	var r: Dictionary = F.repairs.values().filter(func(x): return int(x.building) == b0)[0]
+	var h0 := float(s.economy.accounts["H0"])
+	run(s, 60.0 * float(int(r.until) - GameCalendar.day_of(s.game_min) + 1))
+	ok(r.status == "fertig" and absf(float(s.care.condition[b0]) - cond0) < 2.5, "Reparatur fertig, Zustand wieder hergestellt (%.1f)" % float(s.care.condition[b0]))
+	ok(float(s.economy.accounts["H0"]) <= h0 - float(r.cost) + 0.01 or float(F.stats.reparaturkosten) >= float(r.cost), "Eigentuemer bezahlt die Reparatur")
+	# 2) Nachbarschaftshilfe: Stadt 1 ohne einsatzbereites HLF
+	for st in M.of_town(1, "feuerwehr"):
+		for vid in st.vehicles:
+			M.vehicles[vid].status = "werkstatt"
+	var house1: int = house.call(1)
+	var f1h: Dictionary = F.ignite(house1)
+	ok(f1h.phase == "wartet", "Wohnhaus: Nachbarwehr kaeme zu spaet -> keine Nachbarschaftshilfe")
+	var b1 := -1
+	for b in s.city.buildings:
+		if b.role == "customer" and str(b.type) in FireService.LARGE and s.towns.of_building(int(b.id)) == 1:
+			b1 = int(b.id)
+			break
+	var cash1 := float(s.economy.accounts[Towns.account_of(1)])
+	var f1: Dictionary = F.ignite(b1)
+	ok(bool(f1.large), "Grossbrand in %s" % f1.name)
+	ok(f1.helper and int(M.facilities[f1.station].town) != 1, "Nachbarschaftshilfe aus %s" % s.towns.name_of(int(M.facilities[f1.station].town)) if f1.station != "" else "Nachbarschaftshilfe")
+	t = 0.0
+	while f1.status == "brennt" and t < 300.0:
+		run(s, 1.0)
+		t += 1.0
+	ok(f1.status == "gelöscht" and float(f1.get("help_fee", 0.0)) > 0.0, "geloescht, Kosten erstattet (%s, %s, Schaden %d, Dauer %d min, Angriff nach %d min)" % [str(f1.get("help_fee", 0)), f1.status, int(f1.damage), int(float(f1.get("end", 0)) - float(f1.start)), int(float(f1.get("attack", 0)) - float(f1.start))])
+	ok(float(s.economy.accounts[Towns.account_of(1)]) < cash1, "anfordernde Stadt zahlt")
+	# 3) keine Feuerwehr verfuegbar -> brennt aus
+	for st in M.facilities.values():
+		for vid in st.vehicles:
+			M.vehicles[vid].status = "werkstatt"
+	var b2: int = house.call(2)
+	var f2: Dictionary = F.ignite(b2)
+	ok(f2.phase == "wartet", "keine Wache verfuegbar -> Einsatz wartet")
+	t = 0.0
+	while f2.status == "brennt" and t < 120.0:
+		run(s, 1.0)
+		t += 1.0
+	ok(f2.status == "ausgebrannt" and float(f2.damage) >= FireService.MAX_DAMAGE, "ohne Feuerwehr brennt das Haus aus")
+	# 4) Laden waehrend eines Brandes
+	for v in M.vehicles.values():
+		v.status = "bereit"
+	var f3: Dictionary = F.ignite(house.call(3))
+	run(s, 2.0)
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	s2.fire.random_fires = false
+	var g: Dictionary = s2.fire.fires[f3.id]
+	ok(g.status == "brennt" and g.phase == "wartet", "nach dem Laden: Brand wird neu alarmiert")
+	t = 0.0
+	while g.status == "brennt" and t < 150.0:
+		run(s2, 1.0)
+		t += 1.0
+	ok(g.status == "gelöscht", "nach dem Laden geloescht")
+	ok(absf(s.economy.conservation_error()) < 0.01 and absf(s2.economy.conservation_error()) < 0.01, "Geldkonservierung")

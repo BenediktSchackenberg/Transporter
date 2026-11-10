@@ -290,6 +290,16 @@ func _process_timed(_delta: float) -> void:
 			var j: Dictionary = sim.access.jobs[str(r.ref)]
 			var at: Array = j.cells[j.cells.size() - int(j.built)]
 			args["shot-tile"] = "%d,%d" % [int(at[0]), int(at[1])]
+	if session and args.has("demo-fire") and not args.has("_fire") and session.sim.municipal.started:   # Sichtpruefung Feuerwehr: Brand nahe der ersten Wache
+		args["_fire"] = true
+		var st: Dictionary = session.sim.municipal.of_town(0, "feuerwehr")[0]
+		var sc := Vector2i(int(st.cell[0]), int(st.cell[1]))
+		for b in session.sim.city.buildings:
+			var d := (Vector2i(int(b.x), int(b.y)) - sc).length()
+			if b.role == "customer" and d >= 25.0 and d <= 45.0:
+				session.sim.fire.ignite(int(b.id))
+				args["shot-tile"] = "%d,%d" % [int(b.x), int(b.y)]
+				break
 	if session and args.has("demo-ship") and not args.has("_ship") and session.sim.harbor.enabled:   # Sichtpruefung Hafen: Schiff legt sofort an
 		args["_ship"] = true
 		for k in session.sim.towns.count():   # alle Haefen der Region
@@ -384,6 +394,8 @@ func _process_timed(_delta: float) -> void:
 				session.set_follow(false)
 				session.city_view.set_camera_world(Vector2((float(an.rect[0]) + float(an.rect[2]) * 0.5) * 32.0, (float(an.rect[1]) + float(an.rect[3]) * 0.5) * 32.0))
 				print("AUTOTEST Kamera auf ", an.title, " (", an.status, ")")
+		if args.has("demo-fire"):
+			print("AUTOTEST Feuerwehr: ", session.sim.fire.fires.values().map(func(f): return "%s %s %s Staerke %d Schaden %d" % [f.id, f.status, f.phase, int(f.intensity), int(f.damage)]))
 		if args.has("shot-dienst") and session.sim.municipal != null:   # Kamera auf eine kommunale Einrichtung (Auftrag 20), Nr. = Reihenfolge
 			var fs: Array = session.sim.municipal.facilities.values()
 			print("AUTOTEST Einrichtungen: ", fs.map(func(f): return "%s %s %s" % [f.id, f.name, Municipal.sprite_of(f)]))

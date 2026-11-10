@@ -62,7 +62,8 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 | 1 Fundament | **fertig** (10.11.2026) – `scripts/economy/municipal.gd`, `sim.municipal`, Test `test_municipal`, Probe `tests/probe_municipal.gd` |
 | 2 Gebäude-Baukasten | **fertig** (10.11.2026) – `tools/vox/public.py`, Test `test_public_buildings` (Abnahme A) |
 | 3 Fahrzeuge | **fertig** (10.11.2026) – `tools/vox/vehicles.py` (`MUNICIPAL`), Prüfung in `test_public_buildings` |
-| 4–12 | offen |
+| 4 Feuerwehr | **fertig** (10.11.2026) – `scripts/economy/fire_service.gd` (`sim.fire`), `scripts/world/fire_fx.gd`, Test `test_fire_service` (Abnahme B) |
+| 5–12 | offen |
 
 **Etappe 1 im Detail**
 
@@ -110,3 +111,28 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
   (Drehleiter mit Drehkranz und Rettungskorb, drei Achsen), `rd_rtw` (Rettungswagen), `rd_nef` (Notarzt-Kombi), `bh_kipper` (Kipper mit
   Schotter), `bh_streu` (Streuwagen mit Salztrichter, Räumschild, Streuteller), `bus` (Linienbus mit Fensterband, drei Türen,
   Zielanzeige), `rc_wagen` (Wertstoffsammler mit Pressaufbau). Zuordnung über `Municipal.VEHICLES[typ].sprite`.
+
+**Etappe 4 im Detail**
+
+* Brandentstehung täglich je Kundengebäude, deterministisch (Gebäude-ID, Tag): Grundrisiko 0,12 %/Tag, erhöht für Küchen
+  (Restaurant, Kneipe, Disco, Hotel), Maschinen (Fabrik, Werkstatt), Lager, Höfe, Tankstellen; doppelt bei Gebäudezustand < 40
+  (marode Elektrik), ×1,5 bei Hitze ohne Regen. Ursache passend zum Gebäude (Küchenbrand, Maschinenbrand, Funkenflug, Selbstentzündung
+  von Heu, defekte Elektrik, …).
+* Alarm an die Wache mit der kürzesten Ankunftszeit (Ausrücken + Fahrt über die Straße mit Sonderrechten), die ein freies HLF und
+  mindestens 2 Einsatzkräfte hat (Hauptamtliche + Ehrenamtliche). Ausrückzeit: Berufsfeuerwehr 2, Freiwillige 8 Spielminuten.
+  Ohne verfügbare Wache wird alle 10 Spielminuten erneut alarmiert.
+* Brandverlauf: Stärke wächst um 2 je Spielminute bis zum Löschangriff; Schaden wächst mit der Stärke. Löschleistung: HLF 3 + 1 je
+  Einsatzkraft und Minute. Ohne Feuerwehr brennt ein Gebäude nach 150 Minuten aus (Schaden 90 %).
+* Großbrand: große Gebäude (Fabrik, Lager, Frachthalle, Hof, Hotel, Hafenamt, Luftfracht, Werft) brennen bis zu 8 Stunden und verlieren
+  je Minute anteilig weniger. **Nachbarschaftshilfe** nur, wenn die Wache einer anderen Stadt vor dem Ausbrennen ankommt – bei
+  Wohnhäusern liegen die Städte (330–480 Felder, ≈ 3 Spielstunden) zu weit auseinander, bei Großbränden nicht. Die anfordernde Stadt
+  erstattet 1500 € + 20 € je Einsatzminute an die helfende Stadt.
+* Folgen: Gebäudezustand (BuildingCare) sinkt um 0,8 × Schaden; Reparaturauftrag an das Handwerk (S0) mit 350 € je Schadenspunkt,
+  Dauer 1 + Schaden/15 Tage, bezahlt vom Eigentümer (Stadtgebäude: Stadtkasse, sonst Hausbesitzer H0); danach ist der Zustand wieder
+  hergestellt. Während der Reparatur kein neuer Brand im selben Gebäude.
+* Darstellung: HLF mit Blaulicht fährt zum Brand und zurück (in der Wache = in der Halle, unsichtbar); `FireFx` zeichnet flackernde
+  Flammen und Rauch nach Brandstärke, beim Löschangriff einen Wasserbogen vom Fahrzeug; nach dem Löschen 30 Minuten Restrauch.
+  Einträge im Ereignisprotokoll und auf der Karte (Brand, Ausrücken, Löschangriff, Reparaturauftrag).
+* Laden während eines Einsatzes: Fahrzeuge stehen wieder in der Wache, der Brand wird neu alarmiert.
+* Sichtprüfung: `--demo-fire` (Brand 25–45 Felder von der ersten Wache, Kamera dorthin), z. B.
+  `--autotest --speed=2 --seed=21 --demo-fire --screenshot=user://f.png --shot-at=37`. Probe `tests/probe_fire.gd` (Fahrzeiten zwischen den Wachen, Brandstatistik).
