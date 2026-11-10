@@ -75,6 +75,8 @@ func propose(initiator: int, kind: String, partner: int, shares: Dictionary = {}
 		return {"ok": false, "msg": "Unbekannte Projektart %s (verbindung)." % kind}
 	var today := GameCalendar.day_of(sim.game_min)
 	for r in items.values():
+		if str(r.kind) != "verbindung":
+			continue
 		var pair: bool = (int(r.from) == initiator and int(r.to) == partner) or (int(r.from) == partner and int(r.to) == initiator)
 		if pair and r.status in ["vorgeschlagen", "beschlossen", "im_bau"]:
 			return {"ok": false, "msg": "Für %s – %s läuft schon das Gemeinschaftsprojekt %s." % [sim.towns.name_of(initiator), sim.towns.name_of(partner), r.id]}
@@ -180,6 +182,11 @@ func finish(rid: String) -> void:
 		return
 	r.status = "fertig"
 	r["done_day"] = GameCalendar.day_of(sim.game_min)
+	if str(r.kind) == "autobahn":
+		_open_highway(r)
+		sim.log_event("Autobahn %s abgenommen und freigegeben: %d Felder, %d Anschlussstellen – Fahrzeuge fahren dort %.1f-mal so schnell." % [r.id, r.cells.size(),
+			r.get("junctions", []).size(), HIGHWAY_SPEED], "good")
+		return
 	sim.access._apply_cells(r.cells.map(func(c): return Vector2i(int(c[0]), int(c[1]))))
 	sim.log_event("Gemeinschaftsprojekt %s abgenommen: neue Straße %s – %s ist befahrbar." % [r.id, sim.towns.name_of(int(r.from)), sim.towns.name_of(int(r.to))], "good")
 
@@ -231,13 +238,249 @@ func summary() -> Array:
 
 
 func to_dict() -> Dictionary:
-	return {"items": items.duplicate(true), "next": _next}
+	return {"items": items.duplicate(true), "next": _next, "traffic": traffic.duplicate(true)}
 
 
 ## Laden: die Welt wird neu erzeugt; fertige Verbindungen werden wieder angelegt.
 func from_dict(d: Dictionary) -> void:
 	items = d.get("items", {}).duplicate(true)
 	_next = int(d.get("next", 1))
+	traffic = d.get("traffic", []).duplicate(true)
 	for r in items.values():
-		if r.status == "fertig":
+		if r.status == "fertig" and str(r.get("kind", "")) == "autobahn":
+			_open_highway(r)
+		elif r.status == "fertig":
 			sim.access._apply_cells(r.cells.map(func(c): return Vector2i(int(c[0]), int(c[1]))))
+
+
+# ------------------------------------------------------------------ Autobahn (Auftrag 21, docs/HIGHWAY.md)
+## Verkehrszaehlung: RoadCare meldet vor dem Tageswechsel die Fahrzeugsekunden je 16x16-Abschnitt. Ueberland = Abschnitt weiter als
+## OVERLAND_DIST Felder vom naechsten Ortszentrum. Je Tag Summe und Zuordnung zur naechsten Stadt (Nutzungsanteile fuer die Kosten).
+## Die Trasse verbindet die Staedte nacheinander (Reihenfolge nach Lage um die Kartenmitte): je Abschnitt ein Landweg wie bei der
+## Verbindungsstrasse, aber zweibahnig (Parallelfeld je Schritt), mit Anschlussstelle an der naechsten Ortsstrasse jeder Stadt und
+## Kreuzungen, wo die Trasse vorhandene Strassen quert. Kosten je neuem Feld plus Anschlussstellen und Kreuzungen; der Bund traegt
+## HIGHWAY_FEDERAL, die Staedte den Rest nach Nutzung (Verkehrszaehlung). Gebaut wird sichtbar abschnittsweise (HighwayView zeigt den
+## Baufortschritt), befahrbar ist sie bei der Abnahme. Auf der Autobahn fahren Fahrzeuge HIGHWAY_SPEED-mal so schnell, die Wegsuche
+## bevorzugt sie (Gewicht HIGHWAY_WEIGHT).
+const OVERLAND_DIST := 40
+const TRAFFIC_DAYS := 30
+const HIGHWAY_CELL := 600.0
+const HIGHWAY_JUNCTION := 25000.0
+const HIGHWAY_CROSSING := 12000.0
+const HIGHWAY_FEDERAL := 0.95
+const HIGHWAY_CELLS_PER_DAY := 40
+const HIGHWAY_SPEED := 1.8
+const HIGHWAY_WEIGHT := 0.55
+const HIGHWAY_TRAFFIC := 2000.0         # Fahrzeugsekunden je Tag auf Ueberlandstrassen (Mittel 14 Tage), ab denen ein Antrag sinnvoll ist
+
+var traffic: Array = []                 # [{day, total, by_town: {Stadt: Fahrzeugsekunden}}], letzte TRAFFIC_DAYS Tage
+var highway := {}                       # befahrbare Autobahnfelder (Vector2i -> true), aus fertigen Projekten
+
+
+func count_traffic(usage: Dictionary) -> void:
+	var by := {}
+	var total := 0.0
+	for seg in usage:
+		var c: Vector2i = sim.road_care.cells.get(seg, Vector2i(int(seg.x) * 16 + 8, int(seg.y) * 16 + 8))
+		var k := -1
+		var best := 1.0e9
+		for t in sim.towns.list:
+			var d: float = Vector2(c).distance_to(Vector2(t.center))
+			if d < best:
+				best = d
+				k = int(t.id)
+		if best < float(OVERLAND_DIST):
+			continue
+		total += float(usage[seg])
+		by[str(k)] = float(by.get(str(k), 0.0)) + float(usage[seg])
+	traffic.append({"day": GameCalendar.day_of(sim.game_min), "total": snappedf(total, 0.1), "by_town": by})
+	if traffic.size() > TRAFFIC_DAYS:
+		traffic.pop_front()
+
+
+## Mittlerer Ueberlandverkehr der letzten `days` Tage.
+func traffic_mean(days: int = 14) -> float:
+	var t: Array = traffic.slice(maxi(0, traffic.size() - days))
+	var s := 0.0
+	for e in t:
+		s += float(e.total)
+	return s / maxf(1.0, float(t.size()))
+
+
+## Nutzungsanteile je Stadt aus der Verkehrszaehlung (mindestens 5 % je Stadt); ohne Zaehlung nach Einwohnern.
+func traffic_shares() -> Dictionary:
+	var sums := {}
+	var total := 0.0
+	for e in traffic:
+		for k in e.by_town:
+			sums[k] = float(sums.get(k, 0.0)) + float(e.by_town[k])
+			total += float(e.by_town[k])
+	var out := {}
+	var n: int = sim.towns.count()
+	for t in sim.towns.list:
+		var k := str(int(t.id))
+		out[k] = maxf(0.05, float(sums.get(k, 0.0)) / total) if total > 0.0 else 1.0 / float(n)
+	var s := 0.0
+	for k in out:
+		s += float(out[k])
+	for k in out:
+		out[k] = float(out[k]) / s
+	return out
+
+
+func has_highway() -> bool:
+	return items.values().any(func(r): return str(r.kind) == "autobahn" and r.status not in ["gescheitert"])
+
+
+func on_highway(c: Vector2i) -> bool:
+	return highway.has(c)
+
+
+## Anschlussstelle einer Stadt: naechstes Strassenfeld zum Landanker (ausserhalb der Ortsmitte, Richtung Landesinnere).
+func _junction(town: int) -> Vector2i:
+	var a := _inland_anchor(town)
+	var cd: CityData = sim.city
+	for r in range(0, 40):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if absi(dx) != r and absi(dy) != r:
+					continue
+				var q := a + Vector2i(dx, dy)
+				if q.x >= 0 and q.y >= 0 and q.x < cd.size and q.y < cd.size and cd.is_road(q):
+					return q
+	return a
+
+
+## Trasse durch alle Staedte. Ergebnis: {ok, cells (geordnet, zweibahnig), junctions, crossings, legs, kosten, tage}.
+func plan_highway() -> Dictionary:
+	var T: Towns = sim.towns
+	if T.count() < 2:
+		return {"ok": false, "msg": "Eine Autobahn braucht mindestens zwei Städte."}
+	var cd: CityData = sim.city
+	var n := cd.size
+	var mid := Vector2(n, n) * 0.5
+	var order: Array = T.list.map(func(t): return int(t.id))
+	order.sort_custom(func(a, b): return (Vector2(T.get_t(a).center) - mid).angle() < (Vector2(T.get_t(b).center) - mid).angle())
+	var astar := AStarGrid2D.new()
+	astar.region = Rect2i(0, 0, n, n)
+	astar.cell_size = Vector2.ONE
+	astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
+	astar.update()
+	for y in n:
+		for x in n:
+			var p := Vector2i(x, y)
+			var i := cd.idx(p)
+			if cd.ground[i] in [CityData.G.WATER, CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON] or (cd.height.size() > 0 and cd.height[i] > 0) or cd.building_at[i] >= 0:
+				astar.set_point_solid(p, true)
+			elif cd.ground[i] == CityData.G.ROAD:
+				astar.set_point_weight_scale(p, 3.0)   # kreuzen ja, laengs nein
+	var cells: Array = []
+	var seen := {}
+	var junctions: Array = []
+	var crossings: Array = []
+	var legs: Array = []
+	for i in order.size() - 1:
+		var a := int(order[i])
+		var b := int(order[i + 1])
+		var ja := _junction(a)
+		var jb := _junction(b)
+		var path := astar.get_id_path(ja, jb)
+		if path.is_empty():
+			legs.append({"von": a, "nach": b, "ok": false})
+			continue
+		legs.append({"von": a, "nach": b, "ok": true, "laenge": path.size()})
+		for c in [ja, jb]:
+			if not junctions.has([c.x, c.y]):
+				junctions.append([c.x, c.y])
+		for s in path.size():
+			var p: Vector2i = path[s]
+			var dir: Vector2i = (path[mini(s + 1, path.size() - 1)] - path[maxi(s - 1, 0)])
+			dir = Vector2i(signi(dir.x), signi(dir.y))
+			var side := Vector2i(-dir.y, dir.x)
+			for q in [p, p + side]:
+				if q.x < 0 or q.y < 0 or q.x >= n or q.y >= n or seen.has(q):
+					continue
+				var qi := cd.idx(q)
+				if q != p and (astar.is_point_solid(q) or cd.ground[qi] == CityData.G.ROAD):
+					continue
+				seen[q] = true
+				if cd.ground[qi] == CityData.G.ROAD:
+					if q.distance_to(ja) > 6.0 and q.distance_to(jb) > 6.0 and not crossings.has([q.x, q.y]):
+						crossings.append([q.x, q.y])   # vorhandene Strasse wird gekreuzt
+					continue
+				cells.append([q.x, q.y])
+	if cells.is_empty():
+		return {"ok": false, "msg": "Keine Trasse über Land möglich (Wasser oder Berge dazwischen)."}
+	var cost := snappedf(HIGHWAY_CELL * float(cells.size()) + HIGHWAY_JUNCTION * float(junctions.size()) + HIGHWAY_CROSSING * float(crossings.size()), 100.0)
+	return {"ok": true, "cells": cells, "junctions": junctions, "crossings": crossings, "legs": legs, "kosten": cost,
+		"tage": maxi(10, ceili(float(cells.size()) / float(HIGHWAY_CELLS_PER_DAY)))}
+
+
+## Beschluss des Regionalrats: Trasse planen, Anteile reservieren, ein Bauauftrag (Bund zahlt HIGHWAY_FEDERAL bei der Abnahme).
+func propose_highway(initiator: int, shares: Dictionary, reason: String) -> Dictionary:
+	if has_highway():
+		return {"ok": false, "msg": "Die Region hat bereits eine Autobahn (geplant, im Bau oder fertig)."}
+	var pl := plan_highway()
+	if not pl.ok:
+		return pl
+	var day := GameCalendar.day_of(sim.game_min)
+	var town_cost := float(pl.kosten) * (1.0 - HIGHWAY_FEDERAL)
+	var r := {"id": "R%d" % _next, "kind": "autobahn", "from": initiator, "to": initiator, "initiator": initiator, "shares": shares.duplicate(),
+		"votes": {}, "status": "vorgeschlagen", "cells": pl.cells, "junctions": pl.junctions, "crossings": pl.crossings, "legs": pl.legs,
+		"cost": float(pl.kosten), "federal": snappedf(float(pl.kosten) * HIGHWAY_FEDERAL, 1.0), "town_cost": snappedf(town_cost, 1.0), "days": int(pl.tage),
+		"day": day, "deadline": day, "project": "", "reason": reason.left(200), "note": ""}
+	_next += 1
+	for k in shares:
+		r.votes[str(k)] = "zugestimmt"   # der Regionalrat hat beschlossen
+	items[r.id] = r
+	for k in shares:
+		if sim.towns.mayor(int(k)).available_budget() < float(town_cost) * float(shares[k]):
+			_fail(r, "Anteil von %s (%s) ist nicht gedeckt" % [sim.towns.name_of(int(k)), Catalog.money(town_cost * float(shares[k]))])
+			return {"ok": false, "msg": r.note, "ref": r.id}
+	var M: Mayor = sim.towns.mayor(initiator)
+	# Material beschafft die Baufirma selbst (im Preis enthalten) - nicht ueber das Stadtlager eines kleinen Ortes, das diese Mengen nie fuehrt
+	var prj: Dictionary = M.add_works_project("autobahn", r.id, float(r.cost), int(r.days), {}, "Autobahn %s (Beschluss Regionalrat)" % r.id)
+	M.commitments = maxf(0.0, M.commitments - float(r.cost))
+	var sh := {}
+	for k in shares:
+		var amt := snappedf(town_cost * float(shares[k]), 1.0)
+		sim.towns.mayor(int(k)).commitments += amt
+		sh[str(k)] = amt
+	prj["shares"] = sh
+	prj["federal"] = float(r.federal)
+	prj["regional"] = r.id
+	r.project = prj.id
+	r.status = "beschlossen"
+	sim.log_event("Autobahn %s beschlossen: %d Felder zweibahnig, %d Anschlussstellen, %d Kreuzungen, %s (Bund %s, Städte %s nach Nutzung: %s)." % [r.id, r.cells.size(),
+		r.junctions.size(), r.crossings.size(), Catalog.money(float(r.cost)), Catalog.money(float(r.federal)), Catalog.money(town_cost), _shares_text(r)], "good")
+	return {"ok": true, "msg": "Autobahn %s beschlossen und ausgeschrieben (Projekt %s)." % [r.id, prj.id], "ref": r.id}
+
+
+## Baufortschritt 0..1 einer Autobahn (fuer die Darstellung): laufender Bauauftrag nach verbrauchten Bautagen.
+func progress(r: Dictionary) -> float:
+	if r.status == "fertig":
+		return 1.0
+	var e: Dictionary = sim.construction.public.get(str(r.project), {})
+	if e.is_empty() or int(e.get("days", 0)) <= 0:
+		return 0.0
+	return clampf(1.0 - float(e.days_left) / float(e.days), 0.0, 1.0)
+
+
+func _open_highway(r: Dictionary) -> void:
+	var cs: Array = r.cells.map(func(c): return Vector2i(int(c[0]), int(c[1])))
+	sim.access._apply_cells(cs)
+	for c in cs + r.get("crossings", []).map(func(c): return Vector2i(int(c[0]), int(c[1]))):
+		highway[c] = true
+		if sim.nav != null and sim.nav.road.is_in_boundsv(c) and not sim.nav.road.is_point_solid(c):
+			sim.nav.road.set_point_weight_scale(c, HIGHWAY_WEIGHT)
+			sim.nav.base_weight[c] = HIGHWAY_WEIGHT
+
+
+func highway_summary() -> Dictionary:
+	var hw: Array = items.values().filter(func(r): return str(r.kind) == "autobahn")
+	var out := {"verkehr_ueberland_14_tage": snappedf(traffic_mean(14), 0.1), "schwelle_antrag": HIGHWAY_TRAFFIC, "nutzungsanteile": traffic_shares()}
+	if not hw.is_empty():
+		var r: Dictionary = hw[-1]
+		out["autobahn"] = {"id": r.id, "status": r.status, "felder": r.cells.size(), "anschlussstellen": r.get("junctions", []).size(),
+			"kreuzungen": r.get("crossings", []).size(), "kosten": int(r.cost), "bund": int(r.get("federal", 0)), "fortschritt": snappedf(progress(r), 0.01), "hinweis": r.note}
+	return out

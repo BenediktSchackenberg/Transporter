@@ -358,6 +358,19 @@ func _process_timed(_delta: float) -> void:
 				session.sim.fire.ignite(int(b.id))
 				args["shot-tile"] = "%d,%d" % [int(b.x), int(b.y)]
 				break
+	if session and args.has("demo-highway") and not args.has("_highway") and session.sim.towns.is_region():   # Sichtpruefung Autobahn (Auftrag 21)
+		args["_highway"] = true
+		var R: RegionalProjects = session.sim.regional
+		for t in session.sim.towns.list:
+			session.sim.economy.transfer("X0", Towns.account_of(int(t.id)), 150000.0)
+		var res: Dictionary = session.sim.council.decide({"kind": "autobahn", "by": 0, "reason": "Sichtprüfung"})
+		print("AUTOTEST Autobahn: ", res.text, " ", res.get("ref", ""))
+		var hw: Array = R.items.values().filter(func(r): return str(r.kind) == "autobahn")
+		if not hw.is_empty():
+			var cs: Array = hw[0].cells
+			var c: Array = cs[clampi(int(float(cs.size()) * float(args.get("highway-at", "0.04"))), 0, cs.size() - 1)]
+			print("AUTOTEST Autobahn-Ansicht: im Baum %s, Felder %d, Ziel %s, erste %s" % [str(session.city_view.highway_view.is_inside_tree()), cs.size(), str(c), str(cs.slice(0, 4))])
+			args["shot-tile"] = "%d,%d" % [int(c[0]), int(c[1])]
 	if session and args.has("demo-ship") and not args.has("_ship") and session.sim.harbor.enabled:   # Sichtpruefung Hafen: Schiff legt sofort an
 		args["_ship"] = true
 		for k in session.sim.towns.count():   # alle Haefen der Region

@@ -627,6 +627,19 @@ func _view_dienste() -> void:
 	var rst: Dictionary = sim.rescue.stats   # Etappe 14: Versorgungswege
 	rv.add_child(_t("Rettungsdienst: %d Notfälle · %d in Kliniken · %d ambulant im MVZ · %d notversorgt in Praxen · %d Verlegungen · %d× Einsatzleitung · Klinikmaterial %d× knapp" % [
 		int(rst.notfaelle), int(rst.krankenhaus), int(rst.get("mvz", 0)), int(rst.arztpraxis), int(rst.get("verlegungen", 0)), int(rst.get("elw", 0)), int(rst.get("klinikmaterial_fehlt", 0))], 14))
+	var hs: Dictionary = sim.regional.highway_summary()   # Autobahn (Auftrag 21): Verkehrszaehlung, Planung, Bau
+	var hrow := _row(rv)
+	if hs.has("autobahn"):
+		var ah: Dictionary = hs.autobahn
+		hrow.add_child(_t("🛣 Autobahn %s: %s · %d Felder, %d Anschlussstellen, %d Kreuzungen · %s (Bund %s) · Bau %d %%%s" % [ah.id, ah.status, int(ah.felder),
+			int(ah.anschlussstellen), int(ah.kreuzungen), Catalog.money(float(ah.kosten)), Catalog.money(float(ah.bund)), roundi(float(ah.fortschritt) * 100.0),
+			(" · " + str(ah.hinweis)) if str(ah.hinweis) != "" else ""], 15, C_OK if ah.status == "fertig" else C_INFO))
+		var hw: Array = sim.regional.items.values().filter(func(r): return str(r.kind) == "autobahn")
+		if not hw.is_empty() and not hw[-1].cells.is_empty():
+			var c0 := Vector2i(int(hw[-1].cells[0][0]), int(hw[-1].cells[0][1]))
+			hrow.add_child(_btn("⌖", func(): _jump_cell(c0), true))
+	rv.add_child(_t("Verkehrszählung Überland: Ø %.0f Fahrzeugsekunden je Tag (Antrag ab %.0f) · Nutzung %s" % [float(hs.verkehr_ueberland_14_tage), float(hs.schwelle_antrag),
+		", ".join(hs.nutzungsanteile.keys().map(func(k): return "%s %d %%" % [sim.towns.name_of(int(k)), roundi(float(hs.nutzungsanteile[k]) * 100.0)]))], 14))
 	var cs: Dictionary = sim.council.summary() if sim.council.enabled() else {}
 	if not cs.is_empty():
 		rv.add_child(_t("Regionalrat: nächste Sitzung Tag %d%s" % [int(cs.naechste_sitzung_tag), (" · läuft: " + str(cs.laufend)) if str(cs.laufend) != "" else ""], 15))

@@ -565,6 +565,8 @@ func _speed_factor(v: FleetVehicle) -> float:
 		f *= 0.8   # uebermuedeter Fahrer
 	if nav.jams.has(v.tile()):
 		f *= 0.5
+	if regional.on_highway(v.tile()):
+		f *= RegionalProjects.HIGHWAY_SPEED   # Autobahn (Auftrag 21)
 	return winter.drive_factor(v.tile(), f) * road_care.factor(v.tile())   # Winterdienst: geraeumte Abschnitte fahren sich wie bei Regen
 
 

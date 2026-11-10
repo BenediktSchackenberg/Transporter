@@ -114,6 +114,8 @@ func on_day(day: int) -> void:
 		var rel := minf(4.0, float(usage.get(seg, 0.0)) / mean) if mean > 0.0 else 0.0
 		var loss := (DECAY_BASE + DECAY_TRAFFIC * rel) * (FROST if frost else 1.0) + (RAIN if rain else 0.0)
 		cond[seg] = maxf(0.0, float(cond[seg]) - loss)
+	if sim.regional != null and sim.towns != null and sim.towns.is_region():
+		sim.regional.count_traffic(usage)   # Verkehrszaehlung Ueberland (Autobahn, Auftrag 21)
 	usage.clear()
 	for j in jobs.values():
 		if j.status == "laufend" and day >= int(j.end):

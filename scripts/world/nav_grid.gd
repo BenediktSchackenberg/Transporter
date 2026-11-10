@@ -8,6 +8,7 @@ var road := AStarGrid2D.new()
 var walk := AStarGrid2D.new()
 var roadworks := {}   # Vector2i -> bis Spielminute
 var jams := {}        # Vector2i -> bis Spielminute
+var base_weight := {} # Vector2i -> Grundgewicht (Autobahn < 1: bevorzugt); Staus setzen es voruebergehend hoch
 
 
 func build(c: CityData) -> void:
@@ -30,6 +31,8 @@ func build(c: CityData) -> void:
 			walk.set_point_solid(p, not c.walkable(p))
 			if c.is_road(p):
 				walk.set_point_weight_scale(p, 4.0)   # Strasse nur zum Ueberqueren
+	for p in base_weight:
+		road.set_point_weight_scale(p, float(base_weight[p]))
 
 
 func road_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
@@ -73,6 +76,6 @@ func expire(now: float) -> bool:
 	for p in jams.keys():
 		if jams[p] <= now:
 			jams.erase(p)
-			road.set_point_weight_scale(p, 1.0)
+			road.set_point_weight_scale(p, float(base_weight.get(p, 1.0)))
 			changed = true
 	return changed

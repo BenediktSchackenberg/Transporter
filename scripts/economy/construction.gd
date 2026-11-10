@@ -1154,6 +1154,10 @@ func _finish_public(e: Dictionary) -> void:
 			sim.economy.transfer(Mk.acct(), "K0", part)
 			pay += part
 			Mk.commitments = maxf(0.0, Mk.commitments - float(prj.shares[k]))
+		if prj.has("federal"):   # Autobahn: der Bund traegt seinen Anteil am Werklohn (ausserhalb der Region)
+			var fed := float(e.price) * float(prj.federal) / cost
+			sim.economy.transfer("X0", "K0", fed)
+			pay += fed
 		M.commitments += float(prj.cost)   # wird unten wie bei jedem Projekt wieder abgezogen
 	else:
 		pay = minf(float(e.price), maxf(0.0, M.cash()))
@@ -1167,7 +1171,7 @@ func _finish_public(e: Dictionary) -> void:
 		for part in prj.parts:
 			p.erschliessung[part] = true
 		sim.parcels.touch(pid)
-	if prj.kind == "verbindung":
+	if prj.kind in ["verbindung", "autobahn"]:
 		sim.regional.finish(str(prj.ref))
 	if prj.kind == "erschliessung" and "strasse" in prj.parts:
 		prj["road_cells"] = sim.access.lay_roads(prj.parcels)   # neue Strassen bis an die Grundstuecke (sichtbar, befahrbar)

@@ -12,7 +12,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_highway", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner"]
 	test_names.append("test_tourism_hotel")
 	test_names.append("test_tourism_venues")
 	var args := OS.get_cmdline_user_args()
@@ -10186,6 +10186,60 @@ func test_housing_priority() -> void:
 		ok(C.housing_reserve(k0) == 0.0, "ohne Wartende keine Rücklage")
 	else:
 		ok(false, "kein freies Wohnbauland gefunden")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geldkonservierung (%.4f)" % s.economy.conservation_error())
+
+
+## Auftrag 21 (Autobahn): Verkehrszaehlung, Trasse (zweibahnig, Anschlussstellen, Kreuzungen), Antrag und Beschluss im Regionalrat
+## (Kosten 95 % Bund, Rest nach Nutzung), Bau ueber die Baufirma mit Fortschritt, Freigabe, Tempo/Wegwahl, Speichern/Laden.
+func test_highway() -> void:
+	var s := region_sim(4)
+	var R: RegionalProjects = s.regional
+	s.fire.random_fires = false
+	run(s, 60.0 * 3.0)
+	ok(R.traffic.size() >= 2 and R.traffic.all(func(e): return float(e.total) >= 0.0), "Verkehrszählung läuft (%s)" % str(R.traffic.map(func(e): return int(e.total))))
+	var hp: Dictionary = R.plan_highway()
+	ok(hp.ok and hp.cells.size() > 200 and hp.junctions.size() == s.towns.count(), "Trasse: %d Felder, %d Anschlussstellen, %d Kreuzungen, %s" % [hp.get("cells", []).size(),
+		hp.get("junctions", []).size(), hp.get("crossings", []).size(), Catalog.money(float(hp.get("kosten", 0.0)))])
+	ok(hp.legs.all(func(l): return bool(l.ok)), "alle Städte angebunden")
+	# Viel Ueberlandverkehr -> Antrag der Stadt mit dem groessten Anteil
+	R.traffic.clear()
+	for i in 14:
+		R.traffic.append({"day": i, "total": 3000.0, "by_town": {"0": 1500.0, "1": 600.0, "2": 600.0, "3": 300.0}})
+	var prop: Dictionary = s.council.rule_proposal(0)
+	ok(str(prop.get("kind", "")) == "autobahn", "Regel-Bürgermeister beantragt die Autobahn (%s)" % str(prop.get("reason", prop)))
+	for t in s.towns.list:   # Staedte bei Kasse (Anteile sind klein, der Bund traegt 95 %)
+		s.economy.transfer("X0", Towns.account_of(int(t.id)), 150000.0)
+	var res: Dictionary = s.council.decide({"kind": "autobahn", "by": 0, "reason": "Test"})
+	ok(res.result == "beschlossen" and float(res.shares.get("0", 0.0)) > float(res.shares.get("3", 1.0)), "Regionalrat beschließt, Anteile nach Nutzung (%s, Stimmen %s)" % [str(res.shares), str(res.votes)])
+	var hw: Array = R.items.values().filter(func(r): return str(r.kind) == "autobahn")
+	ok(hw.size() == 1 and hw[0].status == "beschlossen", "Autobahn-Projekt angelegt")
+	var r: Dictionary = hw[0]
+	var M0: Mayor = s.towns.mayor(0)
+	var prj: Dictionary = M0.projects.get(str(r.project), {})
+	var town_sum := 0.0
+	for k in prj.get("shares", {}):
+		town_sum += float(prj.shares[k])
+	ok(absf(town_sum + float(prj.get("federal", 0.0)) - float(r.cost)) < 5.0 and float(prj.federal) >= 0.94 * float(r.cost), "Finanzierung: Bund %s, Städte %s" % [Catalog.money(float(prj.get("federal", 0.0))), Catalog.money(town_sum)])
+	ok(R.propose_highway(1, {"1": 1.0}, "doppelt").ok == false, "keine zweite Autobahn")
+	var t := 0.0
+	while r.status == "beschlossen" and t < 60.0 * 20.0:
+		run(s, 60.0)
+		t += 60.0
+	ok(r.status == "im_bau", "Baufirma beauftragt, Autobahn im Bau (%s)" % r.status)
+	run(s, 60.0 * 5.0)
+	ok(R.progress(r) > 0.0 and R.progress(r) < 1.0, "sichtbarer Baufortschritt %.0f %% (%s)" % [R.progress(r) * 100.0, str(s.construction.public.get(str(r.project), {}).get("waiting", "-"))])
+	var k0 := float(s.economy.accounts[Towns.account_of(0)])
+	s.construction.public[str(r.project)].days_left = 1
+	t = 0.0
+	while r.status != "fertig" and t < 60.0 * 6.0:
+		run(s, 60.0)
+		t += 60.0
+	ok(r.status == "fertig", "abgenommen und freigegeben")
+	var c0 := Vector2i(int(r.cells[0][0]), int(r.cells[0][1]))
+	ok(s.city.is_road(c0) and R.on_highway(c0) and absf(s.nav.road.get_point_weight_scale(c0) - RegionalProjects.HIGHWAY_WEIGHT) < 0.01, "Autobahnfelder befahrbar, Wegsuche bevorzugt sie")
+	ok(float(s.economy.accounts[Towns.account_of(0)]) > k0 - float(prj.shares.get("0", 0.0)) - 30000.0, "Stadt 0 zahlt nur ihren Anteil")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.regional.on_highway(c0) and s2.city.is_road(c0) and s2.regional.traffic.size() > 0, "nach dem Laden: Autobahn und Verkehrszählung erhalten")
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geldkonservierung (%.4f)" % s.economy.conservation_error())
 
 

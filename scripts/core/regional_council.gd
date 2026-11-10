@@ -22,7 +22,7 @@ const WAIT_MIN := 180.0
 const MAJORITY := 0.75
 const CONCESSION := 0.15
 const COSTS := {"kh_ausbau": 600000.0, "drehleiter": 750000.0, "zweckverband": 0.0}
-const KINDS := ["verbindung", "kh_ausbau", "drehleiter", "zweckverband", "kkw_anteile"]
+const KINDS := ["verbindung", "kh_ausbau", "drehleiter", "zweckverband", "kkw_anteile", "autobahn"]
 const OWNERSHIP := ["zweckverband"]
 
 var sim
@@ -181,6 +181,10 @@ func _hospital() -> Dictionary:
 
 ## Regel-Buergermeister: hoechstens ein Antrag nach Lage der eigenen Stadt.
 func rule_proposal(k: int) -> Dictionary:
+	var R: RegionalProjects = sim.regional
+	if not R.has_highway() and R.traffic_mean(14) >= RegionalProjects.HIGHWAY_TRAFFIC and float(R.traffic_shares().get(str(k), 0.0)) >= 1.0 / float(maxi(1, sim.towns.count())):
+		return {"kind": "autobahn", "reason": "Überlandverkehr %.0f Fahrzeugsekunden je Tag (Schwelle %.0f); %s nutzt die Strecken überdurchschnittlich" % [
+			R.traffic_mean(14), RegionalProjects.HIGHWAY_TRAFFIC, sim.towns.name_of(k)]}
 	var kh := _hospital()
 	if not kh.is_empty() and sim.rescue.beds(kh) > 0 and float(sim.rescue.occupied(kh)) >= 0.8 * float(sim.rescue.beds(kh)) and int(kh.town) == k:
 		return {"kind": "kh_ausbau", "reason": "Krankenhaus zu 80 % belegt"}
@@ -220,6 +224,8 @@ func benefit(a: Dictionary, k: int) -> float:
 		"zweckverband":
 			var kh2 := _hospital()
 			return 1.0 if not kh2.is_empty() and int(kh2.town) == k else 0.4   # Mitsprache und gesicherte Betten
+		"autobahn":   # Nutzen nach eigenem Anteil am Ueberlandverkehr; Grundnutzen Erreichbarkeit
+			return minf(1.0, 0.3 + 0.7 * float(sim.regional.traffic_shares().get(str(k), 0.0)) * float(sim.towns.count()))
 	return 0.0
 
 
@@ -250,6 +256,17 @@ func decide(a: Dictionary) -> Dictionary:
 				return res
 			a["cost"] = float(pl.kosten)
 			shares = {str(by): 0.5, str(int(a.partner)): 0.5}
+		"autobahn":
+			if sim.regional.has_highway():
+				res.text = "die Region hat bereits eine Autobahn"
+				return res
+			var hp: Dictionary = sim.regional.plan_highway()
+			if not hp.get("ok", false):
+				res.text = "nicht machbar: %s" % str(hp.get("msg", ""))
+				return res
+			a["cost"] = float(hp.kosten) * (1.0 - RegionalProjects.HIGHWAY_FEDERAL)   # Anteil der Staedte; den Rest traegt der Bund
+			res["bund"] = float(hp.kosten) * RegionalProjects.HIGHWAY_FEDERAL
+			shares = sim.regional.traffic_shares()
 		"zweckverband":
 			var kh := _hospital()
 			if kh.is_empty() or kh.has("shares"):
@@ -303,7 +320,7 @@ func decide(a: Dictionary) -> Dictionary:
 
 
 func _label(kind: String) -> String:
-	return {"verbindung": "Verbindungsstraße", "kh_ausbau": "Ausbau Kreiskrankenhaus", "drehleiter": "gemeinsame Drehleiter",
+	return {"autobahn": "Autobahn", "verbindung": "Verbindungsstraße", "kh_ausbau": "Ausbau Kreiskrankenhaus", "drehleiter": "gemeinsame Drehleiter",
 		"zweckverband": "Zweckverband Kreiskrankenhaus", "kkw_anteile": "Kraftwerksanteile"}.get(kind, kind)
 
 
@@ -318,6 +335,9 @@ func _pay(shares: Dictionary, cost: float, ressort: String) -> void:
 func _apply(a: Dictionary, res: Dictionary) -> void:
 	var M: Municipal = sim.municipal
 	match str(a.kind):
+		"autobahn":
+			var hr: Dictionary = sim.regional.propose_highway(int(a.by), res.shares, "Beschluss Regionalrat: " + str(a.get("reason", "")))
+			res["ref"] = str(hr.get("ref", hr.get("msg", "")))
 		"verbindung":
 			var r: Dictionary = sim.regional.propose(int(a.by), "verbindung", int(a.partner), res.shares, "Beschluss Regionalrat")
 			if r.get("ok", false):
