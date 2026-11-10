@@ -763,6 +763,178 @@ BUILDERS.update({"fire_station_m": fire_station_m, "fire_station_l": fire_statio
                  "fire_school": fire_school})
 
 
+# ------------------------------------------------------------------ Auftrag 20 Etappe 14: Rettungsdienst und Kliniken
+def _ramp(m, x0, y0, x1, y1):
+    """Liegendanfahrt der Notaufnahme: rotes Vordach ueber einer Zufahrt."""
+    canopy(m, x0, y0, x1, y1, 14, roof_mat="pub_red")
+
+
+def rescue_center(v, st, seed):
+    """RD-02 Zentrale Rettungswache 4x3: mehrere Fahrzeughallen, Aufenthalt, Materiallager, Desinfektion."""
+    rng = random.Random(seed)
+    W, H = 4 * T, 3 * T
+    m = Model(W, H, 70)
+    ground(m, st, W, H, seed)
+    d = "pub_door_w"
+    if v == 0:      # vier Tore in einer Zeile, Wache zweigeschossig rechts
+        hall(m, st, 4, 30, 90, 76, 20, 4, d, rng, band="pub_orange", door_w=16)
+        house(m, st, 92, 22, 124, 76, 2, rng)
+    elif v == 1:    # Winkel: Halle vorn, Lagertrakt hinten quer
+        house(m, st, 4, 4, 124, 28, 1, rng, entrance=False)
+        hall(m, st, 4, 32, 80, 78, 20, 3, d, rng, band="pub_orange", door_w=18)
+        house(m, st, 84, 32, 124, 78, 2, rng)
+    elif v == 2:    # offener Unterstand fuer RTW, Wache mit Turm
+        canopy(m, 4, 40, 70, 82, 18, roof_mat="pub_orange")
+        house(m, st, 74, 20, 124, 80, 3, rng)
+        tower(m, st, 8, 6, 12, 48, rng, cap="pub_orange")
+    elif v == 3:    # Wache ueber der Halle
+        hall(m, st, 6, 24, 122, 76, 20, 5, d, rng, roof_kind="flat", band="pub_orange", door_w=14)
+        house(m, st, 6, 24, 90, 52, 2, rng, z0=21)
+    elif v == 4:    # zwei Hallen beidseits des Sozialbaus
+        hall(m, st, 4, 34, 48, 80, 20, 2, d, rng, band="pub_orange", door_w=14)
+        house(m, st, 50, 20, 78, 80, 3, rng)
+        hall(m, st, 80, 34, 124, 80, 20, 2, d, rng, band="pub_orange", door_w=14)
+    else:           # Halle hinten, Waschhalle und Buero vorne versetzt
+        hall(m, st, 4, 4, 100, 46, 22, 4, d, rng, band="pub_orange", door_w=16)
+        house(m, st, 4, 52, 50, 88, 1, rng)
+        hall(m, st, 60, 52, 124, 88, 16, 1, "pub_white", rng, roof_kind="flat", door_w=20)
+    cross_sign(m, W - 14, H - 1, 16, size=8) if v in (0, 4) else None
+    beacon(m, 40, H - 3, 1)
+    greenery(m, st, [(124, 92), (2, 92)], rng)
+    return m, {"w": 4, "h": 3, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": 52, "blink": [40, H - 4]}
+
+
+def general_hospital(v, st, seed):
+    """KH-02 Allgemeinkrankenhaus 6x4: mehrere Stationen, Diagnostik, Rettungswagenzufahrt."""
+    rng = random.Random(seed)
+    W, H = 6 * T, 4 * T
+    m = Model(W, H, 120)
+    ground(m, st, W, H, seed)
+    fl = "flat" if st != "gruen" else "green"
+    if v == 0:      # Bettenriegel hinten, Behandlungsbau vorn, Notaufnahme rechts
+        house(m, st, 8, 6, 184, 46, 6, rng, roof_kind=fl, entrance=False)
+        house(m, st, 30, 54, 140, 100, 2, rng, roof_kind="flat")
+        _ramp(m, 148, 96, 184, 120)
+    elif v == 1:    # Doppel-T: zwei Bettenhaeuser mit Magistrale
+        house(m, st, 10, 6, 70, 110, 5, rng, roof_kind=fl, entrance=False)
+        house(m, st, 70, 46, 120, 80, 2, rng, roof_kind="flat")
+        house(m, st, 120, 6, 180, 110, 5, rng, roof_kind=fl)
+        _ramp(m, 76, 90, 112, 120)
+    elif v == 2:    # Kamm: Sockel mit drei Pflegefluegeln
+        house(m, st, 6, 70, 186, 110, 2, rng, roof_kind="flat")
+        for x0 in (10, 76, 142):
+            house(m, st, x0, 6, x0 + 40, 66, 5, rng, roof_kind=fl, entrance=False)
+        _ramp(m, 150, 112, 186, 126)
+    elif v == 3:    # Hochhaus mit Hubschrauberlandeplatz und Flachbau
+        top = house(m, st, 60, 10, 130, 70, 9, rng, roof_kind="flat", entrance=False, fh=10)
+        m.box(64, 14, top, 126, 66, top + 1, M("pub_heli"))
+        house(m, st, 6, 70, 186, 112, 2, rng, roof_kind="flat")
+        _ramp(m, 6, 112, 40, 126)
+    elif v == 4:    # Hofanlage mit Garten
+        house(m, st, 6, 6, 186, 36, 4, rng, roof_kind=fl, entrance=False)
+        house(m, st, 6, 36, 36, 110, 4, rng, roof_kind=fl, entrance=False)
+        house(m, st, 156, 36, 186, 110, 4, rng, roof_kind=fl)
+        tree(m, 96, 70, 1, kind="round", size=1.2, rng=rng)
+        _ramp(m, 60, 100, 100, 124)
+    else:           # Pavillons: Altbau mit Satteldach plus moderner Anbau
+        house(m, st, 6, 10, 90, 60, 4, rng, roof_kind="gable", entrance=False)
+        house(m, st, 96, 10, 186, 80, 5, rng, roof_kind="flat")
+        house(m, st, 6, 70, 90, 110, 2, rng, roof_kind="flat")
+        _ramp(m, 120, 96, 160, 122)
+    cross_sign(m, 8, H - 1, 18, size=9)
+    lamp_post(m, 44, H - 3, 1, h=16)
+    return m, {"w": 6, "h": 4, "entrance": [W // 2, H], "delivery": [30, H], "height": 110, "blink": [30, H - 6]}
+
+
+def central_clinic(v, st, seed):
+    """KH-03 Zentralklinikum 7x5: mehrere Gebaeudefluegel, grosse Notaufnahme, Hubschrauberlandeplatz."""
+    rng = random.Random(seed)
+    W, H = 7 * T, 5 * T
+    m = Model(W, H, 140)
+    ground(m, st, W, H, seed)
+    fl = "flat" if st != "gruen" else "green"
+
+    def heli(x0, y0, x1, y1, z):
+        m.box(x0 + 2, y0 + 2, z, x1 - 2, y1 - 2, z + 1, M("pub_heli"))
+        cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+        m.box(cx - 4, cy - 6, z + 1, cx - 2, cy + 6, z + 2, M("white"))
+        m.box(cx + 2, cy - 6, z + 1, cx + 4, cy + 6, z + 2, M("white"))
+        m.box(cx - 2, cy - 1, z + 1, cx + 2, cy + 1, z + 2, M("white"))
+
+    if v == 0:      # Turm + breiter Sockel + Seitenfluegel
+        house(m, st, 6, 90, 218, 150, 2, rng, roof_kind="flat")
+        top = house(m, st, 70, 10, 150, 86, 10, rng, roof_kind="flat", entrance=False, fh=10)
+        heli(74, 14, 146, 82, top)
+        house(m, st, 6, 10, 66, 86, 5, rng, roof_kind=fl, entrance=False)
+        house(m, st, 156, 10, 218, 86, 5, rng, roof_kind=fl, entrance=False)
+    elif v == 1:    # Stern: drei Fluegel um einen Kern
+        house(m, st, 80, 40, 140, 110, 7, rng, roof_kind="flat")
+        house(m, st, 6, 56, 80, 96, 5, rng, roof_kind=fl, entrance=False)
+        house(m, st, 140, 56, 218, 96, 5, rng, roof_kind=fl, entrance=False)
+        top = house(m, st, 90, 4, 130, 40, 8, rng, roof_kind="flat", entrance=False)
+        heli(90, 4, 130, 40, top)
+    elif v == 2:    # Campus: vier Haeuser, Magistrale
+        for (x0, y0, f) in ((6, 6, 6), (116, 6, 7), (6, 84, 4), (116, 84, 5)):
+            house(m, st, x0, y0, x0 + 100, y0 + 60, f, rng, roof_kind=fl, entrance=False)
+        house(m, st, 100, 66, 122, 84, 2, rng, roof_kind="flat")
+    elif v == 3:    # Scheibe quer mit Hubschrauberplattform, flache Funktionsbauten
+        top = house(m, st, 6, 6, 218, 50, 8, rng, roof_kind="flat", entrance=False, fh=10)
+        heli(170, 8, 216, 48, top)
+        house(m, st, 6, 60, 110, 120, 2, rng, roof_kind="flat")
+        house(m, st, 120, 60, 218, 120, 3, rng, roof_kind=fl)
+    elif v == 4:    # Doppelhof
+        house(m, st, 6, 6, 218, 34, 5, rng, roof_kind=fl, entrance=False)
+        house(m, st, 6, 34, 34, 120, 5, rng, roof_kind=fl, entrance=False)
+        house(m, st, 96, 34, 124, 120, 5, rng, roof_kind=fl, entrance=False)
+        house(m, st, 190, 34, 218, 120, 5, rng, roof_kind=fl)
+        tree(m, 64, 76, 1, kind="round", size=1.2, rng=rng)
+        tree(m, 156, 76, 1, kind="round", size=1.2, rng=rng)
+    else:           # Terrassen: gestaffelte Bettenhaeuser
+        house(m, st, 6, 6, 218, 40, 7, rng, roof_kind="flat", entrance=False)
+        house(m, st, 6, 40, 218, 76, 5, rng, roof_kind=fl, entrance=False)
+        top = house(m, st, 6, 76, 160, 112, 3, rng, roof_kind="flat")
+        heli(170, 80, 216, 120, 1)
+    _ramp(m, 6, 128, 50, 154)
+    cross_sign(m, 60, H - 1, 18, size=10)
+    lamp_post(m, 100, H - 3, 1, h=18)
+    return m, {"w": 7, "h": 5, "entrance": [W // 2, H], "delivery": [30, H], "height": 130, "blink": [30, H - 6]}
+
+
+def mvz(v, st, seed):
+    """KH-04 Medizinisches Versorgungszentrum 3x3: Praxisgebaeude, Apotheke, Parkplaetze."""
+    rng = random.Random(seed)
+    W, H = 3 * T, 3 * T
+    m = Model(W, H, 70)
+    ground(m, st, W, H, seed)
+    fl = "flat" if st != "gruen" else "green"
+    if v == 0:
+        house(m, st, 6, 6, 90, 50, 3, rng)
+        car(m, 20, 70, 1, color="blue")
+    elif v == 1:
+        house(m, st, 6, 6, 50, 90, 2, rng, roof_kind=fl)
+        house(m, st, 52, 30, 90, 70, 1, rng)
+    elif v == 2:
+        house(m, st, 20, 10, 76, 66, 4, rng, roof_kind="flat")
+        canopy(m, 20, 70, 76, 86, 12, roof_mat="pub_green")
+    elif v == 3:
+        house(m, st, 6, 6, 90, 36, 2, rng, roof_kind=fl, entrance=False)
+        house(m, st, 6, 36, 46, 80, 2, rng)
+        tree(m, 70, 64, 1, kind="round", size=0.9, rng=rng)
+    elif v == 4:
+        house(m, st, 30, 6, 90, 60, 3, rng, roof_kind="gable")
+        house(m, st, 6, 30, 30, 60, 1, rng, roof_kind="flat", entrance=False)
+        car(m, 50, 76, 1, color="red")
+    else:
+        house(m, st, 6, 20, 70, 70, 2, rng, roof_kind="flat")
+        house(m, st, 70, 6, 90, 70, 3, rng, roof_kind="flat", entrance=False)
+    cross_sign(m, 8, H - 1 - 20, 12, size=7) if v in (1, 3) else cross_sign(m, 60, H - 1 - 20, 12, size=7)
+    return m, {"w": 3, "h": 3, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": 60}
+
+
+TYPES.update({"rescue_center": ("rd2", 4, 3), "general_hospital": ("kh2", 6, 4), "central_clinic": ("kh3", 7, 5), "mvz": ("kh4", 3, 3)})
+BUILDERS.update({"rescue_center": rescue_center, "general_hospital": general_hospital, "central_clinic": central_clinic, "mvz": mvz})
+
+
 def sprite_name(btype, v, st):
     return "pub_%s_%d_%s" % (TYPES[btype][0], v, st)
 

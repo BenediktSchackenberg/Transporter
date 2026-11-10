@@ -28,6 +28,11 @@ const BERUFE := {
 	"lehrkraft": {"label": "Lehrkräfte", "wage": 19.0, "bildung": 2},   # Stufe 3 ist selten und geht an die Kliniken
 	"erzieher": {"label": "Erzieher", "wage": 14.0, "bildung": 2},
 	"recycling": {"label": "Wertstoffwerker", "wage": 13.0, "bildung": 0},
+	# Etappe 14: Rettungsdienst und Kliniken
+	"rettungssani": {"label": "Rettungssanitäter", "wage": 15.0, "bildung": 1},
+	"verwaltung": {"label": "Krankenhausverwaltung", "wage": 16.0, "bildung": 1},
+	"medtechnik": {"label": "Medizintechniker", "wage": 18.0, "bildung": 2},
+	"reinigung": {"label": "Reinigungskräfte", "wage": 12.0, "bildung": 0},
 }
 
 ## Einrichtungstypen. building: Gebaeudetyp in CityGenerator.TYPES; upkeep: Sachkosten je Tag; capacity: typabhaengige Leistung
@@ -42,9 +47,9 @@ const TYPES := {
 	"RW-01": {"label": "Rettungswache", "dienst": "rettung", "ressort": "Gesundheit", "building": "rescue_station", "cost": 260000.0,
 		"upkeep": 90.0, "capacity": 2, "staff": {"rettung": 5, "notarzt": 1}, "min_staff": {"rettung": 2}, "power": 30.0, "water": 4.0,
 		"vehicles": ["RTW", "NEF"], "vehicles_from_pop": {"NEF": 500}},
-	"KH-01": {"label": "Krankenhaus", "dienst": "rettung", "ressort": "Gesundheit", "building": "hospital", "cost": 2400000.0,
-		"upkeep": 900.0, "capacity": 40, "staff": {"arzt": 6, "pflege": 20}, "min_staff": {"arzt": 1, "pflege": 2}, "regional": true,
-		"min_capacity": 6, "power": 400.0, "water": 60.0, "vehicles": []},
+	"KH-01": {"label": "Stadtklinik", "dienst": "rettung", "ressort": "Gesundheit", "building": "hospital", "cost": 2400000.0,
+		"upkeep": 900.0, "capacity": 40, "staff": {"arzt": 6, "pflege": 20, "verwaltung": 2, "medtechnik": 1, "reinigung": 3}, "min_staff": {"arzt": 1, "pflege": 2},
+		"regional": true, "min_capacity": 6, "power": 400.0, "water": 60.0, "vehicles": [], "klinik": 1},
 	"BH-01": {"label": "Bauhof", "dienst": "bauhof", "ressort": "Verkehr", "building": "municipal_yard", "cost": 300000.0,
 		"upkeep": 110.0, "capacity": 2, "staff": {"bauhof": 6}, "min_staff": {"bauhof": 2}, "power": 40.0, "water": 6.0,
 		"vehicles": ["Kipper", "Streuwagen"]},
@@ -58,6 +63,20 @@ const TYPES := {
 		"upkeep": 100.0, "capacity": 2, "staff": {"recycling": 4}, "power": 80.0, "water": 4.0, "vehicles": ["Wertstoffwagen"]},
 	# Ausbaustufen der Feuerwehr (Etappe 13): capacity = Stellplaetze. Hauptamtliche in drei Wachabteilungen (24-Stunden-Dienst), sobald
 	# genug Personal da ist (FireService.on_duty); FW-03/04 mit Leitstelle (schnellere Alarmierung), FW-04 mit Werkstatt.
+	# Rettungsdienst und Kliniken (Etappe 14): RW-01 entspricht RD-01. Kliniken: klinik = Versorgungsstufe (1 Notaufnahme, 2 Stationen und
+	# Diagnostik, 3 Maximalversorgung); hoehere Stufen nehmen kritische Patienten auf und verlegen per ITW. KH-04 versorgt ambulant (ohne Bett).
+	"RD-02": {"label": "Zentrale Rettungswache", "dienst": "rettung", "ressort": "Gesundheit", "building": "rescue_center", "cost": 900000.0,
+		"upkeep": 200.0, "capacity": 5, "staff": {"rettung": 10, "rettungssani": 6, "notarzt": 2}, "min_staff": {"rettung": 3, "rettungssani": 1},
+		"power": 60.0, "water": 8.0, "vehicles": ["RTW", "RTW", "NEF", "KTW", "ELW RD"], "vehicles_from_pop": {"ELW RD": 800}},
+	"KH-02": {"label": "Allgemeinkrankenhaus", "dienst": "rettung", "ressort": "Gesundheit", "building": "general_hospital", "cost": 6000000.0,
+		"upkeep": 1600.0, "capacity": 90, "min_capacity": 14, "staff": {"arzt": 12, "pflege": 40, "verwaltung": 4, "medtechnik": 3, "reinigung": 6},
+		"min_staff": {"arzt": 2, "pflege": 4}, "power": 700.0, "water": 110.0, "vehicles": ["ITW"], "klinik": 2},
+	"KH-03": {"label": "Zentralklinikum", "dienst": "rettung", "ressort": "Gesundheit", "building": "central_clinic", "cost": 14000000.0,
+		"upkeep": 3200.0, "capacity": 200, "min_capacity": 30, "staff": {"arzt": 25, "pflege": 80, "verwaltung": 8, "medtechnik": 6, "reinigung": 12},
+		"min_staff": {"arzt": 4, "pflege": 8}, "power": 1400.0, "water": 220.0, "vehicles": ["ITW", "KTW"], "klinik": 3},
+	"KH-04": {"label": "Medizinisches Versorgungszentrum", "dienst": "rettung", "ressort": "Gesundheit", "building": "mvz", "cost": 700000.0,
+		"upkeep": 140.0, "capacity": 12, "min_capacity": 4, "staff": {"arzt": 3, "pflege": 4, "reinigung": 1}, "min_staff": {"arzt": 1, "pflege": 1},
+		"power": 50.0, "water": 8.0, "vehicles": [], "ambulant": true},
 	"FW-02": {"label": "Feuerwache", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_station_m", "cost": 1600000.0,
 		"upkeep": 260.0, "capacity": 4, "staff": {"feuerwehr": 18}, "min_staff": {"feuerwehr": 6}, "volunteers": 10, "power": 110.0, "water": 20.0,
 		"vehicles": ["HLF 20", "LF 10", "TLF 3000", "ELW 1"], "vehicles_from_pop": {"ELW 1": 800}},
@@ -90,6 +109,9 @@ const VEHICLES := {
 	"FLF": {"label": "Flugfeldlöschfahrzeug", "crew": 3, "cost": 70.0, "price": 950000.0, "sprite": "fw_flf", "roles": ["flugfeld", "loeschen"], "power": 8.0},
 	"RTW": {"label": "Rettungswagen", "crew": 2, "cost": 30.0, "price": 160000.0, "sprite": "rd_rtw"},
 	"NEF": {"label": "Notarzteinsatzfahrzeug", "crew": 2, "cost": 20.0, "price": 90000.0, "sprite": "rd_nef"},
+	"KTW": {"label": "Krankentransportwagen", "crew": 2, "cost": 18.0, "price": 95000.0, "sprite": "rd_ktw"},
+	"ELW RD": {"label": "Einsatzleitwagen Rettungsdienst", "crew": 1, "cost": 15.0, "price": 110000.0, "sprite": "rd_elw"},
+	"ITW": {"label": "Intensivtransportwagen", "crew": 3, "cost": 45.0, "price": 380000.0, "sprite": "rd_itw"},
 	"Kipper": {"label": "Kipper", "crew": 2, "cost": 25.0, "price": 120000.0, "sprite": "bh_kipper"},
 	"Streuwagen": {"label": "Streu- und Räumfahrzeug", "crew": 1, "cost": 30.0, "price": 180000.0, "sprite": "bh_streu"},
 	"Linienbus": {"label": "Linienbus", "crew": 1, "cost": 40.0, "price": 280000.0, "sprite": "bus"},
@@ -432,7 +454,11 @@ func _hire(f: Dictionary, by_id: Dictionary) -> void:
 		var missing := int(f.staff_need[beruf]) - int(have.get(beruf, 0))
 		if missing <= 0:
 			continue
-		for p in _candidates(-1 if bool(TYPES[f.code].get("regional", false)) else int(f.town), beruf, day):
+		var hk := -1 if bool(TYPES[f.code].get("regional", false)) or int(BERUFE[beruf].bildung) >= 3 else int(f.town)   # Aerzte pendeln regionsweit
+		var cands := _candidates(hk, beruf, day)
+		if cands.is_empty() and (int(BERUFE[beruf].bildung) >= 3 or (int(BERUFE[beruf].bildung) >= 2 and str(TYPES[f.code].dienst) == "rettung")):
+			cands = _recruit_external(f, beruf, day)
+		for p in cands:
 			if hired >= HIRE_PER_DAY or missing <= 0:
 				break
 			var old := str(p.employer)
@@ -452,6 +478,27 @@ func _hire(f: Dictionary, by_id: Dictionary) -> void:
 				sim.towns.name_of(int(f.town)), _cell(f))
 	if hired > 0:
 		sim.citizens.cap[EMPLOYER] = sim.citizens.employed_count(EMPLOYER)
+
+
+## Etappe 14: Gibt es in der ganzen Region niemanden mit der noetigen Ausbildung (Aerzte; im Gesundheitsdienst auch Pflege und Notfallsanitaeter), wirbt die Einrichtung alle 7 Tage eine Fachkraft
+## von ausserhalb an - sie zieht nur zu, wenn im Ort eine Wohnung frei ist (sonst bleibt die Stelle offen).
+const RECRUIT_EVERY := 7
+
+
+func _recruit_external(f: Dictionary, beruf: String, day: int) -> Array:
+	if day - int(f.get("anwerbung_" + beruf, -RECRUIT_EVERY)) < RECRUIT_EVERY:
+		return []
+	f["anwerbung_" + beruf] = day
+	var units: Array = sim.housing.vacant_units().filter(func(u): return sim.towns.of_building(int(u.building)) == int(f.town))
+	if units.is_empty():
+		return []
+	var n0: int = sim.citizens.people.size()
+	sim.citizens.immigrate(1, day / GameCalendar.DAYS_PER_MONTH, str(units[0].id))
+	var out: Array = sim.citizens.people.slice(n0)
+	for p in out:
+		p["education"] = int(BERUFE[beruf].bildung)
+	sim.log_event("%s: %s wirbt eine Fachkraft (%s) von außerhalb an." % [sim.towns.name_of(int(f.town)), f.name, BERUFE[beruf].label], "info")
+	return out
 
 
 ## Bewerber fuer einen Beruf: zuerst Arbeitslose der Stadt, dann Beschaeftigte privater Arbeitgeber mit niedrigerem Lohn

@@ -624,6 +624,9 @@ func _view_dienste() -> void:
 	for f in sim.rescue.hospitals():
 		rv.add_child(_t("✚ %s (%s): %d/%d Betten belegt%s" % [f.name, sim.towns.name_of(int(f.town)), sim.rescue.occupied(f), sim.rescue.beds(f),
 			" · Zweckverband" if f.has("shares") else ""], 15))
+	var rst: Dictionary = sim.rescue.stats   # Etappe 14: Versorgungswege
+	rv.add_child(_t("Rettungsdienst: %d Notfälle · %d in Kliniken · %d ambulant im MVZ · %d notversorgt in Praxen · %d Verlegungen · %d× Einsatzleitung · Klinikmaterial %d× knapp" % [
+		int(rst.notfaelle), int(rst.krankenhaus), int(rst.get("mvz", 0)), int(rst.arztpraxis), int(rst.get("verlegungen", 0)), int(rst.get("elw", 0)), int(rst.get("klinikmaterial_fehlt", 0))], 14))
 	var cs: Dictionary = sim.council.summary() if sim.council.enabled() else {}
 	if not cs.is_empty():
 		rv.add_child(_t("Regionalrat: nächste Sitzung Tag %d%s" % [int(cs.naechste_sitzung_tag), (" · läuft: " + str(cs.laufend)) if str(cs.laufend) != "" else ""], 15))

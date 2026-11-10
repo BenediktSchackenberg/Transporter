@@ -11,7 +11,8 @@ extends RefCounted
 
 const EVERY := 5
 const BUILD_DAYS := {"FW-01": 20, "RW-01": 14, "KH-01": 40, "BH-01": 14, "VB-01": 16, "SC-01": 30, "KI-01": 16, "RC-01": 14,
-	"FW-02": 30, "FW-03": 45, "FW-04": 60, "FW-05": 30, "FW-06": 40}
+	"FW-02": 30, "FW-03": 45, "FW-04": 60, "FW-05": 30, "FW-06": 40,
+	"RD-02": 20, "KH-02": 60, "KH-03": 90, "KH-04": 20}
 const IDLE_CLOSE_DAYS := 30
 const RESERVE_DAYS := 60            # Ruecklage fuer den laufenden Dienstbetrieb vor einem Neubau
 ## Ausbau der Feuerwehr (Etappe 13): naechste Stufe ab dieser Einsatzlast (Einsaetze in 30 Tagen) oder Einwohnerzahl.
@@ -69,6 +70,7 @@ func needs(k: int) -> Array:
 		if not fw.is_empty() and fw[0].vehicles.filter(func(v): return str(M.vehicles[v].type) == "HLF 20").size() < 2:
 			out.append({"massnahme": "fahrzeug", "einrichtung": fw[0].id, "fahrzeug": "HLF 20", "grund": "%d Gebäude in 30 Tagen ausgebrannt" % burnt, "prio": 1})
 	out += _fire_needs(k, has)
+	out += _health_needs(k, has)
 	if sim.citizens.population_of(k) >= 60 and not has.call("VB-01"):
 		out.append({"massnahme": "bauen", "typ": "VB-01", "grund": "keine Busanbindung bei %d Einwohnern" % sim.citizens.population_of(k), "prio": 3})
 	if sim.waste.fill_share() >= 0.5 and not M.facilities.values().any(func(f): return f.code == "RC-01") and not _planned(-1, "RC-01"):
@@ -117,6 +119,30 @@ func _fire_needs(k: int, has: Callable) -> Array:
 			if best != "" and not out.any(func(o): return str(o.get("fahrzeug", "")) == best):
 				out.append({"massnahme": "fahrzeug", "einrichtung": stations[0].id, "fahrzeug": best, "grund": "%s ohne passendes Fahrzeug (%s)" % [f.kind, alts[0]], "prio": 2})
 				roles[alts[0]] = true
+	return out
+
+
+## Rettungsdienst und Kliniken (Etappe 14): zentrale Rettungswache bei hoher Einsatzzahl oder verfehlter Hilfsfrist; Klinikausbau
+## (KH-02, dann KH-03) in der einwohnerstaerksten Stadt, wenn Patienten ohne Bett notversorgt werden mussten; MVZ fuer Orte ohne Klinik.
+func _health_needs(k: int, has: Callable) -> Array:
+	var out: Array = []
+	var R: RescueService = sim.rescue
+	var M: Municipal = sim.municipal
+	var em: int = R.emergencies(30, k)
+	var rs: Dictionary = R.summary(k)
+	if has.call("RW-01") and not has.call("RD-02") and (em >= 20 or (em >= 6 and float(rs.hilfsfrist_eingehalten_anteil) < 0.7)):
+		out.append({"massnahme": "bauen", "typ": "RD-02", "grund": "%d Notfälle in 30 Tagen, Hilfsfrist in %d %% eingehalten" % [em, roundi(float(rs.hilfsfrist_eingehalten_anteil) * 100.0)], "prio": 2})
+	var order: Array = sim.towns.list.map(func(t): return int(t.id))
+	order.sort_custom(func(a, b): return sim.citizens.population_of(a) > sim.citizens.population_of(b))
+	var over: int = R.overflow(30)
+	if k == int(order[0]) and over >= 3:
+		var any := func(code: String) -> bool: return M.facilities.values().any(func(f): return f.code == code and f.status == "in_betrieb") or _planned(-1, code)
+		var next := "KH-02" if not any.call("KH-02") and not any.call("KH-03") else ("KH-03" if not any.call("KH-03") else "")
+		if next != "":
+			out.append({"massnahme": "bauen", "typ": next, "grund": "%d Patienten in 30 Tagen ohne Klinikbett notversorgt" % over, "prio": 1})
+	var clinic: bool = M.of_town(k, "rettung").any(func(f): return RescueService.tier(f) > 0 or bool(Municipal.TYPES[f.code].get("ambulant", false)))
+	if not clinic and not has.call("KH-04") and (sim.citizens.population_of(k) >= 60 or em >= 5):
+		out.append({"massnahme": "bauen", "typ": "KH-04", "grund": "keine Klinik und kein MVZ im Ort (%d Einwohner, %d Notfälle in 30 Tagen)" % [sim.citizens.population_of(k), em], "prio": 3})
 	return out
 
 

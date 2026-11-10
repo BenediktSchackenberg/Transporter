@@ -675,3 +675,73 @@ def fw_flf():
 
 
 MUNICIPAL += ["fw_kdow", "fw_elw", "fw_klf", "fw_lf10", "fw_tlf", "fw_gwl", "fw_rw", "fw_flf"]
+
+
+# ------------------------------------------------------------------ Auftrag 20 Etappe 14: Rettungsdienst
+SIZES.update({"rd_ktw": 50, "rd_elw": 46, "rd_itw": 80})
+
+
+def rd_ktw():
+    """Krankentransportwagen: kurzer Kastenwagen (Hochdach), weiss mit schmalem blauem Streifen, ohne Notfallkoffer-Aufbau."""
+    S = SIZES["rd_ktw"]
+    m = _square(S)
+    L, W = 40, 17
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 3, x0 + 28, y0 + W, 22, M("cargo_white"))
+    m.box(x0, y0, 3, x0 + 28, y0 + W, 5, M("black"))
+    m.box(x0, y0, 11, x0 + 28, y0 + 1, 13, M("beacon_blue"))
+    m.box(x0, y0 + W - 1, 11, x0 + 28, y0 + W, 13, M("beacon_blue"))
+    m.box(x0 + 6, y0, 15, x0 + 20, y0 + 1, 20, M("glass_dark"))
+    _cab(m, x0 + 28, y0, W, 16, 12)
+    m.box(x0 + 30, y0 + 4, 16, x0 + 33, y0 + W - 4, 17, M("beacon_blue"))
+    for wx in (x0 + 7, x0 + 33):
+        _wheel(m, wx, y0, 4, 1, 1)
+        _wheel(m, wx, y0 + W - 1, 4, 1, 0)
+    _lights(m, x0 + L, x0, y0, W, 5)
+    return m
+
+
+def rd_elw():
+    """Einsatzleitwagen Rettungsdienst: Gelaendewagen weiss-rot, Lichtbalken, Dachbox mit Antennen."""
+    S = SIZES["rd_elw"]
+    m = _square(S)
+    x0, y0 = (S - 34) // 2, (S - 16) // 2
+    m.box(x0, y0, 3, x0 + 34, y0 + 16, 10, M("cargo_white"))
+    m.box(x0 + 2, y0 + 1, 10, x0 + 26, y0 + 15, 17, M("glass_dark"))
+    m.box(x0 + 3, y0 + 2, 16, x0 + 25, y0 + 14, 17, M("cargo_white"))
+    m.box(x0, y0, 6, x0 + 34, y0 + 1, 9, M("signal_red"))
+    m.box(x0, y0 + 15, 6, x0 + 34, y0 + 16, 9, M("signal_red"))
+    m.box(x0 + 4, y0 + 4, 17, x0 + 14, y0 + 12, 19, M("steel_dark"))
+    m.box(x0 + 6, y0 + 6, 19, x0 + 7, y0 + 7, 27, M("steel"))
+    m.box(x0 + 11, y0 + 9, 19, x0 + 12, y0 + 10, 25, M("steel"))
+    m.box(x0 + 17, y0 + 3, 17, x0 + 22, y0 + 13, 19, M("beacon_blue"))
+    for wx in (x0 + 7, x0 + 27):
+        _wheel(m, wx, y0, 4, 1, 1)
+        _wheel(m, wx, y0 + 15, 4, 1, 0)
+    _lights(m, x0 + 34, x0, y0, 16, 5)
+    return m
+
+
+def rd_itw():
+    """Intensivtransportwagen: langer Koffer auf Lkw-Fahrgestell mit drei Achsen, gelb-weisse Warnmarkierung, Klimageraet auf dem Dach."""
+    S = SIZES["rd_itw"]
+    m = _square(S)
+    L, W = 66, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 4, x0 + 46, y0 + W, 30, M("cargo_white"))
+    m.box(x0, y0, 4, x0 + 46, y0 + W, 7, M("black"))
+    for xx in range(x0, x0 + 46, 6):
+        m.box(xx, y0, 12, xx + 3, y0 + 1, 15, M("signal_orange"))
+        m.box(xx + 3, y0, 12, xx + 6, y0 + 1, 15, M("signal_red"))
+        m.box(xx, y0 + W - 1, 12, xx + 3, y0 + W, 15, M("signal_orange"))
+        m.box(xx + 3, y0 + W - 1, 12, xx + 6, y0 + W, 15, M("signal_red"))
+    m.box(x0 + 8, y0 + 5, 30, x0 + 20, y0 + W - 5, 34, M("steel"))      # Klimageraet
+    m.box(x0 + 1, y0 + 3, 30, x0 + 4, y0 + W - 3, 32, M("beacon_blue"))
+    _cab(m, x0 + 46, y0, W, 22, 18)
+    m.box(x0 + 52, y0 + 3, 22, x0 + 56, y0 + W - 3, 24, M("beacon_blue"))
+    _axles(m, (x0 + 8, x0 + 20, x0 + 54), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+MUNICIPAL += ["rd_ktw", "rd_elw", "rd_itw"]

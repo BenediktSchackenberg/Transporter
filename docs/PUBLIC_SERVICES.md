@@ -289,7 +289,7 @@ Der vollständige Auftragstext kam am 10.11. erneut. Etappen 1–12 setzen je Di
 | Etappe | Inhalt | Abnahme |
 |---|---|---|
 | 13 Feuerwehr-Ausbau **(fertig 10.11.)** | FW-02 Feuerwache, FW-03 Hauptfeuerwache, FW-04 BF-Zentrale, FW-05 Flughafenfeuerwehr (übernimmt den Flughafenbrand), FW-06 Ausbildungszentrum (Lehrgänge heben die Qualifikation); Fahrzeuge KdoW, ELW 1, KLF, LF 10, TLF 3000, GW-L, RW, FLF; Einsatzarten (Wohnung, Küche, Fahrzeug, Industrie, Lagerhalle, Verkehrsunfall, technische Hilfe, Unwetter, Wasserschaden, Gefahrstoff, Flughafen) mit Alarm- und Ausrückeordnung (passendes Fahrzeug je Einsatzart); Funktionen im Personal (Maschinist, Gruppenführer, Zugführer, Wachleiter, Gerätewart) mit Arbeitszeit und Erschöpfung | A, B |
-| 14 Rettung/Kliniken | RD-02 zentrale Rettungswache, KH-01 Stadtklinik je Stadt, KH-02/KH-03 als Ausbaustufen, KH-04 MVZ; KTW, ELW RD, ITW; Betten je Klinik, Verlegung bei Überlastung, medizinische Güter aus dem Großlager verbraucht | C |
+| 14 Rettung/Kliniken **(fertig 10.11.)** | RD-02 zentrale Rettungswache, KH-01 Stadtklinik je Stadt, KH-02/KH-03 als Ausbaustufen, KH-04 MVZ; KTW, ELW RD, ITW; Betten je Klinik, Verlegung bei Überlastung, medizinische Güter aus dem Großlager verbraucht | C |
 | 15 Bauhof/Straßen | BH-02 bis BH-05; Fahrzeuge Pritsche, Transporter, Kehrmaschine, Asphaltfertiger, Walze, Bagger, Radlader, Mobilkran, Hubsteiger, Schneepflug, Salz-Lkw, Inspektionsfahrzeug; Reparatur mit Sperrung des Abschnitts und Material aus dem Lager, Tempo-Abschlag an Schlaglöchern, Straßenreinigung | D |
 | 16 ÖPNV-Ausbau | ÖPNV-02/03 (Betriebshof, Busbahnhof), Haltestellen als sichtbare Bauten (ÖPNV-04/05), Umsteigepunkt am Bahnhof (06); mehrere Linien je Stadt, Linien zum Bahnhof/Flughafen/zur Nachbarstadt, Busgrößen (Klein-, Midi-, Standard-, Gelenk-, E-, Überlandbus), Fahrplan mit Verspätungen, Verstärker bei Nachfrage, Subvention statt Streichung | E |
 | 17 Bildung-Ausbau | BILD-02 Kindergarten, BILD-04 weiterführende Schule, BILD-05 Berufsschule, BILD-06 Gymnasium, BILD-07 Hochschule, BILD-08 Bibliothek; Abschlüsse führen zu Berufen (Techniker, Ingenieur, Arzt, Lokführer, Verwaltung, Facharbeiter) | F |
@@ -327,4 +327,25 @@ ohne Aufgabe.
   Einsatzart, auf die gewartet werden musste, die Fahrzeugrolle in der ganzen Stadt, kauft es das günstigste passende Fahrzeug.
 * Leitstelle: je Wache im Dienst/einsatzbereit/Lehrgang/erschöpft und Funktionen; laufende Einsätze mit Fahrzeugkennungen, anklickbar.
 * 30-Tage-Probe (Seed 4242): 6 Brände (alle gelöscht), 13 technische Einsätze, 24 Lehrgänge, Invarianten exakt 0, Feuerwehr-Update 0,006 ms je Schritt.
+
+**Etappe 14 im Detail (Rettungsdienst und Kliniken)** – Test `test_health_stages`, Probe `tests/probe_clinic_reach.gd`
+
+* Typen: RW-01 (= RD-01 Rettungswache), neu RD-02 Zentrale Rettungswache (4×3; RTW, RTW, NEF, KTW, ELW RD ab 800 Einwohnern);
+  KH-01 heißt jetzt „Stadtklinik“ (Versorgungsstufe 1, regional), KH-02 Allgemeinkrankenhaus (6×4, Stufe 2, ITW), KH-03 Zentralklinikum
+  (7×5, Stufe 3, Hubschrauberlandeplatz, ITW und KTW), KH-04 Medizinisches Versorgungszentrum (3×3, ambulant). Je Typ 6 Grundvarianten
+  × 4 Stile. Fahrzeuge KTW (Hochdach-Kastenwagen), ELW RD (Geländewagen mit Antennen), ITW (Dreiachser mit Klimagerät).
+* Personal: neue Berufe Rettungssanitäter, Krankenhausverwaltung, Medizintechniker, Reinigungskräfte. Ärzte pendeln regionsweit; fehlt im
+  Gesundheitsdienst eine Fachkraft (Arzt, Pflege, Notfallsanitäter) in der ganzen Region, wird je Beruf alle 7 Tage eine von außerhalb
+  angeworben – sie zieht nur zu, wenn im Ort eine Wohnung frei ist.
+* Versorgung: kritische Patienten in die höchste Versorgungsstufe, solange der Weg höchstens 1,5-mal so lang ist wie zum nächsten Haus;
+  nicht kritische ambulant ins MVZ (Tageskapazität, kein Bett, halbe Ausfallzeit). Laufen in einer Stadt mehrere Notfälle zugleich, fährt
+  der ELW RD mit (Versorgung vor Ort ein Fünftel schneller).
+* Kliniken verbrauchen 0,1 Einheiten Sanitätsmaterial je belegtem Bett und Tag aus dem Stadtlager; fehlt es, sind nur 75 % der Betten
+  betreibbar. Verlegung: kritische Patienten einer Stadtklinik per ITW (sonst RTW) in ein Haus der Stufe 2/3 mit freiem Bett;
+  überbelegte Häuser verlegen per KTW (sonst RTW).
+* Bauamt: RD-02 ab 20 Notfällen in 30 Tagen oder Hilfsfrist unter 70 % bei mindestens 6 Notfällen; KH-02, dann KH-03 in der
+  einwohnerstärksten Stadt, wenn mindestens 3 Patienten in 30 Tagen notversorgt wurden, **weil alle Betten belegt waren** (fehlt nur
+  Personal, hilft kein Neubau – das zeigte die Probe: in den ersten Tagen hat die Stadtklinik noch keinen Arzt); MVZ für Orte ohne Klinik
+  ab 60 Einwohnern oder 5 Notfällen.
+* Leitstelle: Region mit Versorgungswegen (Kliniken, MVZ, Praxis, Verlegungen, Einsatzleitung, Materialknappheit).
 
