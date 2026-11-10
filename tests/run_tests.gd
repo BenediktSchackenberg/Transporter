@@ -10132,6 +10132,9 @@ func test_regional_council() -> void:
 	ok(not kh.is_empty(), "Kreiskrankenhaus vorhanden")
 	if kh.is_empty():
 		return
+	ok(kh.has("shares") and kh.owner == "region", "Kreiskrankenhaus: Kosten von Anfang an nach Einwohnern geteilt")
+	kh.erase("shares")   # Zweckverband-Antrag pruefen: Ausgangslage Einzeltraegerschaft
+	kh.owner = Towns.owner_of(int(kh.town))
 	# Einstimmigkeit: eine Stadt ohne Geld stimmt gegen den Zweckverband -> abgelehnt trotz 3 Ja-Stimmen
 	var poor := (int(kh.town) + 1) % s.towns.count()
 	var acct := Towns.account_of(poor)

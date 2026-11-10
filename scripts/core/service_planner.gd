@@ -12,11 +12,13 @@ extends RefCounted
 const EVERY := 5
 const BUILD_DAYS := {"FW-01": 20, "RW-01": 14, "KH-01": 40, "BH-01": 14, "VB-01": 16, "SC-01": 30, "KI-01": 16, "RC-01": 14}
 const IDLE_CLOSE_DAYS := 30
+const RESERVE_DAYS := 60            # Ruecklage fuer den laufenden Dienstbetrieb vor einem Neubau
 
 var sim
 var builds := {}          # Projekt-ID -> {town, code, rect, parcel, reason, by, day}
 var log: Array = []       # [{day, town, text, by}]
 var auto := true          # Regel-Buergermeister entscheiden selbst
+var saving := {}          # Stadt -> Monat der letzten Spar-Meldung
 var _day := -1
 
 
@@ -40,7 +42,7 @@ func _note(k: int, text: String, by: String) -> void:
 func build_cost(code: String, k: int) -> float:
 	var t: Dictionary = Municipal.TYPES[code]
 	var pop: int = sim.municipal.served(code, k)
-	return snappedf(float(t.cost) * (0.12 + 0.88 * minf(1.0, float(pop) / Municipal.REF_POP)), 100.0)   # Dorfschule statt Stadtschule: kleine Orte bauen kleiner
+	return snappedf(float(t.cost) * (0.08 + 0.92 * minf(1.0, float(pop) / Municipal.REF_POP)), 100.0)   # Dorfschule statt Stadtschule: kleine Orte bauen kleiner
 
 
 # ------------------------------------------------------------------ Bedarf
@@ -87,8 +89,10 @@ func build(k: int, code: String, reason: String, by: String) -> Dictionary:
 		return {"ok": false, "msg": "%s ist in %s schon geplant." % [Municipal.TYPES[code].label, sim.towns.name_of(k)]}
 	var M: Mayor = sim.towns.mayor(k)
 	var cost := build_cost(code, k)
-	if M.available_budget() < cost:
-		return {"ok": false, "msg": "Verfügbare Mittel %s reichen nicht für %s (%s)." % [Catalog.money(M.available_budget()), Municipal.TYPES[code].label, Catalog.money(cost)]}
+	var reserve: float = RESERVE_DAYS * sim.municipal.daily_cost(k)   # laufende Dienste muessen bezahlbar bleiben
+	if M.available_budget() < cost + reserve:
+		return {"ok": false, "budget": true, "msg": "Verfügbare Mittel %s reichen nicht für %s (%s) plus Rücklage für %d Tage Dienstbetrieb (%s)." % [
+			Catalog.money(M.available_budget()), Municipal.TYPES[code].label, Catalog.money(cost), RESERVE_DAYS, Catalog.money(reserve)]}
 	var info: Array = CityGenerator.TYPES[Municipal.TYPES[code].building]
 	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]))
 	if site.is_empty():
@@ -185,6 +189,11 @@ func on_day(day: int) -> void:
 			var r := act(k, n, "Bürgermeister %s (Regeln)" % sim.towns.mayor(k).name)
 			if r.get("ok", false):
 				break
+			if r.get("budget", false) and int(n.prio) == 1:
+				if int(saving.get(k, -1)) != day / 30:
+					saving[k] = day / 30
+					_note(k, "spart für %s (%s): %s" % [Municipal.TYPES.get(str(n.get("typ", "")), {}).get("label", n.massnahme), n.grund, r.msg], "Bürgermeister %s (Regeln)" % sim.towns.mayor(k).name)
+				break   # dringendster Bedarf noch nicht bezahlbar: sparen statt Geld fuer Nachrangiges ausgeben
 
 
 func act(k: int, n: Dictionary, by: String) -> Dictionary:

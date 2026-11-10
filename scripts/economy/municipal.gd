@@ -50,7 +50,7 @@ const TYPES := {
 		"vehicles": ["Kipper", "Streuwagen"]},
 	"VB-01": {"label": "Busbetriebshof", "dienst": "oepnv", "ressort": "Verkehr", "building": "bus_depot", "cost": 380000.0,
 		"upkeep": 120.0, "capacity": 2, "staff": {"fahrdienst": 6}, "power": 50.0, "water": 6.0, "vehicles": ["Linienbus", "Linienbus"]},
-	"SC-01": {"label": "Grundschule", "dienst": "bildung", "ressort": "Bildung", "building": "public_school", "cost": 1500000.0,
+	"SC-01": {"label": "Grundschule", "dienst": "bildung", "ressort": "Bildung", "building": "public_school", "cost": 1200000.0,
 		"upkeep": 260.0, "capacity": 240, "min_capacity": 20, "staff": {"lehrkraft": 12}, "power": 120.0, "water": 20.0, "vehicles": []},
 	"KI-01": {"label": "Kita", "dienst": "bildung", "ressort": "Bildung", "building": "public_kita", "cost": 600000.0,
 		"upkeep": 110.0, "capacity": 60, "min_capacity": 10, "staff": {"erzieher": 6}, "power": 40.0, "water": 10.0, "vehicles": []},
@@ -277,8 +277,22 @@ func ensure_regional() -> void:
 		if facilities.values().any(func(f): return str(f.code) == code):
 			continue
 		for k in order:
-			if not _place(k, code).is_empty():
+			var f := _place(k, code)
+			if not f.is_empty():
+				_share_regional(f)
 				break
+
+
+## Regionale Einrichtung (Kreiskrankenhaus): Traeger ist der Landkreis, die Kosten tragen alle Staedte nach Einwohneranteilen.
+func _share_regional(f: Dictionary) -> void:
+	var total := 0.0
+	for t in sim.towns.list:
+		total += float(maxi(1, _pop(int(t.id))))
+	var sh := {}
+	for t in sim.towns.list:
+		sh[str(int(t.id))] = float(maxi(1, _pop(int(t.id)))) / total
+	f["shares"] = sh
+	f.owner = "region"
 
 
 func _place(k: int, code: String) -> Dictionary:
@@ -473,6 +487,24 @@ func _drivers(f: Dictionary, by_id: Dictionary) -> void:
 				v.driver = int(p.id)
 				used[int(p.id)] = true
 				break
+
+
+## Laufende Kosten der Dienste einer Stadt je Tag (Sach- und Fahrzeugkosten nach Anteilen plus Loehne des Personals).
+func daily_cost(k: int) -> float:
+	var x := 0.0
+	for f in facilities.values():
+		if f.status != "in_betrieb":
+			continue
+		var share := float(f.get("shares", {"%d" % int(f.town): 1.0}).get(str(k), 0.0))
+		if share <= 0.0:
+			continue
+		var c := float(f.upkeep) * (0.3 + 0.7 * minf(1.0, float(_pop(int(f.town))) / REF_POP))
+		for vid in f.vehicles:
+			c += float(vehicles[vid].cost)
+		for p in staff_of(f.id):
+			c += float(p.wage) * Citizens.HOURS_PER_MONTH / 30.0
+		x += c * share
+	return x
 
 
 ## Sachkosten und Fahrzeugkosten je Tag aus der Stadtkasse an die Dienstleister (S0); Ressort laut Typ.

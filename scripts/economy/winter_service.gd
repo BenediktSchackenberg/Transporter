@@ -124,6 +124,8 @@ var _roads := {}
 
 ## Strassenfelder je Abschnitt (einmal gezaehlt; Hauptachsen haben viele).
 func _road_counts() -> Dictionary:
+	if not sim.road_care.road_count.is_empty():
+		return sim.road_care.road_count   # beim Aufbau der Strassenpflege mitgezaehlt
 	if _roads.is_empty():
 		for y in sim.city.size:
 			for x in sim.city.size:

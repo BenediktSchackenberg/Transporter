@@ -55,7 +55,7 @@ func _init() -> void:
 	print("Bus: ", s.transit.summary())
 	print("Bildung: ", s.towns.list.map(func(t): return s.education.summary(int(t.id))))
 	print("Recycling: ", s.recycling.summary())
-	print("Regionalrat: ", s.council.history.map(func(h): return h.antraege.map(func(a): return "%s %s" % [a.kind, a.result])))
+	print("Rat: ", s.council.history.map(func(h): return h.antraege.map(func(a): return "%s %s" % [a.kind, a.result])))
 	print("Entscheidungen: ", s.services.log.map(func(e): return "T%d %s: %s" % [int(e.day), s.towns.name_of(int(e.town)), e.text]))
 	print("Kassen: ", s.towns.list.map(func(t): return "%s %.0f" % [t.name, float(s.economy.accounts[Towns.account_of(int(t.id))])]))
 	print("Invarianten: Geld %.4f, Buergerkonten %.4f, Warenbilanz %d" % [s.economy.conservation_error(), s.population.account_error(), s.stock.balance_error()])

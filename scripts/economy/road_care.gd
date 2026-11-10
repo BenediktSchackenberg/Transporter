@@ -25,6 +25,7 @@ var sim
 var cells := {}                          # Abschnitt (Vector2i) -> Arbeitsort (Strassenzelle nahe der Mitte)
 var cond := {}                           # Abschnitt -> Zustand 0..100
 var usage := {}                          # Abschnitt -> Fahrzeugsekunden heute
+var road_count := {}                     # Abschnitt -> Strassenfelder (Hauptachsen fuer den Winterdienst)
 var jobs := {}                           # "S<n>" -> {id, seg, cell, mode, start, end, cost, status}
 var works := {}                          # Strassenzelle -> Auftrags-ID (laufende Arbeiten)
 var stats := {"repairs": 0, "spent": 0.0}
@@ -36,6 +37,7 @@ func setup(simulation) -> void:
 	sim = simulation
 	cells.clear()
 	cond.clear()
+	road_count.clear()
 	var best := {}
 	var C = sim.city
 	for y in C.size:
@@ -44,6 +46,7 @@ func setup(simulation) -> void:
 			if not C.is_road(p):
 				continue
 			var seg := Vector2i(x / SEG, y / SEG)
+			road_count[seg] = int(road_count.get(seg, 0)) + 1
 			var mid := Vector2(seg.x * SEG + SEG / 2, seg.y * SEG + SEG / 2)
 			var d := Vector2(p).distance_squared_to(mid)
 			if not best.has(seg) or d < float(best[seg]):

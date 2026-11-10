@@ -70,7 +70,7 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 | 9 Recycling | **fertig** (10.11.2026) – `recycling.gd`, Test `test_recycling` (Abnahme G) |
 | 10 Regionalrat | **fertig** (10.11.2026) – `regional_council.gd`, Test `test_regional_council` (Abnahme H) |
 | 11 Entscheidungen und Leitstelle | **fertig** (10.11.2026) – `service_planner.gd`, Leitstelle „Öffentliche Dienste & Regionalpolitik“, Test `test_service_planner` (Abnahme I) |
-| 12 Leistung, Abnahme | offen – Probe `tests/probe_services.gd` |
+| 12 Leistung, Abnahme | **fertig** (10.11.2026) – Probe `tests/probe_services.gd` (Abnahme J) |
 
 **Etappe 1 im Detail**
 
@@ -243,3 +243,40 @@ gebaut und im Dashboard erklärt. Keine funktionslosen Gebäude, keine erfundene
 * Leitstelle: neuer Bereich **„Öffentliche Dienste & Regionalpolitik“** (✚) – Region (Kreiskrankenhaus, Regionalrat mit letzten
   Beschlüssen und Stimmen) und je Stadt Einrichtungen (Personal, Ehrenamtliche, Fahrzeuge, Kartensprung), Kennzahlen aller Dienste,
   Bedarf mit nächstem Schritt, Neubauten im Bau und letzte Entscheidungen mit Begründung. Test `test_service_planner` (Abnahme I).
+
+**Etappe 12: Leistung und Abnahme**
+
+| Abnahme | Inhalt | Nachweis |
+|---|---|---|
+| A | 10 Feuerwachen sehen verschieden aus (6 Grundvarianten × 4 Stile) | `test_public_buildings` |
+| B | Brand → Alarm → Löschen → Schaden → Reparatur; Nachbarschaftshilfe; Ausbrennen ohne Feuerwehr | `test_fire_service` |
+| C | Notfall → Hilfsfrist → Versorgung → Krankenhausbett / Arztpraxis | `test_rescue_service` |
+| D | Schnee → Räumung nach Priorität mit Streusalz; Schlaglöcher geflickt | `test_winter_service` |
+| E | Buslinie, Fahrgäste zahlen von eigenen Konten, Takt, Kostendeckung | `test_transit` |
+| F | Kinder, Plätze, Lehrkräfte, Lernstand, Abschluss als neuer Bürger | `test_education` |
+| G | Recyclinghof, Sekundärrohstoffe als Ware, Schrott ins Großlager | `test_recycling` |
+| H | Regionalrat: 3 von 4, Eigentum einstimmig, KKW fest, Verhandlung | `test_regional_council` |
+| I | Bedarf → Neubau über Rat/Ausschreibung/Baufirma; KI-Aktionen; Leitstelle | `test_service_planner` |
+| J | 60-Tage-Langlauf aller Dienste: Invarianten, Kassen, Leistung | `tests/probe_services.gd -- --days=60` |
+
+Langlauf (Seed 4242, 60 Tage, Regelbetrieb): 17 Einrichtungen, 16 Fahrzeuge, 32 Beschäftigte; 10 Brände, alle gelöscht (8 Reparaturen,
+38 400 €); 17 Notfälle, Hilfsfrist Ø 7,2 min, 76 % ≤ 15 min; Kreiskrankenhaus 13 Betten; zwei Regionalratssitzungen (Verbindungsstraßen
+beschlossen und abgelehnt); Kitas und Grundschulen über Rat, Ausschreibung und Baufirma gebaut bzw. angespart. Geldkonservierung,
+Bürgerkonten und Warenbilanz exakt 0. Rechenzeit: Dienst-Updates < 0,01 ms je Simulationsschritt, Bedarfsanalyse aller Städte
+≈ 9 ms (alle 5 Tage), Ø ≈ 0,6 s Rechenzeit je Spieltag (ganze Simulation, headless). Der langsamste Einzelschritt (≈ 0,5 s) liegt an
+Tageswechseln der übrigen Simulation; die einmalige Zählung der Straßenfelder für den Räumplan (95 ms) läuft jetzt im Aufbau der
+Straßenpflege mit.
+
+Nach den Langläufen nachgeschärft:
+* Kreiskrankenhaus: Träger ist von Anfang an der Landkreis, Unterhalt nach Einwohneranteilen (vorher trug die Standortstadt alles und
+  rutschte ins Minus). Der Zweckverband-Antrag bleibt für eine aufgehobene Teilung.
+* Bürgermeister bauen nur mit Rücklage für 60 Tage laufender Dienstkosten (`Municipal.daily_cost`) und sparen für den dringendsten
+  Bedarf, statt Geld für Nachrangiges auszugeben (Protokoll „spart für …“). Baukosten kleiner Orte: 8 % des Stadtpreises plus Anteil
+  nach Einwohnern (Grundschule für ~45 Einwohner ≈ 145 000 €).
+
+**Grenzen / offen**
+
+* Private Recyclingfirmen gibt es nicht (Firmen können den Schrott im Großlager kaufen).
+* Ausbau des Krankenhauses und die gemeinsame Drehleiter wirken sofort (ohne Baustelle); Neubauten laufen sichtbar über Baufirma und Bautrupp.
+* Das Ratsgebäude nutzt vorerst das Bild der Bank.
+* Kommunale Dienste nur in der Weltart Region.
