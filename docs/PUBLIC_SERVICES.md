@@ -280,3 +280,26 @@ Nach den Langläufen nachgeschärft:
 * Ausbau des Krankenhauses und die gemeinsame Drehleiter wirken sofort (ohne Baustelle); Neubauten laufen sichtbar über Baufirma und Bautrupp.
 * Das Ratsgebäude nutzt vorerst das Bild der Bank.
 * Kommunale Dienste nur in der Weltart Region.
+
+## Teil 2: Ausbau auf den vollständigen Auftragstext (Eingang 10.11.2026)
+
+Der vollständige Auftragstext kam am 10.11. erneut. Etappen 1–12 setzen je Dienst **einen** Gebäudetyp und zwei bis drei Fahrzeuge um
+(FW-01, RW-01, KH-01, BH-01, VB-01, SC-01, KI-01, RC-01). Abgleich mit dem vollen Text – Lücken und Reihenfolge:
+
+| Etappe | Inhalt | Abnahme |
+|---|---|---|
+| 13 Feuerwehr-Ausbau | FW-02 Feuerwache, FW-03 Hauptfeuerwache, FW-04 BF-Zentrale, FW-05 Flughafenfeuerwehr (übernimmt den Flughafenbrand), FW-06 Ausbildungszentrum (Lehrgänge heben die Qualifikation); Fahrzeuge KdoW, ELW 1, KLF, LF 10, TLF 3000, GW-L, RW, FLF; Einsatzarten (Wohnung, Küche, Fahrzeug, Industrie, Lagerhalle, Verkehrsunfall, technische Hilfe, Unwetter, Wasserschaden, Gefahrstoff, Flughafen) mit Alarm- und Ausrückeordnung (passendes Fahrzeug je Einsatzart); Funktionen im Personal (Maschinist, Gruppenführer, Zugführer, Wachleiter, Gerätewart) mit Arbeitszeit und Erschöpfung | A, B |
+| 14 Rettung/Kliniken | RD-02 zentrale Rettungswache, KH-01 Stadtklinik je Stadt, KH-02/KH-03 als Ausbaustufen, KH-04 MVZ; KTW, ELW RD, ITW; Betten je Klinik, Verlegung bei Überlastung, medizinische Güter aus dem Großlager verbraucht | C |
+| 15 Bauhof/Straßen | BH-02 bis BH-05; Fahrzeuge Pritsche, Transporter, Kehrmaschine, Asphaltfertiger, Walze, Bagger, Radlader, Mobilkran, Hubsteiger, Schneepflug, Salz-Lkw, Inspektionsfahrzeug; Reparatur mit Sperrung des Abschnitts und Material aus dem Lager, Tempo-Abschlag an Schlaglöchern, Straßenreinigung | D |
+| 16 ÖPNV-Ausbau | ÖPNV-02/03 (Betriebshof, Busbahnhof), Haltestellen als sichtbare Bauten (ÖPNV-04/05), Umsteigepunkt am Bahnhof (06); mehrere Linien je Stadt, Linien zum Bahnhof/Flughafen/zur Nachbarstadt, Busgrößen (Klein-, Midi-, Standard-, Gelenk-, E-, Überlandbus), Fahrplan mit Verspätungen, Verstärker bei Nachfrage, Subvention statt Streichung | E |
+| 17 Bildung-Ausbau | BILD-02 Kindergarten, BILD-04 weiterführende Schule, BILD-05 Berufsschule, BILD-06 Gymnasium, BILD-07 Hochschule, BILD-08 Bibliothek; Abschlüsse führen zu Berufen (Techniker, Ingenieur, Arzt, Lokführer, Verwaltung, Facharbeiter) | F |
+| 18 Recyclingindustrie | REC-02 Sortierzentrum, REC-03…08 Werke (Papier, Glas, Metall, Kunststoff, Kompost, Baustoff) mit Verlusten, Energie und Kapazität; private KI-Firmen gründen Recyclingbetriebe (Grundstück, Bau, Maschinen, Personal, Einkauf, Verkauf) – berührt `scripts/ai`, nur mit Abstimmung | G |
+| 19 Regionalverwaltung | REG-01/02/03 mit eigenem repräsentativem Bild in der Kartenmitte; Ankunftsszene mit Porträts und Dialogfenster | H |
+| 20 Regionalpolitik | Anträge Energie, Bahn, Wasser, Abfall, Verkehr, Sicherheit als echte Bauprojekte (Bauauftrag, Grundstück, Baufirma, sichtbare Baustelle, Abnahme); Finanzierung gleich, nach Einwohnern, nach Nutzung, Mehranteil, Regionalkredit; Gegenangebot, Kompromiss, Vertagung; Bürgermeister-Persönlichkeit (8 Merkmale) gewichtet nach Lage; KI-Bürgermeister verhandeln mit eigenem Text | H |
+| 21 Identität | individuelle Namen aus Stadtteil/Lage/Merkmal (Am Stadtpark, Industriehafen …), Fahrzeugkennungen je Wache, Fahrzeugwahl nach Aufgabe und Kapazität; Stadtstile vom Bürgermeister beeinflussbar | – |
+| 22 Dashboard | alle Ereignisse anklickbar (Einsatzstelle, Baustelle mit Baufirma, Begründung jeder Stimme), Kennzahlen je Bereich laut Abschnitt 19 | – |
+| 23 Speichern/Laden | Varianten, Kennungen, laufende Einsätze, Beschlüsse, Bauprojekte nach dem Laden identisch | J |
+| 24 Leistung, Langlauf, Doku | | A–J |
+
+Jeder neue Gebäudetyp bekommt ≥ 6 Grundvarianten × 4 Stile im Baukasten (`tools/vox/public.py`) **und** eine Funktion; keine Typen
+ohne Aufgabe.
