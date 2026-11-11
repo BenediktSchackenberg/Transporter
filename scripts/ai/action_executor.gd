@@ -871,6 +871,8 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 			note = " (%s war nicht mehr verfügbar – stattdessen %s)" % [kid, alt.id]
 			k = alt
 			kid = alt.id
+	if k != null and k.owner == cid and k.status != "open":
+		return {"ok": false, "msg": "Auftrag %s gehört dir bereits (%s) – nicht erneut annehmen; fahren mit assign_transport bzw. Fahrer per assign_worker_task." % [kid, k.status]}
 	if k == null or k.status != "open":
 		return {"ok": false, "msg": "Auftrag %s ist nicht (mehr) verfügbar." % kid}
 	if k.exclusive_for >= 0 and k.exclusive_for != cid and k.exclusive_until > sim.game_min:

@@ -19,7 +19,7 @@ const SCHEMA := {
 	"set_vision": {"params": {"vision": "string", "reason": "string"},
 		"desc": "Langfristiges Ziel der Stadtentwicklung festlegen (gespeichert, prägt die Auswahl der Bauprojekte)."},
 	"remember": {"params": {"inhalt": "string"}, "desc": "Eine Erfahrung oder Notiz im Gedächtnis des Amtes festhalten."},
-	"designate_quarter": {"params": {"name": "string", "parcel_ids": "array", "zone": "string", "reason": "string"},
+	"designate_quarter": {"params": {"name": "string?", "parcel_ids": "array", "zone": "string?", "reason": "string"},
 		"desc": "Neues Quartier vorschlagen: städtische, freie Grundstücke (siehe entwicklungsvorschlaege) werden einer Zone zugewiesen. Braucht Ratsbeschluss; danach zur Entwicklung vorgesehen."},
 	"offer_parcels": {"params": {"parcel_ids": "array", "price_factor": "number?", "reason": "string"},
 		"desc": "Städtische Grundstücke aus beschlossenen Quartieren zur Vergabe freigeben (Preisfaktor 0,7–1,3)."},
@@ -863,8 +863,23 @@ func _quarter_days() -> Dictionary:
 	return out
 
 
+## Zone aus einer Angabe oder Begruendung: exakter Schluessel, sonst Wortstamm (wohn, misch, gewer/gewerb, indust); "" wenn unklar.
+static func _zone_of(text: String) -> String:
+	var t := text.to_lower().strip_edges()
+	var first := t.split(" ")[0] if t != "" else ""
+	if Parcels.ZONES.has(first):
+		return first
+	for stem in [["misch", "mischgebiet"], ["indust", "industrie"], ["gewer", "gewerbe"], ["wohn", "wohnen"]]:
+		if t.contains(stem[0]):
+			return stem[1]
+	return first
+
+
 func _designate_quarter(a: Dictionary) -> Dictionary:
-	var zone := str(a.zone)
+	# Modelle liessen name/zone weg oder verschrieben die Zone ("gewerne"; Partie 11.11.: 90 abgelehnte Antraege) - Zone aus Text erkennen
+	var zone := _zone_of(str(a.get("zone", "")) + " " + str(a.get("reason", "")))
+	if a.get("name") == null or str(a.name).strip_edges() == "":
+		a["name"] = "%s %d" % [Parcels.ZONES[zone].label if Parcels.ZONES.has(zone) else "Quartier", plans.size() + 1]
 	if not Parcels.ZONES.has(zone) or not Parcels.ZONES[zone].buildable or zone == "oeffentlich":
 		return {"ok": false, "msg": "Zone '%s' ist für ein Quartier nicht zulässig (wohnen, mischgebiet, gewerbe, industrie)." % zone}
 	var chk := _city_parcels(a.parcel_ids, ["frei", "zur_entwicklung"])

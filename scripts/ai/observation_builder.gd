@@ -256,8 +256,20 @@ static func _available(sim: Simulation, cid: int) -> Dictionary:
 	var driven: Array = sim.company_vehicles(cid).filter(func(v): return sim.driver_of(v) != null and v.state not in ["broken", "repairing", "to_workshop"])
 	var known_open: Array = sim.market.open_contracts().filter(func(k): return c.known.has(k.id) and (k.exclusive_for < 0 or k.exclusive_for == cid or k.exclusive_until <= sim.game_min) and not k.held_by_other(cid, sim.game_min) and c.reputation >= k.min_rep)
 	var active := sim.executor.active_contracts(cid)
-	out["accept_contract"] = {"ziele": known_open.map(func(k): return k.id).slice(0, 12)} if active < c.contract_capacity() \
-		else {"nicht_moeglich": "Auftragskapazität %d/%d erschöpft" % [active, c.contract_capacity()]}
+	# Nur rechtzeitig machbare Ziele (gleiche Pruefung wie accept_contract): Partie 11.11. stammten 111 von ~330 abgelehnten Annahmen
+	# aus dieser Liste, obwohl der Markt sie als unmachbar ausblendete.
+	var doable_ids: Array = []
+	for k in known_open:
+		if doable_ids.size() >= 12:
+			break
+		if sim.executor._too_late(cid, k, -1) == "":
+			doable_ids.append(k.id)
+	if active >= c.contract_capacity():
+		out["accept_contract"] = {"nicht_moeglich": "Auftragskapazität %d/%d erschöpft" % [active, c.contract_capacity()]}
+	elif doable_ids.is_empty():
+		out["accept_contract"] = {"nicht_moeglich": "kein bekannter Auftrag jetzt rechtzeitig machbar – collect_contracts, Fahrzeug kaufen oder laufende Aufträge fahren"}
+	else:
+		out["accept_contract"] = {"ziele": doable_ids}
 	var mine: Array = sim.contracts.values().filter(func(k): return k.owner == cid and k.status in ["accepted", "assigned", "in_transit"])
 	out["assign_transport/plan_tour"] = {"fahrzeuge": driven.map(func(v): return v.id), "auftraege": mine.map(func(k): return k.id)} \
 		if not driven.is_empty() and not mine.is_empty() else {"nicht_moeglich": "kein Fahrzeug mit Fahrer oder kein laufender Auftrag"}

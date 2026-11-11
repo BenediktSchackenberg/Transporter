@@ -9148,6 +9148,24 @@ func test_local_model_guards() -> void:
 	ctl.stats.tokens = 5000
 	ok(ctl.budget_left(), "Firmen-KI mit Ollama: Grenzen aus setup.json gelten nicht")
 	ctl.free()
+	# 5) Aktionsuebersicht nennt nur rechtzeitig machbare Auftraege
+	var av: Dictionary = ObservationBuilder._available(s, 0)
+	var ids: Array = av.accept_contract.get("ziele", [])
+	ok(ids.all(func(x): return s.executor._too_late(0, s.contracts[x], -1) == ""), "accept_contract-Ziele alle machbar (%d)" % ids.size())
+	# 6) eigener Auftrag: klare Meldung statt "nicht verfuegbar"
+	var mine: Contract = s.market.open_contracts()[0]
+	mine.owner = 0
+	mine.status = "accepted"
+	var r6 := s.executor.execute(0, {"action": "accept_contract", "contract_id": mine.id}, "g6", "fallback")
+	ok(not r6.ok and str(r6.msg).contains("gehört dir bereits"), "eigener Auftrag: %s" % str(r6.msg).left(60))
+	# 7) Buergermeister: Zone aus Tippfehler/Begruendung, Name optional
+	ok(Mayor._zone_of("gewerne Umwidmung in ein Gewerbegebiet") == "gewerbe" and Mayor._zone_of("industrie") == "industrie"
+		and Mayor._zone_of(" Umwidmung der Flächen in ein Mischgebiet") == "mischgebiet", "Zone aus Tippfehler und Begründung erkannt")
+	var M: Mayor = s.mayor
+	var free_p: Array = s.parcels.items.values().filter(func(p): return Towns.is_public(str(p.owner)) and p.state == "frei" and s.parcels.is_buildable(p)).slice(0, 2)
+	if not free_p.is_empty():
+		var rq := M.execute({"action": "designate_quarter", "parcel_ids": free_p.map(func(p): return p.id), "zone": "gewerne", "reason": "Gewerbegebiet für Arbeitsplätze"})
+		ok(not str(rq.msg).contains("fehlt") and not str(rq.msg).contains("nicht zulässig"), "designate_quarter ohne Namen mit Tippfehler: %s" % str(rq.msg).left(80))
 
 ## Region: Lagerstaetten auf Grundstuecken der anderen Staedte (Eigentuemer stadt<k>) sind fuer den Bergbau nutzbar
 ## (vorher nur Ort 0: die Bergbau-Gruenderin fand nie einen naechsten Schritt und blieb mit ihrem Kapital untaetig).
