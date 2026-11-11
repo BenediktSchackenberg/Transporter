@@ -9200,6 +9200,22 @@ func test_local_model_guards() -> void:
 	mine.status = "accepted"
 	var r6 := s.executor.execute(0, {"action": "accept_contract", "contract_id": mine.id}, "g6", "fallback")
 	ok(not r6.ok and str(r6.msg).contains("gehört dir bereits"), "eigener Auftrag: %s" % str(r6.msg).left(60))
+	# 6b) Modell "nimmt" seinen bereits angenommenen Auftrag erneut an -> freies Fahrzeug wird zugewiesen
+	var s6 := new_sim(2)
+	var v6: FleetVehicle = s6.company_vehicles(0)[0]
+	var k6: Contract = null
+	for x in s6.market.open_contracts():
+		if x.vehicle_ok(v6.model) and x.min_rep <= 50.0:
+			k6 = x
+			break
+	if k6 != null:
+		k6.deadline = s6.game_min + 6000.0
+		k6.exclusive_for = -1
+		s6.companies[0].known[k6.id] = true
+		var r6a := s6.executor.execute(0, {"action": "accept_contract", "contract_id": k6.id}, "a1", "fallback")
+		ok(r6a.ok and k6.status == "accepted", "Auftrag angenommen (%s)" % str(r6a.msg).left(60))
+		var r6b := s6.executor.execute(0, {"action": "accept_contract", "contract_id": k6.id}, "a2", "api")
+		ok(r6b.ok and k6.status != "accepted", "erneutes accept_contract eines eigenen Auftrags disponiert ihn (%s, %s)" % [k6.status, str(r6b.msg).left(70)])
 	# 7) Buergermeister: Zone aus Tippfehler/Begruendung, Name optional
 	ok(Mayor._zone_of("gewerne Umwidmung in ein Gewerbegebiet") == "gewerbe" and Mayor._zone_of("industrie") == "industrie"
 		and Mayor._zone_of(" Umwidmung der Flächen in ein Mischgebiet") == "mischgebiet", "Zone aus Tippfehler und Begründung erkannt")

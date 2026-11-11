@@ -29,6 +29,18 @@ func complete(cid: int, a: Dictionary) -> Dictionary:
 				out.erase("contract_id")
 				added.append("contract_id verworfen")
 	if name == "accept_contract":
+		# Bereits eigener, noch nicht disponierter Auftrag: das Modell meint "fahren" (Partie 11.11.: 377 solche Versuche, die Auftraege
+		# blieben liegen und scheiterten an der Frist) - freies Fahrzeug mit Fahrer zuweisen, sonst freien Fahrer ans Steuer setzen.
+		var own: Contract = sim.contracts.get(str(out.get("contract_id", out.get("id", ""))))
+		if own != null and own.owner == cid and own.status == "accepted":
+			var ov := _idle_vehicle(cid, own.id)
+			if ov != null:
+				return {"action": "assign_transport", "contract_id": own.id, "vehicle_id": ov.id, "_ergaenzt": ["statt accept_contract: eigener Auftrag, Fahrzeug #%d zugewiesen" % ov.id]}
+			var uv := _undriven_vehicle(cid, own)
+			var dw := _free_driver(cid)
+			if uv != null and dw != null:
+				return {"action": "assign_worker_task", "kind": "fahren", "worker_id": dw.id, "vehicle_id": uv.id, "contract_id": own.id,
+					"_ergaenzt": ["statt accept_contract: eigener Auftrag, Fahrer %s auf #%d" % [dw.name, uv.id]]}
 		# Genannter Auftrag nicht mehr frei: den ersten noch freien, bekannten und passenden aus der Kandidatenliste nehmen
 		var first: Contract = sim.contracts.get(str(out.get("contract_id", "")))
 		if (first == null or first.status != "open") and out.get("_kandidaten") is Array:
