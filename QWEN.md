@@ -1,7 +1,7 @@
 # Übergabe: Weiterentwicklung von Pixel Transport Rivals
 
 Diese Datei ist der Einstieg für jede KI- oder Entwickler-Sitzung, die hier weitermacht (Qwen Code liest `QWEN.md` automatisch).
-Sie beschreibt Arbeitsweise, Befehle, Konventionen, den aktuellen Stand und die nächsten Schritte. Stand: 11.11.2026, Commit `1ad6c4b`.
+Sie beschreibt Arbeitsweise, Befehle, Konventionen, den aktuellen Stand und die nächsten Schritte. Stand: 11.11.2026, Commit `08e6bbb`.
 
 ## Projekt in Kürze
 
@@ -18,8 +18,9 @@ Autobahn, Häfen, Flughäfen. Ausführliches Handbuch: `README.md`; Fachdokument
   Verhalten über längere Zeit mit Messproben (`tests/probe_*.gd`) prüfen, nicht nur raten.
 - **Commits auf Deutsch**, aussagekräftig (was + warum, gern mit Messwerten), **ohne** Co-Authored-By-Zeile und ohne Nennung eines
   KI-Assistenten. Nach jedem getesteten Schritt committen und pushen.
-- **Branches:** `region`, `main` und `unternehmer` werden gleich gehalten:
-  `git push origin HEAD:region HEAD:main HEAD:unternehmer` (vorher `git pull --rebase` bzw. `git fetch` und prüfen).
+- **Branches:** Es wird **nur noch auf `main`** gearbeitet und gepusht: `git push origin main`
+  (vorher `git pull --rebase` bzw. `git fetch` und prüfen). Die alten Branches `region`/`unternehmer`
+  und die parallelen Worktrees sind am 11.11. in `main` eingemerged und danach entfernt worden.
 - **Nicht einchecken:** `build/`, `.godot/`, API-Schlüssel, `tools/vox/__pycache__/`, lokale `setup.json`.
 - Antworten an den Projektinhaber auf Deutsch, knapp, mit konkreten Zahlen aus Messungen.
 
@@ -105,8 +106,9 @@ Testlage: Volltest zuletzt 6877 Prüfungen; die vier damals roten Tests (veralte
 
 ## Nächste Schritte (in dieser Reihenfolge)
 
-1. **Auftrag 22 Phase 2 Schritt 2 – Müllarten:** getrennte Tonnen Rest/Bio/Wertstoffe je Gebäude, eigene Touren; Wertstoffe gehen
-   real zum Recyclinghof (`scripts/economy/recycling.gd`) statt pauschal über die Recyclingquote.
+1. **Auftrag 22 Phase 2 Schritt 2 – Müllarten (fertig, 11.11.):** drei Tonnen Rest/Bio/Wertstoffe je Gebäude,
+   eigene Touren; Wertstoffe fahren per Wertstoffwagen zum Recyclinghof (jetzt in der Startausstattung);
+   Waagebuch und Hofbestände im realen Modus. Test `test_waste_streams`, Messproben `probe_waste.gd`/`probe_rc_route.gd`.
 2. Schritt 3 – Sauberkeit je Viertel: überquellende Tonnen erzeugen Abfall auf der Straße, Stadtreinigung (Kehrmaschine) räumt;
    Wirkung auf Zufriedenheit.
 3. Schritt 4 – Müllverbrennung (gemeinsam): verbrennt Restmüll, liefert Strom ins Netz, Asche auf die Deponie.
