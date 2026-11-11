@@ -50,3 +50,14 @@ Arbeit im Worktree `PTR_hub`, Veröffentlichung auf `region`, `main`, `unternehm
 Bahnhöfe je Stadt, Güterbahnhof am Großlager, Gleise mit Signalen, Personen- und Güterzüge nach Fahrplan, Strecken als
 Regionalratsprojekt. Wirkung auf den Kreislauf: Pendler (Arbeitsmarkt über Stadtgrenzen), Güterverkehr Großlager ↔ Städte (Konkurrenz und
 Zubringer für Lkw), Fahrgeldeinnahmen, Betriebskosten, Personal.
+
+## Nachtrag 11.11.2026: gerade Trasse statt Zickzack
+
+Benedikt: „wie er gerade die Autobahn baut … Zickzacks, das macht keinen Sinn“. Ursache: die Trasse kam aus der feinen Wegsuche ohne
+Diagonalen; bei schrägen Verbindungen sind alle Treppenwege gleich lang, die Wegsuche wählte Zickzack (Seed 4242: 85 Richtungswechsel),
+und die zweite Fahrbahn wechselte bei jedem Schritt die Seite. Jetzt plant `RegionalProjects.plan_highway` die Hauptstrecke auf einem
+4×4-Grobraster mit Strafkosten je Richtungswechsel (`HW_TURN`): lange Geraden, rechtwinklige Kurven, beide Fahrbahnen fest in einer
+Spur des Blocks; spätere Abschnitte nutzen schon geplante Strecke mit (`HW_REUSE`, keine Parallelautobahn). Nur die kurzen Zubringer
+zur Anschlussstelle nutzen die feine Wegsuche. Seed 4242: 6–8 Richtungswechsel. Eine noch nicht fertige Autobahn aus einem älteren
+Spielstand wird am nächsten Spieltag einmal neu trassiert (`trasse: 2`; Kosten und Bauzeit bleiben). Bild der Trasse:
+`tests/probe_highway_route.gd [-- --seed=… --out=…]`.

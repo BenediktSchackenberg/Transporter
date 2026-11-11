@@ -193,6 +193,8 @@ func finish(rid: String) -> void:
 
 func on_day(day: int) -> void:
 	for r in items.values():
+		if str(r.get("kind", "")) == "autobahn" and r.status != "fertig" and int(r.get("trasse", 1)) < 2:
+			_replan_highway(r)
 		if r.status == "vorgeschlagen" and day > int(r.deadline):
 			# Ohne Beschluss entscheidet die Verwaltung der Partnerstadt (wie das Bauamt bei Antraegen): zustimmen, wenn der Anteil hoechstens
 			# die Haelfte der verfuegbaren Mittel bindet, sonst ablehnen.
@@ -206,6 +208,20 @@ func on_day(day: int) -> void:
 			var prj: Dictionary = sim.towns.project(str(r.project))
 			if str(prj.get("status", "")) in ["beauftragt", "laufend"]:
 				r.status = "im_bau"
+
+
+## Spielstaende vor der Grobraster-Planung: eine noch nicht fertige Autobahn bekommt die gerade Trasse (Kosten und Bauzeit bleiben
+## wie beauftragt; der Baufortschritt zaehlt anteilig weiter).
+func _replan_highway(r: Dictionary) -> void:
+	r["trasse"] = 2
+	var pl := plan_highway()
+	if not pl.ok:
+		return
+	r.cells = pl.cells
+	r.junctions = pl.junctions
+	r.crossings = pl.crossings
+	r.legs = pl.legs
+	sim.log_event("Autobahn %s: Trasse neu geplant – gerade Strecken mit rechtwinkligen Kurven statt Zickzack (%d Felder)." % [r.id, r.cells.size()], "info")
 
 
 ## Offene Vorschlaege fuer eine Stadt (Beobachtung des Buergermeisters).
@@ -257,7 +273,7 @@ func from_dict(d: Dictionary) -> void:
 ## Verkehrszaehlung: RoadCare meldet vor dem Tageswechsel die Fahrzeugsekunden je 16x16-Abschnitt. Ueberland = Abschnitt weiter als
 ## OVERLAND_DIST Felder vom naechsten Ortszentrum. Je Tag Summe und Zuordnung zur naechsten Stadt (Nutzungsanteile fuer die Kosten).
 ## Die Trasse verbindet die Staedte nacheinander (Reihenfolge nach Lage um die Kartenmitte): je Abschnitt ein Landweg wie bei der
-## Verbindungsstrasse, aber zweibahnig (Parallelfeld je Schritt), mit Anschlussstelle an der naechsten Ortsstrasse jeder Stadt und
+## Verbindungsstrasse, aber zweibahnig auf einem Grobraster mit langen Geraden (siehe plan_highway), mit Anschlussstelle an der naechsten Ortsstrasse jeder Stadt und
 ## Kreuzungen, wo die Trasse vorhandene Strassen quert. Kosten je neuem Feld plus Anschlussstellen und Kreuzungen; der Bund traegt
 ## HIGHWAY_FEDERAL, die Staedte den Rest nach Nutzung (Verkehrszaehlung). Gebaut wird sichtbar abschnittsweise (HighwayView zeigt den
 ## Baufortschritt), befahrbar ist sie bei der Abnahme. Auf der Autobahn fahren Fahrzeuge HIGHWAY_SPEED-mal so schnell, die Wegsuche
@@ -352,6 +368,10 @@ func _junction(town: int) -> Vector2i:
 
 
 ## Trasse durch alle Staedte. Ergebnis: {ok, cells (geordnet, zweibahnig), junctions, crossings, legs, kosten, tage}.
+## Die Hauptstrecke wird auf einem Grobraster (HW_BLOCK x HW_BLOCK Felder) mit Strafkosten je Richtungswechsel geplant: lange Geraden
+## mit rechtwinkligen Kurven statt Treppenstufen (die feine Wegsuche ohne Diagonalen waehlte bei schraegen Verbindungen beliebige
+## Zickzackwege, die zweite Fahrbahn sprang dabei bei jedem Schritt die Seite). Beide Fahrbahnen liegen fest in den Feldern 1 und 2
+## jedes Blocks. Nur die kurzen Zubringer von der Anschlussstelle zur Hauptstrecke nutzen die feine Wegsuche.
 func plan_highway() -> Dictionary:
 	var T: Towns = sim.towns
 	if T.count() < 2:
@@ -374,6 +394,7 @@ func plan_highway() -> Dictionary:
 				astar.set_point_solid(p, true)
 			elif cd.ground[i] == CityData.G.ROAD:
 				astar.set_point_weight_scale(p, 3.0)   # kreuzen ja, laengs nein
+	var grid := _hw_blocks(astar)
 	var cells: Array = []
 	var seen := {}
 	var junctions: Array = []
@@ -384,36 +405,224 @@ func plan_highway() -> Dictionary:
 		var b := int(order[i + 1])
 		var ja := _junction(a)
 		var jb := _junction(b)
-		var path := astar.get_id_path(ja, jb)
-		if path.is_empty():
+		var ba := _hw_near_block(grid, ja)
+		var bb := _hw_near_block(grid, jb)
+		var coarse: Array = _hw_route(grid, ba, bb) if ba.x >= 0 and bb.x >= 0 else []
+		var spur_a := PackedVector2Array()
+		var spur_b := PackedVector2Array()
+		if not coarse.is_empty():
+			spur_a = astar.get_id_path(ja, _hw_center(ba))
+			spur_b = astar.get_id_path(_hw_center(bb), jb)
+		if coarse.is_empty() or spur_a.is_empty() or spur_b.is_empty():
 			legs.append({"von": a, "nach": b, "ok": false})
 			continue
-		legs.append({"von": a, "nach": b, "ok": true, "laenge": path.size()})
 		for c in [ja, jb]:
 			if not junctions.has([c.x, c.y]):
 				junctions.append([c.x, c.y])
-		for s in path.size():
-			var p: Vector2i = path[s]
-			var dir: Vector2i = (path[mini(s + 1, path.size() - 1)] - path[maxi(s - 1, 0)])
-			dir = Vector2i(signi(dir.x), signi(dir.y))
-			var side := Vector2i(-dir.y, dir.x)
-			for q in [p, p + side]:
-				if q.x < 0 or q.y < 0 or q.x >= n or q.y >= n or seen.has(q):
-					continue
-				var qi := cd.idx(q)
-				if q != p and (astar.is_point_solid(q) or cd.ground[qi] == CityData.G.ROAD):
-					continue
-				seen[q] = true
-				if cd.ground[qi] == CityData.G.ROAD:
-					if q.distance_to(ja) > 6.0 and q.distance_to(jb) > 6.0 and not crossings.has([q.x, q.y]):
-						crossings.append([q.x, q.y])   # vorhandene Strasse wird gekreuzt
-					continue
-				cells.append([q.x, q.y])
+		var before := cells.size()
+		_hw_spur(spur_a, astar, cd, ja, jb, seen, cells, crossings)
+		for k in coarse.size():
+			var c0 := _hw_center(coarse[k])
+			if k + 1 < coarse.size():
+				var bd := Vector2i(signi(coarse[k + 1].x - coarse[k].x), signi(coarse[k + 1].y - coarse[k].y))
+				var bq: Vector2i = coarse[k]
+				while bq != coarse[k + 1] + bd:   # spaetere Abschnitte nutzen die geplante Strecke mit (keine Parallelautobahn)
+					grid.cost[bq.y * int(grid.nb) + bq.x] = HW_REUSE
+					bq += bd
+				var c1 := _hw_center(coarse[k + 1])
+				var d := Vector2i(signi(c1.x - c0.x), signi(c1.y - c0.y))
+				var side := Vector2i(1, 0) if d.x == 0 else Vector2i(0, 1)   # zweite Fahrbahn immer rechts bzw. unten
+				var q := c0
+				while q != c1:
+					_hw_cell(q, cd, ja, jb, seen, cells, crossings)
+					_hw_cell(q + side, cd, ja, jb, seen, cells, crossings)
+					q += d
+			for e in [c0, c0 + Vector2i(1, 0), c0 + Vector2i(0, 1), c0 + Vector2i(1, 1)]:   # Knoten (Kurve) ganz pflastern
+				_hw_cell(e, cd, ja, jb, seen, cells, crossings)
+		_hw_spur(spur_b, astar, cd, ja, jb, seen, cells, crossings)
+		legs.append({"von": a, "nach": b, "ok": true, "laenge": cells.size() - before})
 	if cells.is_empty():
 		return {"ok": false, "msg": "Keine Trasse über Land möglich (Wasser oder Berge dazwischen)."}
 	var cost := snappedf(HIGHWAY_CELL * float(cells.size()) + HIGHWAY_JUNCTION * float(junctions.size()) + HIGHWAY_CROSSING * float(crossings.size()), 100.0)
 	return {"ok": true, "cells": cells, "junctions": junctions, "crossings": crossings, "legs": legs, "kosten": cost,
 		"tage": maxi(10, ceili(float(cells.size()) / float(HIGHWAY_CELLS_PER_DAY)))}
+
+
+const HW_BLOCK := 4          # Grobraster der Hauptstrecke (Felder je Block)
+const HW_TURN := 6.0         # Strafkosten je Richtungswechsel (in Blockschritten)
+const HW_ROAD := 3.0         # Kosten eines Blocks mit Strasse (kreuzen ja, laengs nein)
+const HW_REUSE := 0.2        # Kosten eines Blocks, den ein frueherer Abschnitt schon belegt
+
+
+## Grobraster: 0 = gesperrt (ein Feld des Blocks ist Wasser, Berg, Gebaeude, Kai oder Flugfeld), sonst Kosten je Schritt.
+func _hw_blocks(astar: AStarGrid2D) -> Dictionary:
+	var nb: int = sim.city.size / HW_BLOCK
+	var cost := PackedFloat32Array()
+	cost.resize(nb * nb)
+	for by in nb:
+		for bx in nb:
+			var c := 1.0
+			for dy in HW_BLOCK:
+				for dx in HW_BLOCK:
+					var p := Vector2i(bx * HW_BLOCK + dx, by * HW_BLOCK + dy)
+					if astar.is_point_solid(p):
+						c = 0.0
+					elif c > 0.0 and astar.get_point_weight_scale(p) > 1.0:
+						c = HW_ROAD
+				if c == 0.0:
+					break
+			cost[by * nb + bx] = c
+	return {"nb": nb, "cost": cost}
+
+
+func _hw_center(blk: Vector2i) -> Vector2i:
+	return blk * HW_BLOCK + Vector2i(1, 1)
+
+
+## Naechster freier Block (ohne Strasse, gern schon Trasse) zu einem Feld; Anschlussstellen liegen im Ort, ihr eigener Block ist meist bebaut.
+func _hw_near_block(grid: Dictionary, c: Vector2i) -> Vector2i:
+	var nb: int = grid.nb
+	var cost: PackedFloat32Array = grid.cost
+	var b0 := c / HW_BLOCK
+	for r in range(0, 16):
+		var best := Vector2i(-1, -1)
+		var bd := INF
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var b := b0 + Vector2i(dx, dy)
+				if b.x < 0 or b.y < 0 or b.x >= nb or b.y >= nb or cost[b.y * nb + b.x] <= 0.0 or cost[b.y * nb + b.x] >= HW_ROAD:
+					continue
+				var d := Vector2(_hw_center(b)).distance_to(Vector2(c))
+				if d < bd:
+					bd = d
+					best = b
+		if best.x >= 0:
+			return best
+	return Vector2i(-1, -1)
+
+
+## Wegsuche auf dem Grobraster mit Richtung im Zustand (A* mit Binaerheap): Kosten je Block plus HW_TURN je Richtungswechsel.
+## Ergebnis: Endpunkte und Knicke von a nach b (gerade Stuecke werden beim Pflastern gefuellt).
+func _hw_route(grid: Dictionary, a: Vector2i, b: Vector2i) -> Array:
+	var nb: int = grid.nb
+	var cost: PackedFloat32Array = grid.cost
+	var dirs := [Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1)]
+	var size := nb * nb * 4
+	var dist := PackedFloat32Array()
+	dist.resize(size)
+	dist.fill(INF)
+	var prev := PackedInt32Array()
+	prev.resize(size)
+	prev.fill(-1)
+	var heap: Array = []   # [f, g, Zustand]
+	for d in 4:
+		var s0 := (a.y * nb + a.x) * 4 + d
+		dist[s0] = 0.0
+		_heap_push(heap, [float(absi(b.x - a.x) + absi(b.y - a.y)), 0.0, s0])
+	var goal := -1
+	var target := b.y * nb + b.x
+	while not heap.is_empty():
+		var top: Array = _heap_pop(heap)
+		var s: int = top[2]
+		var g: float = top[1]
+		if g > dist[s] + 0.001:
+			continue   # veralteter Eintrag
+		var cell := s / 4
+		var d := s % 4
+		if cell == target:
+			goal = s
+			break
+		var p := Vector2i(cell % nb, cell / nb)
+		for nd in 4:
+			if nd == (d + 2) % 4:
+				continue
+			var q: Vector2i = p + dirs[nd]
+			if q.x < 0 or q.y < 0 or q.x >= nb or q.y >= nb:
+				continue
+			var c := cost[q.y * nb + q.x]
+			if c <= 0.0:
+				continue
+			var ng := g + c + (HW_TURN if nd != d and cell != a.y * nb + a.x else 0.0)
+			var ns := (q.y * nb + q.x) * 4 + nd
+			if ng < dist[ns]:
+				dist[ns] = ng
+				prev[ns] = s
+				_heap_push(heap, [ng + float(absi(b.x - q.x) + absi(b.y - q.y)), ng, ns])
+	if goal < 0:
+		return []
+	var path: Array = []
+	var st := goal
+	while st >= 0:
+		path.push_front(Vector2i((st / 4) % nb, (st / 4) / nb))
+		st = prev[st]
+	var out: Array = [path[0]]
+	for i in range(1, path.size() - 1):
+		if path[i] - path[i - 1] != path[i + 1] - path[i]:
+			out.append(path[i])
+	if path.size() > 1:
+		out.append(path[-1])
+	return out
+
+
+static func _heap_push(h: Array, e: Array) -> void:
+	h.append(e)
+	var i := h.size() - 1
+	while i > 0:
+		var up := (i - 1) / 2
+		if float(h[up][0]) <= float(e[0]):
+			break
+		h[i] = h[up]
+		i = up
+	h[i] = e
+
+
+static func _heap_pop(h: Array) -> Array:
+	var top: Array = h[0]
+	var last: Array = h.pop_back()
+	if h.is_empty():
+		return top
+	var i := 0
+	var n := h.size()
+	while true:
+		var l := 2 * i + 1
+		if l >= n:
+			break
+		var c := l
+		if l + 1 < n and float(h[l + 1][0]) < float(h[l][0]):
+			c = l + 1
+		if float(h[c][0]) >= float(last[0]):
+			break
+		h[i] = h[c]
+		i = c
+	h[i] = last
+	return top
+
+
+## Ein Trassenfeld uebernehmen: vorhandene Strasse wird zur Kreuzung (ausser direkt an der Anschlussstelle), sonst neues Feld.
+func _hw_cell(q: Vector2i, cd: CityData, ja: Vector2i, jb: Vector2i, seen: Dictionary, cells: Array, crossings: Array) -> void:
+	if q.x < 0 or q.y < 0 or q.x >= cd.size or q.y >= cd.size or seen.has(q):
+		return
+	seen[q] = true
+	if cd.ground[cd.idx(q)] == CityData.G.ROAD:
+		if q.distance_to(ja) > 6.0 and q.distance_to(jb) > 6.0 and not crossings.has([q.x, q.y]):
+			crossings.append([q.x, q.y])   # vorhandene Strasse wird gekreuzt
+		return
+	cells.append([q.x, q.y])
+
+
+## Zubringer (feine Wegsuche): zweite Fahrbahn neben dem Weg, nur auf freien Feldern.
+func _hw_spur(path: PackedVector2Array, astar: AStarGrid2D, cd: CityData, ja: Vector2i, jb: Vector2i, seen: Dictionary, cells: Array, crossings: Array) -> void:
+	for s in path.size():
+		var p := Vector2i(path[s])
+		var dir := Vector2i(path[mini(s + 1, path.size() - 1)]) - Vector2i(path[maxi(s - 1, 0)])
+		dir = Vector2i(signi(dir.x), signi(dir.y))
+		var side := Vector2i(-dir.y, dir.x)
+		_hw_cell(p, cd, ja, jb, seen, cells, crossings)
+		var q := p + side
+		if q.x >= 0 and q.y >= 0 and q.x < cd.size and q.y < cd.size and not astar.is_point_solid(q) and cd.ground[cd.idx(q)] != CityData.G.ROAD:
+			_hw_cell(q, cd, ja, jb, seen, cells, crossings)
 
 
 ## Beschluss des Regionalrats: Trasse planen, Anteile reservieren, ein Bauauftrag (Bund zahlt HIGHWAY_FEDERAL bei der Abnahme).
@@ -428,7 +637,7 @@ func propose_highway(initiator: int, shares: Dictionary, reason: String) -> Dict
 	var r := {"id": "R%d" % _next, "kind": "autobahn", "from": initiator, "to": initiator, "initiator": initiator, "shares": shares.duplicate(),
 		"votes": {}, "status": "vorgeschlagen", "cells": pl.cells, "junctions": pl.junctions, "crossings": pl.crossings, "legs": pl.legs,
 		"cost": float(pl.kosten), "federal": snappedf(float(pl.kosten) * HIGHWAY_FEDERAL, 1.0), "town_cost": snappedf(town_cost, 1.0), "days": int(pl.tage),
-		"day": day, "deadline": day, "project": "", "reason": reason.left(200), "note": ""}
+		"day": day, "deadline": day, "project": "", "reason": reason.left(200), "note": "", "trasse": 2}
 	_next += 1
 	for k in shares:
 		r.votes[str(k)] = "zugestimmt"   # der Regionalrat hat beschlossen

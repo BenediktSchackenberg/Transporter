@@ -10306,6 +10306,15 @@ func test_highway() -> void:
 	ok(hp.ok and hp.cells.size() > 200 and hp.junctions.size() == s.towns.count(), "Trasse: %d Felder, %d Anschlussstellen, %d Kreuzungen, %s" % [hp.get("cells", []).size(),
 		hp.get("junctions", []).size(), hp.get("crossings", []).size(), Catalog.money(float(hp.get("kosten", 0.0)))])
 	ok(hp.legs.all(func(l): return bool(l.ok)), "alle Städte angebunden")
+	# Gerade Strecken statt Zickzack: auf der Hauptstrecke (Grobraster) liegen fast alle Felder in einer Zeile oder Spalte mit dem Vorgaenger
+	var bends := 0
+	for i in range(2, hp.cells.size()):
+		var c0 := Vector2i(int(hp.cells[i - 2][0]), int(hp.cells[i - 2][1]))
+		var c1 := Vector2i(int(hp.cells[i - 1][0]), int(hp.cells[i - 1][1]))
+		var c2 := Vector2i(int(hp.cells[i][0]), int(hp.cells[i][1]))
+		if (c1 - c0).length_squared() == 1 and (c2 - c1).length_squared() == 1 and (c1 - c0) != (c2 - c1):
+			bends += 1
+	ok(bends <= 20, "Trasse ohne Zickzack: %d Richtungswechsel auf %d Feldern" % [bends, hp.cells.size()])
 	# Viel Ueberlandverkehr -> Antrag der Stadt mit dem groessten Anteil
 	R.traffic.clear()
 	for i in 14:
@@ -10326,6 +10335,12 @@ func test_highway() -> void:
 		town_sum += float(prj.shares[k])
 	ok(absf(town_sum + float(prj.get("federal", 0.0)) - float(r.cost)) < 5.0 and float(prj.federal) >= 0.94 * float(r.cost), "Finanzierung: Bund %s, Städte %s" % [Catalog.money(float(prj.get("federal", 0.0))), Catalog.money(town_sum)])
 	ok(R.propose_highway(1, {"1": 1.0}, "doppelt").ok == false, "keine zweite Autobahn")
+	# Spielstand mit alter Trasse: einmal neu geplant, Kosten bleiben
+	var cost0 := float(r.cost)
+	r.erase("trasse")
+	r.cells = [[1, 1], [2, 2]]
+	R.on_day(GameCalendar.day_of(s.game_min))
+	ok(int(r.get("trasse", 1)) == 2 and r.cells.size() == hp.cells.size() and is_equal_approx(float(r.cost), cost0), "alte Trasse einer unfertigen Autobahn wird gerade neu geplant")
 	var t := 0.0
 	while r.status == "beschlossen" and t < 60.0 * 20.0:
 		run(s, 60.0)
