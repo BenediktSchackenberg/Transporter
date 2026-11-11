@@ -429,6 +429,21 @@ func _process_timed(_delta: float) -> void:
 	if session and args.has("demo-bridge") and not args.has("_bridge"):   # Sichtpruefung Bruecke: Zufahrt mit Bruecke, Bau bis zum Fortschritt (Zahl 0..1, "open" = freigegeben)
 		args["_bridge"] = true
 		_demo_bridge(session.sim, str(args["demo-bridge"]))
+	if session and args.has("demo-airport") and not args.has("_airport"):   # Sichtpruefung Flughafen: Flugzeug steht auf dem Vorfeld, Luftfracht liegt im Frachtterminal
+		args["_airport"] = true
+		var sim: Simulation = session.sim
+		if not sim.airport.enabled:
+			print("AUTOTEST: kein Flughafen – die Weltart muss Kuestenort sein und der Airport eine Strassenanbindung bekommen")
+		else:
+			var A: Airport = sim.airport
+			# Uhr so setzen, dass mit --speed=8 --shot-at=10 das Flugzeug (reine Uhrfunktion, Zyklus 60 Spielmin.)
+			# im Moment des Screenshots auf dem Vorfeld steht (t = 0,75): 5 + 160 = 165, fmod 60 = 45
+			sim.game_min = 5.0 + 2.0 * Airport.PERIOD
+			for it in ["mehl", "holz", "asphalt"]:
+				sim.stock.add(it, 40, "X0", A.cargo_building, "Luftfracht (Sichtpruefung)")
+			var a: Dictionary = sim.city.airport
+			args["shot-tile"] = "%d,%d" % [int(a.rect[0]) + int(a.rect[2]) / 2, int(a.rect[1]) + int(a.rect[3]) / 2]
+			print("AUTOTEST: Flughafen %s – Flugzeug auf dem Vorfeld, Luftfracht im Frachtterminal, Wehrauto an der Wache" % str(a.get("name", "")))
 	if session and args.has("save-at") and not args.has("_saved") and session.active_seconds >= float(args["save-at"]):
 		args["_saved"] = true
 		session.save_game()
@@ -511,6 +526,11 @@ func _process_timed(_delta: float) -> void:
 			if sn != null:
 				session.set_follow(false)
 				session.city_view.set_camera_world(sn.world + Vector2(60, -60))
+		if args.has("shot-airport"):   # Kamera auf das Airport-Areal (Startbahn, Vorfeld, Gebäude)
+			var ar: Dictionary = session.sim.city.airport
+			if not ar.is_empty():
+				session.set_follow(false)
+				session.city_view.set_camera_world(Vector2((float(ar.rect[0]) + float(ar.rect[2]) * 0.5) * 32.0, (float(ar.rect[1]) + float(ar.rect[3]) * 0.5) * 32.0))
 		if args.has("shot-crew"):   # Kamera auf das Fahrzeug eines Bautrupps (bevorzugt eines, das gerade baut)
 			var pick := {}
 			for fv in session.sim.fleet.vehicles:
@@ -564,9 +584,12 @@ func _process_timed(_delta: float) -> void:
 				get_viewport().get_texture().get_image().save_png(path)
 				print("AUTOTEST: Screenshot gespeichert: ", ProjectSettings.globalize_path(path))
 			return
-		var img := get_viewport().get_texture().get_image()
-		img.save_png(args["screenshot"])
-		print("AUTOTEST: Screenshot gespeichert: ", ProjectSettings.globalize_path(args["screenshot"]))
+		var tex := get_viewport().get_texture()
+		if tex == null:   # Headless: kein Viewport-Render, Screenshot geht nur mit Fenster
+			print("AUTOTEST: Screenshot uebersprungen (Headless – kein Renderfenster); Befehl ohne --headless ausfuehren")
+		else:
+			tex.get_image().save_png(args["screenshot"])
+			print("AUTOTEST: Screenshot gespeichert: ", ProjectSettings.globalize_path(args["screenshot"]))
 
 
 ## Leitstelle fuer Screenshots: Bereich bzw. Detail oeffnen (ki, welt, gespraeche, firmen, firma:N[:tab], staedte, stadt:N, finanzen, technik, warum, suche:Text, zu)
