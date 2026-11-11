@@ -72,12 +72,13 @@ func uses_model() -> bool:
 	return adapter != null
 
 
-## Lokales Ollama kostet nichts: dort gelten die Grenzen der Firmen-KI (4000 Anfragen, 10 Mio. Tokens). Die frueheren Standardwerte
-## (200 / 300 000) waren bei ~15 000 Tokens je Lagebericht nach rund 20 Runden erschoepft (Partie 11.11.: alle vier Buergermeister ab
-## etwa Tag 7 nur noch im Ersatzmodus). Kostenpflichtige Anbieter behalten die vorsichtigen Standardwerte.
+## Lokales Ollama kostet nichts: keine Anfrage- und Tokengrenze (Benedikt 11.11.2026; vorher 200 Anfragen / 300 000 Tokens, nach
+## ~20 Lageberichten erschoepft - Partie 11.11.: alle vier Buergermeister ab etwa Tag 7 nur noch im Ersatzmodus). Kostenpflichtige
+## Anbieter behalten die vorsichtigen Standardwerte.
 func budget_left() -> bool:
-	var local := str(config.get("provider", "")) == "ollama"
-	return stats.requests < int(config.get("max_requests", 4000 if local else 200)) and stats.tokens < int(config.get("max_tokens", 10000000 if local else 300000))
+	if str(config.get("provider", "")) == "ollama":
+		return true
+	return stats.requests < int(config.get("max_requests", 200)) and stats.tokens < int(config.get("max_tokens", 300000))
 
 
 func _process(delta: float) -> void:

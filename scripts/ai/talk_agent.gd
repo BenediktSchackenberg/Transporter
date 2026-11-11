@@ -37,6 +37,8 @@ func setup(simulation: Simulation, cfg: Dictionary, logger: ApiLog) -> void:
 
 
 func budget_left() -> bool:
+	if str(config.get("provider", "")) == "ollama":
+		return true   # lokal: keine Grenze
 	return stats.requests < int(config.get("max_requests", 300)) and stats.tokens < int(config.get("max_tokens", 400000))
 
 

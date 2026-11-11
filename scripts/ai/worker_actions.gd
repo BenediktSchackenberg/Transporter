@@ -286,13 +286,31 @@ func _assign_task(cid: int, a: Dictionary) -> Dictionary:
 		var t := P.create_task(cid, kind, target, "", f.id, prio, "Unternehmer über Vorarbeiter")
 		return {"ok": true, "msg": "Aufgabe %s (%s) an Vorarbeiter %s zur Verteilung übergeben." % [t.id, kind, f.name], "task_id": t.id}
 	var w := _own_worker(cid, wid)
-	if w == null:
-		return {"ok": false, "msg": "Arbeiter %s gehört nicht zu dir." % wid}
-	var err := P.can_take(w, kind)
+	var err := "Arbeiter %s gehört nicht zu dir." % wid if w == null else P.can_take(w, kind)
+	if err != "" and kind in ["fahren", "reparieren"] and target.has("vehicle_id") and ex._from_model():
+		# Lokale Modelle verwechseln Arbeiter-IDs (Partie 11.11.: ~500 Fehler "gehört nicht zu dir", "keine Fähigkeit fahren",
+		# "beschäftigt"). Ist ein eigener, freier und geeigneter Arbeiter da, uebernimmt der naechstgelegene.
+		var v: FleetVehicle = sim.vehicles.get(int(target.vehicle_id))
+		var sub := _substitute(cid, kind, v)
+		if sub != null:
+			note += " Ersatz: %s statt %s (%s)." % [sub.name, wid, err.trim_suffix(".")]
+			w = sub
+			err = ""
 	if err != "":
 		return {"ok": false, "msg": err}
 	var t := P.create_task(cid, kind, target, w.id, "", prio, "Unternehmer")
 	return {"ok": true, "msg": "Aufgabe %s: %s übernimmt %s.%s" % [t.id, w.name, t.describe(), note], "task_id": t.id}
+
+
+## Naechstgelegener eigener Arbeiter, der die Aufgabe jetzt uebernehmen kann (oder null). Fahrer anderer Fahrzeuge bleiben, wo sie sind.
+func _substitute(cid: int, kind: String, v: FleetVehicle) -> Worker:
+	var best: Worker = null
+	for x in sim.personnel.employed(cid):
+		if x.business != "" or sim.personnel.can_take(x, kind) != "" or (kind == "fahren" and x.vehicle_id >= 0 and x.vehicle_id != v.id):
+			continue
+		if best == null or x.pos.distance_to(v.pos) < best.pos.distance_to(v.pos):
+			best = x
+	return best
 
 
 func _sabotage(cid: int, a: Dictionary) -> Dictionary:

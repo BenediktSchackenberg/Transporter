@@ -60,6 +60,8 @@ func covers(cid: int) -> bool:
 
 
 func budget_left() -> bool:
+	if str(config.get("provider", "")) == "ollama":
+		return true   # lokal: keine Grenze
 	return stats.requests < int(config.get("max_requests", 400)) and stats.tokens < int(config.get("max_tokens", 600000))
 
 

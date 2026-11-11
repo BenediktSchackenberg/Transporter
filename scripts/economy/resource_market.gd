@@ -81,12 +81,25 @@ func emergency_fuel_price() -> float:
 	return maxf(FUEL_EMERGENCY_PRICE, float(sim.fuel.ref.diesel) * 1.2) * fuel_price_factor
 
 
+## Sammelbegriff statt Bezugsquellen-ID (Modelle schrieben "treibstoff_l", "diesel", "ersatzteile"): guenstigste Quelle dieser Art
+## mit genug Bestand, sonst {}.
+func _alias(sid: String, amount: float) -> Dictionary:
+	var key := sid.to_lower()
+	var kind := "fuel" if (key.contains("treib") or key.contains("diesel") or key.contains("fuel") or key.contains("kraftstoff")) \
+		else ("parts" if (key.contains("teil") or key.contains("part")) else "")
+	var best := {}
+	for s in supplies.values():
+		if kind != "" and s.kind == kind and float(s.stock) >= amount and (best.is_empty() or float(s.price) < float(best.price)):
+			best = s
+	return best
+
+
 ## Kauf von Treibstoff (Liter) oder Ersatzteilen (Stueck); Bestand am Ort sinkt sofort.
 ## Treibstoff (Liter) wird an der Tankstelle gezapft und bezahlt, danach zum Depot gebracht: per Tankwagen der Tankstelle (lieferung "liefern",
 ## Gebuehr) oder per eigenem Transportauftrag Tankstelle -> Depot (lieferung "abholen", ein Fahrzeug muss fahren). Erst bei Ankunft steigt der
 ## Vorrat im Depot. Ersatzteile werden sofort uebernommen.
 func buy_supplies(cid: int, sid: String, amount: float, mode: String = "liefern") -> Dictionary:
-	var s: Dictionary = supplies.get(sid, {})
+	var s: Dictionary = supplies.get(sid, _alias(sid, amount))
 	if mode not in ["liefern", "abholen"]:
 		return {"ok": false, "msg": "Lieferart muss liefern oder abholen sein."}
 	if s.is_empty():

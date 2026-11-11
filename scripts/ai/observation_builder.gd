@@ -391,6 +391,19 @@ static func compact_for_local(obs: Dictionary) -> Dictionary:
 		if obs.has(key):
 			out[key] = obs[key]
 	out["letzte_aktionsergebnisse"] = obs.get("ergebnisse_deiner_aktionen", []).slice(-5)
+	# Kleine lokale Modelle beachten "machbar"/"min_reputation" kaum (Partie 11.11.: 436 Annahmen unmachbarer, 42 zu hoher Reputation,
+	# 144 bei vollem Buero). Deshalb sehen sie nur Auftraege, die sie jetzt annehmen koennen.
+	if out.has("markt"):
+		var me: Dictionary = obs.get("ich", {})
+		var rep := float(me.get("reputation", 100.0))
+		var load := str(me.get("buero", {}).get("laufende_auftraege", "0/1")).split("/")
+		var full := load.size() == 2 and int(load[0]) >= int(load[1])
+		var all_n: int = out.markt.size()
+		out["markt"] = [] if full else out.markt.filter(func(m): return bool(m.get("machbar", true)) and float(m.get("min_reputation", 0)) <= rep)
+		if full:
+			out["markt_hinweis"] = "Büro ausgelastet (%s laufende Aufträge): keine Annahme möglich, erst Aufträge abschließen oder Büro ausbauen." % "/".join(load)
+		elif out.markt.size() < all_n:
+			out["markt_hinweis"] = "%d weitere Aufträge ausgeblendet (zu spät lieferbar oder Reputation zu niedrig)." % (all_n - out.markt.size())
 	return out
 
 

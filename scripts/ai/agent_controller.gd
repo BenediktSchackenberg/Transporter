@@ -95,7 +95,10 @@ func _on_agent_event(company_id: int, text: String) -> void:
 			_events.pop_front()
 
 
+## Lokales Ollama kostet nichts: keine Anfrage- und Tokengrenze (Benedikt 11.11.2026).
 func budget_left() -> bool:
+	if str(config.get("provider", "")) == "ollama":
+		return true
 	return stats.requests < int(config.get("max_requests", 300)) and stats.tokens < int(config.get("max_tokens", 400000))
 
 
