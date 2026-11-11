@@ -234,12 +234,7 @@ func _build_town(k: int) -> void:
 	town = Vector2i(int(t.center[0]), int(t.center[1]))
 	town_rect = _rects[k]
 	c.town_name = str(t.name)
-	var suff := ["", "s1", "s2", "s3", "s4", "s5"]
-	palette = []
-	while palette.size() < 3:   # Material-/Farbpalette des Orts: 3 von 6 Varianten, alle 8 Bauformen
-		var sx: String = suff[rng.randi() % suff.size()]
-		if sx not in palette:
-			palette.append(sx)
+	_pick_palette()
 	t["palette"] = palette.duplicate()
 	var first := c.buildings.size()
 	_town_core(k)
@@ -374,32 +369,6 @@ func _streets(t: Vector2i, ch: String) -> void:
 			_road(Vector2i(t.x - 18, t.y - 14), Vector2i(t.x - 18, t.y + 18))
 			_road(Vector2i(t.x - 30, t.y - 20), Vector2i(t.x - 30, t.y + 20))
 			_road(Vector2i(t.x - 18, t.y + 18), Vector2i(t.x, t.y + 18))
-
-
-## Marktplatz vor dem Rathaus: gepflasterte Flaeche an einer Strasse (nicht bebaubar), Baenke und Laterne; erstes freies 5x3-Feld
-## mit Strassenanschluss nahe `near`.
-func _market_square(near: Vector2i) -> void:
-	var best := Rect2i()
-	var best_d := INF
-	for y in range(near.y - 8, near.y + 8):
-		for x in range(near.x - 8, near.x + 8):
-			var r := Rect2i(x, y, 5, 3)
-			if not _free(r) or not _touches_road(r):
-				continue
-			var d := Vector2(r.position).distance_to(Vector2(near))
-			if d < best_d:
-				best_d = d
-				best = r
-	if best_d == INF:
-		return
-	for y in range(best.position.y, best.end.y):
-		for x in range(best.position.x, best.end.x):
-			var q := Vector2i(x, y)
-			c.ground[c.idx(q)] = G.PLAZA
-			c.building_at[c.idx(q)] = -2   # nicht bebauen
-	c.benches.append(best.position + Vector2i(1, 1))
-	c.benches.append(best.position + Vector2i(3, 1))
-	c.lamps.append(best.position + Vector2i(2, 0))
 
 
 func _counted_from(first: int) -> int:

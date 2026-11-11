@@ -318,7 +318,9 @@ func _town() -> void:
 	_put("warehouse", Vector2i(t.x + 3, t.y + 4), "", "Hafenlager")
 	# Gemeinschaftsgebaeude der Grundversorgung (je Rolle ein kleines Gebaeude)
 	var core := Vector2i(t.x - 8, t.y - 4)
+	_pick_palette()
 	_put("townhall", core, "town_hall", "Rathaus %s" % c.town_name)
+	_market_square(core + Vector2i(2, 2))
 	_put("job_board", core + Vector2i(-6, 2), "job_board", "Arbeitsamt")
 	_put("staffing", core + Vector2i(-6, -4), "staffing", "Personalbüro")
 	_put("police", core + Vector2i(2, 8), "police", "Dorfwache")
@@ -350,11 +352,49 @@ func _town() -> void:
 	var tries := 0
 	while budget > 0 and tries < 200:
 		tries += 1
-		var p := Vector2i(t.x - rng.randi_range(4, 28), t.y + rng.randi_range(-19, 19))
+		# kompakt (Auftrag 18): von der Ortsmitte nach aussen fuellen, der Radius waechst mit jedem Haus und jedem Fehlversuch
+		var reach := mini(28, 8 + k2 + tries / 12)
+		var p := Vector2i(t.x - rng.randi_range(4, reach), t.y + rng.randi_range(-mini(19, 5 + k2), mini(19, 5 + k2)))
 		var id2 := _put("semi" if k2 % 3 == 2 else "house", p)
 		if id2 >= 0:
 			budget -= 1
 			k2 += 1
+
+
+## Marktplatz vor dem Rathaus: gepflasterte Flaeche an einer Strasse (nicht bebaubar), Baenke und Laterne; erstes freies 5x3-Feld
+## mit Strassenanschluss nahe `near`.
+func _market_square(near: Vector2i) -> void:
+	var best := Rect2i()
+	var best_d := INF
+	for y in range(near.y - 8, near.y + 8):
+		for x in range(near.x - 8, near.x + 8):
+			var r := Rect2i(x, y, 5, 3)
+			if not _free(r) or not _touches_road(r):
+				continue
+			var d := Vector2(r.position).distance_to(Vector2(near))
+			if d < best_d:
+				best_d = d
+				best = r
+	if best_d == INF:
+		return
+	for y in range(best.position.y, best.end.y):
+		for x in range(best.position.x, best.end.x):
+			var q := Vector2i(x, y)
+			c.ground[c.idx(q)] = G.PLAZA
+			c.building_at[c.idx(q)] = -2   # nicht bebauen
+	c.benches.append(best.position + Vector2i(1, 1))
+	c.benches.append(best.position + Vector2i(3, 1))
+	c.lamps.append(best.position + Vector2i(2, 0))
+
+
+## Material-/Farbpalette des Orts (Auftrag 18): 3 von 6 Varianten-Endungen, alle Bauformen; Haeuser waehlen daraus (CityGenerator._variant).
+func _pick_palette() -> void:
+	var suff := ["", "s1", "s2", "s3", "s4", "s5"]
+	palette = []
+	while palette.size() < 3:
+		var sx: String = suff[rng.randi() % suff.size()]
+		if sx not in palette:
+			palette.append(sx)
 
 
 ## Feldweg vom Ort nach Westen ins Ackerland (zwischen den Startgrundstuecken hindurch, endet an Wasser oder Berg). Beiderseits

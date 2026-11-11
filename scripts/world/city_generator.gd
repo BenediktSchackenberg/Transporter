@@ -393,6 +393,8 @@ func _signals() -> void:
 	if c.world == "region" and tw is Array:
 		for t in tw:
 			centers.append(Vector2i(int(t.center[0]), int(t.center[1])))
+	elif c.world == "kueste" and get("town") is Vector2i:
+		centers.append(get("town"))   # Kuestenort: Ampeln nur an Vierwegekreuzungen im Kern
 	for p in c.intersections:
 		if centers.is_empty():
 			c.signals[p] = true
