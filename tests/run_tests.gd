@@ -816,6 +816,8 @@ func test_local_agent_choices() -> void:
 	ok(concrete.contract_id == "A999999", "konkrete falsche ID wird nicht stillschweigend umgedeutet")
 	var plan := {"ziel": "Aufträge fahren", "schritte": [{"id": "S1", "text": "Auftrag sammeln"}]}
 	ok(s.plans.set_plan(0, plan).ok and ctl._same_plan(plan), "identischer Plan wird erkannt")
+	var text_step := {"ziel": "Aufträge fahren", "schritte": [{"id": "S1", "text": "Auftrag sammeln", "aktion": "collect_contracts"}]}
+	ok(not ctl._same_plan(text_step), "Planschritt mit Text statt Aktionsobjekt: kein Skriptfehler, gilt als geändert")
 	ctl._since = 0.0
 	var bad := AgentController.parse_response('{"summary":"Ich prüfe einen Auftrag.","actions":[{"action":"accept_contract","contract_id":"A999999"}]}')
 	ctl._apply(bad, "bad1", "KI")

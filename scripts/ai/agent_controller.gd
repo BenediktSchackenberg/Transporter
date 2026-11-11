@@ -529,8 +529,8 @@ func _same_plan(a: Dictionary) -> bool:
 	for i in steps.size():
 		if not steps[i] is Dictionary or str(steps[i].get("id", "S%d" % (i + 1))) != str(p.schritte[i].id) \
 				or str(steps[i].get("text", "")) != str(p.schritte[i].text) \
-				or steps[i].get("aktion", {}) != p.schritte[i].get("aktion", {}) \
-				or steps[i].get("abhaengig_von", []) != p.schritte[i].get("abhaengig_von", []):
+				or var_to_str(steps[i].get("aktion", {})) != var_to_str(p.schritte[i].get("aktion", {})) \
+				or var_to_str(steps[i].get("abhaengig_von", [])) != var_to_str(p.schritte[i].get("abhaengig_von", [])):   # Modelle schicken teils Text statt Objekt (String != Dictionary war ein Skriptfehler)
 			return false
 	return true
 
