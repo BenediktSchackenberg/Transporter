@@ -1104,8 +1104,9 @@ static func garbage_truck(sim: Simulation, v: Dictionary) -> String:
 	var txt := "Status: %s\n" % phase.get(str(v.phase), str(v.phase))
 	txt += "Halt %d von %d · Ladung %.2f t von %.2f t\n" % [mini(int(v.get("stop", 0)) + 1, v.get("stops", []).size()), v.get("stops", []).size(), float(v.get("load", 0.0)), float(v.get("tons", 0.0))]
 	if str(v.phase) in ["tour", "leeren"] and int(v.stop) < v.stops.size():
-		txt += "Haus: %s\n" % sim.city.building(int(v.stops[int(v.stop)].building)).name
-	txt += "Besatzung: Fahrer und zwei Müllwerker · Auftraggeber: Stadt (Müllabfuhr)\n"
+		var bid := int(v.stops[int(v.stop)].building)
+		txt += "Haus: %s · Tonne %.0f von %.0f kg\n" % [sim.city.building(bid).name, float(sim.waste.bins.get(bid, 0.0)), sim.waste.bin_capacity(bid)]
+	txt += "Besatzung: Fahrer und zwei Müllwerker · Auftraggeber: %s (Müllabfuhr)\n" % sim.towns.name_of(int(v.get("town", 0)))
 	return txt
 
 
@@ -1143,15 +1144,25 @@ static func bridge(sim: Simulation, b: Dictionary) -> String:
 	return txt
 
 
-## Deponie: Fuellstand, Mengen, Recycling, Kosten und Gebuehren.
+## Deponie: Fuellstand, Erweiterung, Waage je Stadt, Tonnen, Kosten und Gebuehren.
 static func landfill(sim: Simulation) -> String:
 	var W: Waste = sim.waste
-	var txt := "Füllstand %.0f %% (%.0f von %.0f t Restmüll)\n" % [W.fill_share() * 100.0, W.deposited, Waste.LANDFILL_CAPACITY]
-	txt += "Diesen Monat gesammelt %.1f t · Recyclingquote %.0f %% (Mehrweg %.0f %%)\n" % [float(W.month.tons), W.rate * 100.0, W.mehrweg_share() * 100.0]
+	var txt := "[b]Gemeinsame Deponie[/b] · Füllstand %.0f %% (%.0f von %.0f t Restmüll)\n" % [W.fill_share() * 100.0, W.deposited, W.capacity]
+	if not W.expansion.is_empty():
+		txt += "[color=#e0a040]Erweiterung um %.0f t im Bau, fertig an Tag %d.[/color]\n" % [float(W.expansion.t), int(W.expansion.fertig)]
+	elif W.fill_share() > 0.7:
+		txt += "[color=#e0a040]Die Deponie wird voll – ab %d %% wird erweitert.[/color]\n" % roundi(Waste.EXPAND_AT * 100.0)
+	txt += "Diesen Monat gewogen %.1f t · Recyclingquote %.0f %% (Mehrweg %.0f %%) · Erweiterungen bisher %d\n" % [float(W.month.tons), W.rate * 100.0, W.mehrweg_share() * 100.0, W.expansions]
 	txt += "Müllwagen unterwegs: %d · Touren bisher %d · Halte %d\n" % [sim.fleet.vehicles.filter(func(v): return v.kind == "muell").size(), W.tours, int(sim.fleet.stats.halte)]
+	txt += "\n[b]Waage – Anlieferung je Stadt (gesamt)[/b]\n"
+	for k in sim.towns.count():
+		var t: Dictionary = W.by_town.get(str(k), {}).get("total", {})
+		txt += "  %s: %.1f t · Kosten %s · Gebühren %s · Tonnen %d, davon %d überquellend\n" % [sim.towns.name_of(k), float(t.get("tons", 0.0)),
+			Catalog.money(float(t.get("cost", 0.0))), Catalog.money(float(t.get("fees", 0.0))),
+			W.bins.keys().filter(func(b): return sim.towns.of_building(b) == k).size(), W.overflowing(k).size()]
+	if not W.scale_log.is_empty():
+		txt += "Letzte Wägungen: %s\n" % ", ".join(W.scale_log.slice(-5).map(func(e): return "Tag %d %s %.2f t" % [int(e.tag), sim.towns.name_of(int(e.stadt)), float(e.t)]))
 	txt += "Kosten bisher %s · Wertstofferlöse %s · Gebühren der Haushalte %s\n" % [Catalog.money(float(W.total.cost)), Catalog.money(float(W.total.income)), Catalog.money(float(W.total.fees))]
-	if W.fill_share() > 0.85:
-		txt += "[color=#e0a040]Die Deponie ist fast voll.[/color]\n"
 	return txt
 
 

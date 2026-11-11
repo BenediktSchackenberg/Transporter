@@ -8,9 +8,8 @@ extends RefCounted
 
 const MAX_CREWS := 6
 const MAX_MOVING := 6
-const MAX_GARBAGE := 4
-const EMPTY_MIN := 12.0           # Spielminuten je Halt (Tonnen leeren)
-const DUMP_MIN := 30.0            # Abladen auf der Deponie
+const EMPTY_MIN := 1.0            # Spielminuten je Halt (Tonnen leeren; ein Spieltag hat 120 Spielminuten)
+const DUMP_MIN := 4.0             # Waage und Abladen auf der Deponie
 const UNLOAD_DAYS := 0.1          # Umzugswagen steht so lange vor dem Haus
 const SPEED := 3.0
 
@@ -145,19 +144,23 @@ func update(dt: float) -> void:
 				vehicles.erase(v)
 
 
-## Muellwagen: vom Betriebshof (Rathaus) ueber die Halte der Tour zur Deponie und zurueck. Zwei Muellwerker leeren an jedem Halt.
-func send_garbage(stops: Array, landfill: Vector2i, tons: float, label: String) -> void:
-	if stops.is_empty() or vehicles.filter(func(v): return v.kind == "muell").size() >= MAX_GARBAGE:
-		return
-	var home := depot_road()
+## Muellwagen der Stadt k: vom Rathaus ueber die Halte der Tour zur gemeinsamen Deponie und zurueck. Zwei Muellwerker leeren an jedem
+## Halt die Tonne (Waste.empty_bin); ist der Wagen voll, faehrt er gleich zur Deponie. Dort wiegt die Waage die Ladung (Waste.weigh_in).
+func send_garbage(stops: Array, landfill: Vector2i, tons: float, label: String, town: int = 0) -> bool:
+	if stops.is_empty() or vehicles.filter(func(v): return v.kind == "muell" and int(v.town) == town).size() >= sim.waste.trucks_for(town):
+		return false
+	var th := int(sim.towns.get_t(town).get("town_hall", -1)) if sim.towns != null else -1
+	var home: Vector2i = sim.city.building(th).road if th >= 0 else depot_road()
 	var v := _spawn("muell", home, stops[0].road, 0.0, home, label)
 	v["stops"] = stops
 	v["stop"] = 0
 	v["landfill"] = landfill
 	v["tons"] = tons
 	v["load"] = 0.0
+	v["town"] = town
 	v["phase"] = "tour"
 	stats.muelltouren += 1
+	return true
 
 
 func _garbage(v: Dictionary, now: float) -> void:
@@ -169,14 +172,17 @@ func _garbage(v: Dictionary, now: float) -> void:
 		"leeren":
 			if now < float(v.until):
 				return
-			v.load = float(v.load) + float(v.tons) / float(v.stops.size())
+			var kg: float = sim.waste.empty_bin(int(v.stops[int(v.stop)].building), (float(v.tons) - float(v.load)) * 1000.0)
+			v.load = float(v.load) + kg / 1000.0
 			stats.halte += 1
 			v.stop = int(v.stop) + 1
-			if int(v.stop) < v.stops.size():
+			var full := float(v.load) >= float(v.tons) * 0.98
+			if int(v.stop) < v.stops.size() and not full:
 				v.phase = "tour"
 				if not sim.route(m, _free_neighbor(v.stops[int(v.stop)].road)):
 					m.pos = sim.city.tile_center(v.stops[int(v.stop)].road)
 			else:
+				sim.waste.release(v.stops.slice(int(v.stop)).map(func(s): return int(s.building)))
 				v.phase = "zur_deponie"
 				if not sim.route(m, _free_neighbor(v.landfill)):
 					m.pos = sim.city.tile_center(v.landfill)
@@ -185,6 +191,7 @@ func _garbage(v: Dictionary, now: float) -> void:
 			v.until = now + DUMP_MIN
 		"abladen":
 			if now >= float(v.until):
+				sim.waste.weigh_in(int(v.town), float(v.load))
 				v.load = 0.0
 				v.phase = "rueckfahrt"
 				if not sim.route(m, v.back):

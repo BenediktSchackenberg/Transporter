@@ -58,7 +58,7 @@ func supply_score() -> float:
 		if s.status == "offen":
 			open += 1
 	var shops_ok := float(open) / maxf(1.0, float(sim.retail.shops.size()))
-	var waste_ok := 1.0 if float(sim.waste._unpaid) <= 0.0 else 0.6
+	var waste_ok := (1.0 if float(sim.waste._unpaid) <= 0.0 else 0.6) * (1.0 - 0.5 * sim.waste.overflow_share())   # ueberquellende Tonnen
 	return 100.0 * (0.7 * shops_ok + 0.3 * waste_ok)
 
 
