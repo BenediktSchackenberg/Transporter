@@ -43,6 +43,14 @@ func _init() -> void:
 				trucks[int(v.town)] = int(trucks.get(int(v.town), 0)) + 1
 		print("Tag %3d  in Tonnen %7.0f kg  gewogen %6.2f t  erzeugt %6.2f t  ueberquellend %3d/%d  Wagen %s  Deponie %.0f/%.0f t" % [day,
 			_in_bins(W), float(W.total.tons), made / 1000.0, W.overflowing().size(), W.bins.size(), str(trucks), W.deposited, W.capacity])
+		if W.real:   # Auftrag 22 Phase 2 Schritt 2: drei getrennte Toenen, Bio/Wertstoffe auf dem Weg zum Hof
+			var bio := 0.0
+			var wert := 0.0
+			for b in W.bio:
+				bio += float(W.bio[b])
+			for b in W.wert:
+				wert += float(W.wert[b])
+			print("         Toenen: Rest %.0f kg, Bio %.0f kg, Wertstoffe %.0f kg  Wertstofftouren %d" % [_in_bins(W), bio, wert, W.tours_wert])
 	var durs: Array = []
 	for id in seen:
 		durs.append("%.2fd/%dH/%.2ft" % [(float(seen[id].end) - float(seen[id].start)) / GameCalendar.day_game_min, int(seen[id].stops), float(seen[id].load)])

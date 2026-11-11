@@ -30,7 +30,7 @@ func update_view(delta: float) -> void:
 		landfill.queue_redraw()
 	var seen := {}
 	for v in sim.fleet.vehicles:
-		if v.kind != "muell" or v.phase != "leeren":
+		if v.kind != "muell" and v.kind != "wertstoff" or v.phase != "leeren":
 			continue
 		var id := int(v.id)
 		seen[id] = true
@@ -39,6 +39,7 @@ func update_view(delta: float) -> void:
 			n = CrewNode.new()
 			add_child(n)
 			_crews[id] = n
+		n.stream = str(v.get("stream", "rest"))
 		var m: Mover = v.mover
 		var b: Dictionary = sim.city.building(int(v.stops[int(v.stop)].building))
 		n.truck = m.pos
@@ -154,8 +155,10 @@ class CrewNode extends Node2D:
 	var truck := Vector2.ZERO          # Weltposition des Wagens
 	var house := Vector2.ZERO          # Weltposition des Hauses
 	var t := 0.0
+	var stream := "rest"               # "rest" (Orange, Resttonne) oder "wert" (Gruen, Bio- und Wertstofftonnen)
 
 	func _draw() -> void:
+		var body := ORANGE if stream == "rest" else Color("3f8a4a")
 		var bin := truck.lerp(house, 0.35)          # Tonnenplatz am Gehweg
 		var b := Iso.to_screen(bin) - position
 		var back := Iso.to_screen(truck + (truck - house).normalized() * -4.0) - position
@@ -165,13 +168,14 @@ class CrewNode extends Node2D:
 			var pos := b.lerp(back + Vector2(8.0 * float(k) - 4.0, 0), u) + Vector2(10.0 * float(k), 4.0 * float(k))
 			draw_set_transform(pos, 0.0, Vector2(1.8, 1.8))
 			var bob := sin(t * 9.0 + float(k))
-			draw_rect(Rect2(Vector2(-2, -9 + bob), Vector2(5, 7)), WasteView.ORANGE)
+			draw_rect(Rect2(Vector2(-2, -9 + bob), Vector2(5, 7)), body)
 			draw_rect(Rect2(Vector2(-2, -6 + bob), Vector2(5, 1)), Color("e8e8e8"))   # Reflexstreifen
 			draw_rect(Rect2(Vector2(-2, -2), Vector2(5, 2)), Color("2f343c"))
 			draw_rect(Rect2(Vector2(-2, -13 + bob), Vector2(5, 4)), Color("e0b48a"))
-			draw_rect(Rect2(Vector2(-3, -14 + bob), Vector2(7, 2)), WasteView.ORANGE)
+			draw_rect(Rect2(Vector2(-3, -14 + bob), Vector2(7, 2)), body)
 			var tipping := u > 0.92
-			var bin_col := Color("4a6b3f") if k == 0 else Color("6b6f78")
+			# rest: Resttonne (grau) und Bio (gruen); wert: Bio (gruen) und Wertstoffe (blau)
+			var bin_col := Color("4a6b3f") if k == 0 else (Color("6b6f78") if stream == "rest" else Color("3d6fb0"))
 			if tipping:
 				draw_colored_polygon(PackedVector2Array([Vector2(4, -16), Vector2(12, -18), Vector2(13, -10), Vector2(6, -8)]), bin_col)
 				draw_circle(Vector2(10, -20), 2.0, Color("8a7a60"))
@@ -182,5 +186,6 @@ class CrewNode extends Node2D:
 		# Tonnen, die noch am Gehweg warten
 		for k in 2:
 			var p := b + Vector2(-14.0 - 8.0 * float(k), 6.0)
-			draw_rect(Rect2(p + Vector2(0, -16), Vector2(11, 15)), Color("4a6b3f") if k == 0 else Color("6b6f78"))
+			var c2 := Color("4a6b3f") if k == 0 else (Color("6b6f78") if stream == "rest" else Color("3d6fb0"))
+			draw_rect(Rect2(p + Vector2(0, -16), Vector2(11, 15)), c2)
 			draw_rect(Rect2(p + Vector2(0, -18), Vector2(11, 3)), Color("2f3a2a"))

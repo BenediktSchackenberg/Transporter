@@ -1415,6 +1415,16 @@ func _update_selection() -> void:
 				return
 			sel_title.text = "Müllwagen – %s" % fv.label
 			sel_text.text = LiveText.garbage_truck(sim, fv)
+		"wertstoff":
+			var fw := {}
+			for x in sim.fleet.vehicles:
+				if int(x.id) == int(sel.id):
+					fw = x
+			if fw.is_empty():
+				session.entity_view.selected = {}
+				return
+			sel_title.text = "Wertstoffwagen – %s" % fw.label
+			sel_text.text = LiveText.garbage_truck(sim, fw)
 		"bruecke":
 			var br: Dictionary = sim.bridges.items.get(str(sel.id), {})
 			if br.is_empty():

@@ -140,6 +140,9 @@ func _update_fleet() -> void:
 			if v.kind == "muell":   # Muellwagen der Abfallwirtschaft (eigenes Modell, Auftrag 22 Phase 2), gelbe Rundumleuchte
 				n = _make_vehicle_node("aw_muell", "", Color.WHITE, false)
 				_add_beacon(n, -56.0)
+			elif v.kind == "wertstoff":   # Wertstoffwagen des Recyclinghofs (Auftrag 22 Phase 2 Schritt 2)
+				n = _make_vehicle_node("rc_wagen", "", Color.WHITE, false)
+				_add_beacon(n, -56.0)
 			elif v.kind == "dienstwagen":   # Auftrag 19: Limousine des Buergermeisters in seiner Farbe, mit Aufgabe als Beschriftung
 				n = _make_vehicle_node("car", _car_color(str(v.get("color", ""))), Color.WHITE, false)
 				var lb := Label.new()
@@ -819,6 +822,10 @@ func selected_position() -> Vector2:
 			for fv in sim.fleet.vehicles:
 				if int(fv.id) == int(selected.id):
 					return fv.mover.pos
+		"wertstoff":
+			for fv in sim.fleet.vehicles:
+				if int(fv.id) == int(selected.id):
+					return fv.mover.pos
 		"deponie":
 			return cv.waste_view.landfill_center()
 		"bruecke":
@@ -877,6 +884,8 @@ func pick(click: Vector2) -> Dictionary:
 	for fv in sim.fleet.vehicles:   # Muellwagen anklicken
 		if fv.kind == "muell" and (Iso.to_screen(fv.mover.pos) + Vector2(0, -20)).distance_to(click) < 34.0:
 			return {"kind": "muell", "id": int(fv.id)}
+		if fv.kind == "wertstoff" and (Iso.to_screen(fv.mover.pos) + Vector2(0, -20)).distance_to(click) < 34.0:
+			return {"kind": "wertstoff", "id": int(fv.id)}
 	if not best.is_empty():
 		return best
 	var lot_id: String = cv.depot_view.pick_lot(click)

@@ -132,7 +132,7 @@ const STYLES := {
 	"industrie": "Industrie, Stahl und Wellblech",
 }
 const STYLE_OF_CHARACTER := {"Marktflecken": "backstein", "Handwerkerort": "industrie", "Fischerdorf": "gruen", "Bauerndorf": "gruen"}
-const START_KIT := ["FW-01", "RW-01", "BH-01", "AW-01"]
+const START_KIT := ["FW-01", "RW-01", "BH-01", "AW-01", "RC-01"]
 ## Finanzierung (Analyse 10.11.: die Dienste kosteten kleine Orte mehr als Landeszuweisung und Steuern zusammen):
 ## Rettungsdienst und Kliniken refinanzieren die Krankenkassen, die Flughafenfeuerwehr die Flughafenentgelte (ausserhalb der Region, X0) kostendeckend - Sachkosten, Fahrzeuge und
 ## Loehne kommen taeglich zurueck in die Stadtkasse (bzw. nach den Anteilen des Zweckverbands). Die Freiwillige Feuerwehr hat erst ab

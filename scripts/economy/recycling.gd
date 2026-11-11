@@ -22,6 +22,7 @@ var trips := {}          # Fahrzeug-ID -> {town, facility, phase, load}
 var movers := {}
 var stats := {"tonnen": 0.0, "umgeleitet_t": 0.0, "einheiten": {}, "erloes": 0.0, "an_grosslager": 0}
 var _day := -1
+var _day_done := {}      # Einrichtung-ID -> verarbeitete Tonnen des Tages (Kapazitaet bei realen Muellarten)
 
 
 func setup(simulation) -> void:
@@ -42,6 +43,12 @@ func on_day(day: int) -> void:
 	if day == _day:
 		return
 	_day = day
+	_day_done = {}
+	if sim.waste.real:   # echte Muellarten (Region): die Zulieferung kommt ueber deliver() mit dem Wertstoffwagen
+		for f in yards():
+			if day % TRIP_EVERY == 0:
+				_start_trip(f)
+		return
 	for f in yards():
 		var k := int(f.town)
 		var tons := float(sim.citizens.population_of(k)) * Waste.KG_PER_PERSON_DAY / 1000.0
@@ -61,6 +68,36 @@ func on_day(day: int) -> void:
 				stats.einheiten[item] = int(stats.einheiten.get(item, 0)) + n
 		if day % TRIP_EVERY == 0:
 			_start_trip(f)
+
+
+## Ablieferung der Wertstoffe (Bio + Wertstoffe) vom Wertstoffwagen (Waste.deliver_wert): sortiert nach den Stroemen,
+## begrenzt auf die Tageskapazitaet des Hofs und legt die Sekundaerrohstoffe als echte Ware in den Hofbestand (Eigentum Stadt).
+## Die Abfuhr rechnet Waste.deliver_wert separat ab; der Verwertungspreis kommt bei der woechentlichen Abholung (trip).
+func deliver(k: int, kg: float) -> void:
+	if kg <= 0.0:
+		return
+	var y: Array = yards(k)
+	if y.is_empty():
+		return   # kein Hof in Betrieb: Lieferung wird nicht entgegengenommen
+	var f: Dictionary = y[0]
+	var done := minf(kg / 1000.0, maxf(0.0, capacity_t(f) - float(_day_done.get(f.id, 0.0))))
+	_day_done[f.id] = float(_day_done.get(f.id, 0.0)) + done
+	if done <= 0.0:
+		return
+	stats.tonnen = float(stats.tonnen) + done
+	# 40 % der angelieferten Menge ist Bio (Waste.BIO_OF_RECYCLED) und wird Kompost; der Rest laeuft ueber die Sortierstroeme
+	var bio_sh := Waste.BIO_OF_RECYCLED
+	for item in FRACTIONS:
+		var share: float = float(FRACTIONS[item])
+		if item == "kompost":
+			share += bio_sh * (1.0 - float(FRACTIONS["kompost"]))
+		var key := "%d|%s" % [k, item]
+		carry[key] = float(carry.get(key, 0.0)) + done * share / UNIT_T
+		var n := int(carry[key])
+		if n > 0:
+			carry[key] = float(carry[key]) - n
+			sim.stock.add(item, n, Towns.owner_of(k), int(f.building), "Recyclinghof %s" % f.name, sim.game_min)
+			stats.einheiten[item] = int(stats.einheiten.get(item, 0)) + n
 
 
 func _start_trip(f: Dictionary) -> void:

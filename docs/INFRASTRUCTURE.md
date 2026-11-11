@@ -78,3 +78,24 @@ Nebenbefunde beim Einbau: Die Startorte (30–55 Bürger) sind voll beschäftigt
 Einrichtung wirbt jetzt für jeden Beruf alle 7 Tage eine Kraft von außerhalb an, wenn im Ort eine Wohnung frei ist (vorher nur Ärzte und
 Rettungsdienst). Grundvarianten öffentlicher Gebäude werden über alle Stile verteilt (vorher wiederholten sich Formen bei mehreren Stilen).
 Test `test_waste_depot`; Probe `tests/probe_staff_pool.gd` (Arbeitsmarkt der Dienste je Stadt).
+
+**Schritt 2 Müllarten (fertig 11.11.):** In der Region (eigene Abfallwirtschaft) hat jedes bewohnte Gebäude und jeder Laden drei
+eigene Tonnen mit eigenem Füllstand – Restmüll (grau), Bio (grün) und Wertstoffe (blau) – statt einer pauschalen Tonne. Der Abfall des
+Tages wird nach der effektiven Recyclingquote aufgeteilt: Rest (1 − Quote), davon 40 % des Recyclierbaren als Bio, der Rest Wertstoffe
+(`Waste._put`, Quote `BASE_RECYCLING` + Mehrweg-Bonus). Restmüll fährt weiter mit dem Müllwagen (Hecklader) zur gemeinsamen Deponie; die
+Waage wiegt jetzt reine Reststoffe und verbucht nur noch die Deponiegebühr – die Wertstofferlöse laufen real über den Hof. Bio und
+Wertstoffe holt ein **Wertstoffwagen** (Fahrzeugtyp des Recyclinghofs RC-01, Bild `rc_wagen`, Ladekapazität 1 t, eigener Strom
+`Waste.tours_wert`) als zweite Tour ab: ein Wagen je Stadt, er leert am Halt beide Tonnen proportional zum Füllstand
+(`Waste.empty_wert`), liefert zum Recyclinghof der Stadt und wird dort `Recycling.deliver` sortiert (Bio-Anteil → Kompost, Rest →
+Papier/Glas/Kunststoff/Schrott, Kapazität nach Personal, Sekundärrohstoffe als echte Ware im Hofbestand). Ist die Hof-Kapazität des Tages
+ausgefahren, wird die angelieferte Menge begrenzt; die wöchentliche Abfahrt des Wertstoffwagens zum Großlager/Verwerter bleibt der
+Erlöskanal. Damit die Abfuhr ab dem ersten Tag fährt, ist der Recyclinghof (RC-01) jetzt Teil der Startausstattung jeder Stadt
+(`START_KIT`); alte Spielstände bekommen ihn über `ensure_kit`. Fahren die Müllarten nicht (Hof geschlossen), bleiben Bio- und
+Wertstofftonnen voll und zählen als überquellende Tonnen (die senken die Versorgungszufriedenheit). Die Einzelstadt und der Küstenort
+(keine kommunale Abfallwirtschaft) bleiben unverändert im Pauschal-Modell: eine Tonne, die Waage berechnet Rest aus der Recyclingquote.
+Sichtbar: drei getönte Tonnen je Haus, grüne Wertstoffwerker an den Bio-/Wertstofftonnen, anklickbarer Wertstoffwagen mit eigener
+Detailansicht (Status, Halte, Ladung, Bio/Wertstoffe des nächsten Halts); die Deponie-Anzeige nennt je Stadt die Tonnenzahlen nach Art.
+Tonnen, Raten und Touren werden in `Waste.to_dict`/`from_dict` gespeichert. Tests `test_waste_streams` (drei Ströme, Halt, Hoflieferung,
+Konservation, kein Hof → keine Tour, Laden), Anpassungen `test_waste_bins`/`test_waste_depot`/`test_recycling` an die modusabhängigen
+Erwartungen; Messprobe `tests/probe_waste.gd --region`: 31 Tage, 7 Wertstofftouren, überquellende Tonnen 55 → 0, Deponie bleibt bei
+~201/800 t (vorher ohne Hof: 55 überquellend).

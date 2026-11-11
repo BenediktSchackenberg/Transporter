@@ -18,6 +18,11 @@ const RECYCLE_INCOME := 30.0            # EUR je Tonne Wertstoff
 const BASE_RECYCLING := 0.35
 const MEHRWEG_BONUS := 0.25             # zusaetzliche Quote bei vollstaendiger Mehrwegnutzung
 const FEE_MARKUP := 1.1                 # Gebuehr = erwartete Kosten + 10 %
+## Muellarten (Auftrag 22 Phase 2 Schritt 2): der Gesamtabsatz eines Gebaeudes wird in drei getrennte Toenen aufgeteilt.
+## Rest (1-rate) geht zur Deponie, der recyclebare Teil (rate) geht real zum Recyclinghof: davon BIO_OF_RECYCLED Bio (-> Kompost),
+## der Rest Wertstoffe (-> Sortierung). rate ist die effektive Recyclingquote (Mehrweg erhoht sie).
+const BIO_OF_RECYCLED := 0.4
+const WERT_TONS := 1.0                  # Ladekapazitaet eines Wertstoffwagens (t)
 ## Deponie und Muellabfuhr (sichtbar): Restmuell geht auf die gemeinsame Deponie, Muellwagen fahren Touren zu vollen Tonnen.
 const LANDFILL_CAPACITY := 800.0        # Tonnen bis zur vollen Deponie beim Start (Spielwert)
 const START_FILL := 0.25                # bestehende Deponie beim Start
@@ -26,6 +31,7 @@ const TRIP_DAYS := 5.0                  # typische Tourdauer mit voller Ladung i
 const MAX_TRUCKS := 8                   # hoechstens so viele Muellwagen je Stadt
 const STOPS := 60                       # Halte je Tour (bis die Ladung voll ist)
 const BIN_DAYS := 7.0                   # eine Tonne fasst den Abfall von so vielen Tagen
+const WERT_DAYS := 4.0                  # Bio-/Wertstofftonnen werden oefters geleert (Wertstoffwirtschaft)
 const MIN_BIN_KG := 20.0
 const COLLECT_AT := 0.6                 # Tonnen ab diesem Fuellstand werden angefahren
 const MIN_LOAD := 0.3                   # eine Tour startet ab diesem Anteil der Ladekapazitaet ...
@@ -49,18 +55,25 @@ var landfill_road := Vector2i(-1, -1)   # Zufahrt (Abladestelle)
 var deposited := 0.0                    # abgeladener Restmuell (t), bestimmt die Hoehe des Muellbergs
 var tours := 0
 var capacity := LANDFILL_CAPACITY      # Fassungsvermoegen der Deponie (t), waechst mit jeder Erweiterung
-var bins := {}                          # Gebaeude-ID -> Fuellstand (kg)
-var bin_rate := {}                      # Gebaeude-ID -> kg je Tag (taeglich neu berechnet, nicht gespeichert)
+var bins := {}                          # Gebaeude-ID -> Fuellstand (kg), Restmuell
+var bio := {}                           # Gebaeude-ID -> Fuellstand (kg), Bioabfall (Auftrag 22 Phase 2 Schritt 2)
+var wert := {}                          # Gebaeude-ID -> Fuellstand (kg), Wertstoffe (Auftrag 22 Phase 2 Schritt 2)
+var bin_rate := {}                      # Gebaeude-ID -> kg Restmuell je Tag (taeglich neu berechnet, nicht gespeichert)
+var bio_rate := {}                      # Gebaeude-ID -> kg Bio je Tag (taeglich neu berechnet, nicht gespeichert)
+var wert_rate := {}                     # Gebaeude-ID -> kg Wertstoffe je Tag (taeglich neu berechnet, nicht gespeichert)
 var by_town := {}                       # Stadt -> {"month": {...}, "total": {...}} wie month/total
 var scale_log: Array = []               # Waagebuch [{tag, stadt, t, rest}]
 var expansion := {}                     # laufende Erweiterung {start, fertig, t, kosten}
 var expansions := 0
 var overflow_days := 0                  # Summe ueberquellender Tonnen je Tag (Kennzahl)
 var _planned := {}                      # Gebaeude-ID -> true, Tonne ist einer laufenden Tour zugeteilt (nicht gespeichert)
+var real := false                       # Region: Muellarten real (Rest -> Deponie, Bio+Wertstoffe -> Recyclinghof). Kuestenort: altes Pauschal-Modell.
+var tours_wert := 0                     # Wertstofftouren (Auftrag 22 Phase 2 Schritt 2)
 
 
 func setup(s: Simulation) -> void:
 	sim = s
+	real = sim.municipal != null and sim.municipal.enabled()   # Region: echte Muellarten, sonst Pauschal-Modell
 	s.day_changed.connect(on_day)
 	s.month_changed.connect(on_month)
 	deposited = LANDFILL_CAPACITY * START_FILL
@@ -123,18 +136,38 @@ func bin_capacity(bid: int) -> float:
 	return maxf(MIN_BIN_KG, float(bin_rate.get(bid, 0.0)) * BIN_DAYS)
 
 
-## Tonnen, die ueber ihr Fassungsvermoegen gefuellt sind (Stadt k oder alle).
+## Fassungsvermoegen einer Tonne: Restmuell fasst BIN_DAYS, Bio- und Wertstofftonne WERT_DAYS (ofterer Leerzyklus).
+func _cap_of(stream: String, bid: int) -> float:
+	var rt: Dictionary = {"rest": bin_rate, "bio": bio_rate, "wert": wert_rate}.get(stream, bin_rate)
+	return maxf(MIN_BIN_KG, float(rt.get(bid, 0.0)) * (BIN_DAYS if stream == "rest" else WERT_DAYS))
+
+
+## Inhalt (kg) eines Abfallstroms; bid = -1 bedeutet "Summe ueber alle Gebaeude".
+func bin_level(stream: String, bid: int) -> float:
+	if bid >= 0:
+		return float({"rest": bins, "bio": bio, "wert": wert}.get(stream, bins).get(bid, 0.0))
+	var out := 0.0
+	for b in {"rest": bins, "bio": bio, "wert": wert}.get(stream, bins):
+		out += float(b)
+	return out
+
+
+## Tonnen, die ueber ihr Fassungsvermoegen gefuellt sind (Stadt k oder alle), ueber alle drei Muellarten (Rest, Bio, Wertstoffe).
 func overflowing(k: int = -1) -> Array:
-	return bins.keys().filter(func(bid): return float(bins[bid]) > bin_capacity(bid) and (k < 0 or sim.towns.of_building(bid) == k))
+	return bins.keys().filter(func(bid): return float(bins[bid]) > _cap_of("rest", bid) and (k < 0 or sim.towns.of_building(bid) == k)) \
+		+ bio.keys().filter(func(bid): return float(bio[bid]) > _cap_of("bio", bid) and (k < 0 or sim.towns.of_building(bid) == k)) \
+		+ wert.keys().filter(func(bid): return float(wert[bid]) > _cap_of("wert", bid) and (k < 0 or sim.towns.of_building(bid) == k))
 
 
-## Anteil ueberquellender Tonnen (0..1) fuer die Versorgungszufriedenheit.
+## Anteil ueberquellender Tonnen (0..1) fuer die Versorgungszufriedenheit; Nenner = alle Toenen aller drei Muellarten.
 func overflow_share() -> float:
-	return float(overflowing().size()) / maxf(1.0, float(bins.size()))
+	var n := bins.size() + bio.size() + wert.size()
+	return float(overflowing().size()) / maxf(1.0, float(n))
 
 
-## Abfall des Tages in die Tonnen: Einwohner je Stadt verteilt nach bewohnten Wohnungen, Verpackung auf die geoeffneten Laeden.
-## Ohne bewohnte Wohnung landet der Abfall der Stadt in der Tonne am Rathaus. Gibt die erzeugten Tonnen zurueck.
+## Abfall des Tages in die Toenen: Einwohner je Stadt verteilt nach bewohnten Wohnungen, Verpackung auf die geoeffneten Laeden.
+## Ohne bewohnte Wohnung landet der Abfall der Stadt in der Tonne am Rathaus. Der Gesamtabsatz wird in die drei Muellarten
+## (Rest, Bio, Wertstoffe) aufgeteilt (Auftrag 22 Phase 2 Schritt 2). Gibt die erzeugte Gesamtmenge (t) zurueck.
 func _produce() -> float:
 	var weights := {}   # Stadt -> {Gebaeude-ID: Wohnungen}
 	for u in sim.housing.units.values():
@@ -146,6 +179,8 @@ func _produce() -> float:
 			weights[k] = {}
 		weights[k][bid] = int(weights[k].get(bid, 0)) + 1
 	bin_rate = {}
+	bio_rate = {}
+	wert_rate = {}
 	var made := 0.0
 	for k in sim.towns.count():
 		var kg := float(sim.citizens.population_of(k)) * KG_PER_PERSON_DAY
@@ -172,9 +207,23 @@ func _produce() -> float:
 	return made / 1000.0
 
 
+## Gesammelter Abfall (kg) eines Gebaeudes in die drei getrennten Toenen verteilen (Auftrag 22 Phase 2 Schritt 2):
+## Rest (1-rate), Bio (rate * BIO_OF_RECYCLED) und Wertstoffe (der Rest). Ohne realen Abfallstrom (Einzel-/Kuestenwelt)
+## bleibt der Bestand, wie bisher: alles in der Restmuelltone, die Waage berechnet die Restmenge aus der Recyclingquote.
 func _put(bid: int, kg: float) -> void:
-	bins[bid] = float(bins.get(bid, 0.0)) + kg
-	bin_rate[bid] = float(bin_rate.get(bid, 0.0)) + kg
+	if not real:
+		bins[bid] = float(bins.get(bid, 0.0)) + kg
+		bin_rate[bid] = float(bin_rate.get(bid, 0.0)) + kg
+		return
+	var rec := clampf(rate, 0.0, 1.0)
+	bins[bid] = float(bins.get(bid, 0.0)) + kg * (1.0 - rec)
+	bin_rate[bid] = float(bin_rate.get(bid, 0.0)) + kg * (1.0 - rec)
+	bio[bid] = float(bio.get(bid, 0.0)) + kg * rec * BIO_OF_RECYCLED
+	bio_rate[bid] = float(bio_rate.get(bid, 0.0)) + kg * rec * BIO_OF_RECYCLED
+	var wert_kg := kg * rec * (1.0 - BIO_OF_RECYCLED)
+	if wert_kg > 0.0:
+		wert[bid] = float(wert.get(bid, 0.0)) + wert_kg
+		wert_rate[bid] = float(wert_rate.get(bid, 0.0)) + wert_kg
 
 
 func _dist(a: int, sb: Dictionary) -> int:
@@ -235,52 +284,117 @@ func _trucks_needed(k: int) -> int:
 	return clampi(ceili(t_day * TRIP_DAYS / TRUCK_TONS * 1.3), 1, MAX_TRUCKS)
 
 
-## Tonne der Stadt k voll genug fuer die Abfuhr und noch keiner Tour zugeteilt?
-func _due(bid: int, k: int) -> bool:
-	return not _planned.has(bid) and sim.towns.of_building(bid) == k and float(bins[bid]) >= COLLECT_AT * bin_capacity(bid) and not sim.city.building(bid).is_empty()
+## Tonne der Stadt k im Abfallstrom `stream` (rest|wert) voll genug fuer die Abfuhr und noch keiner Tour zugeteilt?
+func _due(stream: String, bid: int, k: int) -> bool:
+	if _planned.has(bid) or sim.towns.of_building(bid) != k or sim.city.building(bid).is_empty():
+		return false
+	return _stream_level(stream, bid) >= COLLECT_AT * _stream_cap(stream, bid)
+
+
+## Inhalt (kg) und Fassungsvermoegen der Tonne im Strom `stream`: rest = Resttonne, wert = Wertstofftonnen (Bio + Wertstoffe).
+func _stream_level(stream: String, bid: int) -> float:
+	if stream == "rest":
+		return float(bins.get(bid, 0.0))
+	return float(bio.get(bid, 0.0)) + float(wert.get(bid, 0.0))
+
+
+func _stream_cap(stream: String, bid: int) -> float:
+	if stream == "rest":
+		return bin_capacity(bid)
+	return _cap_of("bio", bid) + _cap_of("wert", bid)
 
 
 ## Touren je Stadt: die vollste Tonne ist der erste Halt; von dort faehrt der Wagen jeweils die naechstgelegene volle Tonne an,
-## bis die Ladung voll ist (Nachbarschaftsroute statt Zickzack; die Fahrt zur Deponie lohnt sich nur mit voller Ladung).
+## bis die Ladung voll ist (Nachbarschaftsroute statt Zickzack; die Fahrt lohnt sich nur mit voller Ladung).
+## Restmuell faehrt zur Deponie (stream "rest"); Bio und Wertstoffe fahren gemeinsam zur Wertstoffsammlung (stream "wert")
+## und werden am Recyclinghof sortiert (Auftrag 22 Phase 2 Schritt 2).
 func _dispatch() -> void:
 	if landfill_road.x < 0:
 		return
 	for k in sim.towns.count():
-		var cand: Array = bins.keys().filter(func(bid): return _due(bid, k))
-		cand.sort_custom(func(a, b): return float(bins[a]) / bin_capacity(a) > float(bins[b]) / bin_capacity(b))
-		while not cand.is_empty():
-			var seed_b: Dictionary = sim.city.building(cand[0])
-			var pool: Array = cand.duplicate()
-			var stops: Array = []
-			var kg := 0.0
-			var at: Dictionary = seed_b
-			while not pool.is_empty() and stops.size() < STOPS:
-				var here: Dictionary = at
-				var bid: int = pool.reduce(func(best, x): return x if _dist(x, here) < _dist(best, here) else best, pool[0])
-				if not stops.is_empty() and kg + float(bins[bid]) > TRUCK_TONS * 1000.0:
-					break
-				pool.erase(bid)
-				at = sim.city.building(bid)
-				stops.append({"road": at.road, "building": bid})
-				kg += float(bins[bid])
-			if kg < MIN_LOAD * TRUCK_TONS * 1000.0 and float(bins[cand[0]]) < URGENT * bin_capacity(cand[0]):
-				break   # lohnt die Fahrt zur Deponie noch nicht und keine Tonne droht ueberzulaufen
-			var dep := depot_of(k)
-			var home: Vector2i = sim.city.building(int(dep.building)).road if not dep.is_empty() else Vector2i(-1, -1)
-			if not sim.fleet.send_garbage(stops, landfill_road, TRUCK_TONS, "%s Tour %d" % [str(dep.name) if not dep.is_empty() else "Müllabfuhr " + sim.towns.name_of(k), tours + 1], k, home):
+		_dispatch_stream(k, "rest")
+		if real:
+			_dispatch_stream(k, "wert")
+
+
+func _dispatch_stream(k: int, stream: String) -> void:
+	var dest: Vector2i = landfill_road
+	var tons: float = TRUCK_TONS
+	if stream == "wert":
+		var y := yard_of(k)
+		if y.is_empty():
+			return
+		dest = sim.city.building(int(y.building)).road
+		tons = WERT_TONS
+	var cand: Array = (bins.keys() if stream == "rest" else wert.keys()).filter(func(bid): return _due(stream, bid, k))
+	cand.sort_custom(func(a, b): return _stream_level(stream, a) / _stream_cap(stream, a) > _stream_level(stream, b) / _stream_cap(stream, b))
+	while not cand.is_empty():
+		var seed_b: Dictionary = sim.city.building(cand[0])
+		var pool: Array = cand.duplicate()
+		var stops: Array = []
+		var kg := 0.0
+		var at: Dictionary = seed_b
+		while not pool.is_empty() and stops.size() < STOPS:
+			var here: Dictionary = at
+			var bid: int = pool.reduce(func(best, x): return x if _dist(x, here) < _dist(best, here) else best, pool[0])
+			if not stops.is_empty() and kg + _stream_level(stream, bid) > tons * 1000.0:
 				break
+			pool.erase(bid)
+			at = sim.city.building(bid)
+			stops.append({"road": at.road, "building": bid})
+			kg += _stream_level(stream, bid)
+		if kg < MIN_LOAD * tons * 1000.0 and _stream_level(stream, cand[0]) < URGENT * _stream_cap(stream, cand[0]):
+			break   # lohnt die Fahrt noch nicht und keine Tonne droht ueberzulaufen
+		var dep := depot_of(k)
+		var home: Vector2i = sim.city.building(int(dep.building)).road if not dep.is_empty() else Vector2i(-1, -1)
+		var label := "Wertstoffsammlung %s %d" % [sim.towns.name_of(k), tours_wert + 1] if stream == "wert" \
+			else "%s Tour %d" % [str(dep.name) if not dep.is_empty() else "Müllabfuhr " + sim.towns.name_of(k), tours + 1]
+		if not sim.fleet.send_garbage(stops, dest, tons, label, k, home, stream):
+			break
+		if stream == "wert":
+			tours_wert += 1
+		else:
 			tours += 1
-			for st in stops:
-				_planned[int(st.building)] = true
-				cand.erase(int(st.building))
+		for st in stops:
+			_planned[int(st.building)] = true
+			cand.erase(int(st.building))
 
 
-## Halt eines Muellwagens: Tonne leeren, hoechstens room_kg. Gibt die geladenen kg zurueck.
+## Recyclinghof (RC-01) der Stadt k, sonst {} (dann bleibt der Wertstoffstrom in der Tour-Liste und wird nicht abgeholt).
+func yard_of(k: int) -> Dictionary:
+	if sim.municipal == null or not sim.municipal.enabled():
+		return {}
+	for f in sim.municipal.of_town(k, "recycling"):
+		if str(f.code) == "RC-01" and f.status == "in_betrieb":
+			return f
+	return {}
+
+
+## Halt eines Muellwagens: Resttonne leeren, hoechstens room_kg. Gibt die geladenen kg zurueck.
 func empty_bin(bid: int, room_kg: float) -> float:
 	_planned.erase(bid)
 	var take := minf(float(bins.get(bid, 0.0)), maxf(0.0, room_kg))
 	if take > 0.0:
 		bins[bid] = float(bins[bid]) - take
+	return take
+
+
+## Halt des Wertstoffwagens: Bio- und Wertstofftonne am Haus leeren (proportional zum Füllstand), zusammen hochstens room_kg.
+func empty_wert(bid: int, room_kg: float) -> float:
+	_planned.erase(bid)
+	var b := float(bio.get(bid, 0.0))
+	var w := float(wert.get(bid, 0.0))
+	var tot := b + w
+	if tot <= 0.0:
+		return 0.0
+	var take := minf(tot, maxf(0.0, room_kg))
+	var sh := take / tot
+	bio[bid] = float(bio[bid]) - b * sh
+	wert[bid] = float(wert[bid]) - w * sh
+	if float(bio[bid]) < 0.0:
+		bio[bid] = 0.0
+	if float(wert[bid]) < 0.0:
+		wert[bid] = 0.0
 	return take
 
 
@@ -290,28 +404,69 @@ func release(bids: Array) -> void:
 		_planned.erase(int(bid))
 
 
-## Waage der Deponie: Menge der Stadt k erfassen, Wertstoffe verkaufen, Rest ablagern, Kosten der Stadtkasse buchen.
-func weigh_in(k: int, tons: float) -> void:
+## Abladen der Wertstoffe am Recyclinghof (Bio + Wertstoffe): die Stadt liefert ab, der Hof sortiert (Recycling.deliver)
+## und rechnet die Abfuhr und den Sortierwert ab. Geld und Waren bleiben erhalten.
+func deliver_wert(k: int, tons: float) -> void:
 	if tons <= 0.0:
 		return
-	var recycled := tons * rate
-	var residual := tons - recycled
-	deposited += residual
 	var acct := Towns.account_of(k)
-	# eigener Betriebshof: Abholung leisten Muellwerker und Fuhrpark der Stadt (Loehne/Fahrzeugkosten ueber Municipal), sonst Entsorger S0
-	var cost := (0.0 if not depot_of(k).is_empty() else tons * COLLECT_COST) + residual * DISPOSAL_COST
-	var income := recycled * RECYCLE_INCOME
+	# eigene Wertstoffwirtschaft: Abholung durch den Betriebshof (Loehne/Fahrzeuge ueber Municipal), sonst Entsorger S0
+	var cost := (0.0 if not depot_of(k).is_empty() else tons * COLLECT_COST)
 	var pay := minf(cost, maxf(0.0, float(sim.economy.accounts.get(acct, 0.0))))
-	sim.economy.transfer(acct, "S0", pay)            # Entsorger holt ab und behandelt
+	if pay > 0.0:
+		sim.economy.transfer(acct, "S0", pay)
 	_unpaid += cost - pay
-	sim.economy.transfer("X0", acct, income)         # Wertstoffe gehen in den Verkauf
+	if sim.recycling != null:
+		sim.recycling.deliver(k, tons * 1000.0)
 	var tk: Dictionary = _town_stats(k)
 	for d in [month, total, tk.month, tk.total]:
 		d.tons = float(d.tons) + tons
-		d.recycled = float(d.recycled) + recycled
 		d.cost = float(d.cost) + pay
-		d.income = float(d.income) + income
-	scale_log.append({"tag": GameCalendar.day_of(sim.game_min), "stadt": k, "t": tons, "rest": residual})
+	scale_log.append({"tag": GameCalendar.day_of(sim.game_min), "stadt": k, "t": tons, "rest": 0.0, "art": "wert"})
+	if scale_log.size() > SCALE_LOG:
+		scale_log = scale_log.slice(-SCALE_LOG)
+
+
+## Waage der Deponie: Menge der Stadt k erfassen und Kosten der Stadtkasse buchen.
+## Ohne eigene Wertstoffwirtschaft (Einzel-/Kuestenwelt): wie bisher, Wertstoffe laufen pauschal ueber die Recyclingquote.
+## Eigene Wertstoffwirtschaft (real): hier landen nur die Reststoffe; Bio/Wertstoffe gehen ueber deliver_wert zum Hof.
+func weigh_in(k: int, tons: float) -> void:
+	if tons <= 0.0:
+		return
+	if not real:
+		var recycled := tons * rate
+		var residual := tons - recycled
+		deposited += residual
+		var acct := Towns.account_of(k)
+		# eigener Betriebshof: Abholung leisten Muellwerker und Fuhrpark der Stadt (Loehne/Fahrzeugkosten ueber Municipal), sonst Entsorger S0
+		var cost := (0.0 if not depot_of(k).is_empty() else tons * COLLECT_COST) + residual * DISPOSAL_COST
+		var income := recycled * RECYCLE_INCOME
+		var pay := minf(cost, maxf(0.0, float(sim.economy.accounts.get(acct, 0.0))))
+		sim.economy.transfer(acct, "S0", pay)            # Entsorger holt ab und behandelt
+		_unpaid += cost - pay
+		sim.economy.transfer("X0", acct, income)         # Wertstoffe gehen in den Verkauf
+		var tk: Dictionary = _town_stats(k)
+		for d in [month, total, tk.month, tk.total]:
+			d.tons = float(d.tons) + tons
+			d.recycled = float(d.recycled) + recycled
+			d.cost = float(d.cost) + pay
+			d.income = float(d.income) + income
+		scale_log.append({"tag": GameCalendar.day_of(sim.game_min), "stadt": k, "t": tons, "rest": residual})
+		if scale_log.size() > SCALE_LOG:
+			scale_log = scale_log.slice(-SCALE_LOG)
+		return
+	# real: reine Restmüll-Waage; die Wertstoffe sind schon im Hof verbucht
+	deposited += tons
+	var acct2 := Towns.account_of(k)
+	var cost2 := (0.0 if not depot_of(k).is_empty() else tons * COLLECT_COST) + tons * DISPOSAL_COST
+	var pay2 := minf(cost2, maxf(0.0, float(sim.economy.accounts.get(acct2, 0.0))))
+	sim.economy.transfer(acct2, "S0", pay2)
+	_unpaid += cost2 - pay2
+	var tk2: Dictionary = _town_stats(k)
+	for d in [month, total, tk2.month, tk2.total]:
+		d.tons = float(d.tons) + tons
+		d.cost = float(d.cost) + pay2
+	scale_log.append({"tag": GameCalendar.day_of(sim.game_min), "stadt": k, "t": tons, "rest": tons})
 	if scale_log.size() > SCALE_LOG:
 		scale_log = scale_log.slice(-SCALE_LOG)
 
@@ -367,6 +522,11 @@ func on_day(day: int) -> void:
 	if first:   # Spielbeginn: die Tonnen sind unterschiedlich voll (wie die vorhandene Deponie), damit die Abfuhr gleich Arbeit hat
 		for bid in bins:
 			bins[bid] = float(bins[bid]) + bin_capacity(bid) * float(absi(hash([sim.city.seed_value, bid, "tonne"])) % 80) / 100.0
+		if real:
+			for bid in bio:
+				bio[bid] = float(bio[bid]) + _cap_of("bio", bid) * float(absi(hash([sim.city.seed_value, bid, "bio"])) % 80) / 100.0
+			for bid in wert:
+				wert[bid] = float(wert[bid]) + _cap_of("wert", bid) * float(absi(hash([sim.city.seed_value, bid, "wert"])) % 80) / 100.0
 	_dispatch()
 	overflow_days += overflowing().size()
 	_check_expansion(day)
@@ -395,10 +555,16 @@ func on_month(_m: int) -> void:
 
 func to_dict() -> Dictionary:
 	var b := {}
+	var b2 := {}
+	var b3 := {}
 	for bid in bins:
 		b[str(bid)] = bins[bid]
+	for bid in bio:
+		b2[str(bid)] = bio[bid]
+	for bid in wert:
+		b3[str(bid)] = wert[bid]
 	return {"month": month, "total": total, "rate": rate, "last": last_month, "units_seen": _units_seen, "unpaid": _unpaid, "deposited": deposited, "tours": tours,
-		"capacity": capacity, "bins": b, "by_town": by_town.duplicate(true), "scale_log": scale_log.duplicate(true), "expansion": expansion.duplicate(),
+		"capacity": capacity, "bins": b, "bio": b2, "wert": b3, "by_town": by_town.duplicate(true), "scale_log": scale_log.duplicate(true), "expansion": expansion.duplicate(),
 		"expansions": expansions, "overflow_days": overflow_days}
 
 
@@ -419,6 +585,12 @@ func from_dict(d: Dictionary) -> void:
 	bins = {}
 	for key in d.get("bins", {}):
 		bins[int(key)] = float(d.bins[key])
+	bio = {}
+	for key in d.get("bio", {}):
+		bio[int(key)] = float(d.bio[key])
+	wert = {}
+	for key in d.get("wert", {}):
+		wert[int(key)] = float(d.wert[key])
 	by_town = d.get("by_town", {})
 	scale_log = d.get("scale_log", [])
 	expansion = d.get("expansion", {})

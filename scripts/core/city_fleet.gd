@@ -118,7 +118,7 @@ func update(dt: float) -> void:
 			continue
 		if v.kind in ["kolonne", "dienstwagen"]:
 			continue   # Bautrupps (BuildCrews) und Dienstwagen der Buergermeister (CivicWorks) steuern Ziel und Zustand selbst
-		if v.kind == "muell":
+		if v.kind in ["muell", "wertstoff"]:
 			_garbage(v, now)
 			continue
 		if v.kind == "stadtlkw" and str(v.phase) == "anfahrt":
@@ -146,19 +146,24 @@ func update(dt: float) -> void:
 
 ## Muellwagen der Stadt k: vom Betriebshof (sonst Rathaus) ueber die Halte der Tour zur gemeinsamen Deponie und zurueck. Zwei Muellwerker leeren an jedem
 ## Halt die Tonne (Waste.empty_bin); ist der Wagen voll, faehrt er gleich zur Deponie. Dort wiegt die Waage die Ladung (Waste.weigh_in).
-func send_garbage(stops: Array, landfill: Vector2i, tons: float, label: String, town: int = 0, home := Vector2i(-1, -1)) -> bool:
-	if stops.is_empty() or vehicles.filter(func(v): return v.kind == "muell" and int(v.town) == town).size() >= sim.waste.trucks_for(town):
+## stream: "rest" = Restmuell (Deponie, Waste.weigh_in) oder "wert" = Wertstoffe (Recyclinghof, Waste.deliver_wert; Bio+Wertstoffe werden am Halt zusammen geleert).
+func send_garbage(stops: Array, landfill: Vector2i, tons: float, label: String, town: int = 0, home := Vector2i(-1, -1), stream: String = "rest") -> bool:
+	if stops.is_empty():
+		return false
+	var kind := "muell" if stream == "rest" else "wertstoff"
+	if vehicles.filter(func(v): return v.kind == kind and int(v.town) == town).size() >= (sim.waste.trucks_for(town) if stream == "rest" else 1):
 		return false
 	if home.x < 0:   # ohne Betriebshof: Start am Rathaus
 		var th := int(sim.towns.get_t(town).get("town_hall", -1)) if sim.towns != null else -1
 		home = sim.city.building(th).road if th >= 0 else depot_road()
-	var v := _spawn("muell", home, stops[0].road, 0.0, home, label)
+	var v := _spawn(kind, home, stops[0].road, 0.0, home, label)
 	v["stops"] = stops
 	v["stop"] = 0
 	v["landfill"] = landfill
 	v["tons"] = tons
 	v["load"] = 0.0
 	v["town"] = town
+	v["stream"] = stream
 	v["phase"] = "tour"
 	stats.muelltouren += 1
 	return true
@@ -173,7 +178,11 @@ func _garbage(v: Dictionary, now: float) -> void:
 		"leeren":
 			if now < float(v.until):
 				return
-			var kg: float = sim.waste.empty_bin(int(v.stops[int(v.stop)].building), (float(v.tons) - float(v.load)) * 1000.0)
+			var kg: float
+			if str(v.stream) == "wert":
+				kg = sim.waste.empty_wert(int(v.stops[int(v.stop)].building), (float(v.tons) - float(v.load)) * 1000.0)
+			else:
+				kg = sim.waste.empty_bin(int(v.stops[int(v.stop)].building), (float(v.tons) - float(v.load)) * 1000.0)
 			v.load = float(v.load) + kg / 1000.0
 			stats.halte += 1
 			v.stop = int(v.stop) + 1
@@ -192,7 +201,10 @@ func _garbage(v: Dictionary, now: float) -> void:
 			v.until = now + DUMP_MIN
 		"abladen":
 			if now >= float(v.until):
-				sim.waste.weigh_in(int(v.town), float(v.load))
+				if str(v.stream) == "wert":
+					sim.waste.deliver_wert(int(v.town), float(v.load))
+				else:
+					sim.waste.weigh_in(int(v.town), float(v.load))
 				v.load = 0.0
 				v.phase = "rueckfahrt"
 				if not sim.route(m, v.back):
