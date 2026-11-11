@@ -935,6 +935,74 @@ TYPES.update({"rescue_center": ("rd2", 4, 3), "general_hospital": ("kh2", 6, 4),
 BUILDERS.update({"rescue_center": rescue_center, "general_hospital": general_hospital, "central_clinic": central_clinic, "mvz": mvz})
 
 
+# ------------------------------------------------------------------ Auftrag 22 Phase 2: Betriebshof der Abfallwirtschaft 4x3
+def _parked_truck(m, x0, y0, along_x=True):
+    """Abgestellter Muellwagen von oben: orange Pressaufbau, weisse Kabine."""
+    if along_x:
+        m.box(x0, y0, 1, x0 + 30, y0 + 12, 14, M("pub_orange"))
+        m.box(x0 + 30, y0, 1, x0 + 38, y0 + 12, 12, M("pub_white"))
+        m.box(x0 + 33, y0 + 4, 12, x0 + 35, y0 + 8, 14, M("pub_yellow"))
+    else:
+        m.box(x0, y0, 1, x0 + 12, y0 + 30, 14, M("pub_orange"))
+        m.box(x0, y0 + 30, 1, x0 + 12, y0 + 38, 12, M("pub_white"))
+        m.box(x0 + 4, y0 + 33, 12, x0 + 8, y0 + 35, 14, M("pub_yellow"))
+
+
+def _bin_row(m, x0, y, n, cols=("frame_dark", "pub_green", "pub_yellow", "blue")):
+    """Reihe Ersatztonnen (240-l-Tonnen) im Hof."""
+    for i in range(n):
+        x = x0 + i * 7
+        m.box(x, y, 1, x + 5, y + 6, 8, M(cols[i % len(cols)]))
+
+
+def waste_depot(v, st, seed):
+    rng = random.Random(seed)
+    W, H = 4 * T, 3 * T
+    m = Model(W, H, 50)
+    ground(m, st, W, H, seed)
+    d = "pub_orange"
+    if v == 0:
+        hall(m, st, 6, 6, 84, 46, 22, 3, d, rng, band="pub_orange")
+        house(m, st, 92, 8, 122, 40, 2, rng)
+        _parked_truck(m, 10, 58)
+        _parked_truck(m, 54, 58)
+    elif v == 1:
+        house(m, st, 6, 6, 38, 40, 2, rng)
+        canopy(m, 44, 6, 122, 46, 18, roof_mat="pub_orange" if st != "industrie" else "zinc")
+        _parked_truck(m, 50, 12)
+        _parked_truck(m, 50, 30)
+        _bin_row(m, 8, 54, 10)
+    elif v == 2:
+        hall(m, st, 40, 8, 122, 52, 24, 4, d, rng, band="pub_orange", door_w=16)
+        house(m, st, 6, 8, 34, 44, 1, rng)
+        _parked_truck(m, 10, 60, along_x=True)
+        _bin_row(m, 60, 66, 8)
+    elif v == 3:
+        hall(m, st, 6, 6, 70, 52, 20, 2, d, rng, band="pub_orange", door_w=18)
+        canopy(m, 76, 6, 122, 40, 14, roof_mat="steel")      # Waschplatz
+        _parked_truck(m, 80, 12)
+        house(m, st, 80, 52, 122, 84, 1, rng)
+    elif v == 4:
+        canopy(m, 6, 6, 80, 40, 16, roof_mat="pub_orange" if st != "gruen" else "pub_green")
+        _parked_truck(m, 10, 14)
+        _parked_truck(m, 40, 14)
+        house(m, st, 88, 6, 122, 44, 2, rng)
+        _bin_row(m, 10, 58, 12)
+    else:
+        house(m, st, 6, 50, 44, 86, 2, rng)
+        hall(m, st, 6, 6, 122, 42, 20, 5, d, rng, band="pub_orange", door_w=14)
+        _parked_truck(m, 56, 54, along_x=False)
+        _parked_truck(m, 74, 54, along_x=False)
+    fence(m, 0, H - 2, 44, H, 1, h=6, mat_f="steel")
+    fence(m, 84, H - 2, W, H, 1, h=6, mat_f="steel")
+    greenery(m, st, [(124, 90)], rng)
+    return m, {"w": 4, "h": 3, "entrance": [64, H], "delivery": [64, H], "height": 45}
+
+
+TYPES.update({"waste_depot": ("aw", 4, 3)})
+BUILDERS.update({"waste_depot": waste_depot})
+
+
 def sprite_name(btype, v, st):
     return "pub_%s_%d_%s" % (TYPES[btype][0], v, st)
 

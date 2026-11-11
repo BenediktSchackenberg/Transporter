@@ -184,6 +184,49 @@ func _dist(a: int, sb: Dictionary) -> int:
 
 ## Muellwagen der Stadt k: so viele, dass der Tagesabfall (Haushalte und Verpackung) bei typischer Tourdauer abgefahren wird (+30 % Reserve).
 func trucks_for(k: int) -> int:
+	var need := _trucks_needed(k)
+	var crews := crews_of(k)
+	return need if crews < 0 else mini(need, crews)
+
+
+## Betriebshof der Abfallwirtschaft (Municipal AW-01) der Stadt k, sonst {} (dann holt ein Entsorger gegen Gebuehr ab, Wagen vom Rathaus).
+func depot_of(k: int) -> Dictionary:
+	if sim.municipal == null or not sim.municipal.enabled():
+		return {}
+	for f in sim.municipal.of_town(k, "abfall"):
+		if str(f.code) == "AW-01" and f.status == "in_betrieb":
+			return f
+	return {}
+
+
+## Einsatzbereite Muellwagen mit voller Besatzung (Fahrer + 2 Lader = Vehicles.crew) am Betriebshof; -1 ohne Betriebshof.
+func crews_of(k: int) -> int:
+	var f := depot_of(k)
+	if f.is_empty():
+		return -1
+	var M: Municipal = sim.municipal
+	var trucks: int = f.vehicles.filter(func(v): return str(M.vehicles[v].type) == "Müllwagen" and M.vehicles[v].status != "ausser_dienst" and int(M.vehicles[v].driver) >= 0).size()
+	return mini(trucks, M.staff_count(f.id, "muellwerker") / int(Municipal.VEHICLES["Müllwagen"].crew))
+
+
+## Reicht der Fuhrpark nicht und ist Personal fuer einen weiteren Wagen da, kauft die Stadt einen Muellwagen (Kasse -> Hersteller X0).
+func _fleet_upkeep(k: int) -> void:
+	var f := depot_of(k)
+	if f.is_empty():
+		return
+	var M: Municipal = sim.municipal
+	var n: int = f.vehicles.filter(func(v): return str(M.vehicles[v].type) == "Müllwagen").size()
+	var price := float(Municipal.VEHICLES["Müllwagen"].price)
+	var acct := Towns.account_of(k)
+	if _trucks_needed(k) <= n or n >= MAX_TRUCKS or M.staff_count(f.id, "muellwerker") < (n + 1) * int(Municipal.VEHICLES["Müllwagen"].crew) 			or float(sim.economy.accounts.get(acct, 0.0)) < 2.0 * price:
+		return
+	sim.economy.transfer(acct, "X0", price)
+	var v := M.add_vehicle(f.id, "Müllwagen")
+	sim.activity.add("stadt", -1, "kauf", "%s kauft einen Müllwagen" % sim.towns.name_of(k), "%s · %s" % [v.label, Catalog.money(price)], sim.city.building(int(f.building)).road)
+
+
+## Bedarf an Muellwagen der Stadt k (ohne Ruecksicht auf Fuhrpark und Personal).
+func _trucks_needed(k: int) -> int:
 	var kg := 0.0
 	for bid in bin_rate:
 		if sim.towns.of_building(bid) == k:
@@ -222,7 +265,9 @@ func _dispatch() -> void:
 				kg += float(bins[bid])
 			if kg < MIN_LOAD * TRUCK_TONS * 1000.0 and float(bins[cand[0]]) < URGENT * bin_capacity(cand[0]):
 				break   # lohnt die Fahrt zur Deponie noch nicht und keine Tonne droht ueberzulaufen
-			if not sim.fleet.send_garbage(stops, landfill_road, TRUCK_TONS, "Müllabfuhr %s Tour %d" % [sim.towns.name_of(k), tours + 1], k):
+			var dep := depot_of(k)
+			var home: Vector2i = sim.city.building(int(dep.building)).road if not dep.is_empty() else Vector2i(-1, -1)
+			if not sim.fleet.send_garbage(stops, landfill_road, TRUCK_TONS, "%s Tour %d" % [str(dep.name) if not dep.is_empty() else "Müllabfuhr " + sim.towns.name_of(k), tours + 1], k, home):
 				break
 			tours += 1
 			for st in stops:
@@ -253,7 +298,8 @@ func weigh_in(k: int, tons: float) -> void:
 	var residual := tons - recycled
 	deposited += residual
 	var acct := Towns.account_of(k)
-	var cost := tons * COLLECT_COST + residual * DISPOSAL_COST
+	# eigener Betriebshof: Abholung leisten Muellwerker und Fuhrpark der Stadt (Loehne/Fahrzeugkosten ueber Municipal), sonst Entsorger S0
+	var cost := (0.0 if not depot_of(k).is_empty() else tons * COLLECT_COST) + residual * DISPOSAL_COST
 	var income := recycled * RECYCLE_INCOME
 	var pay := minf(cost, maxf(0.0, float(sim.economy.accounts.get(acct, 0.0))))
 	sim.economy.transfer(acct, "S0", pay)            # Entsorger holt ab und behandelt
@@ -316,6 +362,8 @@ func on_day(day: int) -> void:
 	rate = BASE_RECYCLING + MEHRWEG_BONUS * mehrweg_share()
 	var first := bins.is_empty()
 	_produce()
+	for k in sim.towns.count():
+		_fleet_upkeep(k)
 	if first:   # Spielbeginn: die Tonnen sind unterschiedlich voll (wie die vorhandene Deponie), damit die Abfuhr gleich Arbeit hat
 		for bid in bins:
 			bins[bid] = float(bins[bid]) + bin_capacity(bid) * float(absi(hash([sim.city.seed_value, bid, "tonne"])) % 80) / 100.0

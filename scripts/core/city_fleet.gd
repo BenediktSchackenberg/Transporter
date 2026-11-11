@@ -144,13 +144,14 @@ func update(dt: float) -> void:
 				vehicles.erase(v)
 
 
-## Muellwagen der Stadt k: vom Rathaus ueber die Halte der Tour zur gemeinsamen Deponie und zurueck. Zwei Muellwerker leeren an jedem
+## Muellwagen der Stadt k: vom Betriebshof (sonst Rathaus) ueber die Halte der Tour zur gemeinsamen Deponie und zurueck. Zwei Muellwerker leeren an jedem
 ## Halt die Tonne (Waste.empty_bin); ist der Wagen voll, faehrt er gleich zur Deponie. Dort wiegt die Waage die Ladung (Waste.weigh_in).
-func send_garbage(stops: Array, landfill: Vector2i, tons: float, label: String, town: int = 0) -> bool:
+func send_garbage(stops: Array, landfill: Vector2i, tons: float, label: String, town: int = 0, home := Vector2i(-1, -1)) -> bool:
 	if stops.is_empty() or vehicles.filter(func(v): return v.kind == "muell" and int(v.town) == town).size() >= sim.waste.trucks_for(town):
 		return false
-	var th := int(sim.towns.get_t(town).get("town_hall", -1)) if sim.towns != null else -1
-	var home: Vector2i = sim.city.building(th).road if th >= 0 else depot_road()
+	if home.x < 0:   # ohne Betriebshof: Start am Rathaus
+		var th := int(sim.towns.get_t(town).get("town_hall", -1)) if sim.towns != null else -1
+		home = sim.city.building(th).road if th >= 0 else depot_road()
 	var v := _spawn("muell", home, stops[0].road, 0.0, home, label)
 	v["stops"] = stops
 	v["stop"] = 0

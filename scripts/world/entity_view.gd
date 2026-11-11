@@ -137,8 +137,8 @@ func _update_fleet() -> void:
 		seen[id] = true
 		var n: Node2D = fleet_nodes.get(id)
 		if n == null:
-			if v.kind == "muell":   # Muellwagen: orange Lackierung, gelbe Rundumleuchte
-				n = _make_vehicle_node("truck", "", WasteView.ORANGE, true)
+			if v.kind == "muell":   # Muellwagen der Abfallwirtschaft (eigenes Modell, Auftrag 22 Phase 2), gelbe Rundumleuchte
+				n = _make_vehicle_node("aw_muell", "", Color.WHITE, false)
 				_add_beacon(n, -56.0)
 			elif v.kind == "dienstwagen":   # Auftrag 19: Limousine des Buergermeisters in seiner Farbe, mit Aufgabe als Beschriftung
 				n = _make_vehicle_node("car", _car_color(str(v.get("color", ""))), Color.WHITE, false)

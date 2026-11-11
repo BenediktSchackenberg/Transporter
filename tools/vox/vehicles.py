@@ -677,6 +677,35 @@ def fw_flf():
 MUNICIPAL += ["fw_kdow", "fw_elw", "fw_klf", "fw_lf10", "fw_tlf", "fw_gwl", "fw_rw", "fw_flf"]
 
 
+# ------------------------------------------------------------------ Auftrag 22 Phase 2: Muellwagen der Abfallwirtschaft
+SIZES.update({"aw_muell": 72})
+
+
+def aw_muell():
+    """Muellwagen: weisse Kabine, orange Pressaufbau mit Schuettung und Tonnenlifter hinten, zwei Trittbretter, Rundumleuchten."""
+    S = SIZES["aw_muell"]
+    m = _square(S)
+    L, W = 62, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0 + 4, y0, 5, x0 + 44, y0 + W, 32, M("pub_orange"))
+    m.box(x0 + 4, y0, 5, x0 + 44, y0 + W, 8, M("black"))
+    for yy in (y0, y0 + W - 1):
+        m.box(x0 + 6, yy, 20, x0 + 42, yy + 1, 23, M("hazard_white"))
+    m.box(x0, y0 + 1, 5, x0 + 6, y0 + W - 1, 28, M("steel_dark"))     # Pressheck
+    m.box(x0 - 2, y0 + 5, 6, x0, y0 + W - 5, 14, M("steel"))          # Tonnenlifter
+    m.box(x0 - 3, y0 + 1, 4, x0, y0 + 5, 5, M("steel_dark"))          # Trittbretter der Lader
+    m.box(x0 - 3, y0 + W - 5, 4, x0, y0 + W - 1, 5, M("steel_dark"))
+    _cab(m, x0 + 44, y0, W, 24, 18)
+    m.box(x0 + 50, y0 + 3, 24, x0 + 53, y0 + 6, 27, M("beacon_amber"))
+    m.box(x0 + 50, y0 + W - 6, 24, x0 + 53, y0 + W - 3, 27, M("beacon_amber"))
+    _axles(m, (x0 + 12, x0 + 28, x0 + 52), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+MUNICIPAL += ["aw_muell"]
+
+
 # ------------------------------------------------------------------ Auftrag 20 Etappe 14: Rettungsdienst
 SIZES.update({"rd_ktw": 50, "rd_elw": 46, "rd_itw": 80})
 

@@ -28,6 +28,7 @@ const BERUFE := {
 	"lehrkraft": {"label": "Lehrkräfte", "wage": 19.0, "bildung": 2},   # Stufe 3 ist selten und geht an die Kliniken
 	"erzieher": {"label": "Erzieher", "wage": 14.0, "bildung": 2},
 	"recycling": {"label": "Wertstoffwerker", "wage": 13.0, "bildung": 0},
+	"muellwerker": {"label": "Müllwerker", "wage": 13.5, "bildung": 0},   # Auftrag 22 Phase 2: Fahrer und Lader der Muellabfuhr
 	# Etappe 14: Rettungsdienst und Kliniken
 	"rettungssani": {"label": "Rettungssanitäter", "wage": 15.0, "bildung": 1},
 	"verwaltung": {"label": "Krankenhausverwaltung", "wage": 16.0, "bildung": 1},
@@ -59,6 +60,10 @@ const TYPES := {
 		"upkeep": 260.0, "capacity": 240, "min_capacity": 20, "staff": {"lehrkraft": 12}, "power": 120.0, "water": 20.0, "vehicles": []},
 	"KI-01": {"label": "Kita", "dienst": "bildung", "ressort": "Bildung", "building": "public_kita", "cost": 600000.0,
 		"upkeep": 110.0, "capacity": 60, "min_capacity": 10, "staff": {"erzieher": 6}, "power": 40.0, "water": 10.0, "vehicles": []},
+	# Auftrag 22 Phase 2: Betriebshof der Abfallwirtschaft - Muellwagen mit Fahrer und zwei Ladern (Waste faehrt die Touren).
+	"AW-01": {"label": "Betriebshof Abfallwirtschaft", "dienst": "abfall", "ressort": "Umwelt", "building": "waste_depot", "cost": 380000.0,
+		"upkeep": 90.0, "capacity": 2, "staff": {"muellwerker": 9}, "min_staff": {"muellwerker": 3}, "power": 40.0, "water": 8.0,
+		"vehicles": ["Müllwagen"]},   # weitere Muellwagen kauft die Stadt nach Bedarf (Waste._fleet_upkeep)
 	"RC-01": {"label": "Recyclinghof", "dienst": "recycling", "ressort": "Umwelt", "building": "recycling_yard", "cost": 350000.0,
 		"upkeep": 100.0, "capacity": 2, "staff": {"recycling": 4}, "power": 80.0, "water": 4.0, "vehicles": ["Wertstoffwagen"]},
 	# Ausbaustufen der Feuerwehr (Etappe 13): capacity = Stellplaetze. Hauptamtliche in drei Wachabteilungen (24-Stunden-Dienst), sobald
@@ -116,6 +121,7 @@ const VEHICLES := {
 	"Streuwagen": {"label": "Streu- und Räumfahrzeug", "crew": 1, "cost": 30.0, "price": 180000.0, "sprite": "bh_streu"},
 	"Linienbus": {"label": "Linienbus", "crew": 1, "cost": 40.0, "price": 280000.0, "sprite": "bus"},
 	"Wertstoffwagen": {"label": "Wertstoffsammelfahrzeug", "crew": 2, "cost": 35.0, "price": 230000.0, "sprite": "rc_wagen"},
+	"Müllwagen": {"label": "Müllsammelfahrzeug (Hecklader)", "crew": 3, "cost": 38.0, "price": 260000.0, "sprite": "aw_muell"},
 }
 
 ## Stadtstile (tools/vox/public.py): Wandmaterial, Dachform, Fenster und Gruen; je Typ 6 Grundvarianten in jedem Stil.
@@ -126,7 +132,7 @@ const STYLES := {
 	"industrie": "Industrie, Stahl und Wellblech",
 }
 const STYLE_OF_CHARACTER := {"Marktflecken": "backstein", "Handwerkerort": "industrie", "Fischerdorf": "gruen", "Bauerndorf": "gruen"}
-const START_KIT := ["FW-01", "RW-01", "BH-01"]
+const START_KIT := ["FW-01", "RW-01", "BH-01", "AW-01"]
 ## Finanzierung (Analyse 10.11.: die Dienste kosteten kleine Orte mehr als Landeszuweisung und Steuern zusammen):
 ## Rettungsdienst und Kliniken refinanzieren die Krankenkassen, die Flughafenfeuerwehr die Flughafenentgelte (ausserhalb der Region, X0) kostendeckend - Sachkosten, Fahrzeuge und
 ## Loehne kommen taeglich zurueck in die Stadtkasse (bzw. nach den Anteilen des Zweckverbands). Die Freiwillige Feuerwehr hat erst ab
@@ -212,18 +218,24 @@ static func sprite_of(f: Dictionary) -> String:
 ## Grundvariante aus dem Seed; schon vergebene Kombinationen aus Typ und Stil werden uebersprungen, solange noch eine frei ist
 ## (zehn Feuerwachen in der Region sehen verschieden aus).
 func pick_variant(code: String, st: String, sd: int) -> int:
+	# Zuerst im eigenen Stil am wenigsten genutzt (gleiche Bilder vermeiden), bei Gleichstand ueber alle Stile (alle Grundformen zeigen;
+	# vorher konnten sich bei mehreren Stilen dieselben Grundvarianten wiederholen, waehrend andere nie vorkamen).
 	var used := {}
+	var used_all := {}
 	for f in facilities.values():
-		if str(f.code) == code and str(f.style) == st:
-			used[int(f.variant)] = int(used.get(int(f.variant), 0)) + 1
-	var least := 1 << 30
-	for v in 6:
-		least = mini(least, int(used.get(v, 0)))
+		if str(f.code) == code:
+			used_all[int(f.variant)] = int(used_all.get(int(f.variant), 0)) + 1
+			if str(f.style) == st:
+				used[int(f.variant)] = int(used.get(int(f.variant), 0)) + 1
+	var best := sd % 6
+	var best_key := Vector2i(1 << 30, 1 << 30)
 	for i in 6:
 		var v := (sd + i) % 6
-		if int(used.get(v, 0)) <= least:
-			return v
-	return sd % 6
+		var key := Vector2i(int(used.get(v, 0)), int(used_all.get(v, 0)))
+		if key.x < best_key.x or (key.x == best_key.x and key.y < best_key.y):
+			best_key = key
+			best = v
+	return best
 
 
 static func visual_seed(world_seed: int, k: int, code: String, cell: Vector2i) -> int:
@@ -489,7 +501,7 @@ func _hire(f: Dictionary, by_id: Dictionary) -> void:
 			continue
 		var hk := -1 if bool(TYPES[f.code].get("regional", false)) or int(BERUFE[beruf].bildung) >= 3 else int(f.town)   # Aerzte pendeln regionsweit
 		var cands := _candidates(hk, beruf, day)
-		if cands.is_empty() and (int(BERUFE[beruf].bildung) >= 3 or (int(BERUFE[beruf].bildung) >= 2 and str(TYPES[f.code].dienst) == "rettung")):
+		if cands.is_empty():   # niemand frei im Ort: Stellenanzeige zieht eine Kraft von ausserhalb an (alle 7 Tage, nur mit freier Wohnung)
 			cands = _recruit_external(f, beruf, day)
 		for p in cands:
 			if hired >= HIRE_PER_DAY or missing <= 0:
@@ -513,8 +525,9 @@ func _hire(f: Dictionary, by_id: Dictionary) -> void:
 		sim.citizens.cap[EMPLOYER] = sim.citizens.employed_count(EMPLOYER)
 
 
-## Etappe 14: Gibt es in der ganzen Region niemanden mit der noetigen Ausbildung (Aerzte; im Gesundheitsdienst auch Pflege und Notfallsanitaeter), wirbt die Einrichtung alle 7 Tage eine Fachkraft
-## von ausserhalb an - sie zieht nur zu, wenn im Ort eine Wohnung frei ist (sonst bleibt die Stelle offen).
+## Gibt es niemanden mit der noetigen Ausbildung (Etappe 14: Aerzte, Pflege, Notfallsanitaeter; seit Auftrag 22 Phase 2 jeder Beruf -
+## die Startorte haben 30-55 Buerger und sind voll beschaeftigt, neue Dienste blieben sonst ohne Personal), wirbt die Einrichtung alle
+## 7 Tage eine Kraft von ausserhalb an - sie zieht nur zu, wenn im Ort eine Wohnung frei ist (sonst bleibt die Stelle offen).
 const RECRUIT_EVERY := 7
 
 

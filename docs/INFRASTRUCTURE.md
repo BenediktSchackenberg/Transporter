@@ -60,3 +60,21 @@ Region (2 Orte) Touren mit 8–14 Halten, keine dauerhaft überquellenden Tonnen
 Offen in Phase 1/2: Erweiterung wird noch nicht durch eine Baufirma gebaut (Kosten an den Entsorger S0); Betriebshof mit eigenem
 Personal und Fahrzeugen je Stadt, Müllarten, Littering/Sauberkeit je Viertel, Müllverbrennung → Phase 2. Müllwagen werden nicht
 gespeichert: nach dem Laden bleiben die Tonnen voll und werden neu angefahren (die Ladung eines fahrenden Wagens entfällt).
+
+## Phase 2 – Müll ausbauen (ab 11.11.2026)
+
+Reihenfolge: 1 Betriebshof · 2 Müllarten (Rest, Bio, Wertstoffe) · 3 Sauberkeit je Viertel mit Stadtreinigung · 4 Müllverbrennung
+(Strom, Asche) · 5 Erweiterung von Deponie und Verbrennung durch Baufirmen.
+
+**Schritt 1 Betriebshof (fertig 11.11.):** Municipal-Typ `AW-01` „Betriebshof Abfallwirtschaft“ (Gebäude `waste_depot`, 6 Grundvarianten ×
+4 Stile in `tools/vox/public.py`), Beruf Müllwerker (13,50 €/h), Fahrzeug „Müllwagen“ (Hecklader, Besatzung 3, Bild `aw_muell` in 4
+Richtungen). Gehört zur Startausstattung jeder Stadt (alte Spielstände bekommen ihn über `ensure_kit`). Die Touren starten am Betriebshof;
+es fahren höchstens so viele Wagen, wie Fahrzeuge mit Fahrer und volle Besatzungen (3 Müllwerker je Wagen) da sind (`Waste.crews_of`).
+Reicht der Fuhrpark nicht und ist Personal für einen weiteren Wagen da, kauft die Stadt einen Müllwagen (260 000 €, ab doppeltem
+Kassenbestand). Mit eigenem Betriebshof entfällt die Abholgebühr an den Entsorger; die Stadt trägt Löhne, Fahrzeug- und Sachkosten über
+Municipal. Ohne Betriebshof (Einzelstadt, kein Bauplatz) holt weiter der Entsorger S0 gegen Gebühr ab.
+
+Nebenbefunde beim Einbau: Die Startorte (30–55 Bürger) sind voll beschäftigt – neue Dienste fanden kein Personal. Die Stellenanzeige einer
+Einrichtung wirbt jetzt für jeden Beruf alle 7 Tage eine Kraft von außerhalb an, wenn im Ort eine Wohnung frei ist (vorher nur Ärzte und
+Rettungsdienst). Grundvarianten öffentlicher Gebäude werden über alle Stile verteilt (vorher wiederholten sich Formen bei mehreren Stilen).
+Test `test_waste_depot`; Probe `tests/probe_staff_pool.gd` (Arbeitsmarkt der Dienste je Stadt).
