@@ -553,6 +553,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			if a.get("worker_id") != null and str(a.worker_id) != "":
 				return worker_actions.run(cid, "assign_worker_task", {"kind": "reparieren", "vehicle_id": v.id,
 					"worker_id": a.worker_id, "priority": 1}, on_site)
+			if v.state == "broken" and v.no_fuel:
+				return {"ok": false, "msg": "#%d hat einen leeren Tank, keine Panne – Abschleppen hilft nicht. Diesel bestellen (buy_supplies); sonst kommt in 90 min die Notbetankung." % v.id}
 			if v.state == "broken":
 				sim.tow_to_workshop(v)
 				return {"ok": true, "msg": "#%d wird zur Werkstatt geschleppt (%s Abschleppen + Werkstattkosten)." % [v.id, Catalog.money(Catalog.TOW_FEE)]}

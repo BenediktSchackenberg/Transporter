@@ -680,6 +680,7 @@ func break_vehicle(v: FleetVehicle, reason: String) -> void:
 	if v.state != "broken":
 		v.resume_state = v.state
 		v.resume_timer = v.timer
+	v.no_fuel = reason == "Tank leer"   # eine echte Panne darf nicht als Tankproblem (Weiterfahrt ohne Reparatur) behandelt werden
 	v.state = "broken"
 	v.timer = 120.0
 	decisions.note(v.owner, "auto", "%s ausgefallen (%s)" % [v.display_name(), reason], {"vehicle_id": v.id})

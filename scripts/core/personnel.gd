@@ -880,7 +880,7 @@ func foremen_tick() -> void:
 			var in_area: bool = v.pos.distance_to(center) <= radius or (drv != null and drv.id in f.supervised)
 			if not in_area:
 				continue
-			if v.state == "broken" and v.held_by == "" and not _has_task_for(v.id, "reparieren"):
+			if v.state == "broken" and not v.no_fuel and v.held_by == "" and not _has_task_for(v.id, "reparieren"):
 				var mech := _best_for(team, _probe("reparieren"))
 				var needed := maxi(1, ceili((100.0 - v.condition) / 20.0))
 				if mech and c.parts < needed and f.orders.get("darf_teile_kaufen", false):

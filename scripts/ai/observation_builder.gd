@@ -36,7 +36,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	var fleet: Array = []
 	for v in sim.company_vehicles(cid):
 		var t: Vector2i = v.tile()
-		fleet.append({"id": v.id, "linie": sim.operations.line_of(v.id), "modell": v.model, "status": FleetVehicle.STATE_TEXT.get(v.state, v.state),
+		fleet.append({"id": v.id, "linie": sim.operations.line_of(v.id), "modell": v.model, "status": v.status_text(),
 			"zustand": int(v.condition), "fahrer": sim.driver_of(v).id if sim.driver_of(v) else null, "auftrag": v.contract_id,
 			"warteschlange": v.queue, "stopps": v.stops.slice(0, 6), "ladung": v.load,
 			"kapazitaet_frei": int(v.spec().capacity) - sim.logistics.load_total(v),
@@ -171,7 +171,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"hinweis": hint, "plan": sim.plans.summary(cid), "gedaechtnis": sim.memory.relevant(cid, _context(sim, cid, market)),
 		"betriebsablauf": sim.operations.summary(cid), "experimente": sim.experiments.summary(cid), "strategie_lernen": sim.strategy.summary_of(cid), "betriebshof": sim.estate.summary(cid), "hafen": sim.harbor.summary() if sim.harbor.enabled else {}, "vertraege": sim.social.agreements_of(cid),
 		"gemietete_fahrzeuge": sim.vehicles.values().filter(func(v): return v.operator == cid).map(func(v): return {"id": v.id,
-			"modell": v.model, "status": FleetVehicle.STATE_TEXT.get(v.state, v.state), "stopps": v.stops.slice(0, 6), "ladung": v.load}), "lager": _storage(sim, cid),
+			"modell": v.model, "status": v.status_text(), "stopps": v.stops.slice(0, 6), "ladung": v.load}), "lager": _storage(sim, cid),
 		"verfuegbare_aktionen": _available(sim, cid),
 		"unbekannt": ["Finanzen, Pläne, Notizen und Personaldaten der Konkurrenz",
 			"nicht gesammelte Aufträge (nur Anzahl: unbekannte_offene_auftraege)",
@@ -266,9 +266,12 @@ static func _available(sim: Simulation, cid: int) -> Dictionary:
 	var no_driver: Array = sim.company_vehicles(cid).filter(func(v): return sim.driver_of(v) == null)
 	if not no_driver.is_empty():
 		out["fahrer_benoetigt_fuer"] = no_driver.map(func(v): return v.id)
-	var broken: Array = sim.company_vehicles(cid).filter(func(v): return v.state == "broken" or v.condition < 45.0)
+	var broken: Array = sim.company_vehicles(cid).filter(func(v): return (v.state == "broken" and not v.no_fuel) or v.condition < 45.0)
 	if not broken.is_empty():
 		out["repair_vehicle"] = {"fahrzeuge": broken.map(func(v): return v.id)}
+	var dry: Array = sim.company_vehicles(cid).filter(func(v): return v.state == "broken" and v.no_fuel)
+	if not dry.is_empty():   # Abschleppen hilft hier nicht: Diesel ins Depot, sonst kommt nach 90 min die Notbetankung
+		out["tank_leer"] = {"fahrzeuge": dry.map(func(v): return v.id), "abhilfe": "buy_supplies Diesel (Tankwagen ins Depot), kein repair_vehicle"}
 	out["recruit_worker"] = {"ziele": P.available().filter(func(w): return w.role == "worker" and w.hire_fee <= c.ledger.cash).map(func(w): return w.id).slice(0, 8)}
 	out["recruit_foreman"] = {"ziele": P.available().filter(func(w): return w.role == "foreman" and w.hire_fee <= c.ledger.cash).map(func(w): return w.id)}
 	out["buy_vehicle"] = {"angebote": sim.resources.available_offers().filter(func(o): return o.price <= c.ledger.cash).map(func(o): return o.id).slice(0, 8),

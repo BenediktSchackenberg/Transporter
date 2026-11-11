@@ -50,6 +50,11 @@ func spec() -> Dictionary:
 	return Catalog.model(model)
 
 
+## Zustand fuer Anzeige und KI-Beobachtung: leerer Tank ist keine Panne (Abschleppen hilft nicht, Diesel schon).
+func status_text() -> String:
+	return "Tank leer" if state == "broken" and no_fuel else str(STATE_TEXT.get(state, state))
+
+
 func display_name() -> String:
 	return "%s #%d" % [spec().name, id]
 
