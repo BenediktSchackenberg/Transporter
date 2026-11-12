@@ -99,3 +99,30 @@ Tonnen, Raten und Touren werden in `Waste.to_dict`/`from_dict` gespeichert. Test
 Konservation, kein Hof → keine Tour, Laden), Anpassungen `test_waste_bins`/`test_waste_depot`/`test_recycling` an die modusabhängigen
 Erwartungen; Messprobe `tests/probe_waste.gd --region`: 31 Tage, 7 Wertstofftouren, überquellende Tonnen 55 → 0, Deponie bleibt bei
 ~201/800 t (vorher ohne Hof: 55 überquellend).
+
+**Schritt 3 Sauberkeit je Viertel (fertig 12.11.):** Überquellende Tonnen (Waste.overflowing) lassen ab 3 kg Straßenmüll pro
+Tonne am Gebäude (building.road) zurück; Viertel-Dreck 0..1 = Summe der Straßenmüll-Zellen / DIRTY_REF 40 kg, die
+Versorgungszufriedenheit sinkt um den Dreck im eigenen Viertel. Die Kehrmaschine (Voxel aw_kehr, Betriebshof AW-01) räumt
+täglich die schmutzigste Zelle je Stadt (Viertel mit dem meisten Dreck zuerst, dann die Entfernung); die Stadtkasse zahlt
+60 €/Zelle. Sichtbar: Flecken in RoadStateView, Zeile in der Deponie-Ansicht und im Service-Planner. Test
+test_street_cleaning (16); Messprobe probe_waste --days=31 --region: 23 Zellen geräumt, am Ende 5 Stellen / 5 kg Straßenmüll,
+Zufriedenheit stabil.
+
+**Schritt 4 Müllverbrennung (fertig 12.11.):** Die Region beschließt eine Müllverbrennungsanlage neben der gemeinsamen
+Deponie, sobald IV_BUILD_T 5 t neuer Restmüll (seit Spielbeginn, ohne die 25 % Startfüllung) angeliefert sind (gemessen
+~0,1 t/Tag real angeliefert → Auslösung nach 3–4 Wochen). 25 Tage Bau, 1,5 Mio. €, geteilt nach den gewogenen Müllmengen
+der Städte (Waste._iv_shares wie bei der Deponie-Erweiterung). Die Anlage (Municipal-Typ MV-01, Gebäude incineration_plant,
+6 Grundvarianten × 4 Stile, der Schornstein raucht über der Stadtansicht) steht auf einem freien öffentlichen Bauplatz (5×4)
+mit Straße im Umkreis der Deponie (Waste._iv_find_site); fehlt der Platz, wird es alle 7 Tage erneut versucht. Ab der
+Inbetriebnahme fahren die Müllwagen weiterhin zur Deponie, aber 90 % des angelieferten Restmülls werden verbrannt
+(Waste._iv_burn): pro Tonne 500 kWh Strom ohne Brennstoff; die Leistung zählt über Waste.iv_available_kw in den Bestand des
+Stromnetzes (PowerGrid._allocate wie Kraftwerkseigenproduktion und drückt den Tarif). Der Stromerlös (500 kWh × Tarif)
+gleicht den laufenden Betrieb (400 €/Tag) aus; der Aschenrest (10 %) wird abgelagert. Die Städte zahlen die Deponiegebühr
+ab dem Bautag nur noch auf die Asche plus eine Verarbeitungspauschale von 25 €/t auf die verbrannten Tonnen
+(Waste.weigh_in); die Abholgebühr entfiel bereits mit Schritt 1. Sichtbar: Zeile in der Deponie-Ansicht (LiveText.landfill:
+verbrannt / Asche / Netz-Strom / Kosten) und Feld muelle.verbrennung im Bürgermeister-Bericht (keine / im Bau / in
+Betrieb). Bau- und Betriebszustand werden gespeichert (iv_building, iv_fertig, iv_fac, iv_new_t, iv_stats, iv_last,
+Platzkandidat). Test test_incineration (22: Auslösung, Platzzuweisung, Bau, 90/10-Teilung, Strom im Netz, Kosten,
+Anzeige, Speicherung); Messprobe probe_waste --days=100 --region --cities=4: Auslösung an Tag 51 (5 t neuer Restmüll),
+in Betrieb seit Tag 77; Ende: 5,8 t verbrannt → 0,6 t Asche, Strom 3 MWh / Ertrag 928 €, Netz bis 251 kW; Deponie wächst
+nach Inbetriebnahme nur noch um die Asche (Tag 50–75: 205 → 210 t, dann 210/800 t bis Tag 99).

@@ -24,6 +24,7 @@ TYPES = {
     "public_school": ("sc", 6, 4),
     "public_kita": ("ki", 4, 3),
     "recycling_yard": ("rc", 4, 3),
+    "incineration_plant": ("iv", 5, 4),
 }
 
 ST = {
@@ -1001,6 +1002,70 @@ def waste_depot(v, st, seed):
 
 TYPES.update({"waste_depot": ("aw", 4, 3)})
 BUILDERS.update({"waste_depot": waste_depot})
+
+
+# ------------------------------------------------------------------ Auftrag 22 Phase 2 Schritt 4: Muellverbrennungsanlage 5x4 (gemeinsam, neben der Deponie)
+def incineration_plant(v, st, seed):
+    """Brennhaus mit Schornstein (Rauch), Waermeverwaltung und Aschenhof; sechs Grundformen, vier Stile."""
+    rng = random.Random(seed)
+    W, H = 5 * T, 4 * T
+    m = Model(W, H, 110)
+    ground(m, st, W, H, seed)
+    d = "pub_orange"
+
+    def chim(x, y, s=12, h=66):
+        """Schornstein: schlanker Schlauchturm mit orangem Kennband; gibt die Rauchposition in der Bildebene zurueck
+        (Konvention wie Factory, industrial.py: [2(cx-cy), cx+cy-2h])."""
+        tower(m, st, x, y, s, h, rng, cap="zinc")
+        m.box(x, y + s - 2, h - 10, x + s, y + s, h - 6, M("pub_orange"))
+        cx, cy = x + s // 2, y + s // 2
+        return [2 * (cx - cy), cx + cy - 2 * h]
+
+    sm = []
+    if v == 0:      # Brennhaus quer, Schornstein hinten links, Verwaltung rechts, Aschenlager vorne
+        hall(m, st, 6, 18, 120, 66, 24, 4, d, rng, band="pub_orange", door_w=16)
+        house(m, st, 126, 18, 156, 60, 2, rng)
+        sm = chim(20, 74, 12, 70)
+        heap(m, 70, 76, 104, 100, 6, "zinc")
+        _parked_truck(m, 6, 74)
+    elif v == 1:    # L-Anlage: Halle vorne, Ofenfluegel rechts, zwei Schornsteine
+        hall(m, st, 6, 60, 110, 108, 24, 4, d, rng, band="pub_orange")
+        hall(m, st, 112, 60, 156, 108, 20, 2, d, rng, roof_kind="flat", door_w=16)
+        house(m, st, 6, 18, 60, 54, 2, rng)
+        sm = chim(66, 20, 12, 72)
+        chim(96, 20, 10, 60)
+        heap(m, 18, 30, 54, 50, 5, "zinc")
+    elif v == 2:    # Zwei Hallenteile um einen mittigen Schornstein, Waermoelhaus vorne
+        hall(m, st, 6, 44, 64, 108, 24, 3, d, rng, band="pub_orange")
+        hall(m, st, 96, 44, 156, 108, 24, 3, d, rng, band="pub_orange")
+        sm = chim(70, 60, 14, 78)
+        house(m, st, 44, 6, 120, 36, 1, rng)
+        _parked_truck(m, 126, 10)
+    elif v == 3:    # Kompakt: Halle unten, zwei Geschosse drueber, Schornstein seitlich
+        hall(m, st, 6, 52, 150, 108, 22, 5, d, rng, band="pub_orange", door_w=14)
+        house(m, st, 30, 12, 124, 44, 2, rng, z0=25, entrance=False)
+        sm = chim(132, 60, 12, 74)
+        heap(m, 10, 16, 26, 40, 5, "zinc")
+    elif v == 4:    # Halle hinten, freistehender Schornstein im Hof, Verwaltung rechts vorne
+        hall(m, st, 6, 60, 156, 108, 26, 4, d, rng, band="pub_orange")
+        sm = chim(24, 16, 12, 70)
+        house(m, st, 92, 8, 156, 48, 2, rng)
+        _parked_truck(m, 116, 56)
+        heap(m, 58, 14, 88, 40, 5, "zinc")
+    else:           # Lange Brennhauszeile, Schornstuenturm am Kopf, Aschenhof
+        hall(m, st, 6, 30, 120, 80, 22, 5, d, rng, band="pub_orange", door_w=14)
+        sm = chim(126, 34, 14, 80)
+        house(m, st, 6, 8, 60, 26, 1, rng)
+        heap(m, 70, 86, 110, 112, 6, "zinc")
+        heap(m, 118, 84, 150, 112, 5, "sand")
+    fence(m, 0, H - 2, 40, H, 1, h=6, mat_f="steel")
+    fence(m, 110, H - 2, W, H, 1, h=6, mat_f="steel")
+    greenery(m, st, [(152, 116)], rng)
+    lamp_post(m, 4, H - 3, 1, h=16)
+    return m, {"w": 5, "h": 4, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": 96, "smoke": sm}
+
+
+BUILDERS.update({"incineration_plant": incineration_plant})
 
 
 def sprite_name(btype, v, st):

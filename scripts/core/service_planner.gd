@@ -299,8 +299,15 @@ func act(k: int, n: Dictionary, by: String) -> Dictionary:
 
 # ------------------------------------------------------------------ Lagebericht fuer die KI, Uebersicht, Speichern
 func mayor_obs(k: int) -> Dictionary:
+	var W: Waste = sim.waste
+	var iv_state := "keine"
+	if W.iv_building > 0 and W.iv_fertig == 0:
+		iv_state = "im Bau, Inbetriebnahme an Tag %d" % (W.iv_building + Waste.IV_DAYS)
+	elif W.iv_fertig > 0 and W._iv_on():
+		iv_state = "in Betrieb seit Tag %d (gestern %.1f t verbrannt, %d kW ins Netz)" % [W.iv_fertig, float(W.iv_last.t), roundi(W.iv_available_kw())]
 	return {"einrichtungen": sim.municipal.summary(k), "bedarf": needs(k), "feuerwehr": sim.fire.summary(k), "rettungsdienst": sim.rescue.summary(k),
 		"winterdienst": sim.winter.summary(k), "stadtreinigung": sim.street_cleaning.summary(k), "bus": sim.transit.summary(k), "bildung": sim.education.summary(k), "recycling": sim.recycling.summary(k),
+		"muelle": {"deponie_prozent": roundi(W.fill_share() * 100.0), "rest_t": W.deposited, "verbrennung": iv_state},
 		"neubauten_geplant": builds.values().filter(func(b): return int(b.town) == k).map(func(b): return "%s (%s)" % [Municipal.TYPES[b.code].label, b.reason]),
 		"baukosten": Municipal.TYPES.keys().map(func(c): return "%s %s: %s" % [c, Municipal.TYPES[c].label, Catalog.money(build_cost(c, k))]),
 		"regionalrat": sim.council.summary() if sim.council != null else {}, "autobahn": sim.regional.highway_summary()}

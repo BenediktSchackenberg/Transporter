@@ -1,7 +1,10 @@
 .godot/
 build/
+.qwen/
 *.tmp
 *.log
+__pycache__/
+*.pyc
 user_data/
 .vscode/
 Thumbs.db

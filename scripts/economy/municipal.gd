@@ -66,6 +66,11 @@ const TYPES := {
 		"vehicles": ["Müllwagen", "Kehrmaschine"]},   # weitere Muellwagen kauft die Stadt nach Bedarf (Waste._fleet_upkeep)
 	"RC-01": {"label": "Recyclinghof", "dienst": "recycling", "ressort": "Umwelt", "building": "recycling_yard", "cost": 350000.0,
 		"upkeep": 100.0, "capacity": 2, "staff": {"recycling": 4}, "power": 80.0, "water": 4.0, "vehicles": ["Wertstoffwagen"]},
+	# Auftrag 22 Phase 2 Schritt 4: gemeinsame Muellverbrennungsanlage der Region (neben der Deponie); wird von Waste gebaut,
+	# wenn die Deponie zu schnell waechst (Personal: Muellwerker; Unterhalt und Lohn nach Einwohneranteilen der Staedte).
+	"MV-01": {"label": "Müllverbrennungsanlage", "dienst": "abfall", "ressort": "Umwelt", "building": "incineration_plant", "cost": 1500000.0,
+		"upkeep": 400.0, "capacity": 2, "regional": true, "staff": {"muellwerker": 6}, "min_staff": {"muellwerker": 2}, "power": 300.0, "water": 20.0,
+		"vehicles": []},
 	# Ausbaustufen der Feuerwehr (Etappe 13): capacity = Stellplaetze. Hauptamtliche in drei Wachabteilungen (24-Stunden-Dienst), sobald
 	# genug Personal da ist (FireService.on_duty); FW-03/04 mit Leitstelle (schnellere Alarmierung), FW-04 mit Werkstatt.
 	# Rettungsdienst und Kliniken (Etappe 14): RW-01 entspricht RD-01. Kliniken: klinik = Versorgungsstufe (1 Notaufnahme, 2 Stationen und

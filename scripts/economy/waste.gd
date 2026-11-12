@@ -41,6 +41,15 @@ const EXPAND_T := 600.0
 const EXPAND_COST := 90000.0
 const EXPAND_DAYS := 20
 const SCALE_LOG := 40                   # so viele Waegungen bleiben im Waagebuch
+## Muellverbrennung (Auftrag 22 Phase 2 Schritt 4): hat die Deponie IV_BUILD_T neuen Restmuell (ohne Startfuellung) gesammelt,
+## beschliesst die Region eine gemeinsame Verbrennungsanlage neben der Deponie (Municipal MV-01, Kosten nach Abfallmengen).
+## Ab der Inbetriebnahme faehrt der Muellwagen weiter dorthin: 90 % des Restmuells wird verbrannt (Strom ins Netz, kein
+## Brennstoff, der Muell ist ohnehin da), nur IV_ASH landet als Asche auf der Deponie; die Stadt zahlt einen Verarbeitungstarif.
+const IV_BUILD_T := 5.0                # Tonnen neuer Restmuell (ohne Startfuellung), bis die Region die Verbrennungsanlage beschliesst (gemessen: ~0,1 t/Tag real angeliefert, tests/probe_waste.gd)
+const IV_DAYS := 25                     # Bauzeit
+const IV_ASH := 0.10                    # Anteil des Restmülls, der als Asche deponiert wird
+const IV_KWH_PER_T := 500.0             # Stromausbeute je verbrannter Tonne Restmüll
+const IV_PROC_PER_T := 25.0             # Verarbeitungstarif je Tonne (statt der vollen Deponiegebühr)
 
 var sim: Simulation
 var month := {"tons": 0.0, "recycled": 0.0, "cost": 0.0, "income": 0.0}
@@ -69,6 +78,15 @@ var overflow_days := 0                  # Summe ueberquellender Tonnen je Tag (K
 var _planned := {}                      # Gebaeude-ID -> true, Tonne ist einer laufenden Tour zugeteilt (nicht gespeichert)
 var real := false                       # Region: Muellarten real (Rest -> Deponie, Bio+Wertstoffe -> Recyclinghof). Kuestenort: altes Pauschal-Modell.
 var tours_wert := 0                     # Wertstofftouren (Auftrag 22 Phase 2 Schritt 2)
+var iv_building := 0                    # Baubeginn der Verbrennungsanlage (Tag), 0 = kein Bau
+var iv_fertig := 0                      # Inbetriebnahme-Tag der Verbrennungsanlage, 0 = keine gebaut
+var iv_retry := 0                       # naechster Versuch, einen Bauplatz neben der Deponie zu finden
+var iv_fac := ""                        # Einrichtung MV-01 (Municipal)
+var iv_new_t := 0.0                     # neu abgelagerter Restmuell seit Spielanfang (t) – Ausloesekriterium, die Startfuellung zaehlt nicht
+var iv_stats := {"t": 0.0, "ash": 0.0, "kwh": 0.0, "erloes": 0.0}   # Verbrennungsleistung gesamt (Erloes deckt den Betrieb)
+var _iv_acc := {"t": 0.0, "ash": 0.0, "kwh": 0.0}    # Tagesakkumulation (waelt am Tagesende in iv_last um)
+var iv_last := {"t": 0.0, "ash": 0.0, "kwh": 0.0, "day": -1}   # letzter abgeschlossener Tag (Grundlage fuer Netzanschluss)
+var _iv_site := {}   # gefundener Bauplatz (rect, parcel), bis zur Errichtung
 
 
 func setup(s: Simulation) -> void:
@@ -430,6 +448,7 @@ func deliver_wert(k: int, tons: float) -> void:
 ## Waage der Deponie: Menge der Stadt k erfassen und Kosten der Stadtkasse buchen.
 ## Ohne eigene Wertstoffwirtschaft (Einzel-/Kuestenwelt): wie bisher, Wertstoffe laufen pauschal ueber die Recyclingquote.
 ## Eigene Wertstoffwirtschaft (real): hier landen nur die Reststoffe; Bio/Wertstoffe gehen ueber deliver_wert zum Hof.
+## Muellverbrennung (Schritt 4): in Betrieb verbrannt die Anlage den Restmuell (Strom, Asche), nur die Asche wird deponiert.
 func weigh_in(k: int, tons: float) -> void:
 	if tons <= 0.0:
 		return
@@ -456,9 +475,12 @@ func weigh_in(k: int, tons: float) -> void:
 			scale_log = scale_log.slice(-SCALE_LOG)
 		return
 	# real: reine Restmüll-Waage; die Wertstoffe sind schon im Hof verbucht
-	deposited += tons
+	var burn := _iv_burn(k, tons)
+	var ash := tons if burn <= 0.0 else tons * IV_ASH   # ohne Anlage: alles deponiert; mit Anlage: nur die Asche
+	deposited += ash
+	iv_new_t += ash
 	var acct2 := Towns.account_of(k)
-	var cost2 := (0.0 if not depot_of(k).is_empty() else tons * COLLECT_COST) + tons * DISPOSAL_COST
+	var cost2 := (0.0 if not depot_of(k).is_empty() else tons * COLLECT_COST) + ash * DISPOSAL_COST + burn * IV_PROC_PER_T
 	var pay2 := minf(cost2, maxf(0.0, float(sim.economy.accounts.get(acct2, 0.0))))
 	sim.economy.transfer(acct2, "S0", pay2)
 	_unpaid += cost2 - pay2
@@ -466,9 +488,172 @@ func weigh_in(k: int, tons: float) -> void:
 	for d in [month, total, tk2.month, tk2.total]:
 		d.tons = float(d.tons) + tons
 		d.cost = float(d.cost) + pay2
-	scale_log.append({"tag": GameCalendar.day_of(sim.game_min), "stadt": k, "t": tons, "rest": tons})
+	scale_log.append({"tag": GameCalendar.day_of(sim.game_min), "stadt": k, "t": tons, "rest": ash, "verbrannt": burn})
 	if scale_log.size() > SCALE_LOG:
 		scale_log = scale_log.slice(-SCALE_LOG)
+
+
+## Muellverbrennung (Schritt 4): in Betrieb wird der angelieferte Restmuell verbrannt (Strom IV_KWH_PER_T je Tonne, kein
+## Brennstoff, der Muell ist ohnehin da). Der Stromerlös (kwh * Tarif) wird in iv_stats.erloes gefuehrt; die Leistung selbst fliest
+## ueber iv_available_kw() ins Netz (PowerGrid._allocate), wo sie Notstrom-Bezug verdrangt. Die Menge wird je Tag akkumuliert
+## und von _iv_daily in iv_last gewaellt (Netzanschluss, Anzeige).
+func _iv_burn(k: int, tons: float) -> float:
+	if not _iv_on():
+		return 0.0
+	var kwh := tons * IV_KWH_PER_T
+	_iv_acc.t = float(_iv_acc.t) + tons
+	_iv_acc.ash = float(_iv_acc.ash) + tons * IV_ASH
+	_iv_acc.kwh = float(_iv_acc.kwh) + kwh
+	iv_stats.t = float(iv_stats.t) + tons
+	iv_stats.ash = float(iv_stats.ash) + tons * IV_ASH
+	iv_stats.kwh = float(iv_stats.kwh) + kwh
+	iv_stats.erloes = float(iv_stats.erloes) + kwh * sim.grid.tariff
+	return tons
+
+
+## Anlage ist gebaut und in Betrieb (MV-01, ab dem Inbetriebnahmetag)?
+func _iv_on() -> bool:
+	return iv_fertig > 0 and GameCalendar.day_of(sim.game_min) >= iv_fertig and _iv_fac() != {}
+
+
+func _iv_fac() -> Dictionary:
+	if iv_fac == "" or sim.municipal == null:
+		return {}
+	return sim.municipal.facilities.get(iv_fac, {})
+
+
+## Netzanschluss der Verbrennungsanlage (kW) aus dem letzten abgeschlossenen Tag (iv_last); 0 ohne Anlage.
+func iv_available_kw() -> float:
+	if iv_fertig == 0 or not _iv_fac().has("building") or int(iv_last.day) < 0:
+		return 0.0
+	return float(iv_last.kwh) / (GameCalendar.day_game_min / 60.0)
+
+
+## Tageslauf der Verbrennung (am Tagesende, nach Abfuhr und Erweiterung): bei IV_BUILD_T Restmuell beschliesst die Region
+## den Bau, der Bauplatz wird neben der Deponie gesucht, nach IV_DAYS wird die Anlage in Betrieb genommen; der abgelaufene
+## Tag wird zuletzt in iv_last gewaellt (Netzanschluss und Anzeige), auch nachdem sie laeuft.
+func _iv_daily(day: int) -> void:
+	if iv_fertig > 0 and day >= iv_fertig:
+		if iv_building > 0:   # Inbetriebnahme melden
+			iv_building = 0
+			sim.log_event("Die Müllverbrennungsanlage ist in Betrieb: 90 %% des Restmülls werden verbrannt (Strom %d kWh/t), Asche bleibt auf der Deponie." % int(IV_KWH_PER_T), "good")
+	elif iv_building > 0 and iv_fertig == 0:   # beschlossen: Bauplatz neben der Deponie suchen und errichten
+		if _iv_find_site():
+			_iv_build(day)
+		elif day >= iv_retry:
+			iv_retry = day + 7
+			sim.log_event("Noch kein freies städtisches Grundstück neben der Deponie für die Müllverbrennungsanlage – die Suche wird in 7 Tagen wiederholt.", "warn")
+	elif real and iv_new_t >= IV_BUILD_T:
+		_iv_building(day)
+	if day > int(iv_last.day):   # Vortag abschliessen (Menge fuer Netzanschluss und Anzeige; auch nach Spruengen)
+		iv_last = {"t": float(_iv_acc.t), "ash": float(_iv_acc.ash), "kwh": float(_iv_acc.kwh), "day": day - 1}
+		_iv_acc = {"t": 0.0, "ash": 0.0, "kwh": 0.0}
+
+
+## Baubeschluss der Region (Kassenanteil nach den bisher gewogenen Mengen; S0 als Trägerschaftskonto): die Anlage soll
+## neben der Deponie entstehen; den Bauplatz findet _iv_daily, errichtet wird sofort danach.
+func _iv_building(day: int) -> void:
+	if sim.municipal == null or not sim.municipal.enabled():
+		return
+	iv_building = day
+	iv_retry = day
+	sim.log_event("Die Region beschließt eine gemeinsame Müllverbrennungsanlage neben der Deponie (%s, Bauzeit %d Tage; Kosten nach den Abfallmengen der Städte)." % [
+		Catalog.money(float(Municipal.TYPES["MV-01"].cost)), IV_DAYS], "info")
+
+
+## Bauplatz neben der Deponie: das freie städtische Grundstück im Umkreis der Deponie mit Straßenanschluss, das der
+## Deponieflaeche am naechsten ist (5x4 Felder). Findet einen: true (in _iv_site).
+func _iv_find_site() -> bool:
+	_iv_site = {}
+	if landfill_cells.is_empty():
+		return false
+	var rect := Rect2i(landfill_cells.keys()[0], landfill_cells.keys()[0] + Vector2i(1, 1))
+	for c in landfill_cells:
+		var r2 := Rect2i(c, c + Vector2i(1, 1))
+		rect = Rect2i(Vector2i(mini(rect.position.x, r2.position.x), mini(rect.position.y, r2.position.y)),
+			Vector2i(maxi(rect.end.x, r2.end.x) - rect.position.x, maxi(rect.end.y, r2.end.y) - rect.position.y))
+	var W: int = int(CityGenerator.TYPES["incineration_plant"][1])
+	var H: int = int(CityGenerator.TYPES["incineration_plant"][2])
+	var best := 1 << 30
+	for p in sim.parcels.items.values():
+		if p.state != "frei" or not Towns.is_public(str(p.owner)) or int(p.area) < W * H:
+			continue
+		if not sim.parcels.is_buildable(p) or str(p.zone) in ["korridor", "industrie"]:
+			continue
+		var pr := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
+		if pr.size.x < W or pr.size.y < H or _gap(pr, rect) > 16:
+			continue
+		for y in range(pr.position.y, pr.end.y - H + 1):
+			for x in range(pr.position.x, pr.end.x - W + 1):
+				var r := Rect2i(x, y, W, H)
+				if not sim.civic._cells_free(r) or not sim.civic._touches_road(r):
+					continue
+				var d: int = _gap(r, rect)
+				if d < best:
+					best = d
+					_iv_site = {"rect": [r.position.x, r.position.y, W, H], "parcel": str(p.id)}
+	if _iv_site.is_empty():
+		return false
+	_iv_site["costs"] = _iv_shares()
+	return true
+
+
+## Naechster Abstand (in Feldern) zwischen zwei Rechtecken: 0, wenn sie sich beruehren oder ueberlappen, sonst der
+## Lueckenschmalste Abstand (Godot hat fuer Rechtecke keine distance_to-Methode).
+static func _gap(a: Rect2i, b: Rect2i) -> int:
+	var gx := maxi(0, maxi(b.position.x - a.end.x, a.position.x - b.end.x))
+	var gy := maxi(0, maxi(b.position.y - a.end.y, a.position.y - b.end.y))
+	return maxi(gx, gy)
+
+
+## Baupreis je Stadt nach den bisher gewogenen Mengen (Kassenanteil; S0 als Trägerschaftskonto).
+func _iv_shares() -> Dictionary:
+	var out := {}
+	var sum := 0.0
+	for k in sim.towns.count():
+		out[str(k)] = float(_town_stats(k).total.tons)
+		sum += float(out[str(k)])
+	for k in out:
+		out[str(k)] = float(out[k]) / sum if sum > 0.0 else 1.0 / float(out.size())
+	return out
+
+
+## Gebäude errichten (Gebäude- und Grundstücksstatus wie bei den Diensten), Einrichtung MV-01 registrieren; nach IV_DAYS
+## in Betrieb. Die Kassen der Städte zahlen ihren Anteil des Baupreises (S0 als Trägerschaftskonto).
+func _iv_build(day: int) -> void:
+	var r := Rect2i(int(_iv_site.rect[0]), int(_iv_site.rect[1]), int(_iv_site.rect[2]), int(_iv_site.rect[3]))
+	var b: Dictionary = sim.events._add_building("incineration_plant", r, "Müllverbrennungsanlage")
+	if b.is_empty():
+		return
+	var p: Dictionary = sim.parcels.parcel(str(_iv_site.parcel))
+	if not p.is_empty():
+		p.state = "bebaut"
+		p.use = "incineration_plant"
+		p.building = int(b.id)
+		sim.parcels.touch(str(p.id))
+	var k := 0
+	for t in sim.towns.list:   # Trägerstadt: die Abfallmeiste (Name/Lage der Anlage)
+		if sim.citizens.population_of(int(t.id)) > sim.citizens.population_of(k):
+			k = int(t.id)
+	var f: Dictionary = sim.municipal.register(k, "MV-01", int(b.id))
+	if f.is_empty():
+		return
+	var shares: Dictionary = _iv_site.get("costs", _iv_shares())
+	f["shares"] = shares
+	f.owner = "region"
+	var cost := float(Municipal.TYPES["MV-01"].cost)
+	var parts: Array = []
+	for sk in shares:
+		var part := cost * float(shares[sk])
+		var acct := Towns.account_of(int(sk))
+		var pay := minf(part, maxf(0.0, float(sim.economy.accounts.get(acct, 0.0))))
+		sim.economy.transfer(acct, "S0", pay)
+		_unpaid += part - pay
+		parts.append("%s %s" % [sim.towns.name_of(int(sk)), Catalog.money(part)])
+	iv_fac = str(f.id)
+	iv_fertig = day + IV_DAYS
+	sim.events.buildings_added.emit([b.id])
+	sim.log_event("%s errichtet die Müllverbrennungsanlage am Deponiestrand (fertig in %d Tagen; Baukosten: %s)." % [sim.towns.name_of(k), IV_DAYS, ", ".join(parts)], "info")
 
 
 func _town_stats(k: int) -> Dictionary:
@@ -530,6 +715,7 @@ func on_day(day: int) -> void:
 	_dispatch()
 	overflow_days += overflowing().size()
 	_check_expansion(day)
+	_iv_daily(day)
 
 
 func on_month(_m: int) -> void:
@@ -565,7 +751,8 @@ func to_dict() -> Dictionary:
 		b3[str(bid)] = wert[bid]
 	return {"month": month, "total": total, "rate": rate, "last": last_month, "units_seen": _units_seen, "unpaid": _unpaid, "deposited": deposited, "tours": tours,
 		"capacity": capacity, "bins": b, "bio": b2, "wert": b3, "by_town": by_town.duplicate(true), "scale_log": scale_log.duplicate(true), "expansion": expansion.duplicate(),
-		"expansions": expansions, "overflow_days": overflow_days}
+		"expansions": expansions, "overflow_days": overflow_days, "iv_building": iv_building, "iv_fertig": iv_fertig, "iv_retry": iv_retry, "iv_new_t": iv_new_t,
+		"iv_fac": iv_fac, "iv_stats": iv_stats.duplicate(), "iv_last": iv_last.duplicate()}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -596,4 +783,13 @@ func from_dict(d: Dictionary) -> void:
 	expansion = d.get("expansion", {})
 	expansions = int(d.get("expansions", 0))
 	overflow_days = int(d.get("overflow_days", 0))
+	iv_building = int(d.get("iv_building", 0))
+	iv_fertig = int(d.get("iv_fertig", 0))
+	iv_retry = int(d.get("iv_retry", 0))
+	iv_fac = str(d.get("iv_fac", ""))
+	iv_new_t = float(d.get("iv_new_t", 0.0))
+	for k in d.get("iv_stats", {}):
+		iv_stats[k] = float(d.iv_stats[k])
+	iv_last = d.get("iv_last", iv_last)
+	_iv_site = {}
 	_planned = {}   # Muellwagen werden nicht gespeichert: laufende Touren entfallen, die Tonnen bleiben voll und werden neu angefahren

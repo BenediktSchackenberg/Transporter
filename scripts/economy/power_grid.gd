@@ -67,7 +67,8 @@ func on_day(day: int) -> void:
 func _allocate() -> void:
 	var base := base_load()
 	var plant_kw: float = sim.plant.available_kw(capacity)
-	var free := plant_kw + PowerPlant.EMERGENCY_KW - base   # Notstrom von aussen deckt begrenzt die Luecke
+	var iv_kw: float = sim.waste.iv_available_kw() if sim.waste != null else 0.0   # Mue llverbrennung (Auftrag 22 Phase 2 Schritt 4)
+	var free := plant_kw + iv_kw + PowerPlant.EMERGENCY_KW - base   # Notstrom von aussen deckt begrenzt die Luecke
 	var consumers: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING and float(b.energy_kw) > 0.0 and not sim.biz.frozen(int(b.owner)))
 	consumers.sort_custom(func(a, b): return float(a.founded) < float(b.founded) or (float(a.founded) == float(b.founded) and str(a.id) < str(b.id)))
 	var demand := 0.0

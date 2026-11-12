@@ -5,9 +5,12 @@ extends SceneTree
 func _init() -> void:
 	var days := 31
 	var region := false
+	var cities := 2
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--days="):
 			days = int(a.substr(7))
+		if a.begins_with("--cities="):
+			cities = int(a.substr(9))
 		if a == "--region":
 			region = true
 	GameCalendar.configure(60.0)
@@ -16,7 +19,7 @@ func _init() -> void:
 		s.world_mode = "region"
 		s.start_profile = "unternehmer"
 	var pl: Array = []
-	for i in 2:
+	for i in cities:
 		pl.append({"player_name": "Spieler%d" % i, "company_name": "Firma%d" % i, "color": Catalog.COMPANY_COLORS[i], "avatar_style": i,
 			"personality": Catalog.PERSONALITIES.keys()[i]})
 	s.setup(4242, pl, Catalog.MAP_SIZE if region else 256, 0.5)
@@ -54,6 +57,10 @@ func _init() -> void:
 			for b in W.wert:
 				wert += float(W.wert[b])
 			print("         Toenen: Rest %.0f kg, Bio %.0f kg, Wertstoffe %.0f kg  Wertstofftouren %d" % [_in_bins(W), bio, wert, W.tours_wert])
+			if W.iv_building > 0 or W.iv_fertig > 0:   # Auftrag 22 Phase 2 Schritt 4: Muellverbrennung
+				var state := "im Bau (Tag %d, fertig %d)" % [W.iv_building, W.iv_building + Waste.IV_DAYS] if W.iv_fertig == 0 else "in Betrieb seit Tag %d" % W.iv_fertig
+				print("         Verbrennung: %s  verbrannt %.1f t (%.0f MWh, Erloes %s), Asche %.1f t, neu abgelagert %.1f t, Netz %.0f kW" % [
+					state, float(W.iv_stats.t), float(W.iv_stats.kwh) / 1000.0, Catalog.money(float(W.iv_stats.erloes)), float(W.iv_stats.ash), W.iv_new_t, W.iv_available_kw()])
 	var durs: Array = []
 	for id in seen:
 		durs.append("%.2fd/%dH/%.2ft" % [(float(seen[id].end) - float(seen[id].start)) / GameCalendar.day_game_min, int(seen[id].stops), float(seen[id].load)])

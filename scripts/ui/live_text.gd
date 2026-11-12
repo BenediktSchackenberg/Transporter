@@ -1157,6 +1157,14 @@ static func landfill(sim: Simulation) -> String:
 		txt += "[color=#e0a040]Erweiterung um %.0f t im Bau, fertig an Tag %d.[/color]\n" % [float(W.expansion.t), int(W.expansion.fertig)]
 	elif W.fill_share() > 0.7:
 		txt += "[color=#e0a040]Die Deponie wird voll – ab %d %% wird erweitert.[/color]\n" % roundi(Waste.EXPAND_AT * 100.0)
+	if W.iv_building > 0 and W.iv_fertig == 0:
+		txt += "[color=#e0a040]Müllverbrennungsanlage im Bau (Inbetriebnahme an Tag %d) – der Restmüll wird bis dahin noch gelagert.[/color]\n" % (W.iv_building + Waste.IV_DAYS)
+	if W.iv_fertig > 0 and W._iv_on():
+		var kw := W.iv_available_kw()
+		txt += "Müllverbrennung: %.1f t verbrannt (gestern %.1f t, Strom %d kW ins Netz, %.0f MWh gesamt) · Asche %.1f t von %.1f t Restmüll\n" % [
+			float(W.iv_stats.t), float(W.iv_last.t), roundi(kw), float(W.iv_stats.kwh) / 1000.0, float(W.iv_stats.ash), float(W.iv_stats.t)]
+		txt += "Kosten je Tonne: Deponiegebühr nur für die Asche, plus Verarbeitung %s – der Stromerlös (%s gestern) deckt den Anlagenbetrieb.\n" % [
+			Catalog.money(Waste.IV_PROC_PER_T), Catalog.money(float(W.iv_last.kwh) * sim.grid.tariff)]
 	txt += "Diesen Monat gewogen %.1f t · Recyclingquote %.0f %% (Mehrweg %.0f %%) · Erweiterungen bisher %d\n" % [float(W.month.tons), W.rate * 100.0, W.mehrweg_share() * 100.0, W.expansions]
 	txt += "Müllwagen unterwegs: %d · Touren bisher %d · Halte %d\n" % [sim.fleet.vehicles.filter(func(v): return v.kind == "muell").size(), W.tours, int(sim.fleet.stats.halte)]
 	if W.real:
