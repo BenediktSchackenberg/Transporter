@@ -1181,6 +1181,12 @@ func _finish_public(e: Dictionary) -> void:
 		sim.civic.on_finished(prj)   # Auftrag 19: Anlage/Denkmal eroeffnen
 	if prj.kind == "dienst":
 		sim.services.on_finished(prj)   # Auftrag 20: kommunale Einrichtung in Betrieb nehmen
+	if prj.kind == "deponie":
+		sim.waste.on_landfill_done(prj)   # Auftrag 22 Phase 2 Schritt 5: Deponie-Erweiterung
+	if prj.kind == "verbrennung":
+		sim.waste.on_iv_done(prj)   # Auftrag 22 Phase 2 Schritt 5: Müllverbrennung
+	if prj.kind == "trasse":
+		sim.grid.net.on_line_done(prj)   # Auftrag 22 Phase 3 Schritt 4: Ringschluss Hochspannung
 	if prj.kind == "hafenausbau":
 		sim.towns.harbor(M.town).finish_expansion()
 	if prj.kind == "flughafenausbau":

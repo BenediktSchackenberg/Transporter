@@ -25,6 +25,7 @@ const DISPOSAL_PER_MONTH := 2
 const DISPOSAL_COST := 3000.0
 const EMERGENCY_KW := 800.0          # Notstrom von aussen
 const EMERGENCY_EUR_KWH := 0.45
+const ACCT := "E0"                   # Auftrag 22 Phase 3: gemeinsame Kraftwerksgesellschaft der Staedte (Ausgleich in PowerGrid.settle)
 
 var sim
 var building := -1
@@ -86,13 +87,13 @@ func generate(kwh: float, emergency_kwh: float) -> void:
 	loaded_mwh = maxf(loaded_mwh, 0.0)
 	if emergency_kwh > 0.0:
 		var cost := emergency_kwh * EMERGENCY_EUR_KWH
-		sim.economy.transfer("P0", "X0", cost)
+		sim.economy.transfer(ACCT, "X0", cost)
 		stats.emergency_kwh = float(stats.emergency_kwh) + emergency_kwh
 		stats.emergency_cost = float(stats.emergency_cost) + cost
 
 
 func on_day(day: int) -> void:
-	sim.economy.transfer("P0", "H0", CREW_PER_DAY)   # Betriebsmannschaft
+	sim.economy.transfer(ACCT, "H0", CREW_PER_DAY)   # Betriebsmannschaft
 	stats.crew = float(stats.crew) + CREW_PER_DAY
 	# Ankunft bestellter Elemente am Importterminal -> Spezialtransport zum Kraftwerk (echter Transportauftrag, Zahler P0)
 	for p in pending.duplicate():
@@ -107,7 +108,7 @@ func on_day(day: int) -> void:
 		if T.stock_of("stahl") >= MAINT_STEEL:
 			var price := T.price("stahl", MAINT_STEEL)
 			sim.stock.consume("stahl", MAINT_STEEL, "T0", T.bauhof, "Wartung Kraftwerk", sim.game_min)
-			sim.economy.transfer("P0", "T0", price)
+			sim.economy.transfer(ACCT, "T0", price)
 			stats.maintenance = float(stats.maintenance) + price
 			maint_due = day + MAINT_DAYS
 			sim.log_event("Kraftwerk gewartet (%d Einheiten Stahl, %s)." % [MAINT_STEEL, Catalog.money(price)], "info")
@@ -120,6 +121,7 @@ func _ship(n: int) -> bool:
 		sim.harbor.demand(ITEM, n - sim.harbor.available(ITEM))
 		return false
 	sim.prod._deal("P0", building, "", {"biz": "", "acct": "X0", "cid": -1, "loc": port, "avail": n, "price": ip}, ITEM, n, ip, sim.prod.freight(port, building, ITEM, n))
+	sim.economy.transfer(ACCT, "P0", ip * float(n))   # Bestellung laeuft ueber die Stadtwerke von Ort 0 (Lager P0), die Gesellschaft erstattet
 	stats.fuel_cost = float(stats.fuel_cost) + ip * float(n)
 	return true
 
@@ -129,7 +131,7 @@ func on_month(_m: int) -> void:
 	var n := mini(DISPOSAL_PER_MONTH, sim.stock.qty(SPENT, "P0", building))
 	if n > 0:
 		sim.stock.consume(SPENT, n, "P0", building, "Entsorgung (extern)", sim.game_min)
-		sim.economy.transfer("P0", "S0", DISPOSAL_COST * float(n))
+		sim.economy.transfer(ACCT, "S0", DISPOSAL_COST * float(n))
 		stats.disposal = float(stats.disposal) + DISPOSAL_COST * float(n)
 
 

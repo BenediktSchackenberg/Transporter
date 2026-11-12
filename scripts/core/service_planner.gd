@@ -302,7 +302,11 @@ func mayor_obs(k: int) -> Dictionary:
 	var W: Waste = sim.waste
 	var iv_state := "keine"
 	if W.iv_building > 0 and W.iv_fertig == 0:
+		var e: Dictionary = sim.construction.public.get(W.iv_project, {}) if W.iv_project != "" else {}
+		var who := str(sim.construction.builders.get(str(e.get("builder", "")), {}).get("name", "")) if not e.is_empty() else ""
 		iv_state = "im Bau, Inbetriebnahme an Tag %d" % (W.iv_building + Waste.IV_DAYS)
+		if who != "":
+			iv_state += " (Baufirma %s, noch %d Tage)" % [who, int(e.days_left)]
 	elif W.iv_fertig > 0 and W._iv_on():
 		iv_state = "in Betrieb seit Tag %d (gestern %.1f t verbrannt, %d kW ins Netz)" % [W.iv_fertig, float(W.iv_last.t), roundi(W.iv_available_kw())]
 	return {"einrichtungen": sim.municipal.summary(k), "bedarf": needs(k), "feuerwehr": sim.fire.summary(k), "rettungsdienst": sim.rescue.summary(k),

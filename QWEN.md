@@ -1,7 +1,7 @@
 # Übergabe: Weiterentwicklung von Pixel Transport Rivals
 
 Diese Datei ist der Einstieg für jede KI- oder Entwickler-Sitzung, die hier weitermacht (Qwen Code liest `QWEN.md` automatisch).
-Sie beschreibt Arbeitsweise, Befehle, Konventionen, den aktuellen Stand und die nächsten Schritte. Stand: 11.11.2026, Commit `08e6bbb`.
+Sie beschreibt Arbeitsweise, Befehle, Konventionen, den aktuellen Stand und die nächsten Schritte. Stand: 12.11.2026 (Auftrag 22 Phase 3 Schritt 4).
 
 ## Projekt in Kürze
 
@@ -121,9 +121,24 @@ Testlage: Volltest zuletzt 6877 Prüfungen; die vier damals roten Tests (veralte
    (40 kg); Kehrmaschine (AW-01, Voxel `aw_kehr`) räumt die schmutzigste Zelle je Stadt nach Priorität (Dreck, dann Entfernung),
    die Stadtkasse zahlt Sachkosten; Zufriedenheit sinkt um den Dreck im eigenen Viertel; Flecken auf der Karte (RoadStateView),
    Anzeigeposition in der Deponie, Stadtreinigungs-Zeile in `probe_waste.gd`. Test `test_street_cleaning` (15 Prüfungen).
-3. Schritt 4 – Müllverbrennung (gemeinsam): verbrennt Restmüll, liefert Strom ins Netz, Asche auf die Deponie.
-4. Schritt 5 – Deponie-Erweiterung und Verbrennungsanlage über Ausschreibung und Baufirmen bauen (heute Kosten an S0).
-5. Danach Phase 3 (gemeinsames Kernkraftwerk, Stromnetz als Graph), Phase 4 (Wasser/Kanal/Kläranlage), Phase 5 (Polizei),
+3. **Auftrag 22 Phase 2 Schritt 4 – Müllverbrennung (fertig, 12.11.):** gemeinsame Anlage der Region (MV-01) neben der
+   Deponie, sobald 5 t neuer Restmüll angeliefert (gemessen ~0,1 t/Tag real); 25 Tage Bau, 1,5 Mio. € nach Müllmengen der Städte;
+   ab Inbetrieb 90 % verbrannt (500 kWh/t Strom ins Netz, Ertrag gleicht 400 €/Tag Betrieb aus), 10 % Asche auf die Deponie.
+   Test `test_incineration` (22 Prüfungen), Messprobe `probe_waste --days=100 --region --cities=4` (Auslösung Tag 51, Inbetrieb Tag 77).
+4. **Auftrag 22 Phase 2 Schritt 5 – Ausbau über Baufirmen (fertig, 12.11.):** Deponie-Erweiterung (85 % Füllstand) und
+   Müllverbrennung laufen nicht mehr sofort über die Entsorger-Kasse, sondern als regionale Bauprojekte: Ausschreibung der Region
+   (Kostenanteile nach Anteilen der Städte), Vergabe an die günstigste Baufirma (Angebot ≤ 120 % des Budgets), sichtbarer Bau mit
+   Abnahme; die Erweiterung vergrößert die Deponie, die Verbrennung wird erst mit Abnahme in Betrieb genommen.
+   Test `test_incineration` (24 Prüfungen) + Deponie-Block in `test_waste_bins`.
+5. **Auftrag 22 Phase 3 Schritt 1 – Kraftwerk gemeinsam (fertig, 12.11.):** Konto `E0` trägt die Kraftwerkskosten, Verbrauch je
+   Stadt, jede Stadt kauft ihren Bezug bei E0, Betriebe zahlen an ihre Stadt, Monatsausgleich nach festen Anteilen.
+   Test `test_shared_plant`, Messprobe `tests/probe_power.gd`.
+6. **Phase 3 Schritt 2 – Stromnetz als Graph (fertig, 12.11.):** `PowerNet` (Kraftwerk, Umspannwerk je Stadt, Trassen als
+   Spannbaum), nur angeschlossene Städte bekommen Kraftwerksstrom, Kartenansicht `PowerNetView`. Test `test_power_net`.
+   **Schritt 3 – Leitungsschäden/Netztrupps (fertig, 12.11.):** Sturm/Alterung, Netztrupp fährt hin und repariert. Test `test_power_repair`.
+   **Schritt 4 – Ringschluss über Baufirmen (fertig, 12.11.):** nach einem trennenden Ausfall plant die Region eine zweite Trasse,
+   Baufirma baut, Abnahme macht das Netz ringförmig. Test `test_power_ring`. Danach: Ausfallfolgen für Haushalte, dann Phase 4.
+7. Danach Phase 4 (Wasser/Kanal/Kläranlage), Phase 5 (Polizei),
    Phase 6/7 (Eisenbahn), Phase 8 (Verflechtung, Dashboard) – Details in `docs/INFRASTRUCTURE.md`.
 
 Bekannte offene Punkte außerhalb der Reihenfolge:

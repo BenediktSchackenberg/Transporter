@@ -126,3 +126,65 @@ Platzkandidat). Test test_incineration (22: Auslösung, Platzzuweisung, Bau, 90/
 Anzeige, Speicherung); Messprobe probe_waste --days=100 --region --cities=4: Auslösung an Tag 51 (5 t neuer Restmüll),
 in Betrieb seit Tag 77; Ende: 5,8 t verbrannt → 0,6 t Asche, Strom 3 MWh / Ertrag 928 €, Netz bis 251 kW; Deponie wächst
 nach Inbetriebnahme nur noch um die Asche (Tag 50–75: 205 → 210 t, dann 210/800 t bis Tag 99).
+
+**Schritt 5 Ausbau über Baufirmen (fertig 12.11.):** Die beiden regionalen Großbauwerke laufen nicht mehr sofort über die
+Entsorgungskasse (S0), sondern durch das Bausystem: Die Region (Trägerstadt = größte Stadt) schreibt das Projekt über
+Mayor.add_works_project aus; die Kostenanteile der Städte folgen den Anteilen nach gewogenen Müllmengen (Deponie) bzw.
+_Müllverbrennung nach IV-Schritt (Waste._iv_tender), und der Tageslauf von Construction vergibt es an das günstigste
+Baufirmen-Angebot (maximal 120 % des Budgets, sonst neue Ausschreibung am nächsten Tag). Der Bau ist sichtbar (Baufirma,
+Resttage, Budget in der Deponie-Ansicht und im Service-Planner); bei Abnahme (Construction._finish_public) erhöht
+Waste.on_landfill_done die Deponiekapazität um 600 t (EXPAND_T) bzw. Waste.on_iv_done nimmt die Verbrennung in Betrieb
+(Parzelle bebaut, Gebäude incineration_plant, MV-01). Abnahmefähig wird das Projekt erst ab dem Tag nach Angebotseingang,
+wenn eine Bau-Mannschaft vor Ort ist. Gespeichert: Waste.iv_project (Projekt-Id der Ausschreibung) und der Bauplatz; der
+Ausschreibungs- und Bauprozess selbst gehört zum Bauprojekt der Trägerstadt (Bürgermeister-Projekte sind Teil des Speichers).
+Tests: test_incineration (24: Ausschreibung mit Kostenanteilen, Baufirmen-Bau und Abnahme bis „fertig“, danach Anlage in
+Betrieb), Deponie-Block in test_waste_bins (Erweiterung wird ausgeschrieben, Baufirma baut ab, Kapazität wächst, Geld erhalten).
+
+## Phase 3 – Gemeinsames Kraftwerk und Stromnetz (ab 12.11.2026)
+
+Geplante Schritte: (1) Kraftwerk gemeinsam, Verbrauch und Abrechnung je Stadt · (2) Stromnetz als Graph: Umspannwerk je Stadt,
+Hochspannungstrassen Kraftwerk → Umspannwerke, Versorgung nur über verbundene Trassen · (3) Leitungsschäden (Sturm/Alter) mit
+Ausfall der betroffenen Stadt und Reparaturtrupps der Stadtwerke · (4) Ausbau der Trassen/Umspannwerke über Baufirmen, Anzeige.
+
+**Schritt 1 Kraftwerk gemeinsam, Verbrauch je Stadt (fertig 12.11.):** Neues Konto `E0` „Kraftwerksgesellschaft (gemeinsam)“
+trägt alle Kraftwerkskosten (Personal, Wartung, Notstrom, Entsorgung; Brennelemente bestellt weiter Ort 0 über sein Lager, E0
+erstattet sofort). `PowerGrid` erfasst je Stadt Grundlast (Einwohner × 1,2 kW) und Betriebe nach Standort (`town_of_biz`,
+versorgt/abgeschaltet). Täglich kauft jede Stadt ihren Verbrauch zum Erzeugungspreis (0,17 €/kWh) bei E0; die Betriebe zahlen ihren
+Tarif an die Stadtwerke ihrer eigenen Stadt (vorher immer P0). Am Monatsende (`PowerGrid.settle`) wird das Ergebnis von E0 nach
+festen gleichen Anteilen ausgeschüttet bzw. von den Städten ausgeglichen (E0 danach 0; Einzelstadt: 100 % an P0). Strom-Ansicht
+mit Zeile je Stadt (Last, Bezug, Tarife, Ausgleich), Bürgermeister-Beobachtung mit `staedte`/`anteile`/`letzter_ausgleich`,
+gespeichert (`by_town`, `last_settle`). Test `test_shared_plant` (13), `test_power_grid` angepasst (P0 + E0), Messprobe
+`tests/probe_power.gd [-- --days=35 --cities=4]`: 4 Städte, Monat 1 Bezug 434–756 € je Stadt, Kraftwerk 10 200 € Personal bei
+kleiner Last → Ergebnis −6 630 €, je Stadt −1 658 € ausgeglichen; Geldfehler 0,00.
+
+**Schritt 2 Stromnetz als Graph (fertig 12.11.):** `PowerNet` (`scripts/economy/power_net.gd`, gehört zu `PowerGrid.net`): Knoten
+Kraftwerk `KW` und je Stadt ein Umspannwerk `U<k>` (Feld rechts unten am Rathaus); Kanten = Hochspannungstrassen als gerade
+Zellenfolge (Freileitung, Bresenham), Startnetz = minimaler Spannbaum ab dem Kraftwerk (Prim). `PowerGrid._allocate` teilt in zwei
+Töpfe: Kraftwerk + Müllverbrennung nur für Städte, deren Umspannwerk über intakte Trassen erreichbar ist (`connected`, BFS); der
+Notstrom von außen (800 kW) deckt die Lücke aller Städte, abgehängte Städte haben nur ihn (Sperrgrund „Hochspannungstrasse
+unterbrochen“, `unversorgt_kw` für Grundlast über dem Notstrom). Kartenansicht `PowerNetView` (über der Bebauung): Gittermasten
+alle 4 Felder, Leiterseile mit Durchhang, Umspannwerk mit Zaun, Trafos, Portal und grüner/roter Lampe; unterbrochene Trassen rot
+gestrichelt mit Warnzeichen. Gespeichert (`grid.net`), alte Spielstände bekommen das Netz beim ersten Tageslauf. Test
+`test_power_net` (13): 5 Knoten/4 Trassen, lückenlose Trassen (Region Seed 4242: 1 020 Felder), genau die Städte hinter der
+getrennten Trasse verlieren das Kraftwerk, Notstrom deckt ihre Grundlast, Laden, Wiederverbindung, Einzelstadt 1 Trasse.
+
+**Schritt 3 Leitungsschäden und Netztrupps (fertig 12.11.):** `PowerNet.on_day` würfelt je intakter Trasse einen Schaden
+(Sturmtag laut `Weather.is_strong_wind`: 12 %, sonst 0,2 % Alterung). Die Schadstelle liegt an einer Trassenzelle mit Straße im
+Umkreis von 6 Feldern; der Netztrupp der nächsten **versorgten** Stadt fährt als echtes Fahrzeug (`CityFleet`, Art `netztrupp`,
+Bautrupp-Grafik mit Rundumleuchte) vom Rathaus hin, arbeitet erst ab Ankunft 40 Spielminuten und meldet `PowerNet.repaired`;
+die Kraftwerksgesellschaft E0 zahlt 2 500 € an S0. Ereignismeldungen bei Schaden (betroffene Städte) und Reparatur (Ausfalldauer).
+Strom-Ansicht: unterbrochene Trassen, Netztrupps, Schadensstatistik. Nach dem Laden fährt für offene Schäden ein neuer Trupp los.
+Test `test_power_repair` (12): Anfahrt 94 Spielminuten, 40 Minuten Arbeit, Kosten, Laden mitten in der Reparatur, Sturm.
+Messprobe `probe_power --days=60`: 1 Schaden, 2,5 Spieltage Ausfall, Notstrom 495 €, Geldfehler 0,00.
+
+**Schritt 4 Ringschluss über Baufirmen (fertig 12.11.):** Hat ein Schaden Städte getrennt (`repairs[id].getrennt`), beschließt
+die Region nach der Reparatur (`PowerNet.plan_ring`) eine zweite Trasse: kürzeste Verbindung eines Knotens hinter der Trasse mit dem
+übrigen Netz (BFS ohne die Trasse), 400 €/Feld, Bauzeit Felder/15 (mind. 10 Tage). Ausschreibung als regionales Projekt `trasse`
+(Träger die größte Stadt, Anteile gleich je Stadt wie das Kraftwerk), Bautrupp fährt zur Trassenmitte (`BuildCrews._site_of`), die
+Abnahme (`Construction._finish_public` → `PowerNet.on_line_done`) fügt die Kante hinzu. Nur ein Ringschluss zugleich; ist die Seite
+schon redundant, wird nichts geplant. Karte: abgesteckte Trasse (Pflöcke) während des Baus; Strom-Ansicht „Ringschluss im Bau“.
+Test `test_power_ring` (11): Region Seed 4242 Ringschluss U1–U2, 348 Felder, 139 200 € (34 800 € je Stadt), 24 Tage; danach trennt
+derselbe Schaden keine Stadt mehr ab.
+
+Offen nach Phase 3: Folgen eines längeren Ausfalls für Haushalte (Zufriedenheit) und für Pumpen/Kläranlage (ab Phase 4),
+zusätzliche Umspannwerke für große Städte.

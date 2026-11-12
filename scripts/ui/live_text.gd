@@ -1070,6 +1070,36 @@ static func power(sim: Simulation) -> String:
 	if bool(g.ausbau_laeuft):
 		txt += "[color=#8fd18f]Netzausbau läuft: +%d kW[/color]
 " % int(g.ausbau.kw)
+	# Auftrag 22 Phase 3: gemeinsames Kraftwerk, Verbrauch und Abrechnung je Stadt
+	var st: Dictionary = g.get("staedte", {})
+	var nz: Dictionary = g.get("netz", {})
+	if not nz.is_empty():
+		txt += "[b]Hochspannungsnetz[/b] · %d Trassen, %d Felder · " % [int(nz.trassen), int(nz.laenge_felder)]
+		var cut: Array = nz.defekt
+		if cut.is_empty():
+			txt += "alle Umspannwerke angeschlossen
+"
+		else:
+			var off_t: Array = nz.angeschlossen.keys().filter(func(k): return not bool(nz.angeschlossen[k])).map(func(k): return sim.towns.name_of(int(k)))
+			txt += "[color=#e05040]Trasse %s unterbrochen – ohne Kraftwerksstrom: %s (nur Notstrom)[/color]
+" % [", ".join(cut), ", ".join(off_t) if not off_t.is_empty() else "keine Stadt"]
+		for lb in nz.get("im_bau", []):
+			txt += "  [color=#8fd18f]Ringschluss im Bau: %s – %s (Projekt %s)[/color]\n" % [str(lb.von), str(lb.nach), str(lb.projekt)]
+		for rp in nz.get("reparaturen", []):
+			txt += "  Netztrupp %s repariert Trasse %s (%s)\n" % [str(rp.trupp), str(rp.trasse), str(rp.ursache)]
+		var ns: Dictionary = nz.get("statistik", {})
+		if int(ns.get("schaeden", 0)) > 0:
+			txt += "  Schäden bisher %d, repariert %d (%s), Ausfall gesamt %.1f Spieltage\n" % [int(ns.schaeden), int(ns.reparaturen), Catalog.money(float(ns.kosten)),
+				float(ns.ausfall_min) / GameCalendar.days_to_min(1.0)]
+	if st.size() > 1:
+		txt += "[b]Gemeinsames Kraftwerk[/b] · Anteile je %d %% · Gesellschaft %s offen bis Monatsende
+" % [roundi(100.0 / float(st.size())), Catalog.money(float(g.gesellschaft_saldo))]
+		for key in st:
+			var a: Dictionary = sim.grid.by_town.get(key, {})
+			txt += "  %s: %d kW (Grundlast %d, Betriebe %.0f, %d ohne Strom) · Bezug %s · Tarif der Betriebe %s · Ausgleich %s
+" % [sim.towns.name_of(int(key)),
+				roundi(float(st[key].grundlast) + float(st[key].versorgt)), roundi(float(st[key].grundlast)), float(st[key].versorgt), int(st[key].abgeschaltet),
+				Catalog.money(float(a.get("bezug", 0.0))), Catalog.money(float(a.get("tarif", 0.0))), Catalog.money(float(a.get("ausschuettung", 0.0)))]
 	if int(g.abgeschaltete_betriebe) > 0:
 		txt += "[color=#e0a040]%d Betrieb(e) ohne Strom:[/color]
 " % int(g.abgeschaltete_betriebe)
@@ -1154,11 +1184,24 @@ static func landfill(sim: Simulation) -> String:
 	var W: Waste = sim.waste
 	var txt := "[b]Gemeinsame Deponie[/b] · Füllstand %.0f %% (%.0f von %.0f t Restmüll)\n" % [W.fill_share() * 100.0, W.deposited, W.capacity]
 	if not W.expansion.is_empty():
-		txt += "[color=#e0a040]Erweiterung um %.0f t im Bau, fertig an Tag %d.[/color]\n" % [float(W.expansion.t), int(W.expansion.fertig)]
+		var ep: Dictionary = W._expansion_project()
+		var ee: Dictionary = sim.construction.public.get(str(W.expansion.get("project", "")), {})
+		var who := str(sim.construction.builders.get(str(ee.get("builder", "")), {}).get("name", "")) if not ee.is_empty() else ""
+		var zust := ""
+		if who != "":
+			zust = "Baufirma %s baut (noch %d Tage, Budget %s)" % [who, int(ee.days_left), Catalog.money(float(W.expansion.kosten))]
+		elif str(ep.get("status", "")) in ["beauftragt", "im_bau"]:
+			zust = "Baufirma baut (Budget %s)" % Catalog.money(float(W.expansion.kosten))
+		else:
+			zust = "Ausschreibung läuft (Budget %s, Baufirmen bieten)" % Catalog.money(float(W.expansion.kosten))
+		txt += "[color=#e0a040]Erweiterung um %.0f t: %s.[/color]\n" % [float(W.expansion.t), zust]
 	elif W.fill_share() > 0.7:
 		txt += "[color=#e0a040]Die Deponie wird voll – ab %d %% wird erweitert.[/color]\n" % roundi(Waste.EXPAND_AT * 100.0)
 	if W.iv_building > 0 and W.iv_fertig == 0:
-		txt += "[color=#e0a040]Müllverbrennungsanlage im Bau (Inbetriebnahme an Tag %d) – der Restmüll wird bis dahin noch gelagert.[/color]\n" % (W.iv_building + Waste.IV_DAYS)
+		var e2: Dictionary = sim.construction.public.get(W.iv_project, {}) if W.iv_project != "" else {}
+		var who2 := str(sim.construction.builders.get(str(e2.get("builder", "")), {}).get("name", "")) if not e2.is_empty() else ""
+		var state := "Baufirma %s baut (noch %d Tage)" % [who2, int(e2.days_left)] if who2 != "" else "Ausschreibung läuft (Baufirmen bieten)"
+		txt += "[color=#e0a040]Müllverbrennungsanlage im Bau (%s) – der Restmüll wird bis dahin noch gelagert.[/color]\n" % state
 	if W.iv_fertig > 0 and W._iv_on():
 		var kw := W.iv_available_kw()
 		txt += "Müllverbrennung: %.1f t verbrannt (gestern %.1f t, Strom %d kW ins Netz, %.0f MWh gesamt) · Asche %.1f t von %.1f t Restmüll\n" % [

@@ -155,8 +155,8 @@ func _update_fleet() -> void:
 			elif v.kind == "stadtlkw":   # kommunaler Lkw (Lieferung ans Stadtlager)
 				n = _make_vehicle_node("truck", "", Color.WHITE, false)
 			else:
-				n = _make_vehicle_node("roadcrew" if v.kind in ["bautrupp", "kolonne"] else "moving", "", Color.WHITE, false)
-			if v.kind in ["bautrupp", "kolonne"]:
+				n = _make_vehicle_node("roadcrew" if v.kind in ["bautrupp", "kolonne", "netztrupp"] else "moving", "", Color.WHITE, false)
+			if v.kind in ["bautrupp", "kolonne", "netztrupp"]:
 				_add_beacon(n, -50.0)
 			add_child(n)
 			fleet_nodes[id] = n

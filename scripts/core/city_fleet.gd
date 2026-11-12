@@ -121,6 +121,18 @@ func update(dt: float) -> void:
 		if v.kind in ["muell", "wertstoff"]:
 			_garbage(v, now)
 			continue
+		if v.kind == "netztrupp":   # Auftrag 22 Phase 3: Reparatur der Hochspannungstrasse erst ab Ankunft vor Ort
+			if str(v.phase) == "anfahrt":
+				v.phase = "arbeit"
+				v.until = now + PowerNet.REPAIR_MIN
+			elif str(v.phase) == "arbeit" and now >= float(v.until):
+				sim.grid.net.repaired(str(v.edge))
+				v.phase = "rueckfahrt"
+				if not sim.route(m, v.back):
+					vehicles.erase(v)
+			elif str(v.phase) == "rueckfahrt":
+				vehicles.erase(v)
+			continue
 		if v.kind == "stadtlkw" and str(v.phase) == "anfahrt":
 			var D = sim.towns.depot(int(v.town)) if sim.towns != null else sim.city_depot
 			D.city_truck_arrived(str(v.order))

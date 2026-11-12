@@ -38,6 +38,7 @@ var parcel_layer := ParcelLayer.new()
 var mountain_view := MountainView.new()   # Berge und Bergbau (Auftrag 14)
 var placement_overlay := PlacementOverlay.new()   # Diagnose Gebaeudeplatzierung (F8)
 var road_state := RoadStateView.new()              # Schneedecke, geraeumte Abschnitte, Schlagloecher
+var power_net_view := PowerNetView.new()          # Hochspannungstrassen, Masten, Umspannwerke (Auftrag 22 Phase 3)
 var highway_view := HighwayView.new()              # Autobahn: Trasse, Baufortschritt, Fahrstreifen, Anschlussstellen (Auftrag 21)
 var ambient_view := AmbientView.new()     # Leben auf der Karte: Strand, Boote, Moewen, Industrie, Passanten
 var ship_view := ShipView.new()           # Linienschiff im Hafen (Kuestenort)
@@ -151,6 +152,8 @@ func build(simulation: Simulation) -> void:
 	road_state.setup(sim)
 	decor_node.add_child(highway_view)
 	highway_view.setup(sim)
+	fx_node.add_child(power_net_view)   # Freileitungen ueber der Bebauung
+	power_net_view.setup(sim)
 	add_child(air_view)
 	air_view.setup(sim, self)
 	_build_decor()

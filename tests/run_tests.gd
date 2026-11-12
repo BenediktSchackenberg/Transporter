@@ -12,7 +12,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_meat_chain2", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_waste_bins", "test_waste_depot", "test_waste_streams", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_empty_tank_no_tow", "test_local_model_guards", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_highway", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner", "test_street_cleaning", "test_stone_chain", "test_incineration"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_meat_chain2", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_waste_bins", "test_waste_depot", "test_waste_streams", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_empty_tank_no_tow", "test_local_model_guards", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_highway", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner", "test_street_cleaning", "test_stone_chain", "test_incineration", "test_shared_plant", "test_power_net", "test_power_repair", "test_power_ring"]
 	test_names.append("test_tourism_hotel")
 	test_names.append("test_tourism_venues")
 	var args := OS.get_cmdline_user_args()
@@ -1544,13 +1544,13 @@ func test_power_grid() -> void:
 	G.on_day(1)
 	ok(G.supplied.has(b0.id) and G.supplied.has(b1.id) and float(G.last.grundlast) > 0.0, "Grundversorgung: beide Betriebe versorgt, Grundlast der Bevölkerung erfasst")
 	var e0 := float(s.company(0).ledger.totals.get("energy", 0.0))
-	var p0 := float(s.economy.accounts.P0)
+	var p0 := float(s.economy.accounts.P0) + float(s.economy.accounts.E0)   # Einzelstadt: die Kraftwerksgesellschaft gehoert ganz der Stadt
 	G.on_day(2)
 	var e1 := float(s.company(0).ledger.totals.get("energy", 0.0))
 	var hours := GameCalendar.day_game_min / 60.0
 	ok(is_equal_approx(e1 - e0, -float(b0.energy_kw) * hours * G.tariff), "Abrechnung nach Verbrauch: kW × Stunden × Tarif (%.2f EUR)" % (e0 - e1))
 	ok(float(s.company(0).ledger.cc_totals[b0.id].get("energy", 0.0)) < 0.0, "Strom steht auf der Kostenstelle des Betriebs")
-	ok(float(s.economy.accounts.P0) > p0, "Stadtwerke (Stadtkasse) nehmen mehr ein als die Erzeugung kostet")
+	ok(float(s.economy.accounts.P0) + float(s.economy.accounts.E0) > p0, "Stadtwerke (Stadtkasse) nehmen mehr ein als die Erzeugung kostet")
 	# Engpass: Kraftwerk + Notstrom von aussen reichen nur noch fuer einen Betrieb
 	G.capacity = G.base_load() + float(b0.energy_kw) + 0.5 - PowerPlant.EMERGENCY_KW
 	G.on_day(3)
@@ -7439,9 +7439,12 @@ func test_waste_bins() -> void:
 	var cap0 := W.capacity
 	var d := GameCalendar.day_of(s.game_min)
 	W._check_expansion(d)
-	ok(not W.expansion.is_empty(), "Erweiterung beginnt bei 85 % Füllstand")
-	W._check_expansion(d + Waste.EXPAND_DAYS)
-	ok(W.expansion.is_empty() and is_equal_approx(W.capacity, cap0 + Waste.EXPAND_T) and W.fill_share() < 0.6, "Deponie erweitert auf %.0f t" % W.capacity)
+	ok(not W.expansion.is_empty(), "Erweiterung wird ausgeschrieben (Projekt %s)" % str(W.expansion.get("project", "")))
+	for i in 45:
+		_works_day(s, d + 1 + i)
+		if W.expansion.is_empty():
+			break
+	ok(W.expansion.is_empty() and is_equal_approx(W.capacity, cap0 + Waste.EXPAND_T) and W.fill_share() < 0.6, "Baufirma baut die Erweiterung und nimmt ab (Deponie nun %.0f t)" % W.capacity)
 	ok(identity_ok(s), "Geld erhalten")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.waste.bins.size() == W.bins.size() and is_equal_approx(s2.waste.capacity, W.capacity) and s2.waste.by_town.size() == W.by_town.size(), "Tonnen, Deponie und Waagebuch nach Laden")
@@ -11117,18 +11120,24 @@ func test_incineration() -> void:
 	ok(W.iv_building == 0, "vor dem Tageslauf noch kein Beschluss")
 	next_day(s)
 	ok(W.iv_building > 0, "ab %.0f t neuem Restmüll beschließt die Region den Bau (Tag %d)" % [W.iv_new_t, W.iv_building])
-	# Bauplatz neben der Deponie und Errichtung
-	ok(W._iv_find_site(), "freies städtisches Grundstück mit Straßenanschluss neben der Deponie")
-	W._iv_build(day)
-	W.iv_building = 0
+	# Bauplatz neben der Deponie: der nächste Tageslauf sucht ihn und schreibt die Anlage aus (Baufirmen-Angebot)
+	next_day(s)
+	ok(W.iv_project != "", "Ausschreibung läuft (Projekt %s, Träger %s)" % [W.iv_project, s.towns.name_of(Towns.town_of_id(W.iv_project))])
+	var pid := W.iv_project
+	var Mk: Mayor = s.towns.mayor_of_project(pid)
+	var prj: Dictionary = Mk.projects[pid]
+	ok(str(prj.kind) == "verbrennung" and not prj.shares.is_empty(), "regionaler Bau mit Kostenanteilen der Städte (Budget %s)" % Catalog.money(float(prj.cost)))
+	# Baufirmen-Angebot, Vergabe, sichtbarer Bau und Abnahme (Bausystem-Flow statt sofortigem S0-Zugriff)
+	for i in 60:
+		_works_day(s, day + 2 + i)
+		if Mk.projects[pid].status == "fertig":
+			break
+	ok(Mk.projects[pid].status == "fertig", "Baufirma baut und nimmt ab (Bauzeit %d Tage)" % int(prj.days))
+	ok(W.iv_fertig > 0 and W._iv_on(), "Anlage in Betrieb (Einrichtung %s)" % W.iv_fac)
 	var mv: Array = M.facilities.values().filter(func(f): return str(f.code) == "MV-01")
 	ok(mv.size() == 1 and str(mv[0].owner) == "region" and str(Municipal.TYPES["MV-01"].building) == "incineration_plant", "ein regionaler Dienst MV-01 (Träger: Region)")
 	if not mv.is_empty() and int(mv[0].building) >= 0:
 		ok(str(s.city.building(int(mv[0].building)).type) == "incineration_plant", "Gebäude der Anlage ist die Müllverbrennungsanlage (5×4)")
-	# Inbetriebnahme nach der (übersprungenen) Bauzeit
-	W.iv_fertig = day + 1
-	next_day(s)
-	ok(W._iv_on(), "Anlage in Betrieb (Einrichtung %s)" % W.iv_fac)
 	# Waegung mit Anlage: 90 % verbrannt (Strom), 10 % Asche deponiert; Kosten nur für Asche plus Verarbeitung
 	var dep1 := W.deposited
 	var kwh0 := float(W.iv_stats.kwh)
@@ -11164,3 +11173,193 @@ func test_incineration() -> void:
 	ok(s2.waste._iv_on(), "Anlage nach dem Laden weiterhin in Betrieb")
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geldkonservierung")
 	ok(identity_ok(s), "Identität")
+
+
+## Auftrag 22 Phase 3 Schritt 1: gemeinsames Kernkraftwerk (feste gleiche Anteile), Verbrauch und Bezug je Stadt,
+## Betriebe zahlen an ihre Stadt, Monatsausgleich der Kraftwerksgesellschaft E0.
+func test_shared_plant() -> void:
+	var s := region_sim(4)
+	var G: PowerGrid = s.grid
+	var n: int = s.towns.count()
+	ok(n == 4 and G.shares().size() == 4 and G.shares().values().all(func(x): return is_equal_approx(float(x), 0.25)), "vier Städte, Anteile fest 25/25/25/25")
+	next_day(s)
+	next_day(s)
+	var st: Dictionary = G.last.get("staedte", {})
+	var base_sum := 0.0
+	for key in st:
+		base_sum += float(st[key].grundlast)
+	ok(st.size() == 4 and absf(base_sum - float(G.last.grundlast)) < 1.0, "Grundlast je Stadt erfasst, Summe = Gesamt (%.0f kW)" % base_sum)
+	ok(G.by_town.size() == 4 and G.by_town.values().all(func(x): return float(x.bezug) > 0.0 and float(x.kwh) > 0.0), "jede Stadt kauft ihren Verbrauch bei der Kraftwerksgesellschaft")
+	var price := float(PowerGrid.cfg().erzeugung_eur_kwh)
+	ok(G.by_town.values().all(func(x): return is_equal_approx(float(x.bezug), float(x.kwh) * price)), "Bezug = kWh × Erzeugungspreis (%.2f €/kWh)" % price)
+	var tarif_sum := 0.0
+	for key in G.by_town:
+		tarif_sum += float(G.by_town[key].tarif)
+	ok(is_equal_approx(tarif_sum, float(G.stats.erloes)), "Stromrechnungen der Betriebe gehen an die Stadtwerke ihrer Stadt (%s)" % Catalog.money(tarif_sum))
+	# Betriebsstrom landet bei der Stadt des Standorts
+	var acc0 := float(s.economy.accounts.get("P0", 0.0))
+	var supplied_b: Array = G.supplied.keys().map(func(id): return s.biz.get_b(id)).filter(func(b): return not b.is_empty())
+	if not supplied_b.is_empty():
+		var b: Dictionary = supplied_b[0]
+		var k := G.town_of_biz(b)
+		var t0 := float(G.by_town[str(k)].tarif)
+		G._bill()
+		ok(float(G.by_town[str(k)].tarif) > t0, "Betrieb %s zahlt an %s" % [b.name, s.towns.name_of(k)])
+	# Kraftwerkskosten tragen die Gesellschaft, nicht die Stadtwerke von Ort 0
+	var e0 := float(s.economy.accounts.get(PowerPlant.ACCT, 0.0))
+	ok(not is_zero_approx(e0), "Kraftwerksgesellschaft führt eigene Rechnung (Saldo %s)" % Catalog.money(e0))
+	var before := {}
+	for k in n:
+		before[k] = float(s.economy.accounts[Towns.account_of(k)])
+	G.settle()
+	ok(is_zero_approx(float(s.economy.accounts[PowerPlant.ACCT])), "nach dem Monatsausgleich steht die Gesellschaft auf 0")
+	var each: float = e0 / 4.0
+	var all_eq := true
+	for k in n:
+		all_eq = all_eq and absf(float(s.economy.accounts[Towns.account_of(k)]) - float(before[k]) - each) < 0.01
+	ok(all_eq, "Ergebnis zu gleichen Teilen an die Städte (je %s)" % Catalog.money(each))
+	ok(identity_ok(s), "Geld erhalten")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.grid.by_town.size() == 4 and is_equal_approx(float(s2.grid.by_town["1"].bezug), float(G.by_town["1"].bezug)) and not s2.grid.last_settle.is_empty(), "Abrechnung je Stadt nach Laden")
+	ok(LiveText.power(s).contains("Gemeinsames Kraftwerk"), "Strom-Ansicht zeigt das gemeinsame Kraftwerk")
+	# Einzelstadt: ein Anteil von 100 %
+	var s1 := new_sim(2)
+	ok(s1.grid.shares() == {"0": 1.0}, "Einzelstadt besitzt das Kraftwerk allein")
+	next_day(s1)
+	next_day(s1)
+	s1.grid.settle()
+	ok(is_zero_approx(float(s1.economy.accounts[PowerPlant.ACCT])) and identity_ok(s1), "Einzelstadt: Ausgleich an P0, Geld erhalten")
+
+
+## Auftrag 22 Phase 3 Schritt 2: Stromnetz als Graph - Kraftwerk, Umspannwerk je Stadt, Hochspannungstrassen als Spannbaum;
+## eine unterbrochene Trasse haengt die Staedte dahinter ab (nur Notstrom), Wiederinbetriebnahme verbindet sie wieder.
+func test_power_net() -> void:
+	var s := region_sim(4)
+	var G: PowerGrid = s.grid
+	var N: PowerNet = G.net
+	next_day(s)
+	ok(N.built() and N.nodes.size() == 5 and N.edges.size() == 4, "Netz: Kraftwerk + 4 Umspannwerke, 4 Trassen (Spannbaum)")
+	var contiguous := true
+	for e in N.edges:
+		var c: Array = e.cells
+		contiguous = contiguous and Vector2i(int(c[0][0]), int(c[0][1])) == N.nodes[e.a].cell and Vector2i(int(c[-1][0]), int(c[-1][1])) == N.nodes[e.b].cell
+		for i in range(1, c.size()):
+			contiguous = contiguous and maxi(absi(int(c[i][0]) - int(c[i - 1][0])), absi(int(c[i][1]) - int(c[i - 1][1]))) == 1
+	ok(contiguous, "Trassen sind lückenlose Zellenfolgen vom Kraftwerk zu den Umspannwerken (%d Felder)" % int(N.summary().laenge_felder))
+	ok(range(4).all(func(k): return N.connected(k)) and G.last.staedte.values().all(func(t): return bool(t.netz)), "alle Städte am Netz")
+	ok(s.towns.list.all(func(t): return s.city.town_of(N.nodes["U%d" % int(t.id)].cell) == int(t.id) or N.nodes["U%d" % int(t.id)].cell.distance_to(t.center) < 30.0), "Umspannwerke liegen in ihrer Stadt")
+	# Stadt mit dem längsten Weg abhängen: letzte Trasse auf ihrem Pfad unterbrechen
+	var far := 0
+	for k in 4:
+		if N.path_to(k).size() > N.path_to(far).size():
+			far = k
+	var cut: String = N.path_to(far)[-1]
+	var plant0 := float(G.last.kraftwerk_kw)
+	var paths := {}
+	for k in 4:
+		paths[k] = N.path_to(k)
+	N.set_state(cut, "defekt")
+	ok(not N.connected(far), "Trasse %s unterbrochen: %s ist vom Kraftwerk getrennt" % [cut, s.towns.name_of(far)])
+	ok(range(4).all(func(k): return N.connected(k) == not paths[k].has(cut)), "genau die Städte hinter der Trasse sind getrennt, die übrigen bleiben versorgt")
+	next_day(s)
+	var tf: Dictionary = G.last.staedte[str(far)]
+	ok(not bool(tf.netz) and float(G.last.notstrom_kw) >= float(tf.grundlast) - 0.5, "abgehängte Stadt läuft auf Notstrom (%.0f kW Grundlast, Notstrom %.0f kW)" % [float(tf.grundlast), float(G.last.notstrom_kw)])
+	ok(is_equal_approx(float(G.last.kraftwerk_kw), plant0), "Kraftwerksleistung unverändert")
+	ok(N.summary().defekt == [cut] and LiveText.power(s).contains("unterbrochen"), "Anzeige nennt die unterbrochene Trasse")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.grid.net.edges.size() == 4 and not s2.grid.net.connected(far) and s2.grid.net.nodes["KW"].cell == N.nodes["KW"].cell, "Netz und Schaden nach Laden")
+	N.set_state(cut, "ok")
+	next_day(s)
+	ok(N.connected(far) and bool(G.last.staedte[str(far)].netz), "nach der Reparatur wieder am Netz")
+	ok(identity_ok(s), "Geld erhalten")
+	var s1 := new_sim(2)
+	next_day(s1)
+	ok(s1.grid.net.nodes.size() == 2 and s1.grid.net.edges.size() == 1 and s1.grid.net.connected(0), "Einzelstadt: eine Trasse Kraftwerk → Umspannwerk")
+
+
+## Auftrag 22 Phase 3 Schritt 3: Leitungsschaden -> Stadt hinter der Trasse auf Notstrom, Netztrupp faehrt vom Rathaus zur
+## Schadstelle, repariert vor Ort, Kosten traegt die Kraftwerksgesellschaft; Laden mitten in der Reparatur schickt einen neuen Trupp.
+func test_power_repair() -> void:
+	var s := region_sim(4)
+	var G: PowerGrid = s.grid
+	var N: PowerNet = G.net
+	next_day(s)
+	var far := 0
+	for k in 4:
+		if N.path_to(k).size() > N.path_to(far).size():
+			far = k
+	var cut: String = N.path_to(far)[-1]
+	ok(N.damage(cut, "Test"), "Trasse %s beschädigt" % cut)
+	ok(not N.connected(far) and N.repairs.has(cut), "%s ohne Kraftwerksstrom, Reparatur offen" % s.towns.name_of(far))
+	var trupp: Array = s.fleet.vehicles.filter(func(v): return v.kind == "netztrupp" and str(v.edge) == cut)
+	ok(trupp.size() == 1, "ein Netztrupp ist unterwegs (%s)" % (str(trupp[0].label) if not trupp.is_empty() else "-"))
+	var rp: Dictionary = N.repairs[cut]
+	var road := Vector2i(int(rp.road[0]), int(rp.road[1]))
+	ok(s.city.is_road(road) and N.connected(int(rp.town)), "Schadstelle mit Straßenzufahrt, Trupp aus einer versorgten Stadt (%s)" % s.towns.name_of(int(rp.town)))
+	ok(LiveText.power(s).contains("Netztrupp"), "Strom-Ansicht zeigt den Netztrupp")
+	# Laden mitten in der Reparatur: Fahrzeug entfaellt, der Tageslauf schickt einen neuen Trupp
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.grid.net.repairs.has(cut) and not s2.grid.net.connected(far), "Schaden nach Laden erhalten")
+	next_day(s2)
+	ok(s2.fleet.vehicles.any(func(v): return v.kind == "netztrupp" and str(v.edge) == cut), "nach dem Laden fährt ein neuer Netztrupp los")
+	# Fahren und reparieren (Arbeit beginnt erst vor Ort)
+	var e0 := float(s.economy.accounts.E0)
+	var t0 := s.game_min
+	var arrived_at := -1.0
+	while N.repairs.has(cut) and s.game_min - t0 < GameCalendar.days_to_min(12.0):
+		s.step(0.5)
+		if arrived_at < 0.0 and s.fleet.vehicles.any(func(v): return v.kind == "netztrupp" and v.phase == "arbeit"):
+			arrived_at = s.game_min
+	ok(arrived_at > t0, "Trupp erreicht die Schadstelle nach %.0f Spielminuten" % (arrived_at - t0))
+	ok(not N.repairs.has(cut) and N.connected(far) and s.game_min - arrived_at >= PowerNet.REPAIR_MIN - 1.0, "repariert nach %.0f Minuten Arbeit vor Ort, %s wieder am Netz" % [s.game_min - arrived_at, s.towns.name_of(far)])
+	ok(int(N.stats.reparaturen) == 1 and float(s.economy.accounts.E0) <= e0 - PowerNet.REPAIR_COST + 1.0, "Reparatur von der Kraftwerksgesellschaft bezahlt (%s)" % Catalog.money(PowerNet.REPAIR_COST))
+	ok(identity_ok(s), "Geld erhalten")
+	# Sturm: starke Boeen lassen Trassen reissen (STORM_P je Trasse und Tag), sonst nur selten
+	var sch0 := int(N.stats.schaeden)
+	for i in 10:
+		N.on_day(0)
+	var calm := int(N.stats.schaeden) - sch0
+	s.wx.cur["gust"] = 150.0
+	for i in 10:
+		N.on_day(0)
+	ok(s.wx.is_strong_wind() and int(N.stats.schaeden) - sch0 - calm >= 1, "Sturm: %d Trassenschäden in 10 Sturmtagen (ruhig: %d)" % [int(N.stats.schaeden) - sch0 - calm, calm])
+
+
+## Auftrag 22 Phase 3 Schritt 4: nach einem Ausfall, der Staedte getrennt hat, beschliesst die Region einen Ringschluss; eine
+## Baufirma baut ihn (Anteile gleich je Stadt), danach trennt derselbe Schaden keine Stadt mehr ab.
+func test_power_ring() -> void:
+	var s := region_sim(4)
+	var G: PowerGrid = s.grid
+	var N: PowerNet = G.net
+	next_day(s)
+	var far := 0
+	for k in 4:
+		if N.path_to(k).size() > N.path_to(far).size():
+			far = k
+	var cut: String = N.path_to(far)[-1]
+	N.damage(cut, "Test")
+	ok(int(N.repairs[cut].getrennt) >= 1, "Schaden trennt %d Stadt/Städte" % int(N.repairs[cut].getrennt))
+	N.repaired(cut)
+	ok(N.planned.size() == 1, "nach der Reparatur beschließt die Region einen Ringschluss")
+	var pid: String = N.planned.keys()[0]
+	var pl: Dictionary = N.planned[pid]
+	var Mk: Mayor = s.towns.mayor_of_project(pid)
+	var prj: Dictionary = Mk.projects[pid]
+	ok(str(prj.kind) == "trasse" and prj.shares.size() == 4 and prj.shares.values().all(func(x): return is_equal_approx(float(x), float(prj.cost) / 4.0)), "regionales Bauprojekt, Anteile gleich (%s je Stadt)" % Catalog.money(float(prj.cost) / 4.0))
+	var cut_e: Dictionary = N.edge(cut)
+	ok(not ((str(pl.a) == str(cut_e.a) and str(pl.b) == str(cut_e.b)) or (str(pl.a) == str(cut_e.b) and str(pl.b) == str(cut_e.a))), "Ringschluss %s – %s ist eine neue Verbindung" % [str(pl.a), str(pl.b)])
+	ok(N.plan_ring(cut).is_empty(), "nur ein Ringschluss zugleich")
+	ok(LiveText.power(s).contains("Ringschluss im Bau"), "Strom-Ansicht zeigt den Bau")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.grid.net.planned.has(pid), "geplante Trasse nach Laden erhalten")
+	var day := GameCalendar.day_of(s.game_min)
+	for i in 120:
+		_works_day(s, day + 1 + i)
+		if Mk.projects[pid].status == "fertig":
+			break
+	ok(Mk.projects[pid].status == "fertig" and N.planned.is_empty() and N.edges.size() == 5, "Baufirma baut die Trasse, Abnahme fügt sie ins Netz ein (Bauzeit %d Tage)" % int(prj.days))
+	N.damage(cut, "Test")
+	ok(range(4).all(func(k): return N.connected(k)) and int(N.repairs[cut].getrennt) == 0, "derselbe Schaden trennt keine Stadt mehr ab (Ringschluss)")
+	N.repaired(cut)
+	ok(N.planned.is_empty(), "ohne getrennte Stadt kein weiterer Ringschluss")
+	ok(identity_ok(s), "Geld erhalten")

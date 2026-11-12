@@ -299,6 +299,10 @@ func _site_of(kind: String, id: String) -> Vector2i:
 			if not r.is_empty() and not r.cells.is_empty():
 				var mid: Array = r.cells[r.cells.size() / 2]
 				return nearest_road(Vector2i(int(mid[0]), int(mid[1])), 60)
+		"trasse":   # Ringschluss Hochspannung (Auftrag 22 Phase 3): Mitte der geplanten Trasse
+			var m: Vector2i = sim.grid.net.planned_mid(id)
+			if m.x >= 0:
+				return nearest_road(m, 60)
 		"bruecke":
 			var b: Dictionary = sim.bridges.items.get(str(prj.bridge), {})
 			if not b.is_empty():
