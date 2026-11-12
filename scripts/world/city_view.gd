@@ -31,6 +31,7 @@ var _fog := 0.0
 var _heat := 0.0
 var estate_view := EstateView.new()
 var civic_view := CivicView.new()         # Auftrag 19: Anlagen und Denkmaeler der Buergermeister, Leben im Grosslager
+var stone_view := StoneView.new()        # Auftrag 23: Steinbauten und Stein-Kreationen der Unternehmer
 var site_view := SiteView.new()
 var depot_view := DepotView.new()
 var parcel_layer := ParcelLayer.new()
@@ -122,6 +123,8 @@ func build(simulation: Simulation) -> void:
 	estate_view.setup(sim, self)
 	add_child(civic_view)
 	civic_view.setup(sim, self)
+	add_child(stone_view)
+	stone_view.setup(sim, self)
 	if sim.civic != null:
 		sim.civic.ground_changed.connect(repaint_cells)
 	buildings_node.add_child(site_view)

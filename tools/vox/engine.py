@@ -13,8 +13,9 @@ MATS = [None]           # Index 0 = leer
 MAT_ID = {}
 
 
-def mat(name, rgb, noise=0.06, emit=None, comp=False, top=True, glow=0.0):
-    """Material registrieren. emit: Leuchtfarbe (Nacht), comp: Firmenfarbe, top: Teil der Schnee/Naesse-Maske."""
+def mat(name, rgb, noise=0.06, emit=None, comp=False, accent=False, top=True, glow=0.0):
+    """Material registrieren. emit: Leuchtfarbe (Nacht), comp: Firmen-/Grundtonmaske, accent: Akzentmaske (zweite Farbebene),
+    top: Teil der Schnee/Naesse-Maske. comp und accent koennen kombiniert werden, wenn ein Voxel in beiden Ebenen gefaerbt wird."""
     if name in MAT_ID:
         return MAT_ID[name]
     if isinstance(rgb, str):
@@ -22,7 +23,7 @@ def mat(name, rgb, noise=0.06, emit=None, comp=False, top=True, glow=0.0):
     if isinstance(emit, str):
         emit = tuple(int(emit.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
     MATS.append({"name": name, "rgb": np.array(rgb, dtype=np.float32), "noise": noise, "emit": emit, "comp": comp,
-                 "top": top, "glow": glow})
+                 "accent": accent, "top": top, "glow": glow})
     MAT_ID[name] = len(MATS) - 1
     return MAT_ID[name]
 
@@ -140,6 +141,7 @@ def render(model, shadow_len=64, outline=True, ground_shadow=True, ao=True):
     mat_emit = np.array([[0, 0, 0]] + [m["emit"] if m["emit"] else (0, 0, 0) for m in MATS[1:]], dtype=np.float32)
     mat_has_emit = np.array([False] + [m["emit"] is not None for m in MATS[1:]])
     mat_comp = np.array([False] + [m["comp"] for m in MATS[1:]])
+    mat_accent = np.array([False] + [m.get("accent", False) for m in MATS[1:]])
     mat_top = np.array([False] + [m["top"] for m in MATS[1:]])
     for face, mask in faces.items():
         xs, ys, zs = np.nonzero(mask)
@@ -267,10 +269,17 @@ def render(model, shadow_len=64, outline=True, ground_shadow=True, ao=True):
     sh2 = shades.reshape(H, W)
     cm[c_ok, :3] = (255.0 * np.clip(sh2[c_ok], 0, 1.2))[:, None]
     cm[c_ok, 3] = 255
+    # Akzentmaske (zweite Farbebene, unabhaengig vom Grundton)
+    am = np.zeros((H, W, 4), dtype=np.float32)
+    a_ok = mat_accent[mids] & alpha
+    am[a_ok, :3] = (255.0 * np.clip(sh2[a_ok], 0, 1.2))[:, None]
+    am[a_ok, 3] = 255
     out = {"color": color, "lit": lit, "top": Image.fromarray(tm, "RGBA"),
            "anchor": (int(-minx), int(-miny)), "size": (W, H)}
     if c_ok.any():
         out["mask"] = Image.fromarray(np.clip(cm, 0, 255).astype(np.uint8), "RGBA")
+    if a_ok.any():
+        out["amask"] = Image.fromarray(np.clip(am, 0, 255).astype(np.uint8), "RGBA")
     if gs_x.size:
         shimg = np.zeros((H, W, 4), dtype=np.uint8)
         shimg[(gs_y - miny).astype(np.int64), (gs_x - minx).astype(np.int64)] = (12, 10, 30, 95)
@@ -288,6 +297,9 @@ def save(result, folder, name, crop_to=None):
     if "mask" in result:
         result["mask"].save(os.path.join(folder, name + "_mask.png"))
         files.append("mask")
+    if "amask" in result:
+        result["amask"].save(os.path.join(folder, name + "_amask.png"))
+        files.append("amask")
     if "shadow" in result:
         result["shadow"].save(os.path.join(folder, name + "_shadow.png"))
         files.append("shadow")

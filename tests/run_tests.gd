@@ -12,7 +12,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_meat_chain2", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_waste_bins", "test_waste_depot", "test_waste_streams", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_empty_tank_no_tow", "test_local_model_guards", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_highway", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_meat_chain2", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_waste_bins", "test_waste_depot", "test_waste_streams", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_empty_tank_no_tow", "test_local_model_guards", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_highway", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner", "test_stone_chain"]
 	test_names.append("test_tourism_hotel")
 	test_names.append("test_tourism_venues")
 	var args := OS.get_cmdline_user_args()
@@ -729,7 +729,7 @@ func test_prompt_builds() -> void:
 	var up := ctl.user_prompt(ObservationBuilder.build(s, 0, [], 0.0, 10.0))
 	ok(sp.contains("willst diese Partie gewinnen") and sp.contains("attempt_vehicle_sabotage"), "Systemprompt vollständig gebaut")
 	ok(not sp.contains("%s") and not sp.contains("%d"), "keine offenen Platzhalter")
-	ok(up.length() / 4 < 5900, "Beobachtung kompakt (~%d Token)" % (up.length() / 4))   # +100 fuer machbar je Marktauftrag und chancen (08.11.2026, gemessen 5821)   # +100 fuer Bergbau-Schritte und Gebaeudestufen (07.11.2026, gekuerzt gemessen 5751)   # +200 fuer Betriebe/Branchen/Brotkette (Auftrag 14, Etappe 2; Messung tests/probe_obs_size.gd)
+	ok(up.length() / 4 < 5950, "Beobachtung kompakt (~%d Token)" % (up.length() / 4))   # +100 fuer machbar je Marktauftrag und chancen (08.11.2026, gemessen 5821)   # +100 fuer Bergbau-Schritte und Gebaeudestufen (07.11.2026, gekuerzt gemessen 5751)   # +200 fuer Betriebe/Branchen/Brotkette (Auftrag 14, Etappe 2; Messung tests/probe_obs_size.gd)   # +50 fuer Steinbauten-Status (Auftrag 23, 11.11.2026, gemessen 33)
 	ctl.free()
 
 
@@ -10951,3 +10951,73 @@ func test_service_planner() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.services.builds.size() == P.builds.size() and s2.services.log.size() == P.log.size(), "Speichern/Laden")
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geldkonservierung")
+
+
+## Auftrag 23: Die Steinkette Abbau -> Lager -> Steinmetz -> Kreation: die KI plant das Steinwerk (Motiv, Name,
+## Grundton + Akzent), die Engine prueft Platz, Strasse und Material (eigene Depots + Grosslager) und baut;
+## der Maler malt das Werk an. Ohne Maler bleibt es naturfarben. Geld und Ware bleiben erhalten.
+func test_stone_chain() -> void:
+	var s := region_sim(4, 21)
+	var c: Company = s.companies[0]
+	# Wirtschaftsgrundlage: Naturstein im Abbau und Massengut, Steinmetz-Rezept
+	ok("naturstein" in Production.DEPOSIT_KINDS and "naturstein" in Production.BULK, "Naturstein ist Bergsorte und Massengut")
+	var st: Dictionary = {}
+	var bj: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://config/branches.json"))
+	st = bj.get("steinmetz", {})
+	ok(st.has("rezept") and int(st.rezept.ein.get("naturstein", 0)) == 2 and int(st.rezept.aus.get("naturstein_aufbereitet", 0)) == 1, "Steinmetz: 2 Naturstein -> 1 Aufbereiteter Stein")
+	ok("malen" in Worker.SKILLS, "Fähigkeit malen im Personalregister")
+	var M: StoneWorks = s.stone
+	ok(M.motif_catalog().size() == 17 and M.motif_catalog().all(func(x): return int(x.w) == 1), "17 Motive, alle 1×1 Feld: %s" % str(M.motif_catalog().map(func(x): return str(x.motiv))))
+	ok(M.colors_valid("rot", "gelb") == "" and M.colors_valid("neongruen", "") != "" and M._resolve("petrol") == "#3f7d8c" and M._resolve("") == "", "Farbvalidierung: Palette, hex, leer = natur")
+	# Material mischen: 8 eigene Vorräte + 40 im Großlager; 4 Einheiten gehen pro Werk auf den Großlager-Anteil
+	if s.hub == null or not s.hub.enabled:
+		ok(false, "Test braucht eine Karte mit Großlager")
+		return
+	s.stock.add("naturstein_aufbereitet", 40, CentralHub.ACCT, s.hub.loc, "Test")
+	var depot: int = c.depots[0]
+	s.stock.add("naturstein_aufbereitet", 8, "C0", depot, "Test")
+	# Maler (Fähigkeit) muss vor dem Bau an Bord sein, damit die fertige Arbeit einen Maler findet
+	var w := s.personnel.spawn_available("maler")
+	ok(int(w.skills.malen) >= 1, "Vermittlung liefert Maler mit Fähigkeit %d" % int(w.skills.malen))
+	s.personnel.hire(0, w)
+	var cash0 := c.ledger.cash
+	var hub_before := s.hub.stock_of("naturstein_aufbereitet")
+	# KI plant (über die Aktionen-Schleuse), Engine baut
+	var r := s.executor.execute(0, {"action": "create_stone_work", "motif": "statue", "name": "Gruender-Denkmal", "base_color": "rot", "accent_color": "gelb", "reason": "Prestige"})
+	ok(r.ok, "Steinwerk geplant: %s" % r.msg)
+	var a: Dictionary = s.stone.works[str(r.ref)]
+	ok(str(a.status) == "geplant" and int(a.m) == 12 and str(a.base) == "#c23b33" and str(a.accent) == "#e3b53c", "Werk angelegt (Material 12, Farben aufgelöst)")
+	ok(str(a.get("refs", [])).contains("@hub"), "Material gemischt: eigene Depots und Großlager (refs %s)" % str(a.get("refs", [])))
+	# Baubeginn: Material wird verbraucht (8 eigene aus dem Depot, 4 vom Großlager), Bau schreitet voran
+	next_day(s)
+	ok(str(a.status) == "im_bau" and s.stock.available("naturstein_aufbereitet", "C0") == 0 and s.hub.stock_of("naturstein_aufbereitet") == hub_before - 4, "Baubeginn: Material verbraucht (eigene Depots leer, Großlager um 4 gesunken)")
+	ok(c.ledger.cash < cash0, "Großlager-Anteil bezahlt (%s)" % Catalog.money(cash0 - c.ledger.cash))
+	ok(identity_ok(s), "Identität nach Planung und Baubeginn")
+	# Fertig: der eigene Maler wird eingesetzt und malt Grundton + Akzent an
+	var days := int(a.days)
+	var painted := false
+	var guard := 0
+	while str(a.status) != "angemalt" and guard < days + 2:
+		next_day(s)
+		guard += 1
+		painted = str(a.status) == "angemalt"
+	ok(painted, "Werk angemalt (nach %d Tagen, Status %s)" % [guard, a.status])
+	ok(str(a.base_color) == "#c23b33" and str(a.accent_color) == "#e3b53c" and int(a.painted_day) >= int(a.built_day), "Beide Farben sitzen (Tag %d / Bau Tag %d)" % [int(a.painted_day), int(a.built_day)])
+	ok(w.experience > 0.0, "Maler wird vom Arbeitstag erfahrener (%.1f)" % w.experience)
+	ok(identity_ok(s), "Geld und Waren erhalten")
+	ok(s.stock.balance_error() == 0, "Warenbilanz stimmt")
+	# Beobachtung und Ablehnungen
+	var o: Dictionary = M.obs_of(0)
+	ok(o.werke.size() == 1 and str(o.werke[0].name) == "Gruender-Denkmal" and int(o.maler_anstellung) >= 1, "Beobachtung zeigt Werk und Maler")
+	var cash1 := c.ledger.cash
+	var hub_was := s.hub.enabled
+	s.hub.enabled = false   # Großlager nicht erreichbar -> eigenes Material (0) reicht nicht
+	var r2 := s.executor.execute(0, {"action": "create_stone_work", "motif": "ufo", "name": "Gast"})
+	s.hub.enabled = hub_was
+	ok(not r2.ok and str(r2.grund) == "material", "Ohne Material keine Kreation: %s" % r2.msg)
+	ok(c.ledger.cash == cash1 and s.stone.works.size() == 1, "Keine Geldbewegung bei Ablehnung")
+	ok(not s.stone.create(0, "drache", "x", "rot", "", {}).ok and s.stone.create(0, "statue", "x", "neongruen", "", {}).ok == false, "Unbekanntes Motiv / Farbe wird abgelehnt")
+	# Speichern/Laden
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.stone.works.size() == 1 and str(s2.stone.works.values()[0].status) == "angemalt" and str(s2.stone.works.values()[0].accent_color) == "#e3b53c", "Werk (angemalt, beidseitig bemalt) übersteht das Laden")
+	ok(s2.stone._next == s.stone._next, "Werk-Nummern überleben das Laden")

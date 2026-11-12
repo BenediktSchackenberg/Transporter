@@ -68,7 +68,7 @@ func _topup_focus(day: int) -> void:
 		if sim.biz.items.values().any(func(b): return int(b.owner) == c.id and b.branch == c.focus):
 			continue
 		var ready := false
-		for art in ["eisenerz", "kohle", "kalkstein", "rohmaterial"]:
+		for art in ["eisenerz", "kohle", "kalkstein", "rohmaterial", "naturstein"]:
 			if str(sim.mining.next_step(c.id, art).get("schritt", "")) == "gruenden":
 				ready = true
 				break
@@ -144,7 +144,7 @@ func _mining_town() -> int:
 
 ## Freie Lagerstaette (Eisenerz bevorzugt), auf der noch niemand bohrt oder abbaut.
 func _free_deposit() -> Dictionary:
-	for art in ["eisenerz", "kohle", "kalkstein", "rohmaterial"]:
+	for art in ["eisenerz", "kohle", "kalkstein", "rohmaterial", "naturstein"]:
 		for pid in sim.prod.deposit_parcels():
 			var d: Dictionary = sim.prod.deposit_of(str(pid))
 			if d.is_empty() or str(d.art) != art or sim.mining.drillings.has(pid) or sim.mining.permits.has(pid):

@@ -3,13 +3,13 @@ extends Mover
 ## Arbeiter oder Vorarbeiter: sichtbare Figur mit eigenem Zustand, Standort und hoechstens einer Aufgabe.
 ## Ein Fahrer sitzt im Fahrzeug (vehicle_id) und bewegt sich mit ihm; er kann nichts anderes gleichzeitig tun.
 
-const SKILLS := ["fahren", "verladen", "reparieren", "bewachen"]
+const SKILLS := ["fahren", "verladen", "reparieren", "bewachen", "malen"]
 
 var id: String
 var name: String
 var role := "worker"              # worker | foreman
 var employer := -1                # -1 = verfuegbar
-var skills := {"fahren": 0, "verladen": 0, "reparieren": 0, "bewachen": 0}
+var skills := {"fahren": 0, "verladen": 0, "reparieren": 0, "bewachen": 0, "malen": 0}
 var wage := 14.0                  # EUR pro Spielstunde
 var hire_fee := 400.0
 var experience := 0.0             # 0..100, steigt mit erledigten Aufgaben

@@ -21,6 +21,7 @@ const GOODS := {
 	"kies": {"g": "baumaterial", "t": 500}, "asphalt": {"g": "baumaterial", "t": 240}, "pflaster": {"g": "baumaterial", "t": 300},
 	"betonfertigteil": {"g": "baumaterial", "t": 160}, "rohr": {"g": "baumaterial", "t": 800}, "kabel": {"g": "baumaterial", "t": 1500},
 	"installation": {"g": "baumaterial", "t": 120}, "naturstein": {"g": "baumaterial", "t": 120}, "bronze": {"g": "baumaterial", "t": 40},
+	"naturstein_aufbereitet": {"g": "anlagen", "t": 80},
 	"moebel": {"g": "handel", "t": 60}, "computer": {"g": "handel", "t": 30}, "erstehilfe": {"g": "handel", "t": 120},
 	"hygiene": {"g": "handel", "t": 200}, "werkzeug": {"g": "handel", "t": 60}, "reifen": {"g": "handel", "t": 60},
 	"schutzkleidung": {"g": "handel", "t": 60},

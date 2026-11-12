@@ -11587,6 +11587,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     28,
     62
@@ -11603,6 +11604,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     32,
     75
@@ -11619,6 +11621,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     36,
     63
@@ -11635,6 +11638,7 @@
    ],
    "lit": true,
    "mask": false,
+   "amask": false,
    "pivot": [
     12,
     68
@@ -11651,6 +11655,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     12,
     18
@@ -11667,6 +11672,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     22,
     29
@@ -11683,6 +11689,7 @@
    ],
    "lit": true,
    "mask": false,
+   "amask": false,
    "pivot": [
     14,
     82
@@ -11699,6 +11706,7 @@
    ],
    "lit": true,
    "mask": false,
+   "amask": false,
    "pivot": [
     14,
     82
@@ -11715,6 +11723,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     44,
     34
@@ -11731,6 +11740,7 @@
    ],
    "lit": false,
    "mask": true,
+   "amask": false,
    "pivot": [
     10,
     90
@@ -11747,6 +11757,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     4,
     50
@@ -11763,6 +11774,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     22,
     26
@@ -11779,6 +11791,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     26,
     26
@@ -11795,6 +11808,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     24,
     31
@@ -11811,6 +11825,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     26,
     32
@@ -11827,6 +11842,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     24,
     33
@@ -11843,6 +11859,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     22,
     34
@@ -11859,6 +11876,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     24,
     24
@@ -11875,6 +11893,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     26,
     32
@@ -11891,6 +11910,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     24,
     33
@@ -11907,6 +11927,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     46,
     49
@@ -11923,6 +11944,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     38,
     67
@@ -11939,6 +11961,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     30,
     60
@@ -11955,6 +11978,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     46,
     66
@@ -11971,6 +11995,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     54,
     34
@@ -11987,6 +12012,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     34,
     36
@@ -12003,6 +12029,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     52,
     71
@@ -12019,6 +12046,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     52,
     71
@@ -12035,6 +12063,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     52,
     71
@@ -12051,6 +12080,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     52,
     71
@@ -12067,6 +12097,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     50,
     32
@@ -12083,6 +12114,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     38,
     30
@@ -12099,6 +12131,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     32,
     42
@@ -12115,6 +12148,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     20,
     135
@@ -12131,6 +12165,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     82,
     100
@@ -12147,6 +12182,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     24,
     74
@@ -12163,6 +12199,7 @@
    ],
    "lit": false,
    "mask": true,
+   "amask": false,
    "pivot": [
     30,
     63
@@ -12179,6 +12216,7 @@
    ],
    "lit": false,
    "mask": true,
+   "amask": false,
    "pivot": [
     34,
     104
@@ -12195,6 +12233,7 @@
    ],
    "lit": false,
    "mask": true,
+   "amask": false,
    "pivot": [
     42,
     97
@@ -12211,6 +12250,7 @@
    ],
    "lit": false,
    "mask": true,
+   "amask": false,
    "pivot": [
     38,
     200
@@ -12227,6 +12267,7 @@
    ],
    "lit": true,
    "mask": true,
+   "amask": false,
    "pivot": [
     130,
     230
@@ -12243,6 +12284,7 @@
    ],
    "lit": false,
    "mask": true,
+   "amask": false,
    "pivot": [
     82,
     114
@@ -12259,6 +12301,7 @@
    ],
    "lit": false,
    "mask": true,
+   "amask": false,
    "pivot": [
     74,
     204
@@ -12275,6 +12318,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     40,
     64
@@ -12291,6 +12335,7 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     44,
     146
@@ -12307,9 +12352,299 @@
    ],
    "lit": false,
    "mask": false,
+   "amask": false,
    "pivot": [
     26,
     34
+   ]
+  },
+  "sw_statue": {
+   "anchor": [
+    50,
+    44
+   ],
+   "size": [
+    100,
+    100
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    50,
+    76
+   ]
+  },
+  "sw_obelisk": {
+   "anchor": [
+    26,
+    156
+   ],
+   "size": [
+    52,
+    200
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    26,
+    188
+   ]
+  },
+  "sw_fountain": {
+   "anchor": [
+    46,
+    20
+   ],
+   "size": [
+    92,
+    75
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    46,
+    52
+   ]
+  },
+  "sw_gate": {
+   "anchor": [
+    34,
+    106
+   ],
+   "size": [
+    70,
+    155
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    34,
+    138
+   ]
+  },
+  "sw_column": {
+   "anchor": [
+    26,
+    106
+   ],
+   "size": [
+    52,
+    150
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    26,
+    138
+   ]
+  },
+  "sw_monument_wall": {
+   "anchor": [
+    38,
+    36
+   ],
+   "size": [
+    76,
+    85
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    38,
+    68
+   ]
+  },
+  "sw_cat_statue": {
+   "anchor": [
+    30,
+    92
+   ],
+   "size": [
+    70,
+    138
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    30,
+    124
+   ]
+  },
+  "sw_ufo": {
+   "anchor": [
+    42,
+    4
+   ],
+   "size": [
+    84,
+    57
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    42,
+    36
+   ]
+  },
+  "sw_ice_cream": {
+   "anchor": [
+    22,
+    68
+   ],
+   "size": [
+    46,
+    106
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    22,
+    100
+   ]
+  },
+  "sw_mushroom": {
+   "anchor": [
+    46,
+    45
+   ],
+   "size": [
+    92,
+    91
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    46,
+    77
+   ]
+  },
+  "sw_ferris_wheel": {
+   "anchor": [
+    38,
+    104
+   ],
+   "size": [
+    76,
+    148
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    38,
+    136
+   ]
+  },
+  "sw_carousel": {
+   "anchor": [
+    46,
+    68
+   ],
+   "size": [
+    92,
+    121
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    46,
+    100
+   ]
+  },
+  "sw_hedgehog": {
+   "anchor": [
+    30,
+    15
+   ],
+   "size": [
+    62,
+    61
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    30,
+    47
+   ]
+  },
+  "sw_balloon": {
+   "anchor": [
+    34,
+    90
+   ],
+   "size": [
+    68,
+    132
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    34,
+    122
+   ]
+  },
+  "sw_lighthouse": {
+   "anchor": [
+    36,
+    178
+   ],
+   "size": [
+    72,
+    222
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    36,
+    210
+   ]
+  },
+  "sw_turtle": {
+   "anchor": [
+    36,
+    12
+   ],
+   "size": [
+    72,
+    60
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    36,
+    44
+   ]
+  },
+  "sw_rocket": {
+   "anchor": [
+    38,
+    202
+   ],
+   "size": [
+    76,
+    243
+   ],
+   "lit": false,
+   "mask": true,
+   "amask": true,
+   "pivot": [
+    38,
+    234
    ]
   }
  },

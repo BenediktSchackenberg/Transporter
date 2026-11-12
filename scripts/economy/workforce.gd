@@ -100,8 +100,8 @@ func offer_training(cid: int, wid: String, skill: String) -> Dictionary:
 
 ## Ersatz ueber die Vermittlung: nach einem Spieltag wird ein passender Arbeitnehmer angestellt (Vermittlungsgebuehr sofort).
 func request_replacement(cid: int, kind: String) -> Dictionary:
-	if kind not in ["driver", "loader", "mechanic", "guard", "foreman"]:
-		return {"ok": false, "msg": "Rolle: driver, loader, mechanic, guard oder foreman."}
+	if kind not in ["driver", "loader", "mechanic", "guard", "foreman", "maler"]:
+		return {"ok": false, "msg": "Rolle: driver, loader, mechanic, guard, foreman oder maler."}
 	var open: int = pending.filter(func(p): return p.cid == cid).size()
 	if open >= AGENCY_MAX_PENDING:
 		return {"ok": false, "msg": "Es laufen schon %d Vermittlungen." % open}

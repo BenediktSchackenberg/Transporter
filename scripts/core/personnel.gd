@@ -42,7 +42,7 @@ func setup(simulation) -> void:
 	sim = simulation
 	for c in sim.companies:
 		seen[c.id] = {}
-	var kinds := ["driver", "driver", "loader", "mechanic", "guard", "driver", "foreman", "loader", "mechanic", "driver"]
+	var kinds := ["driver", "driver", "loader", "mechanic", "guard", "driver", "foreman", "loader", "mechanic", "driver", "maler"]
 	for i in 4 + 3 * sim.companies.size():
 		spawn_available(kinds[i % kinds.size()])
 
@@ -78,6 +78,9 @@ func spawn_available(kind: String) -> Worker:
 		"mechanic":
 			w.skills.reparieren = rng.randi_range(2, 3)
 			w.skills.fahren = 1
+		"maler":
+			w.skills.malen = rng.randi_range(1, 3)
+			w.skills.fahren = rng.randi_range(0, 1)   # zweiter Zieh: Stream bleibt mit dem Fahrer-Pool gleich lang
 		"guard":
 			w.skills.bewachen = rng.randi_range(2, 3)
 			w.skills.verladen = 1
@@ -324,6 +327,11 @@ func task_cell(t: WorkerTask, w: Worker) -> Vector2i:
 			return sim.city.building(int(t.target.building)).walk
 		"bauen", "schulung":
 			return sim.city.building(int(t.target.building)).walk   # Zugang zum Grundstueck
+		"malen":
+			var a: Dictionary = sim.stone.works.get(str(t.target.get("work", "")), {})
+			if a.is_empty():
+				return Vector2i(-1, -1)
+			return Vector2i(int(a.rect[0]) + int(a.rect[2]) / 2, int(a.rect[1]) + int(a.rect[3]) / 2)
 		"auskundschaften", "blockieren":
 			var rival: Company = sim.company(int(t.target.company))
 			return sim.city.building(rival.depots[0]).walk + Vector2i(2, 2)
@@ -510,6 +518,14 @@ func _start_work(t: WorkerTask, w: Worker) -> void:
 		"bauen":
 			t.status = "in Bearbeitung"
 			t.report = "arbeitet auf der Baustelle"
+		"malen":
+			var a: Dictionary = sim.stone.works.get(str(t.target.get("work", "")), {})
+			if a.is_empty() or str(a.status) != "fertig":
+				_finish(t, "fehlgeschlagen", "Das Werk existiert nicht mehr oder ist nicht fertig.")
+				return
+			t.work_needed = StoneWorks.PAINT_MIN / (0.5 + 0.5 * int(w.skills.malen))
+			t.status = "in Bearbeitung"
+			t.report = "malt %s an (Grundton %s, Akzent %s)" % [a.name, a.base if a.base != "" else "natur", a.accent if a.accent != "" else "natur"]
 		"schulung":
 			t.work_needed = 120.0
 			t.status = "in Bearbeitung"
@@ -565,6 +581,15 @@ func _work(t: WorkerTask, w: Worker, dt: float) -> void:
 				_scout_report(t, w)
 			if t.progress >= 1.0:
 				_finish(t, "abgeschlossen", "Einsatz beendet")
+		"malen":
+			var a: Dictionary = sim.stone.works.get(str(t.target.get("work", "")), {})
+			if a.is_empty() or str(a.status) != "fertig":
+				_finish(t, "fehlgeschlagen", "Das Werk ist nicht mehr zu bemalen.")
+				return
+			t.progress += minutes / t.work_needed
+			if t.progress >= 1.0:
+				sim.stone.painted(str(t.target.get("work", "")), str(a.base), str(a.accent))
+				_finish(t, "abgeschlossen", "%s angemalt" % a.name)
 		"sabotage":
 			t.progress += minutes / t.work_needed
 			if t.progress >= 1.0:

@@ -11,7 +11,7 @@ extends Node2D
 const STEP := 24.0                     # Pixel je Hoehenstufe
 const MAN := 1.8                       # Massstab der Figuren
 const MACHINE := 2.2                   # Massstab der Maschinen
-const ORE := {"eisenerz": Color("9c4a32"), "kohle": Color("2c2a2a"), "kalkstein": Color("e4e0d4"), "rohmaterial": Color("d8b878")}
+const ORE := {"eisenerz": Color("9c4a32"), "kohle": Color("2c2a2a"), "kalkstein": Color("e4e0d4"), "rohmaterial": Color("d8b878"), "naturstein": Color("8f9aa6")}
 const GRASS := Color("5f8f45")
 const ROCK := Color("8d857a")
 const ROCK_DARK := Color("6e665d")

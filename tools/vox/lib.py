@@ -56,6 +56,8 @@ def init_materials():
     mat("neon_g", "#7dffb0", noise=0.0, emit="#62f59c", top=False)
     mat("comp", "#b8b8b8", noise=0.02, comp=True)          # Firmenfarbe (Maske)
     mat("comp_dark", "#8a8a8a", noise=0.02, comp=True)
+    mat("accent", "#a0a0a0", noise=0.03, accent=True, top=False)   # Akzentfarbe (zweite Maske, Maler)
+    mat("accent_dark", "#787878", noise=0.03, accent=True, top=False)
 
 
 # ------------------------------------------------------------------ Boden und Flaechen

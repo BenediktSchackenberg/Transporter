@@ -16,10 +16,11 @@ const KINDS := {
 	"gehen": "zu einem Ort gehen",
 	"bauen": "auf einer eigenen Baustelle mitarbeiten (Eigenbau)",
 	"schulung": "Weiterbildung im Schulungsraum (über train_worker)",
+	"malen": "eigenes Steinwerk anmalen (Grundton + Akzent)",
 }
 const FINAL := ["abgeschlossen", "fehlgeschlagen", "abgebrochen"]
 ## benoetigte Faehigkeit je Aufgabe (Mindeststufe 1); leer = jeder Arbeiter
-const SKILL := {"fahren": "fahren", "reparieren": "reparieren", "verladen": "verladen", "bewachen": ""}
+const SKILL := {"fahren": "fahren", "reparieren": "reparieren", "verladen": "verladen", "bewachen": "", "malen": "malen"}
 
 var id: String
 var company: int

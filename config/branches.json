@@ -392,6 +392,33 @@
     },
     "naehe": "bauhof"
   },
+  "steinmetz": {
+    "label": "Steinmetz",
+    "beschreibung": "Bearbeitet abgebauten Naturstein (Bergbau) zu aufbereitetem Stein: geschliffen, geschnitten und formschlüssig, bereit für Steinbauten, Denkmäler und Kreationen. Der aufbereitete Stein liegt im Lager und geht über das Großlager an die Unternehmen der Stadt.",
+    "standort": "markt",
+    "gebaeude": "workshop",
+    "gruendungskosten": 0,
+    "ausstattung": 20000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 10.0,
+    "personal_min": 1,
+    "rollen": [
+      "steinmetzen",
+      "malen"
+    ],
+    "rezept": {
+      "ein": {
+        "naturstein": 2
+      },
+      "aus": {
+        "naturstein_aufbereitet": 1
+      },
+      "chargen_je_person_tag": 6,
+      "lager_tage": 8,
+      "lager_max": 300
+    },
+    "naehe": "bauhof"
+  },
   "forst": {
     "label": "Forstbetrieb",
     "beschreibung": "Pflanzt und pflegt Wald auf eigener Parzelle; nach langer Wuchszeit wird Holz geerntet (Bauhof, Sägewerk, Möbel).",

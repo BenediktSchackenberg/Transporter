@@ -88,6 +88,13 @@ und im Test `test_public_buildings`; neue kommunale Fahrzeuge ein Modell in `too
 ## Stand 11.11.2026
 
 Erledigt zuletzt:
+- **Auftrag 23 Steinkette (fertig, 11.11.):** neue Bergsorte „Naturstein" (Roh) + „Aufbereiteter Stein"; neuer Betrieb
+  **Steinmetz** (Rezept 2 Roh → 1 aufbereitet, Markt, neben Bauhof). Die KI plant Stein-Kreationen auf eigenen
+  Grundstücken (Motiv, Name, **zwei freie Farben** Grundton + Akzent), die Engine prüft Platz/Straße/Material (eigene
+  Depots + Großlager) und baut; ein **Maler** (Fähigkeit `malen`) malt nach dem Bau das Werk an – ohne Maler bleibt es naturfarben.
+  17 Motive (seriös: Statue/Obelisk/Brunnen/Bogen/Säule/Wand, verspielt: Steinrakete/Ufo/Pilzhütte/…); Voxel-Pipeline rendert
+  je Motiv ein Farbbild plus **zwei Farbmasken** (Grundton/Akzent), unbemalt bleibt das eingebackene Natursteingrau.
+  Aktion `create_stone_work`, Personalrolle `maler`, Darstellung `stone_view.gd`. Test `test_stone_chain` (23 Prüfungen).
 - **Auftrag 22 Phase 1 Müll:** Tonnen mit Füllstand je Gebäude, Abfuhr je Stadt mit echter Entleerung beim Halt,
   Waage an der gemeinsamen Deponie, Abrechnung je Stadtkasse, Erweiterung der Deponie. Test `test_waste_bins`, Probe `probe_waste.gd`.
 - **Phase 2 Schritt 1 Betriebshof:** Municipal-Typ `AW-01` je Stadt mit Müllwerkern und Müllwagen (Besatzung 3), Touren starten dort,

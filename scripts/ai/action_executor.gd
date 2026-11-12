@@ -90,7 +90,7 @@ const SCHEMA := {
 	"poach_customer": {"params": {"customer_id": "int"}, "desc": "Stammkunden eines Konkurrenten abwerben (legal, 800 EUR)."},
 	"report_rival": {"params": {"target": "int", "reason": "string?"}, "desc": "Konkurrenten beim Bürgermeister anzeigen: das Amt prüft sofort (Steuer, Zahlungsrückstand, Zustand der Einrichtungen). Ohne Beanstandung zahlst DU Bußgeld und verlierst Ruf."},
 	"found_business": {"params": {"branche": "string", "reason": "string?", "standort": "string?", "modus": "string?", "rohstoff": "string?", "stadt": "string?"},
-		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). standort: hauptsitz | markt (freie Parzelle nahe dem Großhandel, kurze Lieferwege) | G<n>; Feld: ohne Angabe das günstigste passende Grundstück. modus pachten|kaufen (Grundstück). Bergwerk: rohstoff eisenerz|kohle|kalkstein|rohmaterial, die beste freie Lagerstätte wird gekauft. Kosten (Gründung inkl. Ausstattung) siehe Liste. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
+		"desc": "Betrieb gründen (Branchen: verfuegbare_branchen). standort: hauptsitz | markt (freie Parzelle nahe dem Großhandel, kurze Lieferwege) | G<n>; Feld: ohne Angabe das günstigste passende Grundstück. modus pachten|kaufen (Grundstück). Bergwerk: rohstoff eisenerz|kohle|kalkstein|rohmaterial|naturstein, die beste freie Lagerstätte wird gekauft. Kosten (Gründung inkl. Ausstattung) siehe Liste. Danach Personal zuordnen (assign_staff). Ein Transportbetrieb entsteht auch automatisch mit dem ersten Fahrzeug."},
 	"book_air_cargo": {"params": {"item": "string", "menge": "int", "standort": "int", "stadt": "string", "reason": "string?"},
 		"desc": "Luftfracht (Region, region.flugnetz): eigene Ware vom Standort (Gebäude-ID in deiner Stadt) in eine Nachbarstadt mit Direktflug. Schnell, aber teurer und höchstens 20 Ladeeinheiten je Flug; die Ware liegt nach der Landung im Frachtterminal der Zielstadt."},
 	"explore_deposit": {"params": {"grundstueck": "string", "reason": "string?"},
@@ -116,6 +116,8 @@ const SCHEMA := {
 		"desc": "Eigenen Betrieb schließen (z. B. dauerhaft unrentabel). Sein Personal geht zurück an den Hauptsitz. Ein Transportbetrieb muss vorher ohne Fahrzeuge und laufende Aufträge sein."},
 	"assign_staff": {"params": {"worker_id": "string", "business_id": "string"},
 		"desc": "Eigenen Mitarbeiter einem eigenen laufenden Betrieb zuordnen (sein Lohn läuft dann auf dessen Kostenstelle)."},
+	"create_stone_work": {"params": {"name": "string?", "motif": "string", "base_color": "string?", "accent_color": "string?", "reason": "string?"},
+		"desc": "Stein-Kreation auf dem eigenen Grundstueck entwerfen (Katalog unter steinbauten.motive, alle 1×1 Feld, 12 Aufbereiteter Stein, Bau ~5 Tage). Motive: Statue, Obelisk, Springbrunnen, Triumphbogen, Saeule, Gedaechtniswand, Steinkatze, Ufo, Rieseneis, Pilzhueitte, Riesenrad, Karussell, Steinigel, Ballon, Leuchtturm, Schildkroete, Steinrakete. Farben: Grundton + Akzent aus der Palette (weiss, creme, grau, blaugrau, schwarz, rot, koralle, orange, gelb, gruen, petrol, blau, lila, weinrot, rosa, braun) oder hex; leer = naturfarbener Stein. Material wird aus den eigenen Depots bzw. dem Grosslager reserviert (Kaufpreis beim Grosslager-Anteil). Nach dem Bau malt ein eigener Maler (Fähigkeit malen, z. B. request_replacement_worker kind=maler oder offer_training) das Werk an – ohne Maler bleibt es naturfarben."},
 	"block_road": {"params": {"target": "int"}, "desc": "Regelwidrig! Paletten auf eine Straße nahe am Hof des Konkurrenten stellen (600 EUR); seine Fahrzeuge fahren Umwege. Erst ab Spannung 70, je Spieltag eine. Die Polizei räumt noch am selben Tag und ermittelt meist: 2500 EUR Bußgeld, Ruf -8."},
 	"buy_security": {"params": {"level": "int"}, "desc": "Sicherheitsstufe 0-2 (schützt vor Sabotage)."},
 	"set_insurance": {"params": {"active": "bool"}, "desc": "Versicherung gegen Sabotageschäden (600 EUR/Tag)."},
@@ -791,6 +793,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.rivalry.report_rival(cid, _i(a.target), _s(a.get("reason", "")))
 		"block_road":
 			return sim.rivalry.block_road(cid, _i(a.target))
+		"create_stone_work":
+			return sim.stone.create(cid, _s(a.motif), _s(a.get("name", "")), _s(a.get("base_color", "")), _s(a.get("accent_color", "")), a)
 		"build_access":
 			return sim.access.request(cid, _s(a.grundstueck), str(a.get("reason", "")))
 		"book_air_cargo":

@@ -22,10 +22,11 @@ const COLD_SPOIL := 0.08             # Kuehlware je Tag im gekuehlten Lager
 const WARM_SPOIL := 0.5              # Kuehlware je Tag ohne Strom
 const START_BATCHES := 4
 const UPSTREAM := {"getreide": "feld", "holz": "forst", "mehl": "muehle", "schlachttier": "tierhaltung", "mastschwein": "schweinemast",
-	"mastrind": "rindermast", "fleisch": "schlachthof", "koks": "kokerei", "eisenerz": "bergwerk", "kohle": "bergwerk", "kalkstein": "bergwerk"}
+	"mastrind": "rindermast", "fleisch": "schlachthof", "koks": "kokerei", "eisenerz": "bergwerk", "kohle": "bergwerk", "kalkstein": "bergwerk",
+	"naturstein": "bergwerk", "naturstein_aufbereitet": "steinmetz"}
 ## Lagerstaetten (Abschnitt 5, vereinfacht): ausgewaehlte freie Parzellen ausserhalb von Wohn- und Mischgebiet tragen ein Vorkommen.
 ## Deterministisch aus Stadtsamen und Parzellen-ID; Menge in Einheiten (100 kg), Qualitaet 0,6-1,0 (Foerderung je Person).
-const DEPOSIT_KINDS := ["eisenerz", "kohle", "kalkstein", "rohmaterial"]
+const DEPOSIT_KINDS := ["eisenerz", "kohle", "kalkstein", "rohmaterial", "naturstein"]
 const DEPOSIT_SHARE := 0.35
 const OUTSKIRTS := 0.62           # Anteil des Kartenhalbmessers, ab dem der Aussenbereich beginnt   # Rohware -> Branche, die sie in der Stadt erzeugt             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
 
@@ -981,7 +982,7 @@ func freight(from_loc: int, to_loc: int, item: String, qty: int) -> float:
 
 ## Massengut (Rohstoffe der Schwerindustrie): Kipper/Ganzzug statt Stadtlieferdienst - je Ladeeinheit und Feld deutlich guenstiger,
 ## sonst kostete Erz ueber 380 Felder rund 10 EUR Fracht je Einheit (mehr als der Erzpreis) und das Stahlwerk kaufte Import.
-const BULK := ["eisenerz", "kohle", "kalkstein", "rohmaterial", "koks", "schlacke"]
+const BULK := ["eisenerz", "kohle", "kalkstein", "rohmaterial", "naturstein", "koks", "schlacke"]
 func freight_dist(dist: int, item: String, qty: int) -> float:
 	if item in BULK:
 		return snappedf(Retail.FREIGHT_BASE + float(dist) * (0.3 + float(units(item, qty)) / 30.0), 1.0)

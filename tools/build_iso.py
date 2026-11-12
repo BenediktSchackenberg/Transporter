@@ -27,6 +27,7 @@ import tourism as TU
 import civic as CV
 import public as PB
 import meat as MT
+import stoneworks as SW
 
 OUT = os.path.join(HERE, "..", "assets", "iso")
 os.makedirs(OUT, exist_ok=True)
@@ -48,6 +49,7 @@ def init():
     A.init()
     PB.init()
     MT.init()
+    SW.init()
 
 
 def bake(im, mask, tint):
@@ -59,11 +61,13 @@ def bake(im, mask, tint):
     return Image.fromarray(np.clip(c, 0, 255).astype("uint8"), "RGBA")
 
 
-def save_result(name, r, keep_mask=False, tint=DEFAULT_TINT, lit=True, top=True):
-    """Schreibt <name>.png (+ _lit, _top, _mask) und gibt die Manifest-Daten zurueck."""
+def save_result(name, r, keep_mask=False, keep_amask=False, tint=DEFAULT_TINT, lit=True, top=True):
+    """Schreibt <name>.png (+ _lit, _top, _mask, _amask) und gibt die Manifest-Daten zurueck."""
     color = r["color"]
     if "mask" in r and not keep_mask:
         color = bake(color, r["mask"], tint)
+    if "amask" in r and not keep_amask:
+        color = bake(color, r["amask"], DEFAULT_TINT)
     color.save(os.path.join(OUT, name + ".png"))
     if lit and r["lit"].getbbox():
         r["lit"].save(os.path.join(OUT, name + "_lit.png"))
@@ -71,7 +75,10 @@ def save_result(name, r, keep_mask=False, tint=DEFAULT_TINT, lit=True, top=True)
         r["top"].save(os.path.join(OUT, name + "_top.png"))
     if keep_mask and "mask" in r:
         r["mask"].save(os.path.join(OUT, name + "_mask.png"))
-    return {"anchor": list(r["anchor"]), "size": list(r["size"]), "lit": bool(r["lit"].getbbox()), "mask": bool(keep_mask and "mask" in r)}
+    if keep_amask and "amask" in r:
+        r["amask"].save(os.path.join(OUT, name + "_amask.png"))
+    return {"anchor": list(r["anchor"]), "size": list(r["size"]), "lit": bool(r["lit"].getbbox()),
+            "mask": bool(keep_mask and "mask" in r), "amask": bool(keep_amask and "amask" in r)}
 
 
 def render(m, **kw):
@@ -284,9 +291,9 @@ def _sheet(items, n, name, cols, rows, keep_mask):
 def build_props():
     out = manifest.setdefault("props", {})
 
-    def prop(name, model, pivot_xy=(16, 16), keep_mask=False, lit=True):
+    def prop(name, model, pivot_xy=(16, 16), keep_mask=False, keep_amask=False, lit=True):
         r = engine.render(model, shadow_len=40, ground_shadow=False)
-        info = save_result(name, r, keep_mask=keep_mask, lit=lit)
+        info = save_result(name, r, keep_mask=keep_mask, keep_amask=keep_amask, lit=lit)
         info["pivot"] = [r["anchor"][0], r["anchor"][1] + pivot_xy[0] + pivot_xy[1]]
         info["pivot"][0] += 2 * (pivot_xy[0] - pivot_xy[1])
         out[name] = info
@@ -324,6 +331,10 @@ def build_props():
     prop("m_giant", CV.statue_giant(), (32, 32), keep_mask=True)
     prop("m_fountain", CV.fountain_monument(), (32, 32), keep_mask=True)
     prop("m_arch", CV.triumph_arch(), (32, 16), keep_mask=True)
+    # Auftrag 23: Stein-Kreationen der Unternehmer (zwei Farbmasken: Grundton + Akzent, Maler faerbt sie)
+    for mid, (lab, fn, w, h) in SW.MOTIFS.items():
+        pivot = (32, 32) if (w, h) == (2, 2) else (32, 16) if w == 2 else (16, 16)
+        prop("sw_" + mid, fn(), pivot, keep_mask=True, keep_amask=True)
     prop("d_forklift", CV.forklift())
     prop("d_rack", CV.pallet_rack())
     for c in ("pakete", "lebensmittel", "medikamente", "getraenke", "elektronik", "moebel", "baustoffe", "maschinenteile", "container", "tiere"):

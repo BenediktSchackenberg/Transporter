@@ -48,6 +48,7 @@ const GROUPS := {
 		["reinigungsgeraet", "Reinigungsgeräte", "Stk", 190.0, 12, {"class": "geraet", "zone": "geraete"}], ["hygiene", "Reinigungs- und Hygieneartikel", "Pack", 12.0, 400]]},
 	"anlagen": {"label": "Öffentliche Anlagen und Denkmäler", "zone": "regal", "class": "verbrauch", "crit": 1, "items": [   # Auftrag 19: nur fuer Bauprojekte
 		["naturstein", "Naturstein", "t", 95.0, 0, {"use": 0.0, "zone": "schuettgut"}], ["bronze", "Bronze", "t", 480.0, 0, {"use": 0.0}],
+		["naturstein_aufbereitet", "Aufbereiteter Stein", "t", 200.0, 0, {"use": 0.0, "zone": "schuettgut"}],
 		["kunstwerk", "Kunstwerke", "Stk", 2400.0, 0, {"use": 0.0}], ["dekoration", "Dekorationsmaterial", "Set", 35.0, 0, {"use": 0.0}],
 		["marktstand", "Marktstände", "Stk", 380.0, 0, {"use": 0.0}], ["flutlicht", "Flutlichtmasten", "Stk", 900.0, 0, {"use": 0.0}],
 		["tribuenenteil", "Tribünenelemente", "Stk", 650.0, 0, {"use": 0.0}], ["sportbelag", "Sportbelag", "m²", 14.0, 0, {"use": 0.0}],

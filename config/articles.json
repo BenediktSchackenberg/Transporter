@@ -154,6 +154,26 @@
     "importpreis": null,
     "exportpreis": 7.0
   },
+  "naturstein": {
+    "name": "Naturstein (Roh)",
+    "einheit": "Einheit",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 95.0,
+    "importpreis": 130.0,
+    "exportpreis": 80.0
+  },
+  "naturstein_aufbereitet": {
+    "name": "Aufbereiteter Stein",
+    "einheit": "Einheit",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 200.0,
+    "importpreis": 260.0,
+    "exportpreis": 170.0
+  },
   "koks": {
     "name": "Koks",
     "einheit": "Einheit (100 kg)",
