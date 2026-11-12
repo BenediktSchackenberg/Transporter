@@ -116,8 +116,11 @@ Testlage: Volltest zuletzt 6877 Prüfungen; die vier damals roten Tests (veralte
 1. **Auftrag 22 Phase 2 Schritt 2 – Müllarten (fertig, 11.11.):** drei Tonnen Rest/Bio/Wertstoffe je Gebäude,
    eigene Touren; Wertstoffe fahren per Wertstoffwagen zum Recyclinghof (jetzt in der Startausstattung);
    Waagebuch und Hofbestände im realen Modus. Test `test_waste_streams`, Messproben `probe_waste.gd`/`probe_rc_route.gd`.
-2. Schritt 3 – Sauberkeit je Viertel: überquellende Tonnen erzeugen Abfall auf der Straße, Stadtreinigung (Kehrmaschine) räumt;
-   Wirkung auf Zufriedenheit.
+2. **Auftrag 22 Phase 2 Schritt 3 – Sauberkeit je Viertel (fertig, 12.11.):** überquellende Tonnen lassen Straßenmüll an der
+   Straßenzelle des Gebäudes zurück (Überquellung + Grundabfall); Sauberkeit eines Viertels = Straßenmüll relativ zur Normmenge
+   (40 kg); Kehrmaschine (AW-01, Voxel `aw_kehr`) räumt die schmutzigste Zelle je Stadt nach Priorität (Dreck, dann Entfernung),
+   die Stadtkasse zahlt Sachkosten; Zufriedenheit sinkt um den Dreck im eigenen Viertel; Flecken auf der Karte (RoadStateView),
+   Anzeigeposition in der Deponie, Stadtreinigungs-Zeile in `probe_waste.gd`. Test `test_street_cleaning` (15 Prüfungen).
 3. Schritt 4 – Müllverbrennung (gemeinsam): verbrennt Restmüll, liefert Strom ins Netz, Asche auf die Deponie.
 4. Schritt 5 – Deponie-Erweiterung und Verbrennungsanlage über Ausschreibung und Baufirmen bauen (heute Kosten an S0).
 5. Danach Phase 3 (gemeinsames Kernkraftwerk, Stromnetz als Graph), Phase 4 (Wasser/Kanal/Kläranlage), Phase 5 (Polizei),

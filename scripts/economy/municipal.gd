@@ -63,7 +63,7 @@ const TYPES := {
 	# Auftrag 22 Phase 2: Betriebshof der Abfallwirtschaft - Muellwagen mit Fahrer und zwei Ladern (Waste faehrt die Touren).
 	"AW-01": {"label": "Betriebshof Abfallwirtschaft", "dienst": "abfall", "ressort": "Umwelt", "building": "waste_depot", "cost": 380000.0,
 		"upkeep": 90.0, "capacity": 2, "staff": {"muellwerker": 9}, "min_staff": {"muellwerker": 3}, "power": 40.0, "water": 8.0,
-		"vehicles": ["Müllwagen"]},   # weitere Muellwagen kauft die Stadt nach Bedarf (Waste._fleet_upkeep)
+		"vehicles": ["Müllwagen", "Kehrmaschine"]},   # weitere Muellwagen kauft die Stadt nach Bedarf (Waste._fleet_upkeep)
 	"RC-01": {"label": "Recyclinghof", "dienst": "recycling", "ressort": "Umwelt", "building": "recycling_yard", "cost": 350000.0,
 		"upkeep": 100.0, "capacity": 2, "staff": {"recycling": 4}, "power": 80.0, "water": 4.0, "vehicles": ["Wertstoffwagen"]},
 	# Ausbaustufen der Feuerwehr (Etappe 13): capacity = Stellplaetze. Hauptamtliche in drei Wachabteilungen (24-Stunden-Dienst), sobald
@@ -122,6 +122,7 @@ const VEHICLES := {
 	"Linienbus": {"label": "Linienbus", "crew": 1, "cost": 40.0, "price": 280000.0, "sprite": "bus"},
 	"Wertstoffwagen": {"label": "Wertstoffsammelfahrzeug", "crew": 2, "cost": 35.0, "price": 230000.0, "sprite": "rc_wagen"},
 	"Müllwagen": {"label": "Müllsammelfahrzeug (Hecklader)", "crew": 3, "cost": 38.0, "price": 260000.0, "sprite": "aw_muell"},
+	"Kehrmaschine": {"label": "Kehrmaschine (Stadtreinigung)", "crew": 2, "cost": 30.0, "price": 180000.0, "sprite": "aw_kehr"},   # Auftrag 22 Phase 2 Schritt 3
 }
 
 ## Stadtstile (tools/vox/public.py): Wandmaterial, Dachform, Fenster und Gruen; je Typ 6 Grundvarianten in jedem Stil.

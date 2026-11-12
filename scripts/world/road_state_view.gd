@@ -19,7 +19,8 @@ func _process(delta: float) -> void:
 		return
 	_poll = 0.5
 	var r := _view_cells()
-	var key := "%s|%d|%d|%d|%d" % [str(r), int(_sum(sim.winter.snow) / 20.0), sim.winter.salted.size(), sim.winter.potholes().size(), sim.transit.lines.size()]
+	var key := "%s|%d|%d|%d|%d|%d" % [str(r), int(_sum(sim.winter.snow) / 20.0), sim.winter.salted.size(), sim.winter.potholes().size(), sim.transit.lines.size(),
+		int(_litter_sum() / 20.0)]
 	if key != _key:
 		_key = key
 		queue_redraw()
@@ -30,6 +31,10 @@ static func _sum(d: Dictionary) -> float:
 	for v in d.values():
 		s += float(v)
 	return s
+
+
+func _litter_sum() -> float:
+	return _sum(sim.street_cleaning.dirt) if sim.street_cleaning != null else 0.0
 
 
 ## Sichtbarer Kartenausschnitt in Feldern (grob, mit Rand).
@@ -61,8 +66,10 @@ func _draw() -> void:
 	var holes := {}
 	for seg in W.potholes():
 		holes[seg] = true
+	var SC: StreetCleaning = sim.street_cleaning
+	var litter: Dictionary = SC.dirt if SC != null else {}
 	_draw_stops()
-	if W.snow.is_empty() and holes.is_empty() and W.salted.is_empty():
+	if W.snow.is_empty() and holes.is_empty() and W.salted.is_empty() and litter.is_empty():
 		return
 	var r := _view_cells()
 	if r.size.x * r.size.y > 40000:
@@ -73,6 +80,13 @@ func _draw() -> void:
 			var q := Vector2i(x, y)
 			if not sim.city.is_road(q):
 				continue
+			if litter.size() > 0:
+				var dl := SC.district_litter(sim.city.district_of(q))
+				var th := 1.0 - dl * 2.0   # mehr Dreck im Viertel -> mehr Flecken (1,0 bei sauberem, 0,0 bei Verschmutzung 0,5+)
+				if th < 1.0 and float(absi(hash(q)) % 100) / 100.0 < th:
+					var p := Iso.to_screen((Vector2(q) + Vector2(0.2 + 0.6 * float(absi(hash(q)) % 7) / 7.0, 0.2 + 0.6 * float(absi(hash(q) * 3) % 7) / 7.0)) * 32.0)
+					var size := 2 if absi(hash(q)) % 5 != 0 else 3
+					draw_rect(Rect2(p, Vector2(size, size)), Color(0.16, 0.15, 0.13, 0.45 + 0.3 * dl))
 			var seg := RoadCare.seg_of(q)
 			var s := float(W.snow.get(seg, 0.0))
 			if s > 5.0:

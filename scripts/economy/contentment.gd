@@ -51,15 +51,37 @@ func of_household(hid: String) -> float:
 	return float(sim.housing.unit_of_household(hid).get("sat", 50.0))
 
 
-## Stadtweite Teile: Versorgung (Anteil offener Geschaefte, Muellabfuhr ohne Rueckstau) und Verkehr (Zeitverlust).
+## Stadtweite Teile: Versorgung (Anteil offener Geschaefte, Muellabfuhr ohne Rueckstau, Sauberkeit des Viertels) und Verkehr (Zeitverlust).
 func supply_score() -> float:
 	var open := 0
 	for s in sim.retail.shops.values():
 		if s.status == "offen":
 			open += 1
 	var shops_ok := float(open) / maxf(1.0, float(sim.retail.shops.size()))
-	var waste_ok := (1.0 if float(sim.waste._unpaid) <= 0.0 else 0.6) * (1.0 - 0.5 * sim.waste.overflow_share())   # ueberquellende Tonnen
+	var waste_ok := (1.0 if float(sim.waste._unpaid) <= 0.0 else 0.6) * (1.0 - 0.5 * sim.waste.overflow_share()) * (1.0 - 0.5 * _litter_mean())   # ueberquellende Tonnen, Dreck auf der Strasse
 	return 100.0 * (0.7 * shops_ok + 0.3 * waste_ok)
+
+## Mittelverschmutzung ueber alle Viertel 0..1 (Streumuell aus ueberquellenden Tonnen; Auftrag 22 Phase 2 Schritt 3).
+func _litter_mean() -> float:
+	if sim.street_cleaning == null or sim.street_cleaning.dirt.is_empty():
+		return 0.0
+	var t := 0.0
+	for d in Catalog.DISTRICTS.size():
+		t += sim.street_cleaning.district_litter(d)
+	return t / float(Catalog.DISTRICTS.size())
+
+## Verschmutzung des Viertels, in dem das Gebaeude steht (0..1): ueberquellende Tonnen lassen Abfall in der Straesse zurueck.
+func _litter_of(building_id: int) -> float:
+	if sim.street_cleaning == null or sim.street_cleaning.dirt.is_empty():
+		return 0.0
+	var b: Dictionary = sim.city.building(building_id)
+	if b.is_empty() or not b.has("road"):
+		return 0.0
+	return sim.street_cleaning.district_litter(int(sim.city.district_of(b.road)))
+
+## Versorgung einer Wohneinheit: stadtweite Versorgung plus der Dreck im eigenen Viertel (Sauberkeit, Auftrag 22 Phase 2 Schritt 3).
+func supply_of(u: Dictionary) -> float:
+	return supply_score() - 10.0 * _litter_of(int(u.building))
 
 
 func traffic_score() -> float:
@@ -112,7 +134,7 @@ func on_month(month: int) -> void:
 			income = float(h.get("last_income", 0.0))
 			work = 20.0 + 0.8 * _motivation(h)
 		var hs := housing_score(u, income)
-		u.sat = snappedf(W_HOUSING * hs + W_WORK * work + W_SUPPLY * supply + W_TRAFFIC * traffic, 0.1)
+		u.sat = snappedf(W_HOUSING * hs + W_WORK * work + W_SUPPLY * supply_of(u) + W_TRAFFIC * traffic, 0.1)
 		u.low = int(u.get("low", 0)) + 1 if float(u.sat) < EMIGRATE_BELOW else 0
 		if u.tenant == "B" and int(u.low) > EMIGRATE_AFTER and Citizens.roll(u.id.hash(), month, 7) < EMIGRATE_CHANCE:
 			leaving.append(u)

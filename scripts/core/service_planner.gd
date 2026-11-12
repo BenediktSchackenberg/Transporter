@@ -300,7 +300,7 @@ func act(k: int, n: Dictionary, by: String) -> Dictionary:
 # ------------------------------------------------------------------ Lagebericht fuer die KI, Uebersicht, Speichern
 func mayor_obs(k: int) -> Dictionary:
 	return {"einrichtungen": sim.municipal.summary(k), "bedarf": needs(k), "feuerwehr": sim.fire.summary(k), "rettungsdienst": sim.rescue.summary(k),
-		"winterdienst": sim.winter.summary(k), "bus": sim.transit.summary(k), "bildung": sim.education.summary(k), "recycling": sim.recycling.summary(k),
+		"winterdienst": sim.winter.summary(k), "stadtreinigung": sim.street_cleaning.summary(k), "bus": sim.transit.summary(k), "bildung": sim.education.summary(k), "recycling": sim.recycling.summary(k),
 		"neubauten_geplant": builds.values().filter(func(b): return int(b.town) == k).map(func(b): return "%s (%s)" % [Municipal.TYPES[b.code].label, b.reason]),
 		"baukosten": Municipal.TYPES.keys().map(func(c): return "%s %s: %s" % [c, Municipal.TYPES[c].label, Catalog.money(build_cost(c, k))]),
 		"regionalrat": sim.council.summary() if sim.council != null else {}, "autobahn": sim.regional.highway_summary()}

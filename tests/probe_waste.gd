@@ -43,6 +43,9 @@ func _init() -> void:
 				trucks[int(v.town)] = int(trucks.get(int(v.town), 0)) + 1
 		print("Tag %3d  in Tonnen %7.0f kg  gewogen %6.2f t  erzeugt %6.2f t  ueberquellend %3d/%d  Wagen %s  Deponie %.0f/%.0f t" % [day,
 			_in_bins(W), float(W.total.tons), made / 1000.0, W.overflowing().size(), W.bins.size(), str(trucks), W.deposited, W.capacity])
+		if s.street_cleaning.enabled():   # Auftrag 22 Phase 2 Schritt 3: Stadtreinigung
+			var sc: Dictionary = s.street_cleaning.summary()
+			print("         Stadtreinigung: %d verschmutzte Stellen, %.0f kg Strassenmuell, Kehrmaschine im Einsatz %d, geraeumt %d" % [int(sc.abschnitte), float(sc.dreck_kg), int(sc.im_einsatz), int(sc.geraeumt)])
 		if W.real:   # Auftrag 22 Phase 2 Schritt 2: drei getrennte Toenen, Bio/Wertstoffe auf dem Weg zum Hof
 			var bio := 0.0
 			var wert := 0.0

@@ -705,6 +705,35 @@ def aw_muell():
 
 MUNICIPAL += ["aw_muell"]
 
+SIZES.update({"aw_kehr": 72})
+
+
+def aw_kehr():
+    """Kehrmaschine der Stadtreinigung: weisse Kabine, orangem Aufbau mit Schuettung und seitlicher Kehrbuerste, Rundumleuchte.
+    Auftrag 22 Phase 2 Schritt 3: raumt den Abfall, der aus ueberquellenden Tonnen ueberquillt, von den Strassen der Viertele."""
+    S = SIZES["aw_kehr"]
+    m = _square(S)
+    L, W = 62, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0 + 4, y0, 5, x0 + 44, y0 + W, 30, M("pub_orange"))
+    m.box(x0 + 4, y0, 5, x0 + 44, y0 + W, 8, M("black"))
+    for yy in (y0, y0 + W - 1):
+        m.box(x0 + 6, yy, 18, x0 + 42, yy + 1, 21, M("hazard_white"))
+    m.box(x0, y0 + 3, 5, x0 + 6, y0 + W - 3, 26, M("steel_dark"))     # Heckkiste
+    m.box(x0 + 46, y0 + W - 6, 3, x0 + 56, y0 + W - 2, 9, M("steel"))         # seitliche Kehrbuerste
+    for zz in range(3, 9, 2):
+        m.box(x0 + 56, y0 + W - 6, zz, x0 + 58, y0 + W - 2, zz + 1, M("hazard_white"))
+    m.box(x0 + 54, y0 - 4, 2, x0 + 60, y0 + W + 4, 6, M("steel_dark"))       # Kehrschild vorn
+    _cab(m, x0 + 44, y0, W, 24, 18)
+    m.box(x0 + 50, y0 + 3, 22, x0 + 53, y0 + 6, 25, M("beacon_amber"))
+    m.box(x0 + 50, y0 + W - 6, 22, x0 + 53, y0 + W - 3, 25, M("beacon_amber"))
+    _axles(m, (x0 + 12, x0 + 28, x0 + 52), y0, W)
+    _lights(m, x0 + L, x0, y0, W, 6)
+    return m
+
+
+MUNICIPAL += ["aw_kehr"]
+
 
 # ------------------------------------------------------------------ Auftrag 20 Etappe 14: Rettungsdienst
 SIZES.update({"rd_ktw": 50, "rd_elw": 46, "rd_itw": 80})

@@ -1174,6 +1174,12 @@ static func landfill(sim: Simulation) -> String:
 		var dep: Dictionary = W.depot_of(k)
 		txt += "    %s\n" % ("Abholung durch Entsorger (kein Betriebshof)" if dep.is_empty() else "%s: %d Müllwagen, %d mit Besatzung, %d Müllwerker" % [dep.name,
 			dep.vehicles.filter(func(v): return str(sim.municipal.vehicles[v].type) == "Müllwagen").size(), W.crews_of(k), sim.municipal.staff_count(dep.id, "muellwerker")])
+		var sc: Dictionary = sim.street_cleaning.summary(k)
+		var worst := ""
+		if not sc.viertel.is_empty():
+			var d: int = sc.viertel.max(func(x, y): return float(sc.viertel[x]) > float(sc.viertel[y]))
+			worst = " · verschmutztes Viertel: %s (%d %%)" % [Catalog.DISTRICTS[d], int(float(sc.viertel[d]) * 100.0)]
+		txt += "    Stadtreinigung: %d verschmutzte Straßenstellen (%.0f kg Straßenmüll)%s · Kehrmaschine im Einsatz: %d, geräumt %d\n" % [int(sc.abschnitte), float(sc.dreck_kg), worst, int(sc.im_einsatz), int(sc.geraeumt)]
 	if not W.scale_log.is_empty():
 		txt += "Letzte Wägungen: %s\n" % ", ".join(W.scale_log.slice(-5).map(func(e): return "Tag %d %s %.2f t" % [int(e.tag), sim.towns.name_of(int(e.stadt)), float(e.t)]))
 	txt += "Kosten bisher %s · Wertstofferlöse %s · Gebühren der Haushalte %s\n" % [Catalog.money(float(W.total.cost)), Catalog.money(float(W.total.income)), Catalog.money(float(W.total.fees))]
