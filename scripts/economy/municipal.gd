@@ -30,6 +30,8 @@ const BERUFE := {
 	"recycling": {"label": "Wertstoffwerker", "wage": 13.0, "bildung": 0},
 	"muellwerker": {"label": "Müllwerker", "wage": 13.5, "bildung": 0},   # Auftrag 22 Phase 2: Fahrer und Lader der Muellabfuhr
 	"wasserwerker": {"label": "Fachkräfte Wasserversorgung", "wage": 15.0, "bildung": 1},   # Auftrag 22 Phase 4: Wasserwerk
+	"lokfuehrer": {"label": "Triebfahrzeugführer", "wage": 19.0, "bildung": 1},   # Auftrag 22 Phase 6: Regionalbahn
+	"zugbegleiter": {"label": "Zugbegleiter", "wage": 14.0, "bildung": 0},
 	# Etappe 14: Rettungsdienst und Kliniken
 	"rettungssani": {"label": "Rettungssanitäter", "wage": 15.0, "bildung": 1},
 	"verwaltung": {"label": "Krankenhausverwaltung", "wage": 16.0, "bildung": 1},
@@ -77,6 +79,11 @@ const TYPES := {
 	"WW-01": {"label": "Wasserwerk", "dienst": "wasser", "ressort": "Umwelt", "building": "waterworks", "cost": 900000.0,
 		"upkeep": 120.0, "capacity": 300, "min_capacity": 40, "staff": {"wasserwerker": 4}, "min_staff": {"wasserwerker": 1}, "power": 150.0,
 		"water": 0.0, "vehicles": []},
+	# Auftrag 22 Phase 6 Schritt 3: Betrieb der Regionalbahn (Zweckverband aller Staedte, Sitz im Bahnhof der groessten Stadt). Je Zug ein
+	# Triebfahrzeugfuehrer im Dienst plus Reserve; Zugbegleiter kontrollieren Fahrkarten. Angelegt von RailTraffic, nicht Startausstattung.
+	"BG-01": {"label": "Regionalbahn", "dienst": "bahn", "ressort": "Verkehr", "building": "train_station", "cost": 0.0,
+		"upkeep": 60.0, "capacity": 2, "regional": true, "staff": {"lokfuehrer": 3, "zugbegleiter": 2}, "min_staff": {"lokfuehrer": 3, "zugbegleiter": 2},
+		"power": 20.0, "water": 2.0, "vehicles": [], "refinanziert": "Regionalisierungsmittel"},   # Land erstattet Personal und Sachkosten (Messung 13.11.: sonst ~8 000 EUR/Monat fuer vier Orte mit je ~50 Einwohnern)
 	# Ausbaustufen der Feuerwehr (Etappe 13): capacity = Stellplaetze. Hauptamtliche in drei Wachabteilungen (24-Stunden-Dienst), sobald
 	# genug Personal da ist (FireService.on_duty); FW-03/04 mit Leitstelle (schnellere Alarmierung), FW-04 mit Werkstatt.
 	# Rettungsdienst und Kliniken (Etappe 14): RW-01 entspricht RD-01. Kliniken: klinik = Versorgungsstufe (1 Notaufnahme, 2 Stationen und

@@ -1197,11 +1197,22 @@ static func rail(sim: Simulation) -> String:
 " % [" – ".join(ts.linie), int(ts.fahrzeit_min)]
 	for z in ts.zuege:
 		var st: String = {"halt": "hält", "fahrt": "fährt", "wartet": "wartet am Signal"}.get(str(z.status), str(z.status))
-		txt += "  %s %s %s · Verspätung %d min%s · %d Fahrten
-" % [z.zug, st, z.ort, int(z.verspaetung_min), (" (%s)" % z.grund) if str(z.grund) != "" else "", int(z.fahrten)]
+		txt += "  %s %s %s · %d Fahrgäste · Verspätung %d min%s · %d Fahrten
+" % [z.zug, st, z.ort, int(z.fahrgaeste), int(z.verspaetung_min), (" (%s)" % z.grund) if str(z.grund) != "" else "", int(z.fahrten)]
 	var stt: Dictionary = ts.statistik
 	txt += "  Kreuzungen im Bahnhof %d · Wartezeit am Signal %d min · gefahren %d Felder
 " % [int(stt.kreuzungen), int(stt.wartezeit), int(stt.felder)]
+	var wl: Array = []
+	for k in ts.wartende:
+		wl.append("%s %d" % [k, int(ts.wartende[k])])
+	txt += "  Fahrgäste befördert %d (schwarz %d) · am Bahnsteig wartend: %s
+" % [int(stt.fahrgaeste), int(stt.schwarz), ", ".join(wl)]
+	txt += "  Regionalbahngesellschaft: Fahrgeld %s, Landeszuschuss %s, Betriebskosten %s · Saldo %s · Personal %d Triebfahrzeugführer, %d Zugbegleiter
+" % [Catalog.money(float(stt.erloes)), Catalog.money(float(stt.zuschuss)), Catalog.money(float(stt.kosten)), Catalog.money(float(ts.gesellschaft_saldo)),
+		int(ts.personal.triebfahrzeugfuehrer), int(ts.personal.zugbegleiter)]
+	if not ts.letzter_ausgleich.is_empty():
+		txt += "  letzter Monatsausgleich: %s nach Einwohneranteilen
+" % Catalog.money(float(ts.letzter_ausgleich.ergebnis))
 	return txt
 
 

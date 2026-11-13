@@ -247,3 +247,19 @@ Bahnhof weich auf das Ausweichgleis versetzt; Ausfahrsignale grün/rot nach Bloc
 „Eisenbahn (Regionalbahn)“ mit Zügen, Ort, Status, Verspätung, Kreuzungen. Gespeichert (`trains`), Fahrweg wird neu abgeleitet.
 Kamera `--shot-bahn=zug|zug2` (folgt dem Zug bis zur Aufnahme). Test `test_rail_traffic` (15): Blocksicherung über einen Umlauf,
 Bahnhofskapazität, Fahrten, Kreuzung, Verspätung, Speichern/Laden während der Fahrt.
+
+**Schritt 3 Fahrgäste, Fahrgeld, Bahngesellschaft, Personal (13.11.):** Täglich entstehen Reisewünsche je Haltepaar und Richtung:
+0,0002 × Einwohner A × Einwohner B (Ausflug/Einkauf) plus 0,3 Fahrten je Bahnpendler (`Commuting`: wer zwischen zwei
+Bahnstädten pendelt, fährt Bahn statt Auto – keine Straßenfahrtkosten, Motivation −1 statt −2; `stats.bahn_paare`). Sie warten am
+Bahnsteig (Bruchteile sammeln sich), steigen bei der Abfahrt nur in Züge Richtung Ziel (160 Plätze) und am Ziel aus. Fahrgeld
+1,50 € + 0,004 €/Feld (Ende zu Ende 6,42 €) von den Haushalten (H0) an das neue Konto `N0` „Regionalbahngesellschaft
+(gemeinsam)“; ohne Zugbegleiter fahren 25 % schwarz. N0 zahlt 0,50 €/Feld Betriebskosten (S0) und erhält 0,45 €/Feld
+Landeszuschuss (Regionalisierungsmittel, X0); Monatsausgleich nach Einwohneranteilen (N0 danach 0). Personal: Municipal `BG-01`
+„Regionalbahn“ (regional, Sitz im Bahnhof der größten Stadt, Bild bleibt), Berufe `lokfuehrer` (Triebfahrzeugführer) und
+`zugbegleiter`, 3 + 2 Stellen, Personal- und Sachkosten erstattet das Land (`refinanziert`). Zug n fährt nur mit mindestens n+1
+Triebfahrzeugführern (sonst „wartet: kein Triebfahrzeugführer“, keine Bahnpendler). Messung vor der Erstattung (Probe 40 Tage,
+Seed 4242): 288 Fahrgäste, 1 281 € Fahrgeld, 12 800 € Betrieb, 8 960 € Zuschuss, dazu ~5 700 €/Monat Löhne – für vier Orte mit je
+~50 Einwohnern zu teuer, daher Erstattung und Zuschuss 0,45 €. Darstellung: wartende Figuren auf dem Bahnsteig (bis 14),
+Beschriftung „RB1 · n Fahrgäste“ über dem Zug, Anzeige mit Fahrgästen, Wartenden je Bahnhof, Fahrgeld/Zuschuss/Kosten, Saldo,
+Personal, Monatsausgleich. Gespeichert (`waiting`, Ladung je Zug, `facility`). Test `test_rail_passengers` (17);
+`test_municipal` nimmt regionale Dienste von der Wohnort-Prüfung aus (stellen regionsweit ein).

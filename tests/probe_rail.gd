@@ -29,7 +29,7 @@ func _init() -> void:
 		s.step(0.1)
 		if s.game_min >= next_print and not s.trains.trains.is_empty():
 			next_print = s.game_min + 30.0
-			print("  %6.0f min  " % s.game_min, " | ".join(s.trains.trains.map(func(t): return "%s %s Halt %d->%d pos %.0f Versp. %.0f %s" % [t.id, t.state, int(t.stop), int(t.target), float(t.pos), float(t.delay), str(t.get("grund", ""))])), "  Blöcke ", s.trains.blocks)
+			print("  %6.0f min  " % s.game_min, " | ".join(s.trains.trains.map(func(t): return "%s %s Halt %d->%d pos %.0f Versp. %.0f Fahrgäste %d %s" % [t.id, t.state, int(t.stop), int(t.target), float(t.pos), float(t.delay), s.trains.passengers(t), str(t.get("grund", ""))])), "  wartend ", range(s.trains.stops.size()).map(func(i): return s.trains.waiting_at(i)))
 	var R: RailNet = s.rail
 	print("Karte %d Felder, Laufzeit %d ms" % [s.city.size, Time.get_ticks_msec() - t0])
 	for key in R.stations:

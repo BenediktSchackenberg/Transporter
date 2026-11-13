@@ -34,6 +34,8 @@ func on_month(_m: int) -> void:
 		return
 	var flows := {}
 	var n := 0
+	var rail_pairs := {}
+	var rail_n := 0
 	for w in sim.personnel.workers.values():
 		if w.lost or int(w.employer) < 0 or str(w.household) == "":
 			continue
@@ -54,19 +56,28 @@ func on_month(_m: int) -> void:
 		var e2: Dictionary = flows.get(work_t, {"aus": 0, "ein": 0})
 		e2.ein = int(e2.ein) + 1
 		flows[work_t] = e2
-		var dist: int = sim.nav.road_path(sim.city.building(int(u.building)).road, sim.city.building(site).road).size()
-		var cost := minf(COST_MAX, COST_PER_CELL * float(dist))
-		var pay := minf(cost, maxf(0.0, float(h.balance)))
-		if pay > 0.0:
-			h.balance = float(h.balance) - pay
-			sim.economy.transfer("H0", "S0", pay)   # Bus/Benzin
-			stats.kosten = float(stats.kosten) + pay
-		w.motivation = maxf(0.0, float(w.motivation) - 2.0)
+		if sim.trains != null and sim.trains.connects(home_t, work_t):
+			# Auftrag 22 Phase 6 Schritt 3: Bahnpendler fahren Regionalbahn (Fahrgeld je Fahrt in RailTraffic), kein Auto, weniger Stress
+			var pk := "%d|%d" % [home_t, work_t]
+			rail_pairs[pk] = int(rail_pairs.get(pk, 0)) + 1
+			rail_n += 1
+			w.motivation = maxf(0.0, float(w.motivation) - 1.0)
+		else:
+			var dist: int = sim.nav.road_path(sim.city.building(int(u.building)).road, sim.city.building(site).road).size()
+			var cost := minf(COST_MAX, COST_PER_CELL * float(dist))
+			var pay := minf(cost, maxf(0.0, float(h.balance)))
+			if pay > 0.0:
+				h.balance = float(h.balance) - pay
+				sim.economy.transfer("H0", "S0", pay)   # Bus/Benzin
+				stats.kosten = float(stats.kosten) + pay
+			w.motivation = maxf(0.0, float(w.motivation) - 2.0)
 		h["pendel_monate"] = int(h.get("pendel_monate", 0)) + 1
 		if int(h.pendel_monate) >= MOVE_AFTER:
 			_move(h, work_t)
 	stats.pendler = n
 	stats.last = flows
+	stats["bahn_pendler"] = rail_n
+	stats["bahn_paare"] = rail_pairs
 
 
 ## Umzug in die Arbeitsstadt: passende freie Einheit, bezahlbar (Miete <= MAX_RENT_SHARE des Einkommens), Umzugspreis gedeckt.

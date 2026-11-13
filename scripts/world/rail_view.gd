@@ -16,6 +16,8 @@ const GAUGE := 4.5            # halbe Spurweite (Weltmass, Feld = 32)
 const SLEEPER_HALF := 7.5
 const SLEEPER_STEP := 5.3
 const PLATFORM_H := 4.0       # Bahnsteighoehe in Pixeln
+const MAX_FIGURES := 14       # wartende Fahrgaeste je Bahnsteig (Darstellung)
+const COATS := [Color(0.75, 0.25, 0.22), Color(0.22, 0.42, 0.72), Color(0.3, 0.55, 0.32), Color(0.85, 0.7, 0.25), Color(0.45, 0.32, 0.55), Color(0.35, 0.35, 0.38)]
 
 var sim: Simulation
 var _poll := 0.0
@@ -35,7 +37,11 @@ func _process(delta: float) -> void:
 	if _poll > 0.0 or _net() == null or not _net().is_built():
 		return
 	_poll = 0.5
-	var key := "%s|%d|%s" % [str(_view_cells()), _net().cells.size(), str(sim.trains.blocks.keys()) if sim.trains != null else ""]
+	var waits := ""
+	if sim.trains != null and not sim.trains.stops.is_empty():
+		for i in sim.trains.stops.size():
+			waits += "%d," % mini(sim.trains.waiting_at(i), MAX_FIGURES)
+	var key := "%s|%d|%s|%s" % [str(_view_cells()), _net().cells.size(), str(sim.trains.blocks.keys()) if sim.trains != null else "", waits]
 	if key != _key:
 		_key = key
 		queue_redraw()
@@ -68,6 +74,11 @@ func _draw() -> void:
 	for q in N.cells:
 		if N.cells[q] == "bahnsteig" and view.has_point(q):
 			_draw_platform(q)
+	if sim.trains != null and not sim.trains.stops.is_empty():
+		for i in sim.trains.stops.size():
+			var stn: Dictionary = N.station_of(int(sim.trains.stops[i].town))
+			if not stn.is_empty():
+				_draw_waiting(stn, mini(sim.trains.waiting_at(i), MAX_FIGURES), view)
 	for q in N.cells:
 		if N.cells[q] == "bruecke" and view.has_point(q):
 			_draw_bridge(q, N.links(q))
@@ -221,6 +232,23 @@ func _draw_portal(q: Vector2i, d: Vector2i) -> void:
 	var a2 := _s(c - n * 8.0)
 	var b2 := _s(c + n * 8.0)
 	draw_colored_polygon(PackedVector2Array([a2, b2, b2 + h * 0.7, (a2 + b2) * 0.5 + h * 0.85, a2 + h * 0.7]), Color(0.08, 0.08, 0.1))
+
+
+## Wartende Fahrgaeste: kleine Figuren (Mantel in wechselnden Farben, Kopf) verteilt auf dem Bahnsteig.
+func _draw_waiting(stn: Dictionary, n: int, view: Rect2i) -> void:
+	var plat: Array = stn.platform
+	for i in n:
+		var a: Array = plat[(i * 7 + 2) % plat.size()]
+		var q := Vector2i(int(a[0]), int(a[1]))
+		if not view.has_point(q):
+			continue
+		var off := Vector2(float((i * 13) % 20) + 6.0, float((i * 7) % 18) + 7.0)
+		var f := _s(Vector2(q) * 32.0 + off) + Vector2(0, -PLATFORM_H)
+		var coat: Color = COATS[i % COATS.size()]
+		draw_rect(Rect2(f + Vector2(-3, -14), Vector2(6, 11)), coat)
+		draw_rect(Rect2(f + Vector2(-3, -3), Vector2(2.4, 3.5)), Color(0.15, 0.15, 0.18))
+		draw_rect(Rect2(f + Vector2(0.6, -3), Vector2(2.4, 3.5)), Color(0.15, 0.15, 0.18))
+		draw_circle(f + Vector2(0, -17), 3.0, Color(0.93, 0.78, 0.64))
 
 
 ## Erhoehter Bahnsteig: Oberseite hell, sichtbare Kanten (Sued/Ost) dunkler, weisse Linie an der Gleiskante.

@@ -142,10 +142,25 @@ func _update_trains() -> void:
 			var n: Node2D = train_nodes.get(key)
 			if n == null:
 				n = _make_vehicle_node("rb_triebwagen", "", Color.WHITE, false)
+				if c == 0:   # Zugnummer und Fahrgaeste ueber dem ersten Wagen
+					var lb := Label.new()
+					lb.name = "task"
+					lb.add_theme_font_size_override("font_size", 13)
+					lb.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+					lb.add_theme_constant_override("outline_size", 4)
+					lb.position = Vector2(-50, -78)
+					n.add_child(lb)
 				add_child(n)
 				train_nodes[key] = n
 			n.position = Iso.to_screen(cars[c].world)
 			_set_vehicle_dir(n, cars[c].heading)
+			var tl: Label = n.get_node_or_null("task")
+			if tl != null:
+				var txt := "%s · %d Fahrgäste" % [t.id, T.passengers(t)]
+				if str(t.state) == "wartet":
+					txt += " · " + str(t.get("grund", "wartet"))
+				if tl.text != txt:
+					tl.text = txt
 
 
 ## Bautrupps und Umzugswagen des Stadtfuhrparks: Knoten anlegen, bewegen, entfernen; Rundumleuchte beim Bautrupp.
