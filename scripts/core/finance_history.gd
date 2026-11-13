@@ -7,7 +7,7 @@ extends RefCounted
 ## Vermoegen bleiben getrennte Groessen. Kreditauszahlungen/-tilgungen sind keine Erloese/Kosten (sie bewegen nur Bargeld und Schulden).
 
 const KEEP_DAYS := 400
-const COST_GROUPS := {"Löhne": ["wages", "hire_fees", "training"], "Treibstoff": ["fuel", "supplies", "energy"], "Reparaturen": ["repairs"],
+const COST_GROUPS := {"Löhne": ["wages", "hire_fees", "training"], "Treibstoff": ["fuel", "supplies", "energy", "water"], "Reparaturen": ["repairs"],
 	"Fahrzeuge (Abschreibung)": ["depreciation"], "Gebäude, Miete, Büro": ["rent", "office", "property_costs", "security", "insurance"],
 	"Kreditzinsen": ["interest"], "Strafen und Schäden": ["penalties", "fines", "sabotage"], "Sonstige Kosten": ["trade_expense", "marketing", "admin", "tax", "internal"]}
 

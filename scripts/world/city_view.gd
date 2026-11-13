@@ -39,6 +39,7 @@ var mountain_view := MountainView.new()   # Berge und Bergbau (Auftrag 14)
 var placement_overlay := PlacementOverlay.new()   # Diagnose Gebaeudeplatzierung (F8)
 var road_state := RoadStateView.new()              # Schneedecke, geraeumte Abschnitte, Schlagloecher
 var power_net_view := PowerNetView.new()          # Hochspannungstrassen, Masten, Umspannwerke (Auftrag 22 Phase 3)
+var rail_view := RailView.new()                  # Gleise, Bahnsteige, Bahnuebergaenge (Auftrag 22 Phase 6)
 var highway_view := HighwayView.new()              # Autobahn: Trasse, Baufortschritt, Fahrstreifen, Anschlussstellen (Auftrag 21)
 var ambient_view := AmbientView.new()     # Leben auf der Karte: Strand, Boote, Moewen, Industrie, Passanten
 var ship_view := ShipView.new()           # Linienschiff im Hafen (Kuestenort)
@@ -152,6 +153,10 @@ func build(simulation: Simulation) -> void:
 	road_state.setup(sim)
 	decor_node.add_child(highway_view)
 	highway_view.setup(sim)
+	decor_node.add_child(rail_view)
+	rail_view.setup(sim)
+	if sim.rail != null:
+		sim.rail.built.connect(_on_rail_built)
 	fx_node.add_child(power_net_view)   # Freileitungen ueber der Bebauung
 	power_net_view.setup(sim)
 	add_child(air_view)
@@ -222,7 +227,7 @@ func _build_ground() -> void:
 				G.FIELD: name = "field"
 				G.CROP: name = "crop"
 				G.WATER: name = "water0"
-				G.RAIL: name = "rail_h"
+				G.RAIL: name = "gravel"   # Gleisschotter; Schwellen, Schienen und Bahnsteige zeichnet RailView
 				G.ROAD: name = "water0" if sim.bridges.is_bridge(p) else "road%d" % c.road_mask(p)   # Bruecke: Wasser darunter, Fahrbahn zeichnet BridgeView
 				G.PARKING: name = "parking"
 				G.RUNWAY: name = "runway"
@@ -440,9 +445,19 @@ func repaint_cells(cells: Array) -> void:
 			G.CONCRETE: name = "concrete"
 			G.SAND: name = "sand"
 			G.PARKING: name = "parking"
+			G.RAIL: name = "gravel"
 		if name != "" and tiles.has(name):
 			var at: Array = tiles[name]
 			ground.set_cell(q, 0, Vector2i(int(at[0]), int(at[1])))
+
+
+## Neue Gleisfelder: Schotter statt Gras, gerodete Baeume entfernen.
+func _on_rail_built(cells: Array) -> void:
+	for q in cells:
+		if _tree_sprites.has(q):
+			_tree_sprites[q].queue_free()
+			_tree_sprites.erase(q)
+	repaint_cells(cells)
 
 
 ## Neue Wegzellen (Zufahrten): Strassenkacheln samt Nachbarn neu setzen (Einmuendungen), gerodete Baeume entfernen.

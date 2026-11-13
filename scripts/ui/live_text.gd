@@ -1179,6 +1179,37 @@ static func bridge(sim: Simulation, b: Dictionary) -> String:
 	return txt
 
 
+## Trinkwasser je Stadt (Auftrag 22 Phase 4): Werk, Foerderung, Bedarf, Gebuehr, Engpaesse.
+static func water(sim: Simulation) -> String:
+	if not sim.water.enabled():
+		return ""
+	var txt := "
+[b][color=#5aa0ff]TRINKWASSER (WASSERWERKE)[/color][/b]
+"
+	for t in sim.towns.list:
+		var k := int(t.id)
+		var w: Dictionary = sim.water.summary(k)
+		var h: Dictionary = w.heute
+		var g: Dictionary = w.gesamt
+		if h.is_empty():
+			txt += "%s: noch keine Abrechnung
+" % sim.towns.name_of(k)
+			continue
+		var werk := "Fernwasser" if str(h.werk) == "" else "%s, Leistung %.0f m³, heute %.0f m³" % [str(h.werk), float(h.leistung), float(h.foerderung)]
+		txt += "%s: %s · Bedarf %.1f m³ (Haushalte %.1f, Einrichtungen %.1f, Betriebe %.1f) · Gebühr %.2f €/m³ · Abwasser %.1f m³
+" % [
+			sim.towns.name_of(k), werk, float(h.bedarf), float(h.haushalte), float(h.einrichtungen), float(h.betriebe), float(w.tarif_eur_m3), float(h.abwasser)]
+		if float(h.fehl) > 0.0 or int(h.abgeschaltet) > 0:
+			txt += "  [color=#e05040]Wasserknappheit: %.1f m³ fehlen, %d Betriebe ohne Wasser (%s)[/color]
+" % [float(h.fehl), int(h.abgeschaltet),
+				str(h.grund) if str(h.grund) != "" else "Wasserwerk ausgelastet"]
+		if not g.is_empty():
+			txt += "  seit Beginn %.0f m³ · Gebühren Haushalte %s, Betriebe %s · Engpasstage %d
+" % [float(g.m3), Catalog.money(float(g.haushalte_eur)),
+				Catalog.money(float(g.betriebe_eur)), int(g.engpass_tage)]
+	return txt
+
+
 ## Deponie: Fuellstand, Erweiterung, Waage je Stadt, Tonnen, Kosten und Gebuehren.
 static func landfill(sim: Simulation) -> String:
 	var W: Waste = sim.waste

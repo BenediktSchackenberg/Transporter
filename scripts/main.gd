@@ -509,6 +509,23 @@ func _process_timed(_delta: float) -> void:
 				var mb: Dictionary = session.sim.city.building(int(mf.building))
 				session.set_follow(false)
 				session.city_view.set_camera_world(Vector2((float(mb.x) + float(mb.w) * 0.5) * 32.0, (float(mb.y) + float(mb.h) * 0.5) * 32.0))
+		if args.has("shot-bahn") and session.sim.rail != null and session.sim.rail.is_built():   # Eisenbahn (Auftrag 22 Phase 6): Bahnhof n, sonst erste "bruecke"/"uebergang"/"tunnel"/"kurve"
+			var RN: RailNet = session.sim.rail
+			var want := str(args["shot-bahn"])
+			var focus := Vector2(-1, -1)
+			if want.is_valid_int():
+				var keys: Array = RN.stations.keys()
+				var st: Dictionary = RN.stations[keys[clampi(int(want), 0, keys.size() - 1)]]
+				focus = Vector2(float(st.rect[0]) + float(st.rect[2]) * 0.5, float(st.rect[1]) + float(st.rect[3]) * 0.5)
+			else:
+				for q in RN.cells:
+					var l: Array = RN.links(q)
+					if RN.cells[q] == want or (want == "kurve" and RN.cells[q] == "gleis" and l.size() == 2 and l[0] + l[1] != Vector2i.ZERO):
+						focus = Vector2(q) + Vector2(0.5, 0.5)
+						break
+			print("AUTOTEST Eisenbahn: ", RN.summary())
+			if focus.x >= 0.0:   # ueber shot-tile (wird nach dem Warten erneut gesetzt); +3/-3 Felder: die Leitstelle deckt die rechte Bildhaelfte
+				args["shot-tile"] = "%d,%d" % [int(focus.x) + 3, int(focus.y) - 3]
 		if args.has("shot-town"):   # Kamera auf das Rathaus eines Orts (Ortskern)
 			var th: Dictionary = session.sim.city.building(int(session.sim.towns.get_t(int(args["shot-town"])).town_hall))
 			session.set_follow(false)

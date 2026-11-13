@@ -188,3 +188,47 @@ derselbe Schaden keine Stadt mehr ab.
 
 Offen nach Phase 3: Folgen eines längeren Ausfalls für Haushalte (Zufriedenheit) und für Pumpen/Kläranlage (ab Phase 4),
 zusätzliche Umspannwerke für große Städte.
+
+## Phase 4 – Trinkwasser, Kanal und Kläranlage (ab 13.11.2026)
+
+Geplante Schritte: (1) Wasserwerk je Stadt, Verbrauch von Haushalten/Einrichtungen/Betrieben, Gebühr, Engpass bei Stromausfall ·
+(2) Leitungsnetz je Stadt entlang der Straßen mit Hochbehälter (Vorrat überbrückt Stromausfälle) und Druckzonen, Gebäude ohne
+Anschluss unversorgt · (3) Rohrbrüche mit Ausfall eines Netzabschnitts und Wassertrupp der Stadtwerke (echtes Fahrzeug) ·
+(4) Kanalisation je Stadt und gemeinsame Kläranlage der Region (Kosten je Stadt nach Abwassermenge, Abwassergebühr, Überlauf
+bei Ausfall) · (5) Ausbau von Wasserwerk, Hochbehälter und Kläranlage über Baufirmen, Anzeige und Bürgermeister-Beobachtung.
+
+**Schritt 1 Wasserwerk und Verbrauch je Stadt (13.11.):** `WaterSupply` (`scripts/economy/water_supply.gd`, `sim.water`, nur
+Region). Neuer Municipal-Typ `WW-01` „Wasserwerk“ (Gebäude `waterworks` 4×3, Baukasten `tools/vox/public.py` 6 Grundformen × 4
+Stile: Filterhalle, Becken, Rundbehälter, Grashügel-Hochbehälter, Wasserturm; Kennfarbe Blau), gehört zur Startausstattung
+(`START_KIT`, alte Spielstände bekommen es beim nächsten Tageslauf), Beruf `wasserwerker`. Verbrauch je Spieltag: 0,12 m³ je
+Einwohner, Einrichtungen die Hälfte von `TYPES.water` anteilig zur Ortsgröße (Bezug 1 000 EW, mind. 5 %), Betriebe 0,4 m³ + 0,01 m³ je kW. Förderung = Leistung (m³/Tag, wächst
+mit den Einwohnern) × Besetzungsgrad; ohne Strom (Stadt vom Kraftwerk getrennt und Notstrom erschöpft) steht das Werk. Verteilung:
+Haushalte, dann Einrichtungen, dann Betriebe nach Anschlussreihenfolge; Betriebe ohne Wasser oder ohne Wasseranschluss des
+Grundstücks sind mit Grund blockiert (`wasser`). Gebühr je m³ (Start 2,20 €, monatlich kostendeckend aus Werkskosten / verkauften
+m³, 1,50–6,00 €): Haushalte (H0) und Betriebe (Buchung `water`) zahlen an ihre Stadt. Stadt ohne Werk: Fernwasser 1,80 €/m³ an S0.
+Abwasser (90 %) wird erfasst. Anzeige im Strom-Tab („Trinkwasser“), gespeichert. Test `test_water_supply`.
+
+## Phase 6 – Eisenbahn: Bahnhöfe, Strecken, Personenverkehr (vorgezogen 13.11.2026)
+
+Benedikt hat die Bahn am 13.11. vor die restlichen Wasserschritte und die Polizei gezogen. Geplante Schritte: (1) Bahnhof je Stadt
+und Gleisnetz zwischen allen Bahnhöfen · (2) Regionalbahn mit Fahrplan: Triebwagen fahren sichtbar auf den Gleisen, halten an den
+Bahnsteigen, eingleisige Abschnitte mit Blocksicherung (Kreuzen nur in Bahnhöfen), Signale zeigen die Belegung · (3) Fahrgäste:
+Einwohner pendeln und reisen per Bahn (statt Auto), Fahrgeld, regionale Bahngesellschaft als Konto, Personal (Triebfahrzeugführer,
+Zugbegleiter) · (4) Bahnübergänge schließen vor dem Zug (Straßenverkehr wartet), Störungen (Signal-/Weichenstörung, Sturm) und
+Rückfall auf Lkw/Auto · (5) Anzeige, Bürgermeister-Beobachtung, Ausbau (Taktverdichtung, zweites Gleis) über Baufirmen.
+Phase 7 (Güterbahn, Güterbahnhof am Großlager, Gleisbau/-wartung, private Güterverkehrsfirmen) folgt danach.
+
+**Schritt 1 Bahnhöfe und Gleisnetz (13.11.):** `RailNet` (`scripts/economy/rail_net.gd`, `sim.rail`, nur Region mit ≥ 2 Städten).
+Beim ersten Tageslauf bekommt jede Stadt einen Bahnhof: freies Rechteck 10×4 möglichst nah an der Ortsmitte (Ringsuche 8–90
+Felder), Gleis außen, Bahnsteig, Empfangsgebäude 4×2 bzw. 2×4 (`train_station`/`train_station_v`, Baukasten `tools/vox/public.py`
+6 Grundformen × 4 Stile: klassisch mit Uhr, Flachbau mit Vordach, Uhrturm, Glaskubus, Holz mit Güterschuppen, Haltepunkt) zur
+Ortsmitte hin an einer Straße; mindestens ein Gleisende muss das offene Land erreichen (Flutfüllung des Grobrasters ab Kartenmitte –
+Seed 4242 hatte sonst Gleisenden in einer von Kai und Bebauung eingeschlossenen Tasche). Strecken verbinden die Bahnhöfe in der
+Reihenfolge um die Kartenmitte (wie die Autobahn): Grobraster 4×4 mit Kurvenstrafe (`RegionalProjects._hw_route`, eigenes Raster
+`RailNet._blocks`: Straße 3, Wasser 10 = Brücke, Berg 14 = Tunnel, vorhandenes Gleis 0,3), kurze Zuführungen fein; alle
+Endenpaare werden der Nähe nach versucht. Boden der Gleisfelder wird `RAIL` (Bäume gerodet, kein Bau darauf); Straßen bleiben
+(Bahnübergang), Wasser/Berg bleiben (Brücke/Tunnel). Darstellung `RailView`: Holzschwellen und Schienen mit Bögen, erhöhte
+Bahnsteige mit Sicherheitslinie, Andreaskreuze, Ausfahrsignale, Prellböcke, Brückentrog mit Pfeilern, Tunnelportale; Bodenkachel
+Schotter. Gespeichert (`rail`), beim Laden wird der Gleisboden neu gelegt. Kamera `--shot-bahn=<n|bruecke|uebergang|kurve|tunnel>`,
+Probe `tests/probe_rail.gd [-- --seed=… --cities=…]` (Seeds 4242/77/9/123: je 4 Bahnhöfe, 3 Abschnitte, 335–501 Felder,
+0–5 Bahnübergänge, bis 12 Brückenfelder). Test `test_rail_net` (23).

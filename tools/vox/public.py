@@ -42,7 +42,8 @@ ST = {
 }
 
 
-RIB = {"pub_red": "pub_red2", "pub_door_w": "pub_white", "pub_orange": "pub_orange2", "pub_yellow": "pub_yellow2", "pub_green": "pub_green2"}
+RIB = {"pub_red": "pub_red2", "pub_door_w": "pub_white", "pub_orange": "pub_orange2", "pub_yellow": "pub_yellow2", "pub_green": "pub_green2",
+       "pub_wblue": "pub_wblue2"}
 
 
 def init():
@@ -62,6 +63,8 @@ def init():
     mat("pub_blue", "#4a8cff", noise=0.0, emit="#5aa0ff")
     mat("pub_door_w", "#d8d5ce", noise=0.02)
     mat("pub_heli", "#3d4a3f", noise=0.03)
+    mat("pub_wblue", "#2f78b7", noise=0.03)       # Kennfarbe Wasserwerk (Auftrag 22 Phase 4)
+    mat("pub_wblue2", "#26649a", noise=0.03)
 
 
 # ------------------------------------------------------------------ Bausteine
@@ -1068,6 +1071,83 @@ def incineration_plant(v, st, seed):
 BUILDERS.update({"incineration_plant": incineration_plant})
 
 
+# ------------------------------------------------------------------ Auftrag 22 Phase 4 Schritt 1: Wasserwerk 4x3 (je Stadt)
+def _basin(m, x0, y0, x1, y1, h=4, rim="concrete"):
+    """Offenes Filter-/Absetzbecken: Betonrand, Wasserflaeche mit leichtem Muster."""
+    m.box(x0, y0, 1, x1, y1, 1 + h, M(rim))
+    for x in range(x0 + 2, x1 - 2):
+        for y in range(y0 + 2, y1 - 2):
+            m.put(x, y, h, M("water" if (x + 2 * y) % 9 else "water2"))
+    m.clear(x0 + 2, y0 + 2, h + 1, x1 - 2, y1 - 2, h + 2)
+
+
+def _tank(m, cx, cy, r, h, mat_name="concrete"):
+    """Runder Reinwasserbehaelter mit flachem Deckel und blauem Kennband."""
+    for z in range(1, h + 1):
+        for x in range(cx - r, cx + r + 1):
+            for y in range(cy - r, cy + r + 1):
+                d = (x - cx) ** 2 + (y - cy) ** 2
+                if d <= r * r:
+                    m.put(x, y, z, M("pub_wblue" if h - 6 <= z <= h - 4 and d >= (r - 1) ** 2 else mat_name))
+    m.box(cx - 1, cy - 1, h + 1, cx + 2, cy + 2, h + 3, M("steel_dark"))
+
+
+def _mound(m, x0, y0, x1, y1, h):
+    """Erdueberdeckter Hochbehaelter: Grashuegel mit Betontuer zur Hofseite."""
+    for i in range(h):
+        m.box(x0 + i, y0 + i, 1 + i, x1 - i, y1 - i, 2 + i, M("grass" if i else "grass3"))
+    mx = (x0 + x1) // 2
+    m.box(mx - 5, y1 - 2, 1, mx + 5, y1, 9, M("concrete"))
+    m.box(mx - 2, y1 - 1, 1, mx + 2, y1, 7, M("pub_wblue"))
+
+
+def waterworks(v, st, seed):
+    """Wasserwerk: Filterhalle (Pumpen), Becken, Reinwasserbehaelter oder Huegel-Hochbehaelter, Brunnenhaeuschen; sechs Grundformen."""
+    rng = random.Random(seed)
+    W, H = 4 * T, 3 * T
+    m = Model(W, H, 60)
+    ground(m, st, W, H, seed)
+    d = "pub_wblue"
+    if v == 0:      # Filterhalle hinten, zwei Becken vorne, Verwaltung rechts
+        hall(m, st, 6, 6, 82, 44, 20, 2, d, rng, band="pub_wblue")
+        house(m, st, 90, 8, 122, 40, 2, rng)
+        _basin(m, 8, 54, 56, 86)
+        _basin(m, 62, 54, 110, 86)
+    elif v == 1:    # Rundbehaelter links, Halle rechts, Brunnenhaus vorne
+        _tank(m, 26, 28, 18, 26)
+        hall(m, st, 52, 6, 122, 50, 20, 2, d, rng, band="pub_wblue", door_w=12)
+        house(m, st, 56, 60, 84, 86, 1, rng)
+        _basin(m, 90, 58, 122, 88)
+    elif v == 2:    # Grashuegel-Hochbehaelter hinten, Pumpenhaus vorne links
+        _mound(m, 6, 4, 84, 48, 10)
+        house(m, st, 90, 6, 122, 44, 2, rng)
+        hall(m, st, 8, 56, 70, 88, 16, 1, d, rng, band="pub_wblue")
+        _basin(m, 78, 56, 120, 88)
+    elif v == 3:    # Zwei Rundbehaelter, flache Pumpenhalle dazwischen
+        _tank(m, 20, 24, 14, 24)
+        _tank(m, 108, 24, 14, 24)
+        hall(m, st, 38, 6, 90, 46, 18, 2, d, rng, roof_kind="flat", band="pub_wblue")
+        house(m, st, 8, 58, 50, 88, 1, rng)
+        _basin(m, 60, 56, 120, 88)
+    elif v == 4:    # Lange Filterhalle quer, Huegel rechts vorne
+        hall(m, st, 6, 6, 122, 40, 22, 3, d, rng, band="pub_wblue", door_w=12)
+        house(m, st, 6, 50, 40, 86, 2, rng)
+        _mound(m, 60, 50, 122, 90, 8)
+    else:           # Wasserturm-Variante: schlanker Turm mit Behaelterkopf, Halle, Becken
+        tower(m, st, 12, 14, 12, 40, rng, cap="pub_wblue")
+        _tank(m, 18, 20, 11, 50, "pub_white")
+        hall(m, st, 44, 6, 122, 46, 20, 2, d, rng, band="pub_wblue")
+        _basin(m, 44, 56, 122, 88)
+    fence(m, 0, H - 2, 44, H, 1, h=6, mat_f="steel")
+    fence(m, 84, H - 2, W, H, 1, h=6, mat_f="steel")
+    greenery(m, st, [(124, 90), (4, 50)], rng)
+    return m, {"w": 4, "h": 3, "entrance": [64, H], "delivery": [64, H], "height": 56}
+
+
+TYPES.update({"waterworks": ("ww", 4, 3)})
+BUILDERS.update({"waterworks": waterworks})
+
+
 def sprite_name(btype, v, st):
     return "pub_%s_%d_%s" % (TYPES[btype][0], v, st)
 
@@ -1080,3 +1160,84 @@ def specs():
             for i, st in enumerate(STYLES):
                 s[sprite_name(bt, v, st)] = (lambda bt=bt, v=v, st=st, sd=11 + 7 * v + 101 * i: BUILDERS[bt](v, st, sd))
     return s
+
+
+# ------------------------------------------------------------------ Auftrag 22 Phase 6 Schritt 1: Bahnhof (Empfangsgebaeude)
+def _clock(m, x, y_face, z):
+    """Bahnhofsuhr: weisses Zifferblatt mit dunklem Rand auf der Suedfassade."""
+    m.box(x - 3, y_face, z - 3, x + 4, y_face + 1, z + 4, M("frame_dark"))
+    m.box(x - 2, y_face, z - 2, x + 3, y_face + 1, z + 3, M("pub_white"))
+    m.box(x, y_face, z, x + 1, y_face + 1, z + 2, M("frame_dark"))
+
+
+def _station_sign(m, x0, x1, y_face, z):
+    """Blaues Bahnhofsschild mit weissem Rand ueber dem Eingang."""
+    m.box(x0, y_face, z, x1, y_face + 1, z + 5, M("pub_white"))
+    m.box(x0 + 1, y_face, z + 1, x1 - 1, y_face + 1, z + 4, M("pub_wblue"))
+
+
+def _station_body(m, st, v, rng, L, D):
+    """Empfangsgebaeude in einem L x D-Rahmen (lange Seite x). Rueckgabe: Hoehe."""
+    k = ST[st]
+    mid = L // 2
+    if v == 0:      # klassisches Empfangsgebaeude mit Mittelrisalit und Uhr
+        house(m, st, 6, 8, L - 6, D - 6, 2, rng, roof_kind="gable" if st != "modern" else None)
+        house(m, st, mid - 14, 4, mid + 14, D - 4, 3, rng, roof_kind="gable" if st != "modern" else None, entrance=False)
+        _clock(m, mid, D - 4, 30)
+        _station_sign(m, mid - 10, mid + 10, D - 4, 22)
+        return 50
+    if v == 1:      # langer Flachbau mit Vordach (Kleinstadtbahnhof)
+        house(m, st, 4, 10, L - 4, D - 10, 1, rng)
+        canopy(m, 8, D - 12, L - 8, D - 2, 12, roof_mat="steel" if st != "backstein" else "tile_terra")
+        _station_sign(m, mid - 12, mid + 12, D - 10, 14)
+        return 30
+    if v == 2:      # Turmbahnhof: Uhrturm an der Ecke
+        house(m, st, 4, 10, L - 20, D - 6, 2, rng)
+        tower(m, st, L - 18, 8, 12, 46, rng, cap="pub_wblue")
+        _clock(m, L - 12, 20, 36)
+        _station_sign(m, 12, 40, D - 6, 22)
+        return 60
+    if v == 3:      # Glaskubus modern mit Kragdach
+        block(m, 10, 8, 1, L - 10, D - 8, 22, k["glass"] if st == "modern" else k["wall"], base=k["base"], base_h=2)
+        m.box(6, 4, 22, L - 6, D - 4, 24, M("concrete" if st != "gruen" else "pub_larch"))
+        door(m, "s", mid - 4, 2, D - 8, w=8, h=10, mat_door=k["frame"])
+        _station_sign(m, mid - 10, mid + 10, D - 4, 16)
+        return 32
+    if v == 4:      # Fachwerk-/Holzbahnhof mit Gueterschuppen
+        house(m, st, 4, 8, mid + 6, D - 6, 2, rng, roof_kind="gable")
+        hall(m, st, mid + 8, 10, L - 4, D - 8, 14, 1, "timber", rng, roof_kind="gable", door_w=12)
+        _station_sign(m, 10, 34, D - 6, 22)
+        return 44
+    # v == 5: Haltepunkt mit Wartehalle und Fahrkartenautomat
+    house(m, st, 4, 12, 40, D - 10, 1, rng)
+    canopy(m, 46, 10, L - 6, D - 8, 13, roof_mat="glass_dark")
+    for x in range(50, L - 10, 14):
+        bench(m, x, D - 12, 1)
+    m.box(L - 14, D - 14, 1, L - 11, D - 11, 9, M("pub_wblue"))
+    _station_sign(m, 8, 34, D - 10, 14)
+    return 28
+
+
+def train_station(v, st, seed):
+    """Empfangsgebaeude 4x2 (Gleis laeuft laengs der langen Seite)."""
+    rng = random.Random(seed)
+    W, H = 4 * T, 2 * T
+    m = Model(W, H, 80)
+    ground(m, st, W, H, seed)
+    h = _station_body(m, st, v, rng, W, H)
+    lamp_post(m, 2, H - 3, 1, h=16)
+    lamp_post(m, W - 3, H - 3, 1, h=16)
+    return m, {"w": 4, "h": 2, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": h}
+
+
+def train_station_v(v, st, seed):
+    """Dasselbe Empfangsgebaeude gedreht (2x4): Modell in x-Richtung bauen, dann x und y tauschen."""
+    m0, meta = train_station(v, st, seed)
+    W, H = 2 * T, 4 * T
+    m = Model(W, H, 80)
+    m.g = m0.g.transpose(1, 0, 2).copy()   # Suedfassade wird Ostfassade (beide sichtbar)
+    return m, {"w": 2, "h": 4, "entrance": [W, H // 2], "delivery": [W, H // 2], "height": meta["height"]}
+
+
+TYPES.update({"train_station": ("bf", 4, 2), "train_station_v": ("bfv", 2, 4)})
+BUILDERS.update({"train_station": train_station, "train_station_v": train_station_v})

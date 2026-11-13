@@ -29,6 +29,7 @@ const BERUFE := {
 	"erzieher": {"label": "Erzieher", "wage": 14.0, "bildung": 2},
 	"recycling": {"label": "Wertstoffwerker", "wage": 13.0, "bildung": 0},
 	"muellwerker": {"label": "Müllwerker", "wage": 13.5, "bildung": 0},   # Auftrag 22 Phase 2: Fahrer und Lader der Muellabfuhr
+	"wasserwerker": {"label": "Fachkräfte Wasserversorgung", "wage": 15.0, "bildung": 1},   # Auftrag 22 Phase 4: Wasserwerk
 	# Etappe 14: Rettungsdienst und Kliniken
 	"rettungssani": {"label": "Rettungssanitäter", "wage": 15.0, "bildung": 1},
 	"verwaltung": {"label": "Krankenhausverwaltung", "wage": 16.0, "bildung": 1},
@@ -71,6 +72,11 @@ const TYPES := {
 	"MV-01": {"label": "Müllverbrennungsanlage", "dienst": "abfall", "ressort": "Umwelt", "building": "incineration_plant", "cost": 1500000.0,
 		"upkeep": 400.0, "capacity": 2, "regional": true, "staff": {"muellwerker": 6}, "min_staff": {"muellwerker": 2}, "power": 300.0, "water": 20.0,
 		"vehicles": []},
+	# Auftrag 22 Phase 4 Schritt 1: Wasserwerk je Stadt (Brunnen, Aufbereitung, Pumpen). capacity = Foerderleistung in m3 je Spieltag
+	# (waechst mit den Einwohnern, mindestens min_capacity); die Leistung skaliert mit Besetzung und Strom (WaterSupply).
+	"WW-01": {"label": "Wasserwerk", "dienst": "wasser", "ressort": "Umwelt", "building": "waterworks", "cost": 900000.0,
+		"upkeep": 120.0, "capacity": 300, "min_capacity": 40, "staff": {"wasserwerker": 4}, "min_staff": {"wasserwerker": 1}, "power": 150.0,
+		"water": 0.0, "vehicles": []},
 	# Ausbaustufen der Feuerwehr (Etappe 13): capacity = Stellplaetze. Hauptamtliche in drei Wachabteilungen (24-Stunden-Dienst), sobald
 	# genug Personal da ist (FireService.on_duty); FW-03/04 mit Leitstelle (schnellere Alarmierung), FW-04 mit Werkstatt.
 	# Rettungsdienst und Kliniken (Etappe 14): RW-01 entspricht RD-01. Kliniken: klinik = Versorgungsstufe (1 Notaufnahme, 2 Stationen und
@@ -138,7 +144,7 @@ const STYLES := {
 	"industrie": "Industrie, Stahl und Wellblech",
 }
 const STYLE_OF_CHARACTER := {"Marktflecken": "backstein", "Handwerkerort": "industrie", "Fischerdorf": "gruen", "Bauerndorf": "gruen"}
-const START_KIT := ["FW-01", "RW-01", "BH-01", "AW-01", "RC-01"]
+const START_KIT := ["FW-01", "RW-01", "BH-01", "AW-01", "RC-01", "WW-01"]
 ## Finanzierung (Analyse 10.11.: die Dienste kosteten kleine Orte mehr als Landeszuweisung und Steuern zusammen):
 ## Rettungsdienst und Kliniken refinanzieren die Krankenkassen, die Flughafenfeuerwehr die Flughafenentgelte (ausserhalb der Region, X0) kostendeckend - Sachkosten, Fahrzeuge und
 ## Loehne kommen taeglich zurueck in die Stadtkasse (bzw. nach den Anteilen des Zweckverbands). Die Freiwillige Feuerwehr hat erst ab
@@ -648,13 +654,18 @@ func daily_cost(k: int) -> float:
 		var share := float(f.get("shares", {"%d" % int(f.town): 1.0}).get(str(k), 0.0))
 		if share <= 0.0:
 			continue
-		var c := float(f.upkeep) * (0.3 + 0.7 * minf(1.0, float(_pop(int(f.town))) / REF_POP))
-		for vid in f.vehicles:
-			c += float(vehicles[vid].cost)
-		for p in staff_of(f.id):
-			c += float(p.wage) * Citizens.HOURS_PER_MONTH / 30.0
-		x += c * share
+		x += cost_of(f) * share
 	return x
+
+
+## Laufende Kosten einer Einrichtung je Tag (Sachkosten nach Ortsgroesse, Fahrzeuge, Loehne des Personals).
+func cost_of(f: Dictionary) -> float:
+	var c := float(f.upkeep) * (0.3 + 0.7 * minf(1.0, float(_pop(int(f.town))) / REF_POP))
+	for vid in f.vehicles:
+		c += float(vehicles[vid].cost)
+	for p in staff_of(f.id):
+		c += float(p.wage) * Citizens.HOURS_PER_MONTH / 30.0
+	return c
 
 
 ## Sachkosten und Fahrzeugkosten je Tag aus der Stadtkasse an die Dienstleister (S0); Ressort laut Typ.
