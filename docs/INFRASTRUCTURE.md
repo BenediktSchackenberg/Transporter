@@ -263,3 +263,18 @@ Seed 4242): 288 Fahrgäste, 1 281 € Fahrgeld, 12 800 € Betrieb, 8 960 € Zu
 Beschriftung „RB1 · n Fahrgäste“ über dem Zug, Anzeige mit Fahrgästen, Wartenden je Bahnhof, Fahrgeld/Zuschuss/Kosten, Saldo,
 Personal, Monatsausgleich. Gespeichert (`waiting`, Ladung je Zug, `facility`). Test `test_rail_passengers` (17);
 `test_municipal` nimmt regionale Dienste von der Wohnort-Prüfung aus (stellen regionsweit ein).
+
+**Schritt 4 Bahnübergänge, Störungen, Rückfall auf die Straße (13.11.):** Bahnübergänge der Linie (`RailTraffic.crossings`)
+schließen, solange ein fahrender Zug zwischen 6 Feldern vor der Spitze und 3,6 Feldern hinter dem Zugende ist
+(`NavGrid.barriers`, zählt in `is_blocked_road`); Firmenfahrzeuge (`Simulation._drive`) und Stadtfahrzeuge (`CityFleet`) warten
+davor, statt umzuplanen. Darstellung: Schrankenbäume rot-weiß quer über die Fahrbahn mit blinkender roter Lampe, offen
+hochgeklappt. Störungen je Block und Tag: Sturm (`Weather.is_strong_wind`) 15 % „Baum auf dem Gleis“ (60 min Arbeit, 1 200 €),
+sonst 0,8 % Signalstörung (Ausfahrsignal, 30 min, 800 €) und 0,4 % Weichenstörung (45 min, 1 500 €). Gestörter Block: keine
+Abfahrt („Störung: …“, Signal rot), ein Zug im Block hält vor der Stelle. Bahntrupp (`CityFleet` Art `bahntrupp`, Bautrupp-Grafik
+mit Rundumleuchte) fährt vom nächsten Bahnhof zur nächsten Straße, arbeitet ab Ankunft, meldet `RailTraffic.repaired` (Kosten N0 →
+S0); nach dem Laden fährt für offene Störungen ein neuer Trupp. Wartende, deren Weg über einen gestörten Block führt, fahren Auto
+(0,01 €/Feld H0 → S0, Statistik `strasse`). Karte: Warndreieck, beim Baum ein umgestürzter Baum quer über dem Gleis. Anzeige:
+offene Störungen, geschlossene Schranken, Schließungen, Sperrzeit, Ausweichende. Probe 60 Tage: Seed 4242 164 Schließungen,
+2 Störungen (81 min), 33 Fahrgäste auf der Straße; Seed 77 262 / 4 (184 min) / 83. Kamera `--shot-bahn=schranke` (wartet, bis
+eine Schranke zu ist). Test `test_rail_disruptions` (17). Hinweis: Eine Strecke kann das Endfeld einer Stichstraße schneiden
+(Übergang ohne Durchgangsverkehr, harmlos).

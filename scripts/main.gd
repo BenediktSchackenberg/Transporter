@@ -518,6 +518,9 @@ func _process_timed(_delta: float) -> void:
 				focus = session.sim.trains.cars_of(tz)[0].world / 32.0
 				print("AUTOTEST Regionalbahn: ", session.sim.trains.summary())
 				args["_shot_train"] = tz.id   # der Zug faehrt waehrend des Kameraschwenks weiter: Ziel vor der Aufnahme neu setzen
+			elif want == "schranke" and not session.sim.trains.crossings.is_empty():   # Bahnuebergang, dem sich gerade ein Zug naehert
+				args["_shot_crossing"] = true
+				focus = _nearest_crossing() / 32.0
 			elif want.is_valid_int():
 				var keys: Array = RN.stations.keys()
 				var st: Dictionary = RN.stations[keys[clampi(int(want), 0, keys.size() - 1)]]
@@ -591,6 +594,17 @@ func _process_timed(_delta: float) -> void:
 		session.hud.show_tab(str(args.get("tab", "Aktivitäten")), int(args.get("econ", "0")))   # schliesst auch versehentlich geoeffnete Fenster
 		for i in 90:   # Kamera schwenken lassen
 			await get_tree().process_frame
+		if args.has("_shot_crossing"):   # Eisenbahn: warten, bis die Schranke zu ist (hoechstens ~15 s), dann Kamera dorthin
+			for i in 900:
+				if not session.sim.trains.closed.is_empty():
+					break
+				await get_tree().process_frame
+			var wc: Vector2 = _nearest_crossing() / 32.0
+			args["shot-tile"] = "%d,%d" % [int(wc.x) + 2, int(wc.y) - 2]
+			session.set_follow(false)
+			session.city_view.set_camera_world(Vector2(float(int(wc.x) + 2) * 32.0 + 16.0, float(int(wc.y) - 2) * 32.0 + 16.0))
+			for i in 45:   # Gleisansicht zeichnet alle 0,5 s neu
+				await get_tree().process_frame
 		if args.has("_shot_train"):   # Eisenbahn: Kamera auf die aktuelle Zugposition
 			for tz2 in session.sim.trains.trains:
 				if str(tz2.id) == str(args["_shot_train"]):
@@ -856,3 +870,19 @@ func _autotest_finished(s: GameSession) -> void:
 	print("AUTOTEST ", "OK" if ok else "FEHLGESCHLAGEN")
 	await get_tree().create_timer(0.5).timeout
 	get_tree().quit(0 if ok else 1)
+
+
+## Weltposition des Bahnuebergangs, der einem fahrenden Zug am naechsten ist (geschlossene zuerst).
+func _nearest_crossing() -> Vector2:
+	var T: RailTraffic = session.sim.trains
+	for q in T.closed:
+		return (Vector2(q) + Vector2(0.5, 0.5)) * 32.0
+	var best := Vector2.ZERO
+	var bd := INF
+	for t in T.trains:
+		for c in T.crossings:
+			var d := absf(float(c.idx) - float(t.pos))
+			if d < bd:
+				bd = d
+				best = (Vector2(c.cell) + Vector2(0.5, 0.5)) * 32.0
+	return best

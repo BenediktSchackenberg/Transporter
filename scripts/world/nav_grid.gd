@@ -9,6 +9,7 @@ var walk := AStarGrid2D.new()
 var roadworks := {}   # Vector2i -> bis Spielminute
 var jams := {}        # Vector2i -> bis Spielminute
 var base_weight := {} # Vector2i -> Grundgewicht (Autobahn < 1: bevorzugt); Staus setzen es voruebergehend hoch
+var barriers := {}    # Vector2i -> true: geschlossener Bahnuebergang (Auftrag 22 Phase 6 Schritt 4). Fahrzeuge warten davor, planen nicht um
 
 
 func build(c: CityData) -> void:
@@ -52,7 +53,7 @@ func path_length(from: Vector2i, to: Vector2i) -> int:
 
 
 func is_blocked_road(p: Vector2i) -> bool:
-	return roadworks.has(p)
+	return roadworks.has(p) or barriers.has(p)
 
 
 func add_roadwork(p: Vector2i, until: float) -> void:

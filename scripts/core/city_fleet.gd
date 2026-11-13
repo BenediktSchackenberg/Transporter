@@ -111,6 +111,8 @@ func update(dt: float) -> void:
 	for v in vehicles.duplicate():
 		var m: Mover = v.mover
 		if not m.arrived():
+			if sim.nav.barriers.has(m.next_tile()):
+				continue   # Bahnuebergang geschlossen: warten
 			if sim.nav.is_blocked_road(m.next_tile()) and m.next_tile() != m.goal:
 				sim.route(m, m.goal)
 			else:
@@ -120,6 +122,18 @@ func update(dt: float) -> void:
 			continue   # Bautrupps (BuildCrews) und Dienstwagen der Buergermeister (CivicWorks) steuern Ziel und Zustand selbst
 		if v.kind in ["muell", "wertstoff"]:
 			_garbage(v, now)
+			continue
+		if v.kind == "bahntrupp":   # Auftrag 22 Phase 6 Schritt 4: Stoerung an der Bahnstrecke beheben (Arbeit erst ab Ankunft)
+			if str(v.phase) == "anfahrt":
+				v.phase = "arbeit"
+				v.until = now + RailTraffic.repair_min(str(v.get("art", "")))
+			elif str(v.phase) == "arbeit" and now >= float(v.until):
+				sim.trains.repaired(int(v.block))
+				v.phase = "rueckfahrt"
+				if not sim.route(m, v.back):
+					vehicles.erase(v)
+			elif str(v.phase) == "rueckfahrt":
+				vehicles.erase(v)
 			continue
 		if v.kind == "netztrupp":   # Auftrag 22 Phase 3: Reparatur der Hochspannungstrasse erst ab Ankunft vor Ort
 			if str(v.phase) == "anfahrt":

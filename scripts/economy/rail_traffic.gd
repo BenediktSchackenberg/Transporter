@@ -14,6 +14,11 @@ extends RefCounted
 ## Einwohneranteilen an die Staedte bzw. von ihnen ausgeglichen (wie die Kraftwerksgesellschaft). Personal: Municipal BG-01
 ## (regional, Sitz im Bahnhof der groessten Stadt) mit Triebfahrzeugfuehrern und Zugbegleitern; Zug n faehrt nur, wenn mindestens
 ## n+1 Triebfahrzeugfuehrer angestellt sind.
+## Schritt 4 Bahnuebergaenge und Stoerungen: Naht ein Zug (CLOSE_AHEAD Felder davor bis zum Zugende), ist die Schranke zu
+## (NavGrid.barriers): Strassenfahrzeuge warten davor. Taeglich koennen Abschnitte gestoert werden (Sturm: umgestuerzter Baum,
+## sonst selten Signal- oder Weichenstoerung). Ein gestoerter Block wird nicht befahren; ein Zug darin bleibt stehen. Ein Bahntrupp
+## (CityFleet "bahntrupp") faehrt vom naechsten Bahnhof zur Stelle und repariert dort; die Kosten traegt N0. Wartende, deren Weg
+## ueber einen gestoerten Block fuehrt, fahren mit dem Auto (Fahrtkosten H0 -> S0).
 ## Fahrplan: Soll-Zeiten aus Fahrzeit (Laenge / SPEED) und Haltezeit; Ist minus Soll = Verspaetung, am Endbahnhof wird mit der
 ## Wendezeit aufgeholt. Bewegung kontinuierlich in Spielminuten (Simulation.step); gespeichert werden die Zuege, der Fahrweg wird
 ## aus dem Netz neu abgeleitet.
@@ -35,6 +40,15 @@ const SUBSIDY_CELL := 0.45    # Landeszuschuss je gefahrenem Feld und Zug (Regio
 const LEISURE := 0.0002       # Reisewuensche je Tag und Richtung = LEISURE x Einwohner A x Einwohner B
 const COMMUTE_TRIPS := 0.3    # Fahrten je Bahnpendler, Tag und Richtung (Rest Homeoffice, Mitfahrt)
 const STAFF_CODE := "BG-01"
+const CLOSE_AHEAD := 6.0      # Schranke schliesst so viele Felder vor der Zugspitze (2 Spielminuten)
+const CLOSE_TAIL := 3.6       # ... und oeffnet, wenn das Zugende so weit vorbei ist
+const ROAD_EUR_CELL := 0.01   # Ausweichen auf die Strasse: Fahrtkosten je Feld (Auto)
+## Stoerungen: Wahrscheinlichkeit je Block und Tag, Arbeit vor Ort (Spielminuten), Kosten
+const DISRUPT := {
+	"Baum auf dem Gleis": {"p_storm": 0.15, "p": 0.0, "min": 60.0, "eur": 1200.0},
+	"Signalstörung": {"p_storm": 0.0, "p": 0.008, "min": 30.0, "eur": 800.0},
+	"Weichenstörung": {"p_storm": 0.0, "p": 0.004, "min": 45.0, "eur": 1500.0},
+}
 
 var sim
 var path: Array = []          # Vector2i: Fahrweg der Linie
@@ -47,10 +61,15 @@ var by_town := {}             # Stadt (str) -> {ein, aus}
 var last_settle := {}
 var facility := ""            # Municipal BG-01
 var _cells_acc := 0.0         # gefahrene Felder seit der letzten Abrechnung
+var crossings: Array = []     # [{idx (Fahrweg), cell: Vector2i}] Bahnuebergaenge der Linie (abgeleitet)
+var closed := {}              # Vector2i -> true: derzeit geschlossene Schranken (abgeleitet)
+var disruptions := {}         # Block -> {art, cell: [x, y], road: [x, y], since, vehicle, town}
+var rng := RandomNumberGenerator.new()
 
 
 func setup(simulation) -> void:
 	sim = simulation
+	rng.seed = hash("regionalbahn") ^ int(sim.rng.seed)
 	sim.day_changed.connect(func(_d): _on_day())
 	sim.month_changed.connect(func(_m): settle())
 
@@ -102,6 +121,9 @@ func ensure() -> bool:
 		if i < chain.size():
 			for a in chain[i].cells:
 				path.append(Vector2i(int(a[0]), int(a[1])))
+	for i in path.size():
+		if sim.city.is_road(path[i]):
+			crossings.append({"idx": i, "cell": path[i]})
 	if trains.is_empty():
 		_start_trains()
 	_ensure_staff()
@@ -168,6 +190,17 @@ func _on_day() -> void:
 			var pb := float(sim.citizens.population_of(int(stops[b].town)))
 			var n := LEISURE * pa * pb + COMMUTE_TRIPS * float(int(pend.get("%s|%s" % [ka, kb], 0)) + int(pend.get("%s|%s" % [kb, ka], 0)))
 			waiting[ka][kb] = float(waiting[ka].get(kb, 0.0)) + n
+	var storm: bool = sim.wx != null and sim.wx.is_strong_wind()
+	for b in stops.size() - 1:
+		for art in DISRUPT:
+			var pr := float(DISRUPT[art].p_storm if storm else DISRUPT[art].p)
+			if pr > 0.0 and rng.randf() < pr:
+				disrupt(b, art)
+	for b in disruptions.keys():   # Spielstand: Trupp neu losschicken, falls er fehlt
+		var vid := int(disruptions[b].vehicle)
+		if not sim.fleet.vehicles.any(func(v): return int(v.id) == vid and v.kind == "bahntrupp"):
+			_dispatch_crew(b)
+	_road_fallback()
 	_book_operation()
 
 
@@ -307,7 +340,117 @@ func update(dt: float) -> void:
 					stats.wartezeit = float(stats.wartezeit) + dmin
 			"fahrt":
 				_move(t, dmin, now)
+	_update_crossings()
 
+
+## Schranken: geschlossen, solange sich ein fahrender Zug im Bereich [Spitze + CLOSE_AHEAD, Ende - CLOSE_TAIL] befindet.
+func _update_crossings() -> void:
+	var now_closed := {}
+	for t in trains:
+		if str(t.state) != "fahrt":
+			continue
+		var d := signf(float(stops[int(t.target)].pos) - float(t.pos))
+		var head := float(CARS) * CAR_LEN * 0.5
+		for c in crossings:
+			var rel := (float(c.idx) - float(t.pos)) * d
+			if rel <= head + CLOSE_AHEAD and rel >= -head - CLOSE_TAIL:
+				now_closed[c.cell] = true
+	var nav = sim.nav
+	for q in closed:
+		if not now_closed.has(q):
+			nav.barriers.erase(q)
+	for q in now_closed:
+		if not closed.has(q):
+			nav.barriers[q] = true
+			stats["schranken"] = int(stats.get("schranken", 0)) + 1
+	closed = now_closed
+
+
+static func repair_min(art: String) -> float:
+	return float(DISRUPT.get(art, {"min": 40.0}).min)
+
+
+## Stoerung auf Block b: Stelle auf dem Fahrweg, Strassenzufahrt, Bahntrupp vom naechsten Bahnhof.
+func disrupt(b: int, art: String) -> bool:
+	if disruptions.has(b) or b < 0 or b >= stops.size() - 1:
+		return false
+	var lo := int(stops[b].to) + 1
+	var hi := int(stops[b + 1].from) - 1
+	if hi <= lo:
+		return false
+	var idx := rng.randi_range(lo, hi)
+	if art == "Signalstörung":
+		idx = lo   # Ausfahrsignal am Bahnhofsende
+	elif art == "Weichenstörung":
+		idx = maxi(lo, int(stops[b].to))
+	var cell: Vector2i = path[idx]
+	var road := _road_near(cell)
+	var town := int(stops[b].town) if absi(idx - int(stops[b].to)) <= absi(idx - int(stops[b + 1].from)) else int(stops[b + 1].town)
+	disruptions[b] = {"art": art, "cell": [cell.x, cell.y], "idx": idx, "road": [road.x, road.y], "since": sim.game_min, "vehicle": -1, "town": town}
+	stats["stoerungen"] = int(stats.get("stoerungen", 0)) + 1
+	sim.log_event("Regionalbahn: %s zwischen %s und %s – Abschnitt gesperrt, Bahntrupp aus %s ist unterwegs." % [art,
+		sim.towns.name_of(int(stops[b].town)), sim.towns.name_of(int(stops[b + 1].town)), sim.towns.name_of(town)], "warn")
+	_dispatch_crew(b)
+	return true
+
+
+func _road_near(c: Vector2i) -> Vector2i:
+	for r in range(0, 12):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var q := c + Vector2i(dx, dy)
+				if sim.city.inside(q) and sim.city.is_road(q) and not closed.has(q):
+					return q
+	return c
+
+
+func _dispatch_crew(b: int) -> void:
+	var dz: Dictionary = disruptions[b]
+	var st: Dictionary = sim.rail.station_of(int(dz.town))
+	var home: Vector2i = sim.city.building(int(st.building)).road if not st.is_empty() else sim.fleet.depot_road()
+	var road := Vector2i(int(dz.road[0]), int(dz.road[1]))
+	var v: Dictionary = sim.fleet._spawn("bahntrupp", home, road, 0.0, home, "Bahntrupp %s: %s" % [sim.towns.name_of(int(dz.town)), dz.art])
+	v["block"] = b
+	v["art"] = dz.art
+	dz.vehicle = int(v.id)
+
+
+## Vom Bahntrupp nach getaner Arbeit gemeldet.
+func repaired(b: int) -> void:
+	if not disruptions.has(b):
+		return
+	var dz: Dictionary = disruptions[b]
+	disruptions.erase(b)
+	var eur := float(DISRUPT.get(str(dz.art), {"eur": 1000.0}).eur)
+	sim.economy.transfer(ACCT, "S0", eur)
+	stats.kosten = float(stats.kosten) + eur
+	var dur: float = sim.game_min - float(dz.since)
+	stats["ausfall_min"] = float(stats.get("ausfall_min", 0.0)) + dur
+	sim.log_event("Regionalbahn: %s behoben (Bahntrupp %s, Sperrung %.0f Spielminuten, %s)." % [dz.art, sim.towns.name_of(int(dz.town)), dur,
+		Catalog.money(eur)], "good")
+
+
+## Wartende, deren Weg ueber einen gestoerten Block fuehrt, fahren mit dem Auto (ganze Personen; Bruchteile bleiben).
+func _road_fallback() -> void:
+	if disruptions.is_empty():
+		return
+	for a in stops.size():
+		var q: Dictionary = waiting.get(_key(a), {})
+		for b in stops.size():
+			if a == b:
+				continue
+			var hit := false
+			for blk in range(mini(a, b), maxi(a, b)):
+				hit = hit or disruptions.has(blk)
+			var n := int(floor(float(q.get(_key(b), 0.0))))
+			if not hit or n <= 0:
+				continue
+			q[_key(b)] = float(q[_key(b)]) - float(n)
+			var eur := float(n) * ROAD_EUR_CELL * absf(float(stops[b].pos) - float(stops[a].pos))
+			sim.economy.transfer("H0", "S0", eur)
+			stats["strasse"] = int(stats.get("strasse", 0)) + n
 
 func _block(i: int, j: int) -> int:
 	return mini(i, j)
@@ -334,6 +477,8 @@ func _depart(t: Dictionary, now: float) -> void:
 	var idx := trains.find(t)
 	if facility != "" and drivers() <= idx:
 		why = "kein Triebfahrzeugführer"
+	elif disruptions.has(b):
+		why = "Störung: %s" % disruptions[b].art
 	elif blocks.has(b) and str(blocks[b]) != str(t.id):
 		why = "Block belegt"
 	elif _occupancy(j, str(t.id)).size() >= capacity(j):
@@ -356,6 +501,14 @@ func _move(t: Dictionary, dmin: float, now: float) -> void:
 	var j := int(t.target)
 	var goal := float(stops[j].pos)
 	var step := SPEED * dmin
+	var b := _block(int(t.stop), j)
+	if disruptions.has(b):   # Stoerung im eigenen Block vor dem Zug: vor der Stelle anhalten
+		var ahead := (float(disruptions[b].idx) - float(t.pos)) * signf(goal - float(t.pos))
+		if ahead > 0.0 and ahead - (float(CARS) * CAR_LEN * 0.5 + 2.0) <= step:
+			t["grund"] = "Störung: %s" % disruptions[b].art
+			stats.wartezeit = float(stats.wartezeit) + dmin
+			return
+	t.erase("grund")
 	var left := goal - float(t.pos)
 	if absf(left) <= step:
 		t.pos = goal
@@ -434,12 +587,22 @@ func signal_clear(s: int, d: int) -> bool:
 	var j := s + d
 	if j < 0 or j >= stops.size():
 		return true
-	return not blocks.has(_block(s, j))
+	return not blocks.has(_block(s, j)) and not disruptions.has(_block(s, j))
 
 
 ## Beide Staedte liegen an der Linie und der Betrieb laeuft (mindestens ein Zug mit Triebfahrzeugfuehrer).
 func connects(a: int, b: int) -> bool:
 	return a != b and not path.is_empty() and stop_of_town(a) >= 0 and stop_of_town(b) >= 0 and (facility == "" or drivers() > 0)
+
+
+## Zielstation erreichbar ohne gestoerten Abschnitt.
+func open_between(a: int, b: int) -> bool:
+	var sa := stop_of_town(a)
+	var sb := stop_of_town(b)
+	for blk in range(mini(sa, sb), maxi(sa, sb)):
+		if disruptions.has(blk):
+			return false
+	return true
 
 
 func stop_of_town(k: int) -> int:
@@ -466,12 +629,14 @@ func summary() -> Dictionary:
 	return {"linie": stops.map(func(s): return sim.towns.name_of(int(s.town))), "zuege": tl, "laenge_felder": path.size(),
 		"fahrzeit_min": snappedf(float(path.size()) / SPEED, 1.0), "statistik": stats.duplicate(), "wartende": wt,
 		"personal": {"triebfahrzeugfuehrer": drivers(), "zugbegleiter": conductors()}, "gesellschaft_saldo": snappedf(float(sim.economy.accounts.get(ACCT, 0.0)), 1.0),
-		"letzter_ausgleich": last_settle, "fahrpreis_beispiel": fare(0, stops.size() - 1) if stops.size() > 1 else 0.0}
+		"letzter_ausgleich": last_settle, "fahrpreis_beispiel": fare(0, stops.size() - 1) if stops.size() > 1 else 0.0,
+		"stoerungen": disruptions.values().map(func(dz): return {"art": dz.art, "seit_min": snappedf(sim.game_min - float(dz.since), 1.0), "trupp_aus": sim.towns.name_of(int(dz.town))}),
+		"schranken_zu": closed.size()}
 
 
 func to_dict() -> Dictionary:
 	return {"trains": trains, "blocks": blocks, "stats": stats, "waiting": waiting, "by_town": by_town, "last_settle": last_settle, "facility": facility,
-		"cells_acc": _cells_acc}
+		"cells_acc": _cells_acc, "disruptions": disruptions}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -493,3 +658,7 @@ func from_dict(d: Dictionary) -> void:
 	last_settle = d.get("last_settle", {})
 	facility = str(d.get("facility", ""))
 	_cells_acc = float(d.get("cells_acc", 0.0))
+	disruptions = {}
+	var dd: Dictionary = d.get("disruptions", {})
+	for k in dd:
+		disruptions[int(k)] = dd[k]

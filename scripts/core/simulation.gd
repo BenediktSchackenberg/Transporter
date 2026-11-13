@@ -644,6 +644,8 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 	if driver_of(v) == null and v.state != "to_workshop":
 		v.state = "idle"
 		return
+	if not v.arrived() and nav.barriers.has(v.next_tile()):
+		return   # Bahnuebergang geschlossen: warten, nicht umplanen
 	if not v.arrived() and city.is_road(v.next_tile()) and nav.is_blocked_road(v.next_tile()) and v.next_tile() != v.goal:
 		events.reroutes[v.owner] = int(events.reroutes.get(v.owner, 0)) + 1
 		if not route(v, v.goal):

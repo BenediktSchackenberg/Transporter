@@ -12,7 +12,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_meat_chain2", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_waste_bins", "test_waste_depot", "test_waste_streams", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_empty_tank_no_tow", "test_local_model_guards", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_highway", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner", "test_street_cleaning", "test_stone_chain", "test_incineration", "test_shared_plant", "test_power_net", "test_power_repair", "test_power_ring", "test_water_supply", "test_rail_net", "test_rail_traffic", "test_rail_passengers"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_meat_chain2", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_waste_bins", "test_waste_depot", "test_waste_streams", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_empty_tank_no_tow", "test_local_model_guards", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_highway", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner", "test_street_cleaning", "test_stone_chain", "test_incineration", "test_shared_plant", "test_power_net", "test_power_repair", "test_power_ring", "test_water_supply", "test_rail_net", "test_rail_traffic", "test_rail_passengers", "test_rail_disruptions"]
 	test_names.append("test_tourism_hotel")
 	test_names.append("test_tourism_venues")
 	var args := OS.get_cmdline_user_args()
@@ -11622,3 +11622,111 @@ func test_rail_passengers() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	var T2: RailTraffic = s2.trains
 	ok(T2.facility == T.facility and T2.waiting.size() == T.waiting.size() and T2.passengers(T2.trains[0]) == T.passengers(T.trains[0]) and int(T2.stats.fahrgaeste) == int(T.stats.fahrgaeste), "Fahrgäste, Personal und Statistik nach Laden")
+
+## Auftrag 22 Phase 6 Schritt 4: Schranke schliesst vor dem Zug (Strassenfahrzeug wartet, plant nicht um) und oeffnet danach;
+## Stoerung sperrt den Block (Abfahrt verweigert, Signal Halt, fahrender Zug haelt vor der Stelle), Bahntrupp faehrt hin und
+## behebt sie (Kosten an N0), Wartende weichen auf die Strasse aus; Speichern/Laden der Stoerung.
+func test_rail_disruptions() -> void:
+	var s := region_sim(4)
+	var T: RailTraffic = s.trains
+	next_day(s)
+	next_day(s)
+	ok(T.ensure() and not T.crossings.is_empty(), "Bahnübergänge auf der Linie (%d)" % T.crossings.size())
+	if T.crossings.is_empty():
+		return
+	# Schranke: Zug kurz vor einem Uebergang, ueber den eine Strasse durchgehend fuehrt
+	var c: Dictionary = T.crossings[0]
+	for cc in T.crossings:
+		for e in [Vector2i(1, 0), Vector2i(0, 1)]:
+			if s.city.is_road(cc.cell - e) and s.city.is_road(cc.cell + e):
+				c = cc
+	var t: Dictionary = T.trains[0]
+	var si := 0
+	while si < T.stops.size() - 1 and float(T.stops[si + 1].pos) < float(c.idx):
+		si += 1
+	t.stop = si
+	t.target = si + 1
+	t.dir = 1
+	t.state = "fahrt"
+	t.pos = float(c.idx) - 5.0
+	T._update_crossings()
+	var q: Vector2i = c.cell
+	ok(T.closed.has(q) and s.nav.barriers.has(q) and s.nav.is_blocked_road(q), "Schranke geschlossen, wenn der Zug naht")
+	# Strassenfahrzeug vor der Schranke wartet
+	var from := Vector2i(-1, -1)
+	var to := Vector2i(-1, -1)
+	for e in [Vector2i(1, 0), Vector2i(0, 1)]:   # Strasse, die ueber den Uebergang fuehrt (beide Nachbarn Strasse, kein Gleis)
+		if s.city.is_road(q - e) and s.city.is_road(q + e) and not T.closed.has(q - e) and not T.closed.has(q + e):
+			from = q - e
+			to = q + e
+	ok(s.city.is_road(from) and s.city.is_road(to), "Straße quert das Gleis (%s -> %s)" % [str(from), str(to)])
+	if s.city.is_road(from) and s.city.is_road(to):
+		var v: Dictionary = s.fleet._spawn("umzug", from, to, 0.0, from, "Test")
+		v.mover.pos = s.city.tile_center(from)
+		s.route(v.mover, to)
+		var p0: Vector2 = v.mover.pos
+		for i in 10:
+			s.fleet.update(0.1)
+		ok(v.mover.pos == p0, "Fahrzeug wartet vor der geschlossenen Schranke")
+		t.pos = float(c.idx) + 12.0
+		T._update_crossings()
+		for i in 10:
+			s.fleet.update(0.1)
+		ok(not s.nav.barriers.has(q) and v.mover.pos != p0, "Schranke offen, Fahrzeug fährt weiter")
+		s.fleet.vehicles.erase(v)
+	else:
+		t.pos = float(c.idx) + 12.0
+		T._update_crossings()
+		ok(not s.nav.barriers.has(q), "Schranke öffnet nach dem Zug")
+	ok(int(T.stats.get("schranken", 0)) >= 1, "Schließungen gezählt")
+	# Stoerung
+	var b := 1
+	for tt in T.trains:
+		tt.state = "halt"
+		tt.until = s.game_min + 1000.0
+	T.blocks.clear()
+	T._update_crossings()
+	ok(T.disrupt(b, "Signalstörung"), "Signalstörung zwischen Halt 1 und 2")
+	ok(not T.signal_clear(1, 1) and not T.open_between(int(T.stops[0].town), int(T.stops[3].town)), "Ausfahrsignal zeigt Halt, Verbindung unterbrochen")
+	var crew: Array = s.fleet.vehicles.filter(func(x): return x.kind == "bahntrupp")
+	ok(crew.size() == 1 and int(crew[0].block) == b, "Bahntrupp unterwegs")
+	var tw: Dictionary = T.trains[0]
+	tw.stop = 1
+	tw.dir = 1
+	tw.pos = float(T.stops[1].pos)
+	tw.until = s.game_min - 1.0
+	T._depart(tw, s.game_min)
+	ok(str(tw.state) == "wartet" and str(tw.get("grund", "")).begins_with("Störung"), "Zug fährt nicht in den gestörten Abschnitt")
+	T.waiting[T._key(0)] = {T._key(3): 4.0, T._key(1): 2.0}
+	var h0 := float(s.economy.accounts["H0"])
+	T._road_fallback()
+	ok(is_zero_approx(float(T.waiting[T._key(0)][T._key(3)])) and is_equal_approx(float(T.waiting[T._key(0)][T._key(1)]), 2.0) and float(s.economy.accounts["H0"]) < h0,
+		"Fahrgäste über den gestörten Abschnitt fahren Auto, andere warten weiter")
+	# fahrender Zug haelt vor einer Stoerung
+	var b2 := 0
+	var tm: Dictionary = T.trains[1]
+	tm.stop = 0
+	tm.target = 1
+	tm.dir = 1
+	tm.state = "fahrt"
+	tm.pos = float(T.stops[0].to) + 3.0
+	T.blocks[0] = tm.id
+	T.disrupt(b2, "Baum auf dem Gleis")
+	var limit := float(T.disruptions[b2].idx)
+	for i in 400:
+		T._move(tm, 0.5, s.game_min)
+	ok(float(tm.pos) < limit and str(tm.get("grund", "")).begins_with("Störung"), "fahrender Zug hält vor dem Baum (%.0f < %.0f)" % [float(tm.pos), limit])
+	# Speichern/Laden mit offener Stoerung
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.trains.disruptions.size() == 2 and s2.trains.disruptions.has(b), "Störungen nach Laden")
+	# Reparatur durch den Trupp
+	var n0 := float(s.economy.accounts[RailTraffic.ACCT])
+	var guard := 0
+	while T.disruptions.has(b) and guard < 4000:
+		s.fleet.update(0.25)
+		s.game_min += 0.5
+		guard += 1
+	ok(not T.disruptions.has(b) and float(s.economy.accounts[RailTraffic.ACCT]) < n0, "Bahntrupp behebt die Signalstörung (Kosten an die Gesellschaft)")
+	ok(T.signal_clear(1, 1), "Signal wieder auf Fahrt")
+	ok(LiveText.rail(s).contains("Bahnübergänge") and LiveText.rail(s).contains("Störung"), "Anzeige Schranken und Störungen")
+	ok(identity_ok(s), "Geld erhalten")

@@ -41,7 +41,10 @@ func _process(delta: float) -> void:
 	if sim.trains != null and not sim.trains.stops.is_empty():
 		for i in sim.trains.stops.size():
 			waits += "%d," % mini(sim.trains.waiting_at(i), MAX_FIGURES)
-	var key := "%s|%d|%s|%s" % [str(_view_cells()), _net().cells.size(), str(sim.trains.blocks.keys()) if sim.trains != null else "", waits]
+	var extra := ""
+	if sim.trains != null:   # Schranken (blinken, solange zu) und Stoerungen
+		extra = "%s|%s|%d" % [str(sim.trains.closed.keys()), str(sim.trains.disruptions.keys()), (int(Time.get_ticks_msec() / 500) % 2) if not sim.trains.closed.is_empty() else 0]
+	var key := "%s|%d|%s|%s|%s" % [str(_view_cells()), _net().cells.size(), str(sim.trains.blocks.keys()) if sim.trains != null else "", waits, extra]
 	if key != _key:
 		_key = key
 		queue_redraw()
@@ -92,6 +95,10 @@ func _draw() -> void:
 			continue
 		if kind != "bahnsteig" and view.has_point(q):
 			_draw_track(q, N.links(q), kind == "uebergang")
+	if sim.trains != null:
+		for dz in sim.trains.disruptions.values():
+			if view.has_point(Vector2i(int(dz.cell[0]), int(dz.cell[1]))):
+				_draw_disruption(dz)
 	for st in N.stations.values():
 		var loop: Array = st.get("loop", [])
 		if loop.size() >= 2:   # Weichen: Ausweichgleis schraeg an das Hauptgleis
@@ -158,6 +165,7 @@ func _draw_track(q: Vector2i, dirs: Array, crossing: bool) -> void:
 		_draw_half(c, Vector2(d), crossing)
 	if crossing:
 		_draw_andreas(q, dirs)
+		_draw_barrier(q, dirs, sim.trains != null and sim.trains.closed.has(q))
 
 
 func _draw_half(c: Vector2, d: Vector2, crossing: bool) -> void:
@@ -249,6 +257,44 @@ func _draw_waiting(stn: Dictionary, n: int, view: Rect2i) -> void:
 		draw_rect(Rect2(f + Vector2(-3, -3), Vector2(2.4, 3.5)), Color(0.15, 0.15, 0.18))
 		draw_rect(Rect2(f + Vector2(0.6, -3), Vector2(2.4, 3.5)), Color(0.15, 0.15, 0.18))
 		draw_circle(f + Vector2(0, -17), 3.0, Color(0.93, 0.78, 0.64))
+
+
+## Schranke am Bahnuebergang: je Strassenseite ein Baum quer ueber die Fahrbahn (zu: rot-weiss, rote Lampe blinkt) bzw. hochgeklappt.
+func _draw_barrier(q: Vector2i, dirs: Array, shut: bool) -> void:
+	var d := Vector2(dirs[0])
+	var n := Vector2(-d.y, d.x)
+	var c := (Vector2(q) + Vector2(0.5, 0.5)) * 32.0
+	var blink := int(Time.get_ticks_msec() / 500) % 2 == 0
+	for side in [-1.0, 1.0]:
+		var post: Vector2 = c + n * side * 13.0 + d * side * 14.0
+		var pf := _s(post)
+		draw_rect(Rect2(pf + Vector2(-1.5, -9), Vector2(3, 9)), Color(0.25, 0.25, 0.28))
+		if shut:
+			var tip: Vector2 = _s(post - d * side * 26.0) + Vector2(0, -7)
+			var root := pf + Vector2(0, -7)
+			for k in 4:
+				var a := root.lerp(tip, float(k) / 4.0)
+				var b := root.lerp(tip, float(k + 1) / 4.0)
+				draw_line(a, b, Color(0.9, 0.12, 0.1) if k % 2 == 0 else Color(0.97, 0.97, 0.95), 2.2)
+			draw_circle(pf + Vector2(0, -11), 2.2, Color(1.0, 0.15, 0.1) if blink else Color(0.35, 0.08, 0.06))
+		else:
+			draw_line(pf + Vector2(0, -7), pf + Vector2(0, -26), Color(0.9, 0.12, 0.1), 2.2)
+
+
+## Stoerungsstelle: Warndreieck; bei "Baum auf dem Gleis" liegt ein Baum quer ueber dem Gleis.
+func _draw_disruption(dz: Dictionary) -> void:
+	var q := Vector2i(int(dz.cell[0]), int(dz.cell[1]))
+	var c := (Vector2(q) + Vector2(0.5, 0.5)) * 32.0
+	if str(dz.art) == "Baum auf dem Gleis":
+		var a := _s(c + Vector2(-14, 10))
+		var b := _s(c + Vector2(12, -10))
+		draw_line(a, b, Color(0.42, 0.28, 0.16), 4.0)
+		for k in 5:
+			draw_circle(b.lerp(a, 0.15 * float(k)) + Vector2(float(k % 2) * 3.0 - 1.5, -2.0), 5.0 - float(k) * 0.5, Color(0.22, 0.45, 0.2))
+	var w := _s(c) + Vector2(0, -26)
+	draw_colored_polygon(PackedVector2Array([w + Vector2(0, -10), w + Vector2(9, 6), w + Vector2(-9, 6)]), Color(1.0, 0.82, 0.1))
+	draw_line(w + Vector2(0, -5), w + Vector2(0, 1), Color.BLACK, 1.6)
+	draw_circle(w + Vector2(0, 3.5), 1.0, Color.BLACK)
 
 
 ## Erhoehter Bahnsteig: Oberseite hell, sichtbare Kanten (Sued/Ost) dunkler, weisse Linie an der Gleiskante.

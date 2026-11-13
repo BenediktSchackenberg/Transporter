@@ -41,7 +41,9 @@ func _init() -> void:
 	for e in R.edges:
 		print("  Strecke %s: %s - %s  %d Felder, %d Bahnübergänge, %d Brückenfelder, %d Tunnelfelder" % [e.id, s.towns.name_of(int(e.a)), s.towns.name_of(int(e.b)), int(e.len),
 			e.crossings.size(), int(e.get("bruecke", 0)), int(e.get("tunnel", 0))])
-	print("  Regionalbahn: ", s.trains.summary())
+	var sm: Dictionary = s.trains.summary()
+	print("  Regionalbahn: Fahrgäste %d, Schranken %d, Störungen %d (Sperrzeit %d min), auf Straße %d, offen %s" % [int(sm.statistik.fahrgaeste), int(sm.statistik.get("schranken", 0)),
+		int(sm.statistik.get("stoerungen", 0)), int(sm.statistik.get("ausfall_min", 0)), int(sm.statistik.get("strasse", 0)), str(sm.stoerungen)])
 	for f in R.failed:
 		print("  NICHT GEBAUT: ", f)
 	quit(0)

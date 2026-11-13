@@ -1213,6 +1213,11 @@ static func rail(sim: Simulation) -> String:
 	if not ts.letzter_ausgleich.is_empty():
 		txt += "  letzter Monatsausgleich: %s nach Einwohneranteilen
 " % Catalog.money(float(ts.letzter_ausgleich.ergebnis))
+	for dz in ts.stoerungen:
+		txt += "  [color=#e05040]Störung: %s seit %d Spielminuten – Bahntrupp aus %s[/color]
+" % [dz.art, int(dz.seit_min), dz.trupp_aus]
+	txt += "  Bahnübergänge: %d gerade geschlossen, %d Schließungen · Störungen %d (Sperrzeit %d min) · auf die Straße ausgewichen %d Fahrgäste
+" % [int(ts.schranken_zu), int(stt.get("schranken", 0)), int(stt.get("stoerungen", 0)), int(stt.get("ausfall_min", 0.0)), int(stt.get("strasse", 0))]
 	return txt
 
 
