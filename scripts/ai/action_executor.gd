@@ -118,6 +118,9 @@ const SCHEMA := {
 		"desc": "Eigenen Mitarbeiter einem eigenen laufenden Betrieb zuordnen (sein Lohn läuft dann auf dessen Kostenstelle)."},
 	"create_stone_work": {"params": {"name": "string?", "motif": "string", "material": "string?", "base_color": "string?", "accent_color": "string?", "reason": "string?"},
 		"desc": "Eigenes Werk (Statue, Denkmal, verspielte Figur) auf dem eigenen Grundstueck – aus eigenem Antrieb, wann immer du Lust und Geld hast (alle 1×1 Feld, Bau ~5 Tage). Material: stein (12 Aufbereiteter Stein) | bronze (4 t) | holz (20 m³) | stahl (8 t) | beton (15 Bauteile); Machbar jetzt: steinbauten.jetzt_moeglich, Kosten je Material steinbauten.material_kosten, Anregung steinbauten.idee (Motiv/Material/Grundton/Akzent) – nimm sie, wandle sie ab oder erfinde etwas Eigenes. Motive: Statue, Obelisk, Springbrunnen, Triumphbogen, Saeule, Gedaechtniswand, Steinkatze, Ufo, Rieseneis, Pilzhueitte, Riesenrad, Karussell, Steinigel, Ballon, Leuchtturm, Schildkroete, Steinrakete. Farben: Grundton + Akzent aus der Palette (weiss, creme, grau, blaugrau, schwarz, rot, koralle, orange, gelb, gruen, petrol, blau, lila, weinrot, rosa, braun) oder hex; leer = naturfarbener Stein. Material wird aus den eigenen Depots bzw. dem Grosslager reserviert (Kaufpreis beim Grosslager-Anteil). Nach dem Bau malt ein eigener Maler (Fähigkeit malen, z. B. request_replacement_worker kind=maler oder offer_training) das Werk an – ohne Maler bleibt es naturfarben."},
+	"free_build": {"params": {"name": "string?", "idee": "string?", "form": "string?", "breite": "int?", "tiefe": "int?", "hoehe": "int?", "material": "string?",
+			"dach": "string?", "dach_material": "string?", "fenster": "bool?", "plan": "array?"},
+		"desc": "Frei bauen, Stein auf Stein, auf dem eigenen Grundstück – deine eigene Idee (Turm, Haus, Burgmauer, Pyramide, Tor, Skulptur …). Entweder form turm|haus|pyramide|mauer|bogen mit breite/tiefe (2-8 Blöcke, 4 Blöcke = 1 Feld), hoehe (1-12 Schichten), material (stein|ziegel|holz|beton|glas|stahl), dach sattel|zelt|flach|kein, dach_material, fenster true – oder ein eigener plan: Liste von Schichten von unten nach oben, je Schicht Zeilen mit / getrennt, Zeichen X=Wandmaterial S=Stein Z=Ziegel H=Holz B=Beton G=Glas T=Stahl D=Dachmaterial .=leer (z. B. [\"XXXX/X..X/X..X/XXXX\", \"XGGX/G..G/G..G/XGGX\", \"DDDD/DDDD/DDDD/DDDD\"]). Material holst du selbst beim Großlager (hub_buy, Bedarf je Block unter freibau.je_block); gebaut wird Block für Block, fehlt etwas, wartet die Baustelle (freibau.bau.fehlt). Ein Bau zugleich."},
 	"block_road": {"params": {"target": "int"}, "desc": "Regelwidrig! Paletten auf eine Straße nahe am Hof des Konkurrenten stellen (600 EUR); seine Fahrzeuge fahren Umwege. Erst ab Spannung 70, je Spieltag eine. Die Polizei räumt noch am selben Tag und ermittelt meist: 2500 EUR Bußgeld, Ruf -8."},
 	"buy_security": {"params": {"level": "int"}, "desc": "Sicherheitsstufe 0-2 (schützt vor Sabotage)."},
 	"set_insurance": {"params": {"active": "bool"}, "desc": "Versicherung gegen Sabotageschäden (600 EUR/Tag)."},
@@ -795,6 +798,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.rivalry.block_road(cid, _i(a.target))
 		"create_stone_work":
 			return sim.stone.create(cid, _s(a.motif), _s(a.get("name", "")), _s(a.get("base_color", "")), _s(a.get("accent_color", "")), a)
+		"free_build":
+			return sim.freebuild.create(cid, a)
 		"build_access":
 			return sim.access.request(cid, _s(a.grundstueck), str(a.get("reason", "")))
 		"book_air_cargo":

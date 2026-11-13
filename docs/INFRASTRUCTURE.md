@@ -331,3 +331,25 @@ Naturfarbe des Materials (Tönung, `StoneView`). Beobachtung kompakt (Token-Budg
 `material_kosten` (nur machbare Materialien) und eine täglich wechselnde Anregung `idee` (Motiv/Material/Grundton/Akzent), die das
 Modell nehmen, abwandeln oder ignorieren kann; die Aktionsbeschreibung betont, dass die Firma jederzeit aus eigenem Antrieb baut.
 Das Regel-Gehirn wählt Motiv, Material und Farben zufällig. Sichtprüfung `--demo-werke`.
+
+## Freies Bauen und KI für Gründer (13.11.2026)
+
+Benedikt: „Was ich mir vorstelle: dass die KI Sachen vom Bauhof abholt und einfach darauf losbaut, Stein auf Stein oder Dach bauen
+– das andere kann ja bleiben. Die neuen Spieler, die entstehen, werden nicht von der KI gesteuert.“
+
+**Freies Bauen** (`FreeBuild`, `scripts/core/free_build.gd`, `sim.freebuild`; Aktion `free_build`): Die Firma entwirft ein Bauwerk –
+Form `turm|haus|pyramide|mauer|bogen` mit Breite/Tiefe (2–8 Blöcke, 4 Blöcke = 1 Feld), Höhe (1–12 Schichten), Wandmaterial
+(`stein|ziegel|holz|beton|glas|stahl`), Dach `sattel|zelt|flach|kein` mit Dachmaterial, Fenster aus Glas; oder frei als Bauplan
+Schicht für Schicht (`"XXXX/X..X/X..X/XXXX"`, Zeichen X/S/Z/H/B/G/T/D/.). Höchstens 420 Blöcke, ein Bau zugleich, 4 fertige je
+Firma; Platz auf dem eigenen Grundstück (gemeinsame Belegung mit den Steinwerken). Material je Block: Naturstein 1 t, Ziegel 10,
+Holz 1 m³, Beton 1, Glas 2 m², Stahl 1 t – verbaut wird nur, was in den eigenen Lagern liegt (die Firma holt es mit `hub_buy` beim
+Baustoffhandel des Großlagers mit eigenem Fahrzeug ab); fehlt etwas, wartet die Baustelle und die Beobachtung `freibau.bau.fehlt`
+nennt die Menge. Gebaut wird mit 8 Blöcken je Spielstunde, Schicht für Schicht von unten, das Dach zuletzt. `FreeBuildView`
+zeichnet die Blöcke als Iso-Würfel in Materialfarbe (verdeckte Flächen weggelassen, Glas durchscheinend, Ziegelfugen), auf der
+Baustelle den nächsten Block als Umriss und Bauzaun-Ecken. Regel-Gehirn: fehlt Material → `hub_buy`; sonst selten (15 %) aus
+Überschuss ein zufälliger Entwurf. Demo `--demo-freibau[=1]` (Ziegelhaus mit Fenstern und Holzdach, frei gezeichneter Glasturm).
+Test `test_free_build` (18). Beobachtung insgesamt ~5 944 Token (Grenze 5 950).
+
+**Gründer mit KI** (`GameSession.founder_profile_for`): Neu gegründete Firmen übernehmen reihum das KI-Profil der Startspieler
+(Anbieter, Modell, Server, Takt, Budget, Schlüssel) mit eigenem Namen, eigener Persönlichkeit, ohne fremdes Gedächtnis und ohne
+fremde Strategie; Demo-Startspieler oder `founders_ai: false` → Regel-Controller wie bisher. Test `test_founder_ai_profile` (5).

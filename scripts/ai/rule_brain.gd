@@ -501,6 +501,8 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	_realty(obs, cash, buffer, personality, planned, actions, reasons)
 	# 11e) Steinwerk (Auftrag 23): Wahrzeichen auf dem eigenen Grundstueck, wenn Material, Platz und Ueberschuss da sind
 	_stone_work(obs, cash, buffer, personality, rng, actions, reasons)
+	# 11f) Freies Bauen (13.11.): eigene Bauwerke Stein auf Stein, Material beim Grosslager abholen
+	_free_build(obs, cash, buffer, personality, rng, actions, reasons)
 	# 12) Gespraeche (kurz, mit Anlass)
 	if rng.randf() < 0.2 and actions.size() < MAX_ACTIONS:
 		var pool: Array = LINES.get(personality, LINES.kostenoptimierer)
@@ -735,6 +737,41 @@ static func _stone_work(obs: Dictionary, cash: float, buffer: float, personality
 	actions.append({"action": "create_stone_work", "motif": motif, "material": material, "name": "%s %s" % [label, firm], "base_color": base, "accent_color": accent,
 		"reason": "Wahrzeichen der Firma aus Überschuss"})
 	reasons.append("baue ein Werk aus %s (%s, %s/%s) als Wahrzeichen" % [mlabel, label, base, accent])
+
+
+## Freies Bauen: laeuft ein Bau und fehlt Material, wird es beim Grosslager gekauft (Abholung mit eigenem Fahrzeug); sonst ab und zu
+## ein neuer, zufaelliger Entwurf (Form, Groesse, Material, Dach) aus Ueberschuss.
+const BUILD_CHANCE := 0.15
+const BUILD_RESERVE := 30000.0
+
+
+static func _free_build(obs: Dictionary, cash: float, buffer: float, personality: String, rng: RandomNumberGenerator, actions: Array, reasons: Array) -> void:
+	var fb: Dictionary = obs.get("freibau", {})
+	if fb.is_empty() or actions.size() >= MAX_ACTIONS:
+		return
+	var bau: Dictionary = fb.get("bau", {})
+	if not bau.is_empty():
+		var miss: Dictionary = bau.get("fehlt", {})
+		for it in miss:
+			if actions.any(func(a): return str(a.action) == "hub_buy"):
+				break
+			if cash > buffer + 2000.0:
+				actions.append({"action": "hub_buy", "item": str(it), "qty": int(miss[it])})
+				reasons.append("hole %d × %s für die Baustelle %s beim Großlager" % [int(miss[it]), str(it), str(bau.name)])
+		return
+	if int(fb.get("fertig", 0)) >= 2 + (1 if personality in ["wachstum", "risikospieler"] else 0) or cash < buffer + BUILD_RESERVE or rng.randf() >= BUILD_CHANCE:
+		return
+	var form: String = FreeBuild.FORMS[rng.randi() % FreeBuild.FORMS.size()]
+	var mats: Array = FreeBuild.MATERIALS.keys().filter(func(m): return m != "glas")
+	var wall: String = mats[rng.randi() % mats.size()]
+	var roof: String = FreeBuild.ROOFS[rng.randi() % FreeBuild.ROOFS.size()]
+	var w := rng.randi_range(3, 6)
+	var labels := {"turm": "Turm", "haus": "Haus", "pyramide": "Pyramide", "mauer": "Mauer", "bogen": "Tor"}
+	var firm := str(obs.ich.get("firma", "")).split(" ")[0]
+	actions.append({"action": "free_build", "name": "%s-%s" % [firm, labels[form]], "idee": "eigenes Bauwerk aus %s" % wall, "form": form, "breite": w,
+		"tiefe": rng.randi_range(3, 6) if form != "mauer" else 1, "hoehe": rng.randi_range(2, 7), "material": wall, "dach": roof,
+		"dach_material": ["ziegel", "holz", "stahl"][rng.randi() % 3], "fenster": rng.randf() < 0.5})
+	reasons.append("baue frei: %s aus %s" % [labels[form], wall])
 
 
 static func _realty(obs: Dictionary, cash: float, buffer: float, personality: String, planned: Array, actions: Array, reasons: Array) -> void:

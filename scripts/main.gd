@@ -539,6 +539,27 @@ func _process_timed(_delta: float) -> void:
 			print("AUTOTEST Eisenbahn: ", RN.summary())
 			if focus.x >= 0.0:   # ueber shot-tile (wird nach dem Warten erneut gesetzt); +3/-3 Felder: die Leitstelle deckt die rechte Bildhaelfte
 				args["shot-tile"] = "%d,%d" % [int(focus.x) + 3, int(focus.y) - 3]
+		if args.has("demo-freibau"):   # Sichtpruefung freies Bauen: Material ins eigene Lager, ein Haus und ein frei gezeichnetes Bauwerk, halb fertig
+			var FB: FreeBuild = session.sim.freebuild
+			for ci in 2:
+				var cc: Company = session.sim.companies[ci]
+				for it in ["naturstein", "ziegel", "holz", "glas", "stahl", "beton"]:
+					session.sim.stock.add(it, 600, "C%d" % ci, int(cc.depots[0]), "Sichtpruefung")
+			var designs := [{"name": "Rotes Haus", "form": "haus", "breite": 4, "tiefe": 4, "hoehe": 3, "material": "ziegel", "dach": "sattel", "dach_material": "holz", "fenster": true},
+				{"name": "Glasturm", "plan": ["SSSS/S..S/S..S/SSSS", "SGGS/G..G/G..G/SGGS", "SGGS/G..G/G..G/SGGS", "SSSS/S..S/S..S/SSSS", "TTTT/T..T/T..T/TTTT", ".TT./T..T/T..T/.TT.", "..T./..../..../...."], "material": "stein"}]
+			var first2 := Vector2(-1, -1)
+			for di in designs.size():
+				var dz: Dictionary = designs[di]
+				var rr: Dictionary = FB.create(di, dz)
+				print("AUTOTEST Freibau: ", rr.msg)
+				if rr.ok:
+					var fbb: Dictionary = FB.builds[str(rr.ref)]
+					fbb.acc = float(fbb.blocks.size()) * (1.0 if fbb.name == "Glasturm" else 0.7)
+					if first2.x < 0 or di == int(args.get("demo-freibau", "0")) if str(args.get("demo-freibau", "")).is_valid_int() else first2.x < 0:
+						first2 = Vector2(float(fbb.rect[0]), float(fbb.rect[1]))
+				FB.update(0.0)
+			if first2.x >= 0:
+				args["shot-tile"] = "%d,%d" % [int(first2.x) + 2, int(first2.y) - 2]
 		if args.has("demo-werke"):   # Sichtpruefung Werke: Stein, Bronze, Holz unbemalt und ein bemaltes Werk der Firma 0
 			var SW: StoneWorks = session.sim.stone
 			session.sim.companies[0].ledger.cash += 300000.0

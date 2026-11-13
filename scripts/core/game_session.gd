@@ -15,6 +15,7 @@ const MAX_FRAME_DT := 0.25
 var sim_budget_ms := 60.0         # max. Rechenzeit der Simulation je Bild (0 = unbegrenzt); darüber läuft das Spiel langsamer statt zu ruckeln
 
 var cfg := {}                     # Spielkonfiguration OHNE API-Keys
+var _keys := {}                   # API-Schluessel je Profil-Slot (nur im Speicher, fuer die KI der spaeteren Gruender)
 var sim: Simulation
 var controllers: Array[AgentController] = []
 var mayor_agent: MayorAgent          # Ort 0 (Kompatibilitaet); alle Orte in mayor_agents
@@ -55,6 +56,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	for p in cfg.players:
 		keys[int(p.slot)] = p.get("api_key", "")
 		p.erase("api_key")
+	_keys = keys
 	if loaded.is_empty():
 		var players: Array = []
 		for p in cfg.players:
@@ -348,15 +350,35 @@ func play_sound(n: String) -> void:
 
 
 ## Neuer Unternehmer auf einem Platz: Erinnerung und Persoenlichkeit des Controllers zuruecksetzen.
-## Controller fuer einen spaeteren Gruender: regelbasiert (kein Modellprofil, kein Schluessel, kein fremdes Gedaechtnis).
+## Controller fuer einen spaeteren Gruender. Benedikt (13.11.): „die neuen Spieler, die entstehen, werden nicht von der KI gesteuert“ –
+## vorher fest regelbasiert. Jetzt uebernimmt der Gruender reihum das KI-Profil eines Startspielers (Anbieter, Modell, Server, Takt,
+## Budget, Schluessel), aber mit eigenem Namen, eigener Persoenlichkeit und ohne fremdes Gedaechtnis (slot -1). Spielen die Startspieler
+## im Demo-/Regelmodus oder ist founders_ai aus, bleibt es beim Regel-Controller.
+func _founder_profile(cid: int) -> Dictionary:
+	return founder_profile_for(sim.company(cid), cid, cfg.get("players", []), _keys, bool(cfg.get("founders_ai", true)))
+
+
+static func founder_profile_for(c, cid: int, players: Array, keys: Dictionary, use_ai: bool) -> Dictionary:
+	var pc := {"slot": -1, "player_name": c.player_name, "company_name": c.company_name, "personality": c.personality,
+		"provider": "demo", "model": "regel", "api_key": "", "interval": 45.0, "max_requests": 0, "max_tokens": 0, "fallback": true, "timeout": 20.0, "strategy": "",
+		"demo_fault_rate": 0.0}
+	if not use_ai or players.is_empty():
+		return pc
+	var tpl: Dictionary = players[cid % players.size()]
+	if str(tpl.get("provider", "demo")) == "demo":
+		return pc
+	var out: Dictionary = tpl.duplicate(true)
+	out.merge({"slot": -1, "player_name": c.player_name, "company_name": c.company_name, "personality": c.personality, "strategy": "",
+		"api_key": str(keys.get(int(tpl.get("slot", -1)), "")), "fallback": true, "demo_fault_rate": 0.0}, true)
+	return out
+
+
 func _add_founder_controller(cid: int, saved: Dictionary) -> void:
 	while controllers.size() < cid:
 		_add_founder_controller(controllers.size(), {})
 	if cid < controllers.size():
 		return
-	var pc := {"slot": -1, "player_name": sim.company(cid).player_name, "company_name": sim.company(cid).company_name, "personality": sim.company(cid).personality,
-		"provider": "demo", "model": "regel", "api_key": "", "interval": 45.0, "max_requests": 0, "max_tokens": 0, "fallback": true, "timeout": 20.0, "strategy": "",
-		"demo_fault_rate": 0.0}
+	var pc := _founder_profile(cid)
 	var ctl := AgentController.new()
 	add_child(ctl)
 	ctl.setup(sim, cid, pc, api_log)

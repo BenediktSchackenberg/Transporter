@@ -268,6 +268,11 @@ func _occupied_cells(cid: int) -> Dictionary:
 		for y in range(r.position.y, r.end.y):
 			for x in range(r.position.x, r.end.x):
 				out[Vector2i(x, y)] = "work"
+	if sim.freebuild != null:
+		for fb in sim.freebuild.builds.values():
+			if int(fb.cid) == cid:
+				for q in sim.freebuild.cells_of(fb):
+					out[q] = "freibau"
 	return out
 
 
