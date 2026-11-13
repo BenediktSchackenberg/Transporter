@@ -291,3 +291,43 @@ Zweigleisig: Belegung je Richtung (`_bkey`), Züge beider Richtungen gleichzeiti
 (Rechtsverkehr, 8 Weltpunkte Versatz), RailView zeichnet zwei Gleise. Gespeichert (`double_blocks`, `planned_tracks`, `ordered`).
 Kamera-Demo `--demo-zweigleis`. Test `test_rail_expansion` (17). Damit ist Phase 6 (Personenbahn) abgeschlossen; offen für später:
 Gleisenden-Zuführungen glätten (Treppen), Übergänge am Ende von Stichstraßen vermeiden. Nächste Phase 7: Güterbahn.
+
+## Phase 7 – Güterbahn (ab 13.11.2026)
+
+Geplante Schritte: (1) Güterbahnhof am Großlager, Anschlussgleis, Güterzug mit Blocksicherung und Vorrang der Regionalbahn ·
+(2) Ladung: Stadtlager-Bestellungen aus dem Großlager fahren per Bahn (Beladen am Güterbahnhof, Entladen am Stadtbahnhof, letzte
+Meile Stadt-Lkw), günstigere Fracht, Ziel der Tour nach Ladung · (3) Gleiswartung: Gleiszustand je Abschnitt sinkt mit Belastung,
+Langsamfahrstellen, Instandsetzung über Baufirmen · (4) private Güterverkehrsfirmen (Unternehmer buchen Trassen/Wagen).
+
+**Schritt 1 Güterbahnhof und Güterzug (13.11.):** `RailNet.ensure_freight` (beim Tageslauf, auch für alte Stände): Güterbahnhof
+nahe der Großlager-Mitte (Ringsuche um das Großlager, Layout wie ein Bahnhof: Ausweich- und Ladegleis, Laderampe, Güterhalle
+`freight_depot`/`_v` 4×2 bzw. 2×4, Baukasten `tools/vox/public.py` 6 Grundformen, Stil Industrie). Anschlussgleis von einem Gleisende
+zu einer Weiche auf einem geraden Stück der Hauptstrecke: Grobraster wie die Strecken, Blöcke mit vorhandenem Gleis gesperrt (keine
+Mitbenutzung, nirgends direkt neben der Hauptstrecke außer an der Weiche), letztes Stück fein. Seeds 4242/77/9/123: 116–256 Felder.
+`RailTraffic`: Güterzug GZ1 (Voxel `gz_lok` Mittelführerhaus-Diesellok, `gz_wagen` Containertragwagen; Lok + 4 Wagen) – Beladen
+20 min, Anschlussgleis (eigener Block `BRANCH`), Einfahrsignal an der Weiche, Einfahrt bei freiem Block und Zielgleis, Fahrt zum Ziel
+der Tour (reihum alle Bahnhöfe), Entladen 10 min, zurück, an der Weiche ins Anschlussgleis. Höchstens 3 Züge auf der Linie
+(Güterzug zählt mit): mit zwei Gleisen je Bahnhof können sich drei Züge auf einer eingleisigen Linie nicht gegenseitig festfahren.
+Vorrang der Regionalbahn: der Güterzug fährt nicht in einen Abschnitt, in den eine Regionalbahn demnächst (30 min) ab- oder
+gerade zufährt; nach 240 min Wartezeit nimmt er die nächste freie Lücke (Messungen 30–40 Tage: ohne Vorrang bis 750 min
+Verspätung der Regionalbahn, mit striktem Vorrang 0 Güterfahrten). Regionalbahn mit > 60 min Verspätung am Endbahnhof fährt den
+nächsten Takt (`takt_neu`). Wartezeit an der Weiche zählt für den Abschnitt (Regel-Bürgermeister beantragen dort das zweite
+Gleis). Darstellung: Rampe, Weichen, Signal am Anschluss, Prellbock; Beschriftung „GZ1 · beladen/leer“; Kamera
+`--shot-bahn=gueter` und `--shot-bahn=zug3`. Test `test_freight_train` (17); die Personenbahn-Tests laufen ohne Güterzug.
+
+## Nachbesserung Auftrag 23 Steinwerke (13.11.)
+
+Partie 13.11. (vier Ollama-Firmen, qwen3.5 9B): in gut drei Spielmonaten kein einziges Steinwerk. Ursachen: Die Beobachtung
+`steinbauten` sagte nur „create_stone_work …“, aber nicht, ob Material, Geld und Platz reichen (das Großlager hat ab Start 80
+Aufbereiteten Stein), und das Regel-Gehirn (Ersatzmodus, Demo) hatte gar keine Regel dafür. Jetzt: `jetzt_moeglich`, `grund`,
+`eigener_stein`, `grosslager_stein`, `kosten_eur` in der Beobachtung; `RuleBrain._stone_work` baut aus Überschuss (Puffer +
+25 000 €) mit 25 % je Entscheidung ein Wahrzeichen, höchstens eins zugleich im Bau, Obergrenze je Persönlichkeit (Wachstum und
+Risiko 3, Netzwerker 2, Kostenoptimierer 1), Motiv seriös oder verspielt nach Persönlichkeit, zwei Palettenfarben, Name aus Motiv
+und Firma. Test `test_stone_rule_brain` (6).
+Benedikt (13.11.): „Die KI sollte selbständig mit den Baumaterialien, unter anderem den Steinen, random sich was Cooles als
+Statue bauen.“ Daher zusätzlich: Werke aus **Stein** (12 Aufbereiteter Stein), **Bronze** (4 t), **Holz** (20 m³), **Stahl** (8 t)
+oder **Beton** (15 Bauteile) – `StoneWorks.MATERIALS`, Aktion `create_stone_work` mit `material`; unbemalt zeigt das Werk die
+Naturfarbe des Materials (Tönung, `StoneView`). Beobachtung kompakt (Token-Budget der lokalen Modelle): `jetzt_moeglich`,
+`material_kosten` (nur machbare Materialien) und eine täglich wechselnde Anregung `idee` (Motiv/Material/Grundton/Akzent), die das
+Modell nehmen, abwandeln oder ignorieren kann; die Aktionsbeschreibung betont, dass die Firma jederzeit aus eigenem Antrieb baut.
+Das Regel-Gehirn wählt Motiv, Material und Farben zufällig. Sichtprüfung `--demo-werke`.

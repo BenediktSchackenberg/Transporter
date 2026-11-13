@@ -844,3 +844,62 @@ def rb_triebwagen():
 
 
 MUNICIPAL += ["rb_triebwagen"]
+
+
+# ------------------------------------------------------------------ Auftrag 22 Phase 7: Gueterzug (Diesellok und Containertragwagen)
+SIZES.update({"gz_lok": 96, "gz_wagen": 96})
+
+
+def _gz_mats():
+    mat("gz_red", "#b8322a", noise=0.03)
+    mat("gz_frame", "#2b2d33", noise=0.02)
+    mat("gz_yellow", "#e3b53c", noise=0.03)
+    mat("gz_blue", "#2f78b7", noise=0.03)
+    mat("gz_blue2", "#26649a", noise=0.03)
+    mat("gz_orange", "#e07a2a", noise=0.03)
+    mat("gz_orange2", "#c4661f", noise=0.03)
+
+
+def gz_lok():
+    """Mittelfuehrerhaus-Diesellok: rote Vorbauten, weisses Fuehrerhaus mittig, Umlauf mit Gelaender, zwei Drehgestelle."""
+    _gz_mats()
+    S = SIZES["gz_lok"]
+    m = _square(S)
+    L, W = 74, 20
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 5, x0 + L, y0 + W, 9, M("gz_frame"))                 # Rahmen/Umlauf
+    m.box(x0 + 3, y0 + 3, 9, x0 + 30, y0 + W - 3, 24, M("gz_red"))     # Vorbau hinten
+    m.box(x0 + 44, y0 + 3, 9, x0 + L - 3, y0 + W - 3, 24, M("gz_red")) # Vorbau vorne
+    m.box(x0 + 30, y0 + 1, 9, x0 + 44, y0 + W - 1, 32, M("hazard_white"))   # Fuehrerhaus
+    for yy in (y0 + 1, y0 + W - 2):
+        m.box(x0 + 32, yy, 22, x0 + 42, yy + 1, 29, M("glass_dark"))
+    m.box(x0 + 30, y0 + 3, 22, x0 + 31, y0 + W - 3, 29, M("glass_dark"))
+    m.box(x0 + 43, y0 + 3, 22, x0 + 44, y0 + W - 3, 29, M("glass_dark"))
+    m.box(x0 + 29, y0, 32, x0 + 45, y0 + W, 33, M("steel_dark"))       # Dach
+    m.box(x0 + 52, y0 + 7, 24, x0 + 56, y0 + W - 7, 28, M("steel_dark"))  # Auspuff
+    for xx in range(x0 + 2, x0 + L - 2, 6):                             # Gelaender
+        m.box(xx, y0, 9, xx + 1, y0 + 1, 13, M("gz_yellow"))
+        m.box(xx, y0 + W - 1, 9, xx + 1, y0 + W, 13, M("gz_yellow"))
+    _axles(m, (x0 + 8, x0 + 18, x0 + L - 18, x0 + L - 8), y0, W, 4)
+    _lights(m, x0 + L, x0, y0, W, 13)
+    return m
+
+
+def gz_wagen():
+    """Containertragwagen mit zwei Containern in wechselnden Farben."""
+    _gz_mats()
+    S = SIZES["gz_wagen"]
+    m = _square(S)
+    L, W = 80, 20
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0 + 2, 5, x0 + L, y0 + W - 2, 8, M("gz_frame"))
+    m.box(x0 + 2, y0, 8, x0 + 38, y0 + W, 24, M("gz_blue"))
+    m.box(x0 + 42, y0, 8, x0 + L - 2, y0 + W, 24, M("gz_orange"))
+    for xx in range(x0 + 4, x0 + 36, 4):
+        m.box(xx, y0, 9, xx + 1, y0 + 1, 23, M("gz_blue2"))
+        m.box(xx + 40, y0, 9, xx + 41, y0 + 1, 23, M("gz_orange2"))
+    _axles(m, (x0 + 8, x0 + 16, x0 + L - 16, x0 + L - 8), y0, W, 4)
+    return m
+
+
+MUNICIPAL += ["gz_lok", "gz_wagen"]

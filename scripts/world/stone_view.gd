@@ -50,6 +50,9 @@ func _make(a: Dictionary) -> Array:
 		return out
 	var w := Vector2((float(r.position.x) + float(r.size.x) * 0.5) * 32.0, (float(r.position.y) + float(r.size.y) * 0.5) * 32.0)
 	var s := _sprite(spr, w)
+	var tint := str(StoneWorks.MATERIALS.get(str(a.get("material", "stein")), {}).get("tint", ""))
+	if tint != "":   # Bronze, Holz, Stahl, Beton: Naturfarbe des Materials (Farbmasken liegen darueber)
+		s.self_modulate = Color(tint)
 	out.append(s)
 	if str(a.base_color) != "" and cv.has_tex(spr + "_mask"):
 		var m := Sprite2D.new()

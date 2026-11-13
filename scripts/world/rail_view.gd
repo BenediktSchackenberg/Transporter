@@ -44,7 +44,7 @@ func _process(delta: float) -> void:
 	var extra := ""
 	if sim.trains != null:   # Schranken (blinken, solange zu) und Stoerungen
 		extra = "%s|%s|%d|%s|%s" % [str(sim.trains.closed.keys()), str(sim.trains.disruptions.keys()), (int(Time.get_ticks_msec() / 500) % 2) if not sim.trains.closed.is_empty() else 0,
-			str(sim.trains.double_blocks.keys()), str(sim.trains.planned_tracks.keys())]
+			str(sim.trains.double_blocks.keys()), str(sim.trains.planned_tracks.keys()) + str(sim.trains.branch_clear())]
 	var key := "%s|%d|%s|%s|%s" % [str(_view_cells()), _net().cells.size(), str(sim.trains.blocks.keys()) if sim.trains != null else "", waits, extra]
 	if key != _key:
 		_key = key
@@ -76,7 +76,7 @@ func _draw() -> void:
 		return
 	# erst Bahnsteige (Boden), dann Gleise, dann Signale/Kreuze (stehen auf)
 	for q in N.cells:
-		if N.cells[q] == "bahnsteig" and view.has_point(q):
+		if N.cells[q] in ["bahnsteig", "rampe"] and view.has_point(q):
 			_draw_platform(q)
 	if sim.trains != null and not sim.trains.stops.is_empty():
 		for i in sim.trains.stops.size():
@@ -94,7 +94,7 @@ func _draw() -> void:
 					if N.cells.get(q + d, "") != "tunnel":
 						_draw_portal(q, d)
 			continue
-		if kind != "bahnsteig" and view.has_point(q):
+		if kind not in ["bahnsteig", "rampe"] and view.has_point(q):
 			_draw_track(q, N.links(q), kind == "uebergang")
 	if sim.trains != null:
 		for pid in sim.trains.planned_tracks:   # zweites Gleis im Bau: abgesteckt
@@ -106,7 +106,10 @@ func _draw() -> void:
 		for dz in sim.trains.disruptions.values():
 			if view.has_point(Vector2i(int(dz.cell[0]), int(dz.cell[1]))):
 				_draw_disruption(dz)
-	for st in N.stations.values():
+	var all_st: Array = N.stations.values()
+	if N.has_freight():
+		all_st = all_st + [N.freight]
+	for st in all_st:
 		var loop: Array = st.get("loop", [])
 		if loop.size() >= 2:   # Weichen: Ausweichgleis schraeg an das Hauptgleis
 			var ld := Vector2i(int(st.loop_dir[0]), int(st.loop_dir[1]))
@@ -121,7 +124,12 @@ func _draw() -> void:
 			var tq := _track_next_to(q, st)
 			if not view.has_point(q):
 				continue
-			if N.cells.has(q):
+			if st.has("branch"):   # Gueterbahnhof: Signal am Anschluss-Ende, Prellbock am anderen
+				if int(st.end[0]) == q.x and int(st.end[1]) == q.y:
+					_draw_signal(q, tq, sim.trains == null or sim.trains.branch_clear())
+				else:
+					_draw_buffer(tq, q - tq)
+			elif N.cells.has(q):
 				_draw_signal(q, tq, _clear(int(st.town), tq))
 			else:
 				_draw_buffer(tq, q - tq)

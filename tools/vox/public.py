@@ -1241,3 +1241,45 @@ def train_station_v(v, st, seed):
 
 TYPES.update({"train_station": ("bf", 4, 2), "train_station_v": ("bfv", 2, 4)})
 BUILDERS.update({"train_station": train_station, "train_station_v": train_station_v})
+
+
+# ------------------------------------------------------------------ Auftrag 22 Phase 7 Schritt 1: Gueterbahnhof am Grosslager
+def _containers(m, x0, y0, n, along_x=True):
+    cols = ["pub_wblue", "pub_orange", "pub_green", "pub_red"]
+    for i in range(n):
+        c = cols[i % len(cols)]
+        if along_x:
+            m.box(x0 + i * 22, y0, 1, x0 + i * 22 + 20, y0 + 9, 10, M(c))
+        else:
+            m.box(x0, y0 + i * 22, 1, x0 + 9, y0 + i * 22 + 20, 10, M(c))
+
+
+def freight_depot(v, st, seed):
+    """Gueterhalle 4x2 am Ladegleis: Halle mit Rolltoren, Laderampe vorne, Container oder Paletten im Hof; sechs Grundformen."""
+    rng = random.Random(seed)
+    W, H = 4 * T, 2 * T
+    m = Model(W, H, 60)
+    ground(m, st, W, H, seed)
+    if v in (0, 3):
+        hall(m, st, 4, 6, 92, 52, 20, 3, "steel", rng, band="pub_yellow", door_w=14)
+        house(m, st, 96, 8, 124, 40, 2, rng)
+    elif v in (1, 4):
+        hall(m, st, 4, 4, 124, 44, 22, 4, "steel", rng, band="pub_yellow", door_w=12, roof_kind="saw" if v == 1 else None)
+        _containers(m, 8, 50, 4)
+    else:
+        canopy(m, 4, 6, 80, 50, 16, roof_mat="steel")
+        _containers(m, 10, 14, 3)
+        house(m, st, 86, 6, 124, 44, 1, rng)
+    m.box(0, H - 6, 1, W, H, 4, M("concrete"))   # Laderampe zur Gleisseite
+    return m, {"w": 4, "h": 2, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": 44}
+
+
+def freight_depot_v(v, st, seed):
+    m0, meta = freight_depot(v, st, seed)
+    m = Model(2 * T, 4 * T, 60)
+    m.g = m0.g.transpose(1, 0, 2).copy()
+    return m, {"w": 2, "h": 4, "entrance": [2 * T, 2 * T], "delivery": [2 * T, 2 * T], "height": meta["height"]}
+
+
+TYPES.update({"freight_depot": ("gb", 4, 2), "freight_depot_v": ("gbv", 2, 4)})
+BUILDERS.update({"freight_depot": freight_depot, "freight_depot_v": freight_depot_v})

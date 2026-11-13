@@ -141,7 +141,7 @@ func _update_trains() -> void:
 			var key := "%s|%d" % [t.id, c]
 			var n: Node2D = train_nodes.get(key)
 			if n == null:
-				n = _make_vehicle_node("rb_triebwagen", "", Color.WHITE, false)
+				n = _make_vehicle_node(str(cars[c].get("model", "rb_triebwagen")), "", Color.WHITE, false)
 				if c == 0:   # Zugnummer und Fahrgaeste ueber dem ersten Wagen
 					var lb := Label.new()
 					lb.name = "task"
@@ -156,7 +156,7 @@ func _update_trains() -> void:
 			_set_vehicle_dir(n, cars[c].heading)
 			var tl: Label = n.get_node_or_null("task")
 			if tl != null:
-				var txt := "%s · %d Fahrgäste" % [t.id, T.passengers(t)]
+				var txt := ("%s · %s" % [t.id, "beladen" if int(t.get("ladung", 0)) > 0 else "leer"]) if T.is_freight(t) else "%s · %d Fahrgäste" % [t.id, T.passengers(t)]
 				if str(t.state) == "wartet":
 					txt += " · " + str(t.get("grund", "wartet"))
 				if tl.text != txt:

@@ -23,6 +23,11 @@ extends RefCounted
 ## TRAIN_DAYS) oder ein zweites Gleis auf dem Abschnitt mit der meisten Wartezeit beschliessen; das Land traegt LAND_SHARE
 ## (Regionalisierungsmittel/GVFG), die Staedte den Rest nach Einwohnern. Das zweite Gleis baut eine Baufirma (Projekt "gleis");
 ## danach hat der Abschnitt je Richtung ein Gleis (Blockschluessel je Richtung), Zuege begegnen sich dort ohne Halt.
+## Phase 7 Schritt 1 Gueterzug: GZ1 (Diesellok + Containertragwagen) faehrt vom Gueterbahnhof am Grosslager ueber das
+## Anschlussgleis zur Weiche und abwechselnd zu den Bahnhoefen der einen und der anderen Seite (Halt zum Entladen), dann zurueck,
+## Ausfahrt an der Weiche, Beladen am Gueterbahnhof. Auf der Hauptstrecke gelten dieselben Bloecke und Bahnhofsgleise wie fuer die
+## Regionalbahn; das Anschlussgleis ist ein eigener Block (Schluessel BRANCH). Hoechstens MAX_TRAINS Zuege (Gueterzug zaehlt mit):
+## mit zwei Gleisen je Bahnhof koennen sich drei Zuege auf einer eingleisigen Linie nie gegenseitig blockieren, vier schon.
 ## Fahrplan: Soll-Zeiten aus Fahrzeit (Laenge / SPEED) und Haltezeit; Ist minus Soll = Verspaetung, am Endbahnhof wird mit der
 ## Wendezeit aufgeholt. Bewegung kontinuierlich in Spielminuten (Simulation.step); gespeichert werden die Zuege, der Fahrweg wird
 ## aus dem Netz neu abgeleitet.
@@ -44,7 +49,14 @@ const SUBSIDY_CELL := 0.45    # Landeszuschuss je gefahrenem Feld und Zug (Regio
 const LEISURE := 0.0002       # Reisewuensche je Tag und Richtung = LEISURE x Einwohner A x Einwohner B
 const COMMUTE_TRIPS := 0.3    # Fahrten je Bahnpendler, Tag und Richtung (Rest Homeoffice, Mitfahrt)
 const STAFF_CODE := "BG-01"
-const MAX_TRAINS := 3
+const MAX_TRAINS := 3           # alle Zuege der Linie (Regionalbahn und Gueterzug)
+const BRANCH := -1              # Blockschluessel des Anschlussgleises
+const FREIGHT_CARS := 5         # Lok + vier Wagen
+const UNLOAD_MIN := 10.0        # Halt zum Entladen am Bahnhof
+const LOAD_MIN := 20.0          # Beladen am Gueterbahnhof
+const YIELD_MIN := 30.0         # Vorrang der Regionalbahn: so lange vor deren Abfahrt faehrt der Gueterzug nicht in ihren Abschnitt
+const RESYNC_MIN := 60.0        # Verspaetung am Endbahnhof, ab der die Regionalbahn den naechsten Takt faehrt
+const FREIGHT_PATIENCE := 240.0 # wartet der Gueterzug laenger, faehrt er in die naechste freie Luecke (Fahrdienstleiter; Probe: sonst 0 Fahrten in 30 Tagen)
 const DOUBLE_OFFSET := 8.0      # Gleisabstand zur Mitte im zweigleisigen Abschnitt (Weltmass)
 const TRAIN_PRICE := 1600000.0  # Triebwagen (zwei Wagen)
 const TRAIN_DAYS := 20          # Lieferzeit
@@ -81,6 +93,10 @@ var double_blocks := {}       # Block -> true: zweigleisig
 var planned_tracks := {}      # Projekt-ID -> Block (zweites Gleis im Bau)
 var ordered: Array = []       # [Liefertag] bestellte Triebwagen
 var _double_cells := {}       # abgeleitet: Fahrweg-Zellen zweigleisiger Bloecke
+var fpath: Array = []         # Gueterbahnhof -> Weiche: Ladegleis + Anschlussgleis (Vector2i, abgeleitet)
+var fstop := 0.0              # Halteposition am Gueterbahnhof (Index in fpath)
+var junction := -1            # Index der Weiche im Fahrweg der Linie
+var fcrossings: Array = []    # Bahnuebergaenge des Anschlussgleises [{idx, cell}]
 
 
 func setup(simulation) -> void:
@@ -144,7 +160,175 @@ func ensure() -> bool:
 		_start_trains()
 	_ensure_staff()
 	_index_double()
+	_ensure_freight()
 	return true
+
+
+## Gueterbahnhof: Weg Ladegleis -> Anschluss -> Weiche; Gueterzug anlegen, sobald es den Bahnhof gibt.
+func _ensure_freight() -> void:
+	var R: RailNet = sim.rail
+	if not fpath.is_empty() or not R.has_freight():
+		return
+	var F: Dictionary = R.freight
+	var tr: Array = F.track.map(func(a): return Vector2i(int(a[0]), int(a[1])))
+	var e0 := Vector2i(int(F.ends[0][0]), int(F.ends[0][1]))
+	var end := Vector2i(int(F.end[0]), int(F.end[1]))
+	if end == e0:
+		tr.reverse()   # Ladegleis so, dass es am Anschluss-Ende aufhoert
+	fpath = tr
+	fstop = float(tr.size() - 1) * 0.5
+	for a in F.branch:
+		fpath.append(Vector2i(int(a[0]), int(a[1])))
+	junction = path.find(Vector2i(int(F.junction[0]), int(F.junction[1])))
+	fcrossings.clear()
+	for i in fpath.size():
+		if sim.city.is_road(fpath[i]):
+			fcrossings.append({"idx": i, "cell": fpath[i]})
+	if junction < 0:
+		fpath.clear()
+		return
+	if not trains.any(func(t): return str(t.get("kind", "")) == "gueter") and trains.size() < MAX_TRAINS:
+		var now: float = sim.game_min
+		trains.append({"id": "GZ1", "kind": "gueter", "phase": "lager", "fpos": fstop, "pos": float(junction), "dir": 1, "state": "halt", "stop": 0,
+			"target": 0, "until": now + LOAD_MIN, "planned": now + LOAD_MIN, "delay": 0.0, "track": 0, "trips": 0, "cells": 0.0, "side": 1, "ladung": 0})
+		var f: Dictionary = sim.municipal.facilities.get(facility, {}) if sim.municipal != null else {}
+		if not f.is_empty():
+			f.staff_need["lokfuehrer"] = maxi(int(f.staff_need.get("lokfuehrer", 0)), trains.size() + 1)
+		sim.log_event("Eisenbahn: Güterzug GZ1 nimmt am Güterbahnhof den Betrieb auf.", "info")
+
+
+func is_freight(t: Dictionary) -> bool:
+	return str(t.get("kind", "")) == "gueter"
+
+
+func on_main(t: Dictionary) -> bool:
+	return str(t.get("phase", "strecke")) == "strecke"
+
+
+## Block, in dem die Weiche liegt (zwischen Halt j und j+1).
+func junction_block() -> int:
+	for b in stops.size() - 1:
+		if float(stops[b].pos) < float(junction) and float(junction) < float(stops[b + 1].pos):
+			return b
+	return -1
+
+
+## Gueterzug auf Ladegleis und Anschluss: Beladen, Fahrt zur Weiche, Einfahrt in die Strecke (Block und Zielbahnhof frei),
+## Rueckfahrt von der Weiche zum Gueterbahnhof.
+func _freight_branch(t: Dictionary, dmin: float, now: float) -> void:
+	var last := float(fpath.size() - 1)
+	match str(t.phase):
+		"lager":
+			if now < float(t.until):
+				return
+			if blocks.has(BRANCH) and str(blocks[BRANCH]) != str(t.id):
+				t["grund"] = "Anschlussgleis belegt"
+				return
+			blocks[BRANCH] = t.id
+			t.phase = "anschluss"
+			t.state = "fahrt"
+			t.erase("grund")
+		"anschluss":   # Richtung Weiche bis zum Einfahrsignal
+			var sig := last - float(FREIGHT_CARS) * CAR_LEN * 0.5 - 1.0
+			t.fpos = minf(sig, float(t.fpos) + SPEED * dmin)
+			t.cells = float(t.cells) + SPEED * dmin
+			_cells_acc += SPEED * dmin
+			if float(t.fpos) >= sig:
+				t.phase = "einfahrt"
+				t.state = "wartet"
+		"einfahrt":
+			_freight_enter(t, now)
+			if str(t.phase) == "einfahrt" and junction_block() >= 0:   # Wartezeit vor dem Abschnitt der Weiche (Grundlage fuer das zweite Gleis)
+				var bw: Dictionary = stats.get("block_wartezeit", {})
+				bw[str(junction_block())] = float(bw.get(str(junction_block()), 0.0)) + dmin
+				stats["block_wartezeit"] = bw
+		"rueck":   # von der Weiche zum Gueterbahnhof
+			t.fpos = maxf(fstop, float(t.fpos) - SPEED * dmin)
+			t.cells = float(t.cells) + SPEED * dmin
+			_cells_acc += SPEED * dmin
+			if float(t.fpos) <= fstop:
+				blocks.erase(BRANCH)
+				t.phase = "lager"
+				t.state = "halt"
+				t.until = now + LOAD_MIN
+				t.trips = int(t.trips) + 1
+				stats["gueter_touren"] = int(stats.get("gueter_touren", 0)) + 1
+				_next_target(t)
+
+
+## Halte auf einer Seite der Weiche (d > 0: groessere Position), von der Weiche aus nach aussen.
+func _side_stops(d: int) -> Array:
+	var out: Array = []
+	for i in stops.size():
+		if (float(stops[i].pos) - float(junction)) * float(d) > 0.0:
+			out.append(i)
+	if d < 0:
+		out.reverse()
+	return out
+
+
+## Vorrang der Regionalbahn: Steht oder wartet an einem Ende des Blocks b eine Regionalbahn, die demnaechst (YIELD_MIN) in b
+## einfahren will, laesst der Gueterzug ihr den Vortritt (Messung 13.11.: ohne Vorrang bis 200 min Verspaetung der Regionalbahn).
+## Auch eine Regionalbahn, die gerade auf einen Endbahnhof von b zufaehrt und danach in b weiterfahren will, hat Vorrang (sonst
+## blieben bis 750 min Verspaetung, Probe 30 Tage).
+func _rb_wants(b: int, now: float) -> bool:
+	for o in trains:
+		if is_freight(o):
+			continue
+		var s := int(o.target) if str(o.state) == "fahrt" else int(o.stop)
+		var d := int(o.dir)
+		if s + d < 0 or s + d >= stops.size():
+			d = -d
+		if _block(s, s + d) != b:
+			continue
+		if str(o.state) == "fahrt" or float(o.until) <= now + YIELD_MIN:
+			return true
+	return false
+
+
+## Ziel der naechsten Tour: reihum alle Bahnhoefe (Schritt 2 waehlt nach Ladung).
+func _next_target(t: Dictionary) -> int:
+	var z := (int(t.get("ziel", -1)) + 1) % stops.size()
+	t["ziel"] = z
+	return z
+
+
+func _freight_enter(t: Dictionary, now: float) -> void:
+	if not t.has("ziel"):
+		_next_target(t)
+	var J := junction_block()
+	var d := 1 if float(stops[int(t.ziel)].pos) > float(junction) else -1
+	var tgt := J + 1 if d > 0 else J
+	var frm := J if d > 0 else J + 1
+	var why := ""
+	if facility != "" and drivers() <= trains.find(t):
+		why = "kein Triebfahrzeugführer"
+	elif disruptions.has(J):
+		why = "Störung: %s" % disruptions[J].art
+	elif not _block_free(J, tgt - frm, str(t.id)):
+		why = "Block belegt"
+	elif not double_blocks.has(J) and now - float(t.get("wait_since", now)) < FREIGHT_PATIENCE and _rb_wants(J, now):
+		why = "Vorrang Regionalbahn"
+	elif _occupancy(tgt, str(t.id)).size() >= capacity(tgt):
+		why = "Zielbahnhof belegt"
+	if why != "":
+		t["grund"] = why
+		if not t.has("wait_since"):
+			t["wait_since"] = now
+		return
+	t.erase("wait_since")
+	blocks.erase(BRANCH)
+	blocks[_bkey(J, tgt - frm)] = t.id
+	t.phase = "strecke"
+	t.state = "fahrt"
+	t.pos = float(junction)
+	t.dir = d
+	t.stop = frm
+	t.target = tgt
+	t.erase("grund")
+	t.erase("exit_at")
+	t.ladung = 40   # Schritt 2 fuellt das mit echter Ware
+	stats["gueter_einfahrten"] = int(stats.get("gueter_einfahrten", 0)) + 1
 
 
 ## Betriebsstelle der Regionalbahn (Municipal BG-01) im Bahnhof der einwohnerstaerksten Stadt; sofort erstes Personal einstellen.
@@ -350,6 +534,9 @@ func update(dt: float) -> void:
 	var dmin := dt * Catalog.GAME_MIN_PER_SIM_SEC
 	var now: float = sim.game_min
 	for t in trains:
+		if is_freight(t) and not on_main(t):
+			_freight_branch(t, dmin, now)
+			continue
 		match str(t.state):
 			"halt", "wartet":
 				if now >= float(t.until):
@@ -371,10 +558,20 @@ func update(dt: float) -> void:
 func _update_crossings() -> void:
 	var now_closed := {}
 	for t in trains:
+		if is_freight(t) and not on_main(t):
+			if str(t.phase) in ["anschluss", "rueck"]:
+				var df := 1.0 if str(t.phase) == "anschluss" else -1.0
+				var hf := float(FREIGHT_CARS) * CAR_LEN * 0.5
+				for c in fcrossings:
+					var relf := (float(c.idx) - float(t.fpos)) * df
+					if relf <= hf + CLOSE_AHEAD and relf >= -hf - CLOSE_TAIL:
+						now_closed[c.cell] = true
+			continue
 		if str(t.state) != "fahrt":
 			continue
-		var d := signf(float(stops[int(t.target)].pos) - float(t.pos))
-		var head := float(CARS) * CAR_LEN * 0.5
+		var goal_pos := float(t.exit_at) if t.has("exit_at") else float(stops[int(t.target)].pos)
+		var d := signf(goal_pos - float(t.pos))
+		var head := float(FREIGHT_CARS if is_freight(t) else CARS) * CAR_LEN * 0.5
 		for c in crossings:
 			var rel := (float(c.idx) - float(t.pos)) * d
 			if rel <= head + CLOSE_AHEAD and rel >= -head - CLOSE_TAIL:
@@ -627,7 +824,7 @@ func _release(t: Dictionary) -> void:
 
 ## Belegung eines Bahnhofs: Zuege, die dort halten oder ihn als Ziel haben.
 func _occupancy(s: int, except: String = "") -> Array:
-	return trains.filter(func(t): return str(t.id) != except and ((str(t.state) != "fahrt" and int(t.stop) == s) or (str(t.state) == "fahrt" and int(t.target) == s)))
+	return trains.filter(func(t): return str(t.id) != except and on_main(t) and not t.has("exit_at") and ((str(t.state) != "fahrt" and int(t.stop) == s) or (str(t.state) == "fahrt" and int(t.target) == s)))
 
 
 func capacity(s: int) -> int:
@@ -644,29 +841,42 @@ func _depart(t: Dictionary, now: float) -> void:
 	var b := _block(s, j)
 	var why := ""
 	var idx := trains.find(t)
+	var to_junction := is_freight(t) and b == junction_block() and (float(junction) - float(stops[s].pos)) * float(d) > 0.0
 	if facility != "" and drivers() <= idx:
 		why = "kein Triebfahrzeugführer"
 	elif disruptions.has(b):
 		why = "Störung: %s" % disruptions[b].art
 	elif not _block_free(b, j - s, str(t.id)):
 		why = "Block belegt"
-	elif _occupancy(j, str(t.id)).size() >= capacity(j):
+	elif not to_junction and _occupancy(j, str(t.id)).size() >= capacity(j):
 		why = "Zielbahnhof belegt"
+	elif is_freight(t) and not double_blocks.has(b) and now - float(t.get("wait_since", now)) < FREIGHT_PATIENCE and _rb_wants(b, now):
+		why = "Vorrang Regionalbahn"
+	elif to_junction and blocks.has(BRANCH) and str(blocks[BRANCH]) != str(t.id):
+		why = "Anschlussgleis belegt"
 	if why != "":
 		t.state = "wartet"
 		t["grund"] = why
-		if why in ["Block belegt", "Zielbahnhof belegt"]:
+		if not t.has("wait_since"):
+			t["wait_since"] = now
+		if why in ["Block belegt", "Zielbahnhof belegt", "Vorrang Regionalbahn"]:
 			var bw: Dictionary = stats.get("block_wartezeit", {})
 			bw[str(b)] = float(bw.get(str(b), 0.0)) + 0.0   # Schluessel anlegen; Minuten zaehlt update()
 			stats["block_wartezeit"] = bw
 			t["wartet_block"] = b
 		return
+	t.erase("wait_since")
 	blocks[_bkey(b, j - s)] = t.id
-	_board(t, s, d)   # Fahrgaeste in Fahrtrichtung steigen kurz vor der Abfahrt ein
+	if is_freight(t):
+		if to_junction:
+			t["exit_at"] = junction
+			blocks[BRANCH] = t.id
+	else:
+		_board(t, s, d)   # Fahrgaeste in Fahrtrichtung steigen kurz vor der Abfahrt ein
 	t.state = "fahrt"
 	t.target = j
 	t.erase("grund")
-	t.delay = maxf(0.0, now - float(t.planned))
+	t.delay = 0.0 if is_freight(t) else maxf(0.0, now - float(t.planned))
 	var dist := absf(float(stops[j].pos) - float(t.pos))
 	t.planned = float(t.planned) + dist / SPEED   # Soll-Ankunft
 
@@ -674,6 +884,8 @@ func _depart(t: Dictionary, now: float) -> void:
 func _move(t: Dictionary, dmin: float, now: float) -> void:
 	var j := int(t.target)
 	var goal := float(stops[j].pos)
+	if t.has("exit_at"):
+		goal = float(t.exit_at)
 	var step := SPEED * dmin
 	var b := _block(int(t.stop), j)
 	if disruptions.has(b):   # Stoerung im eigenen Block vor dem Zug: vor der Stelle anhalten
@@ -689,6 +901,15 @@ func _move(t: Dictionary, dmin: float, now: float) -> void:
 		t.cells = float(t.cells) + absf(left)
 		stats.felder = float(stats.felder) + absf(left)
 		_cells_acc += absf(left)
+		if t.has("exit_at"):   # Gueterzug biegt an der Weiche ins Anschlussgleis
+			for key in blocks.keys():
+				if str(blocks[key]) == str(t.id) and int(key) != BRANCH:
+					blocks.erase(key)
+			t.erase("exit_at")
+			t.phase = "rueck"
+			t.state = "fahrt"
+			t.fpos = float(fpath.size() - 1)
+			return
 		_arrive(t, now)
 		return
 	t.pos = float(t.pos) + signf(left) * step
@@ -711,6 +932,16 @@ func _arrive(t: Dictionary, now: float) -> void:
 	ld.erase(ks)
 	t.state = "halt"
 	t.delay = maxf(0.0, now - float(t.planned))
+	if is_freight(t):
+		t.delay = 0.0
+		if j == int(t.get("ziel", -1)):   # Ziel der Tour: entladen, dann zurueck Richtung Weiche
+			t.until = now + UNLOAD_MIN
+			t.ladung = 0
+			stats["gueter_halte"] = int(stats.get("gueter_halte", 0)) + 1
+			t.dir = -int(t.dir)
+		else:
+			t.until = now   # Durchfahrt (nur Kreuzung/Blockwechsel)
+		return
 	var terminus := j == 0 or j == stops.size() - 1
 	var dwell := DWELL
 	if terminus:
@@ -719,6 +950,10 @@ func _arrive(t: Dictionary, now: float) -> void:
 		dwell = maxf(TURN_MIN, TURN - float(t.delay))   # Verspaetung in der Wendezeit aufholen
 	t.until = now + dwell
 	t.planned = float(t.planned) + (TURN if terminus else DWELL)
+	if terminus and float(t.delay) > RESYNC_MIN:   # zu spaet: der Zug faehrt mit dem naechsten Takt weiter (Fahrplan neu aufgenommen)
+		t.planned = now + dwell
+		t.delay = 0.0
+		stats["takt_neu"] = int(stats.get("takt_neu", 0)) + 1
 
 
 # ------------------------------------------------------------------ Darstellung
@@ -749,14 +984,42 @@ func world_at(pos: float, track: int = 0, lane: int = 0) -> Dictionary:
 ## und blickt nach hinten (Triebwagen mit Fuehrerstand an beiden Enden).
 func cars_of(t: Dictionary) -> Array:
 	var out: Array = []
+	var n := FREIGHT_CARS if is_freight(t) else CARS
+	if is_freight(t) and not on_main(t):   # auf Ladegleis/Anschluss: Richtung nach Fahrtrichtung auf dem Anschluss
+		var df := -1.0 if str(t.phase) in ["rueck", "lager"] else 1.0
+		for c in n:
+			var pc := float(t.fpos) + df * (CAR_LEN * float(n - 1) * 0.5 - float(c) * CAR_LEN)
+			var w := _interp(fpath, pc)
+			w["heading"] = w.heading * df
+			w["front"] = c == 0
+			w["model"] = "gz_lok" if c == 0 else "gz_wagen"
+			out.append(w)
+		return out
 	var d := float(t.dir)
-	for c in CARS:
-		var pc := float(t.pos) + d * (CAR_LEN * float(CARS - 1) * 0.5 - float(c) * CAR_LEN)
+	for c in n:
+		var pc := float(t.pos) + d * (CAR_LEN * float(n - 1) * 0.5 - float(c) * CAR_LEN)
 		var w := world_at(pc, int(t.track), int(t.dir))
-		w["heading"] = w.heading * d * (-1.0 if c == CARS - 1 and CARS > 1 else 1.0)
+		if is_freight(t):
+			w["heading"] = w.heading * d
+			w["model"] = "gz_lok" if c == 0 else "gz_wagen"
+		else:
+			w["heading"] = w.heading * d * (-1.0 if c == CARS - 1 and CARS > 1 else 1.0)
+			w["model"] = "rb_triebwagen"
 		w["front"] = c == 0
 		out.append(w)
 	return out
+
+
+## Weltposition auf einer beliebigen Zellfolge (Anschlussgleis).
+func _interp(arr: Array, pos: float) -> Dictionary:
+	var nn := arr.size()
+	var p := clampf(pos, 0.0, float(nn - 1))
+	var i := int(floor(p))
+	var j := mini(i + 1, nn - 1)
+	var a: Vector2 = (Vector2(arr[i]) + Vector2(0.5, 0.5)) * 32.0
+	var b: Vector2 = (Vector2(arr[j]) + Vector2(0.5, 0.5)) * 32.0
+	var h: Vector2 = (b - a) if j != i else ((a - (Vector2(arr[i - 1]) + Vector2(0.5, 0.5)) * 32.0) if i > 0 else Vector2(1, 0))
+	return {"world": a.lerp(b, p - float(i)), "heading": h.normalized() if h != Vector2.ZERO else Vector2(1, 0)}
 
 
 ## Signal an der Ausfahrt von Halt s in Richtung d: Fahrt (gruen), wenn der Block dahinter frei ist.
@@ -765,6 +1028,10 @@ func signal_clear(s: int, d: int) -> bool:
 	if j < 0 or j >= stops.size():
 		return true
 	return _block_free(_block(s, j), d, "") and not disruptions.has(_block(s, j))
+
+
+func branch_clear() -> bool:
+	return not blocks.has(BRANCH)
 
 
 ## Beide Staedte liegen an der Linie und der Betrieb laeuft (mindestens ein Zug mit Triebfahrzeugfuehrer).
@@ -794,12 +1061,17 @@ func summary() -> Dictionary:
 	var tl: Array = []
 	for t in trains:
 		var where := ""
-		if str(t.state) == "fahrt":
+		if is_freight(t) and not on_main(t):
+			where = {"lager": "am Güterbahnhof (Beladen)", "anschluss": "auf dem Anschlussgleis", "einfahrt": "am Einfahrsignal der Weiche",
+				"rueck": "auf dem Anschlussgleis zum Güterbahnhof"}.get(str(t.phase), "")
+		elif str(t.state) == "fahrt" and t.has("exit_at"):
+			where = "%s → Güterbahnhof" % sim.towns.name_of(int(stops[int(t.stop)].town))
+		elif str(t.state) == "fahrt":
 			where = "%s → %s" % [sim.towns.name_of(int(stops[int(t.stop)].town)), sim.towns.name_of(int(stops[int(t.target)].town))]
 		else:
 			where = "in %s" % sim.towns.name_of(int(stops[int(t.stop)].town))
 		tl.append({"zug": t.id, "status": t.state, "ort": where, "verspaetung_min": snappedf(float(t.delay), 0.1), "grund": str(t.get("grund", "")),
-			"fahrten": int(t.trips), "fahrgaeste": passengers(t)})
+			"fahrten": int(t.trips), "fahrgaeste": passengers(t), "art": "Güterzug" if is_freight(t) else "Regionalbahn", "ladung": int(t.get("ladung", 0))})
 	var wt := {}
 	for i in stops.size():
 		wt[sim.towns.name_of(int(stops[i].town))] = waiting_at(i)

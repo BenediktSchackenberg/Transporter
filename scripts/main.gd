@@ -521,6 +521,8 @@ func _process_timed(_delta: float) -> void:
 				focus = session.sim.trains.cars_of(tz)[0].world / 32.0
 				print("AUTOTEST Regionalbahn: ", session.sim.trains.summary())
 				args["_shot_train"] = tz.id   # der Zug faehrt waehrend des Kameraschwenks weiter: Ziel vor der Aufnahme neu setzen
+			elif want == "gueter" and RN.has_freight():   # Gueterbahnhof am Grosslager
+				focus = Vector2(float(RN.freight.rect[0]) + float(RN.freight.rect[2]) * 0.5, float(RN.freight.rect[1]) + float(RN.freight.rect[3]) * 0.5)
 			elif want == "schranke" and not session.sim.trains.crossings.is_empty():   # Bahnuebergang, dem sich gerade ein Zug naehert
 				args["_shot_crossing"] = true
 				focus = _nearest_crossing() / 32.0
@@ -537,6 +539,26 @@ func _process_timed(_delta: float) -> void:
 			print("AUTOTEST Eisenbahn: ", RN.summary())
 			if focus.x >= 0.0:   # ueber shot-tile (wird nach dem Warten erneut gesetzt); +3/-3 Felder: die Leitstelle deckt die rechte Bildhaelfte
 				args["shot-tile"] = "%d,%d" % [int(focus.x) + 3, int(focus.y) - 3]
+		if args.has("demo-werke"):   # Sichtpruefung Werke: Stein, Bronze, Holz unbemalt und ein bemaltes Werk der Firma 0
+			var SW: StoneWorks = session.sim.stone
+			session.sim.companies[0].ledger.cash += 300000.0
+			for it in ["naturstein_aufbereitet", "bronze", "holz", "stahl"]:
+				session.sim.stock.add(it, 40, CentralHub.ACCT, session.sim.hub.loc, "Sichtpruefung")
+			var specs := [["statue", "stein", "", ""], ["statue", "bronze", "", ""], ["cat_statue", "holz", "", ""], ["rocket", "stahl", "rot", "gelb"]]
+			var first := Vector2(-1, -1)
+			for sp in specs:
+				var rw: Dictionary = SW.create(0, str(sp[0]), "Demo", str(sp[2]), str(sp[3]), {"material": sp[1]})
+				print("AUTOTEST Werk: ", rw.msg)
+				if rw.ok:
+					var wk: Dictionary = SW.works[str(rw.ref)]
+					wk.status = "angemalt" if str(sp[2]) != "" else "natur"
+					wk.base_color = wk.base
+					wk.accent_color = wk.accent
+					SW.work_changed.emit(wk.id)
+					if first.x < 0:
+						first = Vector2(float(wk.rect[0]), float(wk.rect[1]))
+			if first.x >= 0:
+				args["shot-tile"] = "%d,%d" % [int(first.x) + 2, int(first.y) - 2]
 		if args.has("shot-town"):   # Kamera auf das Rathaus eines Orts (Ortskern)
 			var th: Dictionary = session.sim.city.building(int(session.sim.towns.get_t(int(args["shot-town"])).town_hall))
 			session.set_follow(false)

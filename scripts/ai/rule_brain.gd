@@ -499,6 +499,8 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 				break
 	# 11c) Immobilien (Etappe 3): vorsichtige Persoenlichkeiten legen Ueberschuss in ein gut vermietetes Wohngebaeude an
 	_realty(obs, cash, buffer, personality, planned, actions, reasons)
+	# 11e) Steinwerk (Auftrag 23): Wahrzeichen auf dem eigenen Grundstueck, wenn Material, Platz und Ueberschuss da sind
+	_stone_work(obs, cash, buffer, personality, rng, actions, reasons)
 	# 12) Gespraeche (kurz, mit Anlass)
 	if rng.randf() < 0.2 and actions.size() < MAX_ACTIONS:
 		var pool: Array = LINES.get(personality, LINES.kostenoptimierer)
@@ -696,6 +698,45 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 
 const REALTY_PERSONALITIES := ["kostenoptimierer", "netzwerker"]
 const REALTY_MIN_OCCUPANCY := 0.8
+## Steinwerke (Auftrag 23): Vorher baute im Regelmodus niemand ein Werk (keine Regel dafuer, Partie 13.11.). Jetzt: hoechstens ein
+## Werk zugleich im Bau, Obergrenze je Persoenlichkeit, nur aus Ueberschuss (Puffer + STONE_RESERVE), selten (STONE_CHANCE je
+## Entscheidung). Motiv nach Persoenlichkeit (serioes oder verspielt), zwei Farben aus der Palette, Name aus Motiv und Firma.
+const STONE_MAX := {"wachstum": 3, "risikospieler": 3, "netzwerker": 2, "kostenoptimierer": 1}
+const STONE_RESERVE := 25000.0
+const STONE_CHANCE := 0.25
+const STONE_SERIOUS := ["statue", "obelisk", "fountain", "column", "gate", "monument_wall", "lighthouse"]
+const STONE_PLAYFUL := ["rocket", "ufo", "ice_cream", "cat_statue", "mushroom", "turtle", "hedgehog", "balloon", "carousel", "ferris_wheel"]
+const STONE_COLORS := ["weiss", "creme", "grau", "blaugrau", "rot", "koralle", "orange", "gelb", "gruen", "petrol", "blau", "lila", "weinrot", "rosa", "braun"]
+
+
+static func _stone_work(obs: Dictionary, cash: float, buffer: float, personality: String, rng: RandomNumberGenerator, actions: Array, reasons: Array) -> void:
+	var sw: Dictionary = obs.get("steinbauten", {})
+	if sw.is_empty() or not bool(sw.get("jetzt_moeglich", false)) or actions.size() >= MAX_ACTIONS:
+		return
+	var mine: Array = sw.get("werke", [])
+	if mine.size() >= int(STONE_MAX.get(personality, 1)) or mine.any(func(w): return str(w.status) in ["geplant", "im_bau"]):
+		return
+	if cash < buffer + STONE_RESERVE or rng.randf() >= STONE_CHANCE:
+		return
+	var pool: Array = STONE_PLAYFUL if personality in ["risikospieler", "wachstum"] else STONE_SERIOUS
+	var used: Array = mine.map(func(w): return str(w.motiv))
+	var free: Array = pool.filter(func(m): return m not in used)
+	var motif: String = free[rng.randi() % free.size()] if not free.is_empty() else pool[rng.randi() % pool.size()]
+	var base: String = STONE_COLORS[rng.randi() % STONE_COLORS.size()]
+	var accent: String = STONE_COLORS[rng.randi() % STONE_COLORS.size()]
+	var label: String = StoneWorks.MOTIF_LABELS.get(motif, motif)
+	var firm := str(obs.ich.get("firma", "")).split(" ")[0]
+	var mats: Dictionary = sw.get("material_kosten", {})
+	var ok_mats: Array = mats.keys().filter(func(m): return float(mats[m]) <= cash - buffer - STONE_RESERVE)
+	if ok_mats.is_empty():
+		return
+	var material: String = ok_mats[rng.randi() % ok_mats.size()]
+	var mlabel: String = StoneWorks.MATERIALS[material].label
+	actions.append({"action": "create_stone_work", "motif": motif, "material": material, "name": "%s %s" % [label, firm], "base_color": base, "accent_color": accent,
+		"reason": "Wahrzeichen der Firma aus Überschuss"})
+	reasons.append("baue ein Werk aus %s (%s, %s/%s) als Wahrzeichen" % [mlabel, label, base, accent])
+
+
 static func _realty(obs: Dictionary, cash: float, buffer: float, personality: String, planned: Array, actions: Array, reasons: Array) -> void:
 	if personality not in REALTY_PERSONALITIES or "buy_property" in planned:
 		return

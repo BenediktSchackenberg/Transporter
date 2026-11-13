@@ -17,6 +17,15 @@ const PALETTE := {
 	"petrol": "#3f7d8c", "blau": "#3d6fb3", "lila": "#8e44ad", "weinrot": "#7c2b45", "rosa": "#d77a9e",
 	"braun": "#8a5c38",
 }
+## Baumaterialien der Werke (13.11.: nicht nur Stein). Menge je Werk und Naturfarbe des unbemalten Werks (Tönung des Steinbilds;
+## multiplikativ auf grauem Stein, daher hell gewaehlt).
+const MATERIALS := {
+	"stein": {"item": "naturstein_aufbereitet", "qty": 12, "tint": "", "label": "Stein"},
+	"bronze": {"item": "bronze", "qty": 4, "tint": "#ffc47a", "label": "Bronze"},
+	"holz": {"item": "holz", "qty": 20, "tint": "#f2c28c", "label": "Holz"},
+	"stahl": {"item": "stahl", "qty": 8, "tint": "#dbe8f7", "label": "Stahl"},
+	"beton": {"item": "beton", "qty": 15, "tint": "#fff6e8", "label": "Beton"},
+}
 const BUILD_DAYS_MIN := 3.0
 const PAINT_MIN := 120.0            # Arbeitstage-Aufwand eines Malers (Spielminuten), Stufe 1
 
@@ -61,8 +70,40 @@ func obs_of(cid: int) -> Dictionary:
 	var painters: int = sim.personnel.employed(cid).filter(func(w): return int(w.skills.get("malen", 0)) > 0).size()
 	# Motive und Farbpalette stehen im Aktions-Handbuch (create_stone_work); die Beobachtung haelt nur den
 	# dynamischen Zustand klein, damit der Prompt der lokalen Modelle unter dem Token-Budget bleibt.
-	return {"werke": mine, "maler_anstellung": painters,
-		"hinweis": "create_stone_work (Name, Motiv, 2 Farben) – der Maler malt nach dem Bau an"}
+	# Machbarkeit jetzt je Material (13.11.: die Modelle bauten nie, die Beobachtung sagte nicht, ob Material, Geld und Platz reichen)
+	var site := not _find_site(cid, 1, 1).is_empty()
+	var cash: float = sim.company(cid).ledger.cash if sim.company(cid) != null else 0.0
+	# Kompakt (Token-Budget der lokalen Modelle): nur die jetzt machbaren Materialien mit ihren Kosten und eine Anregung.
+	var costs := {}
+	for m in MATERIALS:
+		var f := material_cost(cid, str(m))
+		if site and bool(f.vorhanden) and cash >= float(f.kosten_eur):
+			costs[m] = int(f.kosten_eur)
+	var ok := not costs.is_empty()
+	var out := {"werke": mine, "maler": painters, "jetzt_moeglich": ok}
+	if not ok:
+		out["grund"] = "kein freier Platz" if not site else "Material/Geld fehlt"
+		return out
+	out["material_kosten"] = costs
+	var rng := RandomNumberGenerator.new()   # Anregung, wechselt taeglich: nehmen, abwandeln oder etwas ganz anderes bauen
+	rng.seed = hash("idee%d_%d" % [cid, GameCalendar.day_of(sim.game_min)])
+	var mot: Array = MOTIF_LABELS.keys()
+	var cols: Array = PALETTE.keys()
+	var feasible: Array = costs.keys()
+	out["idee"] = "%s/%s/%s/%s" % [mot[rng.randi() % mot.size()], feasible[rng.randi() % feasible.size()], cols[rng.randi() % cols.size()], cols[rng.randi() % cols.size()]]
+	return out
+
+
+## Bedarf, Vorrat und Kosten eines Materials fuer ein Werk der Firma.
+func material_cost(cid: int, material: String) -> Dictionary:
+	var m: Dictionary = MATERIALS[material]
+	var item: String = m.item
+	var own: int = sim.stock.available(item, "C%d" % cid)
+	var hub_on: bool = sim.hub != null and sim.hub.enabled and sim.hub.GOODS.has(item)
+	var hub_have: int = sim.hub.stock_of(item) if hub_on else 0
+	var need := int(m.qty)
+	var cost := snappedf(sim.hub.price(item) * float(maxi(0, need - own)), 1.0) if hub_on and need > own else 0.0
+	return {"noetig": need, "eigen": own, "grosslager": hub_have, "kosten_eur": cost, "vorhanden": own + hub_have >= need}
 
 
 func colors_valid(base: String, accent: String) -> String:
@@ -107,57 +148,64 @@ func create(cid: int, motif: String, name: String, base_color: String, accent_co
 	var site := _find_site(cid, w, h)
 	if site.is_empty():
 		return {"ok": false, "msg": "Kein freies eigenes Grundstueck %d×%d mit Strasse gefunden." % [w, w], "grund": "platz"}
-	var mat := int(found.material)
-	var own: int = sim.stock.available("naturstein_aufbereitet", "C%d" % cid)
+	var material := str(params.get("material", "stein")).to_lower()
+	if material == "" or material == "naturstein":
+		material = "stein"
+	if not MATERIALS.has(material):
+		return {"ok": false, "msg": "Unbekanntes Material '%s'. Möglich: %s." % [material, ", ".join(MATERIALS.keys())]}
+	var item: String = MATERIALS[material].item
+	var iname: String = CityGoods.get_item(item).name if CityGoods.exists(item) else item
+	var mat := int(MATERIALS[material].qty)
+	var own: int = sim.stock.available(item, "C%d" % cid)
 	var hub_enabled: bool = sim.hub != null and sim.hub.enabled
-	var hub_have: int = sim.hub.stock_of("naturstein_aufbereitet") if hub_enabled else 0
+	var hub_have: int = sim.hub.stock_of(item) if hub_enabled else 0
 	if own + hub_have < mat:
-		return {"ok": false, "msg": "Nur %d × Aufbereiteter Stein erreichbar (eigene Depots %d, Großlager %d; benötigt %d). Etwas aufbereiten lassen (Steinmetz) oder mit hub_buy zukaufen." % [own + hub_have, own, hub_have, mat], "grund": "material", "verfuegbar": own, "grosslager": hub_have, "noetig": mat}
+		return {"ok": false, "msg": "Nur %d × %s erreichbar (eigene Depots %d, Großlager %d; benötigt %d). Anderes Material wählen oder mit hub_buy zukaufen." % [own + hub_have, iname, own, hub_have, mat], "grund": "material", "verfuegbar": own, "grosslager": hub_have, "noetig": mat}
 	# Eigene Vorräte sind bereits bezahlt; nur der Großlager-Anteil kostet Geld (zum aktuellen Lagerpreis).
 	var est_hub := mini(mat - own, hub_have)
-	var est_cost := snappedf(sim.hub.price("naturstein_aufbereitet") * float(est_hub), 0.01) if hub_enabled else 0.0
+	var est_cost := snappedf(sim.hub.price(item) * float(est_hub), 0.01) if hub_enabled else 0.0
 	if c.ledger.cash < est_cost:
-		return {"ok": false, "msg": "Der Großlager-Anteil (%d × Stein) kostet %s, verfügbar %s." % [est_hub, Catalog.money(est_cost), Catalog.money(c.ledger.cash)], "grund": "geld"}
+		return {"ok": false, "msg": "Der Großlager-Anteil (%d × %s) kostet %s, verfügbar %s." % [est_hub, iname, Catalog.money(est_cost), Catalog.money(c.ledger.cash)], "grund": "geld"}
 	var days := snappedf(BUILD_DAYS_MIN + float(w) * 2.0, 0.5)
 	var id := "SW%d" % _next
 	_next += 1
 	var a := {"id": id, "cid": cid, "motif": motif, "name": str(name).left(40) if name != "" else str(found["label"]),
 		"rect": site.rect, "parcel": str(site.parcel), "base": _resolve(base_color), "accent": _resolve(accent_color),
 		"status": "geplant", "base_color": "", "accent_color": "", "progress": 0.0, "day": GameCalendar.day_of(sim.game_min),
-		"built_day": -1, "painted_day": -1, "m": mat, "days": days}
+		"built_day": -1, "painted_day": -1, "m": mat, "days": days, "material": material}
 	works[id] = a
 	# Material wird beim Baubeginn verbraucht; bis dahin reserviert (eigene Depots, dann Großlager), damit nichts doppelt vergeben wird.
-	var refs: Array = _reserve_material(cid, id, mat)
+	var refs: Array = _reserve_material(cid, id, mat, item)
 	var total := int(refs.back()) if refs.size() >= 2 else 0
 	if total < mat:
 		for r in refs.slice(0, -1):
 			sim.stock.release(r)
 		works.erase(id)
-		return {"ok": false, "msg": "Nicht genug Aufbereiteter Stein reservierbar (verfügbar %d, benötigt %d). Eigene Vorräte aufarbeiten oder im Großlager nachkaufen." % [own, mat], "grund": "material"}
+		return {"ok": false, "msg": "Nicht genug %s reservierbar (verfügbar %d, benötigt %d). Anderes Material wählen oder im Großlager nachkaufen." % [iname, own, mat], "grund": "material"}
 	# Bezahlt wird genau der Großlager-Anteil (eigene Vorräte sind bereits bezahlt); Ware + Geld wechseln beim Kauf.
 	var hub_qty := 0
 	for r in refs:
 		if str(r).ends_with("@hub"):
 			hub_qty += int(sim.stock.reservations[r].qty)
 	if hub_enabled and hub_qty > 0:
-		var cost := snappedf(sim.hub.price("naturstein_aufbereitet") * float(hub_qty), 0.01)
+		var cost := snappedf(sim.hub.price(item) * float(hub_qty), 0.01)
 		if c.ledger.cash < cost:
 			for r in refs:
 				sim.stock.release(r)
 			works.erase(id)
-			return {"ok": false, "msg": "Der Großlager-Anteil (%d × Stein) kostet %s, verfügbar %s." % [hub_qty, Catalog.money(cost), Catalog.money(c.ledger.cash)], "grund": "geld"}
-		c.ledger.book("supplies", -cost, true, "Großlager: %d × Aufbereiteter Stein (Steinbau %s)" % [hub_qty, a.name], sim.game_min, CentralHub.ACCT)
-		sim.hub.demand["naturstein_aufbereitet"] = float(sim.hub.demand.get("naturstein_aufbereitet", 0.0)) + float(hub_qty)
+			return {"ok": false, "msg": "Der Großlager-Anteil (%d × %s) kostet %s, verfügbar %s." % [hub_qty, iname, Catalog.money(cost), Catalog.money(c.ledger.cash)], "grund": "geld"}
+		c.ledger.book("supplies", -cost, true, "Großlager: %d × %s (Werk %s)" % [hub_qty, iname, a.name], sim.game_min, CentralHub.ACCT)
+		sim.hub.demand[item] = float(sim.hub.demand.get(item, 0.0)) + float(hub_qty)
 	a["refs"] = refs.slice(0, -1)
-	sim.log_event("%s plant %s (Motiv %s). Material %d × Aufbereiteter Stein (davon %d Großlager), Bau %d Tage." % [
-		c.company_name, a.name, motif, mat, hub_qty, int(days)], "info", cid)
+	sim.log_event("%s plant %s (Motiv %s aus %s). Material %d × %s (davon %d Großlager), Bau %d Tage." % [
+		c.company_name, a.name, motif, MATERIALS[material].label, mat, iname, hub_qty, int(days)], "info", cid)
 	work_changed.emit(id)
 	return {"ok": true, "msg": "%s geplant: %s auf %s (Bauzeit %d Tage). Material reserviert – der Bau läuft, danach malt der Maler an." % [
 		a.name, a.name, a.parcel, int(days)], "ref": id}
 
 
 ## Material an den eigenen Standorten reservieren, Rest beim Großlager. Rückgabe [Ref1, Ref2, ..., gesamt reserviert].
-func _reserve_material(cid: int, wid: String, amount: int) -> Array:
+func _reserve_material(cid: int, wid: String, amount: int, item: String = "naturstein_aufbereitet") -> Array:
 	var out: Array = []
 	var left := amount
 	var c = sim.company(cid)
@@ -165,18 +213,18 @@ func _reserve_material(cid: int, wid: String, amount: int) -> Array:
 		if left <= 0:
 			break
 		# nur so viel wie an diesem Standort frei ist (reserve ist alles-oder-nichts)
-		var avail: int = sim.stock.available("naturstein_aufbereitet", "C%d" % cid, site)
+		var avail: int = sim.stock.available(item, "C%d" % cid, site)
 		if avail <= 0:
 			continue
 		var take := mini(left, avail)
 		var ref := "%s@%d" % [wid, site]
-		var got: bool = sim.stock.reserve(ref, "naturstein_aufbereitet", take, "C%d" % cid, site)
+		var got: bool = sim.stock.reserve(ref, item, take, "C%d" % cid, site)
 		if got:
 			out.append(ref)
 			left -= int(sim.stock.reservations[ref].qty)
 	if left > 0 and sim.hub != null and sim.hub.enabled:
 		var href := "%s@hub" % wid
-		if sim.stock.reserve(href, "naturstein_aufbereitet", left, CentralHub.ACCT, sim.hub.loc):
+		if sim.stock.reserve(href, item, left, CentralHub.ACCT, sim.hub.loc):
 			out.append(href)
 			left -= int(sim.stock.reservations[href].qty)
 	out.append(maxi(0, amount - left))

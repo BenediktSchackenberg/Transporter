@@ -29,7 +29,7 @@ func _init() -> void:
 		s.step(0.1)
 		if s.game_min >= next_print and not s.trains.trains.is_empty():
 			next_print = s.game_min + 30.0
-			print("  %6.0f min  " % s.game_min, " | ".join(s.trains.trains.map(func(t): return "%s %s Halt %d->%d pos %.0f Versp. %.0f Fahrgäste %d %s" % [t.id, t.state, int(t.stop), int(t.target), float(t.pos), float(t.delay), s.trains.passengers(t), str(t.get("grund", ""))])), "  wartend ", range(s.trains.stops.size()).map(func(i): return s.trains.waiting_at(i)))
+			print("  %6.0f min  " % s.game_min, " | ".join(s.trains.trains.map(func(t): return "%s %s/%s Halt %d->%d pos %.0f fpos %.0f Versp. %.0f Fg %d %s" % [t.id, t.state, str(t.get("phase", "-")), int(t.stop), int(t.target), float(t.pos), float(t.get("fpos", -1)), float(t.delay), s.trains.passengers(t), str(t.get("grund", ""))])), "  wartend ", range(s.trains.stops.size()).map(func(i): return s.trains.waiting_at(i)))
 	var R: RailNet = s.rail
 	print("Karte %d Felder, Laufzeit %d ms" % [s.city.size, Time.get_ticks_msec() - t0])
 	for key in R.stations:
@@ -42,8 +42,13 @@ func _init() -> void:
 		print("  Strecke %s: %s - %s  %d Felder, %d Bahnübergänge, %d Brückenfelder, %d Tunnelfelder" % [e.id, s.towns.name_of(int(e.a)), s.towns.name_of(int(e.b)), int(e.len),
 			e.crossings.size(), int(e.get("bruecke", 0)), int(e.get("tunnel", 0))])
 	var sm: Dictionary = s.trains.summary()
+	print("  Güterzug: Touren %d, Einfahrten %d, Halte %d" % [int(sm.statistik.get("gueter_touren", 0)), int(sm.statistik.get("gueter_einfahrten", 0)), int(sm.statistik.get("gueter_halte", 0))])
 	print("  Regionalbahn: Fahrgäste %d, Schranken %d, Störungen %d (Sperrzeit %d min), auf Straße %d, offen %s" % [int(sm.statistik.fahrgaeste), int(sm.statistik.get("schranken", 0)),
 		int(sm.statistik.get("stoerungen", 0)), int(sm.statistik.get("ausfall_min", 0)), int(sm.statistik.get("strasse", 0)), str(sm.stoerungen)])
+	if R.has_freight():
+		var fb: Dictionary = s.city.building(int(R.freight.building))
+		print("  Güterbahnhof %s %s  Anschluss %d Felder an %s, Weiche %s, Großlager-Mitte %s, Bild %s" % [R.freight.orient, str(R.freight.rect), R.freight.branch.size(),
+			R.freight.edge, str(R.freight.junction), str(s.city.hub.center), str(fb.get("sprite", ""))])
 	for f in R.failed:
 		print("  NICHT GEBAUT: ", f)
 	quit(0)

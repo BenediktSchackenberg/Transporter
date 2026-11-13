@@ -7,6 +7,9 @@ extends RefCounted
 ## Zufuehrungen von den Gleisenden per feiner Wegsuche. Gleisfelder werden Boden RAIL (kein Bau darauf, Baeume gerodet); wo die Strecke
 ## eine Strasse quert, bleibt die Strasse und es entsteht ein Bahnuebergang. Fluesse und Buchten quert sie auf Bruecken, Berge im
 ## Tunnel (beides teuer in der Wegsuche, damit nur gebaut wird, wo kein Landweg besteht); dort bleibt der Boden unveraendert.
+## Phase 7 Schritt 1: Gueterbahnhof am Grosslager (Ladegleis, Ausweichgleis, Laderampe, Gueterhalle freight_depot) nahe der
+## Kartenmitte; ein Anschlussgleis fuehrt von einem Gleisende zu einer Weiche auf einem geraden Stueck der Hauptstrecke (ohne die
+## Hauptstrecke mitzubenutzen oder zu kreuzen).
 ## Das Netz entsteht beim ersten Tageslauf (Laufzeitbau wie die Startausstattung) und wird beim Laden wieder auf den Boden gelegt.
 
 signal built(cells: Array)   # neue Gleis-/Bahnsteigfelder (Darstellung)
@@ -29,6 +32,8 @@ var edges: Array = []         # [{id, a, b, cells: [[x, y]...] (Gleisende a -> G
 var tried := false
 var cells := {}               # Vector2i -> "gleis"|"ausweiche"|"bahnsteig"|"uebergang"|"bruecke"|"tunnel" (abgeleitet, nicht gespeichert)
 var failed: Array = []        # nicht baubare Abschnitte [{von, nach, grund}]
+var freight := {}             # Gueterbahnhof {name, orient, rect, track, platform, loop, loop_dir, building, ends, end, branch, junction, edge}
+var freight_tried := false
 var _grid0 := {}              # Grobraster vor dem Bau (nur waehrend ensure)
 var _open := {}               # Grobbloecke, die mit dem offenen Land (Kartenmitte) verbunden sind (nur waehrend ensure)
 
@@ -37,7 +42,9 @@ func setup(simulation) -> void:
 	sim = simulation
 	if not enabled():
 		return
-	sim.day_changed.connect(func(_d): ensure())
+	sim.day_changed.connect(func(_d):
+		ensure()
+		ensure_freight())
 
 
 func enabled() -> bool:
@@ -293,7 +300,24 @@ func _route(a: int, b: int) -> Dictionary:
 	path.append(R._hw_center(coarse[-1]))
 	for p in spur_b:
 		path.append(Vector2i(p))
-	# zusammenhaengende Zellfolge ohne Doppelungen (Schleifen an den Uebergaengen Zufuehrung/Hauptstrecke abschneiden)
+	var seq := _sequence(path)
+	var crossings: Array = []
+	var bridges := 0
+	var tunnels := 0
+	for q in seq:
+		if sim.city.is_road(q):
+			crossings.append([q.x, q.y])
+		elif _water(q):
+			bridges += 1
+		elif _mountain(q):
+			tunnels += 1
+	return {"id": "S%d" % (edges.size() + 1), "a": a, "b": b, "cells": seq.map(func(q): return [q.x, q.y]), "crossings": crossings, "len": seq.size(),
+		"bruecke": bridges, "tunnel": tunnels}
+
+
+## Zusammenhaengende Zellfolge ohne Doppelungen (Schleifen an den Uebergaengen Zufuehrung/Hauptstrecke abschneiden, Luecken
+## rechtwinklig schliessen).
+static func _sequence(path: Array) -> Array:
 	var seq: Array = []
 	var pos := {}
 	for q in path:
@@ -317,18 +341,7 @@ func _route(a: int, b: int) -> Dictionary:
 					seq.append(f)
 		pos[q] = seq.size()
 		seq.append(q)
-	var crossings: Array = []
-	var bridges := 0
-	var tunnels := 0
-	for q in seq:
-		if sim.city.is_road(q):
-			crossings.append([q.x, q.y])
-		elif _water(q):
-			bridges += 1
-		elif _mountain(q):
-			tunnels += 1
-	return {"id": "S%d" % (edges.size() + 1), "a": a, "b": b, "cells": seq.map(func(q): return [q.x, q.y]), "crossings": crossings, "len": seq.size(),
-		"bruecke": bridges, "tunnel": tunnels}
+	return seq
 
 
 func _water(q: Vector2i) -> bool:
@@ -376,6 +389,153 @@ func _blocks() -> Dictionary:
 					break
 			cost[by * nb + bx] = c
 	return {"nb": nb, "cost": cost}
+
+
+# ------------------------------------------------------------------ Gueterbahnhof (Phase 7)
+func ensure_freight() -> void:
+	if freight_tried or not is_built() or edges.is_empty() or sim.city.hub.is_empty():
+		return
+	freight_tried = true
+	_grid0 = _blocks()
+	_open = _open_land(_grid0)
+	var hc: Array = sim.city.hub.center
+	var c := Vector2i(int(hc[0]), int(hc[1]))
+	var hub_rect := Rect2i(int(sim.city.hub.rect[0]), int(sim.city.hub.rect[1]), int(sim.city.hub.rect[2]), int(sim.city.hub.rect[3]))
+	for r in range(SEARCH_MIN, SEARCH_MAX, 2):
+		for p in _ring(c, r + maxi(hub_rect.size.x, hub_rect.size.y) / 2):
+			for orient in ["h", "v"]:
+				var lay := _layout(p, orient, c)
+				if lay.rect.intersects(hub_rect.grow(1)) or not _free(lay):
+					continue
+				var br := _route_branch(lay)
+				if br.is_empty():
+					continue
+				if _build_freight(lay, br):
+					_grid0 = {}
+					_open = {}
+					return
+	_grid0 = {}
+	_open = {}
+	failed.append({"von": -1, "nach": -1, "grund": "kein Bauplatz/Anschluss für den Güterbahnhof"})
+	sim.log_event("Eisenbahn: kein Bauplatz mit Anschluss für den Güterbahnhof am Großlager gefunden.", "warn")
+
+
+## Anschlussgleis von einem Gleisende des Gueterbahnhofs zu einer Weiche auf einem geraden Stueck der Hauptstrecke.
+func _route_branch(lay: Dictionary) -> Dictionary:
+	var cands: Array = []
+	for e in edges:
+		var cs: Array = e.cells
+		for i in range(6, cs.size() - 6):
+			var q := Vector2i(int(cs[i][0]), int(cs[i][1]))
+			if cells.get(q, "") != "gleis":
+				continue
+			var l := links(q)
+			if l.size() != 2 or l[0] + l[1] != Vector2i.ZERO:
+				continue
+			cands.append([q, str(e.id), i])
+	if cands.is_empty():
+		return {}
+	var R = sim.regional
+	for end in lay.ends:
+		var ce: Array = cands.duplicate()
+		ce.sort_custom(func(x, y): return absi(x[0].x - end.x) + absi(x[0].y - end.y) < absi(y[0].x - end.x) + absi(y[0].y - end.y))
+		for k in mini(4, ce.size()):
+			var jq: Vector2i = ce[k][0]
+			var seq := _branch_path(lay, end, jq)
+			if not seq.is_empty():
+				return {"end": end, "junction": jq, "edge": ce[k][1], "cells": seq}
+	return {}
+
+
+func _branch_path(lay: Dictionary, end: Vector2i, jq: Vector2i) -> Array:
+	var R = sim.regional
+	var grid := _blocks()
+	var nb: int = grid.nb
+	var cost: PackedFloat32Array = grid.cost
+	for q in cells:   # Hauptstrecke nicht mitbenutzen: Bloecke mit Gleis gesperrt (ausser dem der Weiche)
+		var bq: Vector2i = q / BLOCK
+		if bq != jq / BLOCK and bq.x < nb and bq.y < nb:
+			cost[bq.y * nb + bq.x] = 0.0
+	var lr: Rect2i = lay.rect
+	for y in range(lr.position.y, lr.end.y):
+		for x in range(lr.position.x, lr.end.x):
+			var bq := Vector2i(x, y) / BLOCK
+			if bq.x < nb and bq.y < nb:
+				cost[bq.y * nb + bq.x] = 0.0
+	var bj: Vector2i = jq / BLOCK
+	cost[bj.y * nb + bj.x] = 1.0
+	grid.cost = cost
+	var astar := _astar()
+	for q in cells:
+		astar.set_point_solid(q, true)
+	for y in range(lr.position.y, lr.end.y):
+		for x in range(lr.position.x, lr.end.x):
+			astar.set_point_solid(Vector2i(x, y), true)
+	astar.set_point_solid(jq, false)
+	astar.set_point_solid(end, false)
+	var ba: Vector2i = R._hw_near_block(grid, end)
+	if ba.x < 0:
+		return []
+	var coarse: Array = R._hw_route(grid, ba, bj)
+	var path: Array = []
+	var spur: PackedVector2Array = astar.get_id_path(end, R._hw_center(ba))
+	if spur.is_empty():
+		return []
+	for q in spur:
+		path.append(Vector2i(q))
+	if coarse.size() >= 2:
+		for i in coarse.size() - 2:   # Hauptstueck bis vor den Block der Weiche
+			var c0: Vector2i = R._hw_center(coarse[i])
+			var c1: Vector2i = R._hw_center(coarse[i + 1])
+			var d := Vector2i(signi(c1.x - c0.x), signi(c1.y - c0.y))
+			var q := c0
+			while q != c1:
+				path.append(q)
+				q += d
+		path.append(R._hw_center(coarse[maxi(0, coarse.size() - 2)]))
+	var last: Vector2i = path[-1]
+	var fin: PackedVector2Array = astar.get_id_path(last, jq)
+	if fin.is_empty():
+		return []
+	for q in fin:
+		path.append(Vector2i(q))
+	var seq := _sequence(path)
+	for q in seq:   # nirgends neben der Hauptstrecke entlang (ausser direkt an der Weiche)
+		if q == jq:
+			continue
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if cells.has(q + d) and q + d != jq:
+				return []
+	return seq
+
+
+func _build_freight(lay: Dictionary, br: Dictionary) -> bool:
+	var bt := "freight_depot" if lay.orient == "h" else "freight_depot_v"
+	var b: Dictionary = sim.events._add_building(bt, lay.building, "Güterbahnhof am Großlager")
+	if b.is_empty():
+		return false
+	b["role"] = "freight_station"
+	b["sprite"] = "pub_%s_%d_industrie" % ["gb" if lay.orient == "h" else "gbv", absi(hash("gueterbahnhof%d" % int(sim.city.seed_value))) % 6]
+	for ab in sim.events.added_buildings:
+		if int(ab.x) == int(b.x) and int(ab.y) == int(b.y) and str(ab.type) == bt:
+			ab["sprite"] = b.sprite
+	sim.events.buildings_added.emit([b.id])
+	var r: Rect2i = lay.rect
+	var end: Vector2i = br.end
+	freight = {"name": "Güterbahnhof am Großlager", "orient": lay.orient, "rect": [r.position.x, r.position.y, r.size.x, r.size.y],
+		"track": lay.track.map(func(q): return [q.x, q.y]), "platform": lay.platform.map(func(q): return [q.x, q.y]),
+		"loop": lay.loop.map(func(q): return [q.x, q.y]), "loop_dir": [lay.loop_dir.x, lay.loop_dir.y], "building": int(b.id),
+		"ends": lay.ends.map(func(q): return [q.x, q.y]), "end": [end.x, end.y], "junction": [br.junction.x, br.junction.y], "edge": br.edge,
+		"branch": br.cells.map(func(q): return [q.x, q.y])}
+	var made := _apply(freight.track + freight.platform + freight.loop + freight.branch)
+	_index()
+	sim.log_event("Eisenbahn: Güterbahnhof am Großlager mit %d Feldern Anschlussgleis an die Strecke %s in Betrieb." % [br.cells.size(), br.edge], "info")
+	built.emit(made)
+	return true
+
+
+func has_freight() -> bool:
+	return not freight.is_empty()
 
 
 func _end_used(e: Array) -> bool:
@@ -454,6 +614,17 @@ func _index() -> void:
 			var q := Vector2i(int(a[0]), int(a[1]))
 			if not cells.has(q):
 				cells[q] = "uebergang" if sim.city.is_road(q) else ("bruecke" if _water(q) else ("tunnel" if _mountain(q) else "gleis"))
+	if not freight.is_empty():
+		for a in freight.track:
+			cells[Vector2i(int(a[0]), int(a[1]))] = "gleis"
+		for a in freight.platform:
+			cells[Vector2i(int(a[0]), int(a[1]))] = "rampe"
+		for a in freight.loop:
+			cells[Vector2i(int(a[0]), int(a[1]))] = "ausweiche"
+		for a in freight.branch:
+			var q := Vector2i(int(a[0]), int(a[1]))
+			if not cells.has(q):
+				cells[q] = "uebergang" if sim.city.is_road(q) else ("bruecke" if _water(q) else ("tunnel" if _mountain(q) else "gleis"))
 
 
 # ------------------------------------------------------------------ Abfragen, Anzeige, Speichern
@@ -480,11 +651,12 @@ func summary() -> Dictionary:
 	for key in stations:
 		st[key] = {"name": stations[key].name, "gebaeude": int(stations[key].building)}
 	return {"bahnhoefe": st, "abschnitte": edges.map(func(e): return {"id": e.id, "von": sim.towns.name_of(int(e.a)), "nach": sim.towns.name_of(int(e.b)),
-		"felder": int(e.len), "bahnuebergaenge": e.crossings.size(), "brueckenfelder": int(e.get("bruecke", 0)), "tunnelfelder": int(e.get("tunnel", 0))}), "gleisfelder": length(), "nicht_gebaut": failed}
+		"felder": int(e.len), "bahnuebergaenge": e.crossings.size(), "brueckenfelder": int(e.get("bruecke", 0)), "tunnelfelder": int(e.get("tunnel", 0))}), "gleisfelder": length(), "nicht_gebaut": failed,
+		"gueterbahnhof": {} if freight.is_empty() else {"anschluss_felder": freight.branch.size(), "an_strecke": freight.edge}}
 
 
 func to_dict() -> Dictionary:
-	return {"stations": stations, "edges": edges, "tried": tried, "failed": failed}
+	return {"stations": stations, "edges": edges, "tried": tried, "failed": failed, "freight": freight, "freight_tried": freight_tried}
 
 
 ## Laden: Welt ist neu erzeugt, Empfangsgebaeude kamen ueber EventDirector zurueck; Gleisboden wieder anlegen.
@@ -497,4 +669,8 @@ func from_dict(d: Dictionary) -> void:
 		_apply(st.track + st.platform + st.get("loop", []))
 	for e in edges:
 		_apply(e.cells)
+	freight = d.get("freight", {})
+	freight_tried = bool(d.get("freight_tried", false))
+	if not freight.is_empty():
+		_apply(freight.track + freight.platform + freight.loop + freight.branch)
 	_index()
