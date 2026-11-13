@@ -803,3 +803,44 @@ def rd_itw():
 
 
 MUNICIPAL += ["rd_ktw", "rd_elw", "rd_itw"]
+
+
+# ------------------------------------------------------------------ Auftrag 22 Phase 6 Schritt 2: Triebwagen der Regionalbahn
+SIZES.update({"rb_triebwagen": 96})
+
+
+def rb_triebwagen():
+    """Wagen eines Regionaltriebwagens (Fuehrerstand vorne = +x): hellgrauer Wagenkasten, tuerkises Band unten, gelbe Tueren,
+    durchgehendes Fensterband, abgeschraegte Front mit grosser Scheibe, Dachaufbauten, zwei Drehgestelle."""
+    mat("rb_body", "#e9eaea", noise=0.02)
+    mat("rb_band", "#1f8f8a", noise=0.02)
+    mat("rb_door", "#e6b93a", noise=0.02)
+    mat("rb_roof", "#9aa0a6", noise=0.03)
+    S = SIZES["rb_triebwagen"]
+    m = _square(S)
+    L, W = 82, 22
+    x0, y0 = (S - L) // 2, (S - W) // 2
+    m.box(x0, y0, 5, x0 + L, y0 + W, 30, M("rb_body"))
+    m.box(x0, y0, 5, x0 + L, y0 + W, 8, M("steel_dark"))
+    for yy in (y0, y0 + W - 1):
+        m.box(x0 + 1, yy, 8, x0 + L - 1, yy + 1, 12, M("rb_band"))
+        m.box(x0 + 4, yy, 15, x0 + L - 10, yy + 1, 25, M("glass_dark"))
+        for dx in (x0 + 18, x0 + 52):                 # Doppeltueren
+            m.box(dx, yy, 8, dx + 7, yy + 1, 26, M("rb_door"))
+            m.box(dx + 3, yy, 9, dx + 4, yy + 1, 25, M("steel_dark"))
+    # Front: grosse Scheibe, Dachkante leicht zurueckgesetzt
+    m.box(x0 + L - 2, y0, 27, x0 + L, y0 + W, 30, 0)
+    m.box(x0 + L - 2, y0 + 1, 27, x0 + L - 1, y0 + W - 1, 29, M("rb_roof"))
+    m.box(x0 + L - 1, y0 + 2, 15, x0 + L, y0 + W - 2, 26, M("glass_dark"))
+    m.box(x0 + L - 1, y0 + 2, 8, x0 + L, y0 + W - 2, 12, M("rb_band"))
+    m.box(x0 + L - 1, y0 + 6, 26, x0 + L, y0 + W - 6, 28, M("beacon_amber"))   # Zielanzeige
+    # Dach
+    m.box(x0 + 1, y0 + 1, 30, x0 + L - 2, y0 + W - 1, 31, M("rb_roof"))
+    for dx in (x0 + 10, x0 + 40):
+        m.box(dx, y0 + 5, 31, dx + 14, y0 + W - 5, 34, M("rb_roof"))
+    _axles(m, (x0 + 8, x0 + 16, x0 + L - 18, x0 + L - 10), y0, W, 4)
+    _lights(m, x0 + L, x0, y0, W, 9)
+    return m
+
+
+MUNICIPAL += ["rb_triebwagen"]

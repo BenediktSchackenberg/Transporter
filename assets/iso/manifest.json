@@ -13775,6 +13775,74 @@
     84,
     92
    ]
+  },
+  "rb_triebwagen_0": {
+   "anchor": [
+    106,
+    18
+   ],
+   "size": [
+    212,
+    160
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "pivot": [
+    106,
+    114
+   ]
+  },
+  "rb_triebwagen_1": {
+   "anchor": [
+    106,
+    18
+   ],
+   "size": [
+    212,
+    160
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "pivot": [
+    106,
+    114
+   ]
+  },
+  "rb_triebwagen_2": {
+   "anchor": [
+    106,
+    17
+   ],
+   "size": [
+    212,
+    160
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "pivot": [
+    106,
+    113
+   ]
+  },
+  "rb_triebwagen_3": {
+   "anchor": [
+    106,
+    17
+   ],
+   "size": [
+    212,
+    160
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "pivot": [
+    106,
+    113
+   ]
   }
  },
  "figures": {

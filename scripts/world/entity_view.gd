@@ -26,6 +26,7 @@ var traffic_nodes: Array = []
 var service_nodes: Array = []         # Streifen- und Krankenwagen (PublicSafety.vehicles)
 var fire_node: Node2D = null    # Feuerwehrwehrauto (Airport.fire_vehicle, Etappe E5)
 var fleet_nodes := {}                 # CityFleet: Bautrupps und Umzugswagen (ID -> Node2D)
+var train_nodes := {}                 # Regionalbahn: "Zug-ID|Wagen" -> Node2D (Auftrag 22 Phase 6)
 var muni_nodes := {}                  # Einsatzfahrzeuge der Feuerwehr (Municipal-Fahrzeug-ID -> Node2D, Auftrag 20)
 var fire_fx := {}                     # Brand-ID -> FireFx (Flammen, Rauch, Loeschwasser)
 var avatar_nodes := {}
@@ -127,6 +128,24 @@ func _add_beacon(n: Node2D, height: float) -> void:
 	siren.scale = Vector2(0.45, 0.45)
 	siren.position = Vector2(0, height)
 	n.add_child(siren)
+
+
+## Triebwagen der Regionalbahn: je Wagen ein Fahrzeugknoten entlang des Fahrwegs (RailTraffic.cars_of), Steuerwagen blickt nach hinten.
+func _update_trains() -> void:
+	var T: RailTraffic = sim.trains
+	if T == null or T.path.is_empty():
+		return
+	for t in T.trains:
+		var cars: Array = T.cars_of(t)
+		for c in cars.size():
+			var key := "%s|%d" % [t.id, c]
+			var n: Node2D = train_nodes.get(key)
+			if n == null:
+				n = _make_vehicle_node("rb_triebwagen", "", Color.WHITE, false)
+				add_child(n)
+				train_nodes[key] = n
+			n.position = Iso.to_screen(cars[c].world)
+			_set_vehicle_dir(n, cars[c].heading)
 
 
 ## Bautrupps und Umzugswagen des Stadtfuhrparks: Knoten anlegen, bewegen, entfernen; Rundumleuchte beim Bautrupp.
@@ -521,6 +540,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		fsiren.visible = in_action
 		fsiren.modulate = Color(1.0, 0.3, 0.3, 0.95) if fblink else Color(0.3, 0.5, 1.0, 0.95)
 	_update_fleet()
+	_update_trains()
 	_update_fires()
 	for i in sim.traffic.size():
 		var m: Mover = sim.traffic[i]

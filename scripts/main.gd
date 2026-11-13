@@ -513,7 +513,12 @@ func _process_timed(_delta: float) -> void:
 			var RN: RailNet = session.sim.rail
 			var want := str(args["shot-bahn"])
 			var focus := Vector2(-1, -1)
-			if want.is_valid_int():
+			if want.begins_with("zug") and not session.sim.trains.trains.is_empty():   # zug = RB1, zug2 = RB2
+				var tz: Dictionary = session.sim.trains.trains[clampi(int(want.substr(3)) - 1 if want.length() > 3 else 0, 0, session.sim.trains.trains.size() - 1)]
+				focus = session.sim.trains.cars_of(tz)[0].world / 32.0
+				print("AUTOTEST Regionalbahn: ", session.sim.trains.summary())
+				args["_shot_train"] = tz.id   # der Zug faehrt waehrend des Kameraschwenks weiter: Ziel vor der Aufnahme neu setzen
+			elif want.is_valid_int():
 				var keys: Array = RN.stations.keys()
 				var st: Dictionary = RN.stations[keys[clampi(int(want), 0, keys.size() - 1)]]
 				focus = Vector2(float(st.rect[0]) + float(st.rect[2]) * 0.5, float(st.rect[1]) + float(st.rect[3]) * 0.5)
@@ -586,6 +591,11 @@ func _process_timed(_delta: float) -> void:
 		session.hud.show_tab(str(args.get("tab", "Aktivitäten")), int(args.get("econ", "0")))   # schliesst auch versehentlich geoeffnete Fenster
 		for i in 90:   # Kamera schwenken lassen
 			await get_tree().process_frame
+		if args.has("_shot_train"):   # Eisenbahn: Kamera auf die aktuelle Zugposition
+			for tz2 in session.sim.trains.trains:
+				if str(tz2.id) == str(args["_shot_train"]):
+					var w2: Vector2 = session.sim.trains.cars_of(tz2)[0].world / 32.0
+					args["shot-tile"] = "%d,%d" % [int(w2.x) + 3, int(w2.y) - 3]
 		if args.has("shot-tile"):   # Kamera kann waehrend des Wartens verschoben worden sein (Folgen): Ziel erneut setzen
 			var xy2: PackedStringArray = str(args["shot-tile"]).split(",")
 			session.set_follow(false)

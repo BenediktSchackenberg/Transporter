@@ -27,7 +27,7 @@ var sim
 var stations := {}            # Stadt (str) -> {town, name, orient: "h"|"v", rect, track, platform, building, ends}
 var edges: Array = []         # [{id, a, b, cells: [[x, y]...] (Gleisende a -> Gleisende b), crossings: [[x, y]...], len}]
 var tried := false
-var cells := {}               # Vector2i -> "gleis"|"bahnsteig"|"uebergang"|"bruecke"|"tunnel" (abgeleitet, nicht gespeichert)
+var cells := {}               # Vector2i -> "gleis"|"ausweiche"|"bahnsteig"|"uebergang"|"bruecke"|"tunnel" (abgeleitet, nicht gespeichert)
 var failed: Array = []        # nicht baubare Abschnitte [{von, nach, grund}]
 var _grid0 := {}              # Grobraster vor dem Bau (nur waehrend ensure)
 var _open := {}               # Grobbloecke, die mit dem offenen Land (Kartenmitte) verbunden sind (nur waehrend ensure)
@@ -72,7 +72,7 @@ func ensure() -> void:
 	order.sort_custom(func(a, b): return (Vector2(sim.towns.get_t(a).center) - mid).angle() < (Vector2(sim.towns.get_t(b).center) - mid).angle())
 	var made: Array = []
 	for st in stations.values():
-		made.append_array(_apply(st.track + st.platform))
+		made.append_array(_apply(st.track + st.platform + st.get("loop", [])))
 	_index()
 	for i in order.size() - 1:
 		var e := _route(int(order[i]), int(order[i + 1]))
@@ -120,7 +120,7 @@ func _open_land(grid: Dictionary) -> Dictionary:
 	return seen
 
 
-## Bahnhof der Stadt k: freies Rechteck STATION_LEN x 4 moeglichst nahe der Ortsmitte; Gleis aussen, Bahnsteig, Empfangsgebaeude
+## Bahnhof der Stadt k: freies Rechteck STATION_LEN x 5 moeglichst nahe der Ortsmitte; Ausweich- und Hauptgleis aussen, Bahnsteig, Empfangsgebaeude
 ## zur Ortsmitte hin an einer Strasse.
 func _place_station(k: int) -> Dictionary:
 	var c: Vector2i = sim.towns.get_t(k).center
@@ -148,45 +148,36 @@ static func _ring(c: Vector2i, r: int) -> Array:
 	return out
 
 
-## Lage eines Bahnhofs mit Mittelpunkt p: Gleisreihe auf der von der Ortsmitte abgewandten Seite.
+## Lage eines Bahnhofs mit Mittelpunkt p (Schritt 2: 5 Reihen). Von aussen nach innen: Ausweichgleis (STATION_LEN - 2 Felder, an
+## beiden Enden per Weiche ans Hauptgleis), Hauptgleis, Bahnsteig, Empfangsgebaeude (2 Reihen) zur Ortsmitte hin.
+## Achse u laeuft laengs des Gleises, v quer (v = 0 aussen); "h": u = x, "v": u = y.
 static func _layout(p: Vector2i, orient: String, center: Vector2i) -> Dictionary:
 	var L := STATION_LEN
+	var horiz := orient == "h"
+	var inward := (center.y >= p.y) if horiz else (center.x >= p.x)   # Ortsmitte liegt bei groesserem v
+	var u0 := (p.x if horiz else p.y) - L / 2
+	var v0 := (p.y if horiz else p.x) - 2
+	var row := func(k: int) -> int: return v0 + k if inward else v0 + 4 - k   # k: 0 Ausweiche, 1 Gleis, 2 Bahnsteig, 3/4 Gebaeude
+	var cell := func(u: int, v: int) -> Vector2i: return Vector2i(u, v) if horiz else Vector2i(v, u)
 	var track: Array = []
 	var platform: Array = []
-	var brect: Rect2i
-	var ends: Array
+	var loop: Array = []
+	for u in range(u0, u0 + L):
+		track.append(cell.call(u, row.call(1)))
+		platform.append(cell.call(u, row.call(2)))
+		if u > u0 and u < u0 + L - 1:
+			loop.append(cell.call(u, row.call(0)))
+	var bv: int = mini(row.call(3), row.call(4))
+	var bu := u0 + (L - BUILDING_LEN) / 2
+	var brect := Rect2i(bu, bv, BUILDING_LEN, 2) if horiz else Rect2i(bv, bu, 2, BUILDING_LEN)
+	var ends := [cell.call(u0 - 1, row.call(1)), cell.call(u0 + L, row.call(1))]
 	var lead: Array = []
-	if orient == "h":
-		var x0 := p.x - L / 2
-		var y0 := p.y - 2
-		var town_below := center.y >= p.y
-		var ty := y0 if town_below else y0 + 3
-		var py := y0 + 1 if town_below else y0 + 2
-		var by := y0 + 2 if town_below else y0
-		for x in range(x0, x0 + L):
-			track.append(Vector2i(x, ty))
-			platform.append(Vector2i(x, py))
-		brect = Rect2i(x0 + (L - BUILDING_LEN) / 2, by, BUILDING_LEN, 2)
-		ends = [Vector2i(x0 - 1, ty), Vector2i(x0 + L, ty)]
-		for i in LEAD:
-			lead.append(Vector2i(x0 - 1 - i, ty))
-			lead.append(Vector2i(x0 + L + i, ty))
-		return {"orient": "h", "rect": Rect2i(x0, y0, L, 4), "track": track, "platform": platform, "building": brect, "ends": ends, "lead": lead}
-	var x0v := p.x - 2
-	var y0v := p.y - L / 2
-	var town_right := center.x >= p.x
-	var tx := x0v if town_right else x0v + 3
-	var px := x0v + 1 if town_right else x0v + 2
-	var bx := x0v + 2 if town_right else x0v
-	for y in range(y0v, y0v + L):
-		track.append(Vector2i(tx, y))
-		platform.append(Vector2i(px, y))
-	brect = Rect2i(bx, y0v + (L - BUILDING_LEN) / 2, 2, BUILDING_LEN)
-	ends = [Vector2i(tx, y0v - 1), Vector2i(tx, y0v + L)]
 	for i in LEAD:
-		lead.append(Vector2i(tx, y0v - 1 - i))
-		lead.append(Vector2i(tx, y0v + L + i))
-	return {"orient": "v", "rect": Rect2i(x0v, y0v, 4, L), "track": track, "platform": platform, "building": brect, "ends": ends, "lead": lead}
+		lead.append(cell.call(u0 - 1 - i, row.call(1)))
+		lead.append(cell.call(u0 + L + i, row.call(1)))
+	var rect := Rect2i(u0, v0, L, 5) if horiz else Rect2i(v0, u0, 5, L)
+	var ld: Vector2i = cell.call(0, row.call(0) - row.call(1))   # Richtung Hauptgleis -> Ausweichgleis
+	return {"orient": orient, "rect": rect, "track": track, "platform": platform, "loop": loop, "loop_dir": ld, "building": brect, "ends": ends, "lead": lead}
 
 
 func _blocked(q: Vector2i, allow_road := false) -> bool:
@@ -245,6 +236,7 @@ func _build_station(k: int, lay: Dictionary) -> Dictionary:
 	var r: Rect2i = lay.rect
 	return {"town": k, "name": nm, "orient": lay.orient, "rect": [r.position.x, r.position.y, r.size.x, r.size.y],
 		"track": lay.track.map(func(q): return [q.x, q.y]), "platform": lay.platform.map(func(q): return [q.x, q.y]),
+		"loop": lay.loop.map(func(q): return [q.x, q.y]), "loop_dir": [lay.loop_dir.x, lay.loop_dir.y],
 		"building": int(b.id), "ends": lay.ends.map(func(q): return [q.x, q.y])}
 
 
@@ -455,6 +447,8 @@ func _index() -> void:
 			cells[Vector2i(int(a[0]), int(a[1]))] = "gleis"
 		for a in st.platform:
 			cells[Vector2i(int(a[0]), int(a[1]))] = "bahnsteig"
+		for a in st.get("loop", []):
+			cells[Vector2i(int(a[0]), int(a[1]))] = "ausweiche"
 	for e in edges:
 		for a in e.cells:
 			var q := Vector2i(int(a[0]), int(a[1]))
@@ -464,10 +458,12 @@ func _index() -> void:
 
 # ------------------------------------------------------------------ Abfragen, Anzeige, Speichern
 ## Nachbarn eines Gleisfelds im Netz (fuer die Darstellung): Richtungen zu benachbarten Gleis-/Uebergangsfeldern.
+## Ausweichgleise verbinden nur untereinander (die Weichen zeichnet RailView an ihren Enden).
 func links(q: Vector2i) -> Array:
 	var out: Array = []
+	var mine := ["ausweiche"] if cells.get(q, "") == "ausweiche" else ["gleis", "uebergang", "bruecke", "tunnel"]
 	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		if cells.get(q + d, "") in ["gleis", "uebergang", "bruecke", "tunnel"]:
+		if cells.get(q + d, "") in mine:
 			out.append(d)
 	return out
 
@@ -498,7 +494,7 @@ func from_dict(d: Dictionary) -> void:
 	tried = bool(d.get("tried", false))
 	failed = d.get("failed", [])
 	for st in stations.values():
-		_apply(st.track + st.platform)
+		_apply(st.track + st.platform + st.get("loop", []))
 	for e in edges:
 		_apply(e.cells)
 	_index()

@@ -24,8 +24,12 @@ func _init() -> void:
 	s.setup(seed_v, pl, Catalog.MAP_SIZE, 0.5)
 	var t0 := Time.get_ticks_msec()
 	var d0 := GameCalendar.day_of(s.game_min)
+	var next_print := s.game_min
 	while GameCalendar.day_of(s.game_min) < d0 + days:
 		s.step(0.1)
+		if s.game_min >= next_print and not s.trains.trains.is_empty():
+			next_print = s.game_min + 30.0
+			print("  %6.0f min  " % s.game_min, " | ".join(s.trains.trains.map(func(t): return "%s %s Halt %d->%d pos %.0f Versp. %.0f %s" % [t.id, t.state, int(t.stop), int(t.target), float(t.pos), float(t.delay), str(t.get("grund", ""))])), "  Blöcke ", s.trains.blocks)
 	var R: RailNet = s.rail
 	print("Karte %d Felder, Laufzeit %d ms" % [s.city.size, Time.get_ticks_msec() - t0])
 	for key in R.stations:
@@ -37,6 +41,7 @@ func _init() -> void:
 	for e in R.edges:
 		print("  Strecke %s: %s - %s  %d Felder, %d Bahnübergänge, %d Brückenfelder, %d Tunnelfelder" % [e.id, s.towns.name_of(int(e.a)), s.towns.name_of(int(e.b)), int(e.len),
 			e.crossings.size(), int(e.get("bruecke", 0)), int(e.get("tunnel", 0))])
+	print("  Regionalbahn: ", s.trains.summary())
 	for f in R.failed:
 		print("  NICHT GEBAUT: ", f)
 	quit(0)

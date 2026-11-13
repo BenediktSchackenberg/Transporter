@@ -1179,6 +1179,32 @@ static func bridge(sim: Simulation, b: Dictionary) -> String:
 	return txt
 
 
+## Eisenbahn (Auftrag 22 Phase 6): Linie, Zuege mit Ort, Status, Verspaetung und Grund, Strecken.
+static func rail(sim: Simulation) -> String:
+	if sim.rail == null or not sim.rail.is_built():
+		return ""
+	var txt := "
+[b][color=#2fb5a8]EISENBAHN (REGIONALBAHN)[/color][/b]
+"
+	var sm: Dictionary = sim.rail.summary()
+	txt += "%d Bahnhöfe · %d Gleisfelder · Strecken: %s
+" % [sm.bahnhoefe.size(), int(sm.gleisfelder), ", ".join(sm.abschnitte.map(func(a): return "%s %s–%s (%d Felder, %d Übergänge%s)" % [a.id, a.von, a.nach,
+		int(a.felder), int(a.bahnuebergaenge), ", Brücke" if int(a.brueckenfelder) > 0 else ""]))]
+	if sim.trains == null or sim.trains.path.is_empty():
+		return txt
+	var ts: Dictionary = sim.trains.summary()
+	txt += "Linie RB: %s · Fahrzeit einfach ca. %d Spielminuten
+" % [" – ".join(ts.linie), int(ts.fahrzeit_min)]
+	for z in ts.zuege:
+		var st: String = {"halt": "hält", "fahrt": "fährt", "wartet": "wartet am Signal"}.get(str(z.status), str(z.status))
+		txt += "  %s %s %s · Verspätung %d min%s · %d Fahrten
+" % [z.zug, st, z.ort, int(z.verspaetung_min), (" (%s)" % z.grund) if str(z.grund) != "" else "", int(z.fahrten)]
+	var stt: Dictionary = ts.statistik
+	txt += "  Kreuzungen im Bahnhof %d · Wartezeit am Signal %d min · gefahren %d Felder
+" % [int(stt.kreuzungen), int(stt.wartezeit), int(stt.felder)]
+	return txt
+
+
 ## Trinkwasser je Stadt (Auftrag 22 Phase 4): Werk, Foerderung, Bedarf, Gebuehr, Engpaesse.
 static func water(sim: Simulation) -> String:
 	if not sim.water.enabled():

@@ -232,3 +232,18 @@ Bahnsteige mit Sicherheitslinie, Andreaskreuze, Ausfahrsignale, Prellböcke, Br�
 Schotter. Gespeichert (`rail`), beim Laden wird der Gleisboden neu gelegt. Kamera `--shot-bahn=<n|bruecke|uebergang|kurve|tunnel>`,
 Probe `tests/probe_rail.gd [-- --seed=… --cities=…]` (Seeds 4242/77/9/123: je 4 Bahnhöfe, 3 Abschnitte, 335–501 Felder,
 0–5 Bahnübergänge, bis 12 Brückenfelder). Test `test_rail_net` (23).
+
+**Schritt 2 Regionalbahn mit Fahrplan und Blocksicherung (13.11.):** Bahnhöfe haben jetzt 5 Reihen: Ausweichgleis (8 Felder, an
+beiden Enden per Weiche am Hauptgleis), Hauptgleis, Bahnsteig, Empfangsgebäude. `RailTraffic` (`scripts/economy/rail_traffic.gd`,
+`sim.trains`, Takt in `Simulation.step`): eine Linie über alle Bahnhöfe in Streckenreihenfolge, Fahrweg = lückenlose Zellfolge
+(Bahnhofsgleise + Strecken; Ein-/Ausfahrt am selben Ende = Kopfbahnhof mit Wenden). Zwei Triebwagen (RB1 ab erstem, RB2 ab letztem
+Bahnhof), 3 Felder je Spielminute (doppelte Lkw-Geschwindigkeit), 4 min Halt, 12 min Wendezeit (Verspätung wird bis auf 4 min
+aufgeholt). Blocksicherung: Abschnitt zwischen zwei Halten = Block, höchstens ein Zug; Abfahrt nur bei freiem Block und freiem
+Gleis im Zielbahnhof (Haupt + Ausweiche = 2), sonst „wartet am Signal“ mit Grund. Fahrplan: RB2 startet so versetzt, dass sich die
+Züge planmäßig im mittleren Bahnhof treffen (gleichzeitiger Start ließ sie sich mitten im Block begegnen: 150 min Wartezeit je
+Umlauf); gemessen über 16 Tage Verspätung 0–1 min, Kreuzungen in Bahnhöfen. Darstellung: Triebwagen aus zwei Wagen (Voxel
+`rb_triebwagen`, hellgrau mit türkisem Band, gelbe Türen, Steuerwagen blickt nach hinten) entlang des Fahrwegs (`EntityView`), im
+Bahnhof weich auf das Ausweichgleis versetzt; Ausfahrsignale grün/rot nach Blockbelegung; Weichen; Anzeige im Strom-Tab
+„Eisenbahn (Regionalbahn)“ mit Zügen, Ort, Status, Verspätung, Kreuzungen. Gespeichert (`trains`), Fahrweg wird neu abgeleitet.
+Kamera `--shot-bahn=zug|zug2` (folgt dem Zug bis zur Aufnahme). Test `test_rail_traffic` (15): Blocksicherung über einen Umlauf,
+Bahnhofskapazität, Fahrten, Kreuzung, Verspätung, Speichern/Laden während der Fahrt.

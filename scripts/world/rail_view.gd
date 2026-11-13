@@ -35,7 +35,7 @@ func _process(delta: float) -> void:
 	if _poll > 0.0 or _net() == null or not _net().is_built():
 		return
 	_poll = 0.5
-	var key := "%s|%d" % [str(_view_cells()), _net().cells.size()]
+	var key := "%s|%d|%s" % [str(_view_cells()), _net().cells.size(), str(sim.trains.blocks.keys()) if sim.trains != null else ""]
 	if key != _key:
 		_key = key
 		queue_redraw()
@@ -82,15 +82,48 @@ func _draw() -> void:
 		if kind != "bahnsteig" and view.has_point(q):
 			_draw_track(q, N.links(q), kind == "uebergang")
 	for st in N.stations.values():
+		var loop: Array = st.get("loop", [])
+		if loop.size() >= 2:   # Weichen: Ausweichgleis schraeg an das Hauptgleis
+			var ld := Vector2i(int(st.loop_dir[0]), int(st.loop_dir[1]))
+			var l0 := Vector2i(int(loop[0][0]), int(loop[0][1]))
+			var l1 := Vector2i(int(loop[-1][0]), int(loop[-1][1]))
+			var along := Vector2i(int(loop[1][0]), int(loop[1][1])) - l0
+			for pr in [[l0, l0 - ld - along], [l1, l1 - ld + along]]:
+				if view.has_point(pr[0]):
+					_draw_seg(_mid(pr[0]), _mid(pr[1]), true)
 		for e in st.ends:
 			var q := Vector2i(int(e[0]), int(e[1]))
 			var tq := _track_next_to(q, st)
 			if not view.has_point(q):
 				continue
 			if N.cells.has(q):
-				_draw_signal(q, tq)
+				_draw_signal(q, tq, _clear(int(st.town), tq))
 			else:
 				_draw_buffer(tq, q - tq)
+
+
+static func _mid(q: Vector2i) -> Vector2:
+	return (Vector2(q) + Vector2(0.5, 0.5)) * 32.0
+
+
+## Ausfahrsignal am Gleisende neben dem Bahnhofsgleis tq: Fahrt, wenn der Block in dieser Richtung frei ist (RailTraffic).
+func _clear(town: int, tq: Vector2i) -> bool:
+	var T: RailTraffic = sim.trains
+	if T == null or T.stops.is_empty():
+		return true
+	var s := T.stop_of_town(town)
+	if s < 0:
+		return true
+	var st: Dictionary = T.stops[s]
+	var idx := -1
+	for i in range(int(st.from), int(st.to) + 1):
+		if T.path[i] == tq:
+			idx = i
+			break
+	if idx < 0:
+		return true
+	var d := 1 if absi(idx - int(st.to)) <= absi(idx - int(st.from)) else -1
+	return T.signal_clear(s, d)
 
 
 func _track_next_to(q: Vector2i, st: Dictionary) -> Vector2i:
@@ -117,13 +150,20 @@ func _draw_track(q: Vector2i, dirs: Array, crossing: bool) -> void:
 
 
 func _draw_half(c: Vector2, d: Vector2, crossing: bool) -> void:
+	_draw_seg(c, c + d * 16.0, not crossing)
+
+
+## Gerades Gleisstueck von a nach b (Weltmass): Schwellen (ausser auf der Fahrbahn) und zwei Schienen mit Schattenkante.
+func _draw_seg(a: Vector2, b: Vector2, sleepers: bool) -> void:
+	var len := a.distance_to(b)
+	if len <= 0.01:
+		return
+	var d := (b - a) / len
 	var n := Vector2(-d.y, d.x)
-	var a := c
-	var b := c + d * 16.0
-	if not crossing:
+	if sleepers:
 		var t := SLEEPER_STEP * 0.5
-		while t < 16.0:
-			var m := c + d * t
+		while t < len:
+			var m := a + d * t
 			draw_line(_s(m - n * SLEEPER_HALF), _s(m + n * SLEEPER_HALF), SLEEPER, 2.0)
 			t += SLEEPER_STEP
 	for side in [-1.0, 1.0]:
@@ -214,14 +254,14 @@ func _draw_andreas(q: Vector2i, dirs: Array) -> void:
 		draw_line(m + Vector2(-4, 3), m + Vector2(4, -3), Color(0.95, 0.95, 0.95), 2.0)
 
 
-## Ausfahrsignal am Bahnhofsende: Mast mit Schirm und gruener Lampe (Phase 6 Schritt 2 schaltet nach Belegung).
-func _draw_signal(q: Vector2i, t: Vector2i) -> void:
+## Ausfahrsignal am Bahnhofsende: Mast mit Schirm, gruen = Block frei, rot = Block belegt.
+func _draw_signal(q: Vector2i, t: Vector2i, clear := true) -> void:
 	var d := Vector2(q - t)
 	var n := Vector2(-d.y, d.x)
 	var f := _s((Vector2(t) + Vector2(0.5, 0.5)) * 32.0 + d * 14.0 + n * 12.0)
 	draw_line(f, f + Vector2(0, -18), STEEL_DARK, 1.5)
 	draw_rect(Rect2(f + Vector2(-3, -26), Vector2(6, 9)), Color(0.1, 0.1, 0.12))
-	draw_circle(f + Vector2(0, -21.5), 1.8, Color(0.3, 0.95, 0.4))
+	draw_circle(f + Vector2(0, -21.5), 1.8, Color(0.3, 0.95, 0.4) if clear else Color(1.0, 0.2, 0.15))
 
 
 ## Prellbock am stumpfen Gleisende.
