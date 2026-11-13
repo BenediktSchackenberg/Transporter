@@ -19,6 +19,10 @@ extends RefCounted
 ## sonst selten Signal- oder Weichenstoerung). Ein gestoerter Block wird nicht befahren; ein Zug darin bleibt stehen. Ein Bahntrupp
 ## (CityFleet "bahntrupp") faehrt vom naechsten Bahnhof zur Stelle und repariert dort; die Kosten traegt N0. Wartende, deren Weg
 ## ueber einen gestoerten Block fuehrt, fahren mit dem Auto (Fahrtkosten H0 -> S0).
+## Schritt 5 Ausbau: Der Regionalrat kann einen weiteren Triebwagen (Taktverdichtung, hoechstens MAX_TRAINS, Lieferzeit
+## TRAIN_DAYS) oder ein zweites Gleis auf dem Abschnitt mit der meisten Wartezeit beschliessen; das Land traegt LAND_SHARE
+## (Regionalisierungsmittel/GVFG), die Staedte den Rest nach Einwohnern. Das zweite Gleis baut eine Baufirma (Projekt "gleis");
+## danach hat der Abschnitt je Richtung ein Gleis (Blockschluessel je Richtung), Zuege begegnen sich dort ohne Halt.
 ## Fahrplan: Soll-Zeiten aus Fahrzeit (Laenge / SPEED) und Haltezeit; Ist minus Soll = Verspaetung, am Endbahnhof wird mit der
 ## Wendezeit aufgeholt. Bewegung kontinuierlich in Spielminuten (Simulation.step); gespeichert werden die Zuege, der Fahrweg wird
 ## aus dem Netz neu abgeleitet.
@@ -40,6 +44,14 @@ const SUBSIDY_CELL := 0.45    # Landeszuschuss je gefahrenem Feld und Zug (Regio
 const LEISURE := 0.0002       # Reisewuensche je Tag und Richtung = LEISURE x Einwohner A x Einwohner B
 const COMMUTE_TRIPS := 0.3    # Fahrten je Bahnpendler, Tag und Richtung (Rest Homeoffice, Mitfahrt)
 const STAFF_CODE := "BG-01"
+const MAX_TRAINS := 3
+const DOUBLE_OFFSET := 8.0      # Gleisabstand zur Mitte im zweigleisigen Abschnitt (Weltmass)
+const TRAIN_PRICE := 1600000.0  # Triebwagen (zwei Wagen)
+const TRAIN_DAYS := 20          # Lieferzeit
+const LAND_SHARE := 0.75        # Anteil des Landes an Fahrzeugen und Streckenausbau
+const TRACK_EUR_CELL := 700.0   # zweites Gleis je Feld (Unterbau, Schotter, Schwellen, Schienen, Weichen)
+const TRACK_CELLS_PER_DAY := 12
+const TRACK_DAYS_MIN := 15
 const CLOSE_AHEAD := 6.0      # Schranke schliesst so viele Felder vor der Zugspitze (2 Spielminuten)
 const CLOSE_TAIL := 3.6       # ... und oeffnet, wenn das Zugende so weit vorbei ist
 const ROAD_EUR_CELL := 0.01   # Ausweichen auf die Strasse: Fahrtkosten je Feld (Auto)
@@ -65,6 +77,10 @@ var crossings: Array = []     # [{idx (Fahrweg), cell: Vector2i}] Bahnuebergaeng
 var closed := {}              # Vector2i -> true: derzeit geschlossene Schranken (abgeleitet)
 var disruptions := {}         # Block -> {art, cell: [x, y], road: [x, y], since, vehicle, town}
 var rng := RandomNumberGenerator.new()
+var double_blocks := {}       # Block -> true: zweigleisig
+var planned_tracks := {}      # Projekt-ID -> Block (zweites Gleis im Bau)
+var ordered: Array = []       # [Liefertag] bestellte Triebwagen
+var _double_cells := {}       # abgeleitet: Fahrweg-Zellen zweigleisiger Bloecke
 
 
 func setup(simulation) -> void:
@@ -127,6 +143,7 @@ func ensure() -> bool:
 	if trains.is_empty():
 		_start_trains()
 	_ensure_staff()
+	_index_double()
 	return true
 
 
@@ -201,6 +218,7 @@ func _on_day() -> void:
 		if not sim.fleet.vehicles.any(func(v): return int(v.id) == vid and v.kind == "bahntrupp"):
 			_dispatch_crew(b)
 	_road_fallback()
+	_deliver()
 	_book_operation()
 
 
@@ -338,6 +356,12 @@ func update(dt: float) -> void:
 					_depart(t, now)
 				if str(t.state) == "wartet":
 					stats.wartezeit = float(stats.wartezeit) + dmin
+					if t.has("wartet_block"):
+						var bw: Dictionary = stats.get("block_wartezeit", {})
+						bw[str(int(t.wartet_block))] = float(bw.get(str(int(t.wartet_block)), 0.0)) + dmin
+						stats["block_wartezeit"] = bw
+				else:
+					t.erase("wartet_block")
 			"fahrt":
 				_move(t, dmin, now)
 	_update_crossings()
@@ -364,6 +388,133 @@ func _update_crossings() -> void:
 			nav.barriers[q] = true
 			stats["schranken"] = int(stats.get("schranken", 0)) + 1
 	closed = now_closed
+
+
+# ------------------------------------------------------------------ Ausbau (Schritt 5)
+## Zweites Gleis: Abschnitt mit der meisten Wartezeit (sonst der laengste), noch eingleisig und nicht im Bau.
+func plan_double() -> Dictionary:
+	if not ensure() or stops.size() < 2:
+		return {"ok": false, "msg": "Keine Bahnlinie."}
+	var bw: Dictionary = stats.get("block_wartezeit", {})
+	var best := -1
+	var score := -1.0
+	for b in stops.size() - 1:
+		if double_blocks.has(b) or planned_tracks.values().has(b):
+			continue
+		var cells := float(stops[b + 1].from) - float(stops[b].to)
+		var sc := float(bw.get(str(b), 0.0)) * 1000.0 + cells
+		if sc > score:
+			score = sc
+			best = b
+	if best < 0:
+		return {"ok": false, "msg": "Alle Abschnitte sind schon zweigleisig oder im Bau."}
+	var n := int(stops[best + 1].from) - int(stops[best].to) - 1
+	var cost := snappedf(float(n) * TRACK_EUR_CELL, 100.0)
+	return {"ok": true, "block": best, "felder": n, "kosten": cost, "tage": maxi(TRACK_DAYS_MIN, ceili(float(n) / float(TRACK_CELLS_PER_DAY))),
+		"von": sim.towns.name_of(int(stops[best].town)), "nach": sim.towns.name_of(int(stops[best + 1].town)),
+		"wartezeit_min": snappedf(float(bw.get(str(best), 0.0)), 1.0)}
+
+
+## Beschluss zweites Gleis: Bauprojekt bei der groessten Stadt, Anteile der Staedte (Betraege), Land traegt LAND_SHARE.
+func start_double(fractions: Dictionary, reason: String) -> Dictionary:
+	var pl := plan_double()
+	if not pl.ok:
+		return pl
+	var k := int(stops[0].town)
+	for s in stops:
+		if sim.citizens.population_of(int(s.town)) > sim.citizens.population_of(k):
+			k = int(s.town)
+	var M: Mayor = sim.towns.mayor(k)
+	var cost := float(pl.kosten)
+	var prj: Dictionary = M.add_works_project("gleis", "B%d" % int(pl.block), cost, int(pl.tage), {}, "Zweites Gleis %s – %s (%s)" % [pl.von, pl.nach, reason.left(80)])
+	M.commitments = maxf(0.0, M.commitments - cost)
+	prj["shares"] = {}
+	for key in fractions:
+		var amt := snappedf(cost * (1.0 - LAND_SHARE) * float(fractions[key]), 1.0)
+		sim.towns.mayor(int(key)).commitments += amt
+		prj.shares[str(key)] = amt
+	prj["federal"] = snappedf(cost * LAND_SHARE, 1.0)
+	prj["regional"] = "gleis"
+	prj.status = "ausgeschrieben"
+	prj.tender = {"opened_day": GameCalendar.day_of(sim.game_min) - 1, "bids": [], "by": "Regionalbahn"}
+	planned_tracks[str(prj.id)] = int(pl.block)
+	sim.log_event("Regionalbahn: zweites Gleis %s – %s beschlossen (%d Felder, %s, Land %d %%) – ausgeschrieben als %s." % [pl.von, pl.nach, int(pl.felder),
+		Catalog.money(cost), roundi(LAND_SHARE * 100.0), prj.id], "info")
+	return {"ok": true, "msg": "Zweites Gleis ausgeschrieben (%s)." % prj.id, "ref": prj.id}
+
+
+## Abnahme durch die Baufirma (Construction._finish_public).
+func on_track_done(prj: Dictionary) -> void:
+	if not planned_tracks.has(str(prj.id)):
+		return
+	var b := int(planned_tracks[str(prj.id)])
+	planned_tracks.erase(str(prj.id))
+	double_blocks[b] = true
+	_index_double()
+	sim.log_event("Regionalbahn: Abschnitt %s – %s ist zweigleisig – Züge begegnen sich ohne Halt." % [sim.towns.name_of(int(stops[b].town)),
+		sim.towns.name_of(int(stops[b + 1].town))], "good")
+
+
+func _index_double() -> void:
+	_double_cells.clear()
+	if path.is_empty():
+		return
+	for b in double_blocks:
+		for i in range(int(stops[int(b)].to) + 1, int(stops[int(b) + 1].from)):
+			_double_cells[path[i]] = true
+
+
+func is_double_cell(q: Vector2i) -> bool:
+	return _double_cells.has(q)
+
+
+## Zellen eines geplanten zweiten Gleises (Darstellung der Baustelle) und Mitte fuer den Bautrupp.
+func planned_cells(project_id: String) -> Array:
+	if not planned_tracks.has(project_id) or path.is_empty():
+		return []
+	var b := int(planned_tracks[project_id])
+	return path.slice(int(stops[b].to) + 1, int(stops[b + 1].from))
+
+
+## Taktverdichtung: weiterer Triebwagen bestellt (Lieferung nach TRAIN_DAYS).
+func order_train() -> Dictionary:
+	if trains.size() + ordered.size() >= MAX_TRAINS:
+		return {"ok": false, "msg": "Höchstens %d Triebwagen auf der Linie." % MAX_TRAINS}
+	ordered.append(GameCalendar.day_of(sim.game_min) + TRAIN_DAYS)
+	sim.log_event("Regionalbahn: weiterer Triebwagen bestellt, Lieferung in %d Tagen." % TRAIN_DAYS, "info")
+	return {"ok": true, "msg": "Triebwagen bestellt."}
+
+
+func _deliver() -> void:
+	var today := GameCalendar.day_of(sim.game_min)
+	for d in ordered.duplicate():
+		if today < int(d):
+			continue
+		ordered.erase(d)
+		var at := 0
+		if _occupancy(0).size() >= capacity(0):
+			at = stops.size() - 1
+		var now: float = sim.game_min
+		var id := "RB%d" % (trains.size() + 1)
+		trains.append({"id": id, "pos": float(stops[at].pos), "dir": 1 if at == 0 else -1, "state": "halt", "stop": at, "target": at,
+			"until": now + TURN, "planned": now + TURN, "delay": 0.0, "track": 1 if not _occupancy(at, id).is_empty() else 0, "trips": 0, "cells": 0.0})
+		var f: Dictionary = sim.municipal.facilities.get(facility, {}) if sim.municipal != null else {}
+		if not f.is_empty():   # je Zug ein Triebfahrzeugfuehrer mehr, ein Zugbegleiter mehr
+			f.staff_need["lokfuehrer"] = maxi(int(f.staff_need.get("lokfuehrer", 0)), trains.size() + 1)
+			f.staff_need["zugbegleiter"] = maxi(int(f.staff_need.get("zugbegleiter", 0)), trains.size())
+		sim.log_event("Regionalbahn: Triebwagen %s geliefert und in Betrieb (dichterer Takt)." % id, "good")
+
+
+## Ausbauoptionen fuer die Beobachtung der Buergermeister.
+func expansion_options() -> Dictionary:
+	var dbl := plan_double()
+	return {"triebwagen": {"moeglich": trains.size() + ordered.size() < MAX_TRAINS, "preis": TRAIN_PRICE, "staedte_anteil": TRAIN_PRICE * (1.0 - LAND_SHARE),
+			"lieferzeit_tage": TRAIN_DAYS, "antrag": "regionalrat_antrag art bahn_takt"},
+		"zweites_gleis": {"moeglich": bool(dbl.ok), "abschnitt": "%s – %s" % [dbl.get("von", ""), dbl.get("nach", "")] if dbl.ok else "",
+			"kosten": float(dbl.get("kosten", 0.0)), "staedte_anteil": float(dbl.get("kosten", 0.0)) * (1.0 - LAND_SHARE), "wartezeit_min": float(dbl.get("wartezeit_min", 0.0)),
+			"antrag": "regionalrat_antrag art zweites_gleis"},
+		"zweigleisig": double_blocks.keys().map(func(b): return "%s – %s" % [sim.towns.name_of(int(stops[int(b)].town)), sim.towns.name_of(int(stops[int(b) + 1].town))]),
+		"im_bau": planned_tracks.keys(), "bestellt": ordered.size()}
 
 
 static func repair_min(art: String) -> float:
@@ -456,6 +607,24 @@ func _block(i: int, j: int) -> int:
 	return mini(i, j)
 
 
+## Belegungsschluessel: eingleisig der Block selbst, zweigleisig je Richtung ein eigenes Gleis.
+func _bkey(b: int, d: int) -> int:
+	return (1000 + b * 2 + (0 if d > 0 else 1)) if double_blocks.has(b) else b
+
+
+func _block_free(b: int, d: int, own: String) -> bool:
+	for key in [b, _bkey(b, d)]:   # alter Schluessel b gilt, solange ein Zug von vor dem Ausbau noch im Block ist
+		if blocks.has(key) and str(blocks[key]) != own:
+			return false
+	return true
+
+
+func _release(t: Dictionary) -> void:
+	for key in blocks.keys():
+		if str(blocks[key]) == str(t.id):
+			blocks.erase(key)
+
+
 ## Belegung eines Bahnhofs: Zuege, die dort halten oder ihn als Ziel haben.
 func _occupancy(s: int, except: String = "") -> Array:
 	return trains.filter(func(t): return str(t.id) != except and ((str(t.state) != "fahrt" and int(t.stop) == s) or (str(t.state) == "fahrt" and int(t.target) == s)))
@@ -479,15 +648,20 @@ func _depart(t: Dictionary, now: float) -> void:
 		why = "kein Triebfahrzeugführer"
 	elif disruptions.has(b):
 		why = "Störung: %s" % disruptions[b].art
-	elif blocks.has(b) and str(blocks[b]) != str(t.id):
+	elif not _block_free(b, j - s, str(t.id)):
 		why = "Block belegt"
 	elif _occupancy(j, str(t.id)).size() >= capacity(j):
 		why = "Zielbahnhof belegt"
 	if why != "":
 		t.state = "wartet"
 		t["grund"] = why
+		if why in ["Block belegt", "Zielbahnhof belegt"]:
+			var bw: Dictionary = stats.get("block_wartezeit", {})
+			bw[str(b)] = float(bw.get(str(b), 0.0)) + 0.0   # Schluessel anlegen; Minuten zaehlt update()
+			stats["block_wartezeit"] = bw
+			t["wartet_block"] = b
 		return
-	blocks[b] = t.id
+	blocks[_bkey(b, j - s)] = t.id
 	_board(t, s, d)   # Fahrgaeste in Fahrtrichtung steigen kurz vor der Abfahrt ein
 	t.state = "fahrt"
 	t.target = j
@@ -525,7 +699,7 @@ func _move(t: Dictionary, dmin: float, now: float) -> void:
 
 func _arrive(t: Dictionary, now: float) -> void:
 	var j := int(t.target)
-	blocks.erase(_block(int(t.stop), j))
+	_release(t)
 	var others := _occupancy(j, str(t.id)).filter(func(o): return str(o.state) != "fahrt")
 	t.track = 1 if not others.is_empty() and others.any(func(o): return int(o.track) == 0) else 0
 	if not others.is_empty():
@@ -549,7 +723,7 @@ func _arrive(t: Dictionary, now: float) -> void:
 
 # ------------------------------------------------------------------ Darstellung
 ## Weltposition (Weltmass, Feld = 32) und Fahrtrichtung an einer Stelle des Fahrwegs; im Bahnhof auf dem Ausweichgleis versetzt.
-func world_at(pos: float, track: int = 0) -> Dictionary:
+func world_at(pos: float, track: int = 0, lane: int = 0) -> Dictionary:
 	var n := path.size()
 	var p := clampf(pos, 0.0, float(n - 1))
 	var i := int(floor(p))
@@ -559,6 +733,9 @@ func world_at(pos: float, track: int = 0) -> Dictionary:
 	var b: Vector2 = (Vector2(path[j]) + Vector2(0.5, 0.5)) * 32.0
 	var h: Vector2 = (b - a) if j != i else ((a - (Vector2(path[i - 1]) + Vector2(0.5, 0.5)) * 32.0) if i > 0 else Vector2(1, 0))
 	var w := a.lerp(b, f)
+	if _double_cells.has(path[i]) and lane != 0:   # zweigleisig: je Richtung ein Gleis (Versatz quer zur Fahrrichtung)
+		var hn := h.normalized()
+		w += Vector2(-hn.y, hn.x) * DOUBLE_OFFSET * float(lane)
 	if track == 1:
 		for s in stops:
 			if p >= float(s.from) and p <= float(s.to):
@@ -575,7 +752,7 @@ func cars_of(t: Dictionary) -> Array:
 	var d := float(t.dir)
 	for c in CARS:
 		var pc := float(t.pos) + d * (CAR_LEN * float(CARS - 1) * 0.5 - float(c) * CAR_LEN)
-		var w := world_at(pc, int(t.track))
+		var w := world_at(pc, int(t.track), int(t.dir))
 		w["heading"] = w.heading * d * (-1.0 if c == CARS - 1 and CARS > 1 else 1.0)
 		w["front"] = c == 0
 		out.append(w)
@@ -587,7 +764,7 @@ func signal_clear(s: int, d: int) -> bool:
 	var j := s + d
 	if j < 0 or j >= stops.size():
 		return true
-	return not blocks.has(_block(s, j)) and not disruptions.has(_block(s, j))
+	return _block_free(_block(s, j), d, "") and not disruptions.has(_block(s, j))
 
 
 ## Beide Staedte liegen an der Linie und der Betrieb laeuft (mindestens ein Zug mit Triebfahrzeugfuehrer).
@@ -631,12 +808,12 @@ func summary() -> Dictionary:
 		"personal": {"triebfahrzeugfuehrer": drivers(), "zugbegleiter": conductors()}, "gesellschaft_saldo": snappedf(float(sim.economy.accounts.get(ACCT, 0.0)), 1.0),
 		"letzter_ausgleich": last_settle, "fahrpreis_beispiel": fare(0, stops.size() - 1) if stops.size() > 1 else 0.0,
 		"stoerungen": disruptions.values().map(func(dz): return {"art": dz.art, "seit_min": snappedf(sim.game_min - float(dz.since), 1.0), "trupp_aus": sim.towns.name_of(int(dz.town))}),
-		"schranken_zu": closed.size()}
+		"schranken_zu": closed.size(), "ausbau": expansion_options()}
 
 
 func to_dict() -> Dictionary:
 	return {"trains": trains, "blocks": blocks, "stats": stats, "waiting": waiting, "by_town": by_town, "last_settle": last_settle, "facility": facility,
-		"cells_acc": _cells_acc, "disruptions": disruptions}
+		"cells_acc": _cells_acc, "disruptions": disruptions, "double_blocks": double_blocks, "planned_tracks": planned_tracks, "ordered": ordered}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -658,6 +835,14 @@ func from_dict(d: Dictionary) -> void:
 	last_settle = d.get("last_settle", {})
 	facility = str(d.get("facility", ""))
 	_cells_acc = float(d.get("cells_acc", 0.0))
+	double_blocks = {}
+	for k in d.get("double_blocks", {}):
+		double_blocks[int(k)] = true
+	planned_tracks = {}
+	var pt: Dictionary = d.get("planned_tracks", {})
+	for k in pt:
+		planned_tracks[str(k)] = int(pt[k])
+	ordered = d.get("ordered", []).map(func(x): return int(x))
 	disruptions = {}
 	var dd: Dictionary = d.get("disruptions", {})
 	for k in dd:

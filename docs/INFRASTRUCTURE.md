@@ -278,3 +278,16 @@ offene Störungen, geschlossene Schranken, Schließungen, Sperrzeit, Ausweichend
 2 Störungen (81 min), 33 Fahrgäste auf der Straße; Seed 77 262 / 4 (184 min) / 83. Kamera `--shot-bahn=schranke` (wartet, bis
 eine Schranke zu ist). Test `test_rail_disruptions` (17). Hinweis: Eine Strecke kann das Endfeld einer Stichstraße schneiden
 (Übergang ohne Durchgangsverkehr, harmlos).
+
+**Schritt 5 Bürgermeister-Beobachtung und Ausbau (13.11.):** Beobachtung der Bürgermeister `bahn` (`RailTraffic.summary`: Züge,
+Fahrgäste, Wartende, Finanzen, Personal, Störungen, `ausbau` mit Optionen und Kosten). Regionalrat mit zwei neuen Antragsarten
+(Aktion `regionalrat_antrag` art `bahn_takt` | `zweites_gleis`; Regel-Bürgermeister nach Lage): **weiterer Triebwagen**
+(1,6 Mio. €, Land 75 %, Städte 25 % nach Einwohnern; höchstens 3 Züge; Lieferung nach 20 Tagen am freien Endbahnhof; Bedarf
+Triebfahrzeugführer = Züge + 1, Zugbegleiter = Züge) – Regel: ≥ 120 Wartende am eigenen Bahnsteig; **zweites Gleis** auf dem
+Abschnitt mit der meisten Wartezeit am Signal (`stats.block_wartezeit`, sonst dem längsten): 700 €/Feld, Bauzeit Felder/12
+(mind. 15 Tage), Land 75 % (`federal`), Städte nach Einwohnern; Bauprojekt `gleis` über Ausschreibung und Baufirma (Bautrupp zur
+Abschnittsmitte, Baustelle abgesteckt), Abnahme `RailTraffic.on_track_done` – Regel: ≥ 120 Minuten Wartezeit vor dem Abschnitt.
+Zweigleisig: Belegung je Richtung (`_bkey`), Züge beider Richtungen gleichzeitig im Abschnitt, je Richtung ein eigenes Gleis
+(Rechtsverkehr, 8 Weltpunkte Versatz), RailView zeichnet zwei Gleise. Gespeichert (`double_blocks`, `planned_tracks`, `ordered`).
+Kamera-Demo `--demo-zweigleis`. Test `test_rail_expansion` (17). Damit ist Phase 6 (Personenbahn) abgeschlossen; offen für später:
+Gleisenden-Zuführungen glätten (Treppen), Übergänge am Ende von Stichstraßen vermeiden. Nächste Phase 7: Güterbahn.

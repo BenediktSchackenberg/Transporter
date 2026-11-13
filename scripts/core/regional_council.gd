@@ -22,7 +22,9 @@ const WAIT_MIN := 180.0
 const MAJORITY := 0.75
 const CONCESSION := 0.15
 const COSTS := {"kh_ausbau": 600000.0, "drehleiter": 750000.0, "zweckverband": 0.0}
-const KINDS := ["verbindung", "kh_ausbau", "drehleiter", "zweckverband", "kkw_anteile", "autobahn"]
+const KINDS := ["verbindung", "kh_ausbau", "drehleiter", "zweckverband", "kkw_anteile", "autobahn", "bahn_takt", "zweites_gleis"]
+const RAIL_WAIT_DOUBLE := 120.0   # Wartezeit am Signal (Spielminuten seit Beginn) auf einem Abschnitt, ab der Regel-Buergermeister ein zweites Gleis beantragen
+const RAIL_CROWD := 120           # Wartende am eigenen Bahnsteig, ab denen Regel-Buergermeister einen weiteren Triebwagen beantragen
 const OWNERSHIP := ["zweckverband"]
 
 var sim
@@ -192,6 +194,13 @@ func rule_proposal(k: int) -> Dictionary:
 		return {"kind": "zweckverband", "reason": "Das Kreiskrankenhaus versorgt alle Städte; der Unterhalt soll geteilt werden."}
 	if int(sim.fire.stats.ausgebrannt) > 0 and not sim.municipal.vehicles.values().any(func(v): return str(v.type) == "DLK 23"):
 		return {"kind": "drehleiter", "reason": "Gebäude sind ausgebrannt; die Region hat keine Drehleiter."}
+	var T: RailTraffic = sim.trains   # Auftrag 22 Phase 6 Schritt 5: Bahnausbau nach Lage
+	if T != null and not T.path.is_empty() and T.stop_of_town(k) >= 0:
+		if T.waiting_at(T.stop_of_town(k)) >= RAIL_CROWD and T.trains.size() + T.ordered.size() < RailTraffic.MAX_TRAINS:
+			return {"kind": "bahn_takt", "reason": "%d Fahrgäste warten am Bahnsteig von %s" % [T.waiting_at(T.stop_of_town(k)), sim.towns.name_of(k)]}
+		var dp: Dictionary = T.plan_double()
+		if dp.get("ok", false) and float(dp.wartezeit_min) >= RAIL_WAIT_DOUBLE and k in [int(T.stops[int(dp.block)].town), int(T.stops[int(dp.block) + 1].town)]:
+			return {"kind": "zweites_gleis", "reason": "Züge warten %.0f Minuten vor dem eingleisigen Abschnitt %s – %s" % [float(dp.wartezeit_min), dp.von, dp.nach]}
 	for t in sim.towns.list:
 		var p := int(t.id)
 		if p != k and p not in sim.regional.linked(k) and not sim.regional.items.values().any(func(r): return r.status in ["vorgeschlagen", "beschlossen", "im_bau"] and int(p) in [int(r.from), int(r.to)] and k in [int(r.from), int(r.to)]):
@@ -224,6 +233,10 @@ func benefit(a: Dictionary, k: int) -> float:
 		"zweckverband":
 			var kh2 := _hospital()
 			return 1.0 if not kh2.is_empty() and int(kh2.town) == k else 0.4   # Mitsprache und gesicherte Betten
+		"bahn_takt", "zweites_gleis":   # Staedte an der Linie: Nutzen nach Fahrgaesten am eigenen Bahnsteig
+			var T: RailTraffic = sim.trains
+			var s := T.stop_of_town(k) if T != null else -1
+			return 0.0 if s < 0 else minf(1.0, 0.4 + float(T.waiting_at(s)) / 100.0)
 		"autobahn":   # Nutzen nach eigenem Anteil am Ueberlandverkehr; Grundnutzen Erreichbarkeit
 			return minf(1.0, 0.3 + 0.7 * float(sim.regional.traffic_shares().get(str(k), 0.0)) * float(sim.towns.count()))
 	return 0.0
@@ -267,6 +280,22 @@ func decide(a: Dictionary) -> Dictionary:
 			a["cost"] = float(hp.kosten) * (1.0 - RegionalProjects.HIGHWAY_FEDERAL)   # Anteil der Staedte; den Rest traegt der Bund
 			res["bund"] = float(hp.kosten) * RegionalProjects.HIGHWAY_FEDERAL
 			shares = sim.regional.traffic_shares()
+		"bahn_takt":
+			var T: RailTraffic = sim.trains
+			if T == null or T.path.is_empty() or T.trains.size() + T.ordered.size() >= RailTraffic.MAX_TRAINS:
+				res.text = "nicht möglich: keine Linie oder schon %d Triebwagen" % RailTraffic.MAX_TRAINS
+				return res
+			a["cost"] = RailTraffic.TRAIN_PRICE * (1.0 - RailTraffic.LAND_SHARE)
+			res["land"] = RailTraffic.TRAIN_PRICE * RailTraffic.LAND_SHARE
+			shares = _pop_shares(towns)
+		"zweites_gleis":
+			var dp: Dictionary = sim.trains.plan_double() if sim.trains != null else {"ok": false, "msg": "keine Linie"}
+			if not dp.get("ok", false):
+				res.text = "nicht möglich: %s" % str(dp.get("msg", ""))
+				return res
+			a["cost"] = float(dp.kosten) * (1.0 - RailTraffic.LAND_SHARE)
+			res["land"] = float(dp.kosten) * RailTraffic.LAND_SHARE
+			shares = _pop_shares(towns)
 		"zweckverband":
 			var kh := _hospital()
 			if kh.is_empty() or kh.has("shares"):
@@ -321,7 +350,8 @@ func decide(a: Dictionary) -> Dictionary:
 
 func _label(kind: String) -> String:
 	return {"autobahn": "Autobahn", "verbindung": "Verbindungsstraße", "kh_ausbau": "Ausbau Kreiskrankenhaus", "drehleiter": "gemeinsame Drehleiter",
-		"zweckverband": "Zweckverband Kreiskrankenhaus", "kkw_anteile": "Kraftwerksanteile"}.get(kind, kind)
+		"zweckverband": "Zweckverband Kreiskrankenhaus", "kkw_anteile": "Kraftwerksanteile", "bahn_takt": "weiterer Triebwagen (Regionalbahn)",
+		"zweites_gleis": "zweites Gleis (Regionalbahn)"}.get(kind, kind)
 
 
 func _pay(shares: Dictionary, cost: float, ressort: String) -> void:
@@ -359,6 +389,12 @@ func _apply(a: Dictionary, res: Dictionary) -> void:
 			var kh := _hospital()
 			kh["shares"] = res.shares.duplicate()
 			kh.owner = "region"
+		"bahn_takt":
+			_pay(res.shares, float(a.cost), "Verkehr")
+			sim.economy.transfer("X0", "S0", float(res.get("land", 0.0)))   # Landesanteil an den Hersteller
+			res["ref"] = str(sim.trains.order_train().get("msg", ""))
+		"zweites_gleis":
+			res["ref"] = str(sim.trains.start_double(res.shares, str(a.get("reason", ""))).get("ref", ""))
 
 
 # ------------------------------------------------------------------ Uebersicht, Speichern

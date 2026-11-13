@@ -43,7 +43,8 @@ func _process(delta: float) -> void:
 			waits += "%d," % mini(sim.trains.waiting_at(i), MAX_FIGURES)
 	var extra := ""
 	if sim.trains != null:   # Schranken (blinken, solange zu) und Stoerungen
-		extra = "%s|%s|%d" % [str(sim.trains.closed.keys()), str(sim.trains.disruptions.keys()), (int(Time.get_ticks_msec() / 500) % 2) if not sim.trains.closed.is_empty() else 0]
+		extra = "%s|%s|%d|%s|%s" % [str(sim.trains.closed.keys()), str(sim.trains.disruptions.keys()), (int(Time.get_ticks_msec() / 500) % 2) if not sim.trains.closed.is_empty() else 0,
+			str(sim.trains.double_blocks.keys()), str(sim.trains.planned_tracks.keys())]
 	var key := "%s|%d|%s|%s|%s" % [str(_view_cells()), _net().cells.size(), str(sim.trains.blocks.keys()) if sim.trains != null else "", waits, extra]
 	if key != _key:
 		_key = key
@@ -96,6 +97,12 @@ func _draw() -> void:
 		if kind != "bahnsteig" and view.has_point(q):
 			_draw_track(q, N.links(q), kind == "uebergang")
 	if sim.trains != null:
+		for pid in sim.trains.planned_tracks:   # zweites Gleis im Bau: abgesteckt
+			var pc: Array = sim.trains.planned_cells(str(pid))
+			for i in range(0, pc.size(), 2):
+				if view.has_point(pc[i]):
+					var f := _s((Vector2(pc[i]) + Vector2(0.5, 0.5)) * 32.0 + Vector2(6, 6))
+					draw_line(f, f + Vector2(0, -8), Color(0.95, 0.55, 0.12), 1.5)
 		for dz in sim.trains.disruptions.values():
 			if view.has_point(Vector2i(int(dz.cell[0]), int(dz.cell[1]))):
 				_draw_disruption(dz)
@@ -156,6 +163,22 @@ func _track_next_to(q: Vector2i, st: Dictionary) -> Vector2i:
 ## zwei rechtwinklige = Bogen (Viertelkreis um die Feldecke).
 func _draw_track(q: Vector2i, dirs: Array, crossing: bool) -> void:
 	var c := (Vector2(q) + Vector2(0.5, 0.5)) * 32.0
+	if sim.trains != null and sim.trains.is_double_cell(q) and dirs.size() >= 1:   # zweigleisig: zwei Gleise nebeneinander
+		var off := RailTraffic.DOUBLE_OFFSET
+		for side: float in [-1.0, 1.0]:
+			var mids: Array = []
+			for d in dirs:
+				var dv := Vector2(d)
+				var nv := Vector2(-dv.y, dv.x)
+				var m0: Vector2 = c + nv * side * off
+				_draw_seg(m0, m0 + dv * 16.0, not crossing)
+				mids.append(m0)
+			if mids.size() == 2 and mids[0] != mids[1]:
+				_draw_seg(mids[0], mids[1], false)
+		if crossing:
+			_draw_andreas(q, dirs)
+			_draw_barrier(q, dirs, sim.trains.closed.has(q))
+		return
 	if dirs.size() == 2 and dirs[0] + dirs[1] != Vector2i.ZERO:
 		_draw_curve(c, Vector2(dirs[0]), Vector2(dirs[1]), crossing)
 		return

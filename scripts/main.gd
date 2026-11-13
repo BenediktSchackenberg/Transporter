@@ -512,6 +512,9 @@ func _process_timed(_delta: float) -> void:
 		if args.has("shot-bahn") and session.sim.rail != null and session.sim.rail.is_built():   # Eisenbahn (Auftrag 22 Phase 6): Bahnhof n, sonst erste "bruecke"/"uebergang"/"tunnel"/"kurve"
 			var RN: RailNet = session.sim.rail
 			var want := str(args["shot-bahn"])
+			if args.has("demo-zweigleis") and session.sim.trains.ensure():   # Sichtpruefung: erster Abschnitt zweigleisig
+				session.sim.trains.double_blocks[0] = true
+				session.sim.trains._index_double()
 			var focus := Vector2(-1, -1)
 			if want.begins_with("zug") and not session.sim.trains.trains.is_empty():   # zug = RB1, zug2 = RB2
 				var tz: Dictionary = session.sim.trains.trains[clampi(int(want.substr(3)) - 1 if want.length() > 3 else 0, 0, session.sim.trains.trains.size() - 1)]
@@ -614,6 +617,11 @@ func _process_timed(_delta: float) -> void:
 			var xy2: PackedStringArray = str(args["shot-tile"]).split(",")
 			session.set_follow(false)
 			session.city_view.set_camera_world(Vector2(float(xy2[0]) * 32.0 + 16.0, float(xy2[1]) * 32.0 + 16.0))
+			if args.has("shot-bahn"):   # Gleisansicht nach dem Kamerasprung sofort neu zeichnen (sie prueft sonst nur alle 0,5 s)
+				for i in 2:
+					await get_tree().process_frame
+				session.city_view.rail_view._key = ""
+				session.city_view.rail_view._poll = 0.0
 			for i in 4:
 				await get_tree().process_frame
 		if args.has("shot-ui"):   # Leitstelle: je Angabe (Komma-getrennt) ein eigenes Bild <screenshot>_<Angabe>.png
