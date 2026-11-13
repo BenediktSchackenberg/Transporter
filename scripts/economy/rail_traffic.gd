@@ -28,6 +28,9 @@ extends RefCounted
 ## Ausfahrt an der Weiche, Beladen am Gueterbahnhof. Auf der Hauptstrecke gelten dieselben Bloecke und Bahnhofsgleise wie fuer die
 ## Regionalbahn; das Anschlussgleis ist ein eigener Block (Schluessel BRANCH). Hoechstens MAX_TRAINS Zuege (Gueterzug zaehlt mit):
 ## mit zwei Gleisen je Bahnhof koennen sich drei Zuege auf einer eingleisigen Linie nie gegenseitig blockieren, vier schon.
+## Phase 7 Schritt 2 Ladung: Stadtlager-Bestellungen aus dem Grosslager stehen in freight_queue. Der Gueterzug laedt am
+## Gueterbahnhof die Sendungen der Stadt mit der meisten wartenden Ware (bis FREIGHT_CAPACITY Einheiten), faehrt hin, entlaedt
+## (CityDepot.rail_arrived: Stadt-Lkw fuer die letzte Meile) und kommt zurueck. Ohne Ladung wartet er am Gueterbahnhof.
 ## Fahrplan: Soll-Zeiten aus Fahrzeit (Laenge / SPEED) und Haltezeit; Ist minus Soll = Verspaetung, am Endbahnhof wird mit der
 ## Wendezeit aufgeholt. Bewegung kontinuierlich in Spielminuten (Simulation.step); gespeichert werden die Zuege, der Fahrweg wird
 ## aus dem Netz neu abgeleitet.
@@ -54,6 +57,8 @@ const BRANCH := -1              # Blockschluessel des Anschlussgleises
 const FREIGHT_CARS := 5         # Lok + vier Wagen
 const UNLOAD_MIN := 10.0        # Halt zum Entladen am Bahnhof
 const LOAD_MIN := 20.0          # Beladen am Gueterbahnhof
+const FREIGHT_CAPACITY := 160   # Einheiten je Gueterzug (vier Wagen)
+const IDLE_CHECK_MIN := 30.0    # ohne Ladung: so oft neu pruefen
 const YIELD_MIN := 30.0         # Vorrang der Regionalbahn: so lange vor deren Abfahrt faehrt der Gueterzug nicht in ihren Abschnitt
 const RESYNC_MIN := 60.0        # Verspaetung am Endbahnhof, ab der die Regionalbahn den naechsten Takt faehrt
 const FREIGHT_PATIENCE := 240.0 # wartet der Gueterzug laenger, faehrt er in die naechste freie Luecke (Fahrdienstleiter; Probe: sonst 0 Fahrten in 30 Tagen)
@@ -97,6 +102,7 @@ var fpath: Array = []         # Gueterbahnhof -> Weiche: Ladegleis + Anschlussgl
 var fstop := 0.0              # Halteposition am Gueterbahnhof (Index in fpath)
 var junction := -1            # Index der Weiche im Fahrweg der Linie
 var fcrossings: Array = []    # Bahnuebergaenge des Anschlussgleises [{idx, cell}]
+var freight_queue: Array = [] # [{town, order, item, qty, day}] Sendungen am Gueterbahnhof
 
 
 func setup(simulation) -> void:
@@ -221,6 +227,10 @@ func _freight_branch(t: Dictionary, dmin: float, now: float) -> void:
 		"lager":
 			if now < float(t.until):
 				return
+			if t.get("cargo", []).is_empty() and not _load(t):
+				t["grund"] = "wartet auf Ladung"
+				t.until = now + IDLE_CHECK_MIN
+				return
 			if blocks.has(BRANCH) and str(blocks[BRANCH]) != str(t.id):
 				t["grund"] = "Anschlussgleis belegt"
 				return
@@ -253,7 +263,76 @@ func _freight_branch(t: Dictionary, dmin: float, now: float) -> void:
 				t.until = now + LOAD_MIN
 				t.trips = int(t.trips) + 1
 				stats["gueter_touren"] = int(stats.get("gueter_touren", 0)) + 1
-				_next_target(t)
+				t.erase("ziel")
+
+
+# ------------------------------------------------------------------ Ladung (Phase 7 Schritt 2)
+func accepts_freight(town: int) -> bool:
+	return not fpath.is_empty() and stop_of_town(town) >= 0 and trains.any(func(t): return is_freight(t))
+
+
+func queue_freight(town: int, order_id: String, item: String, qty: int) -> void:
+	freight_queue.append({"town": town, "order": order_id, "item": item, "qty": qty, "day": GameCalendar.day_of(sim.game_min)})
+
+
+func unqueue(order_id: String) -> void:
+	freight_queue = freight_queue.filter(func(x): return str(x.order) != order_id)
+
+
+func queued_units(town: int = -1) -> int:
+	var n := 0
+	for x in freight_queue:
+		if town < 0 or int(x.town) == town:
+			n += int(x.qty)
+	return n
+
+
+## Beladen: Stadt mit der meisten wartenden Ware, Sendungen in Reihenfolge bis zur Kapazitaet (eine groessere Sendung allein geht immer).
+func _load(t: Dictionary) -> bool:
+	if freight_queue.is_empty():
+		return false
+	var by := {}
+	for x in freight_queue:
+		if stop_of_town(int(x.town)) >= 0:
+			by[int(x.town)] = int(by.get(int(x.town), 0)) + int(x.qty)
+	if by.is_empty():
+		return false
+	var best: int = by.keys()[0]
+	for k in by:
+		if int(by[k]) > int(by[best]):
+			best = k
+	var cargo: Array = []
+	var units := 0
+	for x in freight_queue.duplicate():
+		if int(x.town) != best:
+			continue
+		if not cargo.is_empty() and units + int(x.qty) > FREIGHT_CAPACITY:
+			continue
+		cargo.append(x)
+		units += int(x.qty)
+		freight_queue.erase(x)
+		var o: Dictionary = sim.towns.depot(best).orders.get(str(x.order), {})
+		if not o.is_empty():
+			o.status = "bahn"
+			sim.towns.depot(best)._log(o, "im Güterzug %s verladen" % t.id)
+	t["cargo"] = cargo
+	t.ladung = units
+	t["ziel"] = stop_of_town(best)
+	stats["gueter_einheiten"] = int(stats.get("gueter_einheiten", 0)) + units
+	sim.log_event("Güterzug %s lädt %d Einheiten für %s (%d Sendungen)." % [t.id, units, sim.towns.name_of(best), cargo.size()], "info")
+	return true
+
+
+func _unload(t: Dictionary, s: int) -> void:
+	var k := int(stops[s].town)
+	var st: Dictionary = sim.rail.station_of(k)
+	var road: Vector2i = sim.city.building(int(st.building)).road if not st.is_empty() else Vector2i.ZERO
+	for x in t.get("cargo", []):
+		sim.towns.depot(int(x.town)).rail_arrived(str(x.order), road)
+	if not t.get("cargo", []).is_empty():
+		sim.log_event("Güterzug %s entlädt %d Einheiten in %s." % [t.id, int(t.ladung), sim.towns.name_of(k)], "good")
+	t["cargo"] = []
+	t.ladung = 0
 
 
 ## Halte auf einer Seite der Weiche (d > 0: groessere Position), von der Weiche aus nach aussen.
@@ -296,6 +375,8 @@ func _next_target(t: Dictionary) -> int:
 func _freight_enter(t: Dictionary, now: float) -> void:
 	if not t.has("ziel"):
 		_next_target(t)
+	if int(t.ziel) < 0 or int(t.ziel) >= stops.size():
+		t.ziel = 0
 	var J := junction_block()
 	var d := 1 if float(stops[int(t.ziel)].pos) > float(junction) else -1
 	var tgt := J + 1 if d > 0 else J
@@ -936,7 +1017,7 @@ func _arrive(t: Dictionary, now: float) -> void:
 		t.delay = 0.0
 		if j == int(t.get("ziel", -1)):   # Ziel der Tour: entladen, dann zurueck Richtung Weiche
 			t.until = now + UNLOAD_MIN
-			t.ladung = 0
+			_unload(t, j)
 			stats["gueter_halte"] = int(stats.get("gueter_halte", 0)) + 1
 			t.dir = -int(t.dir)
 		else:
@@ -1080,12 +1161,13 @@ func summary() -> Dictionary:
 		"personal": {"triebfahrzeugfuehrer": drivers(), "zugbegleiter": conductors()}, "gesellschaft_saldo": snappedf(float(sim.economy.accounts.get(ACCT, 0.0)), 1.0),
 		"letzter_ausgleich": last_settle, "fahrpreis_beispiel": fare(0, stops.size() - 1) if stops.size() > 1 else 0.0,
 		"stoerungen": disruptions.values().map(func(dz): return {"art": dz.art, "seit_min": snappedf(sim.game_min - float(dz.since), 1.0), "trupp_aus": sim.towns.name_of(int(dz.town))}),
-		"schranken_zu": closed.size(), "ausbau": expansion_options()}
+		"schranken_zu": closed.size(), "ausbau": expansion_options(), "gueter_wartend": queued_units()}
 
 
 func to_dict() -> Dictionary:
 	return {"trains": trains, "blocks": blocks, "stats": stats, "waiting": waiting, "by_town": by_town, "last_settle": last_settle, "facility": facility,
-		"cells_acc": _cells_acc, "disruptions": disruptions, "double_blocks": double_blocks, "planned_tracks": planned_tracks, "ordered": ordered}
+		"cells_acc": _cells_acc, "disruptions": disruptions, "double_blocks": double_blocks, "planned_tracks": planned_tracks, "ordered": ordered,
+		"freight_queue": freight_queue}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -1115,6 +1197,7 @@ func from_dict(d: Dictionary) -> void:
 	for k in pt:
 		planned_tracks[str(k)] = int(pt[k])
 	ordered = d.get("ordered", []).map(func(x): return int(x))
+	freight_queue = d.get("freight_queue", [])
 	disruptions = {}
 	var dd: Dictionary = d.get("disruptions", {})
 	for k in dd:

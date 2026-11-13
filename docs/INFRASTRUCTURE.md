@@ -353,3 +353,17 @@ Test `test_free_build` (18). Beobachtung insgesamt ~5 944 Token (Grenze 5 950).
 **Gründer mit KI** (`GameSession.founder_profile_for`): Neu gegründete Firmen übernehmen reihum das KI-Profil der Startspieler
 (Anbieter, Modell, Server, Takt, Budget, Schlüssel) mit eigenem Namen, eigener Persönlichkeit, ohne fremdes Gedächtnis und ohne
 fremde Strategie; Demo-Startspieler oder `founders_ai: false` → Regel-Controller wie bisher. Test `test_founder_ai_profile` (5).
+
+**Phase 7 Schritt 2 Ladung (13.11.):** Stadtlager-Bestellungen beim Großlager (`supplier L0`) fahren in Städten an der Linie mit dem
+Güterzug (`CityDepot._to_rail`): die Stadt zahlt 60 % der Lkw-Fracht als Bahnfracht an N0, die Ware bleibt beim Großlager
+reserviert, Status `bahn_wartet` → `bahn` (verladen) → am Bahnhof entladen (`rail_arrived`) → Stadt-Lkw vom Bahnhof ins
+Stadtlager → wie bisher Wareneingang und Bezahlung. `RailTraffic.freight_queue`: der Güterzug lädt am Güterbahnhof die Sendungen
+der Stadt mit der meisten wartenden Ware (bis 160 Einheiten; eine größere Sendung allein geht immer), Ziel = deren Bahnhof; ohne
+Ladung wartet er („wartet auf Ladung“, schont die eingleisige Strecke). Kommt binnen 10 Tagen kein Zug, fährt die Bestellung doch
+per Lkw. Anzeige „Güterbahn: wartend/befördert/Touren“. Test `test_rail_cargo` (14): 30 Ziegel, Bahnfracht 315 € statt 525 € Lkw,
+Ankunft am Bahnhof nach ~1 100 Spielminuten, Stadt-Lkw liefert an.
+
+**Prompt der lokalen Modelle (13.11.):** Log der Partie 22:04 – die Modelle sahen `steinbauten.jetzt_moeglich: true`, aber
+`free_build` fehlte in der Aktionsliste der lokalen Modelle und der Steinwerke-Absatz verlangte noch Bergwerk + Steinmetz. Jetzt:
+`free_build` in der Liste, gemeinsamer Absatz „Bauen aus eigenem Antrieb“ (Statue/Figur aus mehreren Materialien mit Idee; freies
+Bauwerk Stein auf Stein mit Form oder Bauplan, Material per hub_buy).

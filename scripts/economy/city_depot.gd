@@ -515,10 +515,51 @@ func _advance_orders(day: int) -> void:
 						sim.stock.add(o.item, int(o.qty), "X0", port, "Import Stadtlager")
 						sim.stock.reserve("order:" + str(o.id), o.item, int(o.qty), "X0", port)
 						_issue_contract(o)
+				elif str(o.supplier) == CentralHub.ACCT and sim.trains != null and sim.trains.accepts_freight(town):
+					_to_rail(o, day)   # Auftrag 22 Phase 7 Schritt 2: Grosslager-Ware faehrt mit dem Gueterzug
 				else:
 					_issue_contract(o)
+			"bahn_wartet":
+				if day - int(o.get("bahn_day", day)) > RAIL_WAIT_DAYS:   # Strecke blockiert/kein Zug: doch per Lkw
+					sim.trains.unqueue(str(o.id))
+					_log(o, "Güterzug kommt nicht – Transport per Lkw")
+					_issue_contract(o)
+			"bahn":
+				if day - int(o.get("bahn_day", day)) > RAIL_WAIT_DAYS * 2:
+					_receive(o, "order:" + str(o.id))   # Sicherung: Sendung ohne Zug (Spielstand)
 			"transport", "unterwegs":
 				_watch_contract(o, day)
+
+
+## Grosslager-Ware per Bahn: Sendung in die Warteschlange des Gueterzugs; die Stadt zahlt den Bahnanteil der Fracht an die
+## Regionalbahngesellschaft (guenstiger als der Lkw-Auftrag). Die Ware bleibt bis zur Anlieferung beim Grosslager reserviert.
+const RAIL_SHARE := 0.6
+const RAIL_WAIT_DAYS := 10
+
+
+func _to_rail(o: Dictionary, day: int) -> void:
+	var fee := snappedf(float(o.freight) * RAIL_SHARE, 1.0)
+	var pay := minf(fee, maxf(0.0, float(sim.economy.accounts.get(owner(), 0.0))))
+	sim.economy.transfer(owner(), RailTraffic.ACCT, pay)
+	o.freight_paid = pay
+	stats.freight += pay
+	o["bahn_day"] = day
+	o.status = "bahn_wartet"
+	sim.trains.queue_freight(town, str(o.id), str(o.item), int(o.qty))
+	_log(o, "per Güterzug ab Großlager (Bahnfracht %s statt Lkw %s)" % [Catalog.money(pay), Catalog.money(float(o.freight))])
+
+
+## Gueterzug hat am Bahnhof der Stadt entladen: Stadt-Lkw bringt die Sendung vom Bahnhof ins Stadtlager.
+func rail_arrived(order_id: String, station_road: Vector2i) -> void:
+	var o: Dictionary = orders.get(order_id, {})
+	if o.is_empty() or str(o.status) not in ["bahn", "bahn_wartet"]:
+		return
+	_log(o, "am Bahnhof entladen")
+	if sim.fleet != null and sim.fleet.send_city_truck(station_road, sim.city.building(building).road, town, order_id, "Stadt-Lkw %s: %s vom Bahnhof" % [sim.towns.name_of(town), CityGoods.get_item(o.item).name]):
+		o.status = "stadt_lkw"
+		o["truck_until"] = sim.game_min + GameCalendar.days_to_min(1.5)
+		return
+	_receive(o, "order:" + str(o.id))
 
 
 ## Kuestenort: das Schiff hat die Importware im Hafenlager geloescht; ab hier wie bisher (Auftrag an Transporteure zum Stadtlager).
