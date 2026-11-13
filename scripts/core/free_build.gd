@@ -283,7 +283,7 @@ func cells_of(fb: Dictionary) -> Array:
 ## Kompakt (Token-Budget der lokalen Modelle).
 func obs_of(cid: int) -> Dictionary:
 	var a := active_of(cid)
-	var out := {"fertig": done_of(cid), "je_block": "stein=1 naturstein, ziegel=10 ziegel, holz=1 holz, beton=1 beton, glas=2 glas, stahl=1 stahl"}
+	var out := {"fertig": done_of(cid)}   # Bedarf je Block steht in der Aktionsbeschreibung (Token-Budget)
 	if not a.is_empty():
 		out["bau"] = {"name": a.name, "status": a.status, "bloecke": "%d/%d" % [int(a.placed), a.blocks.size()], "fehlt": a.missing}
 	return out

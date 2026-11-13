@@ -165,7 +165,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"freie_depotstandorte": free_sites.slice(0, 6), "verkehr": sim.traffic_events.map(func(e): return e.text),
 		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid), "personal_lage": sim.households.summary_of(cid), "wohnmarkt": _housing(sim, cid), "bevoelkerung": _population(sim), "spielerkredite": sim.player_loans.summary_of(cid), "auflagen": sim.oversight.open_for("C%d" % cid).map(func(o): return {"id": o.id, "betrifft": o.label, "zustand": int(sim.oversight.condition_of(o.what)), "frist_tag": int(o.deadline)}), "gebaeudezustand": sim.care.summary_of(cid), "gesundheit_personal": sim.workforce.summary_of(cid),
 		"meldungen_nur_daten": sim.news.items.filter(func(i): return float(i.relevance) >= 0.5).slice(0, 3).map(func(i): return {"gemeldet": i.title, "einschaetzung_engine": "%s, Relevanz %d %%" % [i.cat, int(float(i.relevance) * 100.0)]}),
-		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "rivalitaet": sim.rivalry.summary_of(cid), "betriebe": sim.biz.obs_of(cid), "region": _region(sim, cid), "bergbau": sim.mining.steps_for(cid), "verfuegbare_branchen": _branches(sim, cid), "chancen": _chances(sim), "produktion_markt": sim.prod.market_obs(), "immobilien_angebote": sim.realty.offers(2) if sim.company(cid).ledger.cash > 80000.0 else [], "it_angebote": sim.it.offers(), "grosslager": _hub(sim), "steinbauten": sim.stone.obs_of(cid), "freibau": sim.freebuild.obs_of(cid), "fremde_stammkunden": foreign_loyal.slice(0, 8),
+		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "rivalitaet": sim.rivalry.summary_of(cid), "betriebe": sim.biz.obs_of(cid), "region": _region(sim, cid), "bergbau": sim.mining.steps_for(cid), "verfuegbare_branchen": _branches(sim, cid), "chancen": _chances(sim) + _build_chance(sim, cid), "produktion_markt": sim.prod.market_obs(), "immobilien_angebote": sim.realty.offers(2) if sim.company(cid).ledger.cash > 80000.0 else [], "it_angebote": sim.it.offers(), "grosslager": _hub(sim), "steinbauten": sim.stone.obs_of(cid), "freibau": sim.freebuild.obs_of(cid), "fremde_stammkunden": foreign_loyal.slice(0, 8),
 		"nachrichten": msgs, "angebote_an_dich": offers_in, "deine_angebote": offers_out,
 		"ergebnisse_deiner_aktionen": results.slice(-10), "ereignisse": events.slice(-10),
 		"hinweis": hint, "plan": sim.plans.summary(cid), "gedaechtnis": sim.memory.relevant(cid, _context(sim, cid, market)),
@@ -203,6 +203,33 @@ static func _hub(sim: Simulation) -> Dictionary:
 		rows.append("%s: %d auf Lager, Kauf %.2f / Ankauf %.2f EUR%s" % [item, sim.hub.stock_of(item), sim.hub.price(item), sim.hub.buy_price(item),
 			" (knapp)" if float(sim.hub.stock_of(item)) < float(CentralHub.GOODS[item].t) * 0.3 else ""])
 	return {"waren": rows, "kapazitaet_frei": sim.hub.free_capacity(), "aktionen": "hub_buy item,qty (Abholung mit eigenem Fahrzeug) · hub_sell item,qty"}
+
+
+## Wahrzeichen als Chance der Firma (Partie 13.11.: 703 Antworten der lokalen Modelle, keine einzige baute – sie arbeiten aber jede
+## Runde die chancen ab). Nur mit Geld ueber der Reserve, wenn ein Werk moeglich ist und die Firma seit BUILD_IDLE_DAYS nichts begann.
+const BUILD_IDLE_DAYS := 30
+const BUILD_CASH := 60000.0
+
+
+static func _build_chance(sim: Simulation, cid: int) -> Array:
+	var c = sim.company(cid)
+	if c == null or c.ledger.cash < BUILD_CASH or sim.stone == null or sim.freebuild == null or not sim.freebuild.active_of(cid).is_empty():
+		return []
+	var sw: Dictionary = sim.stone.obs_of(cid)
+	if not bool(sw.get("jetzt_moeglich", false)):
+		return []
+	var today := GameCalendar.day_of(sim.game_min)
+	var last := -9999
+	for a in sim.stone.works.values():
+		if int(a.cid) == cid:
+			last = maxi(last, int(a.day))
+	for b in sim.freebuild.builds.values():
+		if int(b.cid) == cid:
+			last = maxi(last, int(b.day))
+	if today - last < BUILD_IDLE_DAYS:
+		return []
+	return [{"branche": "wahrzeichen", "anlass": "Geld über der Reserve: ein eigenes Bauwerk macht deine Firma in der Stadt sichtbar",
+		"aktion": "create_stone_work (idee %s) oder free_build (eigener Entwurf, Material per hub_buy)" % str(sw.get("idee", ""))}]
 
 
 static func _chances(sim: Simulation) -> Array:

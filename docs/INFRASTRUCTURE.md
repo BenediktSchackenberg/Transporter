@@ -367,3 +367,8 @@ Ankunft am Bahnhof nach ~1 100 Spielminuten, Stadt-Lkw liefert an.
 `free_build` fehlte in der Aktionsliste der lokalen Modelle und der Steinwerke-Absatz verlangte noch Bergwerk + Steinmetz. Jetzt:
 `free_build` in der Liste, gemeinsamer Absatz „Bauen aus eigenem Antrieb“ (Statue/Figur aus mehreren Materialien mit Idee; freies
 Bauwerk Stein auf Stein mit Form oder Bauplan, Material per hub_buy).
+Auswertung Partie 22:04 (3 Spielmonate): 703 Antworten der lokalen Modelle, keine baute – sie arbeiten aber jede Runde die
+`chancen` ab. Daher `ObservationBuilder._build_chance`: mit ≥ 60 000 € Bargeld, möglichem Werk und ohne Baubeginn in den letzten
+30 Tagen steht dort „wahrzeichen“ mit der Tagesidee und dem Hinweis auf `free_build`. Bedarf je Block steht jetzt in der
+Aktionsbeschreibung statt in der Beobachtung (Token-Budget, jetzt ~5 917). Gründer-KI bestätigt: Spieler 4–10 fragten Ollama an.
+Test `test_build_chance` (4).
