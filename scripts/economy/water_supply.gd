@@ -433,6 +433,7 @@ func pipe_break(k: int, cell: Vector2i = Vector2i(-1, -1)) -> bool:
 	_net.erase(k)
 	stats.rohrbrueche = int(stats.rohrbrueche) + 1
 	sim.log_event("%s: Rohrbruch in der Wasserleitung – Netzabschnitt ohne Wasser, Wassertrupp ist unterwegs." % sim.towns.name_of(k), "warn")
+	sim.activity.add("stadt", -1, "infra", "Rohrbruch in %s" % sim.towns.name_of(k), "Netzabschnitt ohne Wasser, Wassertrupp unterwegs", cell)
 	_dispatch(k)
 	return true
 
@@ -536,7 +537,7 @@ func expand(f: Dictionary, k: int) -> Dictionary:
 	expansions[str(prj.id)] = str(f.id)
 	tight[str(f.id)] = 0
 	sim.log_event("%s: %s dauerhaft ausgelastet – Ausbau ausgeschrieben als %s (%s)." % [sim.towns.name_of(k), f.name, prj.id, Catalog.money(cost)], "info")
-	return {"ok": true, "ref": prj.id}
+	return {"ok": true, "ref": prj.id, "msg": "Ausbau %s ausgeschrieben als %s (%s)." % [f.name, prj.id, Catalog.money(cost)]}
 
 
 ## Abnahme durch die Baufirma (Construction._finish_public).
@@ -584,6 +585,31 @@ func summary(k: int = -1) -> Dictionary:
 	for t in sim.towns.list:
 		out[str(int(t.id))] = summary(int(t.id))
 	return out
+
+
+## Phase 8: Loeschwasser aus dem Netz. Fehlt Wasser oder ist ein Rohr gebrochen, haben die Hydranten wenig Druck.
+const FIRE_WATER_SHORT := 0.6
+
+
+func fire_water_factor(k: int) -> float:
+	var h: Dictionary = last.get(str(k), {})
+	return FIRE_WATER_SHORT if breaks.has(str(k)) or float(h.get("fehl", 0.0)) > 0.01 else 1.0
+
+
+## Buergermeister-Aktion infra_ausbau: Wasserwerk, Hochbehaelter oder Klaeranlage vorzeitig ausbauen.
+func mayor_expand(k: int, anlage: String) -> Dictionary:
+	var f := {}
+	match anlage:
+		"wasserwerk":
+			f = works_of(k)
+		"hochbehaelter":
+			var tk := tanks_of(k)
+			f = tk[0] if not tk.is_empty() else {}
+		"klaeranlage":
+			f = plant()
+	if f.is_empty():
+		return {"ok": false, "msg": "Keine Anlage %s in dieser Stadt." % anlage}
+	return expand(f, k if anlage != "klaeranlage" else int(f.town))
 
 
 ## Kurzfassung fuer die Beobachtung eines Buergermeisters.

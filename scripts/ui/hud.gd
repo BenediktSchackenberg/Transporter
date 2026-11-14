@@ -747,7 +747,7 @@ func _economy_text() -> String:
 		12: return LiveText.housing(sim)
 		13: return LiveText.central_bank(sim)
 		14: return LiveText.businesses(sim)
-		15: return LiveText.power(sim) + LiveText.water(sim) + LiveText.police(sim) + LiveText.rail(sim)
+		15: return LiveText.infra(sim) + LiveText.power(sim) + LiveText.water(sim) + LiveText.police(sim) + LiveText.rail(sim)
 		16: return LiveText.town(sim, maxi(0, session.selected_town))
 		17: return LiveText.region(sim)
 		18: return LiveText.civic(sim)

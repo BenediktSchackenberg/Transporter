@@ -12,8 +12,12 @@ const CATS := {
 	"wirtschaft": {"label": "Wirtschaft", "icon": "€", "color": "#6fd08c"},
 	"ki": {"label": "KI-Entscheidung", "icon": "◆", "color": "#b48cff"},
 	"stadt": {"label": "Stadtentwicklung", "icon": "▲", "color": "#7fc8ff"},
+	"infra": {"label": "Infrastruktur & Versorgung", "icon": "⚡", "color": "#5aa0ff"},
 	"normal": {"label": "Aktivität", "icon": "•", "color": "#9a98a8"},
 }
+## Auftrag 22 Phase 8: Meldungen der Versorgungssysteme (Leitstelle "Infrastruktur & Versorgung")
+const INFRA_WORDS := ["rohrbruch", "wasserknapp", "wasserwerk", "hochbehälter", "kläranlage", "abwasser", "stromausfall", "kraftwerk",
+	"regionalbahn", "güterzug", "gleis", "stellwerk", "deponie", "müllverbrennung", "müllabfuhr", "polizei", "bußgeld"]
 ## Technische Aktionsnamen der Buergermeister -> Alltagssprache (Kartenaktivitaeten nennen die Aktion roh)
 const MAYOR_WORDS := {"plan_infrastructure": "plant Infrastruktur", "offer_parcels": "bietet Grundstücke an", "warn_company": "verwarnt ein Unternehmen",
 	"designate_quarter": "weist ein neues Quartier aus", "approve_procurement": "genehmigt eine Beschaffung", "reject_procurement": "lehnt eine Beschaffung ab",
@@ -87,6 +91,9 @@ func _from_log(e: Dictionary) -> void:
 	elif kind == "bad":
 		cat = "kritisch"
 		sev = 2
+	elif INFRA_WORDS.any(func(w): return low.contains(w)):
+		cat = "infra"
+		sev = 2 if kind == "warn" else 1
 	elif low.contains("bürgermeister") or low.contains("stadtentwicklung") or low.contains("eröffnet") or low.contains("bauvorhaben") \
 			or low.contains("straße") or low.contains("erschließ") or low.contains("rat ") or low.contains("quartier") or low.contains("denkmal"):
 		cat = "stadt"
@@ -128,6 +135,9 @@ func _pull_activity() -> void:
 			"kauf", "personal":
 				cat = "ki"
 				sev = 1
+			"infra":
+				cat = "infra"
+				sev = 2
 			"polizei", "gesundheit":
 				cat = "kritisch" if str(a.text).to_lower().contains("unfall") or str(a.text).to_lower().contains("brand") else "normal"
 				sev = 2 if cat == "kritisch" else 0

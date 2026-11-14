@@ -435,3 +435,21 @@ ohne freien Wagen hilft die nächste Wache.
 Bürgermeister-Beobachtung `polizei` (Wache, Personal, Aufklärung, laufende Einsätze, Zahlen), Anzeige im Infrastruktur-Tab.
 Test `test_police` (17). Grenzen: laufende Einsätze werden nicht gespeichert (nach dem Laden stehen die Wagen in der Wache);
 keine Ausbaustufen der Wache; illegale Müllentsorgung noch nicht.
+
+## Phase 8 – Verflechtung, Bürgermeister-KI, Lagebild (14.11.2026)
+
+- **Lagebild** `InfraStatus` (`scripts/core/infra_status.gd`): Ampel je Stadt für Strom, Wasser, Abwasser, Müll, Polizei, Bahn aus
+  den echten Zuständen (Stadt vom Netz + Notstrom leer; Wasser-Fehlmenge/Rohrbruch/ohne Anschluss; Überlauf der Kläranlage;
+  überquellende Tonnen; wartende Polizeieinsätze; Störung/Langsamfahrstelle an der Strecke). Oben im Infrastruktur-Tab.
+- **Leitstelle:** Bereich „Infrastruktur & Versorgung“ (⚡): Meldungen der Versorgungssysteme (Rohrbruch, Wasserknappheit,
+  Kläranlage, Stromausfall, Regionalbahn/Gleis/Stellwerk, Deponie/Müll, Polizei/Bußgeld); Rohrbrüche und Bahnstörungen kommen
+  mit Ort (anklickbar, Kamera springt hin).
+- **Kettenreaktionen:** Stromausfall → Ampeln aus, dreimal so viele Verkehrsunfälle (`PoliceService.accident_chance`);
+  Stromausfall → Stellwerk am Bahnhof gestört (`RailTraffic._blackout_signals`, Signalstörung mit Bahntrupp, Fahrgäste weichen auf
+  die Straße aus); Wasserknappheit oder Rohrbruch → Hydranten mit wenig Druck, Löschleistung ×0,6 (`WaterSupply.fire_water_factor`).
+  Schon vorher: Stromausfall → Wasserwerk/Kläranlage/Betriebe stehen; Müllkrise → Zufriedenheit; Bahnstörung → Straße.
+- **Bürgermeister-KI:** Aktion `infra_ausbau` (anlage wasserwerk | hochbehaelter | klaeranlage | gleis) – vorausschauend statt erst
+  nach fünf Tagen Engpass; Beobachtung `infrastruktur_lage` (nur Abweichungen). Regel-Bürgermeister: Wassermangel → Ausbau mit
+  Vorrang, Bedarf > 80 % → Ausbau, Langsamfahrstelle am eigenen Bahnhof → Gleisinstandsetzung.
+Test `test_infra_chain` (14). Damit sind die Phasen 1–8 von Auftrag 22 umgesetzt; offen: illegale Müllablagerung, Ausbaustufen der
+Polizeiwache, Abnahmetests 1–12 als ein gemeinsamer Langlauf.

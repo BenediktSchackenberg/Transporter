@@ -296,6 +296,17 @@ static func decide(ind: Dictionary) -> Dictionary:
 			if pl.status == "beschlossen" and not ids.is_empty() and ind.projekte.filter(func(p): return ids.any(func(id): return id in p.grundstuecke)).is_empty():
 				actions.insert(0, {"action": "plan_infrastructure", "parcel_ids": ids, "reason": "Quartier %s ist beschlossen, aber nicht erschlossen: Straße und Anschlüsse bauen (verfügbar %s)." % [pl.name, Catalog.money(budget)]})
 				break
+	# Auftrag 22 Phase 8: Versorgung vorausschauend ausbauen (Wasser knapp oder Werk fast ausgelastet; Gleis mit Langsamfahrstelle)
+	var w: Dictionary = ind.get("wasser", {})
+	if not w.is_empty() and int(w.get("ausbau_laeuft", 0)) == 0:
+		var why := "Wasserbedarf %.1f m³ bei Leistung %.1f m³ – Engpass vermeiden." % [float(w.get("bedarf_m3", 0.0)), float(w.get("leistung_m3", 0.0))]
+		if float(w.get("fehl_m3", 0.0)) > 0.0:   # echter Mangel: Vorrang vor Routine
+			actions.insert(0, {"action": "infra_ausbau", "anlage": "wasserwerk", "reason": "Wassermangel (%.1f m³ fehlen). %s" % [float(w.fehl_m3), why]})
+		elif actions.size() < MAX_ACTIONS and float(w.get("leistung_m3", -1.0)) > 0.0 and float(w.get("bedarf_m3", 0.0)) > 0.8 * float(w.leistung_m3):
+			actions.append({"action": "infra_ausbau", "anlage": "wasserwerk", "reason": why})
+	var lage: Dictionary = ind.get("infrastruktur_lage", {})
+	if str(lage.get("bahn", "")).contains("Langsamfahrstelle") and actions.size() < MAX_ACTIONS:
+		actions.append({"action": "infra_ausbau", "anlage": "gleis", "reason": "Langsamfahrstelle an unserem Bahnhof: Gleis instand setzen lassen."})
 	if actions.is_empty():
 		actions.append({"action": "wait"})
 	var summary := "Lage: %d wohnungssuchende Haushalte, Leerstand %.1f %%, Beschäftigung %.0f %%, %d Anträge zur Entscheidung. %s" % [waiting, float(housing.leerstand) * 100.0,

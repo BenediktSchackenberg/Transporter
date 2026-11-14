@@ -10,6 +10,8 @@ const SCHEMA := {
 		"desc": "Kommunale Einrichtung neu bauen (Auftrag 20): typ FW-01 Feuerwache|RW-01 Rettungswache|KH-01 Krankenhaus|BH-01 Bauhof|VB-01 Busbetriebshof|SC-01 Schule|KI-01 Kita|RC-01 Recyclinghof. Ratsbeschluss, Ausschreibung, Baufirma; Kosten und Bedarf siehe obs.kommunale_dienste."},
 	"kommunal_fahrzeug": {"params": {"einrichtung": "string", "fahrzeug": "string", "reason": "string"},
 		"desc": "Fahrzeug für eine Einrichtung kaufen (einrichtung = ID M<n>, fahrzeug HLF 20|DLK 23|RTW|NEF|Kipper|Streuwagen|Linienbus|Wertstoffwagen)."},
+	"infra_ausbau": {"params": {"anlage": "string", "reason": "string"},
+		"desc": "Versorgung vorausschauend ausbauen (obs.infrastruktur_lage, obs.wasser, obs.bahn): anlage wasserwerk | hochbehaelter | klaeranlage (Leistung ×1,5, 40 % der Neubaukosten, Baufirma, 12 Tage; Kläranlage teilen sich die Städte) oder gleis (Instandsetzung des schlechtesten Abschnitts an deiner Stadt, Land 75 %)."},
 	"kommunal_schliessen": {"params": {"einrichtung": "string", "reason": "string"}, "desc": "Kommunale Einrichtung schließen (Personal frei, keine Kosten mehr)."},
 	"regionalrat_antrag": {"params": {"art": "string", "partner": "int?", "reason": "string"},
 		"desc": "Antrag für die nächste Sitzung des Regionalrats: art verbindung (mit partner = Stadt-Nr.)|kh_ausbau|drehleiter|zweckverband|bahn_takt (weiterer Triebwagen, Land 75 %)|zweites_gleis (Abschnitt mit der meisten Wartezeit, Land 75 %; siehe obs.bahn.ausbau). Mehrheit 3 von 4, Eigentumsfragen einstimmig; Kraftwerksanteile bleiben 25/25/25/25."},
@@ -343,6 +345,7 @@ func indicators() -> Dictionary:
 		"bahn": sim.trains.summary() if sim.trains != null and not sim.trains.path.is_empty() else {},
 		"wasser": sim.water.mayor_view(town) if sim.water != null and sim.water.enabled() else {},
 		"polizei": sim.police.summary(town) if sim.police != null and sim.police.enabled() else {},
+		"infrastruktur_lage": InfraStatus.compact(sim, town) if sim.towns.is_region() else {},
 		"erschliessung": access_indicators(),
 		"bergbau": _own_mining(),
 		"region": _region_obs(),
@@ -621,6 +624,24 @@ func hold_election() -> Dictionary:
 
 
 # ------------------------------------------------------------------ Aktionen
+## Auftrag 22 Phase 8: Ausbau der Versorgung aus eigener Entscheidung (sonst baut der Betreiber erst nach 5 Tagen Engpass aus).
+func _infra_ausbau(anlage: String) -> Dictionary:
+	if anlage == "gleis":
+		if sim.trains == null or sim.trains.stops.is_empty():
+			return {"ok": false, "msg": "Keine Bahnlinie."}
+		var s: int = sim.trains.stop_of_town(town)
+		var worst := -1
+		for b in [s - 1, s]:
+			if b >= 0 and b < sim.trains.stops.size() - 1 and (worst < 0 or sim.trains.condition_of(b) < sim.trains.condition_of(worst)):
+				worst = b
+		if s < 0 or worst < 0:
+			return {"ok": false, "msg": "Kein Bahnhof in dieser Stadt."}
+		return sim.trains.start_repair(worst)
+	if anlage not in ["wasserwerk", "hochbehaelter", "klaeranlage"]:
+		return {"ok": false, "msg": "anlage: wasserwerk | hochbehaelter | klaeranlage | gleis"}
+	return sim.water.mayor_expand(town, anlage)
+
+
 func execute(action: Dictionary) -> Dictionary:
 	var a := ActionExecutor.normalize(action)
 	var act := str(a.get("action", a.get("type", "")))
@@ -640,6 +661,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = {"ok": true, "msg": "Notiz gespeichert."}
 			"propose_project":
 				res = sim.civic.propose(town, a) if sim.civic != null else {"ok": false, "msg": "Keine Stadtentwicklung."}
+			"infra_ausbau":
+				res = _infra_ausbau(str(a.anlage))
 			"kommunal_bauen":
 				res = sim.services.build(town, str(a.typ), str(a.reason), "Bürgermeister %s" % name) if sim.services != null and sim.municipal.enabled() else {"ok": false, "msg": "Keine kommunalen Dienste."}
 			"kommunal_fahrzeug":

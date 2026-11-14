@@ -1227,6 +1227,24 @@ static func rail(sim: Simulation) -> String:
 	return txt
 
 
+## Lagebild Infrastruktur & Versorgung (Auftrag 22 Phase 8): Ampel je Stadt und Bereich mit Grund.
+static func infra(sim: Simulation) -> String:
+	if not sim.towns.is_region():
+		return ""
+	var txt := "[b][color=#5aa0ff]INFRASTRUKTUR & VERSORGUNG[/color][/b]  (Ereignisse: Leitstelle → Infrastruktur & Versorgung)\n"
+	for t in sim.towns.list:
+		var k := int(t.id)
+		var st: Dictionary = InfraStatus.of_town(sim, k)
+		var parts: Array = []
+		for a in InfraStatus.AREAS:
+			parts.append("[color=%s]●[/color] %s" % [InfraStatus.COLOR[st[a].ampel], InfraStatus.LABEL[a]])
+		txt += "%s: %s\n" % [sim.towns.name_of(k), "  ".join(parts)]
+		for a in InfraStatus.AREAS:
+			if str(st[a].ampel) != "ok":
+				txt += "    [color=%s]%s: %s[/color]\n" % [InfraStatus.COLOR[st[a].ampel], InfraStatus.LABEL[a], str(st[a].text)]
+	return txt
+
+
 ## Polizei je Stadt (Auftrag 22 Phase 5): Wache, Personal, Aufklaerung, Einsaetze.
 static func police(sim: Simulation) -> String:
 	if sim.police == null or not sim.police.enabled():

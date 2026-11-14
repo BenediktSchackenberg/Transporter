@@ -22,6 +22,7 @@ const SOLVE_PER_OFFICER := 0.06
 const SOLVE_MAX := 0.9
 const ACCIDENT_P := 0.03               # je Stadt und Tag
 const ACCIDENT_P_BAD := 0.09           # bei Glaette oder Nebel
+const BLACKOUT_FACTOR := 3.0           # Phase 8: Stromausfall in der Stadt -> Ampeln aus, dreimal so viele Unfaelle
 const ACCIDENT_MIN := 40.0             # Unfallaufnahme vor Ort
 const ACCIDENT_BLOCK_MAX := 600.0      # Sperrung haelt hoechstens so lange (falls keine Wache kommt)
 const CHECK_P := 0.25                  # Verkehrskontrolle je Stadt und Tag
@@ -322,13 +323,20 @@ func on_day(_day: int) -> void:
 	var bad: bool = sim.wx != null and (sim.wx.is_icy() or sim.wx.is_fog())
 	for t in sim.towns.list:
 		var k := int(t.id)
-		if _rng.randf() < (ACCIDENT_P_BAD if bad else ACCIDENT_P):
+		if _rng.randf() < accident_chance(k, bad):
 			accident(k)
 		if _rng.randf() < CHECK_P and not station_of(k).is_empty():
 			traffic_check(k)
 	for b in sim.city.buildings:   # Anzeigen aus der Nacht (Tageswechsel)
 		if str(b.get("type", "")) in ["kneipe", "disco"] and _rng.randf() < NOISE_P:
 			noise_call(sim.towns.of_building(int(b.id)), int(b.id))
+
+
+func accident_chance(k: int, bad: bool) -> float:
+	var p := ACCIDENT_P_BAD if bad else ACCIDENT_P
+	if sim.water != null and sim.water.enabled() and not sim.water.power_ok(k):
+		p *= BLACKOUT_FACTOR
+	return p
 
 
 func _prune() -> void:

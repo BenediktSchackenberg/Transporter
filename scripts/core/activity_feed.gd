@@ -21,6 +21,7 @@ const KINDS := {
 	"verbrechen": {"label": "Verbrechen", "icon": "i_bolt"},
 	"polizei": {"label": "Polizei", "icon": "i_shield"},
 	"gesundheit": {"label": "Gesundheit", "icon": "i_star"},
+	"infra": {"label": "Versorgung", "icon": "i_bolt"},   # Auftrag 22 Phase 8: Rohrbruch, Bahnstoerung
 	"sonstiges": {"label": "Aktion", "icon": "i_chat"},
 }
 const ACTION_KIND := {

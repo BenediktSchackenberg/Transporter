@@ -546,6 +546,8 @@ func power(f: Dictionary) -> float:
 		x += EXT_TRAINED if bool(p.get("lehrgang", false)) else EXT_PER_CREW
 	if _has_role(here, "wasser"):
 		x *= WATER_BONUS
+	if sim.water != null and sim.water.enabled():
+		x *= sim.water.fire_water_factor(int(f.get("town", 0)))   # Phase 8: Wasserknappheit/Rohrbruch -> Hydranten ohne Druck
 	return x * _lead(f)
 
 

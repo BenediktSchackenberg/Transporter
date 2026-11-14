@@ -495,6 +495,7 @@ func _on_day() -> void:
 			var pr := float(DISRUPT[art].p_storm if storm else DISRUPT[art].p)
 			if pr > 0.0 and rng.randf() < pr:
 				disrupt(b, art)
+	_blackout_signals()
 	for b in disruptions.keys():   # Spielstand: Trupp neu losschicken, falls er fehlt
 		var vid := int(disruptions[b].vehicle)
 		if not sim.fleet.vehicles.any(func(v): return int(v.id) == vid and v.kind == "bahntrupp"):
@@ -503,6 +504,18 @@ func _on_day() -> void:
 	_deliver()
 	_check_track()
 	_book_operation()
+
+
+## Phase 8: Stadt ohne Strom (abgehaengt, Notstrom erschoepft) -> Stellwerk und Signale am Bahnhof fallen aus.
+func _blackout_signals() -> void:
+	if sim.water == null or not sim.water.enabled():
+		return
+	for s in stops.size():
+		if sim.water.power_ok(int(stops[s].town)):
+			continue
+		var b := s if s < stops.size() - 1 else s - 1
+		if b >= 0 and not disruptions.has(b) and disrupt(b, "Signalstörung"):
+			sim.log_event("Regionalbahn: Stromausfall in %s – Stellwerk ohne Strom, Signalstörung." % sim.towns.name_of(int(stops[s].town)), "warn")
 
 
 ## Betriebskosten und Landeszuschuss nach gefahrenen Feldern.
@@ -792,7 +805,7 @@ func start_repair(b: int) -> Dictionary:
 	repairs[str(prj.id)] = b
 	sim.log_event("Regionalbahn: Gleis %s – %s abgenutzt (Zustand %d %%%s) – Instandsetzung ausgeschrieben als %s (%s, Land %d %%)." % [von, nach,
 		roundi(condition_of(b)), ", Langsamfahrstelle" if condition_of(b) < SLOW_AT else "", prj.id, Catalog.money(cost), roundi(LAND_SHARE * 100.0)], "warn")
-	return {"ok": true, "ref": prj.id}
+	return {"ok": true, "ref": prj.id, "msg": "Gleisinstandsetzung %s – %s ausgeschrieben als %s (%s)." % [von, nach, prj.id, Catalog.money(cost)]}
 
 
 ## Abnahme durch die Baufirma (Construction._finish_public).
@@ -899,6 +912,7 @@ func disrupt(b: int, art: String) -> bool:
 	var town := int(stops[b].town) if absi(idx - int(stops[b].to)) <= absi(idx - int(stops[b + 1].from)) else int(stops[b + 1].town)
 	disruptions[b] = {"art": art, "cell": [cell.x, cell.y], "idx": idx, "road": [road.x, road.y], "since": sim.game_min, "vehicle": -1, "town": town}
 	stats["stoerungen"] = int(stats.get("stoerungen", 0)) + 1
+	sim.activity.add("stadt", -1, "infra", "Bahn: %s" % art, "Abschnitt gesperrt, Bahntrupp unterwegs", cell)
 	sim.log_event("Regionalbahn: %s zwischen %s und %s – Abschnitt gesperrt, Bahntrupp aus %s ist unterwegs." % [art,
 		sim.towns.name_of(int(stops[b].town)), sim.towns.name_of(int(stops[b + 1].town)), sim.towns.name_of(town)], "warn")
 	_dispatch_crew(b)
