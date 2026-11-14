@@ -372,3 +372,17 @@ Auswertung Partie 22:04 (3 Spielmonate): 703 Antworten der lokalen Modelle, kein
 30 Tagen steht dort „wahrzeichen“ mit der Tagesidee und dem Hinweis auf `free_build`. Bedarf je Block steht jetzt in der
 Aktionsbeschreibung statt in der Beobachtung (Token-Budget, jetzt ~5 917). Gründer-KI bestätigt: Spieler 4–10 fragten Ollama an.
 Test `test_build_chance` (4).
+
+**Gründer bauen (14.11.):** Auswertung der Partie 13.11. 22:04 (bis 00:43, ~300 Spieltage): kein Bau, weil die Partie vor den
+Prompt-Änderungen (`3522691`, `ff90bcc`) gestartet war; zusätzlich meldeten alle Gründerfirmen dauerhaft „kein freier Platz“ –
+`StoneWorks._find_site` kannte nur Startgrundstücke. Jetzt auch eigene Parzellen (`owner "C<id>"`), frei ist dort, was
+`EventDirector._free` erlaubt. Test `test_founder_build_site`.
+
+**Phase 7 Schritt 3 Gleiswartung (14.11.):** `RailTraffic.condition` je Abschnitt (0–100 %). Jede Fahrt über den ganzen Abschnitt
+kostet `WEAR_PASS` 1 Prozentpunkt, der Güterzug das Dreifache (`WEAR_FREIGHT`). Unter 50 % Langsamfahrstelle mit halber
+Geschwindigkeit (Grund am Zug, Verspätung), unter 65 % schreibt die Regionalbahn die Instandsetzung aus (`start_repair`: Projekt
+Art „gleis“, 150 €/Feld, ≥ 6 Tage, Land 75 %, Städte nach Einwohnern; gemeinsame Ausschreibung `_tender` mit dem zweiten Gleis).
+Eine Baufirma setzt instand (Bautrupp an der Abschnittsmitte), danach 100 %. Anzeige je Abschnitt in der Bahnansicht, Feld
+`gleiszustand` in `summary()` (Bürgermeister-Beobachtung `bahn`). Gespeichert: `condition`, `repairs`. Gemessen: nur Regionalbahn
+~0,5 %/Tag je Abschnitt (bei 1,0/Fahrt) → Instandsetzung nach gut zwei Spielmonaten, mit Güterzug früher. Test `test_rail_wear` (13).
+Nächster Schritt 4: private Güterverkehrsfirmen (Trassen/Wagen buchen).

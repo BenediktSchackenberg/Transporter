@@ -72,6 +72,15 @@ const TRACK_DAYS_MIN := 15
 const CLOSE_AHEAD := 6.0      # Schranke schliesst so viele Felder vor der Zugspitze (2 Spielminuten)
 const CLOSE_TAIL := 3.6       # ... und oeffnet, wenn das Zugende so weit vorbei ist
 const ROAD_EUR_CELL := 0.01   # Ausweichen auf die Strasse: Fahrtkosten je Feld (Auto)
+# Gleiszustand (Phase 7 Schritt 3): Verschleiss je Abschnitt nach Belastung, Langsamfahrstelle, Instandsetzung durch Baufirmen
+const WEAR_PASS := 1.0          # Zustandsverlust (Prozentpunkte) je Fahrt ueber den ganzen Abschnitt (Triebwagen)
+const WEAR_FREIGHT := 3.0       # Gueterzug (Lok + vier beladene Wagen) belastet das Gleis dreimal so stark
+const SLOW_AT := 50.0           # darunter Langsamfahrstelle ...
+const SLOW_FACTOR := 0.5        # ... mit halber Geschwindigkeit
+const REPAIR_AT := 65.0         # darunter schreibt die Regionalbahngesellschaft die Instandsetzung aus
+const REPAIR_EUR_CELL := 150.0  # Schienen schleifen, Schwellen tauschen, Schotter stopfen (zweites Gleis: 700 EUR/Feld)
+const REPAIR_CELLS_PER_DAY := 30
+const REPAIR_DAYS_MIN := 6
 ## Stoerungen: Wahrscheinlichkeit je Block und Tag, Arbeit vor Ort (Spielminuten), Kosten
 const DISRUPT := {
 	"Baum auf dem Gleis": {"p_storm": 0.15, "p": 0.0, "min": 60.0, "eur": 1200.0},
@@ -103,6 +112,8 @@ var fstop := 0.0              # Halteposition am Gueterbahnhof (Index in fpath)
 var junction := -1            # Index der Weiche im Fahrweg der Linie
 var fcrossings: Array = []    # Bahnuebergaenge des Anschlussgleises [{idx, cell}]
 var freight_queue: Array = [] # [{town, order, item, qty, day}] Sendungen am Gueterbahnhof
+var condition := {}           # Block -> Gleiszustand 0..100 (fehlt = 100)
+var repairs := {}             # Projekt-ID -> Block (Instandsetzung im Bau)
 
 
 func setup(simulation) -> void:
@@ -484,6 +495,7 @@ func _on_day() -> void:
 			_dispatch_crew(b)
 	_road_fallback()
 	_deliver()
+	_check_track()
 	_book_operation()
 
 
@@ -698,13 +710,22 @@ func start_double(fractions: Dictionary, reason: String) -> Dictionary:
 	var pl := plan_double()
 	if not pl.ok:
 		return pl
+	var cost := float(pl.kosten)
+	var prj := _tender("B%d" % int(pl.block), cost, int(pl.tage), "Zweites Gleis %s – %s (%s)" % [pl.von, pl.nach, reason.left(80)], fractions)
+	planned_tracks[str(prj.id)] = int(pl.block)
+	sim.log_event("Regionalbahn: zweites Gleis %s – %s beschlossen (%d Felder, %s, Land %d %%) – ausgeschrieben als %s." % [pl.von, pl.nach, int(pl.felder),
+		Catalog.money(cost), roundi(LAND_SHARE * 100.0), prj.id], "info")
+	return {"ok": true, "msg": "Zweites Gleis ausgeschrieben (%s)." % prj.id, "ref": prj.id}
+
+
+## Gleisbauprojekt (Art "gleis") bei der groessten Stadt ausschreiben: Land traegt LAND_SHARE, die Staedte den Rest nach `fractions`.
+func _tender(ref: String, cost: float, days: int, title: String, fractions: Dictionary) -> Dictionary:
 	var k := int(stops[0].town)
 	for s in stops:
 		if sim.citizens.population_of(int(s.town)) > sim.citizens.population_of(k):
 			k = int(s.town)
 	var M: Mayor = sim.towns.mayor(k)
-	var cost := float(pl.kosten)
-	var prj: Dictionary = M.add_works_project("gleis", "B%d" % int(pl.block), cost, int(pl.tage), {}, "Zweites Gleis %s – %s (%s)" % [pl.von, pl.nach, reason.left(80)])
+	var prj: Dictionary = M.add_works_project("gleis", ref, cost, days, {}, title)
 	M.commitments = maxf(0.0, M.commitments - cost)
 	prj["shares"] = {}
 	for key in fractions:
@@ -715,14 +736,69 @@ func start_double(fractions: Dictionary, reason: String) -> Dictionary:
 	prj["regional"] = "gleis"
 	prj.status = "ausgeschrieben"
 	prj.tender = {"opened_day": GameCalendar.day_of(sim.game_min) - 1, "bids": [], "by": "Regionalbahn"}
-	planned_tracks[str(prj.id)] = int(pl.block)
-	sim.log_event("Regionalbahn: zweites Gleis %s – %s beschlossen (%d Felder, %s, Land %d %%) – ausgeschrieben als %s." % [pl.von, pl.nach, int(pl.felder),
-		Catalog.money(cost), roundi(LAND_SHARE * 100.0), prj.id], "info")
-	return {"ok": true, "msg": "Zweites Gleis ausgeschrieben (%s)." % prj.id, "ref": prj.id}
+	return prj
+
+
+# ------------------------------------------------------------------ Gleiszustand (Phase 7 Schritt 3)
+func condition_of(b: int) -> float:
+	return float(condition.get(b, 100.0))
+
+
+func _block_cells(b: int) -> float:
+	return maxf(1.0, float(stops[b + 1].from) - float(stops[b].to))
+
+
+## Verschleiss beim Befahren: Anteil des Abschnitts x WEAR_PASS (Gueterzug x WEAR_FREIGHT).
+func _wear(b: int, cells_moved: float, t: Dictionary) -> void:
+	var loss := cells_moved / _block_cells(b) * WEAR_PASS * (WEAR_FREIGHT if is_freight(t) else 1.0)
+	condition[b] = maxf(0.0, condition_of(b) - loss)
+
+
+## Langsamfahrstelle: Fahrtgeschwindigkeit im Abschnitt.
+func speed_factor(b: int) -> float:
+	return SLOW_FACTOR if condition_of(b) < SLOW_AT else 1.0
+
+
+## Taeglich: Abschnitte unter REPAIR_AT werden zur Instandsetzung ausgeschrieben.
+func _check_track() -> void:
+	for b in stops.size() - 1:
+		if condition_of(b) < REPAIR_AT and not repairs.values().has(b):
+			start_repair(b)
+
+
+## Instandsetzung ausschreiben: Land LAND_SHARE, die Staedte den Rest nach Einwohnern (wie der Monatsausgleich).
+func start_repair(b: int) -> Dictionary:
+	if b < 0 or b >= stops.size() - 1 or repairs.values().has(b):
+		return {"ok": false, "msg": "Kein Abschnitt oder schon in Instandsetzung."}
+	var total := 0.0
+	for s in stops:
+		total += float(maxi(1, sim.citizens.population_of(int(s.town))))
+	var fr := {}
+	for s in stops:
+		var key := str(int(s.town))
+		fr[key] = float(fr.get(key, 0.0)) + float(maxi(1, sim.citizens.population_of(int(s.town)))) / total
+	var n := int(_block_cells(b))
+	var cost := snappedf(float(n) * REPAIR_EUR_CELL, 100.0)
+	var von: String = sim.towns.name_of(int(stops[b].town))
+	var nach: String = sim.towns.name_of(int(stops[b + 1].town))
+	var prj := _tender("R%d" % b, cost, maxi(REPAIR_DAYS_MIN, ceili(float(n) / float(REPAIR_CELLS_PER_DAY))),
+		"Gleisinstandsetzung %s – %s (Zustand %d %%)" % [von, nach, roundi(condition_of(b))], fr)
+	repairs[str(prj.id)] = b
+	sim.log_event("Regionalbahn: Gleis %s – %s abgenutzt (Zustand %d %%%s) – Instandsetzung ausgeschrieben als %s (%s, Land %d %%)." % [von, nach,
+		roundi(condition_of(b)), ", Langsamfahrstelle" if condition_of(b) < SLOW_AT else "", prj.id, Catalog.money(cost), roundi(LAND_SHARE * 100.0)], "warn")
+	return {"ok": true, "ref": prj.id}
 
 
 ## Abnahme durch die Baufirma (Construction._finish_public).
 func on_track_done(prj: Dictionary) -> void:
+	if repairs.has(str(prj.id)):
+		var rb := int(repairs[str(prj.id)])
+		repairs.erase(str(prj.id))
+		condition[rb] = 100.0
+		stats["instandsetzungen"] = int(stats.get("instandsetzungen", 0)) + 1
+		sim.log_event("Regionalbahn: Gleis %s – %s instand gesetzt – wieder volle Geschwindigkeit." % [sim.towns.name_of(int(stops[rb].town)),
+			sim.towns.name_of(int(stops[rb + 1].town))], "good")
+		return
 	if not planned_tracks.has(str(prj.id)):
 		return
 	var b := int(planned_tracks[str(prj.id)])
@@ -748,9 +824,9 @@ func is_double_cell(q: Vector2i) -> bool:
 
 ## Zellen eines geplanten zweiten Gleises (Darstellung der Baustelle) und Mitte fuer den Bautrupp.
 func planned_cells(project_id: String) -> Array:
-	if not planned_tracks.has(project_id) or path.is_empty():
+	if not (planned_tracks.has(project_id) or repairs.has(project_id)) or path.is_empty():
 		return []
-	var b := int(planned_tracks[project_id])
+	var b := int(planned_tracks.get(project_id, repairs.get(project_id, 0)))
 	return path.slice(int(stops[b].to) + 1, int(stops[b + 1].from))
 
 
@@ -967,8 +1043,8 @@ func _move(t: Dictionary, dmin: float, now: float) -> void:
 	var goal := float(stops[j].pos)
 	if t.has("exit_at"):
 		goal = float(t.exit_at)
-	var step := SPEED * dmin
 	var b := _block(int(t.stop), j)
+	var step := SPEED * dmin * speed_factor(b)
 	if disruptions.has(b):   # Stoerung im eigenen Block vor dem Zug: vor der Stelle anhalten
 		var ahead := (float(disruptions[b].idx) - float(t.pos)) * signf(goal - float(t.pos))
 		if ahead > 0.0 and ahead - (float(CARS) * CAR_LEN * 0.5 + 2.0) <= step:
@@ -976,7 +1052,10 @@ func _move(t: Dictionary, dmin: float, now: float) -> void:
 			stats.wartezeit = float(stats.wartezeit) + dmin
 			return
 	t.erase("grund")
+	if speed_factor(b) < 1.0:
+		t["grund"] = "Langsamfahrstelle (Gleis %d %%)" % roundi(condition_of(b))
 	var left := goal - float(t.pos)
+	_wear(b, minf(absf(left), step), t)
 	if absf(left) <= step:
 		t.pos = goal
 		t.cells = float(t.cells) + absf(left)
@@ -1161,13 +1240,16 @@ func summary() -> Dictionary:
 		"personal": {"triebfahrzeugfuehrer": drivers(), "zugbegleiter": conductors()}, "gesellschaft_saldo": snappedf(float(sim.economy.accounts.get(ACCT, 0.0)), 1.0),
 		"letzter_ausgleich": last_settle, "fahrpreis_beispiel": fare(0, stops.size() - 1) if stops.size() > 1 else 0.0,
 		"stoerungen": disruptions.values().map(func(dz): return {"art": dz.art, "seit_min": snappedf(sim.game_min - float(dz.since), 1.0), "trupp_aus": sim.towns.name_of(int(dz.town))}),
-		"schranken_zu": closed.size(), "ausbau": expansion_options(), "gueter_wartend": queued_units()}
+		"schranken_zu": closed.size(), "ausbau": expansion_options(), "gueter_wartend": queued_units(),
+		"gleiszustand": range(maxi(0, stops.size() - 1)).map(func(b): return {"abschnitt": "%s – %s" % [sim.towns.name_of(int(stops[b].town)),
+			sim.towns.name_of(int(stops[b + 1].town))], "zustand": roundi(condition_of(b)), "langsamfahrstelle": condition_of(b) < SLOW_AT,
+			"instandsetzung": repairs.values().has(b)})}
 
 
 func to_dict() -> Dictionary:
 	return {"trains": trains, "blocks": blocks, "stats": stats, "waiting": waiting, "by_town": by_town, "last_settle": last_settle, "facility": facility,
 		"cells_acc": _cells_acc, "disruptions": disruptions, "double_blocks": double_blocks, "planned_tracks": planned_tracks, "ordered": ordered,
-		"freight_queue": freight_queue}
+		"freight_queue": freight_queue, "condition": condition, "repairs": repairs}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -1198,6 +1280,14 @@ func from_dict(d: Dictionary) -> void:
 		planned_tracks[str(k)] = int(pt[k])
 	ordered = d.get("ordered", []).map(func(x): return int(x))
 	freight_queue = d.get("freight_queue", [])
+	condition = {}
+	var cd: Dictionary = d.get("condition", {})
+	for k in cd:
+		condition[int(k)] = float(cd[k])
+	repairs = {}
+	var rp: Dictionary = d.get("repairs", {})
+	for k in rp:
+		repairs[str(k)] = int(rp[k])
 	disruptions = {}
 	var dd: Dictionary = d.get("disruptions", {})
 	for k in dd:
