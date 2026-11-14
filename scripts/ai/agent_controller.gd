@@ -454,7 +454,8 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 	var i := 0
 	var effective := 0
 	var actions: Array = parsed.actions
-	if parsed.get("plan") is Dictionary and not parsed.plan.is_empty():
+	# nur echte Plaene (Partie 14.11.: das Modell gab {"status": "kein Plan"} aus der Beobachtung zurueck -> 39 Fehler "ziel fehlt")
+	if parsed.get("plan") is Dictionary and (parsed.plan.has("ziel") or parsed.plan.has("schritte")):
 		var pa: Dictionary = parsed.plan.duplicate()
 		pa["action"] = "set_plan"
 		if not _same_plan(pa):
