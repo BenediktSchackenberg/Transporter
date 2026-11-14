@@ -12,11 +12,13 @@ extends RefCounted
 const EVERY := 5
 const BUILD_DAYS := {"FW-01": 20, "RW-01": 14, "KH-01": 40, "BH-01": 14, "VB-01": 16, "SC-01": 30, "KI-01": 16, "RC-01": 14,
 	"FW-02": 30, "FW-03": 45, "FW-04": 60, "FW-05": 30, "FW-06": 40,
-	"RD-02": 20, "KH-02": 60, "KH-03": 90, "KH-04": 20}
+	"RD-02": 20, "KH-02": 60, "KH-03": 90, "KH-04": 20, "PO-02": 30, "PO-03": 45}
 const IDLE_CLOSE_DAYS := 30
 const RESERVE_DAYS := 60            # Ruecklage fuer den laufenden Dienstbetrieb vor einem Neubau
 ## Ausbau der Feuerwehr (Etappe 13): naechste Stufe ab dieser Einsatzlast (Einsaetze in 30 Tagen) oder Einwohnerzahl.
 const FIRE_STAGES := [["FW-01", "FW-02", 10, 1500], ["FW-02", "FW-03", 25, 4000], ["FW-03", "FW-04", 45, 10000]]
+## Ausbau der Polizei (Auftrag 23): naechste Stufe ab dieser Einsatzlast (Einsaetze in 30 Tagen) oder Einwohnerzahl.
+const POLICE_STAGES := [["PO-01", "PO-02", 20, 1500], ["PO-02", "PO-03", 45, 4000]]
 
 var sim
 var builds := {}          # Projekt-ID -> {town, code, rect, parcel, reason, by, day}
@@ -98,6 +100,13 @@ func _fire_needs(k: int, has: Callable) -> Array:
 			if later.any(func(c): return has.call(c)):
 				continue
 			out.append({"massnahme": "bauen", "typ": next, "grund": "%d Feuerwehreinsätze in 30 Tagen, %d Einwohner" % [load, pop], "prio": 2})
+	if sim.police != null and sim.police.enabled():
+		var pload: int = sim.police.load_of(k)
+		for ps in POLICE_STAGES:
+			if has.call(ps[0]) and not has.call(ps[1]) and (pload >= int(ps[2]) or pop >= int(ps[3])):
+				if ps[1] == "PO-02" and has.call("PO-03"):
+					continue
+				out.append({"massnahme": "bauen", "typ": ps[1], "grund": "%d Polizeieinsätze in 30 Tagen, %d Einwohner" % [pload, pop], "prio": 2})
 	var stations: Array = M.of_town(k, "feuerwehr").filter(func(f): return FireService.is_station(f) and f.status == "in_betrieb")
 	if stations.is_empty():
 		return out

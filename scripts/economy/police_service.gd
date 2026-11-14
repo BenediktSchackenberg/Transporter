@@ -11,6 +11,12 @@ extends RefCounted
 ##    (unter 35 %) oder mit uebermuedetem Fahrer (ab 95) zahlen Bussgeld an die Stadt.
 ##  - Ruhestoerung: nachts (22-6 Uhr) an Kneipen und Discos; die Wache faehrt hin, ein Betrieb eines Unternehmens zahlt Bussgeld.
 ## Ohne Wache in der Stadt hilft die naechste Wache (laengere Anfahrt).
+##  - Illegale Muellablagerung (Auftrag 23): je Stadt und Tag, haeufiger bei veraergerten Buergern und ueberquellenden Tonnen; der
+##    Haufen liegt als Strassenmuell im Viertel (StreetCleaning, senkt die Zufriedenheit bis die Kehrmaschine raeumt). Die Polizei
+##    ermittelt vor Ort; mit der Aufklaerungschance der Wache zahlt der Taeter (Haushalt) ein Bussgeld an die Stadt.
+## Ausbaustufen (Auftrag 23): PO-01 Polizeiwache, PO-02 Polizeirevier, PO-03 Polizeipraesidium (mehr Personal und Streifenwagen);
+## ServicePlanner baut die naechste Stufe nach Einsatzlast (30 Tage) oder Einwohnerzahl.
+## Laufende Einsaetze werden gespeichert; nach dem Laden ruecken sie neu von der Wache aus.
 
 const CODE := "PO-01"
 const VEHICLE := "FuStW"
@@ -36,11 +42,17 @@ const NOISE_P := 0.05                  # je Kneipe/Disco und Nacht
 const NOISE_MIN := 20.0
 const NOISE_FINE := 300.0
 const KEEP_DONE := 60
+const DUMP_P := 0.05                   # illegale Muellablagerung je Stadt und Tag (Grundwert)
+const DUMP_KG := 45.0                  # Strassenmuell je Ablagerung
+const DUMP_MIN := 30.0                 # Ermittlung vor Ort
+const DUMP_FINE := 250.0               # Bussgeld des Taeters (Haushalte H0 -> Stadt)
+const STAGES := ["PO-01", "PO-02", "PO-03"]
 
 var sim
 var missions := {}        # "P<n>" -> {id, kind, town, cell, station, task, vid, phase, t, status, ...}
 var movers := {}          # Fahrzeug-ID -> Mover (nicht gespeichert)
-var stats := {"festnahmen": 0, "unfaelle": 0, "kontrollen": 0, "bussgelder": 0, "bussgeld_eur": 0.0, "ruhestoerungen": 0}
+var stats := {"festnahmen": 0, "unfaelle": 0, "kontrollen": 0, "bussgelder": 0, "bussgeld_eur": 0.0, "ruhestoerungen": 0, "muell": 0, "muell_aufgeklaert": 0}
+var load_hist := {}       # Stadt (str) -> {Tag (str): Einsaetze} (Ausbau nach Einsatzlast der letzten 30 Tage)
 var by_town := {}         # Stadt (str) -> {festnahmen, unfaelle, kontrollen, bussgelder, ruhestoerungen}
 var random_events := true # Tests schalten Zufallsereignisse ab
 var _next := 1
@@ -60,10 +72,26 @@ func enabled() -> bool:
 
 
 func station_of(k: int) -> Dictionary:
-	for f in sim.municipal.of_town(k, "polizei"):
-		if str(f.code) == CODE and f.status == "in_betrieb":
-			return f
-	return {}
+	var best := {}
+	for f in sim.municipal.of_town(k, "polizei"):   # hoechste Ausbaustufe zuerst
+		if is_station(f) and f.status == "in_betrieb" and (best.is_empty() or STAGES.find(str(f.code)) > STAGES.find(str(best.code))):
+			best = f
+	return best
+
+
+static func is_station(f: Dictionary) -> bool:
+	return str(f.get("code", "")) in STAGES
+
+
+## Einsaetze einer Stadt in den letzten `days` Tagen.
+func load_of(k: int, days: int = 30) -> int:
+	var h: Dictionary = load_hist.get(str(k), {})
+	var d0 := GameCalendar.day_of(sim.game_min) - days
+	var n := 0
+	for d in h:
+		if int(d) > d0:
+			n += int(h[d])
+	return n
 
 
 ## Aufklaerungschance je Tag und Gesuchtem: Grundwert plus Polizisten der Wache der Stadt (ohne Wache nur der Grundwert).
@@ -88,6 +116,15 @@ func _mission(kind: String, k: int, cell: Vector2i, data: Dictionary = {}) -> Di
 		"t": sim.game_min, "alarm": sim.game_min, "status": "laufend"}
 	m.merge(data)
 	missions[id] = m
+	var hk := str(k)
+	if not load_hist.has(hk):
+		load_hist[hk] = {}
+	var dk := str(GameCalendar.day_of(sim.game_min))
+	load_hist[hk][dk] = int(load_hist[hk].get(dk, 0)) + 1
+	if load_hist[hk].size() > 40:
+		var keys: Array = load_hist[hk].keys()
+		keys.sort_custom(func(a, b): return int(a) < int(b))
+		load_hist[hk].erase(keys[0])
 	_dispatch(m)
 	return m
 
@@ -158,7 +195,7 @@ func _dispatch(m: Dictionary) -> void:
 		var target := Vector2i(int(m.cell[0]), int(m.cell[1]))
 		var best_d := INF
 		for f in M.facilities.values():
-			if str(f.code) != CODE or f.status != "in_betrieb" or _free_car(f) == "":
+			if not is_station(f) or f.status != "in_betrieb" or _free_car(f) == "":
 				continue
 			var d := Vector2(M._cell(f)).distance_to(Vector2(target))
 			if d < best_d:
@@ -254,6 +291,9 @@ func _on_scene(m: Dictionary, now: float) -> void:
 		"ruhestoerung":
 			m.t = now + NOISE_MIN
 			_noise_fine(m)
+		"muell":
+			m.t = now + DUMP_MIN
+			_dump_investigate(m)
 
 
 func _done_on_scene(m: Dictionary, now: float) -> void:
@@ -316,6 +356,46 @@ func _fine(cid: int, k: int, eur: float, why: String) -> void:
 	sim.log_event("Polizei %s: Bußgeld %s für %s (%s)." % [sim.towns.name_of(k), Catalog.money(pay), c.company_name, why], "warn", cid)
 
 
+## Illegale Muellablagerung: Haufen auf einer Strasse am Ortsrand, Polizei ermittelt.
+func illegal_dump(k: int, cell: Vector2i = Vector2i(-1, -1)) -> Dictionary:
+	if cell.x < 0:
+		cell = _random_road(k)
+		if cell.x < 0:
+			return {}
+	if sim.street_cleaning != null:
+		sim.street_cleaning.dirt[cell] = float(sim.street_cleaning.dirt.get(cell, 0.0)) + DUMP_KG
+	stats.muell = int(stats.muell) + 1
+	_tw(k)["muell"] = int(_tw(k).get("muell", 0)) + 1
+	sim.activity.add("stadt", -1, "polizei", "Illegale Müllablagerung in %s" % sim.towns.name_of(k), "%d kg Sperrmüll am Straßenrand, Polizei ermittelt" % int(DUMP_KG), cell)
+	sim.log_event("%s: illegale Müllablagerung – Polizei ermittelt." % sim.towns.name_of(k), "warn")
+	return _mission("muell", k, cell)
+
+
+## Wahrscheinlichkeit je Tag: Grundwert, mehr bei veraergerten Buergern (Buerger-KI) und ueberquellenden Tonnen.
+func dump_chance(k: int) -> float:
+	var p := DUMP_P
+	if sim.citizens != null:
+		p *= 1.0 + 4.0 * float(sim.citizens.mood_of(k).get("veraergert", 0.0))
+	if sim.waste != null and sim.waste.has_method("overflowing"):
+		p *= 1.0 + 0.5 * minf(4.0, float(sim.waste.overflowing(k).size()))
+	return minf(0.5, p)
+
+
+func _dump_investigate(m: Dictionary) -> void:
+	var k := int(m.town)
+	if _rng.randf() >= solve_chance(k):
+		sim.log_event("%s: Müllsünder nicht ermittelt." % sim.towns.name_of(k), "info")
+		return
+	var pay := minf(DUMP_FINE, maxf(0.0, float(sim.economy.accounts.get("H0", 0.0))))
+	if pay > 0.0:
+		sim.economy.transfer("H0", Towns.account_of(k), pay)
+	stats.muell_aufgeklaert = int(stats.muell_aufgeklaert) + 1
+	stats.bussgelder = int(stats.bussgelder) + 1
+	stats.bussgeld_eur = float(stats.bussgeld_eur) + pay
+	_tw(k).bussgelder = int(_tw(k).bussgelder) + 1
+	sim.log_event("%s: Müllsünder ermittelt, Bußgeld %s an die Stadt." % [sim.towns.name_of(k), Catalog.money(pay)], "info")
+
+
 # ------------------------------------------------------------------ Tag
 func on_day(_day: int) -> void:
 	if not random_events:
@@ -323,6 +403,8 @@ func on_day(_day: int) -> void:
 	var bad: bool = sim.wx != null and (sim.wx.is_icy() or sim.wx.is_fog())
 	for t in sim.towns.list:
 		var k := int(t.id)
+		if _rng.randf() < dump_chance(k):
+			illegal_dump(k)
 		if _rng.randf() < accident_chance(k, bad):
 			accident(k)
 		if _rng.randf() < CHECK_P and not station_of(k).is_empty():
@@ -370,8 +452,7 @@ func summary(k: int = -1) -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	# Einsaetze laufen nach dem Laden nicht weiter (Fahrzeuge stehen in der Wache); Sperrungen gibt NavGrid frei
-	return {"stats": stats, "by_town": by_town, "next": _next}
+	return {"stats": stats, "by_town": by_town, "next": _next, "missions": missions.duplicate(true), "load_hist": load_hist.duplicate(true)}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -380,4 +461,19 @@ func from_dict(d: Dictionary) -> void:
 	stats = st0
 	by_town = d.get("by_town", {})
 	_next = int(d.get("next", 1))
-	missions = {}
+	load_hist = d.get("load_hist", {})
+	missions = d.get("missions", {})
+	# Fahrzeugpositionen (Mover) werden nicht gespeichert: laufende Fahrten ruecken neu von der Wache aus, eine Rueckfahrt endet sofort
+	for m in missions.values():
+		if m.status != "laufend":
+			continue
+		match str(m.phase):
+			"anfahrt":
+				m.phase = "ausruecken"
+				m.t = float(m.get("t", 0.0))
+			"rueckfahrt":
+				m.status = "fertig"
+				m.phase = "fertig"
+				m["end"] = float(m.get("t", 0.0))
+				if sim != null and sim.municipal != null:
+					sim.municipal.finish(str(m.task), "Polizei %s: %s (nach dem Laden)" % [m.id, m.kind])

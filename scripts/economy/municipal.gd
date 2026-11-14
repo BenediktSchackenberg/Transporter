@@ -84,6 +84,13 @@ const TYPES := {
 	"PO-01": {"label": "Polizeiwache", "dienst": "polizei", "ressort": "Sicherheit", "building": "police_station", "cost": 380000.0,
 		"upkeep": 70.0, "capacity": 2, "staff": {"polizist": 10}, "min_staff": {"polizist": 2}, "power": 25.0, "water": 4.0,
 		"vehicles": ["FuStW", "FuStW"], "vehicles_from_pop": {"FuStW": 0}},
+	# Auftrag 23: Ausbaustufen der Polizei (gleiches Gebaeudebild, mehr Personal und Streifenwagen)
+	"PO-02": {"label": "Polizeirevier", "dienst": "polizei", "ressort": "Sicherheit", "building": "police_station", "cost": 1200000.0,
+		"upkeep": 160.0, "capacity": 4, "staff": {"polizist": 20}, "min_staff": {"polizist": 4}, "power": 45.0, "water": 7.0,
+		"vehicles": ["FuStW", "FuStW", "FuStW", "FuStW"]},
+	"PO-03": {"label": "Polizeipräsidium", "dienst": "polizei", "ressort": "Sicherheit", "building": "police_station", "cost": 3500000.0,
+		"upkeep": 380.0, "capacity": 7, "staff": {"polizist": 35}, "min_staff": {"polizist": 8}, "power": 90.0, "water": 14.0,
+		"vehicles": ["FuStW", "FuStW", "FuStW", "FuStW", "FuStW", "FuStW"]},
 	# Auftrag 22 Phase 4 Schritt 2: Hochbehaelter (Druckzone, Vorrat in m3 = capacity), ohne eigenes Personal (Fernwirktechnik)
 	"WT-01": {"label": "Hochbehälter", "dienst": "wasser", "ressort": "Umwelt", "building": "water_tank", "cost": 350000.0,
 		"upkeep": 15.0, "capacity": 120, "min_capacity": 15, "staff": {}, "power": 3.0, "water": 0.0, "vehicles": []},

@@ -433,8 +433,12 @@ ohne freien Wagen hilft die nächste Wache.
   geprüft: Zustand unter 35 % → 150 €, übermüdeter Fahrer (ab 95) → 200 € Bußgeld an die Stadtkasse.
 - **Ruhestörung:** je Kneipe/Disco 5 % je Nacht; Betrieb eines Unternehmens zahlt 300 €.
 Bürgermeister-Beobachtung `polizei` (Wache, Personal, Aufklärung, laufende Einsätze, Zahlen), Anzeige im Infrastruktur-Tab.
-Test `test_police` (17). Grenzen: laufende Einsätze werden nicht gespeichert (nach dem Laden stehen die Wagen in der Wache);
-keine Ausbaustufen der Wache; illegale Müllentsorgung noch nicht.
+Test `test_police` (17).
+Nachtrag 14.11. (Auftrag 23): **illegale Müllablagerung** (5 % je Stadt und Tag, mehr bei verärgerten Bürgern und überquellenden
+Tonnen; 45 kg Straßenmüll im Viertel, Polizei ermittelt 30 Minuten, bei Aufklärung 250 € Bußgeld der Haushalte an die Stadt);
+**Ausbaustufen** PO-02 Polizeirevier (20 Polizisten, 4 Streifenwagen) und PO-03 Polizeipräsidium (35, 6), vom ServicePlanner ab
+20/45 Einsätzen in 30 Tagen oder 1 500/4 000 Einwohnern; **laufende Einsätze werden gespeichert** (vorher blieben die Aufgaben
+der Wache nach dem Laden offen und die Streifenwagen für immer gebunden). Test `test_police_dump_stages`.
 
 ## Phase 8 – Verflechtung, Bürgermeister-KI, Lagebild (14.11.2026)
 
@@ -451,5 +455,5 @@ keine Ausbaustufen der Wache; illegale Müllentsorgung noch nicht.
 - **Bürgermeister-KI:** Aktion `infra_ausbau` (anlage wasserwerk | hochbehaelter | klaeranlage | gleis) – vorausschauend statt erst
   nach fünf Tagen Engpass; Beobachtung `infrastruktur_lage` (nur Abweichungen). Regel-Bürgermeister: Wassermangel → Ausbau mit
   Vorrang, Bedarf > 80 % → Ausbau, Langsamfahrstelle am eigenen Bahnhof → Gleisinstandsetzung.
-Test `test_infra_chain` (14). Damit sind die Phasen 1–8 von Auftrag 22 umgesetzt; offen: illegale Müllablagerung, Ausbaustufen der
-Polizeiwache, Abnahmetests 1–12 als ein gemeinsamer Langlauf.
+Test `test_infra_chain` (14). Damit sind die Phasen 1–8 von Auftrag 22 umgesetzt; illegale Müllablagerung und Ausbaustufen der
+Polizeiwache kamen am 14.11. dazu (siehe Phase 5); offen: Abnahmetests 1–12 als ein gemeinsamer Langlauf.
