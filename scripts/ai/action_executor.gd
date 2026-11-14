@@ -217,6 +217,8 @@ static func normalize(action: Dictionary) -> Dictionary:
 	}
 	if name in ["accept_contract", "assign_transport", "assign_vehicle", "plan_tour"]:
 		ctx_keys["contract_id"] = ["contract_ids", "task_id", "task_ids", "tasks", "targets", "order_id", "orders", "auftrag"]
+	elif name == "recruit_worker":   # recruit_worker(ziel='W37') u. Ae. (Partie 14.11.)
+		ctx_keys["worker_id"] = ["ziel", "ziele", "personal_id", "kandidat", "workers", "worker_ids"]
 	elif name == "buy_vehicle":
 		ctx_keys["offer_id"] = ["angebote", "offers", "offer_ids", "targets", "vehicle_ids", "angebot"]
 	for ck in ctx_keys:
@@ -303,13 +305,20 @@ static func _unwrap_call(a: Dictionary) -> void:
 	if m == null:
 		return
 	a["action"] = m.get_string(1)
-	var re := RegEx.create_from_string("([A-Za-z_][A-Za-z0-9_]*)\\s*[=:]\\s*(\"[^\"]*\"|'[^']*'|[^,]+)")
+	# Schluessel auch mit verirrtem Anfuehrungszeichen (contract_id":"A7"), Werte auch als Liste ([10], ['W37']) - Partie 14.11.
+	var re := RegEx.create_from_string("\"?([A-Za-z_][A-Za-z0-9_]*)\"?\\s*[=:]\\s*(\\[[^\\]]*\\]|\"[^\"]*\"|'[^']*'|[^,]+)")
 	for p in re.search_all(m.get_string(2)):
 		var key := p.get_string(1)
 		var val := p.get_string(2).strip_edges()
 		if a.has(key):
 			continue
-		if (val.begins_with("'") and val.ends_with("'")) or (val.begins_with("\"") and val.ends_with("\"")):
+		if val.begins_with("[") and val.ends_with("]"):
+			var items: Array = []
+			for it in val.substr(1, val.length() - 2).split(",", false):
+				var t := it.strip_edges().trim_prefix("'").trim_suffix("'").trim_prefix("\"").trim_suffix("\"")
+				items.append(int(t) if t.is_valid_int() else t)
+			a[key] = items
+		elif (val.begins_with("'") and val.ends_with("'")) or (val.begins_with("\"") and val.ends_with("\"")):
 			a[key] = val.substr(1, val.length() - 2)
 		elif val.is_valid_int():
 			a[key] = int(val)
