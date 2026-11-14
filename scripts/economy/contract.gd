@@ -38,6 +38,11 @@ var payer := ""              # zahlende Stelle, falls nicht der Markt (z. B. "P0
 var order_ref := ""          # Bestellung des Stadtlagers (CityDepot), zu der dieser Transport gehoert
 var bonus := 0.0               # Versorgungspraemie der Stadt bei Lieferung an ein unterversorgtes Geschaeft (siehe Tiers)
 var cause := ""              # Ereignis-ID, aus der der Auftrag entstand (Ursachenkette)
+## Fahrtmessung (Partie 14.11.: Auftraege scheiterten unterwegs, die Schaetzung lag weit unter der echten Fahrzeit): Zeitpunkt der
+## ersten Zuteilung, Schaetzung (Logistics.eta_minutes) in diesem Moment, Spielminuten je Fahrzeugzustand bzw. Wartegrund.
+var assigned_at := -1.0
+var eta_est := -1.0
+var trip := {}
 
 
 func cargo_name() -> String:

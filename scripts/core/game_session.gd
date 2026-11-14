@@ -327,6 +327,9 @@ func _log_perf() -> void:
 			row[k] = int(c.ledger.totals[k])
 		fin[str(c.id)] = {"firma": c.company_name, "bargeld": int(c.ledger.cash), "gewinn": int(c.ledger.profit()), "kosten": row}
 	api_log.write({"type": "finance", "game_min": int(sim.game_min), "firmen": fin})
+	for tr in sim.trip_log:   # Fahrtmessung je abgeschlossenem Auftrag
+		api_log.write(tr.merged({"type": "trip"}))
+	sim.trip_log.clear()
 
 
 ## Bildzeiten seit dem letzten perf-Eintrag (Ruckler-Suche): Mittel/Maximum, Anzahl Bilder ueber 100 ms und Anteile je Bereich.

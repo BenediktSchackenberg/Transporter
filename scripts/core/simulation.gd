@@ -585,6 +585,52 @@ func _speed_factor(v: FleetVehicle) -> float:
 
 
 func _update_vehicle(v: FleetVehicle, dt: float) -> void:
+	_trip_why = ""
+	_trip_speed = 0.0
+	_update_vehicle_inner(v, dt)
+	if not v.stops.is_empty() or not v.load.is_empty():
+		_trip_note(v, _trip_why if _trip_why != "" else v.state, dt * Catalog.GAME_MIN_PER_SIM_SEC)
+
+
+## Fahrtmessung: Spielminuten je Zustand bzw. Wartegrund und mittleres Tempo fuer alle Auftraege, die das Fahrzeug gerade bedient.
+var _trip_why := ""
+var _trip_speed := 0.0
+var trip_log: Array = []      # abgeschlossene Auftraege mit Messung; GameSession schreibt sie ins Partie-Log (type "trip")
+
+func _trip_note(v: FleetVehicle, key: String, mins: float) -> void:
+	var ids := {}
+	for st in v.stops:
+		ids[str(st.contract_id)] = true
+	for kid in v.load:
+		ids[str(kid)] = true
+	for kid in ids:
+		var k: Contract = contracts.get(kid)
+		if k == null:
+			continue
+		k.trip[key] = float(k.trip.get(key, 0.0)) + mins
+		if _trip_speed > 0.0:
+			k.trip["_tempo_min"] = float(k.trip.get("_tempo_min", 0.0)) + _trip_speed * mins
+			k.trip["_fahr_min"] = float(k.trip.get("_fahr_min", 0.0)) + mins
+
+
+func _trip_record(k: Contract) -> void:
+	if k.assigned_at < 0.0 or k.internal != "":
+		return
+	var pick: Vector2i = city.building(k.pickup).road
+	var drop: Vector2i = city.building(k.dropoff).road
+	var t := {}
+	for key in k.trip:
+		if not str(key).begins_with("_"):
+			t[key] = int(k.trip[key])
+	trip_log.append({"id": k.id, "firma": k.owner, "status": k.status, "geschaetzt": int(k.eta_est), "gebraucht": int(k.done_at - k.assigned_at),
+		"frist_ab_zuteilung": int(k.deadline - k.assigned_at), "annahme_bis_zuteilung": int(k.assigned_at - k.accepted_at),
+		"felder_luftlinie": absi(pick.x - drop.x) + absi(pick.y - drop.y),
+		"tempo_mittel": snappedf(float(k.trip.get("_tempo_min", 0.0)) / maxf(1.0, float(k.trip.get("_fahr_min", 0.0))), 0.01), "zustaende": t})
+	if trip_log.size() > 500:
+		trip_log.pop_front()
+
+
+func _update_vehicle_inner(v: FleetVehicle, dt: float) -> void:
 	var c := companies[v.owner]
 	if v.state == "returning" and not v.stops.is_empty() and driver_of(v) != null 			and not c.is_disrupted(game_min):
 		start_next_job(v)   # Rueckfahrt abbrechen, neuer Auftrag hat Vorrang
@@ -647,17 +693,23 @@ func _update_vehicle(v: FleetVehicle, dt: float) -> void:
 func _drive(v: FleetVehicle, dt: float) -> void:
 	if driver_of(v) == null and v.state != "to_workshop":
 		v.state = "idle"
+		_trip_why = "ohne_fahrer"
 		return
 	if not v.arrived() and nav.barriers.has(v.next_tile()):
+		_trip_why = "schranke"
 		return   # Bahnuebergang geschlossen: warten, nicht umplanen
 	if not v.arrived() and city.is_road(v.next_tile()) and nav.is_blocked_road(v.next_tile()) and v.next_tile() != v.goal:
 		events.reroutes[v.owner] = int(events.reroutes.get(v.owner, 0)) + 1
 		if not route(v, v.goal):
+			_trip_why = "kein_weg"
 			return   # vorerst kein Weg: warten
 	if _is_blocked(v):
+		_trip_why = "blockiert"
 		return
 	var before := v.tiles_moved
-	v.advance(dt, _speed_factor(v) * _flow_step(v, dt) * (0.35 if not city.is_road(v.tile()) else 1.0))
+	var spf := _speed_factor(v) * _flow_step(v, dt) * (0.35 if not city.is_road(v.tile()) else 1.0)
+	_trip_speed = spf
+	v.advance(dt, spf)
 	var moved := v.tiles_moved - before
 	if moved > 0 and v.state == "to_workshop":
 		# Fahrt zur Werkstatt (abgeschleppt bzw. auf dem Weg zur Reparatur): kein weiterer Verschleiss, keine neue Panne und kein
@@ -880,6 +932,7 @@ func deliver_contract(v: FleetVehicle, k: Contract) -> void:
 	k.status = "delivered"
 	k.paid = pay
 	k.done_at = game_min
+	_trip_record(k)
 	operations.completed(k)
 	if k.order_ref.begins_with("shop:"):
 		retail.contract_delivered(k)
@@ -965,6 +1018,7 @@ func fail_contract(k: Contract, reason: String) -> void:
 	c.ledger.book("penalties", -penalty, true, "Vertragsstrafe %s" % k.id, game_min)
 	k.status = "failed"
 	k.done_at = game_min
+	_trip_record(k)
 	c.stats.failed += 1
 	memory.record_contract(c.id, k, false, 0.0)
 	decisions.note(c.id, "auto", "Auftrag %s gescheitert (%s)" % [k.id, reason], {"contract_id": k.id})

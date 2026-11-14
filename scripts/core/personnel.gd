@@ -231,8 +231,9 @@ func can_take(w: Worker, kind: String) -> String:
 		return "%s ist mit Aufgabe %s beschäftigt." % [w.name, w.task_id]
 	if w.vehicle_id >= 0 and kind != "fahren":
 		var v: FleetVehicle = sim.vehicles.get(w.vehicle_id)
-		if v and v.state not in ["idle"]:
-			return "%s fährt gerade #%d." % [w.name, w.vehicle_id]
+		if v and (v.state not in ["idle"] or not v.stops.is_empty() or not v.load.is_empty()):
+			# auch ein wartendes Fahrzeug mit Ladung oder geplanten Stopps: steigt der Fahrer aus, bleibt die Fuhre liegen
+			return "%s fährt gerade #%d (Auftrag %s) – erst nach der Tour verfügbar." % [w.name, w.vehicle_id, v.stops[0].contract_id if not v.stops.is_empty() else v.contract_id]
 	if w.rest_until > sim.game_min:
 		return "%s macht Pause (bis %s)." % [w.name, Catalog.game_minutes_to_text(w.rest_until)]
 	if w.fatigue >= 90.0:

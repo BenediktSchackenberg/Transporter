@@ -75,8 +75,13 @@ func eta_minutes(v: FleetVehicle, k: Contract) -> float:
 		at = c
 	var pick: Vector2i = sim.city.building(k.pickup).road
 	var drop: Vector2i = sim.city.building(k.dropoff).road
+	# Passt die Restmenge nicht in eine Ladung, faehrt das Fahrzeug mehrmals hin und her (Partie 14.11.: Auftraege scheiterten
+	# unterwegs, die Schaetzung rechnete nur eine Fahrt).
+	var cap := maxi(1, int(v.spec().capacity))
+	var trips := maxi(1, ceili(float(maxi(1, k.qty - k.picked)) / float(cap)))
+	var leg := travel_minutes(absi(drop.x - pick.x) + absi(drop.y - pick.y), speed) + Catalog.LOADING_MIN
 	t += travel_minutes(absi(pick.x - at.x) + absi(pick.y - at.y), speed) + Catalog.LOADING_MIN
-	t += travel_minutes(absi(drop.x - pick.x) + absi(drop.y - pick.y), speed) + Catalog.LOADING_MIN
+	t += leg * float(trips) + (leg + Catalog.LOADING_MIN) * float(trips - 1)   # Hinfahrten mit Abladen, leere Rueckfahrten mit Laden
 	if sim.driver_of(v) == null:
 		t += ETA_NO_DRIVER_MIN
 	return t
@@ -231,6 +236,11 @@ func _company_stored(cid: int, site: int) -> int:
 
 
 func add_stops(v: FleetVehicle, new_stops: Array) -> void:
+	for st in new_stops:   # Fahrtmessung: Schaetzung bei der ersten Zuteilung (vor dem Anhaengen, sonst zaehlte die Fahrt doppelt)
+		var mk: Contract = sim.contracts.get(str(st.get("contract_id", "")))
+		if mk != null and mk.assigned_at < 0.0:
+			mk.eta_est = eta_minutes(v, mk)
+			mk.assigned_at = sim.game_min
 	for st in new_stops:
 		v.stops.append({"art": str(st.art), "contract_id": str(st.contract_id), "menge": int(st.menge), "ort": str(st.ort)})
 		var k: Contract = sim.contracts[str(st.contract_id)]
