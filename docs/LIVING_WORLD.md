@@ -66,3 +66,8 @@ mehrere hundert Bürger. Deshalb:
    stunden) holt fehlendes Material für laufende Bauten beim Großlager und beginnt, wenn die Firma seit 3 Tagen selbst nichts gebaut
    hat und Geld über der Reserve liegt, ein Werk oder freies Bauwerk; Entwurf nach Persönlichkeit (`RuleBrain._free_build/_stone_work`).
    Im Partie-Log mit `source: "Bauleitung"`. Test: `test_build_help`; Ursachensuche: `tests/probe_build_why.gd`.
+10. **Zuteilung und Rückgabe:** Die Fahrtmessung der Partie 14.11. 17:54 zeigte: gelieferte Aufträge wurden sofort zugeteilt, gescheiterte
+    hatte das Modell ohne Fahrzeug angenommen, sie warteten 10–17 Spielstunden. Jetzt fährt bei einer Modell-Annahme ohne Fahrzeug sofort
+    ein bereitstehendes passendes Fahrzeug, wenn es rechtzeitig liefert; angenommene, nicht zugeteilte Aufträge, die kein eigenes Fahrzeug
+    mehr schafft, gehen alle 30 Spielminuten gegen 10 % Gebühr (statt 30 % Strafe, Reputation −2 statt −6) an den Markt zurück.
+    Test: `test_contract_release`.

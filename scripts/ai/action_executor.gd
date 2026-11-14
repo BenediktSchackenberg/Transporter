@@ -945,6 +945,12 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 			sim.rivalry.add_tension(cid, loyal, "stammkunde_bedient", sim.city.building(bid).get("name", ""))
 			break
 	var msg := "Auftrag %s angenommen (%s, Frist %s)%s." % [kid, Catalog.money(k.reward), Catalog.game_minutes_to_text(k.deadline), note]
+	if vid < 0 and _from_model():
+		# Partie 14.11.: ohne Fahrzeug angenommene Auftraege warteten 10-17 Spielstunden auf eine Zuteilung und scheiterten. Steht ein
+		# passendes Fahrzeug mit Fahrer bereit, das rechtzeitig liefert, faehrt es sofort.
+		var iv: FleetVehicle = assist._idle_vehicle(cid, kid)
+		if iv != null and _too_late(cid, k, iv.id) == "":
+			vid = iv.id
 	if vid >= 0:
 		var r := _assign(cid, vid, kid)
 		msg += " " + r.msg

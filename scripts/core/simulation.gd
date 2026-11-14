@@ -1031,6 +1031,43 @@ func fail_contract(k: Contract, reason: String) -> void:
 	bark(c.id, "frist")
 
 
+## Fruehe Rueckgabe (Partie 14.11.: angenommene, nie zugeteilte Auftraege scheiterten nach 10-17 Spielstunden Wartezeit mit voller
+## Vertragsstrafe): Schafft kein eigenes Fahrzeug den angenommenen, noch nicht zugeteilten Auftrag mehr rechtzeitig, geht er gegen eine
+## Rueckgabegebuehr (RELEASE_FEE_SHARE der Verguetung, Reputation -2) zurueck an den Markt; ein anderer Anbieter kann ihn noch fahren.
+const RELEASE_FEE_SHARE := 0.1
+const RELEASE_MIN_AGE := 30.0
+
+func _release_hopeless(now: float) -> void:
+	for k in contracts.values():
+		if k.owner < 0 or k.status != "accepted" or k.internal != "" or k.payer.begins_with("firm:") or now - k.accepted_at < RELEASE_MIN_AGE:
+			continue
+		if executor._too_late(k.owner, k, -1) == "":
+			continue
+		release_contract(k, now)
+
+
+func release_contract(k: Contract, now: float) -> void:
+	var c := companies[k.owner]
+	var fee := snappedf(k.reward * RELEASE_FEE_SHARE, 0.01)
+	c.ledger.book("penalties", -fee, true, "Rückgabe %s" % k.id, now)
+	c.reputation = maxf(0.0, c.reputation - 2.0)
+	c.stats["returned"] = int(c.stats.get("returned", 0)) + 1
+	var who := k.owner
+	_close_contract_logistics(k)
+	k.owner = -1
+	k.status = "open"
+	k.vehicle_id = -1
+	k.held_for = -1
+	k.accepted_at = 0.0
+	k.assigned_at = -1.0
+	k.eta_est = -1.0
+	k.trip = {}
+	k.offer_until = minf(k.deadline - 60.0, now + 240.0)
+	log_event("%s gibt Auftrag %s zurück (kein Fahrzeug schafft die Frist), Gebühr %s." % [c.company_name, k.id, Catalog.money(fee)], "bad", who)
+	notify(who, "Auftrag %s zurückgegeben: kein eigenes Fahrzeug schafft die Frist mehr. Rückgabegebühr %s statt Vertragsstrafe %s. Nimm nur Aufträge an, für die ein Fahrzeug frei ist." % [
+		k.id, Catalog.money(fee), Catalog.money(k.reward * Catalog.FAIL_PENALTY_SHARE)])
+
+
 ## Kurzbefund fuer gescheiterte Auftraege (Partie 14.11.: Disposition teilte sofort zu, trotzdem jeder dritte Auftrag zu spaet; der
 ## Grund war im Log nicht zu sehen): Status, Fahrzeug mit dem Auftrag, dessen Zustand, Fahrer, Stopps davor, Annahme bis Frist.
 func _fail_diag(k: Contract) -> String:
@@ -1322,6 +1359,8 @@ func _minute_tick() -> void:
 		if k.owner >= 0 and k.status in ["accepted", "assigned", "loading", "in_transit"] \
 				and now > k.deadline + Catalog.FAIL_AFTER_HOURS * 60.0:
 			fail_contract(k, "Frist weit überschritten")
+	if minute_index % 30 == 0:
+		_release_hopeless(now)
 	market.tick(now)
 	social.tick(now)
 	rivalry.tick(now)
