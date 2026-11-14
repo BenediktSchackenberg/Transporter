@@ -8611,8 +8611,13 @@ func test_region_trade() -> void:
 	var parcel: Dictionary = s.parcels.parcel(str(bak.parcel))
 	ok(str(parcel.owner) == "C0" and T.of_parcel(str(parcel.id)) == 1, "Eigentum Firma 0, Zuständigkeit Stadt 1")
 	# Abnahme 9: Muehle von Firma 0 in Stadt 0 liefert Mehl an eine Baeckerei von Firma 1 in Stadt 1.
-	var mill: Dictionary = s.biz.get_b(str(s.executor.execute(0, {"action": "found_business", "branche": "muehle", "standort": "hauptsitz"}).ref))
+	# Marktsaettigung (14.11.): die Region traegt nur eine Baeckerei - die erste (Abnahme 6 ist geprueft) wird geschlossen
+	bak.status = "geschlossen"
+	var rm: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "muehle", "standort": "hauptsitz"})
+	var mill: Dictionary = s.biz.get_b(str(rm.get("ref", "")))
 	var rb: Dictionary = s.executor.execute(1, {"action": "found_business", "branche": "baeckerei"})
+	if mill.is_empty() or str(rb.get("ref", "")) == "":
+		print("    Mühle: %s | Bäckerei: %s" % [str(rm.get("msg", "")).left(160), str(rb.get("msg", "")).left(160)])
 	var bak1: Dictionary = s.biz.get_b(str(rb.get("ref", "")))
 	ok(not mill.is_empty() and not bak1.is_empty() and T.of_building(int(mill.site)) == 0 and T.of_building(int(bak1.site)) == 1, "Mühle in %s, Bäckerei von Firma 1 in %s" % [T.name_of(0), T.name_of(1)])
 	s.stock.add("mehl", 200, "C0", int(mill.site), "Test: gemahlen", s.game_min)
