@@ -74,6 +74,7 @@ func tally_hour(now: float) -> void:
 		if _life_day >= 0:
 			life_last = life_today
 			unserved_last = unserved_today
+			brain.on_day(day)   # Gemuet jeder Figur aus dem Vortag
 		life_today = {}
 		unserved_today = {}
 		_life_day = day
@@ -88,8 +89,36 @@ func tally_hour(now: float) -> void:
 
 func life_obs(town: int) -> Dictionary:
 	var src: Dictionary = life_last.get(town, life_today.get(town, {}))
+	var mood := mood_of(town)
 	return {"personenstunden_gestern": src.duplicate(), "unversorgte_wuensche_gestern": unserved_last.get(town, unserved_today.get(town, {})).duplicate(),
-		"hinweis": "unversorgte_wuensche: Bürger wollten einkaufen, essen gehen, zum Arzt oder spazieren, fanden im Ort aber nichts Offenes."}
+		"beschwerden_gestern": int(src.get("beschwerde", 0)), "stimmung": mood,
+		"hinweis": "unversorgte_wuensche: Bürger wollten einkaufen, essen gehen, zum Arzt oder spazieren, fanden im Ort aber nichts Offenes. stimmung: Anteile müder, verärgerter und kündigungswilliger Bürger mit den häufigsten Gründen."}
+
+
+## Gemuet der Buerger eines Orts: Anteile muede/veraergert/will kuendigen/krank und die haeufigsten Gruende.
+func mood_of(town: int) -> Dictionary:
+	var n := 0
+	var tired := 0
+	var angry := 0
+	var quit := 0
+	var sick := 0
+	var why := {}
+	for p in people:
+		if not p.has("gemuet") or (sim.towns.is_region() and home_town(p) != town):
+			continue
+		n += 1
+		var g: Dictionary = p.gemuet
+		tired += int(float(g.energie) < CitizenBrain.TIRED_BELOW)
+		sick += int(float(g.energie) < CitizenBrain.SICK_BELOW)
+		angry += int(float(g.aerger) > CitizenBrain.ANGRY_ABOVE)
+		quit += int(float(g.frust) > CitizenBrain.QUIT_FRUST and str(p.employer) != "")
+		for w in g.get("gruende", []):
+			var k := str(w).split(":")[0].split(" (")[0].left(40)
+			why[k] = int(why.get(k, 0)) + 1
+	var top: Array = why.keys()
+	top.sort_custom(func(a, b): return why[a] > why[b])
+	var f := func(x: int) -> float: return snappedf(float(x) / maxf(1.0, float(n)), 0.01)
+	return {"muede": f.call(tired), "krank": f.call(sick), "veraergert": f.call(angry), "will_kuendigen": f.call(quit), "gruende": top.slice(0, 4)}
 
 
 func setup(s: Simulation) -> void:
@@ -366,6 +395,9 @@ func _dynamics(month: int) -> void:
 			continue
 		var r := roll(int(p.id), month, 2)
 		var change_chance := QUIT_CHANCE * (3.0 if float(p.get("needs", {}).get("glueck", 50.0)) < unhappy else 1.0)
+		var frust := float(p.get("gemuet", {}).get("frust", 0.0))
+		if frust > CitizenBrain.QUIT_FRUST:
+			change_chance *= 4.0   # Buerger-KI: wer lange frustriert ist, wechselt eher die Stelle (Auftrag 23)
 		if r < change_chance:
 			var target := ""
 			var start := int(roll(int(p.id), month, 3) * keys.size())
@@ -380,7 +412,7 @@ func _dynamics(month: int) -> void:
 				_employ(p, target, roll(int(p.id), month, 4))
 				sim.housing.relocate_for_job(p, int(EMPLOYERS[target].district), month)
 				stats.changes += 1
-		elif r > 1.0 - DROP_CHANCE:
+		elif r > 1.0 - DROP_CHANCE * (4.0 if frust > 85.0 else 1.0):
 			vac[p.employer] = int(vac[p.employer]) + 1
 			p.employer = ""
 			p.wage = 0.0

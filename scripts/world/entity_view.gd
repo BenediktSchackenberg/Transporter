@@ -449,6 +449,15 @@ func _spawn_ped() -> void:
 		var n := _make_figure(style, 1.0, SHIRTS[posmod(int(person.id), SHIRTS.size())])
 		n.set_meta("umbrella_user", int(person.id) % 2 == 0)
 		n.set_meta("citizen", person)
+		var mood := Label.new()   # Gemuet ueber dem Kopf (Buerger-KI, Auftrag 23)
+		mood.name = "mood"
+		mood.add_theme_font_size_override("font_size", 13)
+		mood.add_theme_color_override("font_outline_color", Color("171c26"))
+		mood.add_theme_constant_override("outline_size", 4)
+		mood.position = Vector2(-10, -78)
+		mood.z_index = 40
+		n.add_child(mood)
+		_set_mood_icon(n, person)
 		n.set_meta("purpose", "Zu Hause" if unit.has("building") else plan.purpose)
 		n.set_meta("destination", int(unit.get("building", plan.building)))
 		add_child(n)
@@ -629,6 +638,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 				if not plan.is_empty():
 					n.set_meta("purpose", plan.purpose)
 					n.set_meta("destination", int(plan.building))
+					_set_mood_icon(n, n.get_meta("citizen"), str(plan.get("art", "")))
 					var path := sim.nav.walk_path(m.tile(), plan.cell)
 					if path.size() > 1:
 						m.set_path(path)
@@ -972,3 +982,24 @@ func pick(click: Vector2) -> Dictionary:
 		if b >= 0:
 			return {"kind": "building", "id": b}
 	return {}
+
+
+## Zeichen ueber einem Buerger: Zzz (erschoepft/muede), !! (veraergert, auf dem Weg zur Beschwerde), ? (will kuendigen, Jobsuche).
+func _set_mood_icon(n: Node2D, person: Dictionary, art: String = "") -> void:
+	var l: Label = n.get_node_or_null("mood")
+	if l == null:
+		return
+	var g: Dictionary = person.get("gemuet", {})
+	var txt := ""
+	var col := Color.WHITE
+	if art == "beschwerde" or float(g.get("aerger", 0.0)) > CitizenBrain.ANGRY_ABOVE:
+		txt = "!!"
+		col = Color("ff5a4a")
+	elif art == "jobsuche" or (float(g.get("frust", 0.0)) > CitizenBrain.QUIT_FRUST and str(person.get("employer", "")) != ""):
+		txt = "?"
+		col = Color("f2a541")
+	elif float(g.get("energie", 100.0)) < CitizenBrain.TIRED_BELOW:
+		txt = "Zzz"
+		col = Color("8fb8ff")
+	l.text = txt
+	l.add_theme_color_override("font_color", col)

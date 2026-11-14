@@ -17,6 +17,7 @@ const KINDS := {
 	"home": "Zu Hause", "sleep": "Schläft", "work": "Zur Arbeit", "lunch": "Mittagspause", "course": "Zur Weiterbildung",
 	"jobs": "Zur Arbeitsvermittlung", "shopping": "Einkaufen für den Haushalt", "doctor": "Arzttermin",
 	"restaurant": "Restaurantbesuch nach der Arbeit", "walk": "Spaziergang", "harbor": "Ausflug an den Hafen",
+	"krank": "Krankgemeldet (erschöpft)", "beschwerde": "Beschwerde im Rathaus", "jobsuche": "Sucht eine neue Stelle",
 }
 ## Schichtbeginn (frueheste, spaeteste Stunde) und Dauer je Arbeitgeber; "wechsel": Frueh-, Spaet- und Nachtschicht im Wechsel.
 const SHIFTS := {
@@ -33,6 +34,8 @@ const PLACE_TYPES := {
 	"school": ["school"],
 	"walk": ["fountain", "townhall"],
 	"harbor": ["port_office"],
+	"beschwerde": ["townhall"],
+	"jobsuche": ["job_board", "staffing"],
 }
 ## Oeffnungszeiten fuer Typen ohne Profil in Residents.PROFILES
 const DEFAULT_HOURS := [7.0, 22.0]
@@ -59,7 +62,8 @@ func day_plan(p: Dictionary, day: int) -> Array:
 
 
 func _state_key(p: Dictionary) -> String:
-	return "%s|%s|%d" % [str(p.get("employer", "")), str(p.get("home", "")), int(p.has("course_until"))]
+	var g: Dictionary = p.get("gemuet", {})
+	return "%s|%s|%d|%d" % [str(p.get("employer", "")), str(p.get("home", "")), int(p.has("course_until")), int(g.get("stand", 0))]
 
 
 func _make_plan(p: Dictionary, day: int) -> Array:
@@ -71,6 +75,14 @@ func _make_plan(p: Dictionary, day: int) -> Array:
 	var out: Array = []
 	var employer := str(p.get("employer", ""))
 	var free_from := 9.5   # ab wann Besorgungen moeglich sind
+	var g: Dictionary = p.get("gemuet", {})
+	var energy := float(g.get("energie", 80.0))
+	var frust := float(g.get("frust", 20.0))
+	var anger := float(g.get("aerger", 0.0))
+	if employer != "" and energy < SICK_BELOW:
+		var sh0 := _shift(employer, id, day, wd, me)
+		if not sh0.is_empty():
+			return [[0.0, 24.0, "krank"]]   # erschoepft: meldet sich krank und bleibt zu Hause
 	if employer != "":
 		var sh := _shift(employer, id, day, wd, me)
 		if not sh.is_empty():
@@ -89,8 +101,16 @@ func _make_plan(p: Dictionary, day: int) -> Array:
 	if (wd == 5 and r.call(4) < 0.7) or (not weekend and r.call(4) < 0.35):
 		var s2: float = 9.5 + 1.5 * r.call(5) if wd == 5 or out.is_empty() else minf(free_from + 0.25, 19.0)
 		out.append([s2, s2 + 0.75 + 0.5 * r.call(6), "shopping"])
-	if r.call(7) < 0.025 and not weekend:
+	if r.call(7) < (0.025 if energy > 30.0 else 0.12) and not weekend:
 		out.append([8.0 + r.call(8), 9.25 + r.call(8), "doctor"])
+	if employer != "" and frust > QUIT_FRUST and not weekend and r.call(15) < 0.5:   # unzufrieden: sucht nach der Arbeit eine neue Stelle
+		var s5: float = minf(free_from + 0.25, 17.0)
+		out.append([s5, s5 + 0.75, "jobsuche"])
+	if anger > ANGRY_ABOVE and wd < 5 and r.call(16) < 0.4:   # veraergert: Beschwerde im Rathaus
+		var s6: float = 9.0 + r.call(17) if employer == "" else minf(free_from + 0.5, 15.5)
+		out.append([s6, s6 + 0.75, "beschwerde"])
+	if energy < TIRED_BELOW:
+		return out   # muede: abends kein Ausgehen
 	var evening := 0.45 if wd in [4, 5] else 0.18
 	if float(p.get("wage", 0.0)) > 0.0 and r.call(9) < evening:
 		var s3: float = 18.0 + r.call(10)
@@ -144,8 +164,12 @@ func plan(p: Dictionary, hour: float, day: int) -> Dictionary:
 	var art := str(act.art)
 	if art in ["walk", "harbor"] and sim.wx != null and (sim.wx.is_rain() or sim.wx.is_snow()):
 		art = "home"   # bei Regen bleibt man drinnen
+	if art == "krank":
+		art = "home"
 	if art in ["home", "sleep"]:
 		if home >= 0:
+			if str(act.art) == "krank":
+				return _result(home, KINDS.krank, "krank")
 			return _result(home, "Nach Hause" if art == "sleep" or hour >= 20.0 or hour < 6.0 else KINDS.home, art)
 		art = "jobs" if str(p.get("employer", "")) == "" else "work"   # ohne Wohnung: tagsueber unterwegs
 	var town := _town_of(p, home)
@@ -156,16 +180,19 @@ func plan(p: Dictionary, hour: float, day: int) -> Dictionary:
 			bid = _workplace(p, town)
 		"course":
 			bid = _nearest("school", town, near, int(p.id), hour, false)
-		"jobs":
+		"jobs", "jobsuche":
 			bid = _job_office(town, near)
 		_:
 			bid = _nearest(art, town, near, int(p.id), hour, true)
 	if bid < 0:
 		sim.citizens.note_unserved(town, art)
+		unserved_people[int(p.id)] = int(unserved_people.get(int(p.id), 0)) + 1
 		if home >= 0:
 			return _result(home, KINDS.home, "home")
 		return {}
 	var purpose: String = KINDS.get(art, art)
+	if str(act.art) == "krank":
+		purpose = KINDS.krank
 	if art == "work":
 		purpose = "Zur Arbeit: " + str(Citizens.EMPLOYERS.get(str(p.employer), {}).get("label", p.employer))
 	return _result(bid, purpose, art)
@@ -252,3 +279,123 @@ func _candidates(key: String, types: Array, town: int, by_role: bool = false) ->
 			out.append(int(b.id))
 		_cands[k] = out
 	return _cands[k]
+
+
+# ------------------------------------------------------------------ Gemuet (Auftrag 23)
+## Jede Figur fuehrt ein Gemuet aus ihrer echten Lage: Energie (Arbeitsstunden, Nachtschicht, Pendelweg, Schlaf, freie Tage),
+## Jobfrust (Lohn unter dem Schnitt, Pendelweg, Schichtdienst, Muedigkeit, Unglueck) und Aerger (unversorgte Wuensche, Unglueck,
+## Arbeitslosigkeit, Erschoepfung). Gruende werden mitgeschrieben. Daraus folgen Entscheidungen im Tagesplan (krank, frueh heim,
+## Jobsuche, Beschwerde) und im Monat (Citizens._dynamics: Frustrierte wechseln oder kuendigen eher).
+const SICK_BELOW := 12.0
+const TIRED_BELOW := 35.0
+const QUIT_FRUST := 65.0
+const ANGRY_ABOVE := 60.0
+
+var _wage_mean := 0.0
+var unserved_people := {}   # Personen-ID -> unversorgte Wuensche heute (aus plan())
+
+
+func on_day(day: int) -> void:
+	var paid: Array = sim.citizens.people.filter(func(q): return float(q.get("wage", 0.0)) > 0.0)
+	_wage_mean = 0.0
+	for q in paid:
+		_wage_mean += float(q.wage)
+	_wage_mean /= maxf(1.0, float(paid.size()))
+	for p in sim.citizens.people:
+		_update_mood(p, day)
+	unserved_people.clear()
+
+
+func _update_mood(p: Dictionary, day: int) -> void:
+	var g: Dictionary = p.get("gemuet", {"energie": 70.0 + 20.0 * Citizens.roll(int(p.id), 0, 970), "frust": 20.0, "aerger": 0.0, "nacht_folge": 0})
+	var why: Array = []
+	var yesterday := day_plan(p, day - 1)
+	var work_h := 0.0
+	var night := false
+	var sick := false
+	for e in yesterday:
+		if str(e[2]) == "work":
+			work_h += float(e[1]) - float(e[0])
+			night = night or float(e[0]) >= 21.0
+		sick = sick or str(e[2]) == "krank"
+	var commute := _commute(p)
+	var energy := float(g.energie)
+	if work_h > 0.0:
+		energy -= work_h * 4.2 + commute / 12.0
+		if night:
+			energy -= 8.0
+			g["nacht_folge"] = int(g.get("nacht_folge", 0)) + 1
+		else:
+			g["nacht_folge"] = 0
+		energy += 22.0 if night else 30.0   # Schlaf (nach der Nachtschicht schlechter)
+	else:
+		energy += 22.0 if not sick else 30.0   # freier Tag bzw. Krankentag
+		g["nacht_folge"] = 0
+	energy = clampf(energy, 0.0, 100.0)
+	if int(g.nacht_folge) >= 2:
+		why.append("müde: %d Nachtschichten in Folge" % int(g.nacht_folge))
+	elif energy < TIRED_BELOW and work_h > 0.0:
+		why.append("müde: lange Schichten%s" % (", weiter Arbeitsweg" if commute > 60.0 else ""))
+	var frust := float(g.frust)
+	if str(p.get("employer", "")) != "":
+		var wage := float(p.get("wage", 0.0))
+		var gap := clampf((_wage_mean - wage) / maxf(1.0, _wage_mean), 0.0, 1.0)
+		var glueck := float(p.get("needs", {}).get("glueck", 50.0))
+		var target := 15.0 + 60.0 * gap + clampf(commute / 4.0, 0.0, 20.0) + (12.0 if night else 0.0) + (12.0 if energy < TIRED_BELOW else 0.0) + 0.4 * maxf(0.0, 50.0 - glueck)
+		frust += (target - frust) * 0.12
+		if gap > 0.15:
+			why.append("Lohn %.0f EUR/h unter dem Schnitt (%.0f)" % [wage, _wage_mean])
+		if commute > 60.0:
+			why.append("Arbeitsweg %d Felder" % int(commute))
+	else:
+		frust *= 0.9
+	var anger := float(g.aerger) * 0.85
+	var miss := int(unserved_people.get(int(p.id), 0))
+	if miss > 0:
+		anger += 9.0 * float(miss)
+		why.append("nichts Offenes im Ort gefunden")
+	if float(p.get("needs", {}).get("glueck", 50.0)) < 35.0:
+		anger += 4.0
+		why.append("unglücklich (Geld/Wohnen)")
+	if str(p.get("employer", "")) == "" and int(p.get("jobless_months", 0)) >= 2:
+		anger += 4.0
+		why.append("seit %d Monaten arbeitslos" % int(p.jobless_months))
+	if energy < SICK_BELOW:
+		anger += 3.0
+	g["energie"] = snappedf(energy, 0.1)
+	g["frust"] = snappedf(clampf(frust, 0.0, 100.0), 0.1)
+	g["aerger"] = snappedf(clampf(anger, 0.0, 100.0), 0.1)
+	g["gruende"] = why.slice(0, 3)
+	g["stand"] = int(energy < SICK_BELOW) + 2 * int(energy < TIRED_BELOW) + 4 * int(float(g.frust) > QUIT_FRUST) + 8 * int(float(g.aerger) > ANGRY_ABOVE)
+	p["gemuet"] = g
+
+
+## Pendelweg in Feldern (Luftlinie Wohnung -> Arbeitsplatz).
+func _commute(p: Dictionary) -> float:
+	var unit: Dictionary = sim.housing.units.get(str(p.get("home", "")), {})
+	if unit.is_empty() or str(p.get("employer", "")) == "":
+		return 0.0
+	var home := int(unit.building)
+	var w := _workplace(p, _town_of(p, home))
+	if w < 0:
+		return 0.0
+	var a: Vector2i = sim.city.building(home).walk
+	var b: Vector2i = sim.city.building(w).walk
+	return float(absi(a.x - b.x) + absi(a.y - b.y))
+
+
+## Kurzform fuer Anzeige: "müde", "verärgert", "will kündigen", "erschöpft" oder "".
+static func mood_label(p: Dictionary) -> String:
+	var g: Dictionary = p.get("gemuet", {})
+	if g.is_empty():
+		return ""
+	var out: Array = []
+	if float(g.energie) < SICK_BELOW:
+		out.append("erschöpft")
+	elif float(g.energie) < TIRED_BELOW:
+		out.append("müde")
+	if float(g.aerger) > ANGRY_ABOVE:
+		out.append("verärgert")
+	if float(g.frust) > QUIT_FRUST and str(p.get("employer", "")) != "":
+		out.append("will kündigen")
+	return ", ".join(out)

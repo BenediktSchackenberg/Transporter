@@ -601,6 +601,8 @@ func _update_approval() -> void:
 		target -= 10.0
 	target -= 2.0 * maxf(0.0, float(sim.permits.queue().size()) - 3.0)
 	target += 1.5 * float(plans.values().filter(func(p): return p.status == "beschlossen").size())
+	var complaints := int(sim.citizens.life_last.get(town, {}).get("beschwerde", 0))   # Buerger-KI: Beschwerden im Rathaus (Personenstunden)
+	target -= minf(8.0, 0.25 * float(complaints))
 	var riv: Dictionary = sim.rivalry.mayor_summary()   # Unruhe zwischen Firmen (Blockaden, Sabotage) kostet Zustimmung
 	target -= minf(10.0, 0.2 * float(riv.unruhe) + 2.0 * float(riv.schwere_vorfaelle_7_tage))
 	approval = clampf(approval * 0.7 + clampf(target, 0.0, 100.0) * 0.3, 0.0, 100.0)

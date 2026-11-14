@@ -56,3 +56,8 @@ mehrere hundert Bürger. Deshalb:
 7. **Fahrzeiten:** Die Schätzung rechnet mehrere Ladungen (Hin- und Rückfahrten), Fahrer mit geplanter Tour bekommen keine andere
    Aufgabe mehr, jeder Auftrag misst Schätzung, gebrauchte Zeit, Minuten je Zustand und Tempo (`type: "trip"` im Partie-Log,
    `tests/probe_trip_times.gd`).
+8. **Gemüt der Bürger:** Jede Figur führt täglich Energie (Schichtstunden, Nachtschicht, Pendelweg, Schlaf, freie Tage), Jobfrust (Lohn
+   unter dem Schnitt, Pendelweg, Schichtdienst, Müdigkeit, Unglück) und Ärger (nichts Offenes im Ort, Unglück, Arbeitslosigkeit) mit
+   Gründen. Folgen: erschöpft → krankgemeldet, müde → abends kein Ausgehen, frustriert → Jobsuche nach der Arbeit und häufiger Stellen-
+   wechsel bzw. Kündigung, verärgert → Beschwerde im Rathaus (kostet Zustimmung). Zeichen über dem Kopf (Zzz, ?, !!), Gemüt mit Gründen
+   in der Auswahl, `buergerleben.stimmung` im Lagebild des Bürgermeisters. Test: `test_citizen_mood`.

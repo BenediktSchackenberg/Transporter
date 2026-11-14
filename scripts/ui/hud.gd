@@ -1347,8 +1347,13 @@ func _update_selection() -> void:
 			var day_plan: Array = sim.citizens.brain.day_plan(person, GameCalendar.day_of(sim.game_min))   # Buerger-KI (Auftrag 23)
 			if not day_plan.is_empty():
 				var steps: Array = day_plan.map(func(e): return "%s–%s %s" % [_hhmm(float(e[0])), _hhmm(float(e[1])), str(CitizenBrain.KINDS.get(str(e[2]), e[2])).trim_suffix(" nach der Arbeit")])
-				sel_text.text += "
-Tagesplan: " + " · ".join(steps)
+				sel_text.text += "\nTagesplan: " + " · ".join(steps)
+			var gm: Dictionary = person.get("gemuet", {})
+			if not gm.is_empty():   # Gemuet der Figur mit Gruenden (Buerger-KI)
+				var lab := CitizenBrain.mood_label(person)
+				var why: Array = gm.get("gruende", [])
+				sel_text.text += "\nGemüt: Energie %d · Jobfrust %d · Ärger %d%s%s" % [int(gm.energie), int(gm.frust), int(gm.aerger),
+					(" — " + lab) if lab != "" else "", (" (" + "; ".join(why) + ")") if not why.is_empty() else ""]
 		"vehicle":
 			var v: FleetVehicle = sim.vehicles.get(sel.id)
 			if v == null:
