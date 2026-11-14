@@ -34,6 +34,7 @@ var civic_view := CivicView.new()         # Auftrag 19: Anlagen und Denkmaeler d
 var stone_view := StoneView.new()        # Auftrag 23: Steinbauten und Stein-Kreationen der Unternehmer
 var free_build_view := FreeBuildView.new()   # freie Bauwerke Stein auf Stein (13.11.2026)
 var site_view := SiteView.new()
+var works_view := WorksView.new()      # Auftrag 24: Fahrzeugwerk im Querschnitt, Mechaniker an den Stadtwerkstaetten
 var depot_view := DepotView.new()
 var parcel_layer := ParcelLayer.new()
 var mountain_view := MountainView.new()   # Berge und Bergbau (Auftrag 14)
@@ -134,6 +135,8 @@ func build(simulation: Simulation) -> void:
 		sim.civic.ground_changed.connect(repaint_cells)
 	buildings_node.add_child(site_view)
 	site_view.setup(sim)
+	buildings_node.add_child(works_view)
+	works_view.setup(sim)
 	buildings_node.add_child(depot_view)
 	depot_view.setup(sim, self)
 	buildings_node.add_child(parcel_layer)
@@ -632,6 +635,7 @@ func update_view(delta: float) -> void:
 		tl[0].texture = tex("d_light_green" if green_h == tl[2] else "d_light_red")
 	estate_view.update_view(blink_on)
 	site_view.update_view(delta)
+	works_view.update_view(delta)
 	mountain_view.update_view(delta)
 	waste_view.update_view(delta)
 	tourist_view.update_view(delta)

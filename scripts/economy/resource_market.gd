@@ -66,7 +66,7 @@ func available_offers() -> Array:
 func cheapest_offer(model: String) -> Dictionary:
 	var best := {}
 	for o in available_offers():
-		if o.model == model and (best.is_empty() or o.price < best.price):
+		if (o.model == model or Catalog.base_model(str(o.model)) == model) and (best.is_empty() or o.price < best.price):
 			best = o
 	return best
 

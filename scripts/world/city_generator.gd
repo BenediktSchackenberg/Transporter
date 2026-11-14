@@ -57,7 +57,11 @@ const TYPES := {
 	"police": [["office0"], 3, 3, [], []],     # Polizeiwache (Rolle police)
 	"prison": [["warehouse"], 4, 3, [], []],  # Gefaengnis (Rolle prison)
 	"doctor": [["pharmacy"], 2, 2, [], []],   # Arztpraxis (Rolle doctor)
-	"council_hall": [["bank"], 3, 3, [], []],   # Ratsgebaeude des Regionalrats (Auftrag 20 Etappe 10)
+	"council_hall": [["bank"], 3, 3, [], []],
+	# Auftrag 24: Stadtwerkstaetten und Fahrzeugwerk (das Werk zeichnet WorksView als Querschnitt, ohne Sprite)
+	"car_service": [["workshop"], 3, 2, [], []],
+	"truck_service": [["freight_shed"], 5, 3, [], []],
+	"vehicle_plant": [["vehicle_plant"], 5, 4, [], []],   # Ratsgebaeude des Regionalrats (Auftrag 20 Etappe 10)
 	# Kommunale Gebaeude (Auftrag 20, tools/vox/public.py): Sprite pub_<typ>_<variante 0-5>_<stil>; Municipal waehlt Variante und Stil
 	"fire_station": [["pub_fw_0_backstein", "pub_fw_0_modern", "pub_fw_0_gruen", "pub_fw_0_industrie", "pub_fw_1_backstein", "pub_fw_1_modern", "pub_fw_1_gruen", "pub_fw_1_industrie", "pub_fw_2_backstein", "pub_fw_2_modern", "pub_fw_2_gruen", "pub_fw_2_industrie", "pub_fw_3_backstein", "pub_fw_3_modern", "pub_fw_3_gruen", "pub_fw_3_industrie", "pub_fw_4_backstein", "pub_fw_4_modern", "pub_fw_4_gruen", "pub_fw_4_industrie", "pub_fw_5_backstein", "pub_fw_5_modern", "pub_fw_5_gruen", "pub_fw_5_industrie"], 4, 3, [], []],
 	"rescue_station": [["pub_rw_0_backstein", "pub_rw_0_modern", "pub_rw_0_gruen", "pub_rw_0_industrie", "pub_rw_1_backstein", "pub_rw_1_modern", "pub_rw_1_gruen", "pub_rw_1_industrie", "pub_rw_2_backstein", "pub_rw_2_modern", "pub_rw_2_gruen", "pub_rw_2_industrie", "pub_rw_3_backstein", "pub_rw_3_modern", "pub_rw_3_gruen", "pub_rw_3_industrie", "pub_rw_4_backstein", "pub_rw_4_modern", "pub_rw_4_gruen", "pub_rw_4_industrie", "pub_rw_5_backstein", "pub_rw_5_modern", "pub_rw_5_gruen", "pub_rw_5_industrie"], 3, 2, [], []],

@@ -71,3 +71,29 @@ mehrere hundert Bürger. Deshalb:
     ein bereitstehendes passendes Fahrzeug, wenn es rechtzeitig liefert; angenommene, nicht zugeteilte Aufträge, die kein eigenes Fahrzeug
     mehr schafft, gehen alle 30 Spielminuten gegen 10 % Gebühr (statt 30 % Strafe, Reputation −2 statt −6) an den Markt zurück.
     Test: `test_contract_release`.
+
+## Auftrag 24: Werkstätten, Fahrzeugwerk und Autohaus (`VehicleWorks`, `WorksView`)
+
+1. **Wartung nach Kilometern:** Jedes Firmenfahrzeug zählt Kilometer (`Catalog.KM_PER_TILE` = 1,5 km je Feld im Zeitraffer). Nach
+   500 km (`VehicleWorks.SERVICE_KM`) fährt ein freies Fahrzeug mit Fahrer selbst in die Stadtwerkstatt: Kfz-Werkstatt `KW-01` (je Stadt,
+   2 Hebebühnen, Kfz-Mechatroniker), schwere Lkw in die Nutzfahrzeug-Werkstatt `KW-02` (einmal in der Region). Dauer nach Fahrzeugart,
+   Besetzung und Warteschlange; Kosten Teile + Arbeitsstunden (68 EUR) an die Stadtkasse, die Teile kauft die Stadt von außerhalb.
+   Wartung bringt +25 Zustand. Überfällige Fahrzeuge verschleißen schneller (bis doppelt bei 1 000 km). Eine Durchsicht in der eigenen
+   Hofwerkstatt zählt ebenfalls als Wartung. Beobachtung der Firmen: `km_seit_wartung`, `wartung_faellig`.
+2. **Fahrzeugwerk `FZ-01`** in der einwohnerstärksten Stadt (5 × 4 Felder): Bandmonteure, Fahrzeugkonstrukteure, Autoverkäufer
+   (fester Stellenplan über `Municipal`). Der Bürgermeister entwirft Modelle mit `fahrzeug_entwerfen` (Klasse pkw | transporter | lkw |
+   sattelzug, Name, Farbe, Akzent, Form kantig | rund | keil, Nutzlast, Leistung, Qualität, Kühlung, Preis); die Engine rechnet Tempo,
+   Verbrauch, Verschleiß, Material, Montagestunden und Selbstkosten. Entwicklung 3 Tage (ohne Konstrukteur 6), 15 000 EUR. Das Band baut
+   in zwei Schichten (6–22 Uhr) bis zu 4 Fahrzeuge gleichzeitig durch Karosseriebau, Lackiererei, Montage und Endkontrolle; höchstens
+   3 je Modell und 8 insgesamt warten auf dem Werkshof. Zulieferer und Konstruktionsbüro liefern auf Rechnung (bis 150 000 EUR, Zahlung
+   beim Verkauf oder nach 20 Tagen). Regel-Bürgermeister: entwirft je fehlender Klasse ein Modell (`vorschlag` in `obs.fahrzeugwerk`).
+3. **Autohaus:** Verkäufer stellen Nutzfahrzeuge als Angebote (`F…`, Händler = Werk) auf den Automarkt; Firmen kaufen sie wie beim
+   Autohändler, der Kaufpreis geht an die Stadtkasse. Die Regel-KI und `buy_vehicle` mit `model` finden Werksmodelle über ihr Grundmodell
+   (`Catalog.base_model`). Pkw kaufen Bürger mit Arbeit: 20 % Anzahlung, Rest in Tagesraten über 720 Tage (Rate höchstens 40 % vom
+   Nettotageslohn), höchstens 2 je Verkäufer und Tag.
+4. **Querschnitt (`WorksView`):** Backsteinhalle mit hohen Sprossenfenstern und vier Schornsteinen (Rauch im Schichtbetrieb), vordere
+   Wände aufgeschnitten. Innen: Konstruktionsbüro auf der Empore mit Skizze des aktuellen Entwurfs, Montageband mit den echten Einheiten
+   in Farbe und Form ihres Modells, Schweißroboter mit Funkenflug, Lackierkabine mit Farbnebel, Monteure, Räderstapel, Lichttunnel der
+   Endkontrolle, Hallenkran; davor Werkshof mit den fertigen Fahrzeugen, Fahnen und das gläserne Autohaus mit Drehteller und Verkäufer.
+   An den Werkstätten arbeitet ein Mechaniker, solange gewartet wird. Klick auf das Gebäude zeigt Personal, Band, Modelle und Verkäufe.
+   Sichtprüfung: `tests/probe_works_art.gd`; Langlauf: `tests/probe_vehicle_works.gd`; Autotest `--shot-works`; Test `test_vehicle_works`.

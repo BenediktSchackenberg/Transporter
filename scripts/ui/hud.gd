@@ -1462,6 +1462,10 @@ func _update_selection() -> void:
 			if sel.id == sim.city_depot.building:
 				sel_text.text = LiveText.depot_panel(sim)
 				return
+			var works_txt: String = sim.vworks.panel_text(sel.id)
+			if works_txt != "":   # Fahrzeugwerk und Stadtwerkstaetten (Auftrag 24)
+				sel_text.text = works_txt
+				return
 			var shop: Dictionary = sim.retail.shop_of_building(sel.id)
 			if not shop.is_empty():
 				sel_text.text = LiveText.shop_panel(sim, shop)

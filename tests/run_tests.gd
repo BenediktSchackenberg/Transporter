@@ -12,7 +12,7 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	var test_names: Array = ["test_city", "test_finance_identity", "test_duplicate_actions", "test_invalid_actions",
 			"test_trades", "test_sabotage", "test_vehicle_delivery", "test_end_settlement", "test_save_load",
-			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_meat_chain2", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_waste_bins", "test_waste_depot", "test_waste_streams", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_empty_tank_no_tow", "test_local_model_guards", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_highway", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner", "test_street_cleaning", "test_stone_chain", "test_incineration", "test_shared_plant", "test_power_net", "test_power_repair", "test_power_ring", "test_water_supply", "test_rail_net", "test_rail_traffic", "test_rail_passengers", "test_rail_disruptions", "test_rail_expansion", "test_freight_train", "test_stone_rule_brain", "test_founder_ai_profile", "test_free_build", "test_rail_cargo", "test_build_chance", "test_founder_build_site", "test_rail_wear", "test_rail_company_freight", "test_water_network", "test_free_build_no_rebuy", "test_counter_viability", "test_police", "test_infra_chain", "test_dispatch_staffs_business", "test_accept_backlog", "test_call_syntax_lists", "test_world_variety", "test_citizen_brain", "test_care_works", "test_trip_estimate", "test_citizen_mood", "test_build_help", "test_build_site_purchase", "test_own_accept_already", "test_contract_release", "test_mayor_quarters_staging", "test_police_dump_stages", "test_honorar_staff"]
+			"test_response_parsing", "test_provider_choice", "test_controller_idempotency", "test_kinggamer_features", "test_workers_acceptance", "test_prompt_builds", "test_local_agent_choices", "test_dispatch_help", "test_reserve_check", "test_report_rival", "test_rivalry_tension", "test_road_blockade", "test_rivalry_talk", "test_rivalry_mayor", "test_city_fleet", "test_business_core", "test_power_grid", "test_start_profile", "test_business_actions", "test_idle_routine", "test_tiers", "test_tiers_supply", "test_visit_dedupe", "test_anthropic_adapter", "test_game_master", "test_dispatch_agent", "test_model_error_fixes", "test_town_hall", "test_inspections", "test_city_freight_pool", "test_road_care", "test_mayor_levers", "test_population", "test_resident_behavior", "test_activity_feed", "test_public_safety", "test_assist_trips_and_kind", "test_action_normalize_models", "test_rule_brain_finance", "test_stage1_combinable", "test_stage1_plans", "test_stage2_memory", "test_stage3_events_and_log", "test_stage4_experiments", "test_stage4_contracts", "test_estate_acceptance", "test_foreman_delegation", "test_weather_model", "test_weather_effects", "test_event_chain", "test_event_limits", "test_live_text", "test_iso_assets_complete", "test_iso_geometry", "test_iso_strips", "test_weather_service", "test_residents_save_load", "test_calendar", "test_money_conservation", "test_banking", "test_banking_default", "test_company_forms", "test_insolvency", "test_trader", "test_trader_production", "test_build_materials", "test_yard_empire_core", "test_yard_specializations", "test_yard_permits_and_bids", "test_estate_facilities", "test_player_loans", "test_arena", "test_action_assist", "test_standings", "test_economy_cycle", "test_multi_year_consistency", "test_fuel_prices", "test_gas_stations", "test_households_wages", "test_wage_arrears_in_insolvency", "test_fuel_planner", "test_building_care", "test_workforce", "test_news_feed", "test_review_fixes", "test_physical_fueling", "test_public_sector", "test_citizens", "test_parcels", "test_permits", "test_mayor", "test_construction", "test_developer_autopilot", "test_household_builder", "test_acceptance_flow", "test_city_depot", "test_depot_operations", "test_traffic_flow", "test_retail", "test_waste", "test_supply_acceptance", "test_housing", "test_housing_market", "test_job_move", "test_consumer_credit", "test_contentment", "test_planning_aids", "test_central_bank", "test_oversight", "test_districts", "test_company_operations", "test_strategy_learning", "test_strategy_arena", "test_contract_feasibility", "test_grain_chain", "test_rule_brain_production", "test_bakery_counter", "test_internal_transfer_and_export", "test_meat_chain", "test_meat_chain2", "test_restaurant_business", "test_real_estate", "test_company_builder", "test_business_insolvency", "test_chain_coordination", "test_steel_chain", "test_power_plant", "test_wood_and_beverages", "test_it_services", "test_dominance", "test_mountains", "test_garbage_collection", "test_waste_bins", "test_waste_depot", "test_waste_streams", "test_coast_world", "test_access_road", "test_harbor", "test_bridge", "test_mayor_goals", "test_airport", "test_build_crews", "test_business_works", "test_mining_story", "test_business_stages", "test_harbor_expansion", "test_harbor_partial_order", "test_coast_growth", "test_air_cargo", "test_air_passengers", "test_airport_expansion", "test_air_fire", "test_region_world", "test_region_roads", "test_region_administration", "test_region_mayors_and_save", "test_region_joint_project", "test_region_residents", "test_region_trade", "test_region_flight", "test_region_founders", "test_region_commute", "test_region_model_queue", "test_region_town_roads", "test_reservation_holds_during_application", "test_merged_codex_fixes", "test_region_town_growth", "test_tow_no_repeat", "test_empty_tank_no_tow", "test_local_model_guards", "test_region_mining_other_town", "test_agent_inbox", "test_learnlist_round2", "test_sea_traffic", "test_industry_tempo", "test_founder_without_business", "test_substitute_and_memory", "test_chain_logistics", "test_site_hints_placeable", "test_central_hub", "test_hub_trade", "test_civic_works", "test_region_town_figures", "test_event_center", "test_decision_text", "test_finance_history", "test_ambient_view", "test_building_placement", "test_harbor_handling", "test_municipal", "test_public_buildings", "test_fire_service", "test_fire_stages", "test_rescue_service", "test_health_stages", "test_housing_priority", "test_highway", "test_winter_service", "test_transit", "test_education", "test_recycling", "test_regional_council", "test_service_planner", "test_street_cleaning", "test_stone_chain", "test_incineration", "test_shared_plant", "test_power_net", "test_power_repair", "test_power_ring", "test_water_supply", "test_rail_net", "test_rail_traffic", "test_rail_passengers", "test_rail_disruptions", "test_rail_expansion", "test_freight_train", "test_stone_rule_brain", "test_founder_ai_profile", "test_free_build", "test_rail_cargo", "test_build_chance", "test_founder_build_site", "test_rail_wear", "test_rail_company_freight", "test_water_network", "test_free_build_no_rebuy", "test_counter_viability", "test_police", "test_infra_chain", "test_dispatch_staffs_business", "test_accept_backlog", "test_call_syntax_lists", "test_world_variety", "test_citizen_brain", "test_care_works", "test_trip_estimate", "test_citizen_mood", "test_build_help", "test_build_site_purchase", "test_own_accept_already", "test_contract_release", "test_mayor_quarters_staging", "test_police_dump_stages", "test_honorar_staff", "test_vehicle_works"]
 	test_names.append("test_tourism_hotel")
 	test_names.append("test_tourism_venues")
 	var args := OS.get_cmdline_user_args()
@@ -2529,6 +2529,8 @@ func test_iso_assets_complete() -> void:
 	var missing: Array = []
 	var wrong_size: Array = []
 	for type in CityGenerator.TYPES:
+		if type == "vehicle_plant":
+			continue   # Fahrzeugwerk: WorksView zeichnet den Querschnitt prozedural (Auftrag 24)
 		var info: Array = CityGenerator.TYPES[type]
 		for sprite in info[0]:
 			var e: Dictionary = man.buildings.get(sprite, {})
@@ -12932,3 +12934,111 @@ func test_honorar_staff() -> void:
 	doc["beruf"] = "arzt"
 	M._honorar_fill(mvz, M._staff_index())
 	ok(int(mvz.get("honorar", {}).get("arzt", 0)) == 0 and M.staff_count(mvz.id, "arzt") >= 1, "eigener Arzt löst den Honorararzt ab")
+
+
+## Auftrag 24: Stadtwerkstaetten (Wartung nach Kilometern) und Fahrzeugwerk (Entwurf, Band, Verkauf an Firmen und Buerger).
+func test_vehicle_works() -> void:
+	var s := region_sim(2)
+	run(s, 60.0 * 2.0)
+	next_day(s)
+	var W: VehicleWorks = s.vworks
+	W.ensure_sites()
+	ok(not W.facility("KW-01", 0).is_empty() and not W.facility("KW-01", 1).is_empty(), "Kfz-Werkstatt in jeder Stadt")
+	var f := W.plant()
+	ok(not f.is_empty(), "Fahrzeugwerk in Betrieb (%s)" % str(f.get("name", "")))
+	if f.is_empty():
+		return
+	var k := int(f.town)
+	var fid := str(f.id)
+	# Personal direkt einstellen (Bewerbungsverfahren dauert Tage)
+	var free: Array = s.citizens.people.filter(func(p): return str(p.get("dienst", "")) == "")
+	var jobs := ["monteur", "monteur", "monteur", "monteur", "autohaendler", "ingenieur"]
+	for i in mini(jobs.size(), free.size()):
+		s.citizens._employ(free[i], Municipal.EMPLOYER, 0.5)
+		free[i]["dienst"] = fid
+		free[i]["beruf"] = jobs[i]
+	ok(s.municipal.staff_count(fid, "monteur") >= 4, "Bandmonteure im Werk")
+	# Wartung: faellig nach 500 km, mehr Verschleiss bei Ueberziehung
+	var v: FleetVehicle = s.add_vehicle(0, "van", 12000.0, s.city.building(int(f.building)).road)
+	s.companies[0].ledger.invest(12000.0)
+	ok(identity_ok(s), "Geld erhalten vor der Wartung")
+	v.service_km = 1000.0
+	ok(is_equal_approx(VehicleWorks.wear_factor(v), 2.0), "doppelte Laufleistung = doppelter Verschleiß")
+	v.service_km = 520.0
+	v.condition = 60.0
+	v.state = "idle"
+	var r := W.send_to_service(v)
+	ok(r.ok and v.state == "to_workshop" and v.service_fid != "", "fällige Wartung: Fahrt zur Stadtwerkstatt (%s)" % r.msg)
+	var shop: Dictionary = s.municipal.facilities[v.service_fid]
+	var town_acct := Towns.account_of(int(shop.town))
+	var t0 := float(s.economy.accounts[town_acct])
+	var c0 := s.companies[0].ledger.cash
+	W.begin_service(v)
+	ok(v.state == "repairing" and v.timer > 0.0, "auf der Hebebühne (%.0f min)" % v.timer)
+	W.finish_service(v)
+	var fee := float(VehicleWorks.SERVICE.pkw.teile) + float(VehicleWorks.SERVICE.pkw.stunden) * VehicleWorks.LABOUR_RATE
+	ok(v.service_km == 0.0 and v.condition >= 85.0 and v.state == "idle", "gewartet: Zähler 0, Zustand %d" % int(v.condition))
+	ok(absf(c0 - s.companies[0].ledger.cash - fee) < 0.01, "Firma zahlt %s" % Catalog.money(fee))
+	ok(absf(float(s.economy.accounts[town_acct]) - t0 - (fee - float(VehicleWorks.SERVICE.pkw.teile))) < 0.01, "Stadt behält den Arbeitslohn, Teile gehen nach außen")
+	ok(identity_ok(s), "Geld erhalten nach Wartung")
+	# Entwurf
+	var bad := W.design(k, {"klasse": "panzer"}, "Test")
+	ok(not bad.ok, "unbekannte Klasse abgelehnt")
+	ok(not W.design(1 - k, {"klasse": "lkw", "name": "X"}, "Test").ok, "fremde Stadt darf nicht entwerfen")
+	var M: Mayor = s.towns.mayor(k)
+	var res := M.execute({"action": "fahrzeug_entwerfen", "klasse": "transporter", "name": "Test Kurier", "farbe": "gelb", "form": "keil",
+		"nutzlast": 20, "leistung": "kraftvoll", "qualitaet": "premium", "reason": "Test"})
+	ok(res.ok, "Bürgermeister entwirft: " + str(res.msg))
+	var d: Dictionary = W.designs.values().filter(func(x): return x.name == "Test Kurier")[0] if res.ok else {}
+	if d.is_empty():
+		return
+	ok(int(d.capacity) == 20 and float(d.speed) > 0.0 and Catalog.model(d.id).capacity == 20 and Catalog.base_model(d.id) == "transporter", "Modell registriert (%s)" % d.id)
+	ok(float(d.price) >= float(d.selbstkosten), "Preis deckt Selbstkosten")
+	ok(identity_ok(s), "Geld erhalten nach Entwurf")
+	# Serie, Band, Hof, Automarkt
+	d.status = "serie"
+	var day_start := GameCalendar.day_start(GameCalendar.day_of(s.game_min) + 1)
+	s.game_min = day_start + GameCalendar.day_game_min * 6.0 / 24.0   # 12 Uhr: Schicht
+	W.tick(s.game_min)
+	ok(W.line.size() >= 1, "Band startet mit Material (%d Einheiten, offen %s)" % [W.line.size(), Catalog.money(W.supplier_open())])
+	for u in W.line:
+		u.done_h = float(u.need_h) - 0.01
+	W.tick(s.game_min)
+	ok(W.stats.gebaut >= 1 and not W.hof.is_empty(), "Fahrzeug fertig auf dem Hof")
+	var offers: Array = s.resources.available_offers().filter(func(o): return o.has("werk"))
+	ok(not offers.is_empty(), "Autoverkäufer bietet es auf dem Automarkt an")
+	ok(identity_ok(s), "Geld erhalten nach Bau")
+	if offers.is_empty():
+		return
+	var o: Dictionary = offers[0]
+	var town0 := float(s.economy.accounts[Towns.account_of(k)])
+	teleport_avatar(s, 0, s.city.building(int(o.dealer)).walk)
+	var buy := s.executor.execute(0, {"action": "buy_vehicle", "offer_id": o.id})
+	ok(buy.ok and not buy.has("pending"), "Firma kauft im Werk: " + str(buy.msg))
+	ok(float(s.economy.accounts[Towns.account_of(k)]) > town0, "Kaufpreis an die Stadtkasse")
+	ok(W.stats.verkauft_firmen == 1 and s.company_vehicles(0).any(func(x): return x.model == d.id), "Fahrzeug in der Flotte")
+	ok(identity_ok(s), "Geld erhalten nach Verkauf")
+	# Pkw an Buerger (Werksfinanzierung)
+	var pk := W.design(k, {"klasse": "pkw", "name": "Test Spatz", "farbe": "rot"}, "Test")
+	ok(pk.ok, "Pkw entworfen")
+	var pd: Dictionary = W.designs.values().filter(func(x): return x.name == "Test Spatz")[0]
+	W.hof.append({"design": pd.id, "serial": 99, "day": GameCalendar.day_of(s.game_min), "offer": "", "unpaid": 0.0})
+	var rich: Dictionary = s.citizens.people.filter(func(p): return str(p.employer) != "")[0]
+	s.population.pay_in("X0", [[rich, 5000.0]])
+	for p in s.citizens.people:
+		if p != rich:
+			p["auto"] = "x"   # nur dieser eine kommt in Frage
+	rich["wage"] = 30.0
+	var sold := false
+	for i in 40:
+		W._sell_pkw(0)
+		if W.stats.verkauft_buerger > 0:
+			sold = true
+			break
+	ok(sold and str(rich.get("auto", "")) == pd.id and W.loans.size() == 1, "Bürger kauft Pkw mit Anzahlung und Raten")
+	W._collect_rates()
+	ok(float(W.stats.raten) > 0.0, "Rate gezahlt (%.2f EUR)" % float(W.stats.raten))
+	ok(identity_ok(s), "Geld erhalten nach Pkw-Verkauf")
+	# Speichern/Laden
+	var s2: Simulation = Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.vworks.designs.size() == W.designs.size() and Catalog.model(d.id).capacity == 20 and s2.vworks.loans.size() == 1, "Entwürfe und Kredite gespeichert")

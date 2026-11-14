@@ -524,7 +524,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		if n == null or n.get_meta("owner") != v.owner:
 			if n:
 				n.queue_free()
-			n = _make_vehicle_node(v.model, "", sim.company(v.owner).color, true)
+			n = _make_vehicle_node(Catalog.base_model(v.model), "", sim.company(v.owner).color, true)
 			n.set_meta("owner", v.owner)
 			var cargo := Sprite2D.new()
 			cargo.name = "cargo"
@@ -533,7 +533,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			var warn := Sprite2D.new()
 			warn.name = "warn"
 			warn.texture = cv.tex("i_warn")
-			warn.position = Vector2(0, -2.0 * float(MODEL_HEIGHT.get(v.model, 30)) - 22.0)
+			warn.position = Vector2(0, -2.0 * float(MODEL_HEIGHT.get(Catalog.base_model(v.model), 30)) - 22.0)
 			warn.z_index = 40
 			n.add_child(warn)
 			add_child(n)
@@ -545,7 +545,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		if v.cargo != "":
 			var cname: String = "c_" + v.cargo
 			cs.texture = cv.tex(cname)
-			cs.offset = -cv.pivot_of(cname) + Vector2(0, -2.0 * float(MODEL_HEIGHT.get(v.model, 30)) - 6.0 + (1.0 if int(anim_time * 4) % 2 == 0 else 0.0))
+			cs.offset = -cv.pivot_of(cname) + Vector2(0, -2.0 * float(MODEL_HEIGHT.get(Catalog.base_model(v.model), 30)) - 6.0 + (1.0 if int(anim_time * 4) % 2 == 0 else 0.0))
 		n.get_node("warn").visible = v.state == "broken" and int(anim_time * 3) % 2 == 0
 	for i in mini(service_nodes.size(), sim.safety.vehicles.size()):
 		var sv: Dictionary = sim.safety.vehicles[i]
@@ -800,7 +800,7 @@ func _update_markers() -> void:
 		per_dealer[o.dealer] = i + 1
 		if i >= DEALER_SHOWN:
 			continue   # voller Bestand steht im Haendlerfenster; auf der Karte reihten sich bis zu 5 Lkw ueberlappend an der Strasse
-		var key := "%s_0" % o.model
+		var key := "%s_0" % Catalog.base_model(str(o.model))
 		var node := Node2D.new()
 		node.position = Iso.to_screen(Vector2(b.x * 32 + 18 + i * 64, (b.y + b.h) * 32 + 14))
 		var body := Sprite2D.new()
@@ -925,10 +925,10 @@ func pick(click: Vector2) -> Dictionary:
 	for v in sim.vehicles.values():
 		var n: Node2D = vehicle_nodes.get(v.id)
 		if n and n.get_meta("dir") >= 0:
-			var key := "%s_%d" % [v.model, n.get_meta("dir")]
+			var key := "%s_%d" % [Catalog.base_model(v.model), n.get_meta("dir")]
 			var info: Dictionary = cv.man.vehicles[key]
 			var piv := Vector2(info.pivot[0], info.pivot[1])
-			var d := (n.position - Vector2(0, float(MODEL_HEIGHT.get(v.model, 30)))).distance_to(click)
+			var d := (n.position - Vector2(0, float(MODEL_HEIGHT.get(Catalog.base_model(v.model), 30)))).distance_to(click)
 			if _sprite_hit(n.position, piv, Vector2(info.size[0], info.size[1]), click) and d < best_d:
 				best = {"kind": "vehicle", "id": v.id}
 				best_d = d

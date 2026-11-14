@@ -485,6 +485,7 @@ func _start_work(t: WorkerTask, w: Worker) -> void:
 			t.work_needed = maxf(8.0, (100.0 - v.condition) * 0.8 / (0.5 + 0.5 * int(w.skills.reparieren)))
 			if t.target.get("werkstatt", false):
 				t.work_needed *= 0.5   # Werkstatt: Hebebuehne, Werkzeug
+				v.service_km = 0.0     # Durchsicht in der eigenen Werkstatt zaehlt als Wartung (Auftrag 24)
 			_maybe_delay(t, w)
 			t.status = "in Bearbeitung"
 			t.report = "repariert #%d (%d Ersatzteile verbraucht)" % [v.id, parts]

@@ -13,6 +13,9 @@ const SCHEMA := {
 	"infra_ausbau": {"params": {"anlage": "string", "reason": "string"},
 		"desc": "Versorgung vorausschauend ausbauen (obs.infrastruktur_lage, obs.wasser, obs.bahn): anlage wasserwerk | hochbehaelter | klaeranlage (Leistung ×1,5, 40 % der Neubaukosten, Baufirma, 12 Tage; Kläranlage teilen sich die Städte) oder gleis (Instandsetzung des schlechtesten Abschnitts an deiner Stadt, Land 75 %)."},
 	"kommunal_schliessen": {"params": {"einrichtung": "string", "reason": "string"}, "desc": "Kommunale Einrichtung schließen (Personal frei, keine Kosten mehr)."},
+	"fahrzeug_entwerfen": {"params": {"klasse": "string", "name": "string", "farbe": "string", "akzent": "string?", "form": "string?", "nutzlast": "int?",
+		"leistung": "string?", "qualitaet": "string?", "kuehlung": "bool?", "preis": "number?", "reason": "string"},
+		"desc": "Neues Modell im städtischen Fahrzeugwerk entwerfen (nur die Stadt mit Werk, obs.fahrzeugwerk). klasse pkw|transporter|lkw|sattelzug; farbe/akzent rot|blau|gruen|gelb|weiss|schwarz|silber|orange|tuerkis|violett|braun|grau|creme oder Hex; form kantig|rund|keil; nutzlast je Klasse (pkw 4-7 Sitze, transporter 8-24, lkw 28-56, sattelzug 60-100); leistung sparsam|ausgewogen|kraftvoll; qualitaet einfach|solide|premium; kuehlung nur transporter/lkw; preis optional (zwischen Selbstkosten und 2,2-fach). Kostet 15 000 EUR Entwicklung; danach baut das Band, Verkäufer bieten es an."},
 	"regionalrat_antrag": {"params": {"art": "string", "partner": "int?", "reason": "string"},
 		"desc": "Antrag für die nächste Sitzung des Regionalrats: art verbindung (mit partner = Stadt-Nr.)|kh_ausbau|drehleiter|zweckverband|bahn_takt (weiterer Triebwagen, Land 75 %)|zweites_gleis (Abschnitt mit der meisten Wartezeit, Land 75 %; siehe obs.bahn.ausbau). Mehrheit 3 von 4, Eigentumsfragen einstimmig; Kraftwerksanteile bleiben 25/25/25/25."},
 	"propose_project": {"params": {"project": "string", "category": "string", "reason": "string", "priority": "int?", "desiredDistrict": "string?",
@@ -311,6 +314,7 @@ func indicators() -> Dictionary:
 			"wohnungslos": sim.housing.homeless_count(), "raeumungen": int(sim.housing.stats.evictions), "planung": sim.housing.planning_aids()},
 		"stadtentwicklung": sim.civic.mayor_obs(town) if sim.civic != null else {},
 		"kommunale_dienste": sim.services.mayor_obs(town) if sim.services != null and sim.municipal.enabled() else {},
+		"fahrzeugwerk": sim.vworks.mayor_obs(town) if sim.municipal.enabled() else {},
 		"arbeit": {"quote": snappedf(Z.employment_rate_of(town), 0.001), "arbeitslos": Z.unemployed_of(town), "offene_stellen": vac_jobs,
 			"offene_stellen_nach_arbeitgeber": by_vac},
 		"buergerleben": Z.life_obs(town),
@@ -672,6 +676,8 @@ func execute(action: Dictionary) -> Dictionary:
 				var mf: Dictionary = sim.municipal.facilities.get(str(a.einrichtung), {})
 				res = {"ok": false, "msg": "Einrichtung %s gehört nicht zu dieser Stadt." % str(a.einrichtung)} if mf.is_empty() or int(mf.town) != town \
 					else sim.services.buy_vehicle(str(a.einrichtung), str(a.fahrzeug), str(a.reason), "Bürgermeister %s" % name)
+			"fahrzeug_entwerfen":
+				res = sim.vworks.design(town, a, "Bürgermeister %s" % name)
 			"kommunal_schliessen":
 				var mc: Dictionary = sim.municipal.facilities.get(str(a.einrichtung), {})
 				res = {"ok": false, "msg": "Einrichtung %s gehört nicht zu dieser Stadt." % str(a.einrichtung)} if mc.is_empty() or int(mc.town) != town \

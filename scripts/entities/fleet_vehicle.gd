@@ -34,6 +34,8 @@ var resume_state := ""       # Zustand vor einer Panne/Sabotage (wird nach Repar
 var resume_timer := 0.0
 var needs_dispatch := true
 var crew_requested := false
+var service_km := 0.0        # Kilometer seit der letzten Wartung (VehicleWorks.SERVICE_KM)
+var service_fid := ""        # Wartung in dieser Stadtwerkstatt (M<n>) laeuft oder ist angefahren
 
 
 func setup(vid: int, owner_id: int, model_id: String, price: float, p: Vector2) -> void:
@@ -64,7 +66,8 @@ func to_dict() -> Dictionary:
 		"condition": condition, "state": state, "contract_id": contract_id, "queue": queue, "timer": timer,
 		"odometer": odometer, "idle_since": idle_since, "cargo": cargo, "x": pos.x, "y": pos.y,
 		"goal": [goal.x, goal.y], "held_by": held_by, "stops": stops, "load": load, "operator": operator, "parking": parking, "bay_pref": bay_pref,
-		"clean_until": clean_until, "resume_state": resume_state, "resume_timer": resume_timer, "needs_dispatch": needs_dispatch, "crew_requested": crew_requested, "no_fuel": no_fuel}
+		"clean_until": clean_until, "resume_state": resume_state, "resume_timer": resume_timer, "needs_dispatch": needs_dispatch, "crew_requested": crew_requested, "no_fuel": no_fuel,
+		"service_km": service_km, "service_fid": service_fid}
 
 
 static func from_dict(d: Dictionary) -> FleetVehicle:
@@ -87,6 +90,8 @@ static func from_dict(d: Dictionary) -> FleetVehicle:
 	v.bay_pref = d.get("bay_pref", "")
 	v.clean_until = float(d.get("clean_until", 0.0))
 	v.no_fuel = bool(d.get("no_fuel", false))
+	v.service_km = float(d.get("service_km", 0.0))
+	v.service_fid = str(d.get("service_fid", ""))
 	for st in v.stops:
 		st.menge = int(st.menge)
 	for kid in d.get("load", {}):

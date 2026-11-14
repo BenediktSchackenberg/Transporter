@@ -622,7 +622,9 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 				visit["offer_id"] = offer.id   # genau dieses Angebot bei Ankunft erneut pruefen
 				return _start_visit(cid, visit, dealer.walk, -1, dealer.name)
 			offer.status = "verkauft"
-			L.invest(offer.price)
+			L.invest(offer.price, str(offer.get("acct", "S0")))   # Fahrzeugwerk: Kaufpreis an die Stadtkasse
+			if offer.has("werk"):
+				sim.vworks.on_offer_sold(offer, cid)
 			var nv: FleetVehicle = sim.add_vehicle(cid, offer.model, offer.price, dealer.road)
 			nv.condition = float(offer.condition)
 			sim.biz.ensure_transport(cid, "Unternehmer")   # Fahrzeuge gehoeren zum Transportbetrieb

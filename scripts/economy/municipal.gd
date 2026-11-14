@@ -38,6 +38,11 @@ const BERUFE := {
 	"verwaltung": {"label": "Krankenhausverwaltung", "wage": 16.0, "bildung": 1},
 	"medtechnik": {"label": "Medizintechniker", "wage": 18.0, "bildung": 2},
 	"reinigung": {"label": "Reinigungskräfte", "wage": 12.0, "bildung": 0},
+	# Auftrag 24: Werkstaetten und Fahrzeugwerk
+	"mechaniker": {"label": "Kfz-Mechatroniker", "wage": 16.0, "bildung": 1},
+	"monteur": {"label": "Bandmonteure", "wage": 15.0, "bildung": 0},
+	"ingenieur": {"label": "Fahrzeugkonstrukteure", "wage": 24.0, "bildung": 2},
+	"autohaendler": {"label": "Autoverkäufer", "wage": 15.0, "bildung": 1},
 }
 
 ## Einrichtungstypen. building: Gebaeudetyp in CityGenerator.TYPES; upkeep: Sachkosten je Tag; capacity: typabhaengige Leistung
@@ -134,6 +139,15 @@ const TYPES := {
 	"FW-06": {"label": "Feuerwehrausbildungszentrum", "dienst": "feuerwehr", "ressort": "Sicherheit", "building": "fire_school", "cost": 2500000.0,
 		"upkeep": 280.0, "capacity": 12, "staff": {"feuerwehr": 4}, "min_staff": {"feuerwehr": 2}, "regional": true, "power": 90.0, "water": 15.0,
 		"vehicles": [], "ausbildung": true},
+	# Auftrag 24 (VehicleWorks): Stadtwerkstaetten fuer die Wartung nach Kilometerstand (capacity = Hebebuehnen) und das Fahrzeugwerk
+	# des Buergermeisters (Konstruktion, Montageband, Autohaus). sprite: festes Bild statt pub_<typ>_<v>_<stil>.
+	"KW-01": {"label": "Kfz-Werkstatt", "dienst": "werkstatt", "ressort": "Wirtschaft", "building": "car_service", "sprite": "workshop", "cost": 240000.0,
+		"upkeep": 40.0, "capacity": 2, "staff": {"mechaniker": 3}, "min_staff": {"mechaniker": 1}, "power": 30.0, "water": 3.0, "vehicles": [], "fixed_staff": true},
+	"KW-02": {"label": "Nutzfahrzeug-Werkstatt", "dienst": "werkstatt", "ressort": "Wirtschaft", "building": "truck_service", "sprite": "freight_shed", "cost": 520000.0,
+		"upkeep": 70.0, "capacity": 2, "staff": {"mechaniker": 5}, "min_staff": {"mechaniker": 2}, "power": 50.0, "water": 5.0, "vehicles": [], "fixed_staff": true},
+	"FZ-01": {"label": "Fahrzeugwerk", "dienst": "fahrzeugbau", "ressort": "Wirtschaft", "building": "vehicle_plant", "sprite": "vehicle_plant", "cost": 4000000.0,
+		"upkeep": 260.0, "capacity": 4, "staff": {"monteur": 12, "ingenieur": 2, "autohaendler": 2}, "min_staff": {"monteur": 4, "ingenieur": 1, "autohaendler": 1},
+		"power": 600.0, "water": 30.0, "vehicles": [], "fixed_staff": true},
 }
 
 ## Fahrzeugtypen: Kurzbezeichnung -> Beschreibung, Besatzung, Kosten je Tag, Kaufpreis, Sprite-Familie (Etappe 3).
@@ -250,6 +264,8 @@ func _name(k: int, code: String, cell: Vector2i) -> String:
 
 ## Bildname aus Typ, Grundvariante und Stil (CityGenerator.TYPES, tools/vox/public.py): pub_<kuerzel>_<v>_<stil>.
 static func sprite_of(f: Dictionary) -> String:
+	if TYPES[f.code].has("sprite"):
+		return str(TYPES[f.code].sprite)
 	var first := str(CityGenerator.TYPES[TYPES[f.code].building][0][0])   # z. B. pub_fw_0_backstein
 	return "%s_%d_%s" % [first.left(first.find("_", 4)), int(f.variant), str(f.style)]
 
@@ -331,6 +347,8 @@ static func staff_need(code: String, pop: int) -> Dictionary:
 	var t: Dictionary = TYPES[code]
 	var mins: Dictionary = t.get("min_staff", {})
 	var out := {}
+	if bool(t.get("fixed_staff", false)):
+		return (t.staff as Dictionary).duplicate()   # Betriebe (Werk, Werkstatt): Stellenplan haengt nicht an der Einwohnerzahl
 	if pop < int(t.get("pro_from_pop", 0)):
 		for b in t.staff:
 			out[b] = 0   # kleiner Ort: nur Ehrenamtliche
@@ -429,10 +447,10 @@ func _share_regional(f: Dictionary) -> void:
 	f.owner = "region"
 
 
-func _place(k: int, code: String) -> Dictionary:
+func _place(k: int, code: String, district: String = "") -> Dictionary:
 	var bt: String = TYPES[code].building
 	var info: Array = CityGenerator.TYPES[bt]
-	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]))
+	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]), district)
 	if site.is_empty():
 		sim.log_event("%s: kein Bauplatz für %s gefunden." % [sim.towns.name_of(k), TYPES[code].label], "warn")
 		return {}

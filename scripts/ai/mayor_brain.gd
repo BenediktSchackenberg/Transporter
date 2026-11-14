@@ -29,6 +29,11 @@ static func decide(ind: Dictionary) -> Dictionary:
 			actions.append({"action": "decide_application", "application_id": d.id, "decision": "rueckfrage", "reason": "Offene Punkte: " + " ".join(d.offene_punkte)})
 		else:
 			actions.append({"action": "decide_application", "application_id": d.id, "decision": "ablehnen", "reason": "Offene Punkte trotz Rückfragen nicht behoben: " + " ".join(d.offene_punkte)})
+	# 1a) Fahrzeugwerk (Auftrag 24): fehlt eine Fahrzeugklasse, den Vorschlag des Werks als Entwurf in Auftrag geben
+	var fv: Dictionary = ind.get("fahrzeugwerk", {}).get("vorschlag", {})
+	if not fv.is_empty() and actions.size() < MAX_ACTIONS:   # Finanzierung prueft das Werk (Haushalt oder Kreditrahmen)
+		actions.append(fv.duplicate())
+		notes.append("Fahrzeug %s entworfen" % str(fv.name))
 	# 1b) Beschaffungsvorschlaege des Stadtlagers: kritische Ware und bezahlbare Vorschlaege genehmigen, zu teure ablehnen
 	for pv in ind.stadtlager.vorschlaege:
 		if actions.size() >= MAX_ACTIONS:

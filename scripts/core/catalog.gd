@@ -34,6 +34,8 @@ const LOADING_MIN := 12.0               # Spielminuten fuer Be- oder Entladen
 const REPAIR_MIN := 25.0
 const REPAIR_COST_PER_POINT := 0.0008   # Anteil Kaufpreis pro Zustandspunkt
 const BREAKDOWN_THRESHOLD := 30.0
+const KM_PER_TILE := 1.5                # Kilometerzaehler je Feld Fahrt (Zeitraffer: ein Spieltag = 120 Spielminuten; ein Lkw im Einsatz
+                                        # faehrt ~100-150 km je Tag, Wartung alle VehicleWorks.SERVICE_KM also alle 4-5 Tage)
 const TOW_FEE := 400.0
 
 const LATE_PENALTY_PER_HOUR := 0.25     # Verguetung sinkt pro angefangener Stunde Verspaetung
@@ -142,8 +144,17 @@ const COLOR_NAMES := ["Rot", "Blau", "Grün", "Gelb", "Violett", "Türkis"]
 const AVATAR_COUNT := 6
 
 
+## Eigene Modelle des Fahrzeugwerks (Auftrag 24, VehicleWorks): "D<n>" -> Werte wie VEHICLE_MODELS plus "base" (Grundbild).
+static var custom_models := {}
+
+
 static func model(id: String) -> Dictionary:
-	return VEHICLE_MODELS.get(id, {})
+	return VEHICLE_MODELS.get(id, custom_models.get(id, {}))
+
+
+## Grundmodell fuer Bild und Regel-Einkauf: eigene Entwuerfe zeigen sich als ihr Grundtyp (transporter, truck, semi).
+static func base_model(id: String) -> String:
+	return str(custom_models[id].base) if custom_models.has(id) else id
 
 
 ## Zeitstempel fuer Protokolle und Anzeigen: "M3 T12 14:30" (Spielkalender + Uhrzeit der Stadt).

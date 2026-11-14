@@ -613,6 +613,14 @@ func _process_timed(_delta: float) -> void:
 				args.erase("shot-tile")
 				session.set_follow(false)
 				session.city_view.set_camera_world(pick.mover.pos)
+		if args.has("shot-works"):   # Kamera auf das Fahrzeugwerk (Auftrag 24)
+			var wf: Dictionary = session.sim.vworks.plant()
+			print("AUTOTEST Fahrzeugwerk: %s" % str(wf.get("name", "keins")))
+			if not wf.is_empty():
+				var wb: Dictionary = session.sim.city.building(int(wf.building))
+				args.erase("shot-tile")
+				session.set_follow(false)
+				session.city_view.set_camera_world(Vector2((float(wb.x) + float(wb.w) * 0.5) * 32.0, (float(wb.y) + float(wb.h) * 0.5) * 32.0))
 		if args.has("shot-site"):   # Kamera auf eine Baustelle mit Trupp (Auftrag 23): bau | road | fleet | works, sonst die erste
 			var sv: SiteView = session.city_view.site_view
 			var want := str(args["shot-site"])

@@ -37,7 +37,8 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	for v in sim.company_vehicles(cid):
 		var t: Vector2i = v.tile()
 		fleet.append({"id": v.id, "linie": sim.operations.line_of(v.id), "modell": v.model, "status": v.status_text(),
-			"zustand": int(v.condition), "fahrer": sim.driver_of(v).id if sim.driver_of(v) else null, "auftrag": v.contract_id,
+			"zustand": int(v.condition), "km_seit_wartung": int(v.service_km),   # Wartung alle VehicleWorks.SERVICE_KM (Stadtwerkstatt, automatisch)
+			"fahrer": sim.driver_of(v).id if sim.driver_of(v) else null, "auftrag": v.contract_id,
 			"warteschlange": v.queue, "stopps": v.stops.slice(0, 6), "ladung": v.load,
 			"kapazitaet_frei": int(v.spec().capacity) - sim.logistics.load_total(v),
 			"vermietet_an": v.operator, "viertel": Catalog.DISTRICTS[sim.city.district_of(t)],
@@ -93,8 +94,8 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	for m in market:
 		m.erase("_score")
 	var models := {}
-	for id in Catalog.VEHICLE_MODELS:
-		var m: Dictionary = Catalog.VEHICLE_MODELS[id]
+	for id in Catalog.VEHICLE_MODELS.keys() + Catalog.custom_models.keys():
+		var m: Dictionary = Catalog.model(str(id))
 		models[id] = {"name": m.name, "preis": int(m.price), "kapazitaet": m.capacity, "tempo": m.speed,
 			"kosten_pro_tile": m.cost_per_tile, "kuehlung": m.refrigerated, "schwer": m.heavy}
 	var rivals: Array = []
@@ -580,8 +581,12 @@ static func _resources(sim: Simulation, cid: int) -> Dictionary:
 	var offers: Array = []
 	for o in sim.resources.available_offers():
 		var b: Dictionary = sim.city.building(o.dealer)
-		offers.append({"id": o.id, "modell": o.model, "preis": o.price, "zustand": o.condition, "haendler": b.name,
-			"pos": [b.walk.x, b.walk.y]})
+		var of := {"id": o.id, "modell": o.model, "preis": o.price, "zustand": o.condition, "haendler": b.name,
+			"pos": [b.walk.x, b.walk.y]}
+		if o.has("werk"):   # Modell des staedtischen Fahrzeugwerks (Werte stehen in obs.modelle)
+			of["basis"] = Catalog.base_model(str(o.model))
+			of["name"] = Catalog.model(str(o.model)).get("name", o.model)
+		offers.append(of)
 	var supplies: Array = []
 	for sp in sim.resources.supplies.values():
 		var b: Dictionary = sim.city.building(sp.building)

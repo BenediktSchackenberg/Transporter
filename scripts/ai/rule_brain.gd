@@ -907,7 +907,7 @@ static func _supply(res: Dictionary, kind_prefix: String, amount: float) -> Dict
 static func _cheapest_offer(offers: Array, models: Array) -> Dictionary:
 	var best := {}
 	for o in offers:
-		if o.modell in models and int(o.zustand) >= 60 and (best.is_empty() or float(o.preis) < float(best.preis)):
+		if (o.modell in models or str(o.get("basis", "")) in models) and int(o.zustand) >= 60 and (best.is_empty() or float(o.preis) < float(best.preis)):
 			best = o
 	return best
 
