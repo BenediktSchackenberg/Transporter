@@ -11104,7 +11104,13 @@ func test_street_cleaning() -> void:
 	for seg in SC.dirt:
 		total1 += float(SC.dirt[seg])
 	ok(total1 < total0, "Straßenmüll sinkt nach der Arbeit (%.0f -> %.0f kg)" % [total0, total1])
-	ok(float(s.economy.accounts[Towns.account_of(0)]) < cash0, "Stadtreinigung kostet die Stadtkasse (Sachkosten)")
+	# Sachkosten je geraeumter Zelle direkt pruefen (ueber Stunden fliessen auch Steuern und Gebuehren in die Kasse)
+	var probe := Vector2i(-50, -50)
+	SC.dirt[probe] = 50.0
+	var acct0 := float(s.economy.accounts[Towns.account_of(0)])
+	SC._cleaned({"cell": probe, "town": 0})
+	SC.dirt.erase(probe)
+	ok(float(s.economy.accounts[Towns.account_of(0)]) < acct0, "Stadtreinigung kostet die Stadtkasse (Sachkosten je Zelle %.0f EUR)" % (acct0 - float(s.economy.accounts[Towns.account_of(0)])))
 	ok(int(SC.stats.geraeumt) >= 1, "Statistik: %d Abschnitte geräumt, %.1f kg gesammelt" % [int(SC.stats.geraeumt), float(SC.stats.gesaeubert)])
 	# Speichern/Laden: Straßenmüll bleibt, laufende Fahrten enden
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
