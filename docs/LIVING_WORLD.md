@@ -22,9 +22,11 @@ mehrere hundert Bürger. Deshalb:
 1. **Straßen ohne Zickzack:** Landstraßen, Zufahrten zum Großlager, neue Verbindungen und Autobahnzubringer werden nach der Wegsuche
    begradigt (`PathStraighten`): lange Geraden, rechtwinklige Kurven, höchstens 48 Wegpunkte je L, damit der Weg nahe an der gesuchten
    Trasse bleibt. Messung (`tests/probe_roads_shape.gd`, Seed 97089): Kurvenfelder der Landstraßen 19,0 % → 1,9 %.
-2. **Jede Karte anders:** Lage der Orte, Küstenlinie, Fluss (Seite, Lauf), Zahl und Größe von Bergen und Seen nach Seed; Ortsbild
-   nach Charakter mit zufälligem Straßenraster, Ortskern an wechselnder Stelle, Wahrzeichen und Details (Brunnen, Bänke, Gärten,
-   Alleen, Kirche, Kneipe, Pension).
+2. **Jede Karte anders (Generator 4):** Orte liegen mal weit außen, mal näher an der Mitte; der Fluss mündet im Osten oder Westen
+   mit eigenem Lauf; 3–5 Gebirge und 2–4 Seen in wechselnder Größe; Straßenraster und Ortskern mit Zufallsversatz, Gewerbezeile
+   mal im Süden, mal im Norden; vier von sechs Ortstypen je Partie (neu: Kurort mit Promenade, Villen, Kurhaus und Kurbrunnen;
+   Hafenstadt mit engem Raster, Mietshäusern, Kran, Containerlager und Hafenkneipe). Spielstände mit Generator 2/3 behalten ihre
+   Karte. Prüfung: `test_world_variety`, Bilder: `tests/probe_world_variety.gd`.
 3. **Baustellen im Detail:** Bauphasen mit Gerüst, Kran, Materialstapeln, Lieferwagen; Arbeiter mit sichtbarer Tätigkeit je Phase.
    Straßenbau und -wartung: Absperrung, Fräse, Walze, Asphaltkocher, Arbeiter mit Schaufel und Rüttelplatte.
 4. **Bürger-KI:** Tagespläne für alle Bürger, sichtbar als Fußgänger und Pendler mit Ziel; Auswirkungen auf Umsatz, Verkehr und Stimmung.

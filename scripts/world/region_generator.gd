@@ -11,6 +11,9 @@ extends CoastGenerator
 var town_count := 4
 ## Ortscharakter (je Ort aus dem Seed): praegt Strassennetz, Bebauung und Umland, damit die Staedte verschieden aussehen.
 const CHARACTERS := ["Fischerdorf", "Marktflecken", "Bauerndorf", "Handwerkerort"]
+## Ab Generatorversion 4: vier von sechs Charakteren je Partie (Kurort: Promenade, Villen, Kurhaus; Hafenstadt: dichtes Raster,
+## Mietshaeuser, Kran und Container am Kai).
+const CHARACTERS_V4 := ["Fischerdorf", "Marktflecken", "Bauerndorf", "Handwerkerort", "Kurort", "Hafenstadt"]
 var towns_out: Array = []          # [{id, name, center: [x, y], rect: [x, y, w, h], airport: {...}}]
 var _rects: Array = []             # Rect2i je Ort
 var _air_rects: Array = []
@@ -18,8 +21,27 @@ var failures: Array = []         # Fehler der verworfenen Versuche (Fehlersuche)
 var _band := Rect2i()              # Kuestenband zwischen den Orten (Verbindungsstrassen, frei von Fluss/Seen/Bergen)
 
 
-func _init(count: int = 4) -> void:
+## Generatorversion: 2 = Kuestenband, 3 = Eckregionen, 4 = Eckregionen mit wechselndem Gelaende und Ortsbild (Auftrag 23).
+## Aeltere Versionen erzeugen dieselbe Karte wie damals (Spielstaende); nur Version 4 nutzt die zusaetzlichen Zufallswerte.
+var version := 2
+
+
+func _init(count: int = 4, ver: int = 2) -> void:
 	town_count = clampi(count, 1, 4)
+	version = ver
+
+
+## Zufallsversatz -a..a, nur ab Version 4 (aeltere Versionen ziehen keine Zufallszahl, ihre Karten bleiben gleich).
+func _j(a: int) -> int:
+	return rng.randi_range(-a, a) if version >= 4 else 0
+
+
+## Weg der Rasterwegsuche, ab Version 4 begradigt (ohne Treppenstufen).
+func _road_path(astar: AStarGrid2D, a: Vector2i, b: Vector2i) -> Array:
+	var raw: Array = astar.get_id_path(a, b)
+	if version < 4:
+		return raw
+	return PathStraighten.straighten(raw, func(q: Vector2i) -> bool: return c.inside(q) and not astar.is_point_solid(q))
 
 
 func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: float = 0.0) -> CityData:
@@ -272,7 +294,7 @@ func _town_core(k: int) -> void:
 	var nm := c.town_name
 	_put("port_office", Vector2i(t.x + 3, t.y - 3), "", "Hafen %s" % nm)
 	_put("warehouse", Vector2i(t.x + 3, t.y + 4), "", "Hafenlager")
-	var core := Vector2i(t.x - 8, t.y - 4)
+	var core := Vector2i(t.x - 8 + _j(3), t.y - 4 + _j(6))   # ab Version 4 liegt der Ortskern jedes Mal etwas anders
 	_put("townhall", core, "town_hall", "Rathaus %s" % nm)
 	_market_square(core + Vector2i(2, 2))
 	_put("job_board", core + Vector2i(-6, 2), "job_board", "Arbeitsamt %s" % nm)
@@ -283,12 +305,13 @@ func _town_core(k: int) -> void:
 	_put("shop", core + Vector2i(-2, -8), "", "Dorfladen %s" % nm)
 	_put("shop", core + Vector2i(2, 4), "", "Bäckerei %s" % SURNAMES[rng.randi() % SURNAMES.size()])
 	_put("restaurant", core + Vector2i(6, 2), "", "Gasthaus %s" % nm)
-	_put("freight_shed", Vector2i(t.x - 22, t.y + 16), "", "Städtischer Bauhof")
+	var yard := Vector2i(_j(4), _j(3) - (32 if version >= 4 and rng.randf() < 0.4 else 0))   # Gewerbezeile mal im Sueden, mal im Norden
+	_put("freight_shed", Vector2i(t.x - 22, t.y + 16) + yard, "", "Städtischer Bauhof")
 	if k == 0:
 		_put("factory", Vector2i(t.x - 22, t.y - 17), "", "Kraftwerk")   # ein regionales Kraftwerk (Stadtwerke), nicht je Ort
-	_put("dealer", Vector2i(t.x - 14, t.y + 16), "dealer", "Fahrzeughandel %s" % nm)
-	_put("workshop", Vector2i(t.x - 8, t.y + 16), "workshop", "Werkstatt " + SURNAMES[rng.randi() % SURNAMES.size()])
-	_put("gas_station", Vector2i(t.x - 3, t.y + 15), "", "Tankstelle %s" % nm)
+	_put("dealer", Vector2i(t.x - 14, t.y + 16) + yard, "dealer", "Fahrzeughandel %s" % nm)
+	_put("workshop", Vector2i(t.x - 8, t.y + 16) + yard, "workshop", "Werkstatt " + SURNAMES[rng.randi() % SURNAMES.size()])
+	_put("gas_station", Vector2i(t.x - 3, t.y + 15) + yard, "", "Tankstelle %s" % nm)
 	match ch:
 		"Marktflecken":
 			_put("shop", core + Vector2i(-10, 6), "", "Markthalle %s" % nm)
@@ -296,6 +319,13 @@ func _town_core(k: int) -> void:
 			_put("workshop", Vector2i(t.x - 18, t.y + 8), "", "Schmiede " + SURNAMES[rng.randi() % SURNAMES.size()])
 		"Fischerdorf":
 			_put("containers", Vector2i(t.x + 2, t.y + 10), "", "Fischhalle %s" % nm)
+		"Kurort":
+			_put("hotel", core + Vector2i(-4, 12), "", "Kurhaus %s" % nm)
+			_put("fountain", core + Vector2i(8, -2), "", "Kurbrunnen")
+		"Hafenstadt":
+			_put("crane", Vector2i(t.x + 2, t.y + 9), "", "Hafenkran %s" % nm)
+			_put("containers", Vector2i(t.x + 2, t.y - 9), "", "Containerlager %s" % nm)
+			_put("kneipe", core + Vector2i(4, 9), "", "Hafenkneipe %s" % nm)
 	# genau ein Unternehmer-Startgrundstueck je Ort (Abschnitt 5)
 	var y0 := t.y - 9
 	var r := Rect2i(t.x - 38, y0, PLOT_W, PLOT_H)
@@ -317,7 +347,7 @@ func _town_core(k: int) -> void:
 	var k2 := 0
 	var tries := 0
 	# Bebauung nach Charakter: Fischerdorf dicht am Wasser, Bauerndorf weit verstreut mit Hoefen, Marktflecken mit Doppelhaeusern
-	var span: Array = {"Fischerdorf": [1, 14], "Marktflecken": [4, 22], "Bauerndorf": [10, 30], "Handwerkerort": [4, 28]}[ch]
+	var span: Array = {"Fischerdorf": [1, 14], "Marktflecken": [4, 22], "Bauerndorf": [10, 30], "Handwerkerort": [4, 28], "Kurort": [2, 26], "Hafenstadt": [2, 20]}[ch]
 	# kompakt: von der Ortsmitte nach aussen fuellen (Radius waechst mit jedem Haus), Freiflaechen bleiben am Rand
 	while budget > 0 and tries < 260:
 		tries += 1
@@ -331,6 +361,10 @@ func _town_core(k: int) -> void:
 				kind = "farm" if k2 % 5 == 4 else "house"
 			"Handwerkerort":
 				kind = "workshop" if k2 % 6 == 5 else ("semi" if k2 % 3 == 2 else "house")
+			"Kurort":
+				kind = "villa" if k2 % 4 == 1 else "house"
+			"Hafenstadt":
+				kind = "apartment" if k2 % 3 == 0 else ("semi" if k2 % 3 == 1 else "house")
 			_:
 				kind = "semi" if k2 % 4 == 3 else "house"
 		var id2 := _put(kind, p)
@@ -343,28 +377,50 @@ func _town_core(k: int) -> void:
 ## Ortsmitte bis zur Hinterstrasse (x - 30, dort beginnen Feldweg und Startgrundstueck).
 func _streets(t: Vector2i, ch: String) -> void:
 	match ch:
+		"Kurort":        # lange Promenade am Ufer, Villenstrassen mit versetzten Stuecken
+			_road(Vector2i(t.x, t.y - 22), Vector2i(t.x, t.y + 22))
+			_road(Vector2i(t.x, t.y), Vector2i(t.x - 30, t.y))
+			_road(Vector2i(t.x - 30, t.y - 12), Vector2i(t.x - 30, t.y + 12))
+			var dy1 := -10 + _j(2)
+			var dy2 := 11 + _j(2)
+			_road(Vector2i(t.x, t.y + dy1), Vector2i(t.x - 10, t.y + dy1))
+			_road(Vector2i(t.x - 10, t.y + dy1), Vector2i(t.x - 10, t.y + dy1 - 6))
+			_road(Vector2i(t.x - 10, t.y + dy1 - 6), Vector2i(t.x - 24, t.y + dy1 - 6))
+			_road(Vector2i(t.x, t.y + dy2), Vector2i(t.x - 16, t.y + dy2))
+			_road(Vector2i(t.x - 16, t.y + dy2), Vector2i(t.x - 16, t.y + dy2 + 5))
+			_road(Vector2i(t.x - 16, t.y + dy2 + 5), Vector2i(t.x - 26, t.y + dy2 + 5))
+		"Hafenstadt":    # enges Raster: vier Laengs- und fuenf Querstrassen
+			_road(Vector2i(t.x, t.y - 20), Vector2i(t.x, t.y + 20))
+			var step := 8 + _j(1)
+			for k in range(-2, 3):
+				_road(Vector2i(t.x, t.y + k * step), Vector2i(t.x - 30, t.y + k * step))
+			for gx in [10 + _j(1), 20 + _j(1)]:
+				_road(Vector2i(t.x - gx, t.y - 2 * step), Vector2i(t.x - gx, t.y + 2 * step))
+			_road(Vector2i(t.x - 30, t.y - 2 * step), Vector2i(t.x - 30, t.y + 2 * step))
 		"Fischerdorf":   # lange Uferstrasse, kurze Stichstrassen, kurze Hinterstrasse
 			_road(Vector2i(t.x, t.y - 22), Vector2i(t.x, t.y + 22))
-			for dy in [-18, -9, 9, 18]:
-				_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 12, t.y + dy))
+			for dy in [-18 + _j(2), -9 + _j(1), 9 + _j(1), 18 + _j(2)]:
+				_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 12 - absi(_j(5)), t.y + dy))
 			_road(Vector2i(t.x, t.y), Vector2i(t.x - 30, t.y))
 			_road(Vector2i(t.x - 30, t.y - 10), Vector2i(t.x - 30, t.y + 6))
 		"Marktflecken":  # dichtes Raster um den Markt
 			_road(Vector2i(t.x, t.y - 18), Vector2i(t.x, t.y + 18))
-			for dy in [-12, -6, 0, 6, 12]:
+			for dy in [-12, -6 + _j(1), 0, 6 + _j(1), 12]:
 				_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 30, t.y + dy))
-			_road(Vector2i(t.x - 15, t.y - 12), Vector2i(t.x - 15, t.y + 12))
+			var mx := 15 + _j(4)
+			_road(Vector2i(t.x - mx, t.y - 12), Vector2i(t.x - mx, t.y + 12))
 			_road(Vector2i(t.x - 30, t.y - 18), Vector2i(t.x - 30, t.y + 18))
 			_road(Vector2i(t.x - 30, t.y - 18), Vector2i(t.x, t.y - 18))
 		"Bauerndorf":    # lockeres Netz, lange Hofwege nach Westen
 			_road(Vector2i(t.x, t.y - 16), Vector2i(t.x, t.y + 16))
-			for dy in [-14, 0, 14]:
+			var by := 14 + _j(3)
+			for dy in [-by, 0, by]:
 				_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 30, t.y + dy))
-			_road(Vector2i(t.x - 30, t.y - 14), Vector2i(t.x - 30, t.y + 14))
+			_road(Vector2i(t.x - 30, t.y - by), Vector2i(t.x - 30, t.y + by))
 			_road(Vector2i(t.x - 30, t.y + 8), Vector2i(t.x - 38, t.y + 8))
 		_:               # Handwerkerort: zwei Achsen, Werkstattgasse
 			_road(Vector2i(t.x, t.y - 20), Vector2i(t.x, t.y + 20))
-			for dy in [-14, 0, 10]:
+			for dy in [-14 + _j(2), 0, 10 + _j(2)]:
 				_road(Vector2i(t.x, t.y + dy), Vector2i(t.x - 30, t.y + dy))
 			_road(Vector2i(t.x - 18, t.y - 14), Vector2i(t.x - 18, t.y + 18))
 			_road(Vector2i(t.x - 30, t.y - 20), Vector2i(t.x - 30, t.y + 20))
@@ -398,7 +454,7 @@ func _connect_towns() -> void:
 	for k in towns_out.size() - 1:
 		var a := _edge_road(k, true)        # suedlichste Strasse des Orts k ...
 		var b := _edge_road(k + 1, false)   # ... zur noerdlichsten des Nachbarorts
-		var path: Array = PathStraighten.straighten(astar.get_id_path(a, b), func(q: Vector2i) -> bool: return c.inside(q) and not astar.is_point_solid(q))
+		var path := _road_path(astar, a, b)
 		var cells: Array = []
 		for p in path:
 			if c.ground[c.idx(p)] != G.ROAD:

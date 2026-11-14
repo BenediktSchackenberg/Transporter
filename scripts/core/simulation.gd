@@ -10,7 +10,7 @@ signal day_changed(day: int)       # absoluter Spieltag (0 = erster)
 signal month_changed(month: int)
 
 var city: CityData
-var region_generator_version := 3 # alte Regionsspielstaende behalten ihre bisherige Kartenlage
+var region_generator_version := 4 # alte Regionsspielstaende behalten ihre bisherige Kartenlage
 var nav := NavGrid.new()
 var rng := RandomNumberGenerator.new()
 var market := Market.new()
@@ -153,7 +153,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	if world_mode == "region":
 		if region_town_count <= 0:
 			region_town_count = clampi(players.size(), 1, 4)
-		city = (RegionGenerator.new(region_town_count) if region_generator_version <= 2 else CornerRegionGenerator.new(region_town_count)).generate(seed_value, map_size, reserve)
+		city = (RegionGenerator.new(region_town_count) if region_generator_version <= 2 else CornerRegionGenerator.new(region_town_count, region_generator_version)).generate(seed_value, map_size, reserve)
 	else:
 		city = (CoastGenerator.new() if world_mode == "kueste" else CityGenerator.new()).generate(seed_value, map_size, reserve)
 	if world_mode in ["kueste", "region"] and population_target <= 0:

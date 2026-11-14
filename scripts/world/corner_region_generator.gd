@@ -16,7 +16,7 @@ var hub_out := {}
 func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: float = 0.0) -> CityData:
 	var cd := super.generate(seed_value, map_size, reserve_share)
 	if report.ok:
-		cd.gen_params["generator"] = 3
+		cd.gen_params["generator"] = maxi(3, version)
 	return cd
 
 
@@ -70,6 +70,8 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 		var top := corner.begins_with("N")
 		var left := corner.ends_with("W")
 		var y := int(n * (0.18 if top else 0.82) + rng.randf_range(-0.025, 0.025) * n)
+		if version >= 4:   # Orte liegen mal weit aussen, mal naeher an der Kartenmitte
+			y = int(n * (rng.randf_range(0.13, 0.30) if top else rng.randf_range(0.70, 0.87)))
 		y = clampi(y, 62, n - 63)
 		var east_x: int = coast[y] - 6
 		var x := n - 1 - east_x if left else east_x
@@ -83,7 +85,7 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 	_river_corners()
 	hub_rect = _find_hub_site()   # nach Bergen/Seen/Fluss: die Zufallsfolge (und damit die Staedte) bleibt unveraendert
 	_clear_hub_site()
-	var chars: Array = CHARACTERS.duplicate()
+	var chars: Array = (CHARACTERS if version < 4 else CHARACTERS_V4).duplicate()
 	for i in range(chars.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
 		var tmp = chars[i]
@@ -112,14 +114,27 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 func _mountains_corners() -> void:
 	var centers: Array = []
 	var tries := 0
-	while centers.size() < 4 and tries < 400:
+	var want := 4
+	var x_lo := 0.36
+	var x_hi := 0.64
+	var r_lo := 0.045
+	var r_hi := 0.07
+	if version >= 4:   # 3-5 Gebirge, breiter gestreut, mal Huegel, mal Massiv
+		want = rng.randi_range(3, 5)
+		x_lo = 0.28
+		x_hi = 0.72
+		r_lo = 0.035
+		r_hi = 0.085
+	while centers.size() < want and tries < 400:
 		tries += 1
-		var p := Vector2(rng.randf_range(n * 0.36, n * 0.64), rng.randf_range(n * 0.13, n * 0.87))
+		var p := Vector2(rng.randf_range(n * x_lo, n * x_hi), rng.randf_range(n * 0.13, n * 0.87))
 		if centers.any(func(q): return q.distance_to(p) < n * 0.16):
+			continue
+		if version >= 4 and not _far_from_towns(p, n * 0.2):
 			continue
 		centers.append(p)
 	for ctr in centers:
-		var rad := n * rng.randf_range(0.045, 0.07)
+		var rad := n * rng.randf_range(r_lo, r_hi)
 		for y in range(maxi(1, int(ctr.y - rad)), mini(n - 1, int(ctr.y + rad))):
 			for x in range(maxi(1, int(ctr.x - rad)), mini(n - 1, int(ctr.x + rad))):
 				var p := Vector2i(x, y)
@@ -135,7 +150,8 @@ func _mountains_corners() -> void:
 func _lakes_corners() -> void:
 	var made := 0
 	var tries := 0
-	while made < 2 and tries < 200:
+	var want := 2 if version < 4 else rng.randi_range(2, 4)
+	while made < want and tries < 200:
 		tries += 1
 		var ctr := Vector2i(rng.randi_range(int(n * 0.34), int(n * 0.66)), rng.randi_range(int(n * 0.28), int(n * 0.72)))
 		var clear := true
@@ -145,10 +161,11 @@ func _lakes_corners() -> void:
 					clear = false
 		if not clear or c.lakes.any(func(q): return q.distance_to(ctr) < 30):
 			continue
+		var lr := 6.0 if version < 4 else rng.randf_range(3.5, 7.5)
 		for y in range(ctr.y - 7, ctr.y + 8):
 			for x in range(ctr.x - 7, ctr.x + 8):
 				var d := Vector2(Vector2i(x, y)).distance_to(Vector2(ctr)) + noise.get_noise_2d(x * 5, y * 5) * 2.0
-				if d < 6.0:
+				if d < lr:
 					var i := c.idx(Vector2i(x, y))
 					c.ground[i] = G.WATER
 					c.blocked[i] = 1
@@ -159,8 +176,21 @@ func _lakes_corners() -> void:
 func _river_corners() -> void:
 	# Die Muendung liegt zwischen den Nord- und Suedorten; die Landstrassen koennen sie umrunden.
 	var y0 := int(n * 0.5)
-	for x in range(int(n * 0.58), n):
-		var y := y0 + int(round(9.0 * sin(float(x) * 0.045)))
+	var x_from := int(n * 0.58)
+	var amp := 9.0
+	var freq := 0.045
+	var phase := 0.0
+	var west := false
+	if version >= 4:   # Fluss muendet mal im Osten, mal im Westen, mit eigenem Lauf
+		west = rng.randf() < 0.5
+		y0 = int(n * rng.randf_range(0.44, 0.56))
+		x_from = int(n * rng.randf_range(0.52, 0.66))
+		amp = rng.randf_range(5.0, 13.0)
+		freq = rng.randf_range(0.03, 0.06)
+		phase = rng.randf_range(0.0, TAU)
+	for x0 in range(x_from, n):
+		var x := n - 1 - x0 if west else x0
+		var y := y0 + int(round(amp * sin(float(x0) * freq + phase)))
 		for dy in 2:
 			var p := Vector2i(x, y + dy)
 			if c.inside(p) and heights[c.idx(p)] == 0:
@@ -409,7 +439,7 @@ func _connect_hub() -> void:
 		var ex: Array = hub_out.exits[HUB_EXIT_OF.get(corner, "N")]
 		var a := Vector2i(int(ex[0]), int(ex[1]))
 		var b := _hub_target(k, a)
-		var path: Array = PathStraighten.straighten(astar.get_id_path(a, b), func(q: Vector2i) -> bool: return c.inside(q) and not astar.is_point_solid(q))
+		var path := _road_path(astar, a, b)
 		var cells := 0
 		for p in path:
 			if c.ground[c.idx(p)] != G.ROAD:
@@ -440,6 +470,10 @@ func _hub_target(k: int, from: Vector2i) -> Vector2i:
 func validate(cd: CityData) -> Dictionary:
 	var out := super.validate(cd)
 	var errs: Array = out.fehler
+	if version >= 4:   # Fluss darf auch an der Westkueste muenden
+		errs.erase("Fluss erreicht das Meer nicht")
+		if cd.river.is_empty() or not cd.river.any(func(p): return p.x >= coast[p.y] - 2 or p.x <= west_coast[p.y] + 2):
+			errs.append("Fluss erreicht das Meer nicht")
 	if cd.hub.is_empty():
 		errs.append("Großlager fehlt")
 	else:
