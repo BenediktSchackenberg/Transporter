@@ -71,7 +71,7 @@ func obs_of(cid: int) -> Dictionary:
 	# Motive und Farbpalette stehen im Aktions-Handbuch (create_stone_work); die Beobachtung haelt nur den
 	# dynamischen Zustand klein, damit der Prompt der lokalen Modelle unter dem Token-Budget bleibt.
 	# Machbarkeit jetzt je Material (13.11.: die Modelle bauten nie, die Beobachtung sagte nicht, ob Material, Geld und Platz reichen)
-	var site := not _find_site(cid, 1, 1).is_empty()
+	var site := not _find_site(cid, 1, 1).is_empty() or not _site_offer(cid, 1, 1).is_empty()   # notfalls kleines Grundstueck kaufen
 	var cash: float = sim.company(cid).ledger.cash if sim.company(cid) != null else 0.0
 	# Kompakt (Token-Budget der lokalen Modelle): nur die jetzt machbaren Materialien mit ihren Kosten und eine Anregung.
 	var costs := {}
@@ -145,9 +145,9 @@ func create(cid: int, motif: String, name: String, base_color: String, accent_co
 		return {"ok": false, "msg": err}
 	var w: int = int(found.w)
 	var h: int = w
-	var site := _find_site(cid, w, h)
+	var site := acquire_site(cid, w, h)
 	if site.is_empty():
-		return {"ok": false, "msg": "Kein freies eigenes Grundstueck %d×%d mit Strasse gefunden." % [w, w], "grund": "platz"}
+		return {"ok": false, "msg": "Kein freies eigenes Grundstueck %d×%d mit Strasse gefunden und keines bis %s zu kaufen." % [w, w, Catalog.money(SITE_MAX_PRICE)], "grund": "platz"}
 	var material := str(params.get("material", "stein")).to_lower()
 	if material == "" or material == "naturstein":
 		material = "stein"
@@ -232,6 +232,61 @@ func _reserve_material(cid: int, wid: String, amount: int, item: String = "natur
 
 
 ## Freies eigenes Grundstueck (Estate) mit Strasse am Rand, das w×w Zellen frei haelt.
+## Platz fuer ein Werk oder Bauwerk: zuerst auf eigenem Grund; ist alles belegt (Partie 14.11.: "kein freier Platz" bei vollen
+## Hoefen), kauft die Firma ein kleines freies Grundstueck mit Strassenzugang im Heimatort (hoechstens SITE_MAX_PRICE, Reserve bleibt).
+const SITE_MAX_PRICE := 15000.0
+const SITE_CASH_LEFT := 10000.0
+
+
+func acquire_site(cid: int, w: int, h: int) -> Dictionary:
+	var site := _find_site(cid, w, h)
+	if not site.is_empty():
+		return site
+	var p := _site_offer(cid, w, h)
+	if p.is_empty():
+		return {}
+	var c: Company = sim.company(cid)
+	var town: int = sim.towns.of_parcel(str(p.id)) if sim.towns.is_region() else 0
+	var seller := Towns.account_of(town)
+	var price := float(p.price)
+	p.owner = "C%d" % cid
+	p["lease_by"] = -1
+	p["book"] = price
+	c.ledger.invest(price, seller)
+	c.land_book += price
+	sim.parcels.touch(str(p.id))
+	sim.log_event("%s kauft Grundstück %s (%d Felder, %s) für ein eigenes Bauwerk." % [c.company_name, p.id, int(p.area), Catalog.money(price)], "info", cid)
+	return _find_site(cid, w, h)
+
+
+## Guenstigstes freies Grundstueck im Heimatort, gross genug, mit Strasse, bezahlbar - ohne zu kaufen.
+func _site_offer(cid: int, w: int, h: int) -> Dictionary:
+	var c: Company = sim.company(cid)
+	if c == null or sim.parcels == null:
+		return {}
+	var budget := minf(SITE_MAX_PRICE, c.ledger.cash - SITE_CASH_LEFT)
+	if budget <= 0.0:
+		return {}
+	var crit := {"min_area": (w + 1) * (h + 1), "max_price": budget, "limit": 30}
+	if sim.towns.is_region():
+		crit["town"] = int(c.home_town)
+	var offers: Array = []
+	for zone in ["gewerbe", "mischgebiet", "industrie", "wohnen"]:   # keine Flaechen fuer oeffentliche Einrichtungen, Gruen oder Strand
+		var cz := crit.duplicate()
+		cz["zone"] = zone
+		offers.append_array(sim.parcels.search(cz).filter(func(q): return float(q.price) > 0.0))
+	offers.sort_custom(func(a, b): return float(a.price) < float(b.price))
+	for p in offers:
+		if not bool(sim.parcels.utilities_of(p).get("strasse", false)):
+			continue
+		var pr := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
+		for y in range(pr.position.y, pr.end.y - h + 1):
+			for x in range(pr.position.x, pr.end.x - w + 1):
+				if sim.events._free(Rect2i(x, y, w, h)):
+					return p
+	return {}
+
+
 func _find_site(cid: int, w: int, h: int) -> Dictionary:
 	for p in sim.estate.plot_of(cid):
 		if int(p.get("w", 0)) * int(p.get("h", 0)) < w * h:

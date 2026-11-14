@@ -95,7 +95,7 @@ func create(cid: int, p: Dictionary) -> Dictionary:
 		bd = maxi(bd, int(b[1]) + 1)
 	var cw := ceili(float(bw) / float(PER_CELL))
 	var ch := ceili(float(bd) / float(PER_CELL))
-	var site: Dictionary = sim.stone._find_site(cid, cw, ch)
+	var site: Dictionary = sim.stone.acquire_site(cid, cw, ch)
 	if site.is_empty():
 		return {"ok": false, "msg": "Kein freier Platz %d×%d Felder mit Straße auf deinem Grundstück." % [cw, ch], "grund": "platz"}
 	blocks.sort_custom(func(a, b): return int(a[2]) < int(b[2]) or (int(a[2]) == int(b[2]) and (int(a[1]) < int(b[1]) or (int(a[1]) == int(b[1]) and int(a[0]) < int(b[0])))))
