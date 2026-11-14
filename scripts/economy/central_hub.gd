@@ -163,6 +163,16 @@ func buy(buyer: String, item: String, qty: int, dest: int, note: String = "", ra
 		"Abholung mit eigenem Fahrzeug: Auftrag %s." % d.contract if company else "Transportauftrag %s ist ausgeschrieben." % d.contract], "ref": id, "contract": d.contract}
 
 
+## Gekaufte, noch nicht angelieferte Menge einer Partei (Ware liegt reserviert im Grosslager bzw. im Gueterzug). Ohne diesen Wert
+## kaufte die Regel-KI fuer eine wartende Baustelle alle 20 Sim-Sekunden erneut (Messung 14.11.: ~76 000 EUR Baumaterial in 30 Tagen).
+func pending(party: String, item: String) -> int:
+	var n := 0
+	for d in deals.values():
+		if str(d.kind) == "kauf" and str(d.party) == party and str(d.item) == item and str(d.status) not in ["geliefert", "storniert"]:
+			n += int(d.qty)
+	return n
+
+
 ## Phase 7 Schritt 4: Unternehmen buchen Wagenplatz im Gueterzug bis zum Bahnhof ihrer Stadt (Bahnfracht = RAIL_SHARE der Lkw-Fracht
 ## an die Regionalbahngesellschaft); die letzte Meile faehrt die Firma selbst (exklusiver Auftrag Bahnhof -> eigenes Depot).
 func _book_rail(d: Dictionary) -> Dictionary:

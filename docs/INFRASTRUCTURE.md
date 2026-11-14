@@ -396,7 +396,7 @@ Bahnbuchung abgelehnt. Test `test_rail_company_freight` (13). Eigene Wagen/Loks 
 buchen Plätze im Zug der Regionalbahngesellschaft. Damit ist Phase 7 abgeschlossen.
 
 **Phase 4 Schritte 2–5 Wasser (14.11.):** alles in `WaterSupply` (`scripts/economy/water_supply.gd`).
-- **Schritt 2 Leitungsnetz/Druckzonen/Hochbehälter:** Leitungen unter den Straßen der Stadt; Druck reicht `ZONE_RANGE` 40
+- **Schritt 2 Leitungsnetz/Druckzonen/Hochbehälter:** Leitungen unter den Straßen der Stadt; Druck reicht `ZONE_RANGE` 80 (erst 40, ließ Gewerbegebiete trocken; erschlossene Grundstücke haben eigene Zuleitung)
   Straßenfelder ab Wasserwerk und jedem Hochbehälter (Breitensuche, `compute_net`). Gebäude, deren Straßenfeld nicht im Netz liegt,
   sind unversorgt: Haushalte zählen als „ohne Anschluss“ (kein Bezug, keine Gebühr), Betriebe blockiert („Keine Wasserleitung“),
   Einrichtungen ohne Bedarf. Neuer Municipal-Typ `WT-01` Hochbehälter (Gebäude `water_tank` 2×2, Sprites `pub_ht_*`: Grashügel,

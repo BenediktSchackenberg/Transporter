@@ -249,7 +249,7 @@ func _place_next(fb: Dictionary) -> bool:
 		var rest := needs(fb, true)
 		var miss := {}
 		for it in rest:
-			var have: int = sim.stock.available(it, owner)
+			var have: int = sim.stock.available(it, owner) + (sim.hub.pending(owner, it) if sim.hub != null and sim.hub.enabled else 0)   # gekauft, noch nicht abgeholt
 			if have < int(rest[it]):
 				miss[it] = int(rest[it]) - have
 		if str(fb.status) != "wartet_material":

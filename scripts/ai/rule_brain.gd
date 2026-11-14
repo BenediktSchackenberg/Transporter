@@ -594,6 +594,8 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 			reasons.append("setze %s im Betrieb %s ein, der sonst ruht" % [pool[0].name, b.id])
 		elif "recruit_worker" not in planned:
 			var cand := _best_candidate(obs.ressourcen.arbeitskraefte, "verladen")
+			if cand.is_empty():   # Kueche, Theke, Feld brauchen kein Verladen (Messung 14.11.: Restaurants blieben ohne Servicekraft, nie Umsatz)
+				cand = _cheapest_worker(obs.ressourcen.arbeitskraefte)
 			if not cand.is_empty() and cash > float(cand.anwerbung) + 3000.0:
 				actions.append({"action": "recruit_worker", "worker_id": cand.id})
 				planned.append("recruit_worker")
@@ -870,6 +872,14 @@ static func _pick(staff: Array, skill: String, pos) -> Dictionary:
 		var score := lvl * 10.0 - _dist(w.pos, pos) * 0.1 - float(w.erschoepfung) * 0.1
 		if score > best_score:
 			best_score = score
+			best = w
+	return best
+
+
+static func _cheapest_worker(pool: Array) -> Dictionary:
+	var best := {}
+	for w in pool:
+		if str(w.get("rolle", "Arbeiter")) == "Arbeiter" and (best.is_empty() or float(w.lohn_h) < float(best.lohn_h)):
 			best = w
 	return best
 

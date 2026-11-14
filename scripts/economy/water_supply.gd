@@ -33,7 +33,7 @@ const IMPORT_PRICE := 1.8           # Fernwasser je m3 (Stadt ohne eigenes Werk)
 const CODE := "WW-01"
 const TANK_CODE := "WT-01"
 const PLANT_CODE := "KA-01"
-const ZONE_RANGE := 40              # Druckzone: so viele Strassenfelder ab Werk bzw. Hochbehaelter
+const ZONE_RANGE := 80              # Druckzone: so viele Strassenfelder ab Werk bzw. Hochbehaelter (40 liess Gewerbegebiete trocken, Messung 14.11.)
 const BREAK_P := 0.02               # Rohrbruch je Stadt und Tag
 const BREAK_P_FROST := 0.08         # bei Frost
 const BREAK_SPAN := 3              # gesperrter Abschnitt um die Bruchstelle (Strassenfelder je Richtung)
@@ -171,6 +171,12 @@ func connected(b: Dictionary) -> bool:
 	if p.is_empty():
 		return true
 	return bool(p.get("erschliessung", {}).get("wasser", true))
+
+
+## Grundstueck mit ausdruecklich gelegtem Wasseranschluss (Erschliessung "wasser" = true): hat seine eigene Zuleitung.
+func erschlossen(b: Dictionary) -> bool:
+	var p: Dictionary = sim.parcels.of_building(int(b.site))
+	return not p.is_empty() and bool(p.get("erschliessung", {}).get("wasser", false))
 
 
 # ------------------------------------------------------------------ Schritt 2: Leitungsnetz und Druckzonen
@@ -335,7 +341,7 @@ func _supply_town(k: int, businesses: Array, hh_share: float = 1.0) -> void:
 		if not connected(b):
 			sim.biz.block(b.id, "wasser", "Kein Wasseranschluss: Grundstück nicht erschlossen")
 			continue
-		if not building_on_net(k, int(b.site)):
+		if not building_on_net(k, int(b.site)) and not erschlossen(b):   # erschlossenes Grundstueck: eigene Zuleitung bei der Erschliessung gelegt
 			off += 1
 			sim.biz.block(b.id, "wasser", "Keine Wasserleitung: %s" % ("Rohrbruch im Netz" if breaks.has(str(k)) else "außerhalb der Druckzone"))
 			continue
