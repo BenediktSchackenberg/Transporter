@@ -540,7 +540,9 @@ func _hire(f: Dictionary, by_id: Dictionary) -> void:
 			continue
 		var hk := -1 if bool(TYPES[f.code].get("regional", false)) or int(BERUFE[beruf].bildung) >= 3 else int(f.town)   # Aerzte pendeln regionsweit
 		var cands := _candidates(hk, beruf, day)
-		if cands.is_empty():   # niemand frei im Ort: Stellenanzeige zieht eine Kraft von ausserhalb an (alle 7 Tage, nur mit freier Wohnung)
+		if cands.is_empty() and hk >= 0:   # niemand im Ort: Fachkraefte aus der Region pendeln ein (Auftrag 23: ohne freie Wohnung im Ort
+			cands = _candidates(-1, beruf, day)   # blieb ein neues Krankenhaus sonst dauerhaft ohne Personal)
+		if cands.is_empty():   # niemand frei in der Region: Stellenanzeige zieht eine Kraft von ausserhalb an (alle 7 Tage, nur mit freier Wohnung)
 			cands = _recruit_external(f, beruf, day)
 		for p in cands:
 			if hired >= HIRE_PER_DAY or missing <= 0:
