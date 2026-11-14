@@ -898,7 +898,9 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 			k = alt
 			kid = alt.id
 	if k != null and k.owner == cid and k.status != "open":
-		return {"ok": false, "msg": "Auftrag %s gehört dir bereits (%s) – nicht erneut annehmen; fahren mit assign_transport bzw. Fahrer per assign_worker_task." % [kid, k.status]}
+		# kein echter Fehler (das Modell meint "fahren" oder hat den Stand verpasst): als bereits erledigt melden, damit es keine
+		# Wiederholungsrunde ausloest (Partie 14.11.: 222 solche Versuche)
+		return {"ok": false, "already": true, "msg": "Auftrag %s gehört dir bereits (%s) – nicht erneut annehmen; fahren mit assign_transport bzw. Fahrer per assign_worker_task." % [kid, k.status]}
 	if k == null or k.status != "open":
 		return {"ok": false, "msg": "Auftrag %s ist nicht (mehr) verfügbar." % kid}
 	if k.exclusive_for >= 0 and k.exclusive_for != cid and k.exclusive_until > sim.game_min:
