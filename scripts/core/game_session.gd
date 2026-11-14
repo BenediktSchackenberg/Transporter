@@ -319,6 +319,14 @@ func _log_perf() -> void:
 		"objects": int(Performance.get_monitor(Performance.OBJECT_COUNT)), "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		"orphans": int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)), "resources": int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)),
 		"sizes": sizes, "bild": _frame_report()})
+	# Kostenarten je Firma (kumuliert): die Partie-Analyse sah bisher nur Umsatz und Gesamtkosten (Partie 14.11.)
+	var fin := {}
+	for c in sim.companies:
+		var row := {}
+		for k in c.ledger.totals:
+			row[k] = int(c.ledger.totals[k])
+		fin[str(c.id)] = {"firma": c.company_name, "bargeld": int(c.ledger.cash), "gewinn": int(c.ledger.profit()), "kosten": row}
+	api_log.write({"type": "finance", "game_min": int(sim.game_min), "firmen": fin})
 
 
 ## Bildzeiten seit dem letzten perf-Eintrag (Ruckler-Suche): Mittel/Maximum, Anzahl Bilder ueber 100 ms und Anteile je Bereich.
