@@ -960,6 +960,7 @@ func _close_contract_logistics(k: Contract) -> void:
 
 func fail_contract(k: Contract, reason: String) -> void:
 	var c := companies[k.owner]
+	var diag := _fail_diag(k)   # vor Statuswechsel und Abbau der Fahrten: wo hing der Auftrag?
 	var penalty := k.reward * Catalog.FAIL_PENALTY_SHARE
 	c.ledger.book("penalties", -penalty, true, "Vertragsstrafe %s" % k.id, game_min)
 	k.status = "failed"
@@ -969,11 +970,29 @@ func fail_contract(k: Contract, reason: String) -> void:
 	decisions.note(c.id, "auto", "Auftrag %s gescheitert (%s)" % [k.id, reason], {"contract_id": k.id})
 	c.reputation = maxf(0.0, c.reputation - 6.0)
 	_close_contract_logistics(k)
-	log_event("%s: Auftrag %s gescheitert (%s), Strafe %s." % [c.company_name, k.id, reason, Catalog.money(penalty)],
+	log_event("%s: Auftrag %s gescheitert (%s), Strafe %s. %s" % [c.company_name, k.id, reason, Catalog.money(penalty), diag],
 		"bad", c.id)
 	c.add_key_event("Auftrag %s gescheitert" % k.id, game_min)
-	notify(c.id, "Auftrag %s gescheitert: %s. Vertragsstrafe %s." % [k.id, reason, Catalog.money(penalty)])
+	notify(c.id, "Auftrag %s gescheitert: %s. Vertragsstrafe %s. %s" % [k.id, reason, Catalog.money(penalty), diag])
 	bark(c.id, "frist")
+
+
+## Kurzbefund fuer gescheiterte Auftraege (Partie 14.11.: Disposition teilte sofort zu, trotzdem jeder dritte Auftrag zu spaet; der
+## Grund war im Log nicht zu sehen): Status, Fahrzeug mit dem Auftrag, dessen Zustand, Fahrer, Stopps davor, Annahme bis Frist.
+func _fail_diag(k: Contract) -> String:
+	var parts: Array = ["Stand: %s" % k.status, "angenommen %d min vor Frist" % int(k.deadline - k.accepted_at)]
+	for v in vehicles.values():
+		var idx := -1
+		for i in v.stops.size():
+			if str(v.stops[i].contract_id) == k.id:
+				idx = i
+				break
+		if idx < 0 and not v.load.has(k.id):
+			continue
+		parts.append("#%d %s%s, %d Stopps davor" % [v.id, v.state, "" if driver_of(v) != null else " ohne Fahrer", maxi(idx, 0)])
+	if parts.size() == 2:
+		parts.append("keinem Fahrzeug zugeteilt")
+	return "(" + ", ".join(parts) + ")"
 
 
 # ------------------------------------------------------------------ NPC-Verkehr

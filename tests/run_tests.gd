@@ -12574,6 +12574,12 @@ func test_accept_backlog() -> void:
 	ok(s.executor._too_late(0, b, -1) == "", "mit zweitem Fahrzeug ist B wieder machbar")
 	ok(s.executor._too_late(0, a, -1) == "", "A selbst zählt nicht gegen sich")
 	ok(v2 != null, "zweites Fahrzeug vorhanden")
+	# Befund beim Scheitern: Fahrzeug und Stand des Auftrags stehen in der Meldung
+	var r3: Dictionary = s.executor.execute(0, {"action": "accept_contract", "contract_id": b.id, "vehicle_id": v2.id})
+	ok(r3.ok, "B mit dem zweiten Fahrzeug angenommen (%s)" % str(r3.get("msg", "")).left(80))
+	s.fail_contract(b, "Frist weit überschritten")
+	var last: String = str(s.log_entries[-1].text)
+	ok(last.contains("Stand: ") and last.contains("#%d" % v2.id) and last.contains("Stopps davor"), "Befund nennt Stand und Fahrzeug: %s" % last.right(110))
 
 
 ## Partie 14.11.: Aktionsnamen in Funktionsschreibweise mit Listen oder verirrten Anfuehrungszeichen scheiterten.
