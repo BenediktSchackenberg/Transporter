@@ -334,7 +334,9 @@ func _dispatch_signature() -> String:
 const DISPATCH := ["accept_contract", "assign_transport", "assign_worker_task", "collect_contracts", "repair_vehicle", "buy_supplies",
 	"schedule_refueling", "assign_foreman",
 	# Aufbau des Betriebshofs (Plan aus der Regel-KI: Stellplatz, Büro, Lager, Werkstatt, Internet), damit der Hof nicht leer bleibt
-	"set_plan", "execute_plan_step", "place_building", "build_office", "upgrade_building", "upgrade_office", "install_internet", "assign_building_staff"]
+	"set_plan", "execute_plan_step", "place_building", "build_office", "upgrade_building", "upgrade_office", "install_internet", "assign_building_staff",
+	# Eigene Betriebe besetzen (Partie 14.11.: Baeckereien der Gruender standen 85 Tage ohne Personal, die Modelle nutzten assign_staff nie)
+	"assign_staff"]
 
 
 ## Nur der Tagesbetrieb aus der Regel-KI: Auftraege annehmen und zuweisen, Fahrer einsetzen, reparieren, tanken.
@@ -344,8 +346,10 @@ func _run_dispatch_help() -> void:
 	var obs := ObservationBuilder.build(sim, cid, [], _last_obs_min, remaining_real_min, goal, "")
 	_slow("disposition_beobachtung", t_dp)
 	var d := RuleBrain.decide(obs, sim.company(cid).personality, _fallback_rng, sim.strategy.params_of(cid))
-	# Fahrer anwerben gehoert zum Tagesbetrieb, solange ein eigenes Fahrzeug ohne Fahrer dasteht (sonst bleibt die Anwerbung beim Modell)
-	var allowed: Array = DISPATCH + (["recruit_worker"] if sim.company_vehicles(cid).any(func(v): return sim.driver_of(v) == null) else [])
+	# Anwerben gehoert zum Tagesbetrieb, solange ein eigenes Fahrzeug ohne Fahrer dasteht oder ein eigener Betrieb unter Mindestpersonal liegt
+	# (sonst bleibt die Anwerbung beim Modell)
+	var understaffed: bool = sim.biz.of(cid).any(func(b): return b.status in Businesses.RUNNING and sim.biz.staff_of(b.id).size() < int(sim.biz.branches().get(b.branch, {}).get("personal_min", 0)))
+	var allowed: Array = DISPATCH + (["recruit_worker"] if understaffed or sim.company_vehicles(cid).any(func(v): return sim.driver_of(v) == null) else [])
 	d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) in allowed)
 	if sim.dispatcher != null and sim.dispatcher.covers(cid):   # Auftragszuweisung macht der Claude-Disponent; die Regeln bleiben fuer Fahrer, Reparatur, Tanken und Hofaufbau
 		d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) not in ["accept_contract", "assign_transport"] \
@@ -654,7 +658,7 @@ func _local_system_prompt() -> String:
 	var names := ["collect_contracts", "accept_contract", "assign_vehicle", "plan_tour", "assign_worker_task", "recruit_worker",
 		"buy_vehicle", "sell_vehicle", "rent_depot", "cancel_depot", "build_office", "upgrade_office", "install_internet",
 		"set_operations_policy", "create_transport_line", "pause_transport_line", "request_transport_help", "quote_transport_help", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "take_loan", "request_loan", "repay_loan", "repair_vehicle", "buy_supplies", "set_plan", "execute_plan_step", "wait",
-		"found_business", "explore_deposit", "request_mining", "build_access", "create_stone_work", "free_build", "hub_buy"]
+		"found_business", "explore_deposit", "request_mining", "build_access", "create_stone_work", "free_build", "hub_buy", "assign_staff"]
 	var all := ActionExecutor.all_schema()
 	var lines: Array = []
 	for name in names:
