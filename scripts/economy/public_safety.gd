@@ -176,10 +176,11 @@ func _crime(p: Dictionary, day: int) -> void:
 ## Ermittlung: je Tag und Gesuchtem eine Chance aus der Personalstaerke der Polizei; Festnahme mit Streifenwagen.
 func _police_work(day: int, police_n: int) -> void:
 	var chance := clampf(0.1 + float(police_n) * float(cfg().aufklaerung_je_polizist), 0.1, 0.9)
+	var region: bool = sim.police != null and sim.police.enabled()   # Auftrag 22 Phase 5: Wache der Wohnstadt ermittelt
 	for p in sim.citizens.people:
 		if not bool(p.get("wanted", false)) or in_prison(p, day):
 			continue
-		if Citizens.roll(int(p.id), day, 78) < chance:
+		if Citizens.roll(int(p.id), day, 78) < (sim.police.solve_chance(sim.citizens.home_town(p)) if region else chance):
 			_arrest(p, day)
 
 
@@ -197,7 +198,10 @@ func _arrest(p: Dictionary, day: int) -> void:
 	p.employer = ""
 	p.wage = 0.0
 	stats.festnahmen += 1
-	_send("polizei", where, {"arrest": int(p.id), "back": prison if prison >= 0 else police})
+	if sim.police != null and sim.police.enabled():
+		sim.police.arrest_trip(sim.citizens.home_town(p), _road_near(where), str(p.name))
+	else:
+		_send("polizei", where, {"arrest": int(p.id), "back": prison if prison >= 0 else police})
 	var lost := ""
 	var u: Dictionary = sim.housing.units.get(str(p.get("home", "")), {})
 	if not u.is_empty():

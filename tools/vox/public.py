@@ -65,6 +65,7 @@ def init():
     mat("pub_heli", "#3d4a3f", noise=0.03)
     mat("pub_wblue", "#2f78b7", noise=0.03)       # Kennfarbe Wasserwerk (Auftrag 22 Phase 4)
     mat("pub_wblue2", "#26649a", noise=0.03)
+    mat("pub_pblue", "#1f4fa0", noise=0.03)       # Kennfarbe Polizei (Auftrag 22 Phase 5)
     mat("pub_sludge", "#6b5a3a", noise=0.08)      # Klaeranlage: Belebungsbecken/Schlamm (Auftrag 22 Phase 4 Schritt 4)
     mat("pub_sludge2", "#7d6c48", noise=0.08)
 
@@ -1410,3 +1411,61 @@ def sewage_plant(v, st, seed):
 
 TYPES.update({"water_tank": ("ht", 2, 2), "sewage_plant": ("ka", 4, 3)})
 BUILDERS.update({"water_tank": water_tank, "sewage_plant": sewage_plant})
+
+
+# ------------------------------------------------------------------ Auftrag 22 Phase 5: Polizeiwache 3x2
+def _police_sign(m, x, y_face, z, w=14):
+    """Blaues Schild mit weissem Band (POLIZEI) auf der Suedfassade."""
+    m.box(x, y_face, z, x + w, y_face + 1, z + 5, M("pub_pblue"))
+    m.box(x + 2, y_face, z + 2, x + w - 2, y_face + 1, z + 3, M("pub_white"))
+
+
+def _patrol_car(m, x0, y0):
+    """Geparkter Streifenwagen (blau-silber) im Hof."""
+    m.box(x0, y0, 1, x0 + 16, y0 + 8, 5, M("pub_white"))
+    m.box(x0 + 3, y0, 5, x0 + 12, y0 + 8, 8, M("pub_pblue"))
+    m.box(x0 + 6, y0 + 2, 8, x0 + 9, y0 + 6, 9, M("pub_blue"))
+
+
+def police_station(v, st, seed):
+    """Polizeiwache: Dienstgebaeude mit blauem Band und Schild, Garage oder Carport, geparkte Streifenwagen, Funkmast; sechs Grundformen."""
+    rng = random.Random(seed)
+    W, H = 3 * T, 2 * T
+    m = Model(W, H, 70)
+    ground(m, st, W, H, seed)
+    d = "pub_door_w"
+    if v == 0:      # zweigeschossiges Dienstgebaeude, Garage rechts
+        house(m, st, 4, 8, 58, 46, 2, rng)
+        hall(m, st, 62, 16, 92, 48, 14, 1, d, rng, band="pub_pblue", door_w=14)
+        _patrol_car(m, 8, 50)
+    elif v == 1:    # langer Riegel, Carport vorn
+        house(m, st, 4, 4, 92, 30, 2, rng, entrance=False)
+        canopy(m, 8, 36, 60, 56, 14, roof_mat="pub_pblue")
+        _patrol_car(m, 14, 42)
+        _patrol_car(m, 36, 42)
+    elif v == 2:    # dreigeschossig mit Funkmast
+        house(m, st, 30, 6, 92, 46, 3, rng)
+        _mast(m, 12, 20, 52)
+        _patrol_car(m, 6, 48)
+    elif v == 3:    # Flachbau mit Hof und Schranke
+        house(m, st, 4, 6, 64, 40, 1, rng, roof_kind="flat")
+        hall(m, st, 66, 6, 92, 40, 14, 1, d, rng, band="pub_pblue", door_w=12)
+        _patrol_car(m, 20, 46)
+        m.box(70, H - 6, 1, 90, H - 5, 8, M("pub_white"))
+    elif v == 4:    # Altbau mit Turm (Revier)
+        house(m, st, 20, 8, 92, 46, 2, rng)
+        tower(m, st, 4, 10, 14, 44, rng, cap="pub_pblue")
+        _patrol_car(m, 30, 50)
+    else:           # Glasbau, zwei Stellplaetze
+        house(m, st, 4, 6, 50, 44, 2, rng, roof_kind="flat")
+        canopy(m, 54, 10, 92, 44, 16, roof_mat="steel")
+        _patrol_car(m, 60, 18)
+        _patrol_car(m, 60, 32)
+    _police_sign(m, 10, H - 13 if v in (0, 2, 4) else H - 34 if v == 1 else H - 25, 16)
+    beacon(m, W - 10, H - 3, 1)
+    greenery(m, st, [(90, 58)], rng)
+    return m, {"w": 3, "h": 2, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": 56}
+
+
+TYPES.update({"police_station": ("po", 3, 2)})
+BUILDERS.update({"police_station": police_station})

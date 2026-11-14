@@ -417,3 +417,21 @@ buchen Plätze im Zug der Regionalbahngesellschaft. Damit ist Phase 7 abgeschlos
 Tests `test_water_network` (21), `test_water_supply` angepasst (Abwassergebühr, Hochbehälter vor dem Stromausfall leeren),
 `test_municipal` (Hochbehälter ohne Personal). Grenzen: Ausbau entscheidet der Betreiber automatisch, nicht die Bürgermeister-KI;
 Druckzonen nur über Straßenentfernung, ohne Höhenlage.
+
+## Phase 5 – Polizei (14.11.2026)
+
+`PoliceService` (`scripts/economy/police_service.gd`, `sim.police`, nur Region). Neuer Municipal-Typ `PO-01` Polizeiwache
+(Gebäude `police_station` 3×2, Sprites `pub_po_*`: Dienstgebäude mit blauem Band und Schild, Garage/Carport, Funkmast, Revierturm,
+geparkte Streifenwagen; 6 Grundformen × 4 Stile), Beruf `polizist` (18 €/h), zwei Funkstreifenwagen `FuStW` (Bild `v_police`),
+Startausstattung jeder Stadt. Einsätze sind Municipal-Aufgaben (Personal und Wagen gebunden), Fahrt sichtbar mit Blaulicht;
+ohne freien Wagen hilft die nächste Wache.
+- **Festnahme:** Ladendiebstähle (`PublicSafety`) klärt in der Region die Wache der Wohnstadt auf: Chance je Tag 10 % + 6 % je
+  Polizist (höchstens 90 %); bei Festnahme fährt der Streifenwagen zum Tatort.
+- **Verkehrsunfall:** 3 % je Stadt und Tag (9 % bei Glätte/Nebel) auf einer Straße der Stadt; Sperrung (`NavGrid.add_roadwork`),
+  Fahrzeuge planen um; nach 40 Minuten Unfallaufnahme ist die Straße frei.
+- **Verkehrskontrolle:** 25 % je Stadt und Tag, eine Stunde an einer Straße; jedes vorbeikommende Firmenfahrzeug wird einmal
+  geprüft: Zustand unter 35 % → 150 €, übermüdeter Fahrer (ab 95) → 200 € Bußgeld an die Stadtkasse.
+- **Ruhestörung:** je Kneipe/Disco 5 % je Nacht; Betrieb eines Unternehmens zahlt 300 €.
+Bürgermeister-Beobachtung `polizei` (Wache, Personal, Aufklärung, laufende Einsätze, Zahlen), Anzeige im Infrastruktur-Tab.
+Test `test_police` (17). Grenzen: laufende Einsätze werden nicht gespeichert (nach dem Laden stehen die Wagen in der Wache);
+keine Ausbaustufen der Wache; illegale Müllentsorgung noch nicht.

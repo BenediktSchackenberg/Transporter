@@ -1227,6 +1227,21 @@ static func rail(sim: Simulation) -> String:
 	return txt
 
 
+## Polizei je Stadt (Auftrag 22 Phase 5): Wache, Personal, Aufklaerung, Einsaetze.
+static func police(sim: Simulation) -> String:
+	if sim.police == null or not sim.police.enabled():
+		return ""
+	var txt := "\n[b][color=#4a8cff]POLIZEI[/color][/b]\n"
+	for t in sim.towns.list:
+		var k := int(t.id)
+		var p: Dictionary = sim.police.summary(k)
+		var z: Dictionary = p.zahlen
+		txt += "%s: %s · %d Polizeibeamte · Aufklärung %d %% je Tag · laufend %d · Festnahmen %d, Unfälle %d, Kontrollen %d, Bußgelder %d, Ruhestörungen %d\n" % [
+			sim.towns.name_of(k), str(p.wache) if str(p.wache) != "" else "keine Wache", int(p.polizisten), roundi(float(p.aufklaerung_tag) * 100.0),
+			int(p.einsaetze_laufend), int(z.festnahmen), int(z.unfaelle), int(z.kontrollen), int(z.bussgelder), int(z.ruhestoerungen)]
+	return txt
+
+
 ## Trinkwasser je Stadt (Auftrag 22 Phase 4): Werk, Foerderung, Bedarf, Gebuehr, Engpaesse.
 static func water(sim: Simulation) -> String:
 	if not sim.water.enabled():

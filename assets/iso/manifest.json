@@ -12279,6 +12279,390 @@
    "w": 4,
    "h": 3,
    "height": 46
+  },
+  "pub_po_0_backstein": {
+   "anchor": [
+    130,
+    47
+   ],
+   "size": [
+    324,
+    209
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_0_modern": {
+   "anchor": [
+    130,
+    42
+   ],
+   "size": [
+    324,
+    204
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_0_gruen": {
+   "anchor": [
+    130,
+    42
+   ],
+   "size": [
+    324,
+    204
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_0_industrie": {
+   "anchor": [
+    130,
+    42
+   ],
+   "size": [
+    324,
+    204
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_1_backstein": {
+   "anchor": [
+    130,
+    49
+   ],
+   "size": [
+    324,
+    211
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_1_modern": {
+   "anchor": [
+    130,
+    46
+   ],
+   "size": [
+    324,
+    208
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_1_gruen": {
+   "anchor": [
+    130,
+    46
+   ],
+   "size": [
+    324,
+    208
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_1_industrie": {
+   "anchor": [
+    130,
+    46
+   ],
+   "size": [
+    324,
+    208
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_2_backstein": {
+   "anchor": [
+    130,
+    78
+   ],
+   "size": [
+    324,
+    240
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_2_modern": {
+   "anchor": [
+    130,
+    78
+   ],
+   "size": [
+    324,
+    240
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_2_gruen": {
+   "anchor": [
+    130,
+    78
+   ],
+   "size": [
+    324,
+    240
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_2_industrie": {
+   "anchor": [
+    130,
+    78
+   ],
+   "size": [
+    324,
+    240
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_3_backstein": {
+   "anchor": [
+    130,
+    22
+   ],
+   "size": [
+    324,
+    184
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_3_modern": {
+   "anchor": [
+    130,
+    22
+   ],
+   "size": [
+    324,
+    184
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_3_gruen": {
+   "anchor": [
+    130,
+    22
+   ],
+   "size": [
+    324,
+    184
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_3_industrie": {
+   "anchor": [
+    130,
+    22
+   ],
+   "size": [
+    324,
+    184
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_4_backstein": {
+   "anchor": [
+    130,
+    97
+   ],
+   "size": [
+    324,
+    259
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_4_modern": {
+   "anchor": [
+    130,
+    82
+   ],
+   "size": [
+    324,
+    244
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_4_gruen": {
+   "anchor": [
+    130,
+    82
+   ],
+   "size": [
+    324,
+    244
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_4_industrie": {
+   "anchor": [
+    130,
+    82
+   ],
+   "size": [
+    324,
+    244
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_5_backstein": {
+   "anchor": [
+    130,
+    44
+   ],
+   "size": [
+    324,
+    206
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_5_modern": {
+   "anchor": [
+    130,
+    44
+   ],
+   "size": [
+    324,
+    206
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_5_gruen": {
+   "anchor": [
+    130,
+    44
+   ],
+   "size": [
+    324,
+    206
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
+  },
+  "pub_po_5_industrie": {
+   "anchor": [
+    130,
+    44
+   ],
+   "size": [
+    324,
+    206
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 3,
+   "h": 2,
+   "height": 56
   }
  },
  "facilities": {

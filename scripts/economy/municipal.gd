@@ -32,6 +32,7 @@ const BERUFE := {
 	"wasserwerker": {"label": "Fachkräfte Wasserversorgung", "wage": 15.0, "bildung": 1},   # Auftrag 22 Phase 4: Wasserwerk
 	"lokfuehrer": {"label": "Triebfahrzeugführer", "wage": 19.0, "bildung": 1},   # Auftrag 22 Phase 6: Regionalbahn
 	"zugbegleiter": {"label": "Zugbegleiter", "wage": 14.0, "bildung": 0},
+	"polizist": {"label": "Polizeibeamte", "wage": 18.0, "bildung": 1},   # Auftrag 22 Phase 5: Polizeiwache
 	# Etappe 14: Rettungsdienst und Kliniken
 	"rettungssani": {"label": "Rettungssanitäter", "wage": 15.0, "bildung": 1},
 	"verwaltung": {"label": "Krankenhausverwaltung", "wage": 16.0, "bildung": 1},
@@ -79,6 +80,10 @@ const TYPES := {
 	"WW-01": {"label": "Wasserwerk", "dienst": "wasser", "ressort": "Umwelt", "building": "waterworks", "cost": 900000.0,
 		"upkeep": 120.0, "capacity": 300, "min_capacity": 40, "staff": {"wasserwerker": 4}, "min_staff": {"wasserwerker": 1}, "power": 150.0,
 		"water": 0.0, "vehicles": []},
+	# Auftrag 22 Phase 5: Polizeiwache je Stadt (capacity = gleichzeitige Einsaetze)
+	"PO-01": {"label": "Polizeiwache", "dienst": "polizei", "ressort": "Sicherheit", "building": "police_station", "cost": 380000.0,
+		"upkeep": 70.0, "capacity": 2, "staff": {"polizist": 10}, "min_staff": {"polizist": 2}, "power": 25.0, "water": 4.0,
+		"vehicles": ["FuStW", "FuStW"], "vehicles_from_pop": {"FuStW": 0}},
 	# Auftrag 22 Phase 4 Schritt 2: Hochbehaelter (Druckzone, Vorrat in m3 = capacity), ohne eigenes Personal (Fernwirktechnik)
 	"WT-01": {"label": "Hochbehälter", "dienst": "wasser", "ressort": "Umwelt", "building": "water_tank", "cost": 350000.0,
 		"upkeep": 15.0, "capacity": 120, "min_capacity": 15, "staff": {}, "power": 3.0, "water": 0.0, "vehicles": []},
@@ -138,6 +143,7 @@ const VEHICLES := {
 	"RW": {"label": "Rüstwagen", "crew": 3, "cost": 32.0, "price": 450000.0, "sprite": "fw_rw", "roles": ["thl", "thl_schwer", "gefahrstoff"], "power": 0.0},
 	"FLF": {"label": "Flugfeldlöschfahrzeug", "crew": 3, "cost": 70.0, "price": 950000.0, "sprite": "fw_flf", "roles": ["flugfeld", "loeschen"], "power": 8.0},
 	"RTW": {"label": "Rettungswagen", "crew": 2, "cost": 30.0, "price": 160000.0, "sprite": "rd_rtw"},
+	"FuStW": {"label": "Funkstreifenwagen", "crew": 2, "cost": 15.0, "price": 55000.0, "sprite": "police"},   # Auftrag 22 Phase 5
 	"NEF": {"label": "Notarzteinsatzfahrzeug", "crew": 2, "cost": 20.0, "price": 90000.0, "sprite": "rd_nef"},
 	"KTW": {"label": "Krankentransportwagen", "crew": 2, "cost": 18.0, "price": 95000.0, "sprite": "rd_ktw"},
 	"ELW RD": {"label": "Einsatzleitwagen Rettungsdienst", "crew": 1, "cost": 15.0, "price": 110000.0, "sprite": "rd_elw"},
@@ -158,7 +164,7 @@ const STYLES := {
 	"industrie": "Industrie, Stahl und Wellblech",
 }
 const STYLE_OF_CHARACTER := {"Marktflecken": "backstein", "Handwerkerort": "industrie", "Fischerdorf": "gruen", "Bauerndorf": "gruen"}
-const START_KIT := ["FW-01", "RW-01", "BH-01", "AW-01", "RC-01", "WW-01", "WT-01"]
+const START_KIT := ["FW-01", "RW-01", "BH-01", "AW-01", "RC-01", "WW-01", "WT-01", "PO-01"]
 ## Finanzierung (Analyse 10.11.: die Dienste kosteten kleine Orte mehr als Landeszuweisung und Steuern zusammen):
 ## Rettungsdienst und Kliniken refinanzieren die Krankenkassen, die Flughafenfeuerwehr die Flughafenentgelte (ausserhalb der Region, X0) kostendeckend - Sachkosten, Fahrzeuge und
 ## Loehne kommen taeglich zurueck in die Stadtkasse (bzw. nach den Anteilen des Zweckverbands). Die Freiwillige Feuerwehr hat erst ab
