@@ -46,3 +46,13 @@ mehrere hundert Bürger. Deshalb:
 5. **Instandhaltung sichtbar (`BuildingCare.works`):** Die monatliche Pflege der Eigentümer erscheint als Handwerkereinsatz (jedes vierte
    gepflegte Gebäude, verteilt über den Monat, 1–3 Tage, werktags 7–16 Uhr): Maler auf einem Gerüstfeld mit frischem Anstrich,
    Dachdecker auf der Traufe mit Leiter und Ziegelstapel, Fensterbauer tragen Scheiben vom Firmenwagen. Test: `test_care_works`.
+6. **Animierte KI-Porträts (`PortraitArt`):** Jede Figur oben links wird aus ihrem Namen gezeichnet (Hautton, Frisur, Haarfarbe, Bart,
+   Kappe/Bauhelm/Mütze/Hut, Brille, Ohrring, Sommersprossen, Kragen, Krawatte/Schal/Fliege, Jacke in Firmenfarbe, Skyline). Die
+   Animation zeigt die Tätigkeit: denkt (Modellanfrage läuft: Hand am Kinn, Gedankenblase), telefoniert (Zuteilen, Anwerben),
+   unterschreibt (Aufträge, Kredite, Handel), rechnet (Kauf, Preise), plant (Gründung, Bau), liest (Auftragsbörse), geht, spricht,
+   wartet (Finger trommeln, Gähnen); Blinzeln, Atmen, Stimmung aus dem Ergebnis. Das Sprachmodell wählt mit `geste` selbst, wie sich
+   seine Figur zeigt (jubeln, fluchen, grübeln, telefonieren, zuversichtlich, nervös, winken, schulterzucken, daumen_hoch, kaffee).
+   Sichtprüfung: `tests/probe_portraits.gd`.
+7. **Fahrzeiten:** Die Schätzung rechnet mehrere Ladungen (Hin- und Rückfahrten), Fahrer mit geplanter Tour bekommen keine andere
+   Aufgabe mehr, jeder Auftrag misst Schätzung, gebrauchte Zeit, Minuten je Zustand und Tempo (`type: "trip"` im Partie-Log,
+   `tests/probe_trip_times.gd`).

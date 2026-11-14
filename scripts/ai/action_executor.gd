@@ -331,6 +331,10 @@ static func _unwrap_call(a: Dictionary) -> void:
 
 
 
+## Letzte erfolgreiche Aktion je Firma: [Name, Spielminute] (Anzeige im Portraet).
+var last_act := {}
+
+
 func execute(cid: int, action: Dictionary, key: String = "", origin: String = "api", ctx: Dictionary = {}) -> Dictionary:
 	action = assist.complete(cid, normalize(action))
 	if key != "" and executed.has(key):
@@ -356,6 +360,8 @@ func execute(cid: int, action: Dictionary, key: String = "", origin: String = "a
 			kids = action.stopps.map(func(st): return str(st.get("contract_id", "")))
 		r.msg += sim.experiments.tag(cid, action, kids)
 	r = _done(cid, key, name, r)
+	if r.ok:
+		last_act[cid] = [name, sim.game_min]   # Portraet zeigt die letzte Taetigkeit (Auftrag 23)
 	sim.decisions.record(cid, origin, action, r, key)
 	return r
 

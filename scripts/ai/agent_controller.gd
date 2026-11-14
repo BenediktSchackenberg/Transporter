@@ -28,6 +28,9 @@ var passive_streak := 0           # Entscheidungen in Folge ohne wirksame Aktion
 var summaries: Array = []         # [{t, text, source}]
 var stats := {"requests": 0, "ok": 0, "errors": 0, "invalid": 0, "tokens": 0, "actions_ok": 0, "actions_rejected": 0}
 var status := "bereit"
+var gesture := ""                 # vom Modell gewaehlte Geste der Portraetfigur (PortraitArt.GESTURES)
+var gesture_at := 0               # Echtzeit (ms) der Geste; sie wirkt GESTURE_MS lang
+const GESTURE_MS := 14000
 var last_error := ""
 var fallback_active := false
 var real_time := 0.0
@@ -406,6 +409,10 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 		memory_note = parsed.memory.left(600)
 	if parsed.goal != "":
 		goal = parsed.goal
+	var ge := str(parsed.get("geste", ""))
+	if ge in PortraitArt.GESTURES:   # das Modell entscheidet, wie sich seine Figur im Portraet zeigt
+		gesture = ge
+		gesture_at = Time.get_ticks_msec()
 	var i := 0
 	var effective := 0
 	var actions: Array = parsed.actions
@@ -563,7 +570,8 @@ static func parse_response(text: String) -> Dictionary:
 		"memory": str(data.get("memory", "")) if data.get("memory") != null else "",
 		"goal": str(data.get("goal", "")).left(120) if data.get("goal") != null else "",
 		"plan": data.get("plan") if data.get("plan") is Dictionary else {},
-		"erfahrungen": data.get("erfahrungen") if data.get("erfahrungen") is Array else []}
+		"erfahrungen": data.get("erfahrungen") if data.get("erfahrungen") is Array else [],
+		"geste": str(data.get("geste", "")).strip_edges().to_lower() if data.get("geste") != null else ""}
 
 
 static func _parse_object(text: String):
@@ -634,7 +642,7 @@ REGELN (Kurzfassung):
 AKTIONEN (Parameter, ? = optional):
 %s
 ANTWORTFORMAT: Antworte ausschließlich mit einem JSON-Objekt, ohne weiteren Text:
-{"goal": "dein aktuelles Ziel in wenigen Worten", "plan": {optional: neuer Plan wie bei set_plan}, "erfahrungen": [optional: {id?, inhalt, bereich:[...], art, vertrauen}], "summary": "1–2 Sätze in Ich-Form auf Deutsch: was du tust und warum (nur für Zuschauer sichtbar)", "actions": [{"action": "...", ...}], "memory": "kurze Notiz für dich selbst, max. 400 Zeichen"}
+{"goal": "dein aktuelles Ziel in wenigen Worten", "plan": {optional: neuer Plan wie bei set_plan}, "erfahrungen": [optional: {id?, inhalt, bereich:[...], art, vertrauen}], "summary": "1–2 Sätze in Ich-Form auf Deutsch: was du tust und warum (nur für Zuschauer sichtbar)", "geste": "optional, wie sich deine Figur im Porträt zeigt: jubeln|fluchen|grübeln|telefonieren|zuversichtlich|nervös|winken|schulterzucken|daumen_hoch|kaffee", "actions": [{"action": "...", ...}], "memory": "kurze Notiz für dich selbst, max. 400 Zeichen"}
 Höchstens %d Aktionen. Verwende nur IDs aus der Beobachtung. Gib keine internen Gedankengänge aus.""" % [
 		c.player_name, c.company_name, sim.companies.size() - 1, p.name, p.prompt,
 		("\nZusätzliche Strategie-Vorgabe: " + custom) if custom != "" else "",
@@ -673,7 +681,7 @@ Lege fuer wiederkehrende Fracht create_transport_line fest: Disposition teilt Fa
 Du bist UNTERNEHMER, nicht nur Spedition: Transport ist der Einstieg, Gewinn entsteht mit eigenen Betrieben. Prüfe in jeder Runde chancen (Lücken der Region mit Gründungskosten) und verfuegbare_branchen. Hast du Geld über der Reserve, gründe einen fehlenden Betrieb (found_business) oder beginne Bergbau (explore_deposit -> request_mining -> build_access -> found_business bergwerk; der Rohstoff speist Stahlwerk und Bau).
 Bauen aus eigenem Antrieb – Wahrzeichen deiner Firma, wann immer Geld über der Reserve ist: (1) create_stone_work: Statue oder Figur (Motiv, material stein|bronze|holz|stahl|beton, zwei Farben; siehe steinbauten.jetzt_moeglich, material_kosten, idee – nimm die Idee oder erfinde selbst). Ein Maler (request_replacement_worker kind=maler) malt es danach an. (2) free_build: entwirf frei ein eigenes Bauwerk und baue es Stein auf Stein – form turm|haus|pyramide|mauer|bogen mit Maßen, material und dach, oder ein eigener plan Schicht für Schicht ("XXXX/X..X/X..X/XXXX"). Das Material holst du mit hub_buy beim Großlager (je Block: stein 1 naturstein, ziegel 10 ziegel, holz 1, beton 1, glas 2, stahl 1; Fehlmenge in freibau.bau.fehlt).
 Häufige Aktionen: %s
-Weitere Aktionen stehen in verfuegbare_aktionen und der Spielengine bereit. Antworte ausschließlich als JSON {"summary":"kurze Begründung in Ich-Form","goal":"Ziel","actions":[{"action":"..."}],"memory":"kurze Notiz"}. Kein Denktext.""" % [
+Weitere Aktionen stehen in verfuegbare_aktionen und der Spielengine bereit. Antworte ausschließlich als JSON {"summary":"kurze Begründung in Ich-Form","goal":"Ziel","geste":"jubeln|fluchen|grübeln|zuversichtlich|nervös|winken|schulterzucken|daumen_hoch|kaffee (deine Figur im Porträt, passend zur Lage)","actions":[{"action":"..."}],"memory":"kurze Notiz"}. Kein Denktext.""" % [
 		c.player_name, c.company_name, p.name, ("Zusatzstrategie: " + custom) if custom != "" else "", MAX_ACTIONS, "; ".join(lines)]
 
 

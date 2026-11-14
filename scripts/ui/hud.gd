@@ -293,12 +293,9 @@ func add_company_card(cid0: int) -> void:
 		row.add_theme_constant_override("separation", 8)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		p.add_child(row)
-		var face := TextureRect.new()
-		face.texture = UITheme.portrait(c.avatar_style)
+		var face := PortraitArt.new()   # eigene, animierte Figur je Unternehmer (Auftrag 23)
 		face.custom_minimum_size = Vector2(64, 64)
-		face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		face.setup(c.player_name + "|" + c.company_name, c.color)
 		row.add_child(face)
 		var info := VBoxContainer.new()
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -318,7 +315,7 @@ func add_company_card(cid0: int) -> void:
 		cash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		info.add_child(cash)
 		box.add_child(p)
-		cards.append({"panel": p, "cash": cash, "cid": cid})
+		cards.append({"panel": p, "cash": cash, "cid": cid, "face": face})
 
 
 ## Karte des Buergermeisters (wie die Unternehmer): Modus (Claude/Modell/Regeln), aktuelles Tun, Klick oeffnet die Details.
@@ -421,13 +418,9 @@ func _build_mayor_card(box: VBoxContainer) -> void:
 	row.add_theme_constant_override("separation", 8)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	p.add_child(row)
-	var face := TextureRect.new()
-	face.texture = UITheme.portrait(2)
-	face.modulate = Color(1.0, 0.9, 0.62)      # goldener Ton: unterscheidet das Amt von den Unternehmern
+	var face := PortraitArt.new()   # goldene Amtsfarbe unterscheidet das Amt von den Unternehmern
 	face.custom_minimum_size = Vector2(64, 64)
-	face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	face.setup("Bürgermeister " + sim.mayor.name, gold)
 	row.add_child(face)
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -452,7 +445,7 @@ func _build_mayor_card(box: VBoxContainer) -> void:
 	act.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info.add_child(act)
 	box.add_child(p)
-	mayor_card = {"panel": p, "name": nm, "mode": mode, "act": act}
+	mayor_card = {"panel": p, "name": nm, "mode": mode, "act": act, "face": face}
 
 
 func _update_mayor_card() -> void:
@@ -461,6 +454,9 @@ func _update_mayor_card() -> void:
 	var agent: MayorAgent = session.mayor_agent
 	mayor_card.name.text = sim.mayor.name
 	mayor_card.mode.text = LiveText.mayor_mode(agent)
+	var mf: PortraitArt = mayor_card.face
+	mf.activity = "denkt" if agent != null and agent._inflight >= 0 else ("spricht" if fmod(sim.game_min, 300.0) < 40.0 else "liest")
+	mf.mood = clampf((float(sim.mayor.approval) - 50.0) / 30.0, -1.0, 1.0)
 	var act := LiveText.mayor_now(sim, agent)
 	mayor_card.act.text = act.text
 	mayor_card.act.add_theme_color_override("font_color", act.color)
@@ -1088,6 +1084,8 @@ func _update_cards() -> void:
 		var led: Ledger = sim.company(c.cid).ledger
 		c.cash.text = _k(led.cash)
 		c.cash.add_theme_color_override("font_color", UITheme.GOOD if led.profit() >= 0.0 else UITheme.BAD)
+		if c.has("face"):
+			_animate_face(c.face, int(c.cid))
 	_update_mayor_card()
 	if entrepreneur_window.visible:
 		_update_entrepreneur()
@@ -1484,3 +1482,31 @@ Tagesplan: " + " · ".join(steps)
 static func _hhmm(h: float) -> String:
 	var m := int(round(h * 60.0))
 	return "%02d:%02d" % [posmod(m / 60, 24), m % 60]
+
+
+## Portraet einer Firma: Taetigkeit aus KI-Zustand, Figur auf der Karte und letzter Aktion; Stimmung aus dem Ergebnis; Geste vom Modell.
+const FACE_ACTS := {"accept_contract": "unterschreibt", "offer_trade": "unterschreibt", "accept_trade": "unterschreibt", "take_loan": "unterschreibt",
+	"request_loan": "unterschreibt", "repay_loan": "unterschreibt", "counter_offer": "unterschreibt",
+	"assign_vehicle": "telefoniert", "assign_transport": "telefoniert", "assign_worker_task": "telefoniert", "plan_tour": "telefoniert",
+	"recruit_worker": "telefoniert", "assign_staff": "telefoniert", "request_transport_help": "telefoniert", "send_message": "telefoniert",
+	"buy_vehicle": "rechnet", "sell_vehicle": "rechnet", "hub_buy": "rechnet", "buy_supplies": "rechnet", "set_business_price": "rechnet",
+	"found_business": "plant", "free_build": "plant", "create_stone_work": "plant", "build_access": "plant", "explore_deposit": "plant",
+	"request_mining": "plant", "build_office": "plant", "upgrade_office": "plant", "rent_depot": "plant", "set_plan": "plant",
+	"collect_contracts": "liest"}
+
+func _animate_face(face: PortraitArt, cid: int) -> void:
+	var ctl: AgentController = session.controllers[cid] if cid < session.controllers.size() else null
+	var act := "wartet"
+	var av: Avatar = sim.avatars.get(cid)
+	var last: Array = sim.executor.last_act.get(cid, [])
+	if ctl != null and ctl._inflight >= 0:
+		act = "denkt"
+	elif av != null and av.state == "talking":
+		act = "spricht"
+	elif not last.is_empty() and sim.game_min - float(last[1]) < 45.0:
+		act = str(FACE_ACTS.get(str(last[0]), "telefoniert"))
+	elif av != null and av.state in ["walking", "wander"] and not av.arrived():
+		act = "geht"
+	face.activity = act
+	face.gesture = ctl.gesture if ctl != null and ctl.gesture != "" and Time.get_ticks_msec() - ctl.gesture_at < AgentController.GESTURE_MS else ""
+	face.mood = clampf(sim.company(cid).ledger.profit() / 20000.0, -1.0, 1.0)
