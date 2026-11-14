@@ -409,7 +409,7 @@ func _connect_hub() -> void:
 		var ex: Array = hub_out.exits[HUB_EXIT_OF.get(corner, "N")]
 		var a := Vector2i(int(ex[0]), int(ex[1]))
 		var b := _hub_target(k, a)
-		var path := astar.get_id_path(a, b)
+		var path: Array = PathStraighten.straighten(astar.get_id_path(a, b), func(q: Vector2i) -> bool: return c.inside(q) and not astar.is_point_solid(q))
 		var cells := 0
 		for p in path:
 			if c.ground[c.idx(p)] != G.ROAD:

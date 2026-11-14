@@ -398,7 +398,7 @@ func _connect_towns() -> void:
 	for k in towns_out.size() - 1:
 		var a := _edge_road(k, true)        # suedlichste Strasse des Orts k ...
 		var b := _edge_road(k + 1, false)   # ... zur noerdlichsten des Nachbarorts
-		var path := astar.get_id_path(a, b)
+		var path: Array = PathStraighten.straighten(astar.get_id_path(a, b), func(q: Vector2i) -> bool: return c.inside(q) and not astar.is_point_solid(q))
 		var cells: Array = []
 		for p in path:
 			if c.ground[c.idx(p)] != G.ROAD:

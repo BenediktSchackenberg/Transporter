@@ -52,7 +52,7 @@ func plan_link(a: int, b: int) -> Dictionary:
 				astar.set_point_weight_scale(p, 6.0)   # vorhandene Strassen moeglichst nicht mitbenutzen
 	var pa: Vector2i = _inland_anchor(a)
 	var pb: Vector2i = _inland_anchor(b)
-	var path := astar.get_id_path(pa, pb)
+	var path: Array = PathStraighten.straighten(astar.get_id_path(pa, pb), func(q: Vector2i) -> bool: return cd.inside(q) and not astar.is_point_solid(q))
 	if path.is_empty():
 		return {"ok": false, "msg": "Kein Landweg zwischen %s und %s (Brücke nötig)." % [T.name_of(a), T.name_of(b)]}
 	var cells: Array = []
@@ -408,11 +408,12 @@ func plan_highway() -> Dictionary:
 		var ba := _hw_near_block(grid, ja)
 		var bb := _hw_near_block(grid, jb)
 		var coarse: Array = _hw_route(grid, ba, bb) if ba.x >= 0 and bb.x >= 0 else []
-		var spur_a := PackedVector2Array()
-		var spur_b := PackedVector2Array()
+		var spur_a: Array = []
+		var spur_b: Array = []
+		var free_spur := func(q: Vector2i) -> bool: return cd.inside(q) and not astar.is_point_solid(q) and cd.ground[cd.idx(q)] != CityData.G.ROAD
 		if not coarse.is_empty():
-			spur_a = astar.get_id_path(ja, _hw_center(ba))
-			spur_b = astar.get_id_path(_hw_center(bb), jb)
+			spur_a = PathStraighten.straighten(astar.get_id_path(ja, _hw_center(ba)), free_spur)
+			spur_b = PathStraighten.straighten(astar.get_id_path(_hw_center(bb), jb), free_spur)
 		if coarse.is_empty() or spur_a.is_empty() or spur_b.is_empty():
 			legs.append({"von": a, "nach": b, "ok": false})
 			continue
@@ -613,7 +614,7 @@ func _hw_cell(q: Vector2i, cd: CityData, ja: Vector2i, jb: Vector2i, seen: Dicti
 
 
 ## Zubringer (feine Wegsuche): zweite Fahrbahn neben dem Weg, nur auf freien Feldern.
-func _hw_spur(path: PackedVector2Array, astar: AStarGrid2D, cd: CityData, ja: Vector2i, jb: Vector2i, seen: Dictionary, cells: Array, crossings: Array) -> void:
+func _hw_spur(path: Array, astar: AStarGrid2D, cd: CityData, ja: Vector2i, jb: Vector2i, seen: Dictionary, cells: Array, crossings: Array) -> void:
 	for s in path.size():
 		var p := Vector2i(path[s])
 		var dir := Vector2i(path[mini(s + 1, path.size() - 1)]) - Vector2i(path[maxi(s - 1, 0)])
