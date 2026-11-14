@@ -175,11 +175,64 @@ func _try_start(r: Dictionary) -> void:
 	sim.log_event("Gemeinschaftsprojekt %s beschlossen und als %s ausgeschrieben (eine Vergabe; Anteile %s)." % [r.id, prj.id, _shares_text(r)], "good")
 
 
+## Trassen offener Projekte (vorgeschlagen, beschlossen, im Bau) sind freizuhalten: Neubauten duerfen sie nicht belegen
+## (sonst wurde die Strasse bei der Abnahme durch die Gebaeude gelegt). Zwischenspeicher je Spielminute.
+const OPEN_STATES := ["vorgeschlagen", "beschlossen", "im_bau"]
+var _res := {}
+var _res_min := -1
+
+
+func reserved(q: Vector2i) -> bool:
+	if int(sim.game_min) != _res_min:
+		_res_min = int(sim.game_min)
+		_res = {}
+		for r in items.values():
+			if str(r.status) in OPEN_STATES:
+				for c in r.get("cells", []):
+					_res[Vector2i(int(c[0]), int(c[1]))] = true
+	return _res.has(q)
+
+
+## Felder der Trasse, auf denen inzwischen ein Gebaeude, ein Firmenhof oder ein Bauwerk steht.
+func _blocked_cells(r: Dictionary) -> int:
+	var cd: CityData = sim.city
+	var n := 0
+	for c in r.get("cells", []):
+		var q := Vector2i(int(c[0]), int(c[1]))
+		if cd.inside(q) and cd.building_at[cd.idx(q)] >= 0:
+			n += 1
+	return n
+
+
+## Steht etwas auf der Trasse (Spielstaende vor der Freihaltung), wird sie um die Bebauung herum neu geplant; geht das nicht, bleiben die
+## bebauten Felder ausgespart (keine Strasse durch Gebaeude). true: Trasse ist frei.
+func _clear_route(r: Dictionary) -> bool:
+	var blocked := _blocked_cells(r)
+	if blocked == 0:
+		return true
+	var pl := plan_highway() if str(r.kind) == "autobahn" else plan_link(int(r.from), int(r.to))
+	_res_min = -1
+	if pl.get("ok", false):
+		r.cells = pl.cells
+		if str(r.kind) == "autobahn":
+			r.junctions = pl.junctions
+			r.crossings = pl.crossings
+			r.legs = pl.legs
+		sim.log_event("%s %s: %d Felder der Trasse waren bebaut – Trasse um die Bebauung herum neu geplant (%d Felder)." % [
+			"Autobahn" if str(r.kind) == "autobahn" else "Verbindungsstraße", r.id, blocked, r.cells.size()], "info")
+		return _blocked_cells(r) == 0
+	var cd: CityData = sim.city
+	r.cells = r.cells.filter(func(c): return cd.building_at[cd.idx(Vector2i(int(c[0]), int(c[1])))] < 0)
+	sim.log_event("%s: %d bebaute Felder der Trasse ausgespart (keine neue Trasse möglich)." % [r.id, blocked], "warn")
+	return false
+
+
 ## Vom Bausystem bei der Abnahme: Strasse oeffnen.
 func finish(rid: String) -> void:
 	var r: Dictionary = items.get(rid, {})
 	if r.is_empty():
 		return
+	_clear_route(r)   # nie durch Gebaeude bauen
 	r.status = "fertig"
 	r["done_day"] = GameCalendar.day_of(sim.game_min)
 	if str(r.kind) == "autobahn":
@@ -193,6 +246,8 @@ func finish(rid: String) -> void:
 
 func on_day(day: int) -> void:
 	for r in items.values():
+		if str(r.status) in OPEN_STATES:
+			_clear_route(r)   # bebaute Trassen (aeltere Spielstaende) sofort umplanen, damit Bau und Anzeige stimmen
 		if str(r.get("kind", "")) == "autobahn" and r.status != "fertig" and int(r.get("trasse", 1)) < 2:
 			_replan_highway(r)
 		if r.status == "vorgeschlagen" and day > int(r.deadline):

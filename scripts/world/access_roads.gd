@@ -498,6 +498,8 @@ func _maybe_finish(j: Dictionary) -> void:
 
 ## Freizuhaltender Verkehrskorridor: Zelle einer beantragten oder im Bau befindlichen Zufahrt (Neubauten duerfen sie nicht belegen).
 func reserved(q: Vector2i) -> bool:
+	if sim.regional != null and sim.regional.reserved(q):
+		return true   # Trasse einer beschlossenen oder geplanten Verbindungsstrasse/Autobahn
 	for j in jobs.values():
 		if str(j.get("status", "")) in ["antrag", "im_bau"]:
 			for a in j.cells:
