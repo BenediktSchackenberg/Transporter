@@ -222,7 +222,28 @@ func _workplace(p: Dictionary, town: int) -> int:
 		ids = _candidates("work:any", ["townhall", "office", "shop"], town)
 	if ids.is_empty():
 		ids = _candidates("work:" + employer, types, -1)
-	return int(ids[posmod(int(p.id), ids.size())]) if not ids.is_empty() else -1
+	if ids.is_empty():
+		return -1
+	# fester Arbeitsplatz unter den fuenf naechsten (Partie 14.11.: reihum ueber den ganzen Ort ergab Arbeitswege bis 279 Felder,
+	# z. B. zur Grosslager-Verwaltung in der Kartenmitte)
+	var unit: Dictionary = sim.housing.units.get(str(p.get("home", "")), {})
+	if unit.is_empty():
+		return int(ids[posmod(int(p.id), ids.size())])
+	var near: Vector2i = sim.city.building(int(unit.building)).walk
+	var key := "near:%s:%d" % [str(p.get("employer", "")), int(unit.building)]
+	if not _cands.has(key):
+		var sorted := ids.duplicate()
+		sorted.sort_custom(func(a, b):
+			var pa: Vector2i = sim.city.building(int(a)).walk
+			var pb: Vector2i = sim.city.building(int(b)).walk
+			return absi(pa.x - near.x) + absi(pa.y - near.y) < absi(pb.x - near.x) + absi(pb.y - near.y))
+		var dist := func(b) -> int:
+			var pb: Vector2i = sim.city.building(int(b)).walk
+			return absi(pb.x - near.x) + absi(pb.y - near.y)
+		var limit: int = maxi(60, int(dist.call(sorted[0]) * 1.5))   # nicht viel weiter als der naechste Arbeitsplatz
+		_cands[key] = sorted.slice(0, 5).filter(func(b): return dist.call(b) <= limit)
+	var top: Array = _cands[key]
+	return int(top[posmod(int(p.id), top.size())])
 
 
 func _job_office(town: int, near: Vector2i) -> int:
