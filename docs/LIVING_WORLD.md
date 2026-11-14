@@ -36,4 +36,10 @@ mehrere hundert Bürger. Deshalb:
    nachmessen; bei Baustopp steht der Trupp am Container. Straßenbaustellen: Baken und Leitkegel, abgefräste Decke, frischer
    dampfender Asphalt, Walze, Rüttelplatte, Sicherungsposten; Leitungsbau mit Graben, Rohr und Bagger.
    Sichtprüfung: `tests/probe_site_art.gd` (ohne Partie) und `--shot-site=bau|road|fleet|works` im Autotest.
-4. **Bürger-KI:** Tagespläne für alle Bürger, sichtbar als Fußgänger und Pendler mit Ziel; Auswirkungen auf Umsatz, Verkehr und Stimmung.
+4. **Bürger-KI (`CitizenBrain`):** Jeder Bürger plant seinen Tag selbst: Schichten nach Arbeitgeber (Industrie früh, Handel später und
+   samstags, Polizei/Pflege/Kommunales im Früh-, Spät- und Nachtwechsel mit versetzten freien Tagen), Mittagspause im Büro,
+   gelegentlich ein Arzttermin, Arbeitslose vormittags zur Arbeitsvermittlung, Weiterbildung in der Schule, Besorgungen nach der
+   Arbeit oder am Samstag, abends Gastronomie (freitags und samstags öfter, nur mit Einkommen), Spaziergänge am Markt oder Hafen (nicht
+   bei Regen), sonntags Ausflüge. Ziele sind die nächsten offenen Gebäude im eigenen Ort; fehlt dort etwas, zählt der Wunsch als
+   unversorgt. Stündliche Zählung je Ort (Personenstunden je Tätigkeit, unversorgte Wünsche) steht dem Bürgermeister als
+   `buergerleben` im Lagebild zur Verfügung; die Auswahl eines Bürgers zeigt seinen Tagesplan. Test: `test_citizen_brain`.

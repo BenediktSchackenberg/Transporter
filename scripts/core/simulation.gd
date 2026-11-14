@@ -1202,6 +1202,7 @@ func _minute_tick() -> void:
 	if minute_index % 60 == 0:
 		strategy.sample()
 		fuel.simulate_step()
+		citizens.tally_hour(game_min)   # Buerger-KI: Tagesablauf je Ort (Auftrag 23)
 	if minute_index % 30 == 0:
 		FuelPlanner.run_rules(self)
 	if minute_index % Workforce.TICK_MIN == 0:

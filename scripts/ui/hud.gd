@@ -1346,6 +1346,11 @@ func _update_selection() -> void:
 				sel_text.text += "Wohnung %s · %s · Miete %.0f EUR/Monat fuer die Wohneinheit\n" % [unit.id, sim.city.building(int(unit.building)).name, float(unit.rent)]
 			if not plan.is_empty():
 				sel_text.text += "%s → %s" % [plan.purpose, sim.city.building(int(plan.building)).name]
+			var day_plan: Array = sim.citizens.brain.day_plan(person, GameCalendar.day_of(sim.game_min))   # Buerger-KI (Auftrag 23)
+			if not day_plan.is_empty():
+				var steps: Array = day_plan.map(func(e): return "%s–%s %s" % [_hhmm(float(e[0])), _hhmm(float(e[1])), str(CitizenBrain.KINDS.get(str(e[2]), e[2])).trim_suffix(" nach der Arbeit")])
+				sel_text.text += "
+Tagesplan: " + " · ".join(steps)
 		"vehicle":
 			var v: FleetVehicle = sim.vehicles.get(sel.id)
 			if v == null:
@@ -1474,3 +1479,8 @@ func _update_selection() -> void:
 			elif b.role in ["dealer", "workshop", "bank"]:
 				txt += {"dealer": "Autohaus: Fahrzeugkauf vor Ort", "workshop": "Werkstatt: Reparaturen", "bank": "Bank: Kredite"}[b.role]
 			sel_text.text = txt
+
+
+static func _hhmm(h: float) -> String:
+	var m := int(round(h * 60.0))
+	return "%02d:%02d" % [posmod(m / 60, 24), m % 60]

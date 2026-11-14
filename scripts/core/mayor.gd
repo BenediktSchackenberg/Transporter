@@ -313,6 +313,7 @@ func indicators() -> Dictionary:
 		"kommunale_dienste": sim.services.mayor_obs(town) if sim.services != null and sim.municipal.enabled() else {},
 		"arbeit": {"quote": snappedf(Z.employment_rate_of(town), 0.001), "arbeitslos": Z.unemployed_of(town), "offene_stellen": vac_jobs,
 			"offene_stellen_nach_arbeitgeber": by_vac},
+		"buergerleben": Z.life_obs(town),
 		"gewerbe": {"freie_gewerbeflaeche": free_by_zone.get("gewerbe", {}), "freie_industrieflaeche": free_by_zone.get("industrie", {}),
 			"nachfrage_stellen_baufirma_industrie": int(by_vac.get("baufirma", 0)) + int(by_vac.get("industrie", 0))},
 		"verkehr": _traffic_indicators(jams),

@@ -182,10 +182,20 @@ static func daily_routes(t) -> void:
 	t.ok(night.building == int(s.housing.units[str(person.home)].building) and night.purpose == "Nach Hause", "Nachtweg fuehrt zur tatsaechlich gemieteten Wohnung")
 	var work: Dictionary = s.citizens.travel_plan(person, 9.0)
 	t.ok(work.purpose.begins_with("Zur Arbeit") and s.city.walkable(work.cell), "Arbeitsweg hat einen benannten erreichbaren Zugang")
-	var meal: Dictionary = s.citizens.travel_plan(person, 18.0)
-	t.ok(meal.purpose == "Restaurantbesuch nach der Arbeit", "erwerbstaetiger Bewohner besucht Gastronomie nach der Arbeit")
+	# Buerger-KI (Auftrag 23): Gastronomie nicht jeden Abend, sondern an einzelnen Tagen des persoenlichen Plans
+	var meal := {}
+	for d in 28:
+		for e in s.citizens.brain.day_plan(person, d):
+			if str(e[2]) == "restaurant" and meal.is_empty():
+				meal = s.citizens.travel_plan(person, (float(e[0]) + float(e[1])) * 0.5, d)
+	t.ok(not meal.is_empty() and meal.purpose == "Restaurantbesuch nach der Arbeit", "erwerbstaetiger Bewohner besucht an manchen Abenden Gastronomie")
 	var unemployed := person.duplicate()
+	unemployed.id = int(person.id) + 100000   # eigener Plan (Zwischenspeicher je Person)
 	unemployed.employer = ""
 	unemployed.wage = 0.0
-	var search: Dictionary = s.citizens.travel_plan(unemployed, 9.0)
-	t.ok(search.purpose == "Zur Arbeitsvermittlung", "arbeitsloser Bewohner bekommt passendes Tagesziel")
+	var search := {}
+	for d in 7:
+		for e in s.citizens.brain.day_plan(unemployed, d):
+			if str(e[2]) == "jobs" and search.is_empty():
+				search = s.citizens.travel_plan(unemployed, float(e[0]) + 0.1, d)
+	t.ok(not search.is_empty() and search.purpose == "Zur Arbeitsvermittlung", "arbeitsloser Bewohner geht an Werktagen zur Arbeitsvermittlung")

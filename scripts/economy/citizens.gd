@@ -37,59 +37,64 @@ var start_cap := {}                # Grundbedarf beim Start (Grenze fuer Stellen
 var stats := {"changes": 0, "layoffs": 0, "hires": 0, "quits": 0, "wages": 0.0, "tax": 0.0, "benefits": 0.0}
 var last := {}                     # Kennzahlen des letzten Monatsabschlusses
 var _next := 1
-var _travel_places := {}
-var _travel_revision := -1
 
 
-## Sichtbare Alltagswege aus bestehenden Wohn-, Arbeits- und Einkommensdaten.
+## Sichtbare Alltagswege aus bestehenden Wohn-, Arbeits- und Einkommensdaten: die Buerger-KI (CitizenBrain) plant den Tag jeder Person.
 ## Die Bewegung selbst erzeugt keine zweite Lohn-, Miet- oder Konsumbuchung.
-func travel_plan(person: Dictionary, hour: float = -1.0) -> Dictionary:
-	if _travel_revision != sim.city.buildings.size():
-		_travel_places.clear()
-		_travel_revision = sim.city.buildings.size()
+func travel_plan(person: Dictionary, hour: float = -1.0, day: int = -1) -> Dictionary:
 	if sim.towns.airports.any(func(ap): return str(ap.away_of(person)) != ""):
 		return {}   # Auslandsreise (Flughafen E3): unterwegs auf der Welt, kein Weg auf der Karte
 	if hour < 0.0:
 		hour = Catalog.hour_of_day(sim.game_min)
-	var unit: Dictionary = sim.housing.units.get(str(person.get("home", "")), {})
-	var home := int(unit.get("building", -1))
-	var employer := str(person.get("employer", ""))
-	if home >= 0 and (hour < 6.0 or hour >= 20.0):
-		return {"building": home, "purpose": "Nach Hause", "cell": sim.city.building(home).walk}
-	var kind := "work:" + employer
-	var purpose := "Zur Arbeit: " + str(EMPLOYERS.get(employer, {}).get("label", employer))
-	var types: Array = {"rathaus": ["townhall"] if sim.town_hall.building >= 0 else ["office", "bank"], "schule_klinik": ["school", "kindergarten", "clinic"], "polizei": ["police"], "gesundheit": ["doctor", "clinic"], "baufirma": ["construction", "warehouse"],
-		"handel": ["shop", "restaurant"], "industrie": ["factory", "brewery", "bakery", "workshop"], "stadtlager": ["warehouse"]}.get(employer, ["office"])
-	if employer == "" and person.has("course_until"):
-		kind = "course"
-		types = ["school"]
-		purpose = "Zur Weiterbildung"
-	elif employer == "":
-		kind = "staffing"
-		types = ["office"]
-		purpose = "Zur Arbeitsvermittlung"
-	elif hour >= 12.0 and hour < 14.0:
-		kind = "shopping"
-		types = ["shop", "supermarket", "bakery"]
-		purpose = "Einkaufen fuer den Haushalt"
-	elif hour >= 17.0 and hour < 20.0 and float(person.get("wage", 0.0)) > 0.0:
-		kind = "restaurant"
-		types = ["restaurant", "cafe", "hotel"]
-		purpose = "Restaurantbesuch nach der Arbeit"
-	if not _travel_places.has(kind):
-		var places: Array = sim.city.buildings.filter(func(b): return (b.type in types or (kind == "staffing" and b.role == "staffing")) and sim.city.walkable(b.walk))
-		if places.is_empty():
-			places = sim.city.buildings.filter(func(b): return sim.city.walkable(b.walk) and b.type not in ["plot", "free_plot"])
-		_travel_places[kind] = places.map(func(b): return int(b.id))
-	var places: Array = _travel_places[kind]
-	if places.is_empty():
-		return {}
-	var building := int(places[posmod(int(person.id), places.size())])
-	return {"building": building, "purpose": purpose, "cell": sim.city.building(building).walk}
+	if day < 0:
+		day = GameCalendar.day_of(sim.game_min)
+	return brain.plan(person, hour, day)
+
+
+## Buergerleben je Ort (Auftrag 23): Personen je Taetigkeit zur vollen Stunde, aufsummiert ueber den Tag, und Wuensche ohne offenes Ziel
+## im Ort (kein Laden, Arzt, Lokal offen). Der Buergermeister sieht den Vortag (life_obs).
+var brain: CitizenBrain
+var life_today := {}        # Ort -> {art: Personenstunden}
+var unserved_today := {}    # Ort -> {art: Anzahl}
+var life_last := {}
+var unserved_last := {}
+var _life_day := -1
+
+
+func note_unserved(town: int, art: String) -> void:
+	if not unserved_today.has(town):
+		unserved_today[town] = {}
+	unserved_today[town][art] = int(unserved_today[town].get(art, 0)) + 1
+
+
+## Stuendliche Zaehlung (Simulation, zur vollen Spielstunde): was tun die Buerger gerade? Ohne Wegsuche, nur der Tagesplan.
+func tally_hour(now: float) -> void:
+	var day := GameCalendar.day_of(now)
+	if day != _life_day:
+		if _life_day >= 0:
+			life_last = life_today
+			unserved_last = unserved_today
+		life_today = {}
+		unserved_today = {}
+		_life_day = day
+	var h := Catalog.hour_of_day(now)
+	for p in people:
+		var t := home_town(p)
+		var art := str(brain.activity(p, h, day).art)
+		if not life_today.has(t):
+			life_today[t] = {}
+		life_today[t][art] = int(life_today[t].get(art, 0)) + 1
+
+
+func life_obs(town: int) -> Dictionary:
+	var src: Dictionary = life_last.get(town, life_today.get(town, {}))
+	return {"personenstunden_gestern": src.duplicate(), "unversorgte_wuensche_gestern": unserved_last.get(town, unserved_today.get(town, {})).duplicate(),
+		"hinweis": "unversorgte_wuensche: Bürger wollten einkaufen, essen gehen, zum Arzt oder spazieren, fanden im Ort aber nichts Offenes."}
 
 
 func setup(s: Simulation) -> void:
 	sim = s
+	brain = CitizenBrain.new(s)
 	s.month_changed.connect(on_month)
 
 
