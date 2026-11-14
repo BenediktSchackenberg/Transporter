@@ -613,6 +613,24 @@ func _process_timed(_delta: float) -> void:
 				args.erase("shot-tile")
 				session.set_follow(false)
 				session.city_view.set_camera_world(pick.mover.pos)
+		if args.has("shot-site"):   # Kamera auf eine Baustelle mit Trupp (Auftrag 23): bau | road | fleet | works, sonst die erste
+			var sv: SiteView = session.city_view.site_view
+			var want := str(args["shot-site"])
+			var best: SiteView.SiteNode = null
+			for key in sv._nodes:
+				var sn: SiteView.SiteNode = sv._nodes[key].node
+				if sn.crew.is_empty():
+					continue
+				var kind := "road" if str(key).begins_with("road:") else ("fleet" if str(key).begins_with("fleet:") else ("works" if str(key).begins_with("works:") else "bau"))
+				if best == null or kind == want:
+					best = sn
+				if kind == want:
+					break
+			print("AUTOTEST Baustellen: %d, gewaehlt %s" % [sv._nodes.size(), "keine" if best == null else str(best.crew.get("phase", ""))])
+			if best != null:
+				args.erase("shot-tile")
+				session.set_follow(false)
+				session.city_view.set_camera_world(best.parcel_rect.get_center())
 		if args.has("shot-tile"):
 			var xy: PackedStringArray = str(args["shot-tile"]).split(",")
 			session.set_follow(false)

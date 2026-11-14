@@ -27,6 +27,13 @@ mehrere hundert Bürger. Deshalb:
    mal im Süden, mal im Norden; vier von sechs Ortstypen je Partie (neu: Kurort mit Promenade, Villen, Kurhaus und Kurbrunnen;
    Hafenstadt mit engem Raster, Mietshäusern, Kran, Containerlager und Hafenkneipe). Spielstände mit Generator 2/3 behalten ihre
    Karte. Prüfung: `test_world_variety`, Bilder: `tests/probe_world_variety.gd`.
-3. **Baustellen im Detail:** Bauphasen mit Gerüst, Kran, Materialstapeln, Lieferwagen; Arbeiter mit sichtbarer Tätigkeit je Phase.
-   Straßenbau und -wartung: Absperrung, Fräse, Walze, Asphaltkocher, Arbeiter mit Schaufel und Rüttelplatte.
+3. **Baustellen im Detail (`SiteView.SiteNode`):** Bauzaun mit Betonfüßen, offenem Tor und Bauschild in Firmenfarbe; Baucontainer, WC
+   und Materiallager je Phase (Schotter, Bewehrungsstahl, Steinpaletten, Holz, Ziegel, Fensterscheiben); Schnurgerüst, Baugrube
+   mit Böschung, Bodenplatte mit Bewehrungskorb, Mauerwerk mit Fugen und Fensteröffnungen, Fassadengerüst mit Bohlen, Geländer und
+   Netz, Dachstuhl mit Sparren über der Geschossdecke, Ziegel, fertige Hülle mit Glas. Geräte aus `CrewArt` (Kettenbagger, Kipper
+   mit Mulde, Fahrmischer mit Schütte, Turmdrehkran mit Gittermast, Laufkatze und Last). Polier-Regeln geben jedem Arbeiter eine
+   eigene Aufgabe: graben in der Grube, betonieren, mauern auf dem Gerüst, Dach decken, Material vom Lager tragen und abladen,
+   nachmessen; bei Baustopp steht der Trupp am Container. Straßenbaustellen: Baken und Leitkegel, abgefräste Decke, frischer
+   dampfender Asphalt, Walze, Rüttelplatte, Sicherungsposten; Leitungsbau mit Graben, Rohr und Bagger.
+   Sichtprüfung: `tests/probe_site_art.gd` (ohne Partie) und `--shot-site=bau|road|fleet|works` im Autotest.
 4. **Bürger-KI:** Tagespläne für alle Bürger, sichtbar als Fußgänger und Pendler mit Ziel; Auswirkungen auf Umsatz, Verkehr und Stimmung.
