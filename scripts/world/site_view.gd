@@ -100,6 +100,31 @@ func update_view(delta: float) -> void:
 				"working": true, "people": 4, "builder": str(v.label)}
 			n.seed_key = int(v.id) * 7919
 			n.queue_redraw()
+	# Handwerkereinsaetze an gepflegten Gebaeuden (BuildingCare.works, Auftrag 23): Maler, Dachdecker, Fensterbauer mit Firmenwagen
+	for e in sim.care.active_works(sim.game_min):
+		var bid := int(e[0])
+		var key := "care:%d" % bid
+		seen[key] = true
+		if _nodes.has(key):
+			continue
+		var b: Dictionary = sim.city.building(bid)
+		if b.is_empty():
+			continue
+		var n := SiteNode.new()
+		add_child(n)
+		_nodes[key] = {"node": n, "sig": "care"}
+		var foot := Rect2(float(b.x) * 32.0, float(b.y) * 32.0, float(b.w) * 32.0, float(b.h) * 32.0)
+		var r := foot.grow(24.0)
+		n.position = Iso.to_screen(r.end)
+		n.parcel_rect = r
+		n.foot = foot
+		n.origin = r.end
+		n.state = 6
+		n.height = FLOOR_H * float({"highrise": 6, "apartment": 3, "office": 3, "hotel": 2, "villa": 2, "semi": 2}.get(str(b.type), 1.5))
+		n.crew = {"phase": "pflege", "art": str(e[1].art), "role": "Handwerker", "foreman": 0, "workers": 2, "operators": 0, "gear": [], "working": true,
+			"color": [Color("3e7cb1"), Color("2f8f5b"), Color("c0392b"), Color("8e44ad")][bid % 4]}
+		n.seed_key = bid * 31
+		n.queue_redraw()
 	for id in _nodes.keys():
 		if not seen.has(id):
 			_nodes[id].node.queue_free()
@@ -264,6 +289,9 @@ class SiteNode extends Node2D:
 		var S := Callable(self, "_f")
 		if _job() == "strasse":
 			_draw_roadworks(S)
+			return
+		if _job() == "pflege":
+			_draw_care(S)
 			return
 		var P := Rect2(parcel_rect.position / 32.0, parcel_rect.size / 32.0)
 		var F := Rect2(foot.position / 32.0, foot.size / 32.0)
@@ -736,3 +764,64 @@ class SiteNode extends Node2D:
 		if d < r.size.x:
 			return Vector2(r.end.x - d, r.end.y)
 		return Vector2(r.position.x, r.end.y - (d - r.size.x))
+
+	# ------------------------------------------------------------------ Instandhaltung
+	## Handwerkereinsatz am bestehenden Haus (das Haus selbst zeichnet CityView): Firmenwagen, Absperrkegel und je nach Art ein
+	## Geruestfeld mit Maler (Fassade), Leiter mit Dachdecker auf der Traufe (Dach) oder Fensterbauer mit Scheibe (Fenster).
+	func _draw_care(S: Callable) -> void:
+		var F := Rect2(foot.position / 32.0, foot.size / 32.0)
+		var art := str(crew.get("art", "fassade"))
+		var firm := _firm()
+		var van := Vector2(F.end.x + 0.45, F.end.y + 0.2)
+		for k in 2:   # Raeder zuerst (der Aufbau verdeckt die hinteren)
+			draw_circle(_f(van + Vector2(0.22, 0.3 - 0.6 * k), 0.1), 4.0, CrewArt.TYRE)
+		CrewArt.obox(self, S, van, Vector2(0, 1), 0.9, 0.42, 0.12, 0.75, Color("eeeeee"))   # Kastenwagen
+		CrewArt.obox(self, S, van + Vector2(0, 0.3), Vector2(0, 1), 0.25, 0.43, 0.3, 0.55, firm)
+		for q in [Vector2(F.position.x - 0.1, F.end.y + 0.55), Vector2(F.position.x + 1.6, F.end.y + 0.55)]:
+			var b := _f(q, 0.0)
+			_poly([b + Vector2(-4, 0), b + Vector2(4, 0), b + Vector2(0, -11)], CONE)
+		var h := height / Z
+		var w := _working()
+		match art:
+			"fassade":   # Geruestfeld vor der Suedwand, frisch gestrichener Streifen, Farbeimer
+				var a := Vector2(F.position.x + 0.3, F.end.y + 0.28)
+				var b2 := Vector2(minf(F.end.x - 0.2, a.x + 1.6), a.y)
+				var A := _f(a, 0.0)
+				var B := _f(b2, 0.0)
+				var wall_a := _f(Vector2(a.x, F.end.y), 0.0)
+				var wall_b := _f(Vector2(b2.x, F.end.y), 0.0)
+				var done := 0.35 + 0.45 * (0.5 + 0.5 * sin(t * 0.05))
+				_poly([wall_a, wall_b, wall_b + Vector2(0, -height * done), wall_a + Vector2(0, -height * done)], Color(0.98, 0.95, 0.86, 0.35))
+				for p in [A, B, A.lerp(B, 0.5)]:
+					draw_line(p, p + Vector2(0, -height - 6.0), SCAFF, 2.0)
+				var z := 20.0
+				while z <= height:
+					draw_line(A + Vector2(0, -z), B + Vector2(0, -z), PLANK, 3.0)
+					z += 22.0
+				CrewArt.worker(self, func(wp: Vector2, zz: float) -> Vector2: return _f(wp, zz + minf(h * 0.55, 2.4)), a.lerp(b2, 0.3 + 0.3 * sin(t * 0.1)), t, "haemmern" if w else "gehen", Color("f0f0f0"), firm, seed_key)
+				CrewArt.worker(self, S, Vector2(b2.x + 0.3, F.end.y + 0.6), t, "tragen" if w else "gehen", Color("f0f0f0"), firm, seed_key + 1)
+				CrewArt.box(self, S, a.x + 0.1, a.y + 0.3, a.x + 0.3, a.y + 0.5, 0.0, 0.35, Color("dcdcdc"))   # Farbeimer
+			"dach":   # Leiter an der Ostwand, Dachdecker auf der Traufe, Ziegelstapel am Boden
+				var foot_l := Vector2(F.end.x + 0.35, F.position.y + F.size.y * 0.4)
+				var top_l := Vector2(F.end.x, F.position.y + F.size.y * 0.4)
+				var l0 := _f(foot_l, 0.0)
+				var l1 := _f(top_l, h + 0.3)
+				for side in [-4.0, 4.0]:
+					draw_line(l0 + Vector2(side, 0), l1 + Vector2(side, 0), Color("b0b4b8"), 2.0)
+				for k in 8:
+					var u := float(k + 1) / 9.0
+					draw_line(l0.lerp(l1, u) + Vector2(-4, 0), l0.lerp(l1, u) + Vector2(4, 0), Color("b0b4b8"), 1.5)
+				CrewArt.worker(self, func(wp: Vector2, zz: float) -> Vector2: return _f(wp, zz + h + 0.2), Vector2(F.end.x - 0.4, F.position.y + F.size.y * (0.3 + 0.2 * sin(t * 0.08))), t, "haemmern" if w else "gehen", Color("f0f0f0"), firm, seed_key)
+				var up := 0.5 + 0.5 * sin(t * 0.3)
+				CrewArt.worker(self, func(wp: Vector2, zz: float) -> Vector2: return _f(wp, zz + (h * up if w else 0.0)), foot_l.lerp(top_l, up * 0.6), t, "tragen" if w else "gehen", Color("f0f0f0"), firm, seed_key + 1)
+				for k in 3:
+					CrewArt.box(self, S, foot_l.x + 0.15, foot_l.y + 0.4, foot_l.x + 0.55, foot_l.y + 0.65, 0.15 * k, 0.15 * k + 0.12, TILE)
+			_:   # Fenster: Scheibe vom Wagen zur Wand tragen, Kollege misst die Oeffnung
+				var win := Vector2(F.position.x + F.size.x * 0.5, F.end.y + 0.15)
+				var u2 := fmod(t * 0.06, 1.0)
+				var pos := van.lerp(win, u2 / 0.5) if u2 < 0.5 else win.lerp(van, (u2 - 0.5) / 0.5)
+				CrewArt.worker(self, S, pos, t, ("tragen" if u2 < 0.5 else "gehen") if w else "gehen", Color("f0f0f0"), firm, seed_key)
+				if u2 < 0.5 and w:
+					var g := _f(pos, 1.0)
+					_poly([g + Vector2(-9, -16), g + Vector2(9, -12), g + Vector2(9, 4), g + Vector2(-9, 0)], Color(0.62, 0.8, 0.9, 0.75))
+				CrewArt.worker(self, S, win + Vector2(-0.6, 0.15), t, "messen" if w else "gehen", Color("f0f0f0"), firm, seed_key + 1)

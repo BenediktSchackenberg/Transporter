@@ -43,3 +43,6 @@ mehrere hundert Bürger. Deshalb:
    bei Regen), sonntags Ausflüge. Ziele sind die nächsten offenen Gebäude im eigenen Ort; fehlt dort etwas, zählt der Wunsch als
    unversorgt. Stündliche Zählung je Ort (Personenstunden je Tätigkeit, unversorgte Wünsche) steht dem Bürgermeister als
    `buergerleben` im Lagebild zur Verfügung; die Auswahl eines Bürgers zeigt seinen Tagesplan. Test: `test_citizen_brain`.
+5. **Instandhaltung sichtbar (`BuildingCare.works`):** Die monatliche Pflege der Eigentümer erscheint als Handwerkereinsatz (jedes vierte
+   gepflegte Gebäude, verteilt über den Monat, 1–3 Tage, werktags 7–16 Uhr): Maler auf einem Gerüstfeld mit frischem Anstrich,
+   Dachdecker auf der Traufe mit Leiter und Ziegelstapel, Fensterbauer tragen Scheiben vom Firmenwagen. Test: `test_care_works`.

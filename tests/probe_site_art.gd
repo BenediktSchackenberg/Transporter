@@ -2,7 +2,8 @@ extends SceneTree
 ## Sichtpruefung der Baustellen (Auftrag 23, Phase 3) ohne Partie: Baustellen in allen Phasen und zwei Strassenbaustellen nebeneinander,
 ## nach einigen Sekunden Animation als Bild gespeichert. Aufruf (mit Fenster, nicht headless):
 ##   Godot --path . -s tests/probe_site_art.gd -- --out=user://baustellen.png [--pick=3,4,8] [--zoom=0.9] [--t=4]
-## pick: Nummern 0-7 = Bauphasen (PHASES), 8 = Strasseninstandsetzung, 9 = Leitungsbau; nebeneinander in einer Reihe.
+## pick: Nummern 0-7 = Bauphasen (PHASES), 8 = Strasseninstandsetzung, 9 = Leitungsbau, 10-12 = Handwerker an einem Haus
+## (Fassade, Dach, Fenster; das Haus selbst ist hier ein grauer Block); nebeneinander in einer Reihe.
 
 const PHASES := [[0, "vorbereitung"], [1, "erdarbeiten"], [2, "fundament"], [3, "rohbau"], [4, "dach"], [5, "huelle"], [5, "innenausbau"], [5, "uebergabe"]]
 const GEAR := {"erdarbeiten": ["bagger", "lkw"], "fundament": ["betonmischer"], "rohbau": ["kran"], "dach": ["kran"]}
@@ -39,6 +40,25 @@ func _initialize() -> void:
 	for k in pick:
 		var base := Vector2(slot * 8.0, -slot * 8.0)
 		slot += 1
+		if k >= 10:   # Handwerkereinsatz an einem bestehenden Haus
+			var foot2 := Rect2((base + Vector2(2, 2)) * 32.0, Vector2(3, 2) * 32.0)
+			var house := HouseBlock.new()
+			house.foot = foot2
+			house.position = Iso.to_screen(foot2.end)
+			root.add_child(house)
+			var r3 := foot2.grow(24.0)
+			var n3 := SiteView.SiteNode.new()
+			n3.parcel_rect = r3
+			n3.foot = foot2
+			n3.origin = r3.end
+			n3.position = Iso.to_screen(r3.end)
+			n3.state = 6
+			n3.height = 66.0
+			n3.crew = {"phase": "pflege", "art": ["fassade", "dach", "fenster"][k - 10], "foreman": 0, "workers": 2, "operators": 0, "gear": [], "working": true, "color": Color("2f8f5b")}
+			n3.seed_key = 500 + k
+			root.add_child(n3)
+			nodes.append(n3)
+			continue
 		if k >= 8:   # Strassenbaustellen: Instandsetzung und Leitungsbau
 			var j: int = k - 8
 			var cell := Vector2i(int(base.x) + 3, int(base.y) + 3)
@@ -86,3 +106,19 @@ func _process(delta: float) -> bool:
 		print("Baustellenbild: ", ProjectSettings.globalize_path(out))
 		return true
 	return false
+
+
+## Platzhalter fuer ein fertiges Haus (zwei Wandflaechen und Dach), damit die Handwerker einen Bezug haben.
+class HouseBlock extends Node2D:
+	var foot := Rect2()
+
+	func _draw() -> void:
+		var o := Iso.to_screen(foot.end)
+		var fa := Iso.to_screen(foot.position) - o
+		var fb := Iso.to_screen(Vector2(foot.end.x, foot.position.y)) - o
+		var fc := Vector2.ZERO
+		var fd := Iso.to_screen(Vector2(foot.position.x, foot.end.y)) - o
+		var up := Vector2(0, -66)
+		draw_colored_polygon(PackedVector2Array([fd, fc, fc + up, fd + up]), Color("c9b9a0"))
+		draw_colored_polygon(PackedVector2Array([fc, fb, fb + up, fc + up]), Color("a8987f"))
+		draw_colored_polygon(PackedVector2Array([fa + up, fb + up, fc + up, fd + up]), Color("8c4331"))

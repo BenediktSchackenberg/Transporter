@@ -20,6 +20,11 @@ var sim: Simulation
 var condition := {}        # Gebaeude-ID (int) -> Zustand
 var spent_city := 0.0      # von Eigentuemern in Stadtgebaeude gesteckt
 var district_log: Array = []   # [[Monat, [Mittelwert je Viertel]]]
+## Sichtbare Handwerkereinsaetze (Auftrag 23): Gebaeude-ID -> {von, bis, art}. Die monatliche Pflege der Eigentuemer wird ueber den
+## Monat verteilt als Einsatz gezeigt (Maler am Geruest, Dachdecker, Fensterbauer); nur Darstellung, keine zweite Buchung.
+var works := {}
+const WORK_KINDS := ["fassade", "dach", "fenster"]
+const WORK_SHARE := 4        # jedes vierte gepflegte Gebaeude bekommt einen sichtbaren Einsatz
 
 
 func setup(s: Simulation) -> void:
@@ -28,6 +33,9 @@ func setup(s: Simulation) -> void:
 	for b in s.city.buildings:
 		if _tracked(b):
 			condition[int(b.id)] = START_MIN + float(absi(hash("%d_%d" % [s.city.seed_value, b.id])) % 100) / 100.0 * (START_MAX - START_MIN)
+	for id in condition:
+		if float(condition[id]) < 85.0:
+			_plan_work(int(id), 0, s.game_min)
 
 
 static func _tracked(b: Dictionary) -> bool:
@@ -74,6 +82,7 @@ func on_month(_month: int) -> void:
 		if comfort > 0.0 and float(condition[id]) < 85.0:
 			repair = 2.4 * comfort * wobble
 			paid += CITY_UPKEEP_PER_BUILDING * comfort
+			_plan_work(int(id), _month, sim.game_min)
 		condition[id] = clampf(float(condition[id]) - decay + repair, 0.0, 100.0)
 	if paid > 0.0:
 		sim.economy.transfer("H0", "S0", paid)
@@ -91,6 +100,32 @@ func on_month(_month: int) -> void:
 	district_log.append([_month, district_means()])
 	if district_log.size() > 120:
 		district_log.pop_front()
+
+
+## Einsatz fuer ein gepflegtes Gebaeude einplanen: an einem Tag des Monats (Werktag, 7-16 Uhr), 1-3 Tage lang.
+func _plan_work(id: int, month: int, now: float) -> void:
+	var hsh := absi(hash("care_%d_%d" % [id, month]))
+	if hsh % WORK_SHARE != 0:
+		return
+	for k in works.keys():   # abgelaufene Einsaetze entfernen
+		if float(works[k].bis) < now:
+			works.erase(k)
+	var days := maxi(1, GameCalendar.days_left_in_month(now))
+	var start := GameCalendar.day_start(GameCalendar.day_of(now) + (hsh / 7) % days)
+	works[id] = {"von": start, "bis": start + GameCalendar.days_to_min(float(1 + (hsh / 13) % 3)), "art": WORK_KINDS[(hsh / 3) % WORK_KINDS.size()]}
+
+
+## Einsaetze, an denen gerade gearbeitet wird (Arbeitszeit 7-16 Uhr): [[Gebaeude-ID, Einsatz], ...]
+func active_works(now: float) -> Array:
+	var h := GameCalendar.hour_of(now)
+	if h < 7.0 or h >= 16.0:
+		return []
+	var out: Array = []
+	for id in works:
+		var w: Dictionary = works[id]
+		if now >= float(w.von) and now < float(w.bis):
+			out.append([id, w])
+	return out
 
 
 ## Mittlerer Gebaeudezustand je Stadtviertel.
