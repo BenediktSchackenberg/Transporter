@@ -375,6 +375,44 @@ func _run_dispatch_help() -> void:
 	stats["dispatch_help"] = int(stats.get("dispatch_help", 0)) + 1
 
 
+## Bauleitung (Auftrag 23): Partien 14.11.: die lokalen Modelle bauten nie (kein create_stone_work, free_build oder hub_buy in
+## Tausenden Aktionen), obwohl der Prompt dazu aufruft; Naturstein im Grosslager blieb liegen. Die Bauleitung holt fehlendes Material
+## fuer laufende Bauten beim Grosslager und beginnt - nur wenn die Firma seit BUILD_IDLE_DAYS selbst nichts gebaut hat und Geld ueber
+## der Reserve hat - ein eigenes Werk oder Bauwerk. Was gebaut wird (Form, Motiv, Material, Farben), entscheidet die Bau-KI nach der
+## Persoenlichkeit der Firma (RuleBrain._free_build/_stone_work). Hoechstens alle BUILD_HELP_MIN Spielminuten.
+const BUILD_HELP_MIN := 360.0
+const BUILD_IDLE_DAYS := 3.0
+var _build_help_min := -1.0e9
+
+
+func _run_build_help() -> void:
+	if sim.game_min - _build_help_min < BUILD_HELP_MIN or sim.stone == null or sim.freebuild == null:
+		return
+	_build_help_min = sim.game_min
+	var c := sim.company(cid)
+	if c == null or not c.is_active():
+		return
+	var obs := {"steinbauten": sim.stone.obs_of(cid), "freibau": sim.freebuild.obs_of(cid), "ich": {"firma": c.company_name}}
+	var buffer: float = RuleBrain.BUFFER.get(c.personality, 12000.0)
+	var idle_days := (sim.game_min - float(sim.executor.last_act.get("%d:bau" % cid, -1.0e9))) / GameCalendar.days_to_min(1.0)
+	var own_idle := idle_days >= BUILD_IDLE_DAYS
+	var acts: Array = []
+	var reasons: Array = []
+	RuleBrain._free_build(obs, c.ledger.cash, buffer, c.personality, _fallback_rng, acts, reasons)   # Material holen oder neuer Entwurf
+	if not own_idle:
+		acts = acts.filter(func(a): return str(a.action) == "hub_buy")   # neue Bauten entscheidet die Firma vorerst selbst
+	if own_idle and acts.is_empty():
+		RuleBrain._stone_work(obs, c.ledger.cash, buffer, c.personality, _fallback_rng, acts, reasons)
+	for i in acts.size():
+		var a: Dictionary = acts[i]
+		var key := "p%d:bl%d:%d" % [cid, int(sim.game_min), i]
+		var res := sim.executor.execute(cid, a, key, "fallback")
+		api_log.write({"type": "action", "player": cid, "key": key, "source": "Bauleitung", "action": a, "ok": res.ok, "msg": str(res.get("msg", ""))})
+		if res.ok:
+			stats["build_help"] = int(stats.get("build_help", 0)) + 1
+			sim.log_event("Bauleitung %s: %s" % [c.company_name, reasons[i] if i < reasons.size() else str(a.action)], "ai", cid)
+
+
 const PASSIVE := ["wait", "send_message", "inspect_resource", "request_progress_report", "update_plan_step", "remember", "forget"]
 
 
@@ -487,6 +525,8 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 	sim.memory.add_event(cid, "ausfuehrung", "%d Aktionen ausgeführt, %d abgelehnt" % [effective, actions.size() - effective])
 	# Kleine lokale Modelle scheitern oft an Pflichtangaben: blieb die Runde wirkungslos oder steht ein Fahrzeug still, setzt die Disposition (Regeln) die
 	# Fahrzeuge und Arbeiter ein, damit sie nicht untaetig herumstehen. Eigene Strategie und Investitionen bleiben beim Modell.
+	if source == "KI":
+		_run_build_help()
 	if source == "KI" and _dispatch_help_on():
 		var idle_vehicle: bool = sim.company_vehicles(cid).any(func(v): return v.state == "idle" and v.stops.is_empty() and v.contract_id == "")
 		if effective == 0 or idle_vehicle:   # auch wenn nur "abgewartet"-Aktionen gelangen, aber Fahrzeuge herumstehen

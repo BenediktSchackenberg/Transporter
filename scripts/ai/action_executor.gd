@@ -362,6 +362,8 @@ func execute(cid: int, action: Dictionary, key: String = "", origin: String = "a
 	r = _done(cid, key, name, r)
 	if r.ok:
 		last_act[cid] = [name, sim.game_min]   # Portraet zeigt die letzte Taetigkeit (Auftrag 23)
+		if name in ["create_stone_work", "free_build"]:
+			last_act["%d:bau" % cid] = sim.game_min   # Bauleitung: wann hat die Firma zuletzt selbst einen Bau begonnen?
 	sim.decisions.record(cid, origin, action, r, key)
 	return r
 

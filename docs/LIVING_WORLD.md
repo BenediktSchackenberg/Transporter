@@ -61,3 +61,8 @@ mehrere hundert Bürger. Deshalb:
    Gründen. Folgen: erschöpft → krankgemeldet, müde → abends kein Ausgehen, frustriert → Jobsuche nach der Arbeit und häufiger Stellen-
    wechsel bzw. Kündigung, verärgert → Beschwerde im Rathaus (kostet Zustimmung). Zeichen über dem Kopf (Zzz, ?, !!), Gemüt mit Gründen
    in der Auswahl, `buergerleben.stimmung` im Lagebild des Bürgermeisters. Test: `test_citizen_mood`.
+9. **Bauleitung für Modell-Firmen:** In den Partien vom 14.11. bauten die lokalen Modelle nie (kein `create_stone_work`, `free_build`
+   oder `hub_buy`), Naturstein im Großlager blieb liegen. Die Bauleitung (`AgentController._run_build_help`, höchstens alle 6 Spiel-
+   stunden) holt fehlendes Material für laufende Bauten beim Großlager und beginnt, wenn die Firma seit 3 Tagen selbst nichts gebaut
+   hat und Geld über der Reserve liegt, ein Werk oder freies Bauwerk; Entwurf nach Persönlichkeit (`RuleBrain._free_build/_stone_work`).
+   Im Partie-Log mit `source: "Bauleitung"`. Test: `test_build_help`; Ursachensuche: `tests/probe_build_why.gd`.
