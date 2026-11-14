@@ -386,3 +386,11 @@ Eine Baufirma setzt instand (Bautrupp an der Abschnittsmitte), danach 100 %. Anz
 `gleiszustand` in `summary()` (Bürgermeister-Beobachtung `bahn`). Gespeichert: `condition`, `repairs`. Gemessen: nur Regionalbahn
 ~0,5 %/Tag je Abschnitt (bei 1,0/Fahrt) → Instandsetzung nach gut zwei Spielmonaten, mit Güterzug früher. Test `test_rail_wear` (13).
 Nächster Schritt 4: private Güterverkehrsfirmen (Trassen/Wagen buchen).
+
+**Phase 7 Schritt 4 Unternehmen buchen Wagenplatz (14.11.):** `hub_buy` mit `bahn: true` – liegt das Depot der Firma in einer Stadt
+mit Bahnhof und fährt ein Güterzug, wartet die Ware am Güterbahnhof (`CentralHub._book_rail`, Status `bahn_wartet` → `bahn` →
+`abholbereit`). Die Firma zahlt 60 % der Lkw-Fracht als Bahnfracht an N0. Nach dem Entladen bekommt sie einen exklusiven
+Abholauftrag vom Bahnhof zum eigenen Depot (kurzer Weg statt Fahrt zum Großlager). Firmen-Sendungen laufen in derselben
+Warteschlange wie die Stadtlager (Präfix `hub:`). Kommt binnen 10 Tagen kein Zug, Abholung im Großlager. Ohne Güterzug wird die
+Bahnbuchung abgelehnt. Test `test_rail_company_freight` (13). Eigene Wagen/Loks privater Firmen sind nicht umgesetzt – Firmen
+buchen Plätze im Zug der Regionalbahngesellschaft. Damit ist Phase 7 abgeschlossen.

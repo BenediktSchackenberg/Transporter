@@ -117,7 +117,7 @@ static func _loads(qty: int) -> int:
 
 # ------------------------------------------------------------------ Kaufen und Verkaufen
 ## Kauf durch ein Unternehmen ("C<n>") oder eine Stadt (Konto der Stadt, Towns.account_of). Ziel: Gebaeude-ID der Anlieferung.
-func buy(buyer: String, item: String, qty: int, dest: int, note: String = "") -> Dictionary:
+func buy(buyer: String, item: String, qty: int, dest: int, note: String = "", rail: bool = false) -> Dictionary:
 	if not enabled:
 		return {"ok": false, "msg": "Es gibt kein Großlager auf dieser Karte."}
 	if not GOODS.has(item):
@@ -131,6 +131,9 @@ func buy(buyer: String, item: String, qty: int, dest: int, note: String = "") ->
 	var unit := price(item)
 	var amount := snappedf(unit * float(qty), 0.01)
 	var company := buyer.begins_with("C")
+	var by_rail: bool = rail and company and sim.trains != null and sim.trains.accepts_freight(sim.towns.of_building(dest))
+	if rail and not by_rail:
+		return {"ok": false, "msg": "Kein Güterzug zum Bahnhof deiner Stadt – ohne bahn kaufen (Abholung im Großlager)."}
 	if company:
 		var c = sim.company(int(buyer.substr(1)))
 		if c == null or not c.is_active():
@@ -152,10 +155,46 @@ func buy(buyer: String, item: String, qty: int, dest: int, note: String = "") ->
 	demand[item] = float(demand.get(item, 0.0)) + float(qty)
 	stats.umsatz = float(stats.umsatz) + amount
 	stats.verkaeufe = int(stats.verkaeufe) + 1
+	if by_rail:
+		return _book_rail(d)
 	_issue(d, loc, dest, buyer if company else "")
 	sim.log_event("Großlager: %s kauft %d × %s für %s." % [_party_name(buyer), qty, item_name(item), Catalog.money(amount)], "info")
 	return {"ok": true, "msg": "Gekauft: %d × %s für %s (%s je Einheit). %s" % [qty, item_name(item), Catalog.money(amount), Catalog.money(unit),
 		"Abholung mit eigenem Fahrzeug: Auftrag %s." % d.contract if company else "Transportauftrag %s ist ausgeschrieben." % d.contract], "ref": id, "contract": d.contract}
+
+
+## Phase 7 Schritt 4: Unternehmen buchen Wagenplatz im Gueterzug bis zum Bahnhof ihrer Stadt (Bahnfracht = RAIL_SHARE der Lkw-Fracht
+## an die Regionalbahngesellschaft); die letzte Meile faehrt die Firma selbst (exklusiver Auftrag Bahnhof -> eigenes Depot).
+func _book_rail(d: Dictionary) -> Dictionary:
+	var c = sim.company(int(str(d.party).substr(1)))
+	var fee := snappedf(freight(loc, int(d.dest), int(d.qty)) * CityDepot.RAIL_SHARE, 1.0)
+	fee = minf(fee, maxf(0.0, c.ledger.cash))
+	c.ledger.book("supplies", -fee, true, "Bahnfracht Güterzug %s" % d.id, sim.game_min, RailTraffic.ACCT)
+	d["bahnfracht"] = fee
+	d["bahn_day"] = _today()
+	d.status = "bahn_wartet"
+	var town: int = sim.towns.of_building(int(d.dest))
+	sim.trains.queue_freight(town, "hub:" + str(d.id), str(d.item), int(d.qty))
+	sim.log_event("Großlager: %s kauft %d × %s für %s – per Güterzug nach %s (Bahnfracht %s)." % [_party_name(str(d.party)), int(d.qty),
+		item_name(str(d.item)), Catalog.money(float(d.price)), sim.towns.name_of(town), Catalog.money(fee)], "info")
+	return {"ok": true, "msg": "Gekauft: %d × %s für %s; Wagenplatz im Güterzug nach %s gebucht (Bahnfracht %s). Am Bahnhof holst du die Ware mit eigenem Fahrzeug ab (Auftrag kommt bei Ankunft)." % [
+		int(d.qty), item_name(str(d.item)), Catalog.money(float(d.price)), sim.towns.name_of(town), Catalog.money(fee)], "ref": d.id}
+
+
+## Gueterzug hat verladen bzw. am Bahnhof entladen (RailTraffic._load/_unload).
+func rail_loaded(id: String) -> void:
+	if deals.has(id) and str(deals[id].status) == "bahn_wartet":
+		deals[id].status = "bahn"
+
+
+func rail_arrived(id: String, station_b: int) -> void:
+	var d: Dictionary = deals.get(id, {})
+	if d.is_empty() or str(d.status) not in ["bahn", "bahn_wartet"]:
+		return
+	d.status = "abholbereit"
+	d["am_bahnhof"] = station_b
+	_issue(d, station_b, int(d.dest), str(d.party))
+	sim.log_event("Großlager-Sendung %s liegt am Bahnhof %s zur Abholung bereit (Auftrag %s)." % [id, sim.towns.name_of(sim.towns.of_building(station_b)), d.contract], "info", int(str(d.party).substr(1)))
 
 
 ## Verkauf eines Unternehmens an das Lager: Ware aus dem eigenen Depot, Anlieferung mit eigenem Fahrzeug, Zahlung bei Ankunft.
@@ -252,6 +291,13 @@ func on_day(day: int) -> void:
 		if have < int(float(t) * RESTOCK_AT):
 			_restock(item, t - have)
 	_watch(day)
+	for id in deals.keys():   # Gueterzug kommt nicht (Strecke gesperrt, kein Zug): doch Abholung im Grosslager
+		var dd: Dictionary = deals[id]
+		if str(dd.status) == "bahn_wartet" and day - int(dd.get("bahn_day", day)) > CityDepot.RAIL_WAIT_DAYS:
+			sim.trains.unqueue("hub:" + str(id))
+			dd.status = "abholbereit"
+			_issue(dd, loc, int(dd.dest), str(dd.party))
+			sim.log_event("Großlager-Sendung %s: Güterzug kommt nicht – Abholung im Großlager (Auftrag %s)." % [id, dd.contract], "warn", int(str(dd.party).substr(1)))
 	for id in deals.keys():
 		if deals[id].status in ["geliefert", "storniert"] and day - int(deals[id].get("done", deals[id].day)) > 30:
 			deals.erase(id)

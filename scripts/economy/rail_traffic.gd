@@ -322,6 +322,9 @@ func _load(t: Dictionary) -> bool:
 		cargo.append(x)
 		units += int(x.qty)
 		freight_queue.erase(x)
+		if str(x.order).begins_with("hub:"):   # Wagen eines Unternehmens (Phase 7 Schritt 4)
+			sim.hub.rail_loaded(str(x.order).trim_prefix("hub:"))
+			continue
 		var o: Dictionary = sim.towns.depot(best).orders.get(str(x.order), {})
 		if not o.is_empty():
 			o.status = "bahn"
@@ -339,6 +342,9 @@ func _unload(t: Dictionary, s: int) -> void:
 	var st: Dictionary = sim.rail.station_of(k)
 	var road: Vector2i = sim.city.building(int(st.building)).road if not st.is_empty() else Vector2i.ZERO
 	for x in t.get("cargo", []):
+		if str(x.order).begins_with("hub:"):
+			sim.hub.rail_arrived(str(x.order).trim_prefix("hub:"), int(st.building))
+			continue
 		sim.towns.depot(int(x.town)).rail_arrived(str(x.order), road)
 	if not t.get("cargo", []).is_empty():
 		sim.log_event("Güterzug %s entlädt %d Einheiten in %s." % [t.id, int(t.ladung), sim.towns.name_of(k)], "good")
