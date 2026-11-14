@@ -249,6 +249,20 @@ func _find_site(cid: int, w: int, h: int) -> Dictionary:
 				if not _touches_road(r):
 					continue
 				return {"rect": [r.position.x, r.position.y, w, h], "parcel": str(p.id)}
+	# Gruender haben kein Startgrundstueck, sondern eigene Parzellen (gekauft/gepachtet fuer ihre Betriebe);
+	# dort ist frei, was kein Gebaeude traegt (EventDirector._free prueft Gebaeude, Sperren, Wasser und Strassenzugang).
+	if sim.parcels == null:
+		return {}
+	var occ2 := _occupied_cells(cid)
+	for p in sim.parcels.items.values():
+		if str(p.owner) != "C%d" % cid:
+			continue
+		var pr := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
+		for y in range(pr.position.y, pr.end.y - h + 1):
+			for x in range(pr.position.x, pr.end.x - w + 1):
+				var r := Rect2i(x, y, w, h)
+				if _cells_free(r, occ2) and sim.events._free(r):
+					return {"rect": [r.position.x, r.position.y, w, h], "parcel": str(p.id)}
 	return {}
 
 
