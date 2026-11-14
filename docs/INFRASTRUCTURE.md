@@ -394,3 +394,26 @@ Abholauftrag vom Bahnhof zum eigenen Depot (kurzer Weg statt Fahrt zum Großlage
 Warteschlange wie die Stadtlager (Präfix `hub:`). Kommt binnen 10 Tagen kein Zug, Abholung im Großlager. Ohne Güterzug wird die
 Bahnbuchung abgelehnt. Test `test_rail_company_freight` (13). Eigene Wagen/Loks privater Firmen sind nicht umgesetzt – Firmen
 buchen Plätze im Zug der Regionalbahngesellschaft. Damit ist Phase 7 abgeschlossen.
+
+**Phase 4 Schritte 2–5 Wasser (14.11.):** alles in `WaterSupply` (`scripts/economy/water_supply.gd`).
+- **Schritt 2 Leitungsnetz/Druckzonen/Hochbehälter:** Leitungen unter den Straßen der Stadt; Druck reicht `ZONE_RANGE` 40
+  Straßenfelder ab Wasserwerk und jedem Hochbehälter (Breitensuche, `compute_net`). Gebäude, deren Straßenfeld nicht im Netz liegt,
+  sind unversorgt: Haushalte zählen als „ohne Anschluss“ (kein Bezug, keine Gebühr), Betriebe blockiert („Keine Wasserleitung“),
+  Einrichtungen ohne Bedarf. Neuer Municipal-Typ `WT-01` Hochbehälter (Gebäude `water_tank` 2×2, Sprites `pub_ht_*`: Grashügel,
+  Wasserturm, Rundbehälter, Doppelkammer, Pilzturm, Hügel mit Schieberhaus; ohne Personal), Startausstattung jeder Stadt.
+  Vorrat = Kapazität (m³, wächst mit den Einwohnern); Überschuss füllt ihn, bei Stromausfall des Werks liefert er weiter.
+- **Schritt 3 Rohrbrüche:** 2 %/Tag je Stadt, bei Kälte 8 %; Schieber sperren den Straßenabschnitt (3 Felder je Richtung) um die
+  Bruchstelle, dahinter kein Druck; 4 m³/Tag Verlust. Wassertrupp (CityFleet `wassertrupp`, Baustellenfahrzeug mit Rundumlicht)
+  fährt vom Wasserwerk hin, repariert 60 Spielminuten vor Ort, 2 500 € aus der Stadtkasse.
+- **Schritt 4 Kanal und Kläranlage:** Abwasser (90 %) der angeschlossenen Gebäude fließt zur gemeinsamen Kläranlage der Region
+  (`KA-01`, Gebäude `sewage_plant` 4×3, Sprites `pub_ka_*`: Belebungs-/Nachklärbecken, Faultürme, Schilfbeete; regionale
+  Startausstattung in der größten Stadt). Kosten nach Abwasseranteil (`shares` monatlich neu), Abwassergebühr je Stadt
+  kostendeckend (1–6 €/m³, Start 1,80) für Haushalte und Betriebe. Reicht die Leistung nicht (Kapazität × Besetzung, ohne Strom 0),
+  läuft der Rest ungeklärt über: Abwasserabgabe 1,50 €/m³ an das Land.
+- **Schritt 5 Ausbau:** Wasserwerk mit Bedarf > 85 % der Leistung, Hochbehälter kleiner als ein Tagesbedarf oder Kläranlage mit
+  Zulauf > 85 % – jeweils 5 Tage in Folge – schreibt der Betreiber einen Ausbau aus (Projekt `wasserausbau`, 40 % der Neubaukosten,
+  12 Tage, Kläranlage nach Abwasseranteilen); nach Abnahme durch die Baufirma Kapazität ×1,5. Bürgermeister-Beobachtung `wasser`
+  (Bedarf, Leistung, Fehlmenge, ohne Anschluss, Vorrat, Rohrbruch, Gebühren, Kläranlage, Ausbau). Anzeige im Strom-Tab.
+Tests `test_water_network` (21), `test_water_supply` angepasst (Abwassergebühr, Hochbehälter vor dem Stromausfall leeren),
+`test_municipal` (Hochbehälter ohne Personal). Grenzen: Ausbau entscheidet der Betreiber automatisch, nicht die Bürgermeister-KI;
+Druckzonen nur über Straßenentfernung, ohne Höhenlage.

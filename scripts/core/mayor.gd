@@ -341,6 +341,7 @@ func indicators() -> Dictionary:
 		"rivalitaet": sim.rivalry.mayor_summary(),
 		"strom": sim.grid.summary(),
 		"bahn": sim.trains.summary() if sim.trains != null and not sim.trains.path.is_empty() else {},
+		"wasser": sim.water.mayor_view(town) if sim.water != null and sim.water.enabled() else {},
 		"erschliessung": access_indicators(),
 		"bergbau": _own_mining(),
 		"region": _region_obs(),

@@ -1255,6 +1255,15 @@ static func water(sim: Simulation) -> String:
 			txt += "  seit Beginn %.0f m³ · Gebühren Haushalte %s, Betriebe %s · Engpasstage %d
 " % [float(g.m3), Catalog.money(float(g.haushalte_eur)),
 				Catalog.money(float(g.betriebe_eur)), int(g.engpass_tage)]
+		txt += "  Netz %d Straßenfelder · Hochbehälter %.0f/%.0f m³ · ohne Anschluss %d Einwohner · Abwassergebühr %.2f €/m³%s\n" % [int(h.get("netz_felder", 0)),
+			float(h.get("speicher", 0.0)), float(h.get("speicher_max", 0.0)), int(h.get("ohne_anschluss", 0)), float(w.abwasser_eur_m3),
+			" · Ausbau im Bau" if int(w.ausbau_laeuft) > 0 else ""]
+		if bool(h.get("rohrbruch", false)):
+			txt += "  [color=#e05040]Rohrbruch: Netzabschnitt ohne Wasser, %.1f m³ Verlust – Wassertrupp unterwegs[/color]\n" % float(h.get("leck", 0.0))
+	var pl: Dictionary = sim.water.plant_last
+	if not pl.is_empty():
+		txt += "%s (Region): Zulauf %.1f m³, geklärt %.1f m³ von %.0f m³ Leistung%s\n" % [str(pl.name), float(pl.zulauf), float(pl.geklaert), float(pl.leistung),
+			" · [color=#e05040]Überlauf %.1f m³ (%s)[/color]" % [float(pl.ueberlauf), str(pl.grund) if str(pl.grund) != "" else "Kapazität erschöpft"] if float(pl.ueberlauf) > 0.0 else ""]
 	return txt
 
 

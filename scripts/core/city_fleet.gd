@@ -135,6 +135,18 @@ func update(dt: float) -> void:
 			elif str(v.phase) == "rueckfahrt":
 				vehicles.erase(v)
 			continue
+		if v.kind == "wassertrupp":   # Auftrag 22 Phase 4 Schritt 3: Rohrbruch erst ab Ankunft vor Ort reparieren
+			if str(v.phase) == "anfahrt":
+				v.phase = "arbeit"
+				v.until = now + WaterSupply.REPAIR_MIN
+			elif str(v.phase) == "arbeit" and now >= float(v.until):
+				sim.water.repaired(int(v.town))
+				v.phase = "rueckfahrt"
+				if not sim.route(m, v.back):
+					vehicles.erase(v)
+			elif str(v.phase) == "rueckfahrt":
+				vehicles.erase(v)
+			continue
 		if v.kind == "netztrupp":   # Auftrag 22 Phase 3: Reparatur der Hochspannungstrasse erst ab Ankunft vor Ort
 			if str(v.phase) == "anfahrt":
 				v.phase = "arbeit"

@@ -307,6 +307,10 @@ func _site_of(kind: String, id: String) -> Vector2i:
 			var m: Vector2i = sim.grid.net.planned_mid(id)
 			if m.x >= 0:
 				return nearest_road(m, 60)
+		"wasserausbau":   # Auftrag 22 Phase 4 Schritt 5: an der Einrichtung
+			var wf: Dictionary = sim.municipal.facilities.get(str(prj.ref), {})
+			if not wf.is_empty():
+				return nearest_road(Vector2i(sim.city.building(int(wf.building)).road))
 		"bruecke":
 			var b: Dictionary = sim.bridges.items.get(str(prj.bridge), {})
 			if not b.is_empty():

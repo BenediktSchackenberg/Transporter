@@ -65,6 +65,8 @@ def init():
     mat("pub_heli", "#3d4a3f", noise=0.03)
     mat("pub_wblue", "#2f78b7", noise=0.03)       # Kennfarbe Wasserwerk (Auftrag 22 Phase 4)
     mat("pub_wblue2", "#26649a", noise=0.03)
+    mat("pub_sludge", "#6b5a3a", noise=0.08)      # Klaeranlage: Belebungsbecken/Schlamm (Auftrag 22 Phase 4 Schritt 4)
+    mat("pub_sludge2", "#7d6c48", noise=0.08)
 
 
 # ------------------------------------------------------------------ Bausteine
@@ -1283,3 +1285,128 @@ def freight_depot_v(v, st, seed):
 
 TYPES.update({"freight_depot": ("gb", 4, 2), "freight_depot_v": ("gbv", 2, 4)})
 BUILDERS.update({"freight_depot": freight_depot, "freight_depot_v": freight_depot_v})
+
+
+# ------------------------------------------------------------------ Auftrag 22 Phase 4 Schritt 2/4: Hochbehaelter und Klaeranlage
+def water_tank(v, st, seed):
+    """Hochbehaelter 2x2 (Druckzone): Grashuegel, Wasserturm, Rundbehaelter, Pilzturm; sechs Grundformen."""
+    rng = random.Random(seed)
+    W, H = 2 * T, 2 * T
+    m = Model(W, H, 90)
+    ground(m, st, W, H, seed)
+    top = 30
+    if v == 0:      # erdueberdeckter Behaelter mit Tuerbau
+        _mound(m, 4, 4, 60, 56, 9)
+        top = 12
+    elif v == 1:    # klassischer Wasserturm: Schaft und breiter Kopf
+        tower(m, st, 26, 26, 12, 46, rng, cap="pub_wblue")
+        _tank(m, 32, 32, 14, 62, "pub_white")
+        for z in range(1, 47):   # Kopf erst ab Schafthoehe: unten freiraeumen
+            for x in range(18, 47):
+                for y in range(18, 47):
+                    if not (26 <= x < 38 and 26 <= y < 38):
+                        m.put(x, y, z, 0)
+        top = 66
+    elif v == 2:    # niedriger Rundbehaelter mit Kennband
+        _tank(m, 32, 30, 22, 22)
+        top = 26
+    elif v == 3:    # zwei Kammern nebeneinander
+        _tank(m, 18, 30, 13, 20)
+        _tank(m, 46, 30, 13, 20)
+        top = 24
+    elif v == 4:    # Pilz-Wasserturm aus Beton
+        m.box(28, 28, 1, 36, 36, 44, M("concrete"))
+        for z in range(44, 58):
+            r = min(18, 4 + (z - 44) * 2)
+            for x in range(32 - r, 32 + r):
+                for y in range(32 - r, 32 + r):
+                    if (x - 32) ** 2 + (y - 32) ** 2 <= r * r:
+                        m.put(x, y, z, M("pub_wblue" if z in (52, 53) else "concrete"))
+        top = 60
+    else:           # Huegel mit kleinem Schieberhaus
+        _mound(m, 2, 2, 46, 46, 8)
+        house(m, st, 40, 40, 62, 62, 1, rng)
+        top = 20
+    fence(m, 0, H - 2, W, H, 1, h=5, mat_f="steel")
+    return m, {"w": 2, "h": 2, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": top}
+
+
+def _clarifier(m, cx, cy, r):
+    """Rundes Nachklaerbecken mit Raeumerbruecke."""
+    for x in range(cx - r, cx + r + 1):
+        for y in range(cy - r, cy + r + 1):
+            d = (x - cx) ** 2 + (y - cy) ** 2
+            if d <= r * r:
+                m.box(x, y, 1, x + 1, y + 1, 5, M("concrete"))
+                if d <= (r - 2) ** 2:
+                    m.put(x, y, 4, M("water" if (x + y) % 7 else "water2"))
+    m.box(cx - r, cy - 1, 5, cx + r, cy + 1, 7, M("steel"))
+    m.box(cx - 1, cy - 1, 1, cx + 2, cy + 2, 8, M("steel_dark"))
+
+
+def _digester(m, cx, cy, r, h):
+    """Faulturm (Ei-Form angenaehert)."""
+    for z in range(1, h):
+        rr = int(r * (1.0 - abs(z - h * 0.45) / (h * 0.75)))
+        rr = max(3, rr)
+        for x in range(cx - rr, cx + rr + 1):
+            for y in range(cy - rr, cy + rr + 1):
+                if (x - cx) ** 2 + (y - cy) ** 2 <= rr * rr:
+                    m.put(x, y, z, M("pub_clad" if z % 12 else "steel_dark"))
+
+
+def sewage_plant(v, st, seed):
+    """Klaeranlage 4x3: Belebungsbecken, Nachklaerbecken, Faultuerme, Betriebsgebaeude; sechs Grundformen."""
+    rng = random.Random(seed)
+    W, H = 4 * T, 3 * T
+    m = Model(W, H, 60)
+    ground(m, st, W, H, seed)
+    d = "pub_wblue"
+    def aeration(x0, y0, x1, y1):
+        _basin(m, x0, y0, x1, y1)
+        for x in range(x0 + 2, x1 - 2):
+            for y in range(y0 + 2, y1 - 2):
+                m.put(x, y, 4, M("pub_sludge" if (x * 3 + y) % 5 else "pub_sludge2"))
+    if v == 0:      # zwei Belebungsbecken hinten, zwei Rundbecken vorne, Betriebshaus rechts
+        aeration(6, 6, 56, 44)
+        aeration(60, 6, 98, 44)
+        _clarifier(m, 26, 70, 16)
+        _clarifier(m, 64, 70, 16)
+        house(m, st, 100, 8, 124, 40, 2, rng)
+    elif v == 1:    # Faultuerme links, Becken rechts
+        _digester(m, 16, 24, 11, 40)
+        _digester(m, 16, 66, 11, 40)
+        aeration(36, 6, 122, 44)
+        _clarifier(m, 56, 70, 16)
+        hall(m, st, 80, 54, 122, 88, 14, 1, d, rng, band="pub_wblue")
+    elif v == 2:    # langes Becken quer, drei kleine Rundbecken
+        aeration(6, 6, 122, 36)
+        for i, cx in enumerate((22, 60, 98)):
+            _clarifier(m, cx, 64, 13)
+    elif v == 3:    # Halle hinten (Rechen/Sandfang), Becken vorne, Faulturm rechts
+        hall(m, st, 6, 6, 88, 40, 18, 2, d, rng, band="pub_wblue")
+        _digester(m, 108, 24, 12, 44)
+        aeration(6, 50, 70, 88)
+        _clarifier(m, 98, 70, 16)
+    elif v == 4:    # kompakt: ein grosses Rundbecken, Becken und Haus
+        _clarifier(m, 30, 30, 24)
+        aeration(62, 6, 122, 52)
+        house(m, st, 8, 60, 44, 88, 2, rng)
+        _basin(m, 62, 58, 122, 88)
+    else:           # Pflanzenklaeranlage: Schilfbeete und Haus
+        for i in range(3):
+            x0 = 6 + i * 40
+            m.box(x0, 6, 1, x0 + 36, 60, 3, M("concrete"))
+            for x in range(x0 + 2, x0 + 34):
+                for y in range(8, 58):
+                    m.put(x, y, 3, M("grass3" if (x + y) % 3 else "grass"))
+        house(m, st, 8, 64, 48, 88, 1, rng)
+        _basin(m, 56, 64, 122, 88)
+    fence(m, 0, H - 2, 44, H, 1, h=6, mat_f="steel")
+    fence(m, 84, H - 2, W, H, 1, h=6, mat_f="steel")
+    greenery(m, st, [(124, 90), (4, 50)], rng)
+    return m, {"w": 4, "h": 3, "entrance": [64, H], "delivery": [64, H], "height": 46}
+
+
+TYPES.update({"water_tank": ("ht", 2, 2), "sewage_plant": ("ka", 4, 3)})
+BUILDERS.update({"water_tank": water_tank, "sewage_plant": sewage_plant})

@@ -1187,6 +1187,8 @@ func _finish_public(e: Dictionary) -> void:
 		sim.waste.on_iv_done(prj)   # Auftrag 22 Phase 2 Schritt 5: Müllverbrennung
 	if prj.kind == "trasse":
 		sim.grid.net.on_line_done(prj)   # Auftrag 22 Phase 3 Schritt 4: Ringschluss Hochspannung
+	if prj.kind == "wasserausbau":
+		sim.water.on_expansion_done(prj)   # Auftrag 22 Phase 4 Schritt 5: Wasserwerk, Hochbehaelter, Klaeranlage
 	if prj.kind == "gleis":
 		sim.trains.on_track_done(prj)   # Auftrag 22 Phase 6 Schritt 5: zweites Gleis
 	if prj.kind == "hafenausbau":

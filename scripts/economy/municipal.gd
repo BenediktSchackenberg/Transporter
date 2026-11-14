@@ -79,6 +79,13 @@ const TYPES := {
 	"WW-01": {"label": "Wasserwerk", "dienst": "wasser", "ressort": "Umwelt", "building": "waterworks", "cost": 900000.0,
 		"upkeep": 120.0, "capacity": 300, "min_capacity": 40, "staff": {"wasserwerker": 4}, "min_staff": {"wasserwerker": 1}, "power": 150.0,
 		"water": 0.0, "vehicles": []},
+	# Auftrag 22 Phase 4 Schritt 2: Hochbehaelter (Druckzone, Vorrat in m3 = capacity), ohne eigenes Personal (Fernwirktechnik)
+	"WT-01": {"label": "Hochbehälter", "dienst": "wasser", "ressort": "Umwelt", "building": "water_tank", "cost": 350000.0,
+		"upkeep": 15.0, "capacity": 120, "min_capacity": 15, "staff": {}, "power": 3.0, "water": 0.0, "vehicles": []},
+	# Auftrag 22 Phase 4 Schritt 4: gemeinsame Klaeranlage der Region (capacity = Klaerleistung m3 je Spieltag)
+	"KA-01": {"label": "Kläranlage", "dienst": "abwasser", "ressort": "Umwelt", "building": "sewage_plant", "cost": 1200000.0,
+		"upkeep": 140.0, "capacity": 300, "min_capacity": 40, "regional": true, "staff": {"wasserwerker": 4}, "min_staff": {"wasserwerker": 1},
+		"power": 120.0, "water": 0.0, "vehicles": []},
 	# Auftrag 22 Phase 6 Schritt 3: Betrieb der Regionalbahn (Zweckverband aller Staedte, Sitz im Bahnhof der groessten Stadt). Je Zug ein
 	# Triebfahrzeugfuehrer im Dienst plus Reserve; Zugbegleiter kontrollieren Fahrkarten. Angelegt von RailTraffic, nicht Startausstattung.
 	"BG-01": {"label": "Regionalbahn", "dienst": "bahn", "ressort": "Verkehr", "building": "train_station", "cost": 0.0,
@@ -151,7 +158,7 @@ const STYLES := {
 	"industrie": "Industrie, Stahl und Wellblech",
 }
 const STYLE_OF_CHARACTER := {"Marktflecken": "backstein", "Handwerkerort": "industrie", "Fischerdorf": "gruen", "Bauerndorf": "gruen"}
-const START_KIT := ["FW-01", "RW-01", "BH-01", "AW-01", "RC-01", "WW-01"]
+const START_KIT := ["FW-01", "RW-01", "BH-01", "AW-01", "RC-01", "WW-01", "WT-01"]
 ## Finanzierung (Analyse 10.11.: die Dienste kosteten kleine Orte mehr als Landeszuweisung und Steuern zusammen):
 ## Rettungsdienst und Kliniken refinanzieren die Krankenkassen, die Flughafenfeuerwehr die Flughafenentgelte (ausserhalb der Region, X0) kostendeckend - Sachkosten, Fahrzeuge und
 ## Loehne kommen taeglich zurueck in die Stadtkasse (bzw. nach den Anteilen des Zweckverbands). Die Freiwillige Feuerwehr hat erst ab
@@ -164,7 +171,7 @@ static func refinanced(code: String) -> String:
 	if str(TYPES[code].dienst) in REFINANCED:
 		return "Krankenkassen"
 	return str(TYPES[code].get("refinanziert", ""))
-const REGIONAL_KIT := ["KH-01", "FW-06", "FW-05"]   # einmal je Region: Kreiskrankenhaus und Ausbildungszentrum in der einwohnerstaerksten Stadt,
+const REGIONAL_KIT := ["KH-01", "FW-06", "FW-05", "KA-01"]   # einmal je Region: Kreiskrankenhaus und Ausbildungszentrum in der einwohnerstaerksten Stadt,
                                                   # Flughafenfeuerwehr in der Wache des Flughafens (nur wenn es einen gibt)
 
 var sim
