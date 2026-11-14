@@ -876,6 +876,7 @@ func _proposal_vote(kind: String, cost: float, units: int, area: int, zone: Stri
 
 
 const QUARTER_RETRY_DAYS := 10
+const QUARTER_OPEN_MAX := 2        # so viele ueberwiegend unverkaufte Quartiere je Zone, bevor neue ausgewiesen werden
 ## Ab welchem Tag nimmt der Rat wieder Quartiersantraege dieser Zone an (nach einer Ablehnung)? Heute oder frueher = jetzt moeglich.
 func quarter_ok_day(zone: String) -> int:
 	var d := _today()
@@ -927,6 +928,24 @@ func _designate_quarter(a: Dictionary) -> Dictionary:
 		if pl.status == "abgelehnt" and str(pl.zone) == zone and _today() - int(pl.get("day", -999)) < QUARTER_RETRY_DAYS:
 			return {"ok": false, "msg": "Der Rat hat am Tag %d das Quartier '%s' abgelehnt (%s). Neue Quartiersanträge frühestens ab Tag %d – bis dahin Bestehendes entwickeln (offer_parcels, plan_infrastructure) oder die Gründe der Ablehnung angehen." % [
 				int(pl.day), pl.name, str(pl.vote).left(160), int(pl.day) + QUARTER_RETRY_DAYS]}
+	# Partie 14.11.: ein Modell-Buergermeister wies 38 Industrie- und 35 Gewerbegebiete aus, die alten blieben leer. Solange beschlossene
+	# Quartiere der Zone noch ueberwiegend unverkauft sind, erst diese vergeben.
+	var open_q: Array = []
+	var unsold := 0
+	for pl in plans.values():
+		if pl.status != "beschlossen" or str(pl.zone) != zone:
+			continue
+		var free_n := 0
+		for pid in pl.parcels:
+			var pp: Dictionary = sim.parcels.parcel(str(pid))
+			if not pp.is_empty() and Towns.is_public(str(pp.owner)):
+				free_n += 1
+		if free_n * 2 >= int(pl.parcels.size()):
+			open_q.append(str(pl.id))
+			unsold += free_n
+	if open_q.size() >= QUARTER_OPEN_MAX:
+		return {"ok": false, "already": true, "msg": "Es gibt schon %d Quartiere der Zone %s mit %d unverkauften Grundstücken (%s): erst diese vergeben (offer_parcels) oder erschließen (plan_infrastructure), dann neue ausweisen." % [
+			open_q.size(), zone, unsold, ", ".join(open_q.slice(0, 4))]}
 	var area := 0
 	for p in chk.parcels:
 		area += int(p.area)
@@ -974,15 +993,38 @@ func _plan_infrastructure(a: Dictionary) -> Dictionary:
 	var wanted: Array = a.get("parts", []) if a.get("parts") is Array else []
 	var cost := 0.0
 	var missing_total := 0
+	var per: Array = []   # [Kosten, Grundstueck]
 	for p in chk.parcels:
+		var pc := 0.0
 		for part in Planning.UTILITY_COST_CELL:
 			if not p.erschliessung.get(part, false) and (wanted.is_empty() or part in wanted):
-				cost += float(Planning.UTILITY_COST_CELL[part]) * float(p.area)
+				pc += float(Planning.UTILITY_COST_CELL[part]) * float(p.area)
 				missing_total += 1
 				if part not in parts:
 					parts.append(part)
+		if pc > 0.0:
+			per.append([pc, p])
+		cost += pc
 	if missing_total == 0:
 		return {"ok": false, "msg": "Alle gewünschten Anschlüsse liegen bereits an."}
+	var staged := ""
+	if cost > available_budget():
+		# Partie 14.11.: 11 Mal hintereinander an den Mitteln gescheitert. In Etappen erschliessen: die guenstigsten Grundstuecke,
+		# so viele die Mittel tragen.
+		per.sort_custom(func(x, y): return float(x[0]) < float(y[0]))
+		var keep: Array = []
+		var sum := 0.0
+		for e in per:
+			if sum + float(e[0]) > available_budget():
+				break
+			sum += float(e[0])
+			keep.append(e[1])
+		if keep.is_empty():
+			return {"ok": false, "msg": "Kosten %s übersteigen die verfügbaren Mittel %s; schon das günstigste Grundstück kostet %s. Erst Einnahmen abwarten (Grundstücksverkauf mit offer_parcels, Steuern)." % [
+				Catalog.money(cost), Catalog.money(available_budget()), Catalog.money(float(per[0][0]) if not per.is_empty() else cost)]}
+		staged = " Erste Etappe: %d von %d Grundstücken (Mittel reichen nicht für alle)." % [keep.size(), chk.parcels.size()]
+		chk.parcels = keep
+		cost = sum
 	var v := _proposal_vote("erschliessung", cost, 0, 0)
 	if not v.passed:
 		return {"ok": false, "msg": "Erschließung (%s) abgelehnt: %s" % [Catalog.money(cost), v.text]}
@@ -995,7 +1037,7 @@ func _plan_infrastructure(a: Dictionary) -> Dictionary:
 	projects[prj.id] = prj
 	for p in chk.parcels:
 		sim.parcels.mark(p.id, p.state, p.application)
-	return {"ok": true, "msg": "Projekt %s: Erschließung (%s) für %d Grundstücke, %s reserviert. %s" % [prj.id, ", ".join(parts), prj.parcels.size(), Catalog.money(cost), v.text], "ref": prj.id}
+	return {"ok": true, "msg": "Projekt %s: Erschließung (%s) für %d Grundstücke, %s reserviert. %s%s" % [prj.id, ", ".join(parts), prj.parcels.size(), Catalog.money(cost), v.text, staged], "ref": prj.id}
 
 
 func _prioritize_road(a: Dictionary) -> Dictionary:
