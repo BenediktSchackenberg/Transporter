@@ -456,4 +456,11 @@ der Wache nach dem Laden offen und die Streifenwagen für immer gebunden). Test 
   nach fünf Tagen Engpass; Beobachtung `infrastruktur_lage` (nur Abweichungen). Regel-Bürgermeister: Wassermangel → Ausbau mit
   Vorrang, Bedarf > 80 % → Ausbau, Langsamfahrstelle am eigenen Bahnhof → Gleisinstandsetzung.
 Test `test_infra_chain` (14). Damit sind die Phasen 1–8 von Auftrag 22 umgesetzt; illegale Müllablagerung und Ausbaustufen der
-Polizeiwache kamen am 14.11. dazu (siehe Phase 5); offen: Abnahmetests 1–12 als ein gemeinsamer Langlauf.
+Polizeiwache kamen am 14.11. dazu (siehe Phase 5).
+
+**Abnahmelauf (14.11.2026):** `tests/probe_infra_acceptance.gd -- --days=30` – vier Städte, alle Zufallsereignisse, Regel-Bürgermeister,
+danach 12 Prüfungen über alle Phasen (Müll mit Deponie und Waage, Wertstoffe/Recycling, Strom aus dem gemeinsamen Kraftwerk für alle
+Städte, Hochspannungsnetz, Trinkwasser je Stadt, Abwasser, Polizei mit Einsätzen, Bahnnetz, Regionalbahn mit Fahrgästen, kommunale
+Dienste mit Personal und Kosten, Lagebild, Speichern/Laden) plus Geldkonservierung. Seed 4242, 30 Tage, 31 s: 13 von 13 grün
+(203,9 t Deponie, 23 Wertstofftouren, 16 Zugfahrten mit 279 Fahrgästen, 9 illegale Ablagerungen, davon 5 aufgeklärt). Der
+Originaltext der Tests 1–12 liegt nicht mehr vor; die Prüfungen folgen den verbindlichen Punkten oben.
