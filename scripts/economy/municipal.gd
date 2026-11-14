@@ -471,6 +471,7 @@ func on_day(day: int) -> void:
 		for b in need:   # waechst mit der Stadt; schrumpft sie, wird niemand entlassen, nur nicht nachbesetzt
 			f.staff_need[b] = maxi(int(f.staff_need.get(b, 0)), int(need[b])) if int(need[b]) > 0 or not TYPES[f.code].has("pro_from_pop") else 0
 		_hire(f, by_id)
+		_honorar_fill(f, by_id)
 		_volunteers(f, vol)
 		_drivers(f, by_id)
 	_costs()
@@ -515,7 +516,50 @@ func staff_of(fid: String, by_id: Dictionary = {}) -> Array:
 
 
 func staff_count(fid: String, beruf: String = "") -> int:
-	return staff_of(fid).filter(func(p): return beruf == "" or str(p.beruf) == beruf).size()
+	var n := staff_of(fid).filter(func(p): return beruf == "" or str(p.beruf) == beruf).size()
+	var hon: Dictionary = facilities.get(fid, {}).get("honorar", {})
+	for b in hon:
+		if beruf == "" or b == beruf:
+			n += int(hon[b])
+	return n
+
+
+## Honorarkraefte (Auftrag 23): Aerzte und Pflege, die in der Region niemand stellen kann (test_health_stages: neues MVZ ohne Arzt,
+## ohne freie Wohnung keine Anwerbung). Sie pendeln von ausserhalb, fuellen nur die Mindestbesetzung auf, kosten HONORAR_FACTOR x
+## Lohn je Tag (Stadtkasse -> ausserhalb X0) und werden abgeloest, sobald eigenes Personal da ist.
+const HONORAR_BERUFE := ["arzt", "notarzt", "pflege"]
+const HONORAR_FACTOR := 1.5
+
+
+func _honorar_fill(f: Dictionary, by_id: Dictionary) -> void:
+	var mins: Dictionary = TYPES[f.code].get("min_staff", {})
+	var hon: Dictionary = f.get("honorar", {})
+	var changed := false
+	for b in HONORAR_BERUFE:
+		var own := 0
+		for p in by_id.values():
+			if str(p.dienst) == str(f.id) and str(p.beruf) == b:
+				own += 1
+		var want := maxi(0, int(mins.get(b, 0)) - own) if int(f.staff_need.get(b, 0)) > 0 else 0
+		if want != int(hon.get(b, 0)):
+			if want > int(hon.get(b, 0)):
+				sim.activity.add("stadt", -1, "personal", "%s holt %d Honorarkraft (%s) von außerhalb" % [f.name, want - int(hon.get(b, 0)), BERUFE[b].label],
+					"niemand in der Region frei – Mindestbesetzung", _cell(f))
+			hon[b] = want
+			changed = true
+	if changed:
+		for b in hon.keys():
+			if int(hon[b]) <= 0:
+				hon.erase(b)
+		f["honorar"] = hon
+
+
+func honorar_cost(f: Dictionary) -> float:
+	var x := 0.0
+	var hon: Dictionary = f.get("honorar", {})
+	for b in hon:
+		x += float(hon[b]) * float(BERUFE[b].wage) * HONORAR_FACTOR * Citizens.HOURS_PER_MONTH / 30.0
+	return x
 
 
 ## Besetzungsgrad 0..1 (Fachsysteme skalieren ihre Leistung damit).
@@ -694,7 +738,7 @@ func cost_of(f: Dictionary) -> float:
 		c += float(vehicles[vid].cost)
 	for p in staff_of(f.id):
 		c += float(p.wage) * Citizens.HOURS_PER_MONTH / 30.0
-	return c
+	return c + honorar_cost(f)
 
 
 ## Sachkosten und Fahrzeugkosten je Tag aus der Stadtkasse an die Dienstleister (S0); Ressort laut Typ.
@@ -710,8 +754,13 @@ func _costs() -> void:
 		var shares: Dictionary = f.get("shares", {"%d" % int(f.town): 1.0})   # Zweckverband (Regionalrat): Kosten nach Anteilen
 		for sk in shares:
 			sim.economy.transfer(Towns.account_of(int(sk)), "S0", x * float(shares[sk]))
+		var hc := honorar_cost(f)
+		if hc > 0.0:   # Honorarkraefte von ausserhalb
+			for sk in shares:
+				sim.economy.transfer(Towns.account_of(int(sk)), "X0", hc * float(shares[sk]))
+			stats["honorar"] = float(stats.get("honorar", 0.0)) + hc
 		if refinanced(f.code) != "":   # Krankenkassen bzw. Flughafenentgelte erstatten Sachkosten und Loehne (Loehne zahlt Citizens._pay der Wohnstadt)
-			var refund := x
+			var refund := x + hc
 			for p in staff_of(f.id):
 				refund += float(p.wage) * Citizens.HOURS_PER_MONTH / 30.0
 			for sk in shares:
