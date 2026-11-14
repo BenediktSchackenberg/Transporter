@@ -18,6 +18,8 @@ const MAX_PER_TOWN := 5              # ursprunglicher Unternehmer + bis zu vier 
 const COOLDOWN_DAYS := 12
 const CAPITAL := 60000.0
 const CAPITAL_BY_BRANCH := {"bergwerk": 120000.0, "stahlwerk": 150000.0, "kokerei": 110000.0}
+const POP_PER_FIRM := 40.0           # Standard fuer pop_per_firm: neue Gruender erst ab so vielen Einwohnern je bestehendem Unternehmen (Messung 14.11.: 10 Firmen
+                                      # auf ~200 Einwohner, alle im Minus)
 const MINING_FROM_DAY := 5           # Bergbau frueh: die Kette Bohrung -> Abbaurecht -> Zufahrt -> Bergwerk -> Stahl braucht Wochen
 const INDUSTRY := ["bergwerk", "stahlwerk", "elektrostahlwerk", "kokerei"]   # regionale Aufgaben: ohne Abklingzeit der Stadt, sofort statt nach STREAK Pruefungen
 const FOCUS_BRANCHES := ["bergwerk"] # mehrstufige Gruendung (Probebohrung, Abbaurecht, Zufahrt): die Regel-KI geht die Schritte selbst
@@ -27,6 +29,7 @@ const WORDS := ["Werke", "& Partner", "Betriebe", "Handel", "Gruppe"]
 
 var sim
 var enabled := true
+var pop_per_firm := POP_PER_FIRM   # 0 = ohne Marktgroessen-Pruefung (Mechanik-Tests)
 var max_per_town := MAX_PER_TOWN
 var streaks := {}                    # "Stadt|Branche" -> aufeinanderfolgende Pruefungen mit dieser Chance
 var last_found := {}                 # Stadt -> Tag der letzten Gruendung
@@ -176,6 +179,12 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 	var spec: Dictionary = Businesses.branches().get(branch, {})
 	if spec.is_empty():
 		return _refuse(town, branch, "unbekannte Branche")
+	var via: Dictionary = sim.retail.counter_viable(branch)
+	if not bool(via.ok):
+		return _refuse(town, branch, str(via.msg).left(120))
+	var firms: int = sim.companies.filter(func(x): return x.status not in ["geschlossen", "verwertung"]).size()
+	if branch not in INDUSTRY and float(sim.citizens.population()) < pop_per_firm * float(firms + 1):
+		return _refuse(town, branch, "Markt zu klein: %d Einwohner für %d Unternehmen (eine Gründung je %d Einwohner)" % [sim.citizens.population(), firms + 1, int(pop_per_firm)])
 	var bsize: Array = CityGenerator.TYPES[str(spec.get("gebaeude", "farm"))]
 	var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4
 	var site_ok: bool = branch in FOCUS_BRANCHES or sim.parcels.search({"min_area": min_area, "town": town, "limit": 400}).any(func(p): return bool(sim.parcels.utilities_of(p).strasse))

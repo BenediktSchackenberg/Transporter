@@ -80,6 +80,9 @@ const WORKS_SHARE := 0.4            # Anteil der Ausstattung, der als Bauauftrag
 func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dictionary:
 	var spec: Dictionary = Businesses.branches().get(branch, {})
 	var c = sim.company(cid)
+	var via: Dictionary = sim.retail.counter_viable(branch) if sim.retail != null else {"ok": true}
+	if not bool(via.ok):
+		return {"ok": false, "msg": str(via.msg)}
 	var equip := float(spec.get("ausstattung", 0.0))
 	var site := -1
 	var parcel := {}
@@ -769,7 +772,7 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 		for item in V.ein:
 			var per_day := maxi(1, plan * int(V.chargen_je_person_tag) / maxi(1, int(R.chargen_je_person_tag)) / vs.size()) * int(V.ein[item]) if vs.size() > 1 else plan * int(V.ein[item])
 			if per_day > 0:
-				_ensure_input(b, item, per_day * int(V.lager_tage), per_day * int(V.lager_tage) / 2, _input_cap(b, V, acct, site))
+				_ensure_input(b, item, per_day * int(V.lager_tage), per_day * int(V.lager_tage) / 2, _input_cap(b, V, acct, site, item))
 	b["today"] = 0
 	if staff <= 0:
 		return
@@ -828,10 +831,7 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 ## Hoechster sinnvoller Einkaufspreis je Einheit der (einzigen) Rohware: Erloes der Ausgangsware je Einheit Rohware x 0,9.
 ## Liegt das Ausgangslager halb voll (Absatz stockt, Ueberschuss geht in die Ausfuhr), zaehlt der Exportpreis. Bei mehreren
 ## Rohwaren (Baeckerei) keine Grenze.
-func _input_cap(b: Dictionary, R: Dictionary, acct: String, site: int) -> float:
-	if R.ein.size() != 1:
-		return INF
-	var in_qty := float(R.ein.values()[0])
+func _input_cap(b: Dictionary, R: Dictionary, acct: String, site: int, input: String = "") -> float:
 	var value := 0.0
 	for item in R.aus:
 		var p := price_of(b, item)
@@ -839,7 +839,27 @@ func _input_cap(b: Dictionary, R: Dictionary, acct: String, site: int) -> float:
 		if ep != null and sim.stock.qty(item, acct, site) >= int(R.lager_max) / 2:
 			p = float(ep)
 		value += p * float(R.aus[item])
-	return value / in_qty * 0.9
+	if R.ein.size() == 1:
+		return value / float(R.ein.values()[0]) * 0.9
+	# Mehrere Einsatzstoffe (Stahlwerk: Erz, Koks, Kalk): vom Warenwert die guenstigsten Bezugskosten der uebrigen Stoffe abziehen.
+	# Messung 14.11.: das Stahlwerk kaufte Import-Koks (36 EUR) und Import-Erz (13 EUR) ohne Grenze - 19 000 EUR Einkauf gegen
+	# 11 000 EUR Erloes in 60 Tagen.
+	var others := 0.0
+	for it in R.ein:
+		if str(it) != input:
+			others += unit_cost_estimate(str(it)) * float(R.ein[it])
+	return maxf(0.0, value * 0.9 - others) / float(R.ein.get(input, 1))
+
+
+## Guenstigster Bezugspreis je Einheit: Anbieter in der Region, sonst Import (bzw. Basispreis).
+func unit_cost_estimate(item: String) -> float:
+	var best := INF
+	for o in sellers(item):
+		best = minf(best, float(o.price))
+	if best < INF:
+		return best
+	var ip = art(item).get("importpreis")
+	return float(ip) if ip != null else float(art(item).get("basispreis", 0.0))
 
 
 func _use(b: Dictionary, item: String, qty: int, acct: String, site: int) -> void:
@@ -1455,6 +1475,17 @@ func detail(b: Dictionary) -> Dictionary:
 
 ## Lage der Kette fuer die KI-Beobachtung: Betriebe je Stufe und bisherige Importe (= Chance fuer lokale Erzeuger).
 func market_obs() -> Dictionary:
+	var out := _market_obs()
+	var weak: Array = []
+	for br in Retail.POP_PER_BUSINESS:
+		if Businesses.branches().has(br) and not bool(sim.retail.counter_viable(br).ok):
+			weak.append(br)
+	if not weak.is_empty():
+		out["zu_wenig_kundschaft"] = weak   # Gruendung lohnt nicht (Retail.counter_viable)
+	return out
+
+
+func _market_obs() -> Dictionary:
 	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0, "baufirma": 0, "stahlwerk": 0, "elektrostahlwerk": 0, "kokerei": 0, "bergwerk": 0, "brauerei": 0, "moebelwerk": 0, "forst": 0, "it": 0}
 	for b in sim.biz.items.values():
 		if n.has(b.branch) and b.status in Businesses.RUNNING:

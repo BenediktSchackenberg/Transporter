@@ -296,6 +296,83 @@ func counters() -> Array:
 	return out
 
 
+# ------------------------------------------------------------------ Tragfaehigkeit neuer Theken (14.11.2026)
+## Messung 14.11. (tests/probe_region_profit.gd): in der Region (~200 Einwohner) bekam ein Restaurant 6-7 Gaeste am Tag, Fixkosten
+## ~100 EUR/Tag - jede Gruendung schrieb Verlust. Gruendungen mit Theke pruefen deshalb vorher, ob die erwartete Kundschaft die
+## Fixkosten (Abschreibung, Personal fuer Kueche/Herstellung und Theke) mit der Marge je Kunde deckt.
+const VIABLE_WAGE_H := 15.0   # Durchschnittslohn je Stunde fuer die Fixkostenschaetzung
+
+
+## Rohertrag je Kunde: Restaurant Durchschnitt der Gerichte (Preis - Zutaten), Laden (Preis - Einkauf) x mittlere Korbgroesse.
+func counter_margin(kind: String) -> float:
+	if kind == "restaurant":
+		var m := 0.0
+		for dn in KINDS.restaurant.dishes:
+			var d: Dictionary = DISHES[dn]
+			var cost := 0.0
+			for it in d.uses:
+				cost += float(GOODS[it].cost) * float(d.uses[it])
+			m += float(d.price) - cost
+		return m / float(KINDS.restaurant.dishes.size())
+	var g: Dictionary = GOODS.get(str(KINDS[kind].goods[0]), {})
+	return (float(g.get("price", 0.0)) - float(g.get("cost", 0.0))) * (1.0 + float(g.get("basket", 1))) / 2.0
+
+
+## Erwartete Kundschaft je Tag fuer eine WEITERE Theke dieser Art (Mittelwert ohne Wetter und Lage): Grundbedarf x Bevoelkerung x
+## Kaufkraft, geteilt mit den bestehenden Laeden und Theken (gleiches Gewicht wie kind_share).
+func expected_new_counter(kind: String) -> float:
+	var base := float(KINDS[kind].base) * float(sim.citizens.population()) / POP_REFERENCE * clampf(sim.citizens.employment_rate() / 0.8, 0.6, 1.2)
+	var npc := 0.0
+	for s in shops.values():
+		if s.kind == kind and s.status != "geschlossen":
+			npc += _weight(s)
+	var extra := 0.0
+	for ct in counters():
+		if ct.kind == kind:
+			extra += _weight(ct)
+	return base * maxf(npc, 1.0) / (npc + extra + 1.0)
+
+
+## Nur die Theke bringt Umsatz (die Baeckerei beliefert zusaetzlich die Lebensmittellaeden und wird hier nicht gesperrt).
+const COUNTER_ONLY := ["restaurant", "metzgerei"]
+## Marktsaettigung: so viele Einwohner (Region) traegt ein Betrieb der Branche, mindestens einer ist immer moeglich.
+## Messung 14.11.: nach der Restaurant-Sperre gruendeten vier Firmen Baeckereien fuer ~200 Einwohner - alle im Minus.
+const POP_PER_BUSINESS := {"baeckerei": 300, "muehle": 600, "restaurant": 300, "metzgerei": 400, "brauerei": 800, "schlachthof": 800}
+
+
+## Laufende Betriebe der Branche in der Region und die tragfaehige Zahl nach Einwohnern.
+func saturation(branch: String) -> Dictionary:
+	var n := 0
+	for b in sim.biz.items.values():
+		if str(b.branch) == branch and str(b.status) != "geschlossen":
+			n += 1
+	var cap := maxi(1, int(floor(float(sim.citizens.population()) / float(POP_PER_BUSINESS.get(branch, 1)))))
+	return {"betriebe": n, "tragfaehig": cap}
+
+
+## Pruefung fuer eine Gruendung der Branche: {ok, gaeste, noetig, msg}. Andere Branchen sind immer ok.
+func counter_viable(branch: String) -> Dictionary:
+	var spec: Dictionary = Businesses.branches().get(branch, {})
+	if POP_PER_BUSINESS.has(branch):
+		var sat := saturation(branch)
+		if int(sat.betriebe) >= int(sat.tragfaehig):
+			return {"ok": false, "gaeste": 0.0, "noetig": 0.0, "msg": "Markt gesättigt: %d Betriebe der Branche %s für %d Einwohner (tragfähig etwa einer je %d). Erst wenn die Region wächst." % [
+				int(sat.betriebe), branch, sim.citizens.population(), int(POP_PER_BUSINESS[branch])]}
+	if branch not in COUNTER_ONLY or not spec.has("laden") or not KINDS.has(str(spec.laden.get("kundschaft", ""))):
+		return {"ok": true}
+	var kind := str(spec.laden.kundschaft)
+	var staff := int(spec.get("personal_min", 1)) + int(spec.laden.get("personal", 1))
+	var fixed := float(spec.get("ausstattung", 0.0)) * float(spec.get("abschreibung_tag", 0.0)) + float(staff) * VIABLE_WAGE_H * Citizens.HOURS_PER_MONTH / 30.0
+	var margin := counter_margin(kind)
+	var need := fixed / maxf(0.1, margin)
+	var exp := expected_new_counter(kind)
+	if exp >= need:
+		return {"ok": true, "gaeste": snappedf(exp, 0.1), "noetig": snappedf(need, 0.1)}
+	return {"ok": false, "gaeste": snappedf(exp, 0.1), "noetig": snappedf(need, 0.1),
+		"msg": "Zu wenig Kundschaft für ein weiteres Geschäft der Art %s: erwartet etwa %.0f Kunden am Tag, nötig wären %.0f (Fixkosten %s/Tag, Rohertrag %s je Kunde). Erst wenn die Region wächst." % [
+			str(KINDS[kind].label), exp, need, Catalog.money(fixed), Catalog.money(margin)]}
+
+
 func _weight(s: Dictionary) -> float:
 	return pow(1.0 / maxf(0.5, float(s.price_factor)), 1.6) * sim.contentment.building_factor(int(s.building)) * float(s.get("stage_factor", 1.0))
 

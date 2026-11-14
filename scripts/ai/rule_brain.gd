@@ -657,6 +657,8 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "baeckerei"
 	if branch == "" or own.any(func(b): return b.branche == branch):
 		return
+	if branch in mk.get("zu_wenig_kundschaft", []):
+		return   # Theke traegt sich bei der Bevoelkerung nicht (Retail.counter_viable)
 	# Lagerstaette ohne Strassenanschluss (Kuestenort): erst die Zufahrt bauen lassen, dann gruenden
 	if branch == "bergwerk" and obs.has("bergbau"):
 		# Bergwerk-Story: Probebohrung -> Abbauantrag -> Zufahrt -> Gruendung (der Bautrupp baut das Bergwerk)

@@ -156,8 +156,11 @@ func facility_need(f: Dictionary) -> float:
 const OWN_WELL := ["farm", "pig_farm", "cattle_farm"]
 
 
+const OWN_WELL_BRANCHES := ["bergwerk", "forst"]   # Aussenbereich (Lagerstaette, Wald): Grubenwasser/eigener Brunnen (Messung 14.11.: Bergwerk blockiert)
+
+
 func on_net(b: Dictionary) -> bool:
-	if str(sim.city.building(int(b.site)).get("type", "")) in OWN_WELL:
+	if str(sim.city.building(int(b.site)).get("type", "")) in OWN_WELL or str(b.get("branch", "")) in OWN_WELL_BRANCHES:
 		return false
 	var p: Dictionary = sim.parcels.of_building(int(b.site))
 	if p.is_empty():

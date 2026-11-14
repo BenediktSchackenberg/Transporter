@@ -664,3 +664,23 @@ Angepasst: `test_power_grid` (Engpass erst unter Kraftwerk + Notstrom; Ausbau br
 - **Interaktiv**: Klick auf Berg oder Bergwerk öffnet die Detailkarte (Lagerstätte, Restvorrat, Abbauanteil, Betreiber, Personal, Förderung, Halde, Preis, Absatz, Abnehmer, Ergebnis, letzte Sprengung; bei freien Bergen Kaufpreis und Weg zum Abbau); „Folgen“ hält die Kamera am Abbau; **Taste B** springt reihum zu den Bergwerken. Sprengungen (etwa jeder dritte Fördertag) stehen im Protokoll und als Marker auf der Karte.
 - Behoben: `SiteView.pick` schlug bei Bautrupps des Stadtfuhrparks fehl.
 - Test `test_mountains`; Sichtprüfung per Autotest `--demo-mine=eisenerz --shot-mine`.
+
+## Wirtschaftsmessung 14.11.2026 (Region, Regel-KI, `tests/probe_region_profit.gd -- --days=60`)
+
+Benedikt: „die Unternehmer machen immer noch durchweg Minus“. Messung Seed 21, 60 Spieltage, Buchungen je Kategorie und Kostenstelle.
+
+| Stand | Firmen | Summe Gewinn | im Plus |
+|---|---|---|---|
+| vorher | 10 | −299 000 € | 0 |
+| Fehler behoben (`087a25a`) | 10 | ≈ −100 000 € | 0–1 |
+| Marktgrößen-Prüfung (dieser Stand) | 6 | ≈ −101 000 € | 1 |
+
+Behoben: Mehrfachkauf für Freibau-Baustellen (`CentralHub.pending`), Wasser-Druckzone blockierte Gewerbe, Anwerbung nur mit „verladen“
+(Restaurants ohne Service, nie Umsatz), Bergwerk/Forst ohne Netzanschluss (eigener Brunnen).
+Neu: `Retail.counter_viable` – Restaurant/Metzgerei nur, wenn die erwartete Kundschaft Fixkosten deckt (Region ~200 EW: 4 Gäste statt
+nötiger 13); Marktsättigung `Retail.POP_PER_BUSINESS` (Bäckerei je 300 EW, Mühle je 600, …; mindestens einer); Gründer erst ab 40
+Einwohnern je Unternehmen (`Founders.pop_per_firm`); Einkaufsgrenze auch für Rezepte mit mehreren Einsatzstoffen
+(`Production._input_cap` zieht die günstigsten Bezugskosten der übrigen Stoffe ab – Stahlwerk kaufte Import-Koks/-Erz mit Verlust).
+Offen (nächste Hebel): Transport selbst – Treibstoff frisst bei mehreren Firmen fast den Frachtumsatz (Leerfahrten quer durch die
+Region, unbezahlte Eigenabholung am Großlager); Stahlkette: Bergwerk-Erz zu 9 € liegt über der Einkaufsgrenze des Stahlwerks
+(Import-Koks 36 €) – Preisgefüge Stahl/Koks prüfen; Mühle findet kein Getreide unter Grenzpreis.
