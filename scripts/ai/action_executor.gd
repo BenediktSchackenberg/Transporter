@@ -918,6 +918,7 @@ func _accept_contract(cid: int, kid: String, vid: int) -> Dictionary:
 	k.status = "accepted"
 	k.owner = cid
 	k.accepted_at = sim.game_min
+	_unassigned_cache.clear()
 	sim.market.on_accepted(k)
 	for bid in [k.pickup, k.dropoff]:
 		var loyal: int = sim.loyal_company(bid)
@@ -960,11 +961,20 @@ const PURCHASE_LEAD_MIN := 120.0   # Spielminuten fuer Weg zum Autohaus, Kauf un
 ## Machbarkeit vor der Annahme: Kann ein eigenes passendes Fahrzeug (das genannte oder das schnellste) nach seinen geplanten Fahrten
 ## vor der Frist liefern (mit 20 % Puffer)? Ohne passendes Fahrzeug wird Kauf + Fahrt vom Hof geschaetzt.
 func _too_late(cid: int, k: Contract, vid: int) -> String:
-	var best := INF
+	var etas: Array = []
 	for v in sim.company_vehicles(cid):
 		if (vid >= 0 and v.id != vid) or not k.vehicle_ok(v.model) or v.state in ["broken", "repairing"]:
 			continue
-		best = minf(best, sim.logistics.eta_minutes(v, k))
+		etas.append(sim.logistics.eta_minutes(v, k))
+	var best := INF
+	if not etas.is_empty():
+		etas.sort()
+		best = etas[0]
+		if vid < 0:
+			# Angenommene, noch keinem Fahrzeug zugeteilte Auftraege belegen die schnellsten Fahrzeuge zuerst (Partie 14.11.: 79 von 212
+			# Modell-Annahmen scheiterten, 42 davon wurden nie zugeteilt - jede Pruefung rechnete mit demselben freien Fahrzeug).
+			var queued: int = _unassigned(cid) - (1 if k.owner == cid and k.status == "accepted" else 0)
+			best = float(etas[queued % etas.size()]) * (1.0 + float(queued / etas.size()))
 	var left: float = k.deadline - sim.game_min
 	if best == INF:
 		# Ohne passendes eigenes Fahrzeug: Kauf (Besuch im Autohaus) plus Fahrt vom Hof schaetzen, mit dem schnellsten passenden Modell.
@@ -988,6 +998,19 @@ func _too_late(cid: int, k: Contract, vid: int) -> String:
 	if best * Logistics.ETA_BUFFER > left:
 		return "Auftrag %s ist nicht rechtzeitig machbar: Lieferung frühestens in ~%d Spielminuten, Frist in %d. Nimm einen näheren Auftrag oder vergib ihn weiter." % [k.id, int(best * Logistics.ETA_BUFFER), int(left)]
 	return ""
+
+
+## Angenommene, noch keinem Fahrzeug zugeteilte Auftraege der Firma (je Spielminute zwischengespeichert: die Beobachtung
+## prueft viele Auftraege hintereinander, sim.contracts haelt Tausende).
+var _unassigned_cache := {}
+
+func _unassigned(cid: int) -> int:
+	var key := "%d:%d" % [cid, int(sim.game_min)]
+	if not _unassigned_cache.has(key):
+		if _unassigned_cache.size() > 64:
+			_unassigned_cache.clear()
+		_unassigned_cache[key] = sim.contracts.values().filter(func(x): return x.owner == cid and x.status == "accepted").size()
+	return int(_unassigned_cache[key])
 
 
 func active_contracts(cid: int) -> int:
