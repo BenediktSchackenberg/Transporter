@@ -13163,6 +13163,11 @@ func test_eko_world() -> void:
 	ok(s.action_results[0].any(func(r): return str(r.text).contains("spricht dich an")), "Firma bekommt die Worte als Meldung")
 	ok(str(ws.handle("GET", "/api.md", {}, {}, "")[1]).contains("MoveTo"), "API-Beschreibung abrufbar")
 	ok(ws.handle("GET", "/nix", {}, h, "")[0] == 404, "unbekannter Endpunkt")
+	var saved := [false]
+	ws.on_save = func(): saved[0] = true
+	ws.operator_token = "geheim"
+	ok(ws.handle("POST", "/betreiber/speichern", {}, h, "")[0] == 403 and not saved[0], "Speichern ohne Betreiberschluessel abgelehnt (auch mit Wesen-Token)")
+	ok(ws.handle("POST", "/betreiber/speichern", {}, {"x-betreiber": "geheim"}, "")[0] == 200 and saved[0], "Betreiber kann den Spielstand sichern")
 	var r := ws._parse("POST /input?x=1 HTTP/1.1\r\nX-Session: abc\r\nContent-Length: 10\r\n\r\n{\"a\"".to_utf8_buffer())
 	ok(r.is_empty(), "unvollstaendiger Body wartet")
 	r = ws._parse("POST /join?name=K%C3%A4the HTTP/1.1\r\nContent-Length: 0\r\n\r\n".to_utf8_buffer())
@@ -13213,6 +13218,14 @@ func test_eko_life() -> void:
 			m = {}
 	if not m.is_empty():
 		E.input("Lumo", "AcceptJob", {"job": m.id})
+		var dm: Dictionary = E.input("Lumo", "Deliver", {"job": m.id})
+		ok(not dm.ok and str(dm.msg).contains("es fehlen %d" % int(m.menge)) and str(dm.msg).contains("Bauhof"), "Mauer-Rueckmeldung nennt Fehlendes und Bauhof: %s" % str(dm.msg).left(80))
+		var used_tile := Vector2i(int(m.bereich[0]), int(m.bereich[1]))
+		for k in 6:
+			var m2: Dictionary = E._new_job(s.companies[1])
+			if not m2.is_empty() and m2.art == "mauer":
+				ok(not (used_tile.x >= int(m2.bereich[0]) and used_tile.x < int(m2.bereich[0]) + int(m2.bereich[2]) and used_tile.y == int(m2.bereich[1])), "neuer Mauerbereich liegt nicht im offenen Bereich")
+				break
 		for k in int(m.menge):
 			E.blocks[Vector3i(int(m.bereich[0]) * 4 + k % 8, int(m.bereich[1]) * 4, k / 8)] = m.material
 		ok(E.input("Lumo", "Deliver", {"job": m.id}).ok, "Mauer abgenommen und bezahlt")

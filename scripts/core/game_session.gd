@@ -444,6 +444,12 @@ func _start_eko_server() -> void:
 	sim.eko.persist_path = "user://eko_ersparnisse.json"   # Ersparnisse der Wesen ueberstehen einen Neustart der Welt
 	var ws := WorldServer.new()
 	add_child(ws)
+	ws.on_save = save_game
+	ws.operator_token = "%08x%08x%08x" % [randi(), randi(), randi()]
+	var tf := FileAccess.open("user://eko_betreiber.txt", FileAccess.WRITE)
+	if tf != null:
+		tf.store_string(ws.operator_token)
+		tf.close()
 	if ws.setup(sim.eko, port):
 		sim.log_event("Eko-Modus: Weltschnittstelle auf http://127.0.0.1:%d – Agent mit tools/eko/start_eko.ps1 starten." % port, "system")
 

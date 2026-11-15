@@ -565,6 +565,14 @@ func _new_job(c) -> Dictionary:
 
 ## Freie, bebaubare Felder (w x h) in der Naehe eines Punktes, [x, y, w, h] oder [].
 func _free_area_near(p: Vector2i, w: int, h: int) -> Array:
+	var used := {}   # Felder mit Bloecken (fruehere Mauern verwirrten das Modell, 15.11.)
+	for q in blocks:
+		used[Vector2i(floori(float(q.x) / PER_TILE), floori(float(q.y) / PER_TILE))] = true
+	for j in jobs.values():   # offene Mauerbereiche anderer Auftraege freihalten
+		if j.get("art", "") == "mauer" and j.status in ["offen", "angenommen"]:
+			for yy in int(j.bereich[3]):
+				for xx in int(j.bereich[2]):
+					used[Vector2i(int(j.bereich[0]) + xx, int(j.bereich[1]) + yy)] = true
 	for r in range(1, 8):
 		for dy in range(-r, r + 1):
 			for dx in range(-r, r + 1):
@@ -573,7 +581,7 @@ func _free_area_near(p: Vector2i, w: int, h: int) -> Array:
 				for yy in h:
 					for xx in w:
 						var t := o + Vector2i(xx, yy)
-						if not sim.city.walkable(t) or can_place(Vector3i(t.x * PER_TILE, t.y * PER_TILE, 0)) != "":
+						if used.has(t) or not sim.city.walkable(t) or can_place(Vector3i(t.x * PER_TILE, t.y * PER_TILE, 0)) != "":
 							ok = false
 				if ok:
 					return [o.x, o.y, w, h]
@@ -631,7 +639,19 @@ func _deliver(b: Dictionary, id: String) -> Dictionary:
 			if blocks[p] == j.material and t.x >= int(a[0]) and t.y >= int(a[1]) and t.x < int(a[0]) + int(a[2]) and t.y < int(a[1]) + int(a[3]):
 				n += 1
 		if n < int(j.menge):
-			return {"ok": false, "msg": "Erst %d von %d Blöcken %s im Bereich %s gesetzt." % [n, j.menge, j.material, str(a)]}
+			var free_spots: Array = []
+			for yy in int(a[3]) * PER_TILE:
+				for xx in int(a[2]) * PER_TILE:
+					var q := Vector3i(int(a[0]) * PER_TILE + xx, int(a[1]) * PER_TILE + yy, 0)
+					while blocks.has(q):
+						q.z += 1
+					if free_spots.size() < 3 and can_place(q) == "":
+						free_spots.append([q.x, q.y, q.z])
+			var carried: int = b.held.count(str(j.material))
+			var src: Array = sources()[0].feld if not sources().is_empty() else [0, 0]
+			var hint := "Du trägst %d davon – setze sie" % carried if carried > 0 else "Du trägst keine – hol %d %s am Bauhof (Feld %d,%d, für diesen Auftrag gratis) und setze sie" % [int(j.menge) - n, j.material, src[0], src[1]]
+			return {"ok": false, "msg": "Erst %d von %d Blöcken %s im Bereich gesetzt, es fehlen %d. %s, z. B. bei %s. Bereits gesetzte Blöcke nicht wieder aufnehmen." % [
+				n, j.menge, j.material, int(j.menge) - n, hint, str(free_spots)]}
 	var c = sim.company(int(j.cid))
 	var lohn := float(j.lohn)
 	c.ledger.book("wages", -lohn, true, "%s: Auftrag %s (%s)" % [b.name, j.id, j.art], sim.game_min, "Y0")

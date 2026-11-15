@@ -12,6 +12,8 @@ var port := 8790
 var _server := TCPServer.new()
 var _peers: Array = []              # [{peer, buf, since}]
 var _sessions := {}                 # Token -> Name
+var on_save: Callable                # Betreiber: Spielstand sichern (GameSession.save_game)
+var operator_token := ""             # nur fuer den Betreiber (Datei user://eko_betreiber.txt), nie an Wesen weitergeben
 
 
 func setup(world: EkoWorld, p: int = 8790) -> bool:
@@ -89,6 +91,11 @@ func _parse(buf: PackedByteArray) -> Dictionary:
 func handle(method: String, path: String, query: Dictionary, headers: Dictionary, body: String) -> Array:
 	if path == "/api.md" and method == "GET":
 		return [200, FileAccess.get_file_as_string(API_DOC), "text/markdown; charset=utf-8"]
+	if path == "/betreiber/speichern" and method == "POST":   # Spielstand sichern, z. B. vor einem Neustart mit neuem Code
+		if operator_token == "" or str(headers.get("x-betreiber", "")) != operator_token or not on_save.is_valid():
+			return [403, {"ok": false, "msg": "Nur für den Betreiber."}]
+		on_save.call()
+		return [200, {"ok": true, "msg": "Spielstand gesichert."}]
 	if path == "/join" and method == "POST":
 		var r := eko.join(str(query.get("name", "")), str(query.get("art", "mensch")))
 		if not bool(r.ok):
@@ -121,7 +128,7 @@ func handle(method: String, path: String, query: Dictionary, headers: Dictionary
 
 func _send(peer: StreamPeerTCP, status: int, payload, ctype: String = "application/json") -> void:
 	var body: PackedByteArray = (payload if payload is String else JSON.stringify(payload)).to_utf8_buffer()
-	var reason: String = {200: "OK", 400: "Bad Request", 401: "Unauthorized", 404: "Not Found", 413: "Payload Too Large"}.get(status, "OK")
+	var reason: String = {200: "OK", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden", 404: "Not Found", 413: "Payload Too Large"}.get(status, "OK")
 	var head := "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n" % [status, reason, ctype, body.size()]
 	peer.put_data(head.to_utf8_buffer())
 	peer.put_data(body)
