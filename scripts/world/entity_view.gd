@@ -598,6 +598,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			_make_avatar(cid)   # spaeter gegruendete Firma (Auftrag 17): Figur nachtraeglich anlegen
 		var n: Node2D = avatar_nodes[cid]
 		n.position = Iso.to_screen(a.pos)
+		n.visible = sim.eko.firm_being(cid) == ""   # Firma eines freien Wesens: das Wesen selbst ist die sichtbare Figur
 		var moving := a.state in ["walking", "wander"] and not a.arrived()
 		var talking: bool = a.state == "talking" or a.bubble_timer > 0.0
 		var afr := (1 + int(anim_time * 8.0) % 4) if moving else (5 + int(anim_time * 2.5) % 2 if talking else 0)   # Sprechen: gestikulieren

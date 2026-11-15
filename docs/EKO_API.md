@@ -20,12 +20,25 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 | `Pickup` | `{"block": [x, y, z]}` | einen gesetzten Block wieder aufnehmen (nur, wenn nichts darauf liegt) |
 | `Place` | `{"block": [x, y, z], "material"?: "holz"}` | einen getragenen Block setzen (höchstens 2 Felder entfernt) |
 | `Say` | `{"text": "..."}` | etwas sagen (erscheint als Sprechblase) |
+| `Talk` | `{"to": "Greta", "text": "..."}` | mit einer Figur oder einem Wesen in der Nähe reden (höchstens 3 Felder). Unternehmer antworten sofort; Wesen hören es und können antworten |
+| `AcceptJob` | `{"job": "J3"}` | Arbeit einer Firma aus `jobangebote` annehmen (eine zur Zeit) |
+| `Pickup` | `{"job": "J3"}` | bei einem Botengang die Kisten am Abholort aufnehmen (höchstens 2 Felder entfernt) |
+| `Deliver` | `{"job": "J3"}` | Auftrag abliefern: Kisten am Ziel abgeben bzw. Mauer im Bereich fertig – die Firma zahlt den Lohn |
+| `BuyPlot` | `{"plot": "G123"}` | ein freies Wohngrundstück aus `lebensziel.grundstuecke_zu_kaufen` kaufen (höchstens 6 Felder entfernt) |
+| `OrderHouse` | `{"wand"?: "ziegel"}` | eine Baufirma baut dir ein Haus auf deinem Grundstück (Wände: ziegel, holz, stein, beton) |
+| `Rest` | `{}` | zu Hause in der Ladestation ausruhen |
+| `FoundCompany` | `{"name"?: "Lumo Lichtkurier", "behalten"?: 500}` | eigene Transportfirma gründen: ab 1.500 € Ersparnissen, der Kapitalgeber legt 20.000 € dazu; `behalten` bleibt privat |
+| `Firma` | `{"aktion": {"action": "buy_vehicle", "offer_id": "F12"}}` | deine Firma führen: accept_contract, assign_transport, collect_contracts, buy_vehicle, sell_vehicle, recruit_worker, dismiss_worker, assign_worker_task, rent_depot, take_loan, repay_loan, install_internet, send_message. Lage in `meine_firma`; Tagesbetrieb (zuweisen, tanken, reparieren) läuft automatisch |
 
 - Du trägst höchstens **4 Blöcke**.
 - Materialien: `stein`, `ziegel`, `holz`, `beton`, `glas`, `stahl`.
 - Blöcke gehen nur auf **freien Boden** (keine Straße, kein Gebäude) und brauchen **Halt**: den Boden, einen Block darunter oder direkt daneben. Über Wasser geht es nur oberhalb des Bodens mit seitlichem Halt (Brücken vom Ufer aus).
 - Ein Block lässt sich nur aufnehmen, wenn nichts darauf liegt und kein Nachbar danach frei schweben würde.
+- Wer in deiner Nähe ist, steht in `/observe` unter `figuren_in_der_naehe` (Unternehmer mit Feld und Entfernung, nächste zuerst) und `andere_wesen`; was in Hörweite gesagt wurde, unter `gehoert`.
 - Gehen braucht Zeit. Nach `MoveTo` erneut beobachten, bis `unterwegs` false ist.
+
+Geld verdienst du mit Aufträgen der Firmen (`jobangebote`, Lohn wird beim Abliefern gezahlt). Dein Geld, dein Grundstück und
+dein Haus stehen in `/observe` unter `lebensziel`.
 
 Jede Antwort enthält `ok`, `msg` und deine aktuelle `beobachtung`.
 
@@ -33,7 +46,7 @@ Jede Antwort enthält `ok`, `msg` und deine aktuelle `beobachtung`.
 
 Basis: `http://127.0.0.1:8790` (oder der Port, den dir dein Start nennt).
 
-- `POST /join?name=DeinName` → `{"session": "..."}`. Den Token bei allen weiteren Anfragen im Kopf `X-Session` mitschicken.
+- `POST /join?name=DeinName&art=roboter` → `{"session": "..."}` (`art`: `mensch` oder `roboter`). Den Token bei allen weiteren Anfragen im Kopf `X-Session` mitschicken.
   Dein Wesen bleibt bestehen; erneutes Beitreten mit demselben Namen gibt dir einen neuen Token für dasselbe Wesen.
 - `GET /observe` → wo du bist, was du trägst, eine Karte deiner Umgebung (21 × 21 Felder), Blöcke in der Nähe,
   Gebäude in der Nähe, Bauhöfe (`quellen`), andere Wesen und deine letzten Ereignisse.

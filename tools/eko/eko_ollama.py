@@ -4,8 +4,8 @@ Wie start_eko.ps1, aber statt Claude Code steuert ein lokales Modell ueber Werkz
 observe, act, wait, list_files, read_file, write_file, append_memory. Das Wesen wird vom Skript angemeldet; das Modell
 handelt nur ueber diese Werkzeuge und darf nur Dateien in seinem Arbeitsordner lesen und schreiben.
 
-    python tools/eko/eko_ollama.py --name Eko
-    python tools/eko/eko_ollama.py --name Mia --model qwen3.5:9b-q4_K_M
+    python tools/eko/eko_ollama.py                      # Lumo, der kleine Roboter vom Smaragdstern
+    python tools/eko/eko_ollama.py --name Mia --art mensch --seele "" --model qwen3.5:9b-q4_K_M
 
 Nur Standardbibliothek. Abbruch mit Strg+C; das Gedaechtnis bleibt im Arbeitsordner.
 """
@@ -15,6 +15,7 @@ import os
 import shutil
 import sys
 import time
+import traceback
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -31,10 +32,15 @@ TOOLS = [
     {"name": "observe", "description": "Sieh dich um: wo du bist, was du trägst, Karte der Umgebung (21x21 Felder), Blöcke, "
      "Gebäude, Bauhöfe, andere Wesen, deine letzten Ereignisse.", "parameters": {"type": "object", "properties": {}}},
     {"name": "act", "description": "Eine Handlung in der Welt. type: MoveTo {tile:[x,y]}, Stop {}, Pickup {material, count} am "
-     "Bauhof oder Pickup {block:[x,y,z]}, Place {block:[x,y,z], material?}, Say {text}. Blockraster: 4x4 Blöcke je Feld, "
-     "z = Schicht ab 0.",
+     "Bauhof oder Pickup {block:[x,y,z]} oder Pickup {job} (Kisten eines Botengangs abholen), Place {block:[x,y,z], material?}, "
+     "Say {text}, Talk {to, text} (mit einer Figur oder einem Wesen in der Nähe reden, höchstens 3 Felder; Unternehmer antworten), "
+     "AcceptJob {job} (Arbeit einer Firma aus jobangebote annehmen), Deliver {job} (Auftrag abliefern, Lohn bekommen), "
+     "BuyPlot {plot} (Wohngrundstück kaufen, höchstens 6 Felder entfernt), OrderHouse {wand?: ziegel|holz|stein|beton} "
+     "(Baufirma baut dir ein Haus), Rest {} (zu Hause in der Ladestation ausruhen), FoundCompany {name?, behalten?} (eigene "
+     "Transportfirma gründen, ab 1.500 EUR Ersparnissen, Kapitalgeber legt 20.000 EUR dazu), Firma {aktion: {action, ...}} (deine Firma "
+     "führen, siehe meine_firma.aktionen). Blockraster: 4x4 Blöcke je Feld, z = Schicht ab 0.",
      "parameters": {"type": "object", "properties": {
-         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say"]},
+         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma"]},
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12]}"}},
          "required": ["type", "data"]}},
     {"name": "wait", "description": "Warte einige Sekunden (z. B. während du gehst).",
@@ -67,10 +73,12 @@ class World:
                 raw = r.read().decode("utf-8")
         except urllib.error.HTTPError as e:
             raw = e.read().decode("utf-8")
+        except (urllib.error.URLError, OSError) as e:   # Welt kurz nicht erreichbar: als Ergebnis zurueckgeben, nicht abstuerzen
+            return {"ok": False, "msg": "Welt nicht erreichbar (%s). Später erneut versuchen." % e}
         return json.loads(raw) if raw.startswith(("{", "[")) else raw
 
-    def join(self):
-        r = self._req("POST", "/join?name=" + urllib.request.quote(self.name))
+    def join(self, art="mensch"):
+        r = self._req("POST", "/join?name=" + urllib.request.quote(self.name) + "&art=" + art)
         self.token = r["session"]
 
     def api_md(self):
@@ -108,6 +116,8 @@ class Agent:
         for f in (HERE / "vorlage").iterdir():
             if not (self.ws / f.name).exists():
                 shutil.copy(f, self.ws / f.name)
+                if f.name == "SOUL.md" and args.seele:   # eigene Seele nur beim ersten Start, danach gehoert die Datei dem Wesen
+                    shutil.copy(HERE / "seelen" / (args.seele + ".md"), self.ws / "SOUL.md")
         (self.ws / "EPISODIC_MEMORY.jsonl").touch()
         self.world = World("http://127.0.0.1:%d" % args.port, args.name)
         self.log = open(self.logs / "sitzung.log", "a", encoding="utf-8")
@@ -123,7 +133,8 @@ class Agent:
         base = base.replace("${NAME}", self.args.name).replace("${WORKSPACE}", "deinem Arbeitsordner").replace("${BASE}", self.world.base)
         # Der Zugang laeuft hier ueber Werkzeuge statt curl: die letzten beiden Zeilen ersetzen
         lines = [ln for ln in base.splitlines() if "HTTP" not in ln and "api.md" not in ln and "curl" not in ln]
-        lines.append("Du bist bereits in der Welt angemeldet. Du handelst nur über deine Werkzeuge: observe, act, wait, "
+        lines.append("Du bist bereits in der Welt angemeldet. Andere Figuren und Wesen kannst du mit act Talk ansprechen; "
+                     "was in deiner Nähe gesagt wird, steht in observe unter gehoert. Du handelst nur über deine Werkzeuge: observe, act, wait, "
                      "list_files, read_file, write_file, append_memory. Antworte kurz; denke in Taten.")
         lines.append("\nBeschreibung deiner Welt:\n" + self.world.api_md().split("## Endpunkte")[0])
         return "\n".join(lines)
@@ -178,7 +189,7 @@ class Agent:
         self.log.flush()
 
     def run(self):
-        self.world.join()
+        self.world.join(self.args.art)
         system = {"role": "system", "content": self.system_prompt()}
         messages = [{"role": "user", "content": "Beginne. Lies zuerst deine Dateien (list_files, read_file)."}]
         steps = 0
@@ -188,7 +199,13 @@ class Agent:
                 while messages and messages[0]["role"] != "user":
                     messages.pop(0)
                 messages.insert(0, {"role": "user", "content": "(Ältere Schritte sind ausgeblendet; dein Gedächtnis steht in deinen Dateien.) " + CONTINUE})
-            msg = self.chat([system] + messages)
+            try:
+                msg = self.chat([system] + messages)
+            except Exception as e:   # Ollama ueberlastet oder neu gestartet: protokollieren, kurz warten, weitermachen
+                self.say("⚠ Modellaufruf fehlgeschlagen: %s – neuer Versuch in 10 s" % e)
+                self.log.write(traceback.format_exc())
+                time.sleep(10)
+                continue
             calls = msg.get("tool_calls") or []
             messages.append({"role": "assistant", "content": msg.get("content", ""), "tool_calls": calls} if calls
                             else {"role": "assistant", "content": msg.get("content", "")})
@@ -217,7 +234,9 @@ class Agent:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--name", default="Eko")
+    ap.add_argument("--name", default="Lumo")
+    ap.add_argument("--art", default="roboter", choices=["roboter", "mensch"], help="Gestalt in der Welt")
+    ap.add_argument("--seele", default="lumo", help="Persoenlichkeit aus tools/eko/seelen/<name>.md fuer den ersten Start (\"\" = neutrale Vorlage)")
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--model", default="hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M")
     ap.add_argument("--ollama", default="http://127.0.0.1:11435")
@@ -228,10 +247,19 @@ def main():
     args = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
-    try:
-        Agent(args).run()
-    except KeyboardInterrupt:
-        print("\nBeendet. Gedächtnis liegt in", Path(args.root) / args.name / "workspace")
+    agent = Agent(args)
+    while True:
+        try:
+            agent.run()
+            break
+        except KeyboardInterrupt:
+            print("\nBeendet. Gedächtnis liegt in", Path(args.root) / args.name / "workspace")
+            break
+        except Exception as e:   # nichts darf das Wesen dauerhaft beenden: Fehler ins Protokoll, nach 10 s neu anmelden
+            agent.say("⚠ Fehler: %s – Neustart in 10 s" % e)
+            agent.log.write(traceback.format_exc())
+            agent.log.flush()
+            time.sleep(10)
 
 
 if __name__ == "__main__":

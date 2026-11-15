@@ -126,6 +126,8 @@ func _process_timed(delta: float) -> void:
 		handle_result(d[0], d[1])
 	_dispatch_tick()
 	_after_buy_tick()
+	if str(config.get("provider", "")) == "eko":   # Firma eines freien Wesens: es entscheidet selbst (EkoWorld), hier nur der Tagesbetrieb
+		return
 	if _inflight >= 0:
 		# Wachhund: falls der Adapter nie antwortet
 		if real_time - _inflight_sent > adapter.timeout_s() + 5.0:   # Zeitgrenze des Adapters (IONOS laenger)
@@ -279,7 +281,7 @@ func _run_fallback() -> void:
 
 ## Regel-Disposition fuer Modellspieler mit offenen Modellen (lokal per Ollama oder gehostet bei IONOS): in der Partie vom 09.11.
 ## lief sie mit IONOS gar nicht, Fahrzeuge mit angenommenem Auftrag standen ohne Fahrer.
-const DISPATCH_PROVIDERS := ["ollama", "ionos"]
+const DISPATCH_PROVIDERS := ["ollama", "ionos", "eko"]
 func _dispatch_help_on() -> bool:
 	return config.get("provider", "") in DISPATCH_PROVIDERS and bool(config.get("dispatch_help", true))
 

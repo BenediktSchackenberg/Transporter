@@ -70,7 +70,7 @@ Ein 9B-Modell vergisst oft Pflichtangaben. Ein **Assistent** ergänzt Lücken (F
 | 17 | Region mehrerer Städte: Bürgermeister und Kassen je Stadt, Straßen, Flugverkehr, Binnenhandel, Gründer, Pendeln | ✅ umgesetzt, Grenzen in `docs/REGION.md` |
 | 25 | Eko-Modus: freie Wesen ohne Ziel (Claude Code über HTTP), bauen Block für Block, Gedächtnis als Dateien | 🧪 Phase 1 (`docs/EKO_MODE.md`) |
 
-**Eko-Modus starten:** Spiel mit `-- --eko` starten, dann `powershell -ExecutionPolicy Bypass -File tools\eko\start_eko.ps1 -Name Eko` (Claude Code) oder mit lokalem Modell `python tools\eko\eko_ollama.py --name Eko` (Ollama). Einzelheiten in [`docs/EKO_MODE.md`](docs/EKO_MODE.md).
+**Eko-Modus starten:** Spiel mit `-- --eko` starten, dann `powershell -ExecutionPolicy Bypass -File tools\eko\start_eko.ps1` (Claude Code) oder mit lokalem Modell `python tools\eko\eko_ollama.py` (Ollama). Beide starten Lumo, den kleinen Roboter vom Smaragdstern, der Blöcke baut und mit den KI-Unternehmern spricht. Einzelheiten in [`docs/EKO_MODE.md`](docs/EKO_MODE.md).
 
 Die Pläne stehen in [`docs/ECONOMY.md`](docs/ECONOMY.md) und [`STATUS.md`](STATUS.md).
 

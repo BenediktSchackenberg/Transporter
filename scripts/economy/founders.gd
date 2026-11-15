@@ -240,6 +240,22 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 	return {"ok": true, "msg": "%s gegründet (Firma %d)." % [c.company_name, c.id], "ref": c.id}
 
 
+## Gruendung durch ein freies Wesen (Eko-Modus): eigene Ersparnisse (Konto Y0) plus Einlage des Kapitalgeberpools I0.
+## Sitz vorlaeufig im Rathaus der Heimatstadt, zwei Allrounder wie beim Startunternehmer. Das Signal company_founded sendet der
+## Aufrufer, nachdem er die Firma dem Wesen zugeordnet hat (damit die Sitzung den Controller als "eko" anlegt).
+func create_for_being(town: int, player: String, firm: String, own: float, investor: float) -> Company:
+	var c := _create(town, "Gründung durch %s (eigene Ersparnisse und Kapitalgeber)" % player, investor)
+	c.player_name = player
+	c.company_name = firm
+	c.personality = "netzwerker"
+	sim.economy.transfer("Y0", "I0", own)   # Ersparnisse des Wesens als Einlage (ueber den Kapitalgeberpool in die Firma)
+	c.ledger.inject(own)
+	c.depots.append(int(sim.towns.get_t(town).town_hall))
+	sim.personnel.start_staff_small(c.id)
+	history.append({"tag": GameCalendar.day_of(sim.game_min), "stadt": town, "firma": c.id, "branche": "transport", "anlass": "Wesen %s" % player, "kapital": own + investor})
+	return c
+
+
 ## Neue Company am Ende des Registers (eigene ID, eigenes Konto "C<id>", Einlage aus I0, eigenes Gedaechtnis, Figur und Personal).
 func _create(town: int, reason: String, capital: float = CAPITAL) -> Company:
 	var cid: int = sim.companies.size()

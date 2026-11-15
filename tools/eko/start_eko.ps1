@@ -1,12 +1,13 @@
 # Eko-Modus: startet einen Claude-Code-Agenten als freies Wesen in der laufenden Partie (Idee nach Clawblox, MIT).
 # Voraussetzung: Spiel laeuft mit --eko (Weltschnittstelle auf 127.0.0.1:8790), Claude Code ist installiert und angemeldet.
 #
-#   powershell -ExecutionPolicy Bypass -File tools\eko\start_eko.ps1 -Name Eko
+#   powershell -ExecutionPolicy Bypass -File tools\eko\start_eko.ps1 -Name Lumo
 #   (weitere Wesen mit anderem -Name; Abbruch mit Strg+C, das Gedaechtnis bleibt im Arbeitsordner)
 #
 # Der Agent darf nur curl ausfuehren und Dateien in seinem Arbeitsordner lesen/schreiben (--allowedTools).
 param(
-    [string]$Name = "Eko",
+    [string]$Name = "Lumo",
+    [string]$Seele = "lumo",     # Persoenlichkeit aus tools\eko\seelen\<Seele>.md beim ersten Start ("" = neutrale Vorlage)
     [int]$Port = 8790,
     [string]$Model = "",
     [string]$Root = "$env:USERPROFILE\PixelTransportRivals-Eko",
@@ -24,7 +25,10 @@ New-Item -ItemType Directory -Force $ws, $logs | Out-Null
 # Gedaechtnis beim ersten Start aus der Vorlage anlegen (spaeter nie ueberschreiben)
 foreach ($f in Get-ChildItem (Join-Path $here "vorlage")) {
     $dst = Join-Path $ws $f.Name
-    if (-not (Test-Path $dst)) { Copy-Item $f.FullName $dst }
+    if (-not (Test-Path $dst)) {
+        Copy-Item $f.FullName $dst
+        if ($f.Name -eq "SOUL.md" -and $Seele -ne "") { Copy-Item (Join-Path $here "seelen\$Seele.md") $dst -Force }
+    }
 }
 $epi = Join-Path $ws "EPISODIC_MEMORY.jsonl"
 if (-not (Test-Path $epi)) { New-Item -ItemType File $epi | Out-Null }

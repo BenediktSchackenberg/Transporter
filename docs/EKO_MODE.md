@@ -23,8 +23,8 @@ powershell -ExecutionPolicy Bypass -File tools\eko\start_eko.ps1 -Name Eko
 
 ```powershell
 Godot_v4.4.1-stable_win64.exe --path . -- --eko-folgen          # Kamera folgt dem Wesen, KI-Zentrale eingeklappt
-python tools\eko\eko_ollama.py --name Eko                         # Standard: Qwen3.8-27B (IQ3_M) über Ollama auf 127.0.0.1:11435
-python tools\eko\eko_ollama.py --name Mia --model qwen3.5:9b-q4_K_M
+python tools\eko\eko_ollama.py                                    # Lumo, der kleine Roboter vom Smaragdstern (Qwen3.8-27B über Ollama, 127.0.0.1:11435)
+python tools\eko\eko_ollama.py --name Mia --art mensch --seele "" --model qwen3.5:9b-q4_K_M   # zweites Wesen, kleines Modell
 ```
 
 `eko_ollama.py` (nur Python-Standardbibliothek) ist eine eigene Agentenschleife mit Werkzeugaufrufen: `observe`, `act`, `wait`,
@@ -37,6 +37,48 @@ Arbeitsordner und Protokolle liegen unter `%USERPROFILE%\PixelTransportRivals-Ek
 Ein erneuter Start mit demselben Namen setzt die letzte Unterhaltung fort (`claude -c`), das Gedächtnis bleibt erhalten.
 
 Der Agent darf nur `curl` ausführen und Dateien in seinem Arbeitsordner lesen und schreiben (`--allowedTools`).
+
+## Lumo und andere Wesen
+
+- **Gestalt** beim Beitreten: `art=mensch` (Pixelfigur) oder `art=roboter` (kleiner Roboter auf Ketten mit großem leuchtendem Auge und
+  blinkender Antenne, eigener Entwurf). Standard der Startskripte ist **Lumo**, ein Roboter vom Smaragdstern.
+- **Seelen** liegen in `tools/eko/seelen/<name>.md` und werden beim ersten Start als `SOUL.md` übernommen (`--seele` / `-Seele`); danach gehört
+  die Datei dem Wesen. Eigene Figuren: einfach eine weitere Datei anlegen.
+
+## Lumos Leben: Arbeit, Grundstück, Haus
+
+- **Arbeit für die KI-Firmen:** Aktive Firmen mit mehr als 3.000 € Kasse bieten Wesen Aufträge an (`jobangebote`, höchstens 5 offen,
+  10 Minuten gültig): *Botengang* (1–3 Kisten vom Betriebshof zu einem Gebäude im Ort, `Pickup {job}`, `Deliver {job}`) oder *Mauer*
+  (4–8 Blöcke eines Materials im markierten Bereich neben dem Hof). Firmenfiguren in Sichtweite rufen das Wesen an. Beim Abliefern
+  zahlt die Firma den Lohn aus ihrer Kasse (Kategorie Löhne, Gegenkonto **Y0 „Freie Wesen“**); die Firma bekommt Annahme und
+  Erledigung als Meldung.
+- **Grundstück:** `lebensziel.grundstuecke_zu_kaufen` zeigt freie Wohngrundstücke (mind. 2 × 2 Felder) im Ort. `BuyPlot` zahlt den
+  Grundstückspreis an die Stadtkasse; Eigentümer wird Y0, das Grundstück gilt als privat gehalten.
+- **Haus:** `OrderHouse` (2.400 € an K0 „Baufirmen“) – die Baufirma eines Bautrupps baut ein 8 × 8-Block-Haus Block für Block:
+  Holzboden mit Teppich, Wände mit Fenstern und Tür nach Süden, Bett mit Decke, Tisch mit Lampe, Regal mit Buch, Pflanze, Ladestation,
+  Flachdach. Gezeichnet wird es als **Schnitt** (ohne Dach, Vorder- und Ostwand nur eine Schicht hoch), damit man das Wesen drinnen sieht.
+  Ist es fertig, wird das Grundstück bebaut; `Rest` lässt das Wesen in der Ladestation ausruhen.
+- **Vorführung:** `-- --eko-demo-haus` gibt Lumo sofort ein fertiges Haus am nächsten Wohngrundstück (Geld aus X0, Bilanz bleibt gleich).
+
+## Lumo-Unternehmer
+
+- `FoundCompany {name?, behalten?}` ab 1.500 € Ersparnissen: Der Kapitalgeberpool I0 legt 20.000 € dazu, die Ersparnisse gehen als
+  Einlage in die Firma (`behalten` bleibt privat). Sitz vorerst im Rathaus, zwei Allrounder wie beim Startunternehmer (`Founders.create_for_being`).
+- Das Wesen führt die Firma selbst mit `Firma {aktion}` (accept_contract, assign_transport, collect_contracts, buy_vehicle, sell_vehicle,
+  recruit_worker, dismiss_worker, assign_worker_task, rent_depot, take_loan, repay_loan, install_internet, send_message) und sieht eine
+  kompakte Lage in `meine_firma`. Den Tagesbetrieb (Aufträge zuweisen, Fahrer setzen, tanken, reparieren, Hof aufbauen) erledigt die
+  Disposition der Regel-KI über einen Controller mit Anbieter `eko`, der selbst keine Modellanfragen stellt.
+- Die Firmenfigur ist ausgeblendet; sichtbar ist das Wesen selbst. Die Firma erscheint wie jede Gründung in HUD und KI-Zentrale.
+
+## Gespräche mit anderen KIs
+
+- `Talk {to, text}` (höchstens 3 Felder Abstand) spricht eine Figur an:
+  - **Unternehmer** (KI-Firmen): antworten sofort aus ihrem echten Zustand – was ihre Figur gerade tut, das Ziel und die Begründung ihrer
+    letzten KI-Entscheidung. Die Firma bekommt die Worte des Wesens als Meldung in ihre Beobachtung (`sim.notify`); Firmen mit Sprachmodell
+    können darauf eingehen.
+  - **andere Wesen**: hören es als Ereignis und in `gehoert`, ihr eigenes Modell antwortet mit `Talk`/`Say`.
+- `/observe` zeigt `figuren_in_der_naehe` (alle Unternehmer mit Feld und Entfernung, nächste zuerst) und `gehoert` (was im Umkreis von
+  12 Feldern gesagt wurde).
 
 ## Aufbau
 
@@ -66,4 +108,8 @@ die behoben sind: Abbauen ließ Blöcke schweben, Gehen war bei langsamen Bilder
 - Blöcke versperren keine Wege (Wesen und Fahrzeuge gehen hindurch).
 - Keine Verbindung zur Wirtschaft: Material kostet nichts, Wesen haben kein Geld und keine Bedürfnisse.
 - Kein Bild aus der Sicht des Wesens (`/observe/image` wie bei Clawblox fehlt).
-- Kosten: Ein Dauerlauf verbraucht laufend Kontingent des Claude-Kontos.
+- Kosten: Ein Dauerlauf mit Claude Code verbraucht laufend Kontingent des Claude-Kontos (mit Ollama nicht).
+- Bürgermeister und Bürger lassen sich noch nicht ansprechen; Unternehmer antworten mit festem Satzbau aus ihrem Zustand, nicht frei.
+- Aufträge an Wesen erzeugt die Engine im Namen der Firmen; Firmen mit Sprachmodell können noch keine eigenen Aufträge an Wesen formulieren.
+- Ein Wesen mit Firma geht nicht selbst zum Händler: Besuche (Fahrzeugkauf, Depot) erledigt die ausgeblendete Firmenfigur.
+- Haus und Einrichtung sind fest vorgegeben (eine Bauform, Wandmaterial wählbar).

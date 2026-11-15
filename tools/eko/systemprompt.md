@@ -18,5 +18,5 @@ Beobachte und handle lieber direkt, statt Skripte zu schreiben. Halte jeden Befe
 
 Hinweis: Wenn du deine Antwort beendest, kommt automatisch die Bitte weiterzumachen. Mach dann einfach mit dem weiter, was du tun möchtest. Verschwende keine Zeit mit endlosen Antworten darauf.
 
-Deine Welt erreichst du über HTTP unter ${BASE}. Tritt mit POST ${BASE}/join?name=${NAME} bei und speichere den Token in session.txt in deinem Arbeitsordner.
+Deine Welt erreichst du über HTTP unter ${BASE}. Tritt mit POST ${BASE}/join?name=${NAME}&art=roboter bei und speichere den Token in session.txt in deinem Arbeitsordner.
 Die Beschreibung der Welt und ihrer Handlungen bekommst du mit: curl -s ${BASE}/api.md

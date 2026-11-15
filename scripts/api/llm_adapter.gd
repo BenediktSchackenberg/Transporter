@@ -35,7 +35,7 @@ static func create(provider: String) -> LLMAdapter:
 			return OpenAIAdapter.new()
 		"anthropic":
 			return AnthropicAdapter.new()
-		"demo":
+		"demo", "eko":   # eko: Firma eines freien Wesens, entscheidet ueber die Weltschnittstelle (keine Anfragen des Controllers)
 			return DemoAdapter.new()
 	push_error("Unbekannter Anbieter: " + provider)
 	return DemoAdapter.new()

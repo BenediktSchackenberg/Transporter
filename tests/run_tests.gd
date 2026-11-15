@@ -16,6 +16,8 @@ func _initialize() -> void:
 	test_names.append("test_tourism_hotel")
 	test_names.append("test_tourism_venues")
 	test_names.append("test_eko_world")
+	test_names.append("test_eko_life")
+	test_names.append("test_eko_founder")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13118,6 +13120,7 @@ func test_eko_world() -> void:
 		ok(not E.input("Eko", "Place", {"block": [road.x * 4, road.y * 4, 0]}).ok, "nicht auf die Strasse")
 	ok(not E.input("Eko", "Place", {"block": [(t.x + 9) * 4, t.y * 4, 0]}).ok, "ausser Reichweite abgelehnt")
 	ok(not E.input("Eko", "Fly", {}).ok, "unbekannte Handlung abgelehnt")
+	ok(E.input("Eko", "Stop", {}).ok, "anhalten")
 	var goal := Vector2i(-1, -1)
 	for d in range(5, 15):
 		for c in [t + Vector2i(d, 0), t + Vector2i(0, d), t + Vector2i(-d, 0), t + Vector2i(0, -d)]:
@@ -13141,6 +13144,18 @@ func test_eko_world() -> void:
 	var sy: Array = ws.handle("POST", "/input", {}, h, JSON.stringify({"type": "Say", "data": {"text": "Hallo Eko!"}}))
 	ok(sy[0] == 200 and sy[1].has("beobachtung"), "sprechen, Antwort mit Beobachtung")
 	ok(ws.handle("GET", "/chat/messages", {"limit": "5"}, h, "")[1].size() == 1, "Chatverlauf")
+	# Gespraeche: Wesen untereinander und mit einem Unternehmer (Antwort aus dessen Zustand, Meldung an die Firma)
+	ok(E.join("Lumo", "roboter").ok and E.beings.Lumo.art == "roboter", "Roboter beigetreten")
+	E.beings.Lumo.mover.pos = E.beings.Mia.mover.pos
+	ok(E.input("Lumo", "Talk", {"to": "Mia", "text": "Hallo Mia, ich komme vom Smaragdstern."}).ok, "Lumo spricht Mia an")
+	ok(str(E.beings.Mia.events.back()).contains("Lumo sagt zu dir") and E.observe("Mia").gehoert.any(func(m): return m.von == "Lumo"), "Mia hat es gehoert")
+	ok(not E.input("Lumo", "Talk", {"to": "Eko", "text": "Hallo?"}).ok, "zu weit weg fuer ein Gespraech")
+	var boss: Company = s.companies[0]
+	E.beings.Lumo.mover.pos = s.city.tile_center(s.avatars[0].tile())
+	ok(E.observe("Lumo").figuren_in_der_naehe.any(func(f): return f.name == boss.player_name), "Unternehmer in der Naehe sichtbar")
+	var tk: Dictionary = E.input("Lumo", "Talk", {"to": boss.player_name, "text": "Was machst du da?"})
+	ok(tk.ok and str(tk.msg).contains("Ich bin %s" % boss.player_name), "Unternehmer antwortet: %s" % str(tk.msg).left(90))
+	ok(s.action_results[0].any(func(r): return str(r.text).contains("spricht dich an")), "Firma bekommt die Worte als Meldung")
 	ok(str(ws.handle("GET", "/api.md", {}, {}, "")[1]).contains("MoveTo"), "API-Beschreibung abrufbar")
 	ok(ws.handle("GET", "/nix", {}, h, "")[0] == 404, "unbekannter Endpunkt")
 	var r := ws._parse("POST /input?x=1 HTTP/1.1\r\nX-Session: abc\r\nContent-Length: 10\r\n\r\n{\"a\"".to_utf8_buffer())
@@ -13150,4 +13165,105 @@ func test_eko_world() -> void:
 	ws.free()
 	# Speichern und Laden
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
-	ok(s2.eko.blocks.size() == 2 and s2.eko.beings.has("Eko") and s2.eko.beings.has("Mia") and s2.eko.tile_of(s2.eko.beings.Eko) == goal, "Bloecke und Wesen gespeichert")
+	ok(s2.eko.blocks.size() == 2 and s2.eko.beings.has("Eko") and s2.eko.beings.has("Mia") and s2.eko.tile_of(s2.eko.beings.Eko) == goal and s2.eko.beings.Lumo.art == "roboter", "Bloecke, Wesen und Gestalt gespeichert")
+
+
+## Lumos Leben (15.11.2026): Firmen bieten Auftraege an und zahlen Lohn (Konto Y0), Wesen kauft ein Wohngrundstueck,
+## beauftragt ein Haus, das Block fuer Block entsteht, und ruht darin; Geld bleibt erhalten, Speichern/Laden.
+func test_eko_life() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.join("Lumo", "roboter")
+	var b: Dictionary = E.beings.Lumo
+	var c: Company = s.companies[0]
+	var j: Dictionary = {}
+	for i in 30:
+		j = E._new_job(c)
+		if not j.is_empty() and j.art == "botengang":
+			break
+		if not j.is_empty():
+			E.jobs.erase(j.id)
+			j = {}
+	ok(not j.is_empty(), "Firma bietet einen Botengang an")
+	ok(E.observe("Lumo").jobangebote.any(func(x): return x.id == j.id), "Angebot in der Beobachtung")
+	ok(E.input("Lumo", "AcceptJob", {"job": j.id}).ok and b.job == j.id, "Auftrag angenommen")
+	ok(not E.input("Lumo", "Deliver", {"job": j.id}).ok, "ohne Kisten kein Abliefern")
+	b.mover.pos = s.city.tile_center(Vector2i(int(j.von[0]), int(j.von[1])))
+	ok(E.input("Lumo", "Pickup", {"job": j.id}).ok and b.held.count("kiste") == int(j.menge), "Kisten aufgenommen")
+	ok(not E.input("Lumo", "Place", {"block": [int(j.von[0]) * 4, int(j.von[1]) * 4, 0], "material": "kiste"}).ok, "Kisten werden nicht verbaut")
+	b.mover.pos = s.city.tile_center(Vector2i(int(j.nach[0]), int(j.nach[1])))
+	var cash0 := c.ledger.cash
+	var dv: Dictionary = E.input("Lumo", "Deliver", {"job": j.id})
+	ok(dv.ok and is_equal_approx(float(b.geld), float(j.lohn)) and is_equal_approx(cash0 - c.ledger.cash, float(j.lohn)), "Lohn %s von der Firma an Lumo" % str(j.lohn))
+	ok(is_equal_approx(float(s.economy.accounts.Y0), float(b.geld)), "Konto Y0 = Geld der Wesen")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten (Lohn)")
+	# Mauer-Auftrag
+	var m := {}
+	for i in 30:
+		m = E._new_job(c)
+		if not m.is_empty() and m.art == "mauer":
+			break
+		if not m.is_empty():
+			E.jobs.erase(m.id)
+			m = {}
+	if not m.is_empty():
+		E.input("Lumo", "AcceptJob", {"job": m.id})
+		for k in int(m.menge):
+			E.blocks[Vector3i(int(m.bereich[0]) * 4 + k % 8, int(m.bereich[1]) * 4, k / 8)] = m.material
+		ok(E.input("Lumo", "Deliver", {"job": m.id}).ok, "Mauer abgenommen und bezahlt")
+	# Grundstueck und Haus
+	var obs: Dictionary = E.observe("Lumo")
+	var plots: Array = obs.lebensziel.get("grundstuecke_zu_kaufen", [])
+	ok(not plots.is_empty(), "Wohngrundstuecke zum Kauf angezeigt")
+	var pl: Dictionary = plots[0]
+	b.mover.pos = s.city.tile_center(Vector2i(int(pl.feld[0]), int(pl.feld[1])))
+	ok(not E.input("Lumo", "BuyPlot", {"plot": pl.id}).ok or float(pl.preis) <= float(b.geld), "zu wenig Geld wird abgelehnt")
+	s.economy.transfer("X0", "Y0", 10000.0)   # Erspartes fuer den Test (Gegenbuchung Ausland)
+	b.geld = float(b.geld) + 10000.0
+	var bp: Dictionary = E.input("Lumo", "BuyPlot", {"plot": pl.id})
+	ok(bp.ok and s.parcels.parcel(pl.id).owner == "Y0", "Grundstueck gekauft: %s" % str(bp.msg).left(60))
+	ok(E.input("Lumo", "OrderHouse", {"wand": "holz"}).ok and E.houses.Lumo.status == "im_bau", "Haus beauftragt")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten (Grundstueck, Haus)")
+	var r := E.home_rect("Lumo")
+	ok(E.can_place(Vector3i(r.position.x * 4 + 2, r.position.y * 4 + 2, 0)) != "", "Hausflaeche nicht ueberbaubar")
+	for i in 400:
+		E.update(1.0)
+	ok(E.houses.Lumo.status == "fertig" and s.parcels.parcel(pl.id).state == "bebaut", "Haus fertig gebaut")
+	ok(E.houses.Lumo.blocks.any(func(x): return str(x[3]) == "ladestation"), "Haus hat eine Ladestation")
+	ok(not E.input("Lumo", "Rest", {}).ok or E.is_home(b), "Ausruhen nur zu Hause")
+	b.mover.pos = s.city.tile_center(r.position + Vector2i(1, 1))
+	ok(E.is_home(b) and E.input("Lumo", "Rest", {}).ok, "Lumo ruht zu Hause")
+	ok(E.observe("Lumo").lebensziel.haus.du_bist_zuhause, "Beobachtung: zu Hause")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.eko.houses.Lumo.status == "fertig" and is_equal_approx(float(s2.eko.beings.Lumo.geld), float(b.geld)) and s2.eko.beings.Lumo.grundstueck == pl.id, "Haus, Geld und Grundstueck gespeichert")
+
+
+## Lumo-Unternehmer (15.11.2026): Wesen gruendet mit Ersparnissen plus Kapitalgeber eine Firma, fuehrt sie ueber Firma-Aktionen,
+## sieht eine kompakte Firmenlage; Geld bleibt erhalten, Zuordnung wird gespeichert.
+func test_eko_founder() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.join("Lumo", "roboter")
+	var b: Dictionary = E.beings.Lumo
+	ok(not E.input("Lumo", "FoundCompany", {}).ok, "ohne Ersparnisse keine Gruendung")
+	s.economy.transfer("X0", "Y0", 3000.0)
+	b.geld = 3000.0
+	var n0 := s.companies.size()
+	var r: Dictionary = E.input("Lumo", "FoundCompany", {"name": "Lumo Lichtkurier", "behalten": 500})
+	ok(r.ok and s.companies.size() == n0 + 1, "Firma gegruendet: %s" % str(r.msg).left(70))
+	var c: Company = s.companies[-1]
+	ok(c.player_name == "Lumo" and c.company_name == "Lumo Lichtkurier" and E.firm_being(c.id) == "Lumo", "Firma gehoert Lumo")
+	ok(is_equal_approx(float(b.geld), 500.0) and c.ledger.cash > 20000.0, "Einlage 2.500 + Kapitalgeber, 500 privat behalten")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten (Gruendung)")
+	ok(not c.depots.is_empty(), "Sitz vorhanden (Rathaus)")
+	var fo: Dictionary = E.observe("Lumo").meine_firma
+	ok(fo.firma == "Lumo Lichtkurier" and fo.has("markt") and fo.has("fahrzeugangebote"), "kompakte Firmenlage in der Beobachtung")
+	ok(E.observe("Lumo").jobangebote.is_empty(), "als Unternehmer keine Hilfsjobs mehr")
+	ok(not E.input("Lumo", "Firma", {"aktion": {"action": "sabotage"}}).ok, "nicht erlaubte Firmenaktion abgelehnt")
+	var offers: Array = fo.fahrzeugangebote.filter(func(f): return float(f.preis) < c.ledger.cash)
+	if not offers.is_empty():
+		var bv: Dictionary = E.input("Lumo", "Firma", {"aktion": {"action": "buy_vehicle", "offer_id": offers[0].id}})
+		ok(bv.ok, "Fahrzeugkauf ueber die Firma: %s" % str(bv.msg).left(70))
+	ok(not E.input("Lumo", "FoundCompany", {}).ok, "nur eine Firma je Wesen")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.eko.firm_being(c.id) == "Lumo", "Zuordnung Firma - Wesen gespeichert")

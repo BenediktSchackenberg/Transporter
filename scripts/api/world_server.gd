@@ -90,7 +90,7 @@ func handle(method: String, path: String, query: Dictionary, headers: Dictionary
 	if path == "/api.md" and method == "GET":
 		return [200, FileAccess.get_file_as_string(API_DOC), "text/markdown; charset=utf-8"]
 	if path == "/join" and method == "POST":
-		var r := eko.join(str(query.get("name", "")))
+		var r := eko.join(str(query.get("name", "")), str(query.get("art", "mensch")))
 		if not bool(r.ok):
 			return [400, r]
 		var token := "%08x%08x" % [randi(), randi()]

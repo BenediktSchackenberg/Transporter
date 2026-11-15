@@ -367,7 +367,11 @@ func play_sound(n: String) -> void:
 ## Budget, Schluessel), aber mit eigenem Namen, eigener Persoenlichkeit und ohne fremdes Gedaechtnis (slot -1). Spielen die Startspieler
 ## im Demo-/Regelmodus oder ist founders_ai aus, bleibt es beim Regel-Controller.
 func _founder_profile(cid: int) -> Dictionary:
-	return founder_profile_for(sim.company(cid), cid, cfg.get("players", []), _keys, bool(cfg.get("founders_ai", true)))
+	var pc := founder_profile_for(sim.company(cid), cid, cfg.get("players", []), _keys, bool(cfg.get("founders_ai", true)))
+	if sim.eko.firm_being(cid) != "":   # Firma eines freien Wesens (Eko-Modus): Wesen entscheidet, Controller macht nur den Tagesbetrieb
+		pc["provider"] = "eko"
+		pc["model"] = "wesen"
+	return pc
 
 
 static func founder_profile_for(c, cid: int, players: Array, keys: Dictionary, use_ai: bool) -> Dictionary:
@@ -428,6 +432,9 @@ func _start_eko_server() -> void:
 		elif str(a).begins_with("--eko-port="):
 			on = true
 			port = int(str(a).trim_prefix("--eko-port="))
+		elif str(a) == "--eko-demo-haus":   # Vorfuehrung: Lumo mit fertigem Haus (Schnittansicht)
+			on = true
+			sim.eko.demo_house("Lumo")
 		elif str(a) == "--eko-folgen":   # Zuschauen: Kamera folgt dem ersten Wesen, KI-Zentrale eingeklappt
 			on = true
 			city_view.eko_view.follow = true
