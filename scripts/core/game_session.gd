@@ -12,6 +12,8 @@ const SPEEDS := [1, 2, 4, 8, 16]
 const SAVE_PATH := "user://saves/quicksave.json"
 const SUBSTEP := 0.1
 const MAX_FRAME_DT := 0.25
+var eko_autosave_s := 0.0          # Wesen-Modus: Spielstand automatisch alle so viele Sekunden sichern (0 = aus)
+var _eko_save_left := 0.0
 var sim_budget_ms := 60.0         # max. Rechenzeit der Simulation je Bild (0 = unbegrenzt); darüber läuft das Spiel langsamer statt zu ruckeln
 
 var cfg := {}                     # Spielkonfiguration OHNE API-Keys
@@ -450,6 +452,8 @@ func _start_eko_server() -> void:
 	if not on:
 		return
 	sim.eko.persist_path = "user://eko_ersparnisse.json"   # Ersparnisse der Wesen ueberstehen einen Neustart der Welt
+	eko_autosave_s = 180.0
+	_eko_save_left = eko_autosave_s
 	var ws := WorldServer.new()
 	add_child(ws)
 	ws.on_save = save_game
@@ -524,6 +528,11 @@ func _process_timed(delta: float) -> void:
 		ctl.remaining_real_min = sim.remaining_real_min
 	if running:
 		sim.eko.update(minf(delta, 1.0))   # Eko-Wesen laufen in Echtzeit (ungedeckelt, sonst bei langsamen Bildern zu langsam)
+		if eko_autosave_s > 0.0:   # Absturzschutz: ungeklaerter Engine-Absturz (Index out of bounds), Waechter startet aus diesem Stand neu
+			_eko_save_left -= delta
+			if _eko_save_left <= 0.0:
+				_eko_save_left = eko_autosave_s
+				save_game()
 		active_seconds += delta   # Partiedauer zaehlt volle Echtzeit, auch bei langsamen Bildern
 		_sim_acc += dt * speed()
 		var t0 := Time.get_ticks_usec()
