@@ -13299,5 +13299,15 @@ func test_eko_founder() -> void:
 		var bv: Dictionary = E.input("Lumo", "Firma", {"aktion": {"action": "buy_vehicle", "offer_id": offers[0].id}})
 		ok(bv.ok, "Fahrzeugkauf ueber die Firma: %s" % str(bv.msg).left(70))
 	ok(not E.input("Lumo", "FoundCompany", {}).ok, "nur eine Firma je Wesen")
+	s.companies[c.id].ledger.inject(10000.0)
+	E._job_timer = 0.0
+	for i in 5:
+		E._jobs_tick(EkoWorld.JOB_EVERY_S)
+	ok(not E.jobs.values().any(func(j): return int(j.cid) == c.id), "eigene Firma schreibt keine Hilfsjobs aus")
+	var own := {"id": "JX", "cid": c.id, "status": "offen", "art": "botengang", "person": "Lumo", "text": "x", "lohn": 10.0}
+	E.jobs["JX"] = own
+	ok(not E.input("Lumo", "AcceptJob", {"job": "JX"}).ok, "eigenen Auftrag nicht annehmbar")
+	E.jobs.erase("JX")
+	ok(str(E.observe("Lumo").meine_firma.hinweis).contains("Büroleitung"), "Hinweis: Firmengaenge erledigt die Bueroleitung")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.eko.firm_being(c.id) == "Lumo", "Zuordnung Firma - Wesen gespeichert")

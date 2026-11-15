@@ -499,8 +499,8 @@ func _jobs_tick(dt: float) -> void:
 		for c in sim.companies:
 			if open >= JOB_MAX_OPEN:
 				break
-			if not c.is_active() or c.ledger.cash < JOB_MIN_CASH or c.depots.is_empty():
-				continue
+			if not c.is_active() or c.ledger.cash < JOB_MIN_CASH or c.depots.is_empty() or firm_being(c.id) != "":
+				continue   # Firmen von Wesen schreiben keine Hilfsjobs aus (Lumo bezahlte sich sonst aus der eigenen Kasse, 15.11.)
 			if jobs.values().any(func(j): return int(j.cid) == c.id and j.status in ["offen", "angenommen"]):
 				continue
 			if not _new_job(c).is_empty():
@@ -582,6 +582,8 @@ func _accept_job(b: Dictionary, id: String) -> Dictionary:
 		return {"ok": false, "msg": "Auftrag %s gibt es nicht (mehr) oder er ist vergeben." % id}
 	if str(b.get("job", "")) != "":
 		return {"ok": false, "msg": "Du arbeitest schon an %s. Erst abliefern." % b.job}
+	if int(j.cid) == int(b.get("firma", -1)):
+		return {"ok": false, "msg": "%s ist ein Auftrag deiner eigenen Firma." % id}
 	j.status = "angenommen"
 	j.by = b.name
 	b.job = id
@@ -966,6 +968,8 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"bewerber": o.ressourcen.arbeitskraefte.slice(0, 3).map(func(w): return {"id": w.id, "name": w.name, "lohn_h": w.lohn_h, "anwerbung": w.anwerbung,
 			"fahren": int(w.faehigkeiten.get("fahren", 0))}),
 		"personal": o.personal.size(), "letzte_ergebnisse": o.get("ergebnisse_deiner_aktionen", []).slice(-4),
+		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
+			"du musst nicht darauf warten. Den Tagesbetrieb (Fahrten zuweisen, tanken, reparieren) erledigt die Disposition. Du bist frei für dein Leben und dein Haus.",
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text}}"}
 
