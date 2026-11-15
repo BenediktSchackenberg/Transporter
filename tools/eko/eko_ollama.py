@@ -509,8 +509,23 @@ class Agent:
             if msg.get("content", "").strip():
                 self.say("💭 " + msg["content"].strip().replace("\n", " ")[:300])
             if not calls:
-                messages.append({"role": "user", "content": CONTINUE})
+                # Schleifenbremse fuer Antworten ohne Werkzeug (15.11.: Sabine hielt nach einer alten Notiz die Welt fuer
+                # unerreichbar und antwortete minutenlang nur mit Text): Lage zeigen, notfalls frische Sitzung
+                self._no_tool = getattr(self, "_no_tool", 0) + 1
+                if self._no_tool >= 6:
+                    self.say("↺ Schleifenbremse: frische Sitzung nach %d Antworten ohne Handlung" % self._no_tool)
+                    messages = [{"role": "user", "content": MORNING + " " + self.digest()}]
+                    self._no_tool = 0
+                elif self._no_tool >= 3:
+                    o = compact_obs(self.world.observe())
+                    ok = isinstance(o, dict) and o.get("ok")
+                    messages.append({"role": "user", "content": ("Die Welt ist erreichbar – hier ist deine aktuelle Lage: %s. Handle jetzt mit deinen Werkzeugen (act, observe)."
+                                     % json.dumps({"du": o.get("du"), "gefuehle": o.get("gefuehle"), "mein_ziel": o.get("mein_ziel")}, ensure_ascii=False)[:1500])
+                                     if ok else CONTINUE})
+                else:
+                    messages.append({"role": "user", "content": CONTINUE})
                 continue
+            self._no_tool = 0
             for c in calls:
                 fn = c["function"]
                 a = fn.get("arguments") or {}
