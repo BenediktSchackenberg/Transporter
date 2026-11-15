@@ -104,6 +104,10 @@ class FairGate:
 
 
 MODEL_GATE = FairGate()
+# IONOS AI Model Hub (OpenAI-kompatibel): Schluessel nur aus der Umgebungsvariablen, nie im Arbeitsordner oder Protokoll.
+IONOS_BASE_URL = "https://openai.inference.de-txl.ionos.com/v1"
+IONOS_MODEL = "Qwen/Qwen3.8-27B"
+IONOS_PARALLEL = threading.Semaphore(4)   # gehostet: einige Wesen gleichzeitig, aber nicht unbegrenzt
 
 TOOLS = [
     {"name": "observe", "description": "Sieh dich um: wo du bist, was du trägst, Karte der Umgebung (21x21 Felder), Blöcke, "
@@ -249,6 +253,8 @@ class Agent:
                         .replace("{STADT}", getattr(args, "stadt", "") or "meiner Stadt")
                     (self.ws / "SOUL.md").write_text(soul, encoding="utf-8")
         (self.ws / "EPISODIC_MEMORY.jsonl").touch()
+        if getattr(args, "anbieter", "ollama") == "ionos" and args.model.startswith("hf.co/"):
+            args.model = IONOS_MODEL
         self.world = World("http://127.0.0.1:%d" % args.port, args.name, self.dir / "schluessel.txt")
         self._arrival_failed = set()
         self.log = open(self.logs / "sitzung.log", "a", encoding="utf-8")
@@ -367,6 +373,8 @@ class Agent:
         return ("Erinnerung aus deinem Gedächtnis:\n" + "\n\n".join(parts)) if parts else ""
 
     def chat(self, messages):
+        if getattr(self.args, "anbieter", "ollama") == "ionos":
+            return self.chat_openai(messages)
         body = {"model": self.args.model, "messages": messages, "stream": False, "think": self.args.think,
                 "tools": [{"type": "function", "function": t} for t in TOOLS],
                 "options": {"num_ctx": self.args.ctx, "temperature": 0.8}}
@@ -374,6 +382,45 @@ class Agent:
                                      headers={"Content-Type": "application/json"})
         with MODEL_GATE, urllib.request.urlopen(req, timeout=600) as r:   # der Reihe nach, fair fuer alle Wesen
             return json.loads(r.read().decode("utf-8"))["message"]
+
+    def chat_openai(self, messages):
+        """OpenAI-kompatibler Aufruf (IONOS): Verlauf ins OpenAI-Format (tool_call_id, Argumente als JSON-Text), Antwort zurueck
+        ins interne Format (Argumente als Objekt)."""
+        key = os.environ.get(getattr(self.args, "key_env", "IONOS_API_TOKEN"), "")
+        if not key:
+            raise RuntimeError("Umgebungsvariable %s fehlt (IONOS-Token)." % getattr(self.args, "key_env", "IONOS_API_TOKEN"))
+        out = []
+        for m in messages:
+            if m["role"] == "assistant" and m.get("tool_calls"):
+                out.append({"role": "assistant", "content": m.get("content") or "", "tool_calls": [
+                    {"id": c.get("id", "call_%d" % i), "type": "function", "function": {"name": c["function"]["name"],
+                     "arguments": c["function"]["arguments"] if isinstance(c["function"]["arguments"], str) else json.dumps(c["function"]["arguments"], ensure_ascii=False)}}
+                    for i, c in enumerate(m["tool_calls"])]})
+            elif m["role"] == "tool":
+                out.append({"role": "tool", "tool_call_id": m.get("tool_call_id", "call_0"), "content": m.get("content", "")})
+            else:
+                out.append({"role": m["role"], "content": m.get("content", "")})
+        while out and out[0]["role"] == "tool":   # Werkzeugantwort ohne Aufruf ist im OpenAI-Format ungueltig
+            out.pop(0)
+        body = {"model": self.args.model, "messages": out, "tools": [{"type": "function", "function": t} for t in TOOLS],
+                "temperature": 0.8, "max_tokens": 2000}
+        req = urllib.request.Request(self.args.base_url.rstrip("/") + "/chat/completions", data=json.dumps(body).encode("utf-8"),
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer " + key})
+        with IONOS_PARALLEL:
+            try:
+                with urllib.request.urlopen(req, timeout=300) as r:
+                    msg = json.loads(r.read().decode("utf-8"))["choices"][0]["message"]
+            except urllib.error.HTTPError as e:   # Fehlertext von IONOS weitergeben, ohne den Schluessel
+                raise RuntimeError("IONOS HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300]))
+        calls = []
+        for c in msg.get("tool_calls") or []:
+            a = c["function"].get("arguments") or "{}"
+            try:
+                a = json.loads(a) if isinstance(a, str) else a
+            except ValueError:
+                a = {}
+            calls.append({"id": c.get("id", ""), "function": {"name": c["function"]["name"], "arguments": a}})
+        return {"content": msg.get("content") or "", "tool_calls": calls}
 
     def say(self, text):
         line = time.strftime("%H:%M:%S ") + text
@@ -442,7 +489,7 @@ class Agent:
                 short = json.dumps(a, ensure_ascii=False)[:120]
                 verdict = (res.get("msg", "") if isinstance(res, dict) else "")[:100]
                 self.say("→ %s %s %s" % (fn["name"], short, ("· " + verdict) if verdict else ""))
-                messages.append({"role": "tool", "tool_name": fn["name"], "content": json.dumps(res, ensure_ascii=False)[:14000]})
+                messages.append({"role": "tool", "tool_name": fn["name"], "tool_call_id": c.get("id", ""), "content": json.dumps(res, ensure_ascii=False)[:14000]})
                 # Schleifenbremse: dieselbe fehlgeschlagene Handlung dreimal hintereinander -> deutlicher Hinweis (Ralf fragte Greta 20-mal)
                 failed = isinstance(res, dict) and res.get("ok") is False
                 key = fn["name"] + json.dumps(a, sort_keys=True, ensure_ascii=False) if failed else ""
@@ -469,6 +516,9 @@ def main():
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--model", default="hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M")
     ap.add_argument("--ollama", default="http://127.0.0.1:11435")
+    ap.add_argument("--anbieter", default="ollama", choices=["ollama", "ionos"], help="Modellanbieter: lokales Ollama oder IONOS AI Model Hub")
+    ap.add_argument("--base-url", default=IONOS_BASE_URL, help="OpenAI-kompatible Adresse (fuer --anbieter ionos)")
+    ap.add_argument("--key-env", default="IONOS_API_TOKEN", help="Umgebungsvariable mit dem API-Schluessel")
     ap.add_argument("--root", default=os.path.join(os.path.expanduser("~"), "PixelTransportRivals-Eko"))
     ap.add_argument("--ctx", type=int, default=16384)
     ap.add_argument("--think", action="store_true", help="Denkmodus des Modells einschalten (langsamer)")
