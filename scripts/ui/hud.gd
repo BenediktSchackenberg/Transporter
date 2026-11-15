@@ -469,6 +469,12 @@ func _card_action(kind: String, cid: int) -> void:
 		"Folgen":   # fuehrt ein Wesen die Firma, folgt die Kamera dem Wesen (es lebt auf seinem Stammsitz, nicht bei der Firmenfigur)
 			var being: String = sim.eko.firm_being(cid) if sim.eko != null else ""
 			session.follow({"kind": "being", "id": being} if being != "" else {"kind": "avatar", "id": cid})
+		"Stammsitz":   # Anwesen des Wesens, das die Firma fuehrt
+			var being: String = sim.eko.firm_being(cid) if sim.eko != null else ""
+			if being != "" and sim.eko.estates.estates.has(being):
+				session.camera_to(Vector2(sim.eko.estates.center_of(being)) * 32.0 + Vector2(16, 16))
+			else:
+				show_toast("Diese Firma führt kein Wesen mit Stammsitz.")
 		"Betriebshof":
 			for p in sim.estate.plot_of(cid):
 				if int(p.parent) < 0:
@@ -881,7 +887,7 @@ func _build_entrepreneur_window() -> void:
 	entrepreneur_actions = actions
 	actions.add_theme_constant_override("separation", 10)
 	layout.add_child(actions)
-	for kind in ["Folgen", "Betriebshof", "Verlauf"]:
+	for kind in ["Folgen", "Stammsitz", "Betriebshof", "Verlauf"]:
 		var b := Button.new()
 		b.text = kind
 		b.focus_mode = Control.FOCUS_NONE

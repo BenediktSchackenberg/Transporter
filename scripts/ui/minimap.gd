@@ -60,6 +60,19 @@ func _draw() -> void:
 		var p: Vector2 = sim.avatars[cid].pos / 32.0 * s
 		draw_circle(p, 4.0, Color.BLACK)
 		draw_circle(p, 3.0, sim.company(cid).color.lightened(0.3))
+	if sim.eko != null:   # Stammsitze (Quadrat in der Firmenfarbe mit Anfangsbuchstaben) und Wesen (Punkt mit Ring)
+		for name in sim.eko.estates.estates:
+			var r: Rect2i = sim.eko.estates.rect_of(name)
+			var b: Dictionary = sim.eko.beings.get(name, {})
+			var cid: int = sim.eko.active_firm(b) if not b.is_empty() else -1
+			var col: Color = sim.company(cid).color if cid >= 0 else Color(b.get("color", Color.WHITE))
+			draw_rect(Rect2(Vector2(r.position) * s, Vector2(r.size) * s), Color(col, 0.35))
+			draw_rect(Rect2(Vector2(r.position) * s, Vector2(r.size) * s), col, false, 1.5)
+			draw_string(ThemeDB.fallback_font, Vector2(r.position) * s + Vector2(1, 9), str(name).left(1), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color.WHITE)
+		for b in sim.eko.beings.values():
+			var p: Vector2 = (b.mover as Mover).pos / 32.0 * s
+			draw_circle(p, 3.5, Color.WHITE)
+			draw_circle(p, 2.5, Color(b.color))
 	for e in sim.traffic_events:
 		for cell in e.cells:
 			draw_rect(Rect2(Vector2(cell) * s - Vector2(1, 1), Vector2(3, 3)), Color.ORANGE if e.kind == "baustelle" else Color.RED)

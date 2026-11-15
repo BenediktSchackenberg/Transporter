@@ -55,14 +55,33 @@ func _process(_delta: float) -> void:
 	for name in _houses:
 		_houses[name].queue_redraw()   # Lampe und Ladestation leuchten, Baufortschritt
 	var A: EkoArms = sim.eko.arms
-	if not (A.ruins.is_empty() and A.towers.is_empty() and A.blasts.is_empty() and A.zones.is_empty() and A.bombs.is_empty()):
+	if not (A.ruins.is_empty() and A.towers.is_empty() and A.blasts.is_empty() and A.zones.is_empty() and A.bombs.is_empty() and sim.eko.estates.estates.is_empty()):
 		queue_redraw()
 
 
 ## Krieg sichtbar: Rauch ueber Ruinen, Wachtuerme, Explosionen (Atompilz), Strahlungszonen, tickende Bomben.
+## Dazu die Stammsitze: Grenzlinie in der Farbe des Wesens und ein Schild mit dem Namen.
 func _draw() -> void:
 	var A: EkoArms = sim.eko.arms
 	var ms := Time.get_ticks_msec()
+	for name in sim.eko.estates.estates:
+		var r: Rect2i = sim.eko.estates.rect_of(name)
+		var b: Dictionary = sim.eko.beings.get(name, {})
+		var col: Color = Color(b.get("color", Color.WHITE))
+		var cid: int = sim.eko.active_firm(b) if not b.is_empty() else -1
+		if cid >= 0:
+			col = sim.company(cid).color
+		var pts := PackedVector2Array()
+		for c in [r.position, Vector2i(r.end.x, r.position.y), r.end, Vector2i(r.position.x, r.end.y), r.position]:
+			pts.append(Iso.to_screen(Vector2(c) * 32.0))
+		draw_polyline(pts, Color(col, 0.85), 3.0)
+		var top := Iso.to_screen(Vector2(r.get_center()) * 32.0) + Vector2(0, -60)
+		var label := "Stammsitz %s" % name
+		var font := ThemeDB.fallback_font
+		var wl := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 12.0
+		draw_rect(Rect2(top.x - wl * 0.5, top.y - 14, wl, 20), Color(0.08, 0.08, 0.12, 0.8))
+		draw_rect(Rect2(top.x - wl * 0.5, top.y - 14, wl, 20), col, false, 2.0)
+		draw_string(font, Vector2(top.x - wl * 0.5 + 6, top.y + 1), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
 	for z in A.zones:
 		var c := Iso.to_screen(sim.city.tile_center(Vector2i(int(z.feld[0]), int(z.feld[1]))))
 		draw_circle(c, float(z.radius) * 32.0, Color(0.4, 1.0, 0.2, 0.10 + 0.04 * sin(ms / 400.0)))
