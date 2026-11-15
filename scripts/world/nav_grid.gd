@@ -48,6 +48,12 @@ func walk_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	return walk.get_id_path(from, to, true)
 
 
+## Wirklich erreichbar (walk_path liefert sonst einen Teilweg bis zum naechsten erreichbaren Punkt).
+func walk_reachable(from: Vector2i, to: Vector2i) -> bool:
+	var p := walk_path(from, to)
+	return not p.is_empty() and p[-1] == to
+
+
 func path_length(from: Vector2i, to: Vector2i) -> int:
 	return maxi(1, road_path(from, to).size() - 1)
 

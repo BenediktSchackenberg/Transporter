@@ -120,10 +120,62 @@ func open_plot(id: String) -> void:
 			var c := Vector2i(x, y)
 			if sim.city.inside(c) and sim.city.g(c) != CityData.G.WATER:
 				sim.nav.walk.set_point_solid(c, false)
+	_ensure_path(r)
 
 
-## Begehbare Haenge und Hochebenen (5a, 15.11.2026): Bergzellen bis Terrain.CLIMB_MAX mit sanfter Steigung werden im
-## Fussweg-Raster frei (Gewicht steigt mit der Hoehe). Gilt fuer alle Fussgaenger; Fahrzeuge fahren weiter nur auf Strassen.
+## Flutfuellung im Fussweg-Raster ab einem Feld (1 = erreichbar).
+func _walk_component(from: Vector2i) -> PackedByteArray:
+	var n0: int = sim.city.size
+	var seen := PackedByteArray()
+	seen.resize(n0 * n0)
+	var stack: Array[Vector2i] = [from]
+	seen[from.y * n0 + from.x] = 1
+	while not stack.is_empty():
+		var c: Vector2i = stack.pop_back()
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)]:
+			var n: Vector2i = c + d
+			if n.x < 0 or n.y < 0 or n.x >= n0 or n.y >= n0 or seen[n.y * n0 + n.x] == 1 or sim.nav.walk.is_point_solid(n):
+				continue
+			if d.x != 0 and d.y != 0 and (sim.nav.walk.is_point_solid(Vector2i(c.x + d.x, c.y)) or sim.nav.walk.is_point_solid(Vector2i(c.x, c.y + d.y))):
+				continue   # diagonal nur ohne Hindernis (wie das Fussweg-Raster)
+			seen[n.y * n0 + n.x] = 1
+			stack.append(n)
+	return seen
+
+
+## Trampelpfad, falls das Grundstueck eine Insel ist (15.11.: Viktors Haus lag im Wald, Baeume und Hoefe sperrten den Fussweg):
+## Breitensuche vom Grundstueck ueber Land (kein Wasser, keine Gebaeude) bis zum naechsten begehbaren Feld, das ans Fusswegnetz
+## einer Stadt angeschlossen ist; die Felder dieses Weges werden begehbar.
+func _ensure_path(r: Rect2i) -> void:
+	var ctr := r.get_center()
+	var src: Array = sources().map(func(s0): return Vector2i(int(s0.feld[0]), int(s0.feld[1])))
+	if src.is_empty() or src.any(func(f): return sim.nav.walk_reachable(ctr, f)):
+		return
+	src.sort_custom(func(a, b): return _dist(ctr, a) < _dist(ctr, b))
+	var net := _walk_component(src[0])   # alle Felder, die zu Fuss mit dem naechsten Bauhof verbunden sind
+	var n0: int = sim.city.size
+	var prev := {ctr: ctr}
+	var queue: Array = [ctr]
+	var goal := Vector2i(-1, -1)
+	while not queue.is_empty() and prev.size() < 40000:
+		var c: Vector2i = queue.pop_front()
+		if net[c.y * n0 + c.x] == 1:
+			goal = c
+			break
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = c + d
+			if prev.has(n) or not sim.city.inside(n) or sim.city.g(n) == CityData.G.WATER or int(sim.city.building_at[sim.city.idx(n)]) >= 0:
+				continue
+			prev[n] = c
+			queue.append(n)
+	if goal.x < 0:
+		return
+	var c2 := goal
+	while c2 != ctr:
+		sim.nav.walk.set_point_solid(c2, false)
+		c2 = prev[c2]
+	sim.nav.walk.set_point_solid(ctr, false)
+
 func ensure_terrain() -> void:
 	if _terrain_ready or sim == null or sim.city == null:
 		return
@@ -1087,6 +1139,16 @@ const FURNITURE := {"boden": "#c9a26b", "teppich": "#7a5ea8", "bett": "#e9e4f0",
 var houses := {}                    # Name des Wesens -> {plot, origin: [bx, by], blocks: [[x,y,z,mat]], placed, status, builder, acc}
 
 
+## Erreichbar: ein Rand- oder Innenfeld des Grundstuecks hat einen Fussweg zum Wesen.
+func _plot_reachable(r: Rect2i, from: Vector2i) -> bool:
+	for y in range(r.position.y - 1, r.end.y + 1):
+		for x in range(r.position.x - 1, r.end.x + 1):
+			var c := Vector2i(x, y)
+			if sim.city.inside(c) and not sim.nav.walk.is_point_solid(c) and sim.nav.walk_reachable(from, c):
+				return true
+	return false
+
+
 func _plot_obs(b: Dictionary) -> Array:
 	var t := tile_of(b)
 	var town: int = sim.city.town_of(t)
@@ -1096,6 +1158,8 @@ func _plot_obs(b: Dictionary) -> Array:
 		if int(r[2]) < 2 or int(r[3]) < 2:
 			continue
 		var c := Vector2i(int(r[0]) + int(r[2]) / 2, int(r[1]) + int(r[3]) / 2)
+		if not _plot_reachable(Rect2i(int(r[0]), int(r[1]), int(r[2]), int(r[3])), t):
+			continue   # Insel zwischen gesperrten Feldern: nicht anbieten
 		out.append({"id": p.id, "feld": [c.x, c.y], "groesse": "%dx%d Felder" % [r[2], r[3]], "preis": float(p.price),
 			"entfernung": _dist(t, c)})
 	out.sort_custom(func(a, c): return int(a.entfernung) < int(c.entfernung))

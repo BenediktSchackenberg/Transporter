@@ -14124,7 +14124,7 @@ func test_eko_estates() -> void:
 	var hut: Rect2i = E.estates.field_rect("Viktor", EkoEstates.HUT_FIELD)
 	V.mover.pos = s.city.tile_center(hut.get_center())
 	ok(E.is_home(V) and E.estates.estates.Viktor.bauten.any(func(x): return x.art == "huette"), "Starthuette: von Anfang an zu Hause")
-	ok(not s.nav.walk_path(E.estates.center_of("Viktor"), E.estates._nearest_town_tile(R.get_center())).is_empty(), "zu Fuss mit einem Ort verbunden")
+	ok(s.nav.walk_reachable(E.estates.center_of("Viktor"), E.estates._nearest_town_tile(R.get_center())), "zu Fuss mit einem Ort verbunden")
 	var ms: Array = E.adopt_mayors()
 	ok(not E.estates.estates.has(ms[0]), "Buergermeister ohne Stammsitz")
 	E.join("Mia")

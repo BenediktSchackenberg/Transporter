@@ -99,7 +99,7 @@ func _try(name: String, cands: Array, busy: PackedByteArray, stat: Dictionary, h
 		var ctr: Vector2i = r.get_center()
 		var goal := _nearest_town_tile(ctr)
 		_open(r)
-		if _sim().nav.walk_path(ctr, goal).is_empty():
+		if not _sim().nav.walk_reachable(ctr, goal):
 			stat.ohne_weg += 1
 			continue
 		estates[name] = {"rect": [r.position.x, r.position.y], "tor_offen": true, "gate": [], "wall_tiles": [], "bauten": []}
