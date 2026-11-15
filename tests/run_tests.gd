@@ -14166,4 +14166,7 @@ func test_eko_estates() -> void:
 	E2.setup(s)
 	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
 	ok(E2.estates.estates.has("Viktor") and not E2.estates.estates.Viktor.bauten.is_empty(), "Stammsitz gespeichert")
+	E.estates.estates.erase("Mia")
+	E.ensure_estates()
+	ok(E.estates.estates.has("Mia") and not E.estates.estates.has(ms[0]), "Nachvergabe fuer KI-Spieler ohne Stammsitz, nicht fuer Buergermeister")
 	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")

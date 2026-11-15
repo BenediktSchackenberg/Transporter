@@ -82,8 +82,16 @@ func assign(name: String) -> bool:
 	var seed_v: int = int(C.seed_value)
 	cands.sort_custom(func(a, b): return hash([seed_v, a.position, name]) < hash([seed_v, b.position, name]))
 	var stat := {"kand": cands.size(), "frei": 0, "ohne_weg": 0}
+	for pass_i in 2:   # zweiter Durchgang: einzelne Huegelfelder erlaubt (hoechstens 10 %)
+		if _try(name, cands, busy, stat, 0 if pass_i == 0 else SIDE * SIDE / 10):
+			return true
+	last_failure = stat
+	return false
+
+
+func _try(name: String, cands: Array, busy: PackedByteArray, stat: Dictionary, hills_ok: int) -> bool:
 	for r in cands:
-		var why := _block_reason(r, busy)
+		var why := _block_reason(r, busy, hills_ok)
 		if why != "":
 			stat[why] = int(stat.get(why, 0)) + 1
 			continue
@@ -101,14 +109,13 @@ func assign(name: String) -> bool:
 				p["use"] = "stammsitz"
 		_sim().log_event("%s erhält einen Stammsitz bei %d,%d." % [name, ctr.x, ctr.y], "info")
 		return true
-	last_failure = stat
 	return false
 
 
 var last_failure := {}
 
 
-func _block_reason(r: Rect2i, busy: PackedByteArray) -> String:
+func _block_reason(r: Rect2i, busy: PackedByteArray, hills_ok: int = 0) -> String:
 	var C = _sim().city
 	var cnt := {"parzelle": 0, "wasser": 0, "gebaeude": 0, "strasse": 0, "berg": 0}
 	for y in range(r.position.y, r.end.y):
@@ -120,7 +127,7 @@ func _block_reason(r: Rect2i, busy: PackedByteArray) -> String:
 			if C.is_road(Vector2i(x, y)): cnt.strasse += 1
 			if not C.height.is_empty() and C.height[i] > 0: cnt.berg += 1
 	for k in cnt:
-		if int(cnt[k]) > 0:
+		if int(cnt[k]) > (hills_ok if k == "berg" else 0):
 			return k
 	return ""
 

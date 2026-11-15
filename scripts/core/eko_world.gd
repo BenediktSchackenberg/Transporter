@@ -75,6 +75,13 @@ func _on_visit_completed(cid: int, action: String, r: Dictionary) -> void:
 
 ## Eigenes Grundstueck fuer Fussgaenger oeffnen (Parzellenfelder zaehlen sonst als Gebaeudeflaeche): sonst kommt das Wesen nie ins
 ## eigene Haus und gilt nie als zu Hause (Viktor, 15.11.: "MoveTo ins eigene Haus: Ziel nicht begehbar").
+## Nachvergabe: KI-Spieler (keine Buergermeister) ohne Stammsitz bekommen einen (z. B. war beim Start kein Platz frei).
+func ensure_estates() -> void:
+	for b in beings.values():
+		if int(b.get("amt", -1)) < 0 and not estates.estates.has(b.name):
+			estates.assign(b.name)
+
+
 func open_plot(id: String) -> void:
 	if id == "":
 		return
