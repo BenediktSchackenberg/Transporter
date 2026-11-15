@@ -221,7 +221,7 @@ func next_step(cid: int, kind: String) -> Dictionary:
 ## Beobachtung der Unternehmer: naechster Schritt je Rohstoff.
 func steps_for(cid: int) -> Dictionary:
 	var out := {}
-	for k in Production.DEPOSIT_KINDS:
+	for k in Production.ALL_DEPOSIT_KINDS:
 		var s := next_step(cid, k)
 		if s.is_empty():
 			continue

@@ -536,5 +536,15 @@
     "basispreis": 400.0,
     "importpreis": null,
     "exportpreis": 300.0
+  },
+  "kupfererz": {
+    "name": "Kupfererz",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 20.0,
+    "importpreis": 28.0,
+    "exportpreis": 15.0
   }
 }

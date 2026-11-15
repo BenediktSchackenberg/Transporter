@@ -308,7 +308,15 @@
     "abbau": {
       "je_person_tag": 28,
       "lager_max": 600,
-      "diesel_tag": 40.0
+      "diesel_tag": 40.0,
+      "arten": [
+        "eisenerz",
+        "kohle",
+        "kalkstein",
+        "rohmaterial",
+        "naturstein",
+        "kupfererz"
+      ]
     }
   },
   "kokerei": {
@@ -618,7 +626,7 @@
   },
   "kiesgrube": {
     "label": "Kiesgrube",
-    "beschreibung": "Baggert Kies und Sand aus dem Boden (Flussbett, Strand, Kiesgrube) für Betonwerk, Glashütte, Straßenbau und Großlager.",
+    "beschreibung": "Baggert Kies und Sand aus einer Lagerstätte an Fluss oder Strand (Probebohrung, Genehmigung).",
     "standort": "markt",
     "gebaeude": "warehouse",
     "gruendungskosten": 0,
@@ -629,21 +637,19 @@
     "rollen": [
       "baggern"
     ],
-    "rezept": {
-      "ein": {},
-      "aus": {
-        "kies": 2,
-        "sand": 1
-      },
-      "chargen_je_person_tag": 10,
-      "lager_tage": 4,
-      "lager_max": 600
-    },
-    "naehe": "bauhof"
+    "abbau": {
+      "je_person_tag": 20,
+      "lager_max": 600,
+      "diesel_tag": 20.0,
+      "arten": [
+        "kies",
+        "sand"
+      ]
+    }
   },
   "lehmgrube": {
     "label": "Lehmgrube",
-    "beschreibung": "Sticht Lehm und Ton für die Ziegelei.",
+    "beschreibung": "Sticht Lehm aus einer Lehmlagerstätte am Wasser für die Ziegelei (Probebohrung, Genehmigung).",
     "standort": "markt",
     "gebaeude": "warehouse",
     "gruendungskosten": 0,
@@ -654,16 +660,14 @@
     "rollen": [
       "graben"
     ],
-    "rezept": {
-      "ein": {},
-      "aus": {
-        "lehm": 3
-      },
-      "chargen_je_person_tag": 10,
-      "lager_tage": 4,
-      "lager_max": 600
-    },
-    "naehe": "bauhof"
+    "abbau": {
+      "je_person_tag": 25,
+      "lager_max": 600,
+      "diesel_tag": 10.0,
+      "arten": [
+        "lehm"
+      ]
+    }
   },
   "saegewerk": {
     "label": "Sägewerk",
@@ -867,7 +871,7 @@
   },
   "bohrinsel": {
     "label": "Bohrinsel",
-    "beschreibung": "Fördert Erdöl vor der Küste; Versorgung und Abtransport über den Hafen. Teuer, braucht viel Personal und Diesel für die Pumpen.",
+    "beschreibung": "Fördert Erdöl aus einem Ölfeld vor der Küste (Lagerstätte am Wasser, Probebohrung und Genehmigung nötig). Teuer, viel Personal.",
     "standort": "markt",
     "gebaeude": "port_office",
     "gruendungskosten": 0,
@@ -879,16 +883,14 @@
       "bohren",
       "foerdern"
     ],
-    "rezept": {
-      "ein": {},
-      "aus": {
-        "rohoel": 1
-      },
-      "chargen_je_person_tag": 2,
-      "lager_tage": 4,
-      "lager_max": 200
-    },
-    "naehe": "hafen"
+    "abbau": {
+      "je_person_tag": 1,
+      "lager_max": 200,
+      "diesel_tag": 80.0,
+      "arten": [
+        "rohoel"
+      ]
+    }
   },
   "raffinerie": {
     "label": "Raffinerie",
@@ -996,7 +998,7 @@
   },
   "uranbergwerk": {
     "label": "Uranbergwerk",
-    "beschreibung": "Fördert seltenes Uranerz tief im Gebirge. Strenge Auflagen, viel Personal, teuer.",
+    "beschreibung": "Fördert seltenes Uranerz aus einer Uranlagerstätte im Gebirge. Strenge Auflagen, viel Personal, teuer.",
     "standort": "markt",
     "gebaeude": "warehouse",
     "gruendungskosten": 0,
@@ -1007,16 +1009,14 @@
     "rollen": [
       "foerdern"
     ],
-    "rezept": {
-      "ein": {},
-      "aus": {
-        "uranerz": 1
-      },
-      "chargen_je_person_tag": 1,
-      "lager_tage": 6,
-      "lager_max": 100
-    },
-    "naehe": "bauhof"
+    "abbau": {
+      "je_person_tag": 2,
+      "lager_max": 100,
+      "diesel_tag": 60.0,
+      "arten": [
+        "uranerz"
+      ]
+    }
   },
   "brennelementwerk": {
     "label": "Brennelementwerk",

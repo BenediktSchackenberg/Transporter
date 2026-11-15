@@ -28,6 +28,12 @@ const UPSTREAM := {"getreide": "feld", "holz": "forst", "mehl": "muehle", "schla
 ## Deterministisch aus Stadtsamen und Parzellen-ID; Menge in Einheiten (100 kg), Qualitaet 0,6-1,0 (Foerderung je Person).
 const DEPOSIT_KINDS := ["eisenerz", "kohle", "kalkstein", "rohmaterial", "naturstein"]
 const DEPOSIT_SHARE := 0.35
+## Zweiter Durchgang (15.11.2026), nur auf Flaechen ohne Vorkommen, damit bestehende Lagerstaetten gleich bleiben:
+## Gebirge: Kupfer und (selten) Uran; am Wasser: Lehm, Kies, Sand und (selten) Erdoel. Vorkommen am Wasser bekommen keine Bergform.
+const EXTRA_MOUNTAIN := ["kupfererz", "kupfererz", "kupfererz", "uranerz"]
+const EXTRA_WATER := ["lehm", "lehm", "kies", "kies", "sand", "sand", "rohoel"]
+const SURFACE_KINDS := ["lehm", "kies", "sand", "rohoel"]
+const ALL_DEPOSIT_KINDS := ["eisenerz", "kohle", "kalkstein", "rohmaterial", "naturstein", "kupfererz", "uranerz", "lehm", "kies", "sand", "rohoel"]
 const OUTSKIRTS := 0.62           # Anteil des Kartenhalbmessers, ab dem der Aussenbereich beginnt   # Rohware -> Branche, die sie in der Stadt erzeugt             # Mindestbestand verderblicher Ware in Chargen (Anlauf ohne Absatzmessung)
 
 static var _articles := {}
@@ -97,6 +103,22 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 	var btype := str(spec.get("gebaeude", "farm"))
 	var bsize: Array = CityGenerator.TYPES[btype]
 	if spec.has("abbau"):
+		var arten: Array = spec.abbau.get("arten", [])
+		if not arten.is_empty():
+			var want := str(params.get("rohstoff", ""))
+			if want != "" and want not in arten:
+				return {"ok": false, "msg": "%s fördert nur %s, nicht %s." % [spec.label, ", ".join(arten), want]}
+			if want == "":   # beste Lagerstaette unter den erlaubten Arten
+				var best_s := -1.0
+				for k in arten:
+					var d := best_deposit(str(k), where if where.begins_with("G") else "")
+					if not d.is_empty() and float(d.menge) * float(d.qualitaet) > best_s:
+						best_s = float(d.menge) * float(d.qualitaet)
+						want = str(k)
+				if want == "":
+					want = str(arten[0])
+			params = params.duplicate()
+			params["rohstoff"] = want
 		if sim.mining.enabled and not where.begins_with("G"):
 			var own_pid: String = sim.mining.permitted_for(cid, str(params.get("rohstoff", "")))   # Lagerstaette mit eigenem Abbaurecht zuerst
 			if own_pid != "":
@@ -110,7 +132,7 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 			var far := remote_deposit(str(params.get("rohstoff", "")))
 			if not far.is_empty():
 				return {"ok": false, "msg": "Keine Lagerstätte mit Straßenanschluss%s. Zufahrt zu %s bauen (build_access, %s, %d Tage)." % [(" für " + str(params.get("rohstoff", ""))) if str(params.get("rohstoff", "")) != "" else "", far.grundstueck, Catalog.money(float(far.kosten)), int(far.tage)]}
-			return {"ok": false, "msg": "Keine freie Lagerstätte%s gefunden (deposits: %s)." % [(" für " + str(params.get("rohstoff", ""))) if str(params.get("rohstoff", "")) != "" else "", ", ".join(DEPOSIT_KINDS)]}
+			return {"ok": false, "msg": "Keine freie Lagerstätte%s gefunden (deposits: %s)." % [(" für " + str(params.get("rohstoff", ""))) if str(params.get("rohstoff", "")) != "" else "", ", ".join(ALL_DEPOSIT_KINDS)]}
 		mode = "kaufen"   # Abbaurecht nur auf eigenem Grund
 		cands = [sim.parcels.parcel(str(dep.grundstueck))]
 		parcel = cands[0]
@@ -454,6 +476,39 @@ func _build_deposits() -> void:
 			if not _deposits.has(p.id):
 				_deposits[p.id] = {"art": kind, "menge": 5000, "qualitaet": 0.8}
 				break
+	_build_extra_deposits(cands, seed_v)
+
+
+func _build_extra_deposits(mountain_cands: Array, seed_v: int) -> void:
+	for p in mountain_cands:
+		if _deposits.has(p.id):
+			continue
+		var h := absi(hash([seed_v, p.id, "vorkommen2"]))
+		if float(h % 1000) / 1000.0 < 0.15:
+			_deposits[p.id] = {"art": EXTRA_MOUNTAIN[(h / 1000) % EXTRA_MOUNTAIN.size()], "menge": 2000 + (h / 7) % 6000, "qualitaet": snappedf(0.6 + float((h / 13) % 41) / 100.0, 0.01)}
+	var water: Array = sim.parcels.items.values().filter(func(p): return not _deposits.has(p.id) and p.zone not in ["gruen", "korridor"] \
+		and sim.parcels.is_buildable(p) and int(p.area) >= 30 and p.state == "frei" and _near_water(p))
+	for p in water:
+		var h := absi(hash([seed_v, p.id, "vorkommen_wasser"]))
+		if float(h % 1000) / 1000.0 < 0.25:
+			_deposits[p.id] = {"art": EXTRA_WATER[(h / 1000) % EXTRA_WATER.size()], "menge": 3000 + (h / 7) % 9000, "qualitaet": snappedf(0.6 + float((h / 13) % 41) / 100.0, 0.01)}
+	# jede neue Art mindestens einmal (sonst waere eine Kette auf dieser Karte unmoeglich)
+	for kind in ["kupfererz", "uranerz"] + ["lehm", "kies", "sand", "rohoel"]:
+		if _deposits.values().any(func(d): return d.art == kind):
+			continue
+		var pool: Array = (water if kind in SURFACE_KINDS else mountain_cands).filter(func(p): return not _deposits.has(p.id))
+		if not pool.is_empty():
+			_deposits[pool[absi(hash([seed_v, kind])) % pool.size()].id] = {"art": kind, "menge": 4000, "qualitaet": 0.75}
+
+
+## Grundstueck grenzt bis auf 3 Felder an Wasser (Fluss, See, Meer).
+func _near_water(p: Dictionary) -> bool:
+	for y in range(int(p.rect[1]) - 3, int(p.rect[1]) + int(p.rect[3]) + 3):
+		for x in range(int(p.rect[0]) - 3, int(p.rect[0]) + int(p.rect[2]) + 3):
+			var q := Vector2i(x, y)
+			if sim.city.inside(q) and sim.city.g(q) == CityData.G.WATER:
+				return true
+	return false
 
 
 ## Kuestenort: Lagerstaetten liegen an den Bergraendern (Parzelle grenzt bis auf 2 Felder an ein Berggebiet).
@@ -494,7 +549,7 @@ func _build_terrain() -> void:
 	var tree_cells := {}
 	for pid in _deposits:
 		var p: Dictionary = sim.parcels.parcel(pid)
-		if p.is_empty() or p.state != "frei":
+		if p.is_empty() or p.state != "frei" or str(_deposits[pid].art) in SURFACE_KINDS:
 			continue
 		var r := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
 		var roads: Array = []

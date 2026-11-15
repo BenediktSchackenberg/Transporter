@@ -230,11 +230,11 @@ func _start_autotest() -> void:
 			"api_key": OS.get_environment(args.get("api-key-env", "")) if args.has("api-key-env") else "",
 			"interval": float(args.get("interval", "3")), "max_requests": 500, "max_tokens": 2000000,
 			"max_tokens_per_request": 900, "fallback": true, "timeout": float(args.get("timeout", "20")), "strategy": ""})
-	var cfg := {"seed": int(args.get("seed", "777")), "duration_min": 240, "duration_seconds": float(args.get("seconds", "60")),
+	var cfg := {"seed": int(args.get("seed", str(randi() % 100000))), "duration_min": 240,   # ohne --seed jedes Mal eine neue Karte "duration_seconds": float(args.get("seconds", "60")),
 		"speed_idx": GameSession.SPEEDS.find(int(args.get("speed", "16"))), "demo_fault_rate": float(args.get("fault", "0.1")),
 		"map_size": int(args.get("map", str(Catalog.MAP_SIZE))), "players": players,
 		"weather": args.get("weather", "sim"), "weather_replay": args.get("weather-replay", ""), "welt": args.get("welt", "region")}
-	print("AUTOTEST: %d Spieler, %s s aktive Echtzeit, %sx, Anbieter %s" % [n, args.get("seconds", "60"), args.get("speed", "16"), args.get("provider", "demo")])
+	print("AUTOTEST: %d Spieler, %s s aktive Echtzeit, %sx, Anbieter %s, Seed %d" % [n, args.get("seconds", "60"), args.get("speed", "16"), args.get("provider", "demo"), int(cfg.seed)])
 	_start(cfg)
 
 

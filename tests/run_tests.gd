@@ -25,6 +25,7 @@ func _initialize() -> void:
 	test_names.append("test_world_production_stage1")
 	test_names.append("test_world_production_oil")
 	test_names.append("test_world_production_energy")
+	test_names.append("test_world_deposits")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13513,16 +13514,18 @@ func test_eko_terrain() -> void:
 ## Glashuette), Gruende und Produktion mit Personal, Wesen-Unternehmer sehen und gruenden Branchen, kaufen echten Bauhof-Bestand.
 func test_world_production_stage1() -> void:
 	var bj: Dictionary = Businesses.branches()
-	for k in ["kiesgrube", "lehmgrube", "saegewerk", "schreinerei", "ziegelei", "zementwerk", "betonwerk", "glashuette"]:
+	for k in ["saegewerk", "schreinerei", "ziegelei", "zementwerk", "betonwerk", "glashuette"]:
 		ok(bj.has(k) and bj[k].has("rezept"), "Branche %s mit Rezept" % k)
+	for k in ["kiesgrube", "lehmgrube"]:
+		ok(bj.has(k) and bj[k].has("abbau") and not bj[k].abbau.arten.is_empty(), "Gewinnung %s auf Lagerstaette" % k)
 	for a in ["kies", "sand", "lehm", "zement", "ziegel", "beton", "glas", "bretter", "tisch", "bett", "regal", "stuhl"]:
 		ok(not Production.art(a).is_empty(), "Artikel %s" % a)
 	ok(Production.variants(bj.schreinerei).size() == 4, "Schreinerei: Tisch, Bett, Regal, Stuhl")
 	var s := region_sim(2, 21)
 	var c: Company = s.companies[0]
 	c.ledger.inject(60000.0)
-	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "kiesgrube", "reason": "Test"})
-	ok(r.ok, "Kiesgrube gegruendet: %s" % str(r.get("msg", "")).left(80))
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "saegewerk", "reason": "Test"})
+	ok(r.ok, "Saegewerk gegruendet: %s" % str(r.get("msg", "")).left(80))
 	if r.ok:
 		var bid := str(r.ref)
 		for i in 2:
@@ -13530,9 +13533,10 @@ func test_world_production_stage1() -> void:
 			s.personnel.hire(0, w)
 			s.executor.execute(0, {"action": "assign_staff", "worker_id": w.id, "business_id": bid})
 		var B: Dictionary = s.biz.get_b(bid)
+		s.stock.add("holz", 40, "C0", int(B.site), "Test", s.game_min)
 		for d in 6:
 			next_day(s)
-		ok(s.stock.qty("kies", "C0", int(B.site)) + s.stock.qty("sand", "C0", int(B.site)) > 0 or int(B.get("total", 0)) > 0, "Kiesgrube foerdert (Status %s, Blockaden %s)" % [B.status, str(B.get("blocks", {}))])
+		ok(int(B.get("total", 0)) > 0, "Saegewerk schneidet Bretter (Status %s, Blockaden %s)" % [B.status, str(B.get("blocks", {}))])
 	ok(identity_ok(s), "Identitaet nach Gruendung und Foerderung")
 	# Wesen-Unternehmer sieht Branchen und kauft echten Bauhof-Bestand
 	var E: EkoWorld = s.eko
@@ -13563,27 +13567,30 @@ func test_world_production_stage1() -> void:
 ## Diesel aus Raffinerien der Welt (Geld G0 -> Firma), nur der Rest wird importiert.
 func test_world_production_oil() -> void:
 	var bj: Dictionary = Businesses.branches()
-	ok(bj.has("bohrinsel") and bj.has("raffinerie") and str(bj.bohrinsel.naehe) == "hafen", "Bohrinsel und Raffinerie am Hafen")
+	ok(bj.has("bohrinsel") and bj.has("raffinerie") and "rohoel" in bj.bohrinsel.abbau.arten and str(bj.raffinerie.naehe) == "hafen", "Bohrinsel auf Oelfeld, Raffinerie am Hafen")
 	ok(int(bj.raffinerie.rezept.aus.diesel) == 1 and int(bj.raffinerie.rezept.ein.rohoel) == 2, "Raffinerie: 2 Rohoel -> Diesel, Asphalt, Kunststoff")
 	var s := region_sim(2, 21)
 	var c: Company = s.companies[0]
 	c.ledger.inject(400000.0)
 	var rb: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "bohrinsel", "reason": "Test"})
+	ok(not rb.ok, "Bohrinsel nur auf erkundetem, genehmigtem Oelfeld: %s" % str(rb.get("msg", "")).left(70))
+	ok(not s.executor.execute(0, {"action": "found_business", "branche": "bergwerk", "rohstoff": "rohoel", "reason": "Test"}).ok, "Bergwerk foerdert kein Oel")
 	var rr: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "raffinerie", "reason": "Test"})
-	ok(rb.ok and rr.ok, "Bohrinsel und Raffinerie gegruendet: %s / %s" % [str(rb.get("msg", "")).left(50), str(rr.get("msg", "")).left(50)])
-	if rb.ok and rr.ok:
-		var Bo: Dictionary = s.biz.get_b(str(rb.ref))
+	ok(rr.ok, "Raffinerie gegruendet: %s" % str(rr.get("msg", "")).left(50))
+	if rr.ok:
+		var Bo: Dictionary = s.biz.get_b(str(rr.ref))
 		var hb: Harbor = s.towns.harbor(s.towns.of_building(int(Bo.site))) if s.towns.is_region() else s.harbor
 		var d_h: int = absi(s.city.building(int(Bo.site)).road.x - s.city.building(hb.building).road.x) + absi(s.city.building(int(Bo.site)).road.y - s.city.building(hb.building).road.y)
-		ok(d_h < 80, "Bohrinsel nahe am Hafen (%d Felder)" % d_h)
-		for bid in [str(rb.ref), str(rr.ref)]:
+		ok(d_h < 80, "Raffinerie nahe am Hafen (%d Felder)" % d_h)
+		s.stock.add("rohoel", 20, "C0", int(Bo.site), "Test", s.game_min)
+		for bid in [str(rr.ref)]:
 			for i in 3:
 				var w := s.personnel.spawn_available("allrounder")
 				s.personnel.hire(0, w)
 				s.executor.execute(0, {"action": "assign_staff", "worker_id": w.id, "business_id": bid})
 		for d in 4:
 			next_day(s)
-		ok(int(Bo.get("total", 0)) > 0, "Bohrinsel foerdert Rohoel (%d Chargen, Blockaden %s)" % [int(Bo.get("total", 0)), str(Bo.get("blocks", {}))])
+		ok(int(Bo.get("total", 0)) > 0, "Raffinerie verarbeitet Rohoel (%d Chargen, Blockaden %s)" % [int(Bo.get("total", 0)), str(Bo.get("blocks", {}))])
 		var Rf: Dictionary = s.biz.get_b(str(rr.ref))
 		s.stock.add("diesel", 5, "C0", int(Rf.site), "Test", s.game_min)
 		var have0: int = s.stock.available("diesel", "C0", int(Rf.site))
@@ -13646,3 +13653,24 @@ func test_world_production_energy() -> void:
 	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.plant.offline_until == s.plant.offline_until and s2.plant.incidents.size() == s.plant.incidents.size(), "Stoerfall gespeichert")
+
+
+## Lagerstaetten der neuen Rohstoffe (15.11.2026): zweiter Durchgang laesst bestehende Vorkommen unveraendert, jede neue Art
+## kommt vor; Vorkommen am Wasser ohne Bergform.
+func test_world_deposits() -> void:
+	var s := region_sim(2, 21)
+	var P: Production = s.prod
+	var deps := {}
+	for pid in P.deposit_parcels():
+		var art := str(P.deposit_of(pid).art)
+		deps[art] = int(deps.get(art, 0)) + 1
+	for k in Production.ALL_DEPOSIT_KINDS:
+		ok(int(deps.get(k, 0)) > 0, "Lagerstaette %s vorhanden (%d)" % [k, int(deps.get(k, 0))])
+	ok(int(deps.get("uranerz", 0)) <= int(deps.get("kupfererz", 0)), "Uran seltener als Kupfer")
+	var surface_mountain := false
+	for pid in P.terrain:
+		if str(P.terrain[pid].art) in Production.SURFACE_KINDS:
+			surface_mountain = true
+	ok(not surface_mountain, "keine Bergform fuer Vorkommen am Wasser")
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "kiesgrube", "rohstoff": "kohle", "reason": "Test"})
+	ok(not r.ok and str(r.msg).contains("nur"), "Kiesgrube foerdert keine Kohle")
