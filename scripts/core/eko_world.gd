@@ -115,6 +115,14 @@ func update(dt: float) -> void:
 			b.rest_left = maxf(0.0, float(b.rest_left) - dt)
 	_jobs_tick(dt)
 	_houses_tick(dt)
+	_salary_timer -= dt
+	if _salary_timer <= 0.0:   # Amtsgehalt der Buergermeister-Wesen aus der Stadtkasse (sonst kein Privatgeld fuer ein Zuhause)
+		_salary_timer = 60.0
+		for b in beings.values():
+			var k := int(b.get("amt", -1))
+			if k >= 0:
+				sim.economy.transfer(Towns.account_of(k), "Y0", MAYOR_SALARY)
+				b.geld = float(b.get("geld", 0.0)) + MAYOR_SALARY
 	if persist_path != "":
 		_persist_timer -= dt
 		if _persist_timer <= 0.0:
@@ -929,7 +937,9 @@ const FOUND_MIN_OWN := 1500.0       # eigene Ersparnisse mindestens
 const FOUND_INVESTOR := 20000.0     # Einlage des Kapitalgeberpools I0
 const FIRM_ACTIONS := ["accept_contract", "assign_transport", "collect_contracts", "buy_vehicle", "sell_vehicle", "recruit_worker",
 	"dismiss_worker", "assign_worker_task", "rent_depot", "take_loan", "repay_loan", "install_internet", "send_message", "entnahme"]
-const FIRM_RESERVE := 5000.0        # Privatentnahme laesst mindestens so viel in der Firmenkasse
+const FIRM_RESERVE := 5000.0
+const MAYOR_SALARY := 50.0          # Amtsgehalt je Echtzeitminute aus der Stadtkasse
+var _salary_timer := 60.0        # Privatentnahme laesst mindestens so viel in der Firmenkasse
 
 
 func firm_being(cid: int) -> String:
@@ -1204,7 +1214,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	for name in Mayor.SCHEMA:
 		acts.append("%s(%s)" % [name, ", ".join(Mayor.SCHEMA[name].params.keys())])
 	out["aktionen"] = "Amt {aktion: {action, ...}}: " + "; ".join(acts)
-	out["hinweis"] = "Routinefälle erledigt deine Verwaltung nach Regeln; du setzt die Schwerpunkte für deine Stadt."
+	out["hinweis"] = "Routinefälle erledigt deine Verwaltung nach Regeln; du setzt die Schwerpunkte für deine Stadt. Du bekommst ein Amtsgehalt von %s je Minute (Privatgeld, lebensziel.geld) – du musst nicht für Firmen arbeiten." % Catalog.money(MAYOR_SALARY)
 	return out
 
 

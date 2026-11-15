@@ -13390,6 +13390,10 @@ func test_eko_players_and_mayors() -> void:
 	var en: Dictionary = E.input(ps[0], "Firma", {"aktion": {"action": "entnahme", "betrag": 1000}})
 	ok(en.ok and is_equal_approx(float(E.beings[ps[0]].geld), 1000.0) and is_equal_approx(cash0 - c0.ledger.cash, 1000.0), "Privatentnahme 1.000 EUR")
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten (Entnahme, Abweichung %.2f)" % s.economy.conservation_error())
+	var g0 := float(E.beings[ms[0]].geld)
+	for i in 61:
+		E.update(1.0)
+	ok(float(E.beings[ms[0]].geld) >= g0 + EkoWorld.MAYOR_SALARY and absf(s.economy.conservation_error()) < 0.01, "Amtsgehalt aus der Stadtkasse, Geld bleibt erhalten")
 	var info: Array = E.beings_info()
 	ok(info.any(func(x): return x.name == "Lumo" and x.seele == "lumo") and info.any(func(x): return x.rolle == "buergermeister") and info.filter(func(x): return x.rolle == "unternehmer").size() == 3, "Betreiberliste mit Rollen und Seelen")
 	var ws := WorldServer.new()
