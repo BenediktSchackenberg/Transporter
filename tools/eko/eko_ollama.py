@@ -61,8 +61,20 @@ class World:
         self.base = base
         self.name = name
         self.token = ""
+        self.art = "mensch"
 
-    def _req(self, method, path, body=None):
+    def _req(self, method, path, body=None, retry=True):
+        r = self._send(method, path, body)
+        # Welt neu gestartet: alter Token ungueltig (401) -> automatisch neu anmelden und einmal wiederholen
+        if retry and isinstance(r, dict) and "X-Session" in str(r.get("msg", "")) and not path.startswith("/join"):
+            try:
+                self.join(self.art)
+            except Exception:
+                return r
+            return self._send(method, path, body)
+        return r
+
+    def _send(self, method, path, body=None):
         data = json.dumps(body).encode("utf-8") if body is not None else (b"" if method == "POST" else None)
         req = urllib.request.Request(self.base + path, data=data, method=method)
         if self.token:
@@ -78,7 +90,8 @@ class World:
         return json.loads(raw) if raw.startswith(("{", "[")) else raw
 
     def join(self, art="mensch"):
-        r = self._req("POST", "/join?name=" + urllib.request.quote(self.name) + "&art=" + art)
+        self.art = art
+        r = self._send("POST", "/join?name=" + urllib.request.quote(self.name) + "&art=" + art)
         self.token = r["session"]
 
     def api_md(self):
