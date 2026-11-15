@@ -57,6 +57,7 @@ def main():
     ap.add_argument("--ctx", type=int, default=16384)
     ap.add_argument("--think", action="store_true")
     ap.add_argument("--max-steps", type=int, default=0)
+    ap.add_argument("--kein-internet", action="store_true", help="Werkzeug nachschlagen (Wikipedia) fuer alle Wesen abschalten")
     ap.add_argument("--ohne", default="", help="Komma-Liste von Wesen, die hier nicht gestartet werden (z. B. schon laufende)")
     args = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"):

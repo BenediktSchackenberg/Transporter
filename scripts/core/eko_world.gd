@@ -284,6 +284,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			r = estates.order(b, data)
 		"Tor":
 			r = estates.gate(b, data)
+		"Bauplan":
+			r = estates.build_plan(b, data)
 		"Give":
 			r = arms.give(b, data)
 		"Place":
@@ -319,7 +321,7 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		"Merke":
 			r = _lesson(b, data)
 		_:
-			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, Attack, Give, Bauwerk, Tor, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
+			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, Attack, Give, Bauwerk, Tor, Bauplan, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
 	if not bool(r.ok):
 		_event(b, "Fehlschlag %s: %s" % [type, r.msg])
 	if not r.has("status"):   # angenommen != abgeschlossen: Bewegung laeuft, bis du.unterwegs false ist

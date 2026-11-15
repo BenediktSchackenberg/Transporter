@@ -312,6 +312,7 @@ func _gate_blocks(name: String) -> Dictionary:
 
 # ------------------------------------------------------------------ Takt, Tor, Schutz
 func tick(dt: float) -> void:
+	_plans_tick(dt)
 	for name in estates:
 		for s in estates[name].bauten:
 			if s.status != "im_bau":
@@ -436,7 +437,8 @@ func obs(b: Dictionary) -> Dictionary:
 		"tor": {"felder": e.gate, "offen": bool(e.tor_offen)} if not (e.gate as Array).is_empty() else {},
 		"mauerluecken": breaches(name) if not (e.wall_tiles as Array).is_empty() else 0, "geschuetzt_drinnen": sheltered(b, Vector2i(-999, -999)),
 		"zu_hause": at_home(b),
-		"bauwerke": ARTEN, "bauen": "Bauwerk {art, feld 0-8 (4 = Bauplatz), material?, hoehe?, zahlung?: \"firma\"} – Preis je Block nach material_preise; Tor {offen: true|false}"}
+		"bauwerke": ARTEN, "bauen": "Bauwerk {art, feld 0-8 (4 = Bauplatz), material?, hoehe?, zahlung?: \"firma\"} – Preis je Block nach material_preise; Tor {offen: true|false}",
+		"eigener_entwurf": "Bauplan {titel, ort: stammsitz|grundstueck, feld?, schichten: [[Zeilen der untersten Schicht], ...], legende?, zahlung?} – baue genau so, wie du es dir ausdenkst (bis 32 x 32 Blöcke je Feld)"}
 
 
 func visible(b: Dictionary) -> Array:
@@ -455,13 +457,116 @@ func visible(b: Dictionary) -> Array:
 
 
 func to_dict() -> Dictionary:
-	return {"estates": estates, "next": _next}
+	return {"estates": estates, "next": _next, "plans": plans}
 
 
 func from_dict(d: Dictionary) -> void:
 	estates = d.get("estates", {})
 	_next = int(d.get("next", 1))
+	plans = d.get("plans", [])
 	for name in estates:
 		_open(rect_of(name))
 		if not (estates[name].wall_tiles as Array).is_empty():
 			apply_walls(name)
+
+# ------------------------------------------------------------------ Eigener Bauplan (15.11.2026)
+## Benedikt: "die KI soll immer entscheiden, wie ein Haus gebaut wird und wie es aussieht". Das Wesen beschreibt sein Gebaeude
+## Schicht fuer Schicht (unten zuerst) als Zeichenraster; eine Baufirma baut genau das (Block fuer Block, Preis nach Material).
+## Ort: ein Feld des Stammsitzes (bis 32 x 32 Bloecke) oder das eigene Grundstueck (MoveIn danach wie beim Selbstbau).
+const LEGEND := {"S": "stein", "Z": "ziegel", "H": "holz", "B": "beton", "G": "glas", "T": "stahl", "D": "dach", "F": "boden",
+	"P": "pflanze", "L": "lampe", "X": "bett", "Y": "ladestation", "Q": "tisch", "R": "regal", "K": "teppich", "U": "buch", "C": "decke"}
+const PLAN_MAX_LAYERS := 16
+const PLAN_MAX_BLOCKS := 4000
+
+var plans: Array = []               # Bauplaene auf Grundstuecken {name, titel, blocks, placed, acc, status}
+
+
+func build_plan(b: Dictionary, data: Dictionary) -> Dictionary:
+	var name: String = b.name
+	var layers = data.get("schichten", [])
+	if not (layers is Array) or layers.is_empty() or layers.size() > PLAN_MAX_LAYERS:
+		return {"ok": false, "msg": "schichten: Liste von 1-%d Schichten (unten zuerst), jede Schicht eine Liste von Zeilen, z. B. [\"SSGSS\", \"S...S\"]. Zeichen: %s; '.' = leer." % [PLAN_MAX_LAYERS, _legend_text()]}
+	var legend := LEGEND.duplicate()
+	var own = data.get("legende", {})
+	if own is Dictionary:
+		for k in own:
+			if str(k).length() == 1 and EkoWorld.PRICES.has(str(own[k])):
+				legend[str(k)] = str(own[k])
+	# Zielflaeche in Bloecken
+	var area := Rect2i()
+	var ort := str(data.get("ort", "stammsitz" if estates.has(name) else "grundstueck"))
+	if ort == "stammsitz":
+		if not estates.has(name):
+			return {"ok": false, "msg": "Du hast keinen Stammsitz."}
+		var F := field_rect(name, clampi(int(data.get("feld", 4)), 0, 8))
+		area = Rect2i(F.position * P, F.size * P)
+	else:
+		var pid := str(b.get("grundstueck", ""))
+		if pid == "":
+			return {"ok": false, "msg": "Du hast kein Grundstück (BuyPlot) und keinen Stammsitz."}
+		var pr: Rect2i = w.plot_rect(pid)
+		area = Rect2i(pr.position * P, pr.size * P)
+	var blocks: Array = []
+	var cost := 0.0
+	for z in layers.size():
+		var rows = layers[z]
+		if rows is String:
+			rows = str(rows).split("/")
+		for y in (rows as Array).size():
+			var row := str(rows[y])
+			for x in row.length():
+				var ch := row[x]
+				if ch == "." or ch == " ":
+					continue
+				if not legend.has(ch):
+					return {"ok": false, "msg": "Unbekanntes Zeichen '%s' in Schicht %d, Zeile %d. Zeichen: %s." % [ch, z, y, _legend_text()]}
+				var p := Vector3i(area.position.x + x, area.position.y + y, z)
+				if not area.has_point(Vector2i(p.x, p.y)):
+					return {"ok": false, "msg": "Der Plan ist größer als die Fläche (%d x %d Blöcke)." % [area.size.x, area.size.y]}
+				blocks.append([p.x, p.y, p.z, legend[ch]])
+				cost += float(EkoWorld.PRICES.get(legend[ch], 3.0)) + LABOR
+	if blocks.is_empty() or blocks.size() > PLAN_MAX_BLOCKS:
+		return {"ok": false, "msg": "Ein Plan hat 1-%d Blöcke (deiner: %d)." % [PLAN_MAX_BLOCKS, blocks.size()]}
+	cost = snappedf(cost, 1.0)
+	if str(data.get("zahlung", "")) == "firma" and w.active_firm(b) >= 0:
+		var c = _sim().company(w.active_firm(b))
+		if c.ledger.cash < cost:
+			return {"ok": false, "msg": "Der Bau kostet %s, die Firmenkasse hat %s." % [Catalog.money(cost), Catalog.money(c.ledger.cash)]}
+		c.ledger.book("property_costs", -cost, true, "Bauplan %s" % str(data.get("titel", "")), _sim().game_min, "K0")
+	else:
+		if float(b.get("geld", 0.0)) < cost:
+			return {"ok": false, "msg": "Der Bau (%d Blöcke) kostet %s, du hast %s. Mit zahlung: \"firma\" zahlt deine Firma." % [blocks.size(), Catalog.money(cost), Catalog.money(float(b.get("geld", 0.0)))]}
+		_sim().economy.transfer("Y0", "K0", cost)
+		b.geld = float(b.geld) - cost
+	var titel := str(data.get("titel", "Eigenbau")).left(40)
+	plans.append({"name": name, "titel": titel, "blocks": blocks, "placed": 0, "acc": 0.0, "status": "im_bau"})
+	w._event(b, "lässt nach eigenem Plan bauen: %s" % titel)
+	_sim().log_event("%s lässt nach eigenem Entwurf bauen: „%s“ (%d Blöcke, %s)." % [name, titel, blocks.size(), Catalog.money(cost)], "info")
+	return {"ok": true, "status": "laeuft", "msg": "„%s“ beauftragt: %d Blöcke, %s, fertig in etwa %d s." % [titel, blocks.size(), Catalog.money(cost), int(blocks.size() / BUILD_RATE)]}
+
+
+func _legend_text() -> String:
+	var parts: Array = []
+	for k in LEGEND:
+		parts.append("%s=%s" % [k, LEGEND[k]])
+	return ", ".join(parts)
+
+
+func _plans_tick(dt: float) -> void:
+	for pl in plans:
+		if pl.status != "im_bau":
+			continue
+		pl.acc = float(pl.acc) + dt * BUILD_RATE
+		while float(pl.acc) >= 1.0 and int(pl.placed) < (pl.blocks as Array).size():
+			pl.acc = float(pl.acc) - 1.0
+			var bl: Array = pl.blocks[int(pl.placed)]
+			var p := Vector3i(int(bl[0]), int(bl[1]), int(bl[2]))
+			if not w.blocks.has(p):
+				w.blocks[p] = str(bl[3])
+			pl.placed = int(pl.placed) + 1
+		if int(pl.placed) >= (pl.blocks as Array).size():
+			pl.status = "fertig"
+			if w.beings.has(pl.name):
+				w._event(w.beings[pl.name], "Bau „%s“ ist fertig" % pl.titel)
+			_sim().log_event("„%s“ von %s ist fertig gebaut." % [pl.titel, pl.name], "good")
+		w.changed.emit()

@@ -33,6 +33,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_destruction")
 	test_names.append("test_eko_play_fixes")
 	test_names.append("test_eko_estates")
+	test_names.append("test_eko_build_plan")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -14170,3 +14171,51 @@ func test_eko_estates() -> void:
 	E.ensure_estates()
 	ok(E.estates.estates.has("Mia") and not E.estates.estates.has(ms[0]), "Nachvergabe fuer KI-Spieler ohne Stammsitz, nicht fuer Buergermeister")
 	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
+
+
+## Eigener Bauplan (15.11.2026): das Wesen entwirft Schicht fuer Schicht, die Baufirma baut genau das; auf dem Stammsitz und auf dem
+## Grundstueck (Bett und Ladestation im Plan -> Einzug moeglich); Zeichen- und Groessenpruefung; Geldbilanz.
+func test_eko_build_plan() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.auto_estates = true
+	E.join("Viktor")
+	var V: Dictionary = E.beings.Viktor
+	s.economy.transfer("X0", "Y0", 20000.0)
+	V.geld = 20000.0
+	ok(not E.input("Viktor", "Bauplan", {"schichten": [["S?S"]]}).ok, "unbekanntes Zeichen abgelehnt")
+	var big: Array = []
+	big.append(["S".repeat(40)])
+	ok(not E.input("Viktor", "Bauplan", {"schichten": big, "feld": 2}).ok, "zu grosser Plan abgelehnt")
+	var plan := [["SSSS", "S..S", "SSSS"], ["SGGS", "G..G", "SGGS"], ["DDDD", "DDDD", "DDDD"]]
+	var g0 := float(V.geld)
+	var r: Dictionary = E.input("Viktor", "Bauplan", {"titel": "Turmhaus", "ort": "stammsitz", "feld": 2, "schichten": plan})
+	ok(r.ok and float(V.geld) < g0, "Plan beauftragt: %s" % str(r.msg))
+	for i in 60:
+		E.estates.tick(1.0)
+	var F: Rect2i = E.estates.field_rect("Viktor", 2)
+	var o := F.position * EkoWorld.PER_TILE
+	ok(E.blocks.get(Vector3i(o.x, o.y, 0), "") == "stein" and E.blocks.get(Vector3i(o.x + 1, o.y, 1), "") == "glas" and E.blocks.get(Vector3i(o.x + 2, o.y + 1, 2), "") == "dach", "genau nach Plan gebaut")
+	ok(not E.blocks.has(Vector3i(o.x + 1, o.y + 1, 0)), "Leerstellen bleiben frei")
+	# Grundstueck mit Bett und Ladestation -> einziehen
+	E.auto_estates = false
+	E.join("Mia")
+	var M: Dictionary = E.beings.Mia
+	s.economy.transfer("X0", "Y0", 20000.0)
+	M.geld = 20000.0
+	var pl: Array = E._plot_obs(M)
+	if not pl.is_empty():
+		M.mover.pos = s.city.tile_center(Vector2i(int(pl[0].feld[0]), int(pl[0].feld[1])))
+		E.input("Mia", "BuyPlot", {"plot": str(pl[0].id)})
+		var ring := ["SSSS", "S..S", "S..S", "SSSS"]
+		var floor0 := ["SSSS", "SXYS", "S..S", "SSSS"]
+		var rp: Dictionary = E.input("Mia", "Bauplan", {"titel": "Mias Haus", "ort": "grundstueck", "schichten": [floor0, ring, ring, ["DDDD", "DDDD", "DDDD", "DDDD"]]})
+		ok(rp.ok, "Plan auf dem Grundstueck: %s" % str(rp.msg))
+		for i in 60:
+			E.estates.tick(1.0)
+		ok(E.input("Mia", "MoveIn", {}).ok, "Einzug ins selbst entworfene Haus")
+	var E2 := EkoWorld.new()
+	E2.setup(s)
+	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
+	ok(E2.estates.plans.size() == E.estates.plans.size(), "Bauplaene gespeichert")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geldbilanz")
