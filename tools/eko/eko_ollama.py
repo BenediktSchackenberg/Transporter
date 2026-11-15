@@ -125,6 +125,8 @@ def compact_obs(o):
 class Agent:
     def __init__(self, args):
         self.args = args
+        self._repeat = 0
+        self._last_fail = ""
         self.dir = Path(args.root) / args.name
         self.ws = self.dir / "workspace"
         self.logs = self.dir / "logs"
@@ -262,6 +264,16 @@ class Agent:
                 verdict = (res.get("msg", "") if isinstance(res, dict) else "")[:100]
                 self.say("→ %s %s %s" % (fn["name"], short, ("· " + verdict) if verdict else ""))
                 messages.append({"role": "tool", "tool_name": fn["name"], "content": json.dumps(res, ensure_ascii=False)[:8000]})
+                # Schleifenbremse: dieselbe fehlgeschlagene Handlung dreimal hintereinander -> deutlicher Hinweis (Ralf fragte Greta 20-mal)
+                failed = isinstance(res, dict) and res.get("ok") is False
+                key = fn["name"] + json.dumps(a, sort_keys=True, ensure_ascii=False) if failed else ""
+                self._repeat = self._repeat + 1 if key and key == getattr(self, "_last_fail", "") else (1 if key else 0)
+                self._last_fail = key
+                if self._repeat >= 3:
+                    messages.append({"role": "user", "content": "Du wiederholst dich: Dieselbe Handlung ist jetzt %d-mal hintereinander gescheitert (%s). "
+                                     "So klappt es nicht – lies die Rückmeldung genau und versuche etwas anderes." % (self._repeat, verdict)})
+                    self.say("↺ Schleifenbremse nach %d gleichen Fehlschlägen" % self._repeat)
+                    self._repeat = 0
             if steps % REFLECT_EVERY < len(calls):
                 messages.append({"role": "user", "content": REFLECT})
 
