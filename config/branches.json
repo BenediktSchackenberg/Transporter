@@ -1043,5 +1043,30 @@
       "lager_max": 10
     },
     "naehe": "bauhof"
+  },
+  "holzfaeller": {
+    "label": "Holzfäller",
+    "beschreibung": "Fällt echte Bäume der Karte im Umkreis (bis 60 Felder) und verkauft das Holz an Sägewerk und Bauhof. Gerodetes Land wird frei, etwa für Straßen. Ohne Wald in Reichweite ruht der Betrieb.",
+    "standort": "markt",
+    "gebaeude": "warehouse",
+    "gruendungskosten": 0,
+    "ausstattung": 11000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 1,
+    "rollen": [
+      "faellen"
+    ],
+    "rezept": {
+      "ein": {},
+      "aus": {
+        "holz": 1
+      },
+      "chargen_je_person_tag": 6,
+      "lager_tage": 4,
+      "lager_max": 300,
+      "rodung": 60
+    },
+    "naehe": "grosshandel"
   }
 }

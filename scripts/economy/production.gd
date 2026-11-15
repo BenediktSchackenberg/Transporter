@@ -44,6 +44,8 @@ var mined := {}                      # Parzelle -> bereits gefoerderte Menge (La
 var terrain := {}                    # Parzelle -> Bergmassiv {cells: {Vector2i: Hoehe in Stufen}, order: [Zellen ab der Abbaufront], art}
 var blasts := {}                     # Betrieb -> Spielminute der letzten Sprengung (fuer Darstellung und Protokoll)
 var _deposits := {}
+var felled: Array = []               # gefaellte Baumzellen [x, y] (Baeume entstehen beim Laden aus dem Seed neu)
+signal trees_felled(cells: Array)
 var stats := {"produced": {}, "consumed": {}, "imported": {}, "exported": {}, "sold": 0.0, "deals": 0, "fallback": 0, "spoiled": 0}
 var _next := 1
 
@@ -872,6 +874,11 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 			sim.biz.block(b.id, "material", "Wartet auf %s" % item_name(short))
 			b["waiting_for"] = short
 		return
+	if R.has("rodung"):   # Holzfaeller: je Charge ein echter Baum der Karte
+		batches = _fell(site, batches, int(R.rodung))
+		if batches <= 0:
+			sim.biz.block(b.id, "material", "Kein Wald mehr in Reichweite")
+			return
 	sim.biz.unblock(b.id, "material")
 	b.erase("waiting_for")
 	for item in R.ein:
@@ -1130,6 +1137,22 @@ func order(buyer: String, loc: int, buyer_biz: String, item: String, qty: int, m
 func import_point(loc: int = -1) -> int:
 	var H := port_of(loc)
 	return H.building if H.enabled else int(sim.retail.wholesale_building)   # Kuestenort: Hafenlager (Region: der eigenen Stadt)
+
+
+## Faellt bis zu n Baeume (die naechsten zuerst) im Umkreis `radius` (Manhattan) um den Standort; gibt die Anzahl zurueck.
+func _fell(site: int, n: int, radius: int) -> int:
+	var at: Vector2i = sim.city.building(site).road
+	var near: Array = sim.city.trees.filter(func(t): return absi(t[0].x - at.x) + absi(t[0].y - at.y) <= radius)
+	near.sort_custom(func(a, b): return absi(a[0].x - at.x) + absi(a[0].y - at.y) < absi(b[0].x - at.x) + absi(b[0].y - at.y))
+	var cut := {}
+	for t in near.slice(0, n):
+		cut[t[0]] = true
+		felled.append([t[0].x, t[0].y])
+	if cut.is_empty():
+		return 0
+	sim.city.trees = sim.city.trees.filter(func(t): return not cut.has(t[0]))
+	trees_felled.emit(cut.keys())
+	return cut.size()
 
 
 ## Ertragsfaktor 0..1 fuer Wind (Windgeschwindigkeit, Sturm drosselt) und Sonne (Tag, Bewoelkung).
@@ -1617,7 +1640,7 @@ func opportunities() -> Array:
 
 
 func to_dict() -> Dictionary:
-	return {"deals": deals, "stats": stats, "next": _next, "mined": mined}
+	return {"deals": deals, "stats": stats, "next": _next, "mined": mined, "felled": felled}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -1629,6 +1652,12 @@ func from_dict(d: Dictionary) -> void:
 	for k in st:
 		stats[k] = st[k]
 	_next = int(d.get("next", 1))
+	felled = d.get("felled", [])
+	if not felled.is_empty():
+		var cut := {}
+		for q in felled:
+			cut[Vector2i(int(q[0]), int(q[1]))] = true
+		sim.city.trees = sim.city.trees.filter(func(t): return not cut.has(t[0]))
 	mined = {}
 	for k in d.get("mined", {}):
 		mined[k] = int(d.mined[k])

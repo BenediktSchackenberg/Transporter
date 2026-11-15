@@ -26,6 +26,7 @@ func _initialize() -> void:
 	test_names.append("test_world_production_oil")
 	test_names.append("test_world_production_energy")
 	test_names.append("test_world_deposits")
+	test_names.append("test_lumberjack")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13674,3 +13675,31 @@ func test_world_deposits() -> void:
 	ok(not surface_mountain, "keine Bergform fuer Vorkommen am Wasser")
 	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "kiesgrube", "rohstoff": "kohle", "reason": "Test"})
 	ok(not r.ok and str(r.msg).contains("nur"), "Kiesgrube foerdert keine Kohle")
+
+
+## Holzfaeller (15.11.2026): faellt echte Baeume der Karte, Holz ins Lager, gefaellte Baeume bleiben nach dem Laden weg.
+func test_lumberjack() -> void:
+	var s := region_sim(2, 21)
+	var c: Company = s.companies[0]
+	c.ledger.inject(60000.0)
+	var trees0: int = s.city.trees.size()
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "holzfaeller", "reason": "Test"})
+	ok(r.ok, "Holzfaeller gegruendet: %s" % str(r.get("msg", "")).left(60))
+	if not r.ok:
+		return
+	var B: Dictionary = s.biz.get_b(str(r.ref))
+	for i in 2:
+		var w := s.personnel.spawn_available("allrounder")
+		s.personnel.hire(0, w)
+		s.executor.execute(0, {"action": "assign_staff", "worker_id": w.id, "business_id": str(r.ref)})
+	for d in 3:
+		next_day(s)
+	var cut: int = s.prod.felled.size()
+	ok(cut > 0 and int(B.get("total", 0)) == cut and s.city.trees.size() <= trees0 - cut, "%d Baeume gefaellt, %d Chargen Holz" % [cut, int(B.get("total", 0))])
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.city.trees.size() == s.city.trees.size(), "nach dem Laden bleiben die Baeume gefaellt (%d / %d)" % [s2.city.trees.size(), s.city.trees.size()])
+	# ohne Wald in Reichweite ruht der Betrieb
+	s.city.trees = []
+	next_day(s)
+	ok(int(B.get("today", 0)) == 0 and str(B.blockers).contains("Wald"), "ohne Wald ruht der Holzfaeller (%s)" % str(B.blockers))
+	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")

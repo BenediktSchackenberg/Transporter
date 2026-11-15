@@ -469,6 +469,13 @@ func _on_rail_built(cells: Array) -> void:
 	repaint_cells(cells)
 
 
+func _on_trees_felled(cells: Array) -> void:
+	for q in cells:
+		if _tree_sprites.has(q):
+			_tree_sprites[q].queue_free()
+			_tree_sprites.erase(q)
+
+
 ## Neue Wegzellen (Zufahrten): Strassenkacheln samt Nachbarn neu setzen (Einmuendungen), gerodete Baeume entfernen.
 func _on_roads_built(cells: Array) -> void:
 	var tiles: Dictionary = man.ground.tiles
@@ -493,6 +500,7 @@ func _build_decor() -> void:
 		s.material = _sway_mat
 		_tree_sprites[t[0]] = s
 	sim.access.roads_built.connect(_on_roads_built)
+	sim.prod.trees_felled.connect(_on_trees_felled)
 	for b in c.benches:
 		_detail_nodes.append(_prop("d_bench", Vector2(b.x * 32 + 16, b.y * 32 + 16), decor_node))
 	for p in c.lamps:
