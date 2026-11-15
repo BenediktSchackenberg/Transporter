@@ -278,9 +278,13 @@ func attack(b: Dictionary, data: Dictionary) -> Dictionary:
 		_incident(at, "%s legt etwas ab, das tickt" % b.name)
 		return {"ok": true, "status": "laeuft", "msg": "Bombe scharf, Zündung in %d Sekunden. Wirkradius %d Felder – bring dich in Sicherheit." % [int(FUSE_S), int(d.radius)]}
 	var to := str(data.get("ziel", data.get("to", "")))
+	if not w.beings.has(to):   # Gebaeude, Fahrzeug oder Feld
+		var ro := attack_object(b, d, it, data)
+		if not ro.is_empty():
+			return ro
 	var o: Dictionary = w.beings.get(to, {})
 	if o.is_empty() or to == b.name:
-		return {"ok": false, "msg": "ziel muss ein anderes Wesen sein."}
+		return {"ok": false, "msg": "ziel: ein anderes Wesen, ein Gebäude (Name oder building_<id>), ein Fahrzeug (fahrzeug_<id>) oder feld [x, y] für einen Sprengsatz."}
 	if is_out(o):
 		return {"ok": false, "msg": "%s ist bereits ausser Gefecht." % to}
 	var dist: int = w._dist(me, w.tile_of(o))
@@ -289,6 +293,7 @@ func attack(b: Dictionary, data: Dictionary) -> Dictionary:
 	if bool(d.einweg):
 		(b.waffen as Array).erase(it)
 	_crime(b, str(d.typ), w.tile_of(o))
+	_tower_defense(b, w.tile_of(o))
 	if str(d.typ) == "sprengsatz":
 		_explode(w.tile_of(o), int(d.radius), float(d.schaden), b, false)
 		return {"ok": true, "msg": "Sprengsatz gezündet bei %s." % to}
@@ -334,8 +339,11 @@ func _incident(at: Vector2i, text: String) -> void:
 
 
 ## Entdeckung und Strafe: Bussgeld an die Stadt des Tatorts (Wiederholung teurer); wer nicht zahlen kann, kommt in Gewahrsam.
-func _crime(b: Dictionary, typ: String, at: Vector2i) -> void:
-	if _sim().rng.randf() >= float(DETECT.get(typ, 0.5)):
+func _crime(b: Dictionary, typ: String, at: Vector2i, against_property := false) -> void:
+	var p := float(DETECT.get(typ, 0.5)) + (0.2 if against_property else 0.0)
+	if _tower_near(at):
+		p = 1.0   # Wachturm: die Polizei sieht alles
+	if _sim().rng.randf() >= p:
 		return
 	b["vergehen"] = int(b.get("vergehen", 0)) + 1
 	var fine := float(FINE.get(typ, 1000.0)) * mini(5, int(b.vergehen))
@@ -366,6 +374,20 @@ func _explode(at: Vector2i, radius: int, dmg: float, by: Dictionary, nuclear: bo
 			var f := 1.0 - float(d) / float(radius + 1)
 			var shield := 0.5 if (w.is_home(o) and not nuclear) else 1.0
 			_hurt(o, dmg * f * shield * (1.0 - armor_of(o) * (0.3 if nuclear else 1.0)), by)
+	for bd in _sim().city.buildings:   # Gebaeude im Wirkradius
+		if bd.get("walk") == null or int(bd.id) < 0:
+			continue
+		var bt := Vector2i(int(bd.walk.x), int(bd.walk.y))
+		var dd: int = w._dist(at, bt)
+		if dd <= radius:
+			damage_building(bd, dmg * float(BUILDING_FACTOR.atom if nuclear else BUILDING_FACTOR.sprengsatz) * (1.0 - float(dd) / float(radius + 1)), by, w.tile_of(by) if not by.is_empty() else at)
+			if not nuclear and _sim().fire != null and _sim().rng.randf() < 0.5 and str(bd.get("type", "")) != "plot":
+				_sim().fire.ignite(int(bd.id), "Sprengsatz", "")
+	for v in _sim().vehicles.values():   # Fahrzeuge im Wirkradius
+		var vd: int = w._dist(at, v.tile())
+		if vd <= radius:
+			damage_vehicle(v, dmg * (1.0 - float(vd) / float(radius + 1)) * (3.0 if nuclear else 1.0), by)
+	damage_roads(at, maxi(0, radius - 1) if not nuclear else radius, by)
 	var gone := 0
 	for p in w.blocks.keys():   # Bloecke im Wirkradius (Mauern, Haeuser) werden zerstoert
 		var bt := Vector2i(floori(float(p.x) / EkoWorld.PER_TILE), floori(float(p.y) / EkoWorld.PER_TILE))
@@ -393,6 +415,7 @@ func out_msg(b: Dictionary) -> String:
 # ------------------------------------------------------------------ Takt
 func tick(dt: float) -> void:
 	_finish_pending()
+	_objects_tick()
 	var day := _day()
 	zones = zones.filter(func(z): return day < int(z.bis_tag))
 	for bm in bombs.duplicate():
@@ -470,7 +493,8 @@ func firm_obs(cid: int) -> Dictionary:
 
 # ------------------------------------------------------------------ Speichern
 func to_dict() -> Dictionary:
-	return {"designs": designs, "arsenal": arsenal, "pending": pending, "bombs": bombs, "zones": zones, "next": _next}
+	return {"designs": designs, "arsenal": arsenal, "pending": pending, "bombs": bombs, "zones": zones, "next": _next,
+		"ruins": ruins, "rebuilds": rebuilds, "fortified": fortified, "walls": walls, "towers": towers}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -480,3 +504,310 @@ func from_dict(d: Dictionary) -> void:
 	bombs = d.get("bombs", [])
 	zones = d.get("zones", [])
 	_next = int(d.get("next", 1))
+	ruins = d.get("ruins", {})
+	rebuilds = d.get("rebuilds", [])
+	fortified = d.get("fortified", {})
+	walls = d.get("walls", {})
+	towers = d.get("towers", [])
+	for k in walls:   # fertige Mauern sperren die Mauerfelder wieder fuer Fussgaenger (Bloecke liegen im Spielstand)
+		if bool(walls[k].get("fertig", false)):
+			walls[k].fertig = false
+			walls[k].fertig_tag = -1
+
+# ------------------------------------------------------------------ Zerstoerung: Gebaeude, Fahrzeuge, Strassen (15.11.2026)
+## Alles Gebaute kann beschaedigt und zerstoert werden; die Wesen entscheiden, ob sie es tun. Gebaeude: Bauzustand (BuildingCare,
+## 0..100), bei 0 Ruine (Betriebe darin stehen still, Brand bei Sprengung -> Feuerwehr); Wiederaufbau durch den Eigentuemer
+## (Firma rebuild_building) oder die Stadt (Amt rebuild_building). Fahrzeuge: Zustand, bei 0 Panne/Totalschaden (Werkstatt).
+## Strassen: Sprengsatz/Bombe auf ein Feld sperrt die Strassenzellen im Wirkradius, bis der Bauhof sie raeumt (Strassenzustand sinkt).
+## Verteidigung: Stadtmauer (Amt build_defense stadtmauer: echte Mauer aus Bloecken um den Ort, Durchlass nur an den Strassen;
+## Angriffe von aussen auf Gebaeude im Ort richten wenig aus), Wachturm (Amt: Angriffe im Umkreis werden sofort entdeckt, der
+## Turm wehrt sich), befestigte Gebaeude (Firma fortify_building: halber Schaden). Die Polizei steht immer auf der Seite der
+## Buerger: Angriffe auf Gebaeude, Fahrzeuge und Strassen werden haeufig entdeckt, der Taeter zahlt Bussgeld und Schadensersatz.
+const BUILDING_FACTOR := {"nahkampf": 0.3, "fernkampf": 0.4, "sprengsatz": 1.5, "atom": 10.0}
+const REBUILD_PER_CELL := 6000.0    # Wiederaufbau je Feld Grundflaeche
+const REBUILD_DAYS := 4
+const WALL_COST := 120000.0
+const WALL_DAYS := 6
+const TOWER_COST := 40000.0
+const TOWER_RADIUS := 12
+const TOWER_SHOT := 20.0
+const FORTIFY_COST := 15000.0
+const ROAD_CLOSED_DAYS := Vector2(2.0, 4.0)
+
+var ruins := {}                     # "bid" -> {seit_tag, stadt, name}
+var rebuilds: Array = []            # {bid, fertig_tag}
+var fortified := {}                 # "bid" -> true
+var walls := {}                     # "k" -> {fertig_tag, fertig: bool}
+var towers: Array = []              # {stadt, feld}
+
+
+func _building_by(target: String) -> Dictionary:
+	if target.begins_with("building_") and target.substr(9).is_valid_int():
+		return _sim().city.building(int(target.substr(9)))
+	for x in _sim().city.buildings:
+		if str(x.get("name", "")) == target:
+			return x
+	return {}
+
+
+func _vehicle_by(target: String):
+	var t := target.trim_prefix("fahrzeug_").trim_prefix("#")
+	if t.is_valid_int():
+		return _sim().vehicles.get(int(t))
+	return null
+
+
+func condition_of(bid: int) -> float:
+	return float(_sim().care.condition.get(bid, 100.0)) if _sim().care != null else 100.0
+
+
+func _set_condition(bid: int, v: float) -> void:
+	if _sim().care != null:
+		_sim().care.condition[bid] = clampf(v, 0.0, 100.0)
+
+
+func _town_rect(k: int) -> Rect2i:
+	if k < 0 or k >= _sim().city.towns.size():
+		return Rect2i()
+	var r: Array = _sim().city.towns[k].rect
+	return Rect2i(int(r[0]), int(r[1]), int(r[2]), int(r[3]))
+
+
+func _town_at(t: Vector2i) -> int:
+	return _sim().city.town_of(t)
+
+
+## Schaden an einem Gebaeude: Befestigung halbiert, Stadtmauer schuetzt vor Angreifern ausserhalb des Orts.
+func damage_building(bd: Dictionary, dmg: float, by: Dictionary, from: Vector2i) -> String:
+	var bid := int(bd.id)
+	var k: int = _sim().towns.of_building(bid)
+	if fortified.has(str(bid)):
+		dmg *= 0.5
+	if bool(walls.get(str(k), {}).get("fertig", false)) and not _town_rect(k).has_point(from):
+		dmg *= 0.3
+	var before := condition_of(bid)
+	_set_condition(bid, before - dmg)
+	var t := Vector2i(int(bd.walk.x), int(bd.walk.y))
+	_incident(t, "%s beschädigt %s" % [str(by.get("name", "Explosion")), bd.name])
+	_alert_owner(bid, "%s wurde angegriffen (Zustand %d %%)." % [bd.name, int(condition_of(bid))])
+	if condition_of(bid) <= 0.0 and not ruins.has(str(bid)):
+		ruins[str(bid)] = {"seit_tag": _day(), "stadt": k, "name": str(bd.name)}
+		for biz in _sim().biz.items.values():
+			if int(biz.get("site", -1)) == bid:
+				_sim().biz.block(str(biz.id), "zerstoert", "Gebäude zerstört – Wiederaufbau nötig (rebuild_building)")
+		for M in _sim().towns.mayors:
+			if int(M.town) == k:
+				M.approval = maxf(0.0, float(M.approval) - 3.0)
+		_sim().log_event("%s wurde zerstört (von %s)." % [bd.name, str(by.get("name", "einer Explosion"))], "bad")
+		return "%s ist zerstört" % bd.name
+	return "%s beschädigt: Zustand %d %% (vorher %d %%)" % [bd.name, int(condition_of(bid)), int(before)]
+
+
+func _alert_owner(bid: int, text: String) -> void:
+	for biz in _sim().biz.items.values():
+		if int(biz.get("site", -1)) == bid:
+			for o in w.beings.values():
+				if int(w.active_firm(o)) == int(biz.owner):
+					w._event(o, "Alarm: " + text)
+			return
+
+
+func damage_vehicle(v, dmg: float, by: Dictionary) -> String:
+	v.condition = maxf(0.0, float(v.condition) - dmg)
+	var t: Vector2i = v.tile()
+	_incident(t, "%s beschädigt Fahrzeug #%d" % [str(by.get("name", "Explosion")), int(v.id)])
+	for o in w.beings.values():
+		if int(w.active_firm(o)) == int(v.owner):
+			w._event(o, "Alarm: Fahrzeug #%d wurde angegriffen (Zustand %d %%)" % [int(v.id), int(v.condition)])
+	if float(v.condition) <= 0.0:
+		v.state = "broken"
+		v.timer = 600.0
+		_sim().log_event("Fahrzeug #%d von %s zerstört (Totalschaden, muss in die Werkstatt)." % [int(v.id), _sim().company(int(v.owner)).company_name], "bad")
+		return "Fahrzeug #%d zerstört" % int(v.id)
+	return "Fahrzeug #%d beschädigt (Zustand %d %%)" % [int(v.id), int(v.condition)]
+
+
+## Strassen im Radius sperren (Bauhof raeumt nach 2-4 Tagen), Strassenzustand sinkt.
+func damage_roads(at: Vector2i, radius: int, by: Dictionary) -> int:
+	var n := 0
+	var until: float = _sim().game_min + GameCalendar.days_to_min(_sim().rng.randf_range(ROAD_CLOSED_DAYS.x, ROAD_CLOSED_DAYS.y))
+	for y in range(at.y - radius, at.y + radius + 1):
+		for x in range(at.x - radius, at.x + radius + 1):
+			var c := Vector2i(x, y)
+			if not _sim().city.inside(c) or not _sim().city.is_road(c) or w._dist(at, c) > radius:
+				continue
+			_sim().nav.add_roadwork(c, until)
+			if _sim().road_care != null:
+				var seg = RoadCare.seg_of(c)
+				if _sim().road_care.cond.has(seg):
+					_sim().road_care.cond[seg] = maxf(0.0, float(_sim().road_care.cond[seg]) - 40.0)
+			n += 1
+	if n > 0:
+		_sim().traffic_events.append({"kind": "blockade", "cells": [at], "until": until, "text": "Straße bei %d,%d zerstört" % [at.x, at.y]})
+		_incident(at, "%s zerstört %d Straßenfelder" % [str(by.get("name", "Explosion")), n])
+	return n
+
+
+## Angriff auf ein Bauwerk, Fahrzeug oder Feld. Gibt {} zurueck, wenn das Ziel kein solches ist.
+func attack_object(b: Dictionary, d: Dictionary, it: Dictionary, data: Dictionary) -> Dictionary:
+	var me: Vector2i = w.tile_of(b)
+	var target := str(data.get("ziel", data.get("to", "")))
+	var typ := str(d.typ)
+	var bd := _building_by(target) if target != "" else {}
+	var v = _vehicle_by(target) if target != "" and bd.is_empty() else null
+	var f = data.get("feld")
+	if bd.is_empty() and v == null and not (f is Array and typ == "sprengsatz"):
+		return {}
+	if bool(d.einweg):
+		(b.waffen as Array).erase(it)
+	if f is Array and bd.is_empty() and v == null:   # Sprengsatz auf ein Feld: Strasse, Fahrzeuge und Gebaeude im Radius
+		var at := Vector2i(int(f[0]), int(f[1]))
+		if w._dist(me, at) > int(d.reichweite):
+			return {"ok": false, "msg": "Das Feld ist zu weit weg (%s reicht %d)." % [d.name, int(d.reichweite)]}
+		_crime(b, "sprengsatz", at, true)
+		_explode(at, int(d.radius), float(d.schaden), b, false)
+		return {"ok": true, "msg": "Sprengsatz bei %d,%d gezündet." % [at.x, at.y]}
+	var pos: Vector2i = Vector2i(int(bd.walk.x), int(bd.walk.y)) if not bd.is_empty() else v.tile()
+	var dist: int = w._dist(me, pos)
+	if dist > int(d.reichweite) + (1 if not bd.is_empty() else 0):
+		return {"ok": false, "msg": "%s ist %d Felder entfernt, %s reicht %d." % [target, dist, d.name, int(d.reichweite)]}
+	_crime(b, typ, pos, true)
+	if typ == "sprengsatz":
+		_explode(pos, int(d.radius), float(d.schaden), b, false)
+		return {"ok": true, "msg": "Sprengsatz an %s gezündet." % target}
+	var dmg := float(d.schaden) * float(BUILDING_FACTOR.get(typ, 0.3))
+	var txt: String = damage_building(bd, dmg, b, me) if not bd.is_empty() else damage_vehicle(v, float(d.schaden), b)
+	_tower_defense(b, pos)
+	return {"ok": true, "msg": txt}
+
+
+## Wachtuerme verteidigen: ein Angreifer im Umkreis wird beschossen (die Polizei hat ihn ohnehin im Blick).
+func _tower_defense(b: Dictionary, at: Vector2i) -> void:
+	for tw in towers:
+		if w._dist(at, Vector2i(int(tw.feld[0]), int(tw.feld[1]))) <= TOWER_RADIUS and not is_out(b):
+			_hurt(b, TOWER_SHOT * (1.0 - armor_of(b)), {"name": "Wachturm"})
+			w._event(b, "der Wachturm schießt auf dich")
+			return
+
+
+func _tower_near(at: Vector2i) -> bool:
+	return towers.any(func(tw): return w._dist(at, Vector2i(int(tw.feld[0]), int(tw.feld[1]))) <= TOWER_RADIUS)
+
+
+## Firma: eigenes Gebaeude befestigen oder wieder aufbauen.
+func firm_object_action(b: Dictionary, cid: int, a: Dictionary) -> Dictionary:
+	var bd := _building_by(str(a.get("gebaeude", "")))
+	if bd.is_empty():
+		return {"ok": false, "msg": "gebaeude: Name oder building_<id> eines Gebäudes deiner Firma."}
+	var own: bool = _sim().biz.items.values().any(func(biz): return int(biz.owner) == cid and int(biz.get("site", -1)) == int(bd.id))
+	if not own:
+		return {"ok": false, "msg": "%s gehört nicht deiner Firma." % bd.name}
+	var c = _sim().company(cid)
+	if str(a.action) == "fortify_building":
+		if fortified.has(str(bd.id)):
+			return {"ok": false, "msg": "%s ist schon befestigt." % bd.name}
+		if c.ledger.cash < FORTIFY_COST:
+			return {"ok": false, "msg": "Befestigung kostet %s." % Catalog.money(FORTIFY_COST)}
+		c.ledger.book("security", -FORTIFY_COST, true, "Befestigung %s" % bd.name, _sim().game_min, "K0")
+		fortified[str(bd.id)] = true
+		w._event(b, "lässt %s befestigen" % bd.name)
+		return {"ok": true, "msg": "%s ist befestigt: Angriffe richten nur noch halben Schaden an." % bd.name}
+	return _rebuild(b, bd, c.company_name, func(cost): c.ledger.book("repairs", -cost, true, "Wiederaufbau %s" % bd.name, _sim().game_min, "K0"), c.ledger.cash)
+
+
+func _rebuild(b: Dictionary, bd: Dictionary, payer: String, pay: Callable, cash: float) -> Dictionary:
+	var bid := int(bd.id)
+	if condition_of(bid) >= 100.0:
+		return {"ok": false, "msg": "%s ist unbeschädigt." % bd.name}
+	if rebuilds.any(func(r): return int(r.bid) == bid):
+		return {"ok": false, "msg": "%s wird bereits wieder aufgebaut." % bd.name}
+	var cost: float = snappedf(REBUILD_PER_CELL * int(bd.get("w", 2)) * int(bd.get("h", 2)) * (1.0 - condition_of(bid) / 100.0), 10.0)
+	if cash < cost:
+		return {"ok": false, "msg": "Wiederaufbau kostet %s, verfügbar %s." % [Catalog.money(cost), Catalog.money(cash)]}
+	pay.call(cost)
+	rebuilds.append({"bid": bid, "fertig_tag": _day() + REBUILD_DAYS})
+	w._event(b, "lässt %s wieder aufbauen" % bd.name)
+	return {"ok": true, "msg": "Baufirmen bauen %s wieder auf (%s, %d Tage, bezahlt von %s)." % [bd.name, Catalog.money(cost), REBUILD_DAYS, payer]}
+
+
+## Amt: Stadtmauer, Wachturm, Wiederaufbau oeffentlicher Gebaeude (aus der Stadtkasse).
+func office_action(b: Dictionary, k: int, a: Dictionary) -> Dictionary:
+	var acct := Towns.account_of(k)
+	var cash := float(_sim().economy.accounts.get(acct, 0.0))
+	var act := str(a.action)
+	if act == "rebuild_building":
+		var bd := _building_by(str(a.get("gebaeude", "")))
+		if bd.is_empty() or _sim().towns.of_building(int(bd.id)) != k:
+			return {"ok": false, "msg": "gebaeude: ein Gebäude deiner Stadt."}
+		return _rebuild(b, bd, "Stadtkasse", func(cost): _sim().economy.transfer(acct, "K0", cost), cash)
+	var art := str(a.get("art", ""))
+	if art == "stadtmauer":
+		if walls.has(str(k)):
+			return {"ok": false, "msg": "Die Stadtmauer ist schon gebaut oder im Bau."}
+		if cash < WALL_COST:
+			return {"ok": false, "msg": "Die Stadtmauer kostet %s, die Stadtkasse hat %s." % [Catalog.money(WALL_COST), Catalog.money(cash)]}
+		_sim().economy.transfer(acct, "K0", WALL_COST)
+		walls[str(k)] = {"fertig_tag": _day() + WALL_DAYS, "fertig": false}
+		_sim().log_event("%s lässt eine Stadtmauer um %s bauen (%d Tage)." % [b.name, _sim().towns.name_of(k), WALL_DAYS], "info")
+		return {"ok": true, "msg": "Stadtmauer beauftragt: %s, fertig in %d Tagen. Durchlass nur an den Straßen." % [Catalog.money(WALL_COST), WALL_DAYS]}
+	if art == "wachturm":
+		var f = a.get("feld", null)
+		var at: Vector2i = w.tile_of(b) if not (f is Array) else Vector2i(int(f[0]), int(f[1]))
+		if _town_at(at) != k:
+			return {"ok": false, "msg": "Der Wachturm muss in deiner Stadt stehen."}
+		if cash < TOWER_COST:
+			return {"ok": false, "msg": "Ein Wachturm kostet %s." % Catalog.money(TOWER_COST)}
+		_sim().economy.transfer(acct, "K0", TOWER_COST)
+		towers.append({"stadt": k, "feld": [at.x, at.y]})
+		_sim().log_event("Wachturm in %s bei %d,%d errichtet." % [_sim().towns.name_of(k), at.x, at.y], "info")
+		return {"ok": true, "msg": "Wachturm bei %d,%d steht: Angriffe im Umkreis von %d Feldern werden sofort entdeckt und beschossen." % [at.x, at.y, TOWER_RADIUS]}
+	return {"ok": false, "msg": "build_defense braucht art: stadtmauer oder wachturm."}
+
+
+## Mauer aus Bloecken um den Ortsrand (2 Schichten), Durchlass an Strassen; Mauerfelder sind fuer Fussgaenger gesperrt.
+func _raise_wall(k: int) -> void:
+	var r := _town_rect(k).grow(2)
+	var C = _sim().city
+	var cells: Array = []
+	for x in range(r.position.x, r.end.x):
+		cells.append(Vector2i(x, r.position.y))
+		cells.append(Vector2i(x, r.end.y - 1))
+	for y in range(r.position.y + 1, r.end.y - 1):
+		cells.append(Vector2i(r.position.x, y))
+		cells.append(Vector2i(r.end.x - 1, y))
+	var n := 0
+	for c in cells:
+		if not C.inside(c) or C.is_road(c) or C.g(c) == CityData.G.WATER or int(C.building_at[C.idx(c)]) >= 0:
+			continue
+		for i in EkoWorld.PER_TILE:
+			for z in 2:
+				var p := Vector3i(c.x * EkoWorld.PER_TILE + i, c.y * EkoWorld.PER_TILE + EkoWorld.PER_TILE / 2, z)
+				if not w.blocks.has(p):
+					w.blocks[p] = "stein"
+		_sim().nav.walk.set_point_solid(c, true)
+		n += 1
+	walls[str(k)].fertig = true
+	_sim().log_event("Die Stadtmauer um %s ist fertig (%d Felder, Tore an den Straßen)." % [_sim().towns.name_of(k), n], "good")
+	w.changed.emit()
+
+
+func _objects_tick() -> void:
+	var day := _day()
+	for r in rebuilds.duplicate():
+		if day >= int(r.fertig_tag):
+			rebuilds.erase(r)
+			_set_condition(int(r.bid), 100.0)
+			ruins.erase(str(r.bid))
+			for biz in _sim().biz.items.values():
+				if int(biz.get("site", -1)) == int(r.bid):
+					_sim().biz.unblock(str(biz.id), "zerstoert")
+			_sim().log_event("%s ist wieder aufgebaut." % _sim().city.building(int(r.bid)).get("name", ""), "good")
+	for k in walls:
+		if not bool(walls[k].fertig) and day >= int(walls[k].fertig_tag):
+			_raise_wall(int(k))
+
+
+func defense_obs(k: int) -> Dictionary:
+	return {"stadtmauer": walls.get(str(k), {}), "wachtuerme": towers.filter(func(tw): return int(tw.stadt) == k).map(func(tw): return tw.feld),
+		"ruinen": ruins.values().filter(func(x): return int(x.stadt) == k).map(func(x): return x.name),
+		"aktionen": "Amt {aktion: {action: build_defense, art: stadtmauer (%s, %d Tage) | wachturm (%s, feld?)}} | {action: rebuild_building, gebaeude}" % [Catalog.money(WALL_COST), WALL_DAYS, Catalog.money(TOWER_COST)]}

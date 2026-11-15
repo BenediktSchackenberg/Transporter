@@ -54,6 +54,45 @@ func _process(_delta: float) -> void:
 			n.queue_redraw()
 	for name in _houses:
 		_houses[name].queue_redraw()   # Lampe und Ladestation leuchten, Baufortschritt
+	var A: EkoArms = sim.eko.arms
+	if not (A.ruins.is_empty() and A.towers.is_empty() and A.blasts.is_empty() and A.zones.is_empty() and A.bombs.is_empty()):
+		queue_redraw()
+
+
+## Krieg sichtbar: Rauch ueber Ruinen, Wachtuerme, Explosionen (Atompilz), Strahlungszonen, tickende Bomben.
+func _draw() -> void:
+	var A: EkoArms = sim.eko.arms
+	var ms := Time.get_ticks_msec()
+	for z in A.zones:
+		var c := Iso.to_screen(sim.city.tile_center(Vector2i(int(z.feld[0]), int(z.feld[1]))))
+		draw_circle(c, float(z.radius) * 32.0, Color(0.4, 1.0, 0.2, 0.10 + 0.04 * sin(ms / 400.0)))
+	for key in A.ruins:
+		var bd: Dictionary = sim.city.building(int(key))
+		if bd.is_empty():
+			continue
+		var c := Iso.to_screen(sim.city.tile_center(Vector2i(int(bd.walk.x), int(bd.walk.y))))
+		draw_circle(c, 26.0, Color(0.1, 0.1, 0.1, 0.55))
+		for i in 4:   # aufsteigender Rauch
+			var ph := fmod(ms / 1800.0 + i * 0.25, 1.0)
+			draw_circle(c + Vector2(sin(ph * 6.0 + i) * 6.0, -10.0 - ph * 60.0), 6.0 + ph * 10.0, Color(0.25, 0.25, 0.25, 0.5 * (1.0 - ph)))
+	for tw in A.towers:
+		var c := Iso.to_screen(sim.city.tile_center(Vector2i(int(tw.feld[0]), int(tw.feld[1]))))
+		draw_rect(Rect2(c.x - 5, c.y - 34, 10, 34), Color("#6d5d4b"))
+		draw_rect(Rect2(c.x - 8, c.y - 40, 16, 7), Color("#8d7b66"))
+		draw_circle(c + Vector2(0, -44), 2.5, Color(1.0, 0.2, 0.2, 0.6 + 0.4 * sin(ms / 250.0)))
+	for bm in A.bombs:
+		var c := Iso.to_screen(sim.city.tile_center(Vector2i(int(bm.feld[0]), int(bm.feld[1]))))
+		draw_circle(c, 5.0, Color("#222"))
+		draw_circle(c + Vector2(0, -6), 2.5, Color(1, 0.1, 0.1) if (ms / 300) % 2 == 0 else Color(0.4, 0, 0))
+		draw_string(ThemeDB.fallback_font, c + Vector2(-10, -12), "%d s" % int(bm.left), HORIZONTAL_ALIGNMENT_CENTER, 20, 8, Color.RED)
+	for bl in A.blasts:
+		var t := clampf(float(ms - int(bl.ms)) / 8000.0, 0.0, 1.0)
+		var c := Iso.to_screen(sim.city.tile_center(Vector2i(int(bl.feld[0]), int(bl.feld[1]))))
+		var rad := float(bl.radius) * 32.0 * (0.3 + 0.7 * t)
+		draw_circle(c, rad, Color(1.0, 0.55, 0.1, 0.5 * (1.0 - t)))
+		if bool(bl.get("atom", false)):   # Atompilz
+			draw_rect(Rect2(c.x - 8, c.y - 120 * t, 16, 120 * t), Color(0.6, 0.5, 0.45, 0.7 * (1.0 - t)))
+			draw_circle(c + Vector2(0, -120 * t), 30.0 + 40.0 * t, Color(0.75, 0.6, 0.5, 0.7 * (1.0 - t)))
 
 
 static func color_of(mat: String) -> Color:

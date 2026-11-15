@@ -106,10 +106,12 @@ var incidents: Array = []        # {tag, schwer, kosten, tage}
 func _incident_roll(day: int) -> void:
 	if day < offline_until or (loaded_mwh <= 0.0 and fuel_elements() <= 0):
 		return
-	if sim.rng.randf() >= INCIDENT_P + (INCIDENT_P_OVERDUE if maintenance_overdue() else 0.0):
+	var r := RandomNumberGenerator.new()   # eigener Wurf je Tag: verschiebt nicht die Zufallsfolge der uebrigen Simulation
+	r.seed = hash([int(sim.city.seed_value), day, "kernkraftwerk"])
+	if r.randf() >= INCIDENT_P + (INCIDENT_P_OVERDUE if maintenance_overdue() else 0.0):
 		return
-	var severe: bool = sim.rng.randf() < 0.2
-	var days: int = 30 if severe else sim.rng.randi_range(4, 10)
+	var severe: bool = r.randf() < 0.2
+	var days: int = 30 if severe else r.randi_range(4, 10)
 	var cost: float = 300000.0 if severe else 50000.0
 	offline_until = day + days
 	sim.economy.transfer(ACCT, "K0", cost)   # Reparatur und Sicherheitspruefung durch Baufirmen

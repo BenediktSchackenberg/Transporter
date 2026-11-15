@@ -1247,7 +1247,7 @@ const FIRM_ACTIONS := [
 	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen",
 	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage",
 	# Waffenschmiede (nur mit eigener, laufender Waffenschmiede)
-	"design_weapon", "forge_weapon"]
+	"design_weapon", "forge_weapon", "fortify_building", "rebuild_building"]
 const FIRM_RESERVE := 5000.0
 const MAYOR_SALARY := 50.0          # Amtsgehalt je Echtzeitminute aus der Stadtkasse
 var _salary_timer := 60.0        # Privatentnahme laesst mindestens so viel in der Firmenkasse
@@ -1307,6 +1307,8 @@ func _firm_action(b: Dictionary, data: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Firma braucht aktion: {\"action\": eine von %s, ...Parameter}." % ", ".join(FIRM_ACTIONS)}
 	if str(a.action) in ["design_weapon", "forge_weapon"]:   # Waffenschmiede: Entwurf und Fertigung (EkoArms)
 		return arms.firm_action(b, cid, a)
+	if str(a.action) in ["fortify_building", "rebuild_building"]:   # eigene Gebaeude befestigen / wieder aufbauen
+		return arms.firm_object_action(b, cid, a)
 	if str(a.action) == "auftrag_an_wesen":   # Firma schreibt selbst einen Hilfsjob fuer freie Wesen aus
 		var c2 = sim.company(cid)
 		var lohn := clampf(float(a.get("lohn", 100.0)), 20.0, 2000.0)
@@ -1549,6 +1551,8 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 	var a = data.get("aktion", data.get("action"))
 	if a is String:
 		a = JSON.parse_string(a)
+	if a is Dictionary and str(a.get("action", "")) in ["build_defense", "rebuild_building"]:   # Verteidigung und Wiederaufbau (EkoArms)
+		return arms.office_action(b, k, a)
 	if not (a is Dictionary) or not Mayor.SCHEMA.has(str(a.get("action", ""))):
 		return {"ok": false, "msg": "Amt braucht aktion: {\"action\": eine von %s, ...}. Parameter siehe mein_amt.aktionen." % ", ".join(Mayor.SCHEMA.keys())}
 	if not a.has("reason"):
@@ -1566,7 +1570,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	var ind: Dictionary = sim.towns.mayors[k].indicators()
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
-	var out := {"stadt": sim.towns.name_of(k)}
+	var out := {"stadt": sim.towns.name_of(k), "verteidigung": arms.defense_obs(k)}
 	var size := 0
 	var skipped: Array = []
 	for key in keys:

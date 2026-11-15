@@ -30,6 +30,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_autonomy")
 	test_names.append("test_world_production_metal_textile")
 	test_names.append("test_eko_arms")
+	test_names.append("test_eko_destruction")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -10163,9 +10164,29 @@ func test_fire_service() -> void:
 	for st in M.of_town(1, "feuerwehr"):
 		for vid in st.vehicles:
 			M.vehicles[vid].status = "werkstatt"
-	var house1: int = house.call(1)
+	var house1 := -1   # das Wohnhaus in Stadt 1, das am weitesten von den Wachen der anderen Staedte entfernt liegt
+	var far_d := -1.0
+	for b in s.city.buildings:
+		if b.role == "customer" and b.type == "house" and s.towns.of_building(int(b.id)) == 1 and s.care.condition.has(int(b.id)):
+			var dmin := INF
+			for st in M.facilities.values():
+				if F.is_station(st) and int(st.town) != 1:
+					dmin = minf(dmin, F.eta(st, b.road))
+			if dmin > far_d:
+				far_d = dmin
+				house1 = int(b.id)
 	var f1h: Dictionary = F.ignite(house1)
-	ok(f1h.phase == "wartet", "Wohnhaus: Nachbarwehr kaeme zu spaet -> keine Nachbarschaftshilfe")
+	# Regel: Nachbarwehr beim Brand nur, wenn sie vor dem Ausbrennen ankommt (sonst wartet der Einsatz)
+	if far_d >= FireService.BURN_OUT_MIN:
+		ok(f1h.phase == "wartet", "Wohnhaus: Nachbarwehr kaeme zu spaet -> keine Nachbarschaftshilfe (%.0f min)" % far_d)
+	else:
+		ok(f1h.phase == "wartet" or (bool(f1h.helper) and F.eta(M.facilities[f1h.station], s.city.building(house1).road) < FireService.BURN_OUT_MIN),
+			"Wohnhaus: Nachbarwehr nur, wenn sie vor dem Ausbrennen ankommt (%.0f min, %s)" % [far_d, f1h.phase])
+		var th := 0.0
+		while f1h.status == "brennt" and th < 300.0:   # Einsatz abschliessen, damit die Nachbarwehr fuer den Grossbrand frei ist
+			run(s, 1.0)
+			th += 1.0
+		run(s, 60.0)
 	var b1 := -1
 	for b in s.city.buildings:
 		if b.role == "customer" and str(b.type) in FireService.LARGE and s.towns.of_building(int(b.id)) == 1:
@@ -13650,7 +13671,7 @@ func test_world_production_energy() -> void:
 	var day := GameCalendar.day_of(s.game_min)
 	var hit := false
 	for i in 1500:
-		s.plant._incident_roll(day)
+		s.plant._incident_roll(day + i)
 		if s.plant.offline_until > day:
 			hit = true
 			break
@@ -13924,3 +13945,123 @@ func test_eko_arms() -> void:
 
 func arms_out(E: EkoWorld, b: Dictionary) -> bool:
 	return E.arms.is_out(b)
+
+
+## Zerstoerung und Verteidigung (15.11.2026): Gebaeude, Fahrzeuge und Strassen lassen sich beschaedigen und zerstoeren; Ruinen
+## blockieren Betriebe, Wiederaufbau durch den Eigentuemer; Stadtmauer aus Bloecken, Wachturm (Polizei sieht alles, Turm wehrt sich),
+## Befestigung; Speichern; Geldbilanz.
+func test_eko_destruction() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.join("Viktor")
+	var V: Dictionary = E.beings.Viktor
+	s.economy.transfer("X0", "Y0", 3000.0)
+	V.geld = 3000.0
+	E.input("Viktor", "FoundCompany", {"name": "Vik Abriss"})
+	var cid: int = E.active_firm(V)
+	s.company(cid).ledger.inject(400000.0)
+	E.input("Viktor", "Firma", {"aktion": {"action": "found_business", "branche": "waffenschmiede", "reason": "Test"}})
+	var forge := {}
+	for B in s.biz.items.values():
+		if str(B.branch) == "waffenschmiede":
+			forge = B
+	var w := s.personnel.spawn_available("allrounder")
+	s.personnel.hire(cid, w)
+	s.executor.execute(cid, {"action": "assign_staff", "worker_id": w.id, "business_id": str(forge.id)})
+	next_day(s)
+	E.input("Viktor", "Firma", {"aktion": {"action": "design_weapon", "name": "Bumm", "typ": "sprengsatz", "material": {"diesel": 2, "kunststoffgranulat": 1}}})
+	E.input("Viktor", "Firma", {"aktion": {"action": "design_weapon", "name": "Hammer", "typ": "nahkampf", "material": {"stahl": 3}}})
+	E.input("Viktor", "Firma", {"aktion": {"action": "forge_weapon", "design": "Bumm", "anzahl": 3}})
+	E.input("Viktor", "Firma", {"aktion": {"action": "forge_weapon", "design": "Hammer"}})
+	next_day(s)
+	var fsite: Dictionary = s.city.building(int(forge.site))
+	V.mover.pos = s.city.tile_center(fsite.walk)
+	for dn in ["Bumm", "Bumm", "Bumm", "Hammer"]:
+		E.input("Viktor", "Pickup", {"waffe": dn})
+	ok((V.waffen as Array).size() == 4, "drei Sprengsaetze und ein Hammer abgeholt")
+	# fremder Betrieb (Firma 1) als Ziel
+	var c1: Company = s.companies[1]
+	c1.ledger.inject(200000.0)
+	var rb: Dictionary = s.executor.execute(1, {"action": "found_business", "branche": "saegewerk", "reason": "Test"})
+	var target: Dictionary = s.biz.get_b(str(rb.ref))
+	var tb: Dictionary = s.city.building(int(target.site))
+	V.mover.pos = s.city.tile_center(tb.walk)
+	var c0 := E.arms.condition_of(int(tb.id))
+	var r1: Dictionary = E.input("Viktor", "Attack", {"ziel": str(tb.name), "waffe": "Hammer"})
+	ok(r1.ok and E.arms.condition_of(int(tb.id)) < c0, "Hammer beschaedigt %s: %s" % [tb.name, str(r1.msg)])
+	V.custody_left = 0.0
+	V.out_left = 0.0
+	E.arms._set_condition(int(tb.id), 20.0)
+	var r2: Dictionary = E.input("Viktor", "Attack", {"ziel": str(tb.name), "waffe": "Bumm"})
+	V.custody_left = 0.0
+	V.out_left = 0.0
+	ok(r2.ok and E.arms.ruins.has(str(tb.id)), "Sprengsatz zerstoert das Gebaeude (Ruine)")
+	ok(target.blockers.any(func(x): return x.key == "zerstoert"), "Betrieb in der Ruine steht still")
+	# Wiederaufbau durch den Eigentuemer (Wesen der Firma 1)
+	E.join("Greta")
+	E.beings.Greta.firma = 1
+	ok(E.input("Greta", "Firma", {"aktion": {"action": "rebuild_building", "gebaeude": str(tb.name)}}).ok, "Greta laesst wieder aufbauen")
+	for d in EkoArms.REBUILD_DAYS + 1:
+		next_day(s)
+	E.arms.tick(0.1)
+	ok(not E.arms.ruins.has(str(tb.id)) and not target.blockers.any(func(x): return x.key == "zerstoert"), "wieder aufgebaut, Betrieb laeuft weiter")
+	# Strasse sprengen
+	var road := Vector2i(-1, -1)
+	var me := E.tile_of(V)
+	for r in range(0, 4):
+		for dx in range(-r, r + 1):
+			var c := me + Vector2i(dx, r - absi(dx))
+			if road.x < 0 and s.city.inside(c) and s.city.is_road(c):
+				road = c
+	if road.x >= 0:
+		var r3: Dictionary = E.input("Viktor", "Attack", {"waffe": "Bumm", "feld": [road.x, road.y]})
+		V.custody_left = 0.0
+		V.out_left = 0.0
+		V.gesundheit = 100.0
+		ok(r3.ok and s.nav.roadworks.has(road), "Strasse bei %s gesperrt" % str(road))
+	# Fahrzeug
+	var veh = null
+	for v in s.vehicles.values():
+		veh = v
+		break
+	if veh != null:
+		V.mover.pos = s.city.tile_center(veh.tile())
+		var r4: Dictionary = E.input("Viktor", "Attack", {"ziel": "fahrzeug_%d" % int(veh.id), "waffe": "Bumm"})
+		V.custody_left = 0.0
+		V.out_left = 0.0
+		ok(r4.ok and float(veh.condition) < 100.0, "Fahrzeug beschaedigt: %s" % str(r4.get("msg", "")))
+	# Verteidigung der Stadt durch das Buergermeister-Wesen
+	var ms: Array = E.adopt_mayors()
+	var mname: String = ms[0]
+	var k := int(E.beings[mname].amt)
+	s.economy.transfer("X0", Towns.account_of(k), 300000.0)
+	ok(E.input(mname, "Amt", {"aktion": {"action": "build_defense", "art": "stadtmauer"}}).ok, "Stadtmauer beauftragt")
+	var blocks0 := E.blocks.size()
+	for d in EkoArms.WALL_DAYS + 1:
+		next_day(s)
+	E.arms.tick(0.1)
+	ok(bool(E.arms.walls[str(k)].fertig) and E.blocks.size() > blocks0 + 100, "Stadtmauer steht (%d Bloecke)" % (E.blocks.size() - blocks0))
+	var tr: Rect2i = E.arms._town_rect(k).grow(2)
+	var wall_cell := Vector2i(tr.position.x + 3, tr.position.y)
+	ok(s.city.is_road(wall_cell) or s.nav.walk.is_point_solid(wall_cell) or s.city.building_at[s.city.idx(wall_cell)] >= 0 or s.city.g(wall_cell) == CityData.G.WATER, "Mauerfeld ist fuer Fussgaenger gesperrt")
+	var center := Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1]))
+	E.beings[mname].mover.pos = s.city.tile_center(center)
+	ok(E.input(mname, "Amt", {"aktion": {"action": "build_defense", "art": "wachturm"}}).ok, "Wachturm gebaut")
+	ok(E.observe(mname).mein_amt.verteidigung.wachtuerme.size() == 1, "Verteidigung in der Amtslage")
+	# Angriff neben dem Wachturm: sofort entdeckt, der Turm schiesst
+	var bd2 := {}
+	for bd in s.city.buildings:
+		if s.towns.of_building(int(bd.id)) == k and EkoWorld._dist(center, Vector2i(int(bd.walk.x), int(bd.walk.y))) <= 6 and str(bd.get("type", "")) != "plot":
+			bd2 = bd
+			break
+	if not bd2.is_empty():
+		V.mover.pos = s.city.tile_center(Vector2i(int(bd2.walk.x), int(bd2.walk.y)))
+		var v0 := int(V.get("vergehen", 0))
+		var g0 := float(V.gesundheit)
+		E.input("Viktor", "Attack", {"ziel": str(bd2.name), "waffe": "Hammer"})
+		ok(int(V.get("vergehen", 0)) == v0 + 1 and float(V.gesundheit) < g0, "Wachturm: Taeter entdeckt und beschossen")
+	var E2 := EkoWorld.new()
+	E2.setup(s)
+	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
+	ok(E2.arms.walls.has(str(k)) and E2.arms.towers.size() == 1, "Mauer und Wachturm gespeichert")
+	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
