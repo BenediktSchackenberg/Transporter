@@ -75,6 +75,8 @@ TOOLS = [
      "(Sprengsatz auf ein Feld, z. B. eine Straße; Bombe ablegen). Alles Gebaute kann beschädigt und zerstört werden. Gewalt ist verboten, "
      "die Polizei steht auf der Seite der Bürger und bestraft oft. "
      "Give {to, waffe} (getragene Waffe einem Wesen in der Nähe geben), Pickup {waffe} (fertige Waffe an deiner eigenen Waffenschmiede holen), "
+     "Bauwerk {art: mauer|zaun|burg|festung|schloss|turm|garten, feld 0-8, material?, hoehe?, zahlung?: firma} (auf deinem Stammsitz bauen lassen, "
+     "siehe mein_stammsitz), Tor {offen: true|false} (Tor deines Stammsitzes), "
      "Ziel {ziel, warum, teilziele?, nutzen?, ressourcen?, erwartung?, abbruch?, ersetzen?} (dein Hauptziel; ein aktives Ziel ersetzt du nur bewusst), "
      "ZielStand {fortschritt 0-100?, teilziel_erledigt?, status?: aktiv|erreicht|aufgegeben, notiz?}, "
      "AcceptJob {job} (Arbeit einer Firma aus jobangebote annehmen), Deliver {job} (Auftrag abliefern, Lohn bekommen), "
@@ -88,7 +90,7 @@ TOOLS = [
      "Einrichtung (bett, ladestation, tisch, lampe, ...) kaufst du mit Pickup am Bauhof, Preise in material_preise. "
      "Blockraster: 4x4 Blöcke je Feld, z = Schicht ab 0.",
      "parameters": {"type": "object", "properties": {
-         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Ziel", "ZielStand", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
+         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Bauwerk", "Tor", "Ziel", "ZielStand", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12], \"warum\": \"Hafen erkunden\"}. "
                   "warum (kurz) ist bei jeder Handlung erlaubt und wird im Spiel angezeigt. Die Antwort hat status: laeuft, abgeschlossen, gescheitert oder doppelt."}},
          "required": ["type", "data"]}},

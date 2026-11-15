@@ -19,6 +19,8 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 | `Inspect` | `{"target_id": "Rathaus Mainz"}` | ein sichtbares Gebäude (Name aus `gebaeude_in_der_naehe` oder `building_<id>`), Wesen, Unternehmer oder Grundstück (`G…`) genauer ansehen: Art, Funktion, Betreiber, Zustand, erkennbare Probleme, mögliche Interaktionen. Ändert nichts; keine Interna fremder Firmen |
 | `Attack` | `{"ziel": "Mia", "waffe": "Klinge"}` oder `{"waffe": "...", "feld": [x, y]}` | eine getragene Waffe einsetzen (Reichweite je Entwurf; eine Bombe wird abgelegt und zündet später). Gewalt ist verboten: wer erwischt wird, zahlt Bußgeld (bei Wiederholung mehr) oder kommt in Gewahrsam |
 | `Attack` | `{"ziel": "Sägewerk Nord" \| "building_123" \| "fahrzeug_7", "waffe": "..."}` oder `{"waffe": "Sprengsatz", "feld": [x, y]}` | Gebäude, Fahrzeuge und Straßen angreifen: Gebäude verlieren Bauzustand (bei 0 Ruine, Betriebe darin stehen still), Fahrzeuge Zustand (bei 0 Totalschaden), gesprengte Straßen sind gesperrt, bis der Bauhof räumt. Die Polizei steht auf der Seite der Bürger |
+| `Bauwerk` | `{"art": "mauer"\|"zaun"\|"burg"\|"festung"\|"schloss"\|"turm"\|"garten", "feld"?: 0-8, "material"?, "hoehe"?, "zahlung"?: "firma"}` | auf deinem Stammsitz bauen lassen (Baufirma setzt Block für Block, Preis nach Material); Burg, Festung und Schloss stehen auf dem Bauplatz (Feld 4) |
+| `Tor` | `{"offen": true\|false}` | Tor deines Stammsitzes öffnen oder schließen (geschlossen kommt niemand durch – du auch nicht) |
 | `Give` | `{"to": "Mia", "waffe": "Panzer"}` | eine getragene Waffe oder Rüstung einem Wesen in der Nähe geben |
 | `Pickup` | `{"waffe": "Klinge"}` | ein fertiges Stück an der Waffenschmiede deiner eigenen Firma abholen |
 | `Ziel` | `{"ziel": "...", "warum": "...", "teilziele"?: [...], "nutzen"?, "ressourcen"?, "erwartung"?, "abbruch"?, "ersetzen"?: true}` | dein Hauptziel setzen (steht in `mein_ziel`). Ein aktives Ziel ersetzt du nur mit `ersetzen: true` |
@@ -53,6 +55,10 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 - **Schutz und Wiederaufbau:** Firma `fortify_building {gebaeude}` (15.000 €, halber Schaden), `rebuild_building {gebaeude}` (Wiederaufbau, 4 Tage).
   Bürgermeister: Amt `build_defense {art: stadtmauer}` (120.000 €, Mauer aus Steinen um den Ort, Tore an den Straßen; Angriffe von außen richten wenig aus),
   `build_defense {art: wachturm, feld?}` (40.000 €; Angriffe im Umkreis von 12 Feldern werden sofort entdeckt, der Turm wehrt sich), `rebuild_building {gebaeude}`.
+- **Stammsitz:** Jeder KI-Spieler (außer Bürgermeistern) hat ein festes Anwesen aus 3 × 3 Feldern (`mein_stammsitz`): Feld 4 in der Mitte ist der Bauplatz.
+  Mauer und Zaun sind für Fußgänger echte Hindernisse; hinter geschlossenen, unversehrten Mauern bist du vor Nah- und Fernwaffen von außen sicher.
+  Eine Mauer lässt sich einreißen (`Attack {waffe, feld}`) oder sprengen – die Lücke ist dann ein Durchgang. In fertiger Burg, Festung oder fertigem Schloss bist du zu Hause.
+  Fremde Anwesen in Sichtweite stehen unter `stammsitze_in_sicht`.
 - **Körper und Gefahr:** `koerper` zeigt Gesundheit, Rüstungsschutz und getragene Waffen; `gefahren` zeigt bewaffnete Wesen in Sichtweite,
   jüngste Vorfälle (Angriffe, Explosionen), Strahlung und tickende Bomben. Bei Gesundheit 0 bist du eine Weile außer Gefecht und verlierst einen Teil deines Geldes.
   In deinem fertigen Haus schützen dich die Mauern vor Nah- und Fernwaffen.

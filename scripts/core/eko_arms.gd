@@ -297,6 +297,10 @@ func attack(b: Dictionary, data: Dictionary) -> Dictionary:
 	if str(d.typ) == "sprengsatz":
 		_explode(w.tile_of(o), int(d.radius), float(d.schaden), b, false)
 		return {"ok": true, "msg": "Sprengsatz gezündet bei %s." % to}
+	if w.estates.sheltered(o, me):
+		_incident(w.tile_of(o), "%s greift %s an, aber die Mauern des Stammsitzes halten" % [b.name, to])
+		w._event(o, "%s greift dich an – deine Mauern schützen dich" % b.name)
+		return {"ok": false, "msg": "%s ist hinter geschlossenen Mauern; reiß erst eine Lücke (Attack {waffe, feld} auf die Mauer) oder sprenge sie." % to}
 	if w.is_home(o):
 		_incident(w.tile_of(o), "%s greift %s an, aber die Hauswände halten" % [b.name, to])
 		w._event(o, "%s greift dich an – deine Mauern schützen dich" % b.name)
@@ -395,6 +399,7 @@ func _explode(at: Vector2i, radius: int, dmg: float, by: Dictionary, nuclear: bo
 			w.blocks.erase(p)
 			gone += 1
 	_incident(at, "Explosion%s (%d Blöcke zerstört)" % [" – ATOMPILZ" if nuclear else "", gone])
+	w.estates.refresh()   # gesprengte Mauern werden zu Durchgaengen
 	if nuclear:
 		zones.append({"feld": [at.x, at.y], "radius": radius + 4, "bis_tag": _day() + RAD_DAYS})
 		for M in _sim().towns.mayors:
@@ -656,6 +661,28 @@ func attack_object(b: Dictionary, d: Dictionary, it: Dictionary, data: Dictionar
 	var bd := _building_by(target) if target != "" else {}
 	var v = _vehicle_by(target) if target != "" and bd.is_empty() else null
 	var f = data.get("feld")
+	if bd.is_empty() and v == null and f is Array and typ in ["nahkampf", "fernkampf"]:   # Mauer einreissen / beschiessen
+		var at0 := Vector2i(int(f[0]), int(f[1]))
+		if w._dist(me, at0) > maxi(1, int(d.reichweite)):
+			return {"ok": false, "msg": "Das Feld ist zu weit weg."}
+		var taken := 0
+		for k in (3 if typ == "nahkampf" else 1):
+			var top := Vector3i(-1, -1, -1)
+			for p in w.blocks:
+				if floori(float(p.x) / EkoWorld.PER_TILE) == at0.x and floori(float(p.y) / EkoWorld.PER_TILE) == at0.y and p.z > top.z:
+					top = p
+			if top.z < 0:
+				break
+			w.blocks.erase(top)
+			taken += 1
+		if taken == 0:
+			return {"ok": false, "msg": "Auf %d,%d steht nichts zum Einreißen." % [at0.x, at0.y]}
+		_crime(b, typ, at0, true)
+		_tower_defense(b, at0)
+		w.estates.refresh()
+		w.changed.emit()
+		_incident(at0, "%s reißt Blöcke ein" % b.name)
+		return {"ok": true, "msg": "%d Blöcke bei %d,%d eingerissen%s." % [taken, at0.x, at0.y, " – die Mauer hat dort jetzt eine Lücke" if not w.estates._has_wall(at0) else ""]}
 	if bd.is_empty() and v == null and not (f is Array and typ == "sprengsatz"):
 		return {}
 	if bool(d.einweg):
@@ -684,6 +711,8 @@ func attack_object(b: Dictionary, d: Dictionary, it: Dictionary, data: Dictionar
 ## Wachtuerme verteidigen: ein Angreifer im Umkreis wird beschossen (die Polizei hat ihn ohnehin im Blick).
 func _tower_defense(b: Dictionary, at: Vector2i) -> void:
 	for tw in towers:
+		if str(tw.get("besitzer", "")) == str(b.get("name", "")):
+			continue   # der eigene Turm schiesst nicht auf den Besitzer
 		if w._dist(at, Vector2i(int(tw.feld[0]), int(tw.feld[1]))) <= TOWER_RADIUS and not is_out(b):
 			_hurt(b, TOWER_SHOT * (1.0 - armor_of(b)), {"name": "Wachturm"})
 			w._event(b, "der Wachturm schießt auf dich")

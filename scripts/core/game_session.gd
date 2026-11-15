@@ -452,6 +452,7 @@ func _start_eko_server() -> void:
 	if not on:
 		return
 	sim.eko.persist_path = "user://eko_ersparnisse.json"   # Ersparnisse der Wesen ueberstehen einen Neustart der Welt
+	sim.eko.auto_estates = true   # jeder KI-Spieler (ausser Buergermeistern) bekommt einen Stammsitz
 	eko_autosave_s = 180.0
 	_eko_save_left = eko_autosave_s
 	var ws := WorldServer.new()

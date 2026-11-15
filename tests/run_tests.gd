@@ -32,6 +32,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_arms")
 	test_names.append("test_eko_destruction")
 	test_names.append("test_eko_play_fixes")
+	test_names.append("test_eko_estates")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -14101,3 +14102,68 @@ func test_eko_play_fixes() -> void:
 	var ms: Array = E.adopt_mayors()
 	var firms: Array = E.office_obs(E.beings[ms[0]]).firmen
 	ok(firms.any(func(f): return int(f.firma) == cid and f.name == "Vik"), "Amtslage nennt Firmen mit ID")
+
+
+## Stammsitz (15.11.2026): feste Startposition je KI-Spieler (3 x 3 Felder, Mitte Bauplatz), Bauwerke aus Bloecken, Mauer mit Tor
+## als echtes Hindernis, Schutz drinnen, Einreissen schafft eine Luecke, Turm, Zuhause im Schloss, Speichern, Geldbilanz.
+func test_eko_estates() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.auto_estates = true
+	E.join("Viktor")
+	var V: Dictionary = E.beings.Viktor
+	ok(E.estates.estates.has("Viktor"), "Viktor hat einen Stammsitz")
+	var R: Rect2i = E.estates.rect_of("Viktor")
+	ok(R.has_point(E.tile_of(V)), "Viktor erwacht auf seinem Stammsitz %s" % str(R))
+	ok(not s.nav.walk_path(E.estates.center_of("Viktor"), E.estates._nearest_town_tile(R.get_center())).is_empty(), "zu Fuss mit einem Ort verbunden")
+	var ms: Array = E.adopt_mayors()
+	ok(not E.estates.estates.has(ms[0]), "Buergermeister ohne Stammsitz")
+	E.join("Mia")
+	ok(E.estates.estates.has("Mia") and not E.estates.rect_of("Mia").grow(8).intersects(R), "Mia hat einen eigenen Stammsitz mit Abstand (%s)" % str(E.estates.last_failure))
+	s.economy.transfer("X0", "Y0", 60000.0)
+	V.geld = 60000.0
+	ok(not E.input("Viktor", "Bauwerk", {"art": "pyramide"}).ok, "unbekanntes Bauwerk abgelehnt")
+	var rm: Dictionary = E.input("Viktor", "Bauwerk", {"art": "mauer", "hoehe": 4})
+	ok(rm.ok and float(V.geld) < 60000.0, "Mauer beauftragt: %s" % str(rm.msg))
+	ok(E.input("Viktor", "Bauwerk", {"art": "schloss"}).ok, "Schloss beauftragt")
+	ok(E.input("Viktor", "Bauwerk", {"art": "turm", "feld": 0}).ok, "Turm beauftragt")
+	for i in 400:
+		E.estates.tick(5.0)
+	var est: Dictionary = E.estates.estates.Viktor
+	ok(est.bauten.all(func(x): return x.status == "fertig"), "alle Bauwerke fertig")
+	var wall_t: Array = est.wall_tiles[0]
+	ok(s.nav.walk.is_point_solid(Vector2i(int(wall_t[0]), int(wall_t[1]))), "Mauerfeld ist fuer Fussgaenger gesperrt")
+	var g: Array = est.gate[0]
+	ok(not s.nav.walk.is_point_solid(Vector2i(int(g[0]), int(g[1]))), "Tor offen: Durchgang")
+	ok(E.input("Viktor", "Tor", {"offen": false}).ok and s.nav.walk.is_point_solid(Vector2i(int(g[0]), int(g[1]))), "Tor zu: gesperrt")
+	V.mover.pos = s.city.tile_center(E.estates.center_of("Viktor"))
+	ok(E.is_home(V), "im Schloss zu Hause")
+	ok(E.arms.towers.any(func(t): return str(t.get("besitzer", "")) == "Viktor"), "Turm wehrt Angreifer ab")
+	# Angriff von aussen
+	var M: Dictionary = E.beings.Mia
+	E.arms.designs["Keule"] = {"name": "Keule", "typ": "nahkampf", "material": {"stahl": 3}, "schaden": 45, "reichweite": 3, "radius": 0, "schutz": 0.0, "einweg": false, "tage": 0, "kosten_je_stueck": 0, "cid": -1}
+	M.waffen = [{"id": "W1", "design": "Keule"}]
+	var outside := Vector2i(int(wall_t[0]), int(wall_t[1]))
+	for d in [Vector2i(0, -1), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(1, 0)]:
+		if not R.has_point(outside + d):
+			outside = outside + d
+			break
+	M.mover.pos = s.city.tile_center(outside)
+	V.mover.pos = s.city.tile_center(Vector2i(int(wall_t[0]), int(wall_t[1])) + (Vector2i(int(wall_t[0]), int(wall_t[1])) - outside))
+	ok(E.estates.sheltered(V, outside), "Viktor drinnen hinter geschlossenen Mauern geschuetzt")
+	var ra: Dictionary = E.input("Mia", "Attack", {"ziel": "Viktor", "waffe": "Keule"})
+	ok(not ra.ok and str(ra.msg).contains("Mauern"), "Angriff von aussen prallt ab")
+	var tries := 0
+	while E.estates._has_wall(Vector2i(int(wall_t[0]), int(wall_t[1]))) and tries < 20:
+		M.custody_left = 0.0
+		M.out_left = 0.0
+		M.gesundheit = 100.0
+		E.input("Mia", "Attack", {"waffe": "Keule", "feld": wall_t})
+		tries += 1
+	ok(not E.estates._has_wall(Vector2i(int(wall_t[0]), int(wall_t[1]))) and not s.nav.walk.is_point_solid(Vector2i(int(wall_t[0]), int(wall_t[1]))), "Mauer eingerissen: Luecke ist begehbar (%d Versuche)" % tries)
+	ok(E.estates.breaches("Viktor") >= 1 and not E.estates.sheltered(V, outside), "mit Luecke kein Schutz mehr")
+	var E2 := EkoWorld.new()
+	E2.setup(s)
+	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
+	ok(E2.estates.estates.has("Viktor") and not E2.estates.estates.Viktor.bauten.is_empty(), "Stammsitz gespeichert")
+	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")

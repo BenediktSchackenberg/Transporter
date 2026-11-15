@@ -49,11 +49,15 @@ var _terrain_ready := false
 
 
 var arms := EkoArms.new()           # Waffen, Schutz, Gefahren (Benedikt 15.11.2026)
+var estates := EkoEstates.new()     # Stammsitz je KI-Spieler (Benedikt 15.11.2026)
+var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
+var _no_estate := false             # beim Laden und fuer Buergermeister keinen Stammsitz vergeben
 
 
 func setup(simulation) -> void:
 	sim = simulation
 	arms.setup(self)
+	estates.setup(self)
 	sim.visit_completed.connect(_on_visit_completed)
 
 
@@ -123,6 +127,9 @@ func join(name: String, art: String = "mensch") -> Dictionary:
 			"amt": -1, "seele": "", "gesundheit": 100.0, "waffen": [],
 			"color": COLORS[beings.size() % COLORS.size()]}
 		_event(beings[name], "ist in der Welt erwacht")
+		if auto_estates and not _no_estate and estates.assign(name):   # erwacht auf dem eigenen Stammsitz
+			m.pos = sim.city.tile_center(estates.center_of(name))
+			_event(beings[name], "erwacht auf seinem Stammsitz")
 		_restore_savings(beings[name])
 		sim.log_event("%s %s ist erwacht." % ["Der kleine Roboter" if art == "roboter" else "Das Wesen", name], "info")
 	changed.emit()
@@ -176,6 +183,7 @@ func update(dt: float) -> void:
 	_jobs_tick(dt)
 	_houses_tick(dt)
 	arms.tick(dt)
+	estates.tick(dt)
 	for b in beings.values():   # laufende Ablaeufe fortsetzen, sobald das Wesen angekommen ist und nicht ruht
 		if not (b.get("ablauf", []) as Array).is_empty() and (b.mover as Mover).arrived() and float(b.get("rest_left", 0.0)) <= 0.0:
 			_run_plan(b)
@@ -259,6 +267,10 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			r = arms.pickup(b, str(data.waffe)) if data.has("waffe") else _pickup(b, data)
 		"Attack":
 			r = arms.attack(b, data)
+		"Bauwerk":
+			r = estates.order(b, data)
+		"Tor":
+			r = estates.gate(b, data)
 		"Give":
 			r = arms.give(b, data)
 		"Place":
@@ -294,7 +306,7 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		"Merke":
 			r = _lesson(b, data)
 		_:
-			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, Attack, Give, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
+			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, Attack, Give, Bauwerk, Tor, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
 	if not bool(r.ok):
 		_event(b, "Fehlschlag %s: %s" % [type, r.msg])
 	if not r.has("status"):   # angenommen != abgeschlossen: Bewegung laeuft, bis du.unterwegs false ist
@@ -791,6 +803,7 @@ func observe(name: String) -> Dictionary:
 		"ablauf": {"offen": (b.get("ablauf", []) as Array).size(), "letzte_ergebnisse": (b.get("ablauf_log", []) as Array).slice(-5)},
 		"mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
 		"koerper": arms.body_obs(b), "gefahren": arms.dangers(b),
+		"mein_stammsitz": estates.obs(b), "stammsitze_in_sicht": estates.visible(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}
 
 
@@ -1155,6 +1168,8 @@ func home_rect(name: String) -> Rect2i:
 func is_home(b: Dictionary) -> bool:
 	var h: Dictionary = houses.get(b.name, {})
 	if not h.is_empty() and h.status == "fertig" and home_rect(b.name).has_point(tile_of(b)):
+		return true
+	if estates.at_home(b):
 		return true
 	return str(b.get("zuhause", "")) != "" and plot_rect(str(b.zuhause)).has_point(tile_of(b))
 
@@ -1564,6 +1579,8 @@ func adopt_players(n: int) -> Array:
 		b.firma = cid
 		b.seele = str(c.personality)
 		b.mover.pos = sim.avatars[cid].pos
+		if auto_estates and estates.assign(name):   # Startposition: eigener Stammsitz
+			b.mover.pos = sim.city.tile_center(estates.center_of(name))
 		_event(b, "führt jetzt selbst %s" % c.company_name)
 		out.append(name)
 	return out
@@ -1578,7 +1595,9 @@ func adopt_mayors() -> Array:
 		var name := str(M.name).left(24)
 		if name == "" or beings.has(name):
 			continue
+		_no_estate = true
 		join(name, "mensch")
+		_no_estate = false
 		var b: Dictionary = beings[name]
 		b.amt = k
 		b.seele = "buergermeister"
@@ -1800,7 +1819,7 @@ func to_dict() -> Dictionary:
 			"amt": int(b.get("amt", -1)), "seele": str(b.get("seele", "")), "orte": b.get("orte", {}), "besucht": b.get("besucht", {}),
 			"ziel": b.get("ziel", {}), "ziele_alt": b.get("ziele_alt", []), "gesundheit": float(b.get("gesundheit", 100.0)), "waffen": b.get("waffen", []),
 			"vergehen": int(b.get("vergehen", 0)), "out_left": float(b.get("out_left", 0.0)), "custody_left": float(b.get("custody_left", 0.0))})
-	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict()}
+	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict(), "estates": estates.to_dict()}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -1808,6 +1827,7 @@ func from_dict(d: Dictionary) -> void:
 	beings.clear()
 	for e in d.get("blocks", []):
 		blocks[Vector3i(int(e[0]), int(e[1]), int(e[2]))] = str(e[3])
+	_no_estate = true
 	for e in d.get("beings", []):
 		join(str(e.name), str(e.get("art", "mensch")))
 		var b: Dictionary = beings[str(e.name)]
@@ -1820,8 +1840,10 @@ func from_dict(d: Dictionary) -> void:
 	chat = d.get("chat", [])
 	jobs = d.get("jobs", {})
 	_next_job = int(d.get("next_job", 1))
+	_no_estate = false
 	houses = d.get("houses", {})
 	arms.from_dict(d.get("arms", {}))
+	estates.from_dict(d.get("estates", {}))
 	for b in beings.values():   # eigene Grundstuecke wieder begehbar
 		open_plot(str(b.get("grundstueck", "")))
 
