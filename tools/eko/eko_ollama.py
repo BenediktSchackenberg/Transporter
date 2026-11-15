@@ -340,6 +340,10 @@ class Agent:
                 with open(self.ws / "EPISODIC_MEMORY.jsonl", "a", encoding="utf-8") as f:
                     f.write(json.dumps(a.get("entry", {}), ensure_ascii=False) + "\n")
                 return {"ok": True}
+            acts = {t.lower(): t for t in TOOLS[1]["parameters"]["properties"]["type"]["enum"]}
+            if str(name).lower() in acts:   # Handlung direkt als Werkzeug aufgerufen (z. B. inspect): als act ausfuehren
+                data = a.get("data", a) if isinstance(a, dict) else {}
+                return self.call_tool("act", {"type": acts[str(name).lower()], "data": data})
             return {"ok": False, "msg": "Unbekanntes Werkzeug %s" % name}
         except Exception as e:   # Fehler gehen als Ergebnis an das Modell zurueck
             return {"ok": False, "msg": "%s: %s" % (type(e).__name__, e)}
