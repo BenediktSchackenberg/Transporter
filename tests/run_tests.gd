@@ -13195,6 +13195,9 @@ func test_eko_world() -> void:
 	ok(str(E.beings.Mia.events.back()).contains("Lumo sagt zu dir") and E.observe("Mia").gehoert.any(func(m): return m.von == "Lumo"), "Mia hat es gehoert")
 	var call: Dictionary = E.input("Lumo", "Talk", {"to": "Eko", "text": "Hallo?"})
 	ok(call.ok and str(call.msg).contains("angerufen") and str(E.beings.Eko.events.back()).contains("ruft dich an"), "zu weit weg: Anruf statt Gespraech")
+	E.beings.Lumo.mover.pos = s.city.tile_center(E.tile_of(E.beings.Lumo) + Vector2i(40, 40))
+	var far_pick: Dictionary = E.input("Lumo", "Pickup", {"material": "stein"})
+	ok(not far_pick.ok and str(far_pick.msg).contains("Feld") and str(far_pick.msg).contains("Felder entfernt"), "fern vom Bauhof: Meldung nennt Lage und Entfernung")
 	var boss: Company = s.companies[0]
 	E.beings.Lumo.mover.pos = s.city.tile_center(s.avatars[0].tile())
 	ok(E.observe("Lumo").figuren_in_der_naehe.any(func(f): return f.name == boss.player_name), "Unternehmer in der Naehe sichtbar")

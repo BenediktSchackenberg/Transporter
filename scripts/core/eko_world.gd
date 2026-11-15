@@ -589,7 +589,7 @@ func _pickup(b: Dictionary, data: Dictionary) -> Dictionary:
 	if not PRICES.has(mat):
 		return {"ok": false, "msg": "Material muss eines von %s sein." % ", ".join(PRICES.keys())}
 	if not _at_source(b):
-		return {"ok": false, "msg": "Material gibt es nur am Bauhof (siehe quellen in /observe)."}
+		return {"ok": false, "msg": "Material gibt es nur am Bauhof.%s" % _source_hint(b)}
 	var n := clampi(int(data.get("count", 1)), 1, CARRY - held.size())
 	if held.size() >= CARRY:
 		return {"ok": false, "msg": "Haende voll (%d Bloecke)." % CARRY}
@@ -712,7 +712,7 @@ func _talk(b: Dictionary, to: String, text: String) -> Dictionary:
 		if _dist(t, tile_of(o)) > TALK_REACH:   # zu weit fuer ein Gespraech: Anruf (Partie 15.11.: 44 gescheiterte Gespraeche)
 			_chat(b.name, to, "(Anruf) " + text, t)
 			_event(o, "%s ruft dich an: %s" % [b.name, text])
-			return {"ok": true, "msg": "%s ist weit weg – du hast angerufen; %s hat es gehört und kann antworten (Talk)." % [to, to]}
+			return {"ok": true, "msg": "%s ist weit weg – du hast angerufen; %s hat es gehört und kann antworten. Ihr könnt per Anruf weiterreden (Talk), dafür müsst ihr euch nicht treffen." % [to, to]}
 		_chat(b.name, to, text, t)
 		_event(o, "%s sagt zu dir: %s" % [b.name, text])
 		return {"ok": true, "msg": "%s hat es gehoert und kann antworten." % to}
@@ -1855,7 +1855,24 @@ func _at_source(b: Dictionary) -> bool:
 	for s in sources():
 		if maxi(absi(int(s.feld[0]) - t.x), absi(int(s.feld[1]) - t.y)) <= SOURCE_REACH:
 			return true
+	for tw in sim.city.towns:   # auch direkt am Gebaeude (15.11.: Lindner stand am Bauhof, 7 Felder vom Eingang)
+		var bd: Dictionary = sim.city.building(int(tw.get("bauhof", -1)))
+		if not bd.is_empty() and _building_dist(t, bd) <= SOURCE_REACH:
+			return true
 	return false
+
+
+## Naechster Bauhof mit Feld und Entfernung (fuer Fehlermeldungen).
+func _source_hint(b: Dictionary) -> String:
+	var t := tile_of(b)
+	var best := {}
+	for s in sources():
+		var d := _dist(t, Vector2i(int(s.feld[0]), int(s.feld[1])))
+		if best.is_empty() or d < int(best.d):
+			best = {"name": s.name, "feld": s.feld, "d": d}
+	if best.is_empty():
+		return ""
+	return " Der nächste Bauhof (%s) hat seinen Eingang bei Feld %d,%d, %d Felder entfernt – MoveTo dorthin (höchstens %d Felder Abstand)." % [best.name, int(best.feld[0]), int(best.feld[1]), int(best.d), SOURCE_REACH]
 
 
 func _in_reach(b: Dictionary, p: Vector3i) -> bool:
