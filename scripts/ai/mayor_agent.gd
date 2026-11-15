@@ -112,8 +112,11 @@ func _process_timed(delta: float) -> void:
 ## Eine Entscheidungsrunde: mit Modell (asynchron) oder per Regeln.
 func think() -> void:
 	if eko_managed:
+		if sim.eko.office_idle_s(town) < 300.0:
+			status = "Wesen führt das Amt"
+			return   # das Wesen entscheidet selbst; die Verwaltung springt nur ein, wenn es fuenf Minuten nichts tut
 		_run_rules("Verwaltung")
-		status = "Wesen entscheidet, Verwaltung nach Regeln"
+		status = "Wesen untätig – Verwaltung nach Regeln"
 		return
 	if adapter == null or fallback_active or not budget_left():
 		if adapter != null and not budget_left():

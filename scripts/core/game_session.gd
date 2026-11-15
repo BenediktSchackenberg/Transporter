@@ -472,6 +472,7 @@ func _eko_adopt() -> void:
 			var ctl: AgentController = controllers[cid]
 			ctl.config["provider"] = "eko"
 			ctl.fallback_active = false
+	sim.founders.enabled = false   # neue Firmen entstehen nur noch, wenn ein Wesen gruendet
 	for ag in mayor_agents:
 		ag.eko_managed = true
 		ag.config["interval"] = 120.0

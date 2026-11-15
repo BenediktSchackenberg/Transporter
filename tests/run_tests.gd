@@ -20,6 +20,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_founder")
 	test_names.append("test_eko_feelings")
 	test_names.append("test_eko_players_and_mayors")
+	test_names.append("test_eko_plan_and_autonomy")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13417,3 +13418,45 @@ func test_eko_players_and_mayors() -> void:
 	ws.free()
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(int(s2.eko.beings[ms[0]].amt) == 0 and s2.eko.firm_being(0) == ps[0], "Amt und Firma gespeichert")
+
+
+## Ablauf und Selbststaendigkeit (15.11.2026): Liste von Handlungen laeuft ueber Wege hinweg, bricht beim ersten Fehler ab,
+## direkte Handlung ersetzt den Ablauf; Firmen schreiben Hilfsjobs selbst aus; Untaetigkeit fuer die Notfall-Regelhilfe.
+func test_eko_plan_and_autonomy() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.join("Lumo", "roboter")
+	var b: Dictionary = E.beings.Lumo
+	s.economy.transfer("X0", "Y0", 500.0)
+	b.geld = 500.0
+	ok(is_inf(E.idle_s(b)), "noch nie gehandelt: unendlich untaetig")
+	var t := E.tile_of(b)
+	var free := Vector2i(-1, -1)
+	for d in range(3, 12):
+		for c in [t + Vector2i(d, 0), t + Vector2i(0, d), t + Vector2i(-d, 0), t + Vector2i(0, -d)]:
+			if free.x < 0 and s.city.walkable(c) and not s.city.is_road(c) and E.can_place(Vector3i(c.x * 4, c.y * 4, 0)) == "" and s.nav.walk_path(t, c).size() > 2:
+				free = c
+	ok(free.x >= 0, "Zielfeld gefunden")
+	var plan := [{"type": "Pickup", "data": {"material": "stein", "count": 2}}, {"type": "MoveTo", "data": {"tile": [free.x, free.y]}},
+		{"type": "Place", "data": {"block": [free.x * 4, free.y * 4, 0]}}, {"type": "Place", "data": {"block": [free.x * 4 + 1, free.y * 4, 0]}},
+		{"type": "Say", "data": {"text": "Fertig!"}}]
+	var r: Dictionary = E.input("Lumo", "Ablauf", {"schritte": plan})
+	ok(r.ok and int(E.observe("Lumo").ablauf.offen) == 3, "Ablauf gestartet, wartet nach MoveTo: %s" % str(r.msg).left(70))
+	ok(E.idle_s(b) < 5.0, "Handlung zaehlt als Aktivitaet")
+	for i in 60:
+		E.update(0.5)
+	ok(E.blocks.has(Vector3i(free.x * 4, free.y * 4, 0)) and E.blocks.has(Vector3i(free.x * 4 + 1, free.y * 4, 0)) and int(E.observe("Lumo").ablauf.offen) == 0, "Ablauf nach der Ankunft zu Ende gefuehrt")
+	ok(str(b.say) == "Fertig!", "letzter Schritt ausgefuehrt")
+	var bad: Dictionary = E.input("Lumo", "Ablauf", {"schritte": [{"type": "Place", "data": {"block": [free.x * 4, free.y * 4, 0]}}, {"type": "Say", "data": {"text": "nie"}}]})
+	ok(not bad.ok and str(b.say) != "nie", "Ablauf bricht beim ersten Fehler ab")
+	E.input("Lumo", "Ablauf", {"schritte": [{"type": "MoveTo", "data": {"tile": [t.x, t.y]}}, {"type": "Say", "data": {"text": "spaeter"}}]})
+	E.input("Lumo", "Stop", {})
+	ok(int(E.observe("Lumo").ablauf.offen) == 0, "direkte Handlung ersetzt den laufenden Ablauf")
+	ok(not E.input("Lumo", "Ablauf", {"schritte": []}).ok, "leerer Ablauf abgelehnt")
+	# Firma schreibt selbst einen Hilfsjob aus
+	s.economy.transfer("X0", "Y0", 3000.0)
+	b.geld = 3000.0
+	E.input("Lumo", "FoundCompany", {"name": "Lumo Lichtkurier"})
+	var aj: Dictionary = E.input("Lumo", "Firma", {"aktion": {"action": "auftrag_an_wesen", "art": "botengang", "lohn": 250}})
+	ok(aj.ok and E.jobs.values().any(func(j): return int(j.cid) == int(b.firma) and is_equal_approx(float(j.lohn), 250.0) and j.get("selbst_ausgeschrieben", false)), "Firma schreibt Hilfsjob mit eigenem Lohn aus: %s" % str(aj.msg).left(60))
+	ok(E.firm_idle_s(int(b.firma)) < 5.0 and is_inf(E.firm_idle_s(0)), "Untaetigkeit je Firma fuer die Notfall-Disposition")

@@ -282,7 +282,12 @@ func _run_fallback() -> void:
 ## Regel-Disposition fuer Modellspieler mit offenen Modellen (lokal per Ollama oder gehostet bei IONOS): in der Partie vom 09.11.
 ## lief sie mit IONOS gar nicht, Fahrzeuge mit angenommenem Auftrag standen ohne Fahrer.
 const DISPATCH_PROVIDERS := ["ollama", "ionos", "eko"]
+const EKO_IDLE_S := 180.0   # Firma eines Wesens: Disposition nur, wenn das Wesen so lange (Echtzeit) nichts getan hat
+
+
 func _dispatch_help_on() -> bool:
+	if str(config.get("provider", "")) == "eko" and sim.eko.firm_idle_s(cid) < EKO_IDLE_S:
+		return false   # das Wesen fuehrt seine Firma selbst; Regeln nur als Notfall
 	return config.get("provider", "") in DISPATCH_PROVIDERS and bool(config.get("dispatch_help", true))
 
 

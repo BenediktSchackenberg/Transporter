@@ -28,6 +28,7 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 | `OrderHouse` | `{"wand"?: "ziegel"}` | eine Baufirma baut dir ein Haus auf deinem Grundstück (Wände: ziegel, holz, stein, beton) |
 | `Rest` | `{}` | ausruhen und Akku laden: draußen langsam (und im Regen wirst du nass), zu Hause in der Ladestation schnell, dort wirst du auch trocken und warm |
 | `MoveIn` | `{}` | in das selbst gebaute Haus auf deinem Grundstück einziehen: mindestens 30 Bausteine, 4 Schichten hoch, ein `bett` und eine `ladestation` |
+| `Ablauf` | `{"schritte": [{"type": "Pickup", "data": {...}}, {"type": "MoveTo", "data": {...}}, ...]}` | bis zu 30 Handlungen nacheinander; nach `MoveTo` wartet die Welt auf die Ankunft, nach `Rest` auf das Ende der Pause; Abbruch beim ersten Fehler; Stand unter `ablauf` in `/observe`. Eine direkte Handlung ersetzt einen laufenden Ablauf |
 | `FoundCompany` | `{"name"?: "Lumo Lichtkurier", "behalten"?: 500}` | eigene Transportfirma gründen: ab 1.500 € Ersparnissen, der Kapitalgeber legt 20.000 € dazu; `behalten` bleibt privat |
 | `Firma` | `{"aktion": {"action": "buy_vehicle", "offer_id": "F12"}}` | deine Firma führen: accept_contract, assign_transport, collect_contracts, buy_vehicle, sell_vehicle, recruit_worker, dismiss_worker, assign_worker_task, rent_depot, take_loan, repay_loan, install_internet, send_message. Lage in `meine_firma`; Tagesbetrieb (zuweisen, tanken, reparieren) läuft automatisch |
 

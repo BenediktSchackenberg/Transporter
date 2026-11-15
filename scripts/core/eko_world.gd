@@ -115,6 +115,9 @@ func update(dt: float) -> void:
 			b.rest_left = maxf(0.0, float(b.rest_left) - dt)
 	_jobs_tick(dt)
 	_houses_tick(dt)
+	for b in beings.values():   # laufende Ablaeufe fortsetzen, sobald das Wesen angekommen ist und nicht ruht
+		if not (b.get("ablauf", []) as Array).is_empty() and (b.mover as Mover).arrived() and float(b.get("rest_left", 0.0)) <= 0.0:
+			_run_plan(b)
 	_salary_timer -= dt
 	if _salary_timer <= 0.0:   # Amtsgehalt der Buergermeister-Wesen aus der Stadtkasse (sonst kein Privatgeld fuer ein Zuhause)
 		_salary_timer = 60.0
@@ -158,11 +161,17 @@ func _restore_savings(b: Dictionary) -> void:
 
 
 # ------------------------------------------------------------------ Handlungen
-func input(name: String, type: String, data: Dictionary) -> Dictionary:
+func input(name: String, type: String, data: Dictionary, from_plan := false) -> Dictionary:
 	var b: Dictionary = beings.get(name, {})
 	if b.is_empty():
 		return {"ok": false, "msg": "Unbekanntes Wesen. Erst POST /join."}
 	last_active = name
+	b.last_act = Time.get_ticks_msec()
+	if not from_plan and type in ["MoveTo", "Stop", "Pickup", "Place", "Ablauf"] and not (b.get("ablauf", []) as Array).is_empty():
+		b.ablauf = []   # eine direkte Handlung ersetzt einen laufenden Ablauf
+		_event(b, "bricht den laufenden Ablauf ab")
+	if type == "Ablauf":
+		return _start_plan(b, data)
 	if type in WORK_ACTIONS and float(b.get("akku", 100.0)) < EMPTY_AKKU:
 		_event(b, "ist zu erschöpft für %s" % type)
 		return {"ok": false, "msg": "Dein Akku ist fast leer (%d %%). Ruh dich erst aus (Rest) – zu Hause in der Ladestation geht es am schnellsten." % int(b.akku)}
@@ -202,7 +211,7 @@ func input(name: String, type: String, data: Dictionary) -> Dictionary:
 		"Firma":
 			r = _firm_action(b, data)
 		_:
-			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt." % type}
+			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ablauf." % type}
 	if not bool(r.ok):
 		_event(b, "Fehlschlag %s: %s" % [type, r.msg])
 	changed.emit()
@@ -482,6 +491,7 @@ func observe(name: String) -> Dictionary:
 		"andere_wesen": others, "figuren_in_der_naehe": figures, "gehoert": heard(name),
 		"jobangebote": _job_obs(b) if active_firm(b) < 0 and int(b.get("amt", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
 		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "mein_amt": office_obs(b), "gefuehle": feelings(b),
+		"ablauf": {"offen": (b.get("ablauf", []) as Array).size(), "letzte_ergebnisse": (b.get("ablauf_log", []) as Array).slice(-5)},
 		"deine_letzten_ereignisse": b.events.slice(-10)}
 
 
@@ -536,13 +546,13 @@ func _jobs_tick(dt: float) -> void:
 					break
 
 
-func _new_job(c) -> Dictionary:
+func _new_job(c, art := "", lohn := -1.0) -> Dictionary:
 	var depot: Dictionary = sim.city.building(int(c.depots[0]))
 	var home: Vector2i = depot.walk
 	var town: int = sim.city.town_of(home)
 	var j := {"id": "J%d" % _next_job, "cid": c.id, "firma": c.company_name, "person": c.player_name, "status": "offen",
 		"rest_s": JOB_OPEN_S, "by": "", "von": [home.x, home.y], "von_name": str(depot.name)}
-	if sim.rng.randf() < 0.6:
+	if art == "botengang" or (art == "" and sim.rng.randf() < 0.6):
 		var dest := {}
 		for i in 12:   # Ziel: ein Gebaeude im selben Ort, 10-45 Felder entfernt
 			var b: Dictionary = sim.city.buildings[sim.rng.randi() % sim.city.buildings.size()]
@@ -569,6 +579,9 @@ func _new_job(c) -> Dictionary:
 			"nach_name": "Hof von %s" % c.company_name, "lohn": float(n * 22),
 			"text": "Bau mir eine kleine Mauer aus %d Blöcken %s auf den Feldern %d,%d bis %d,%d neben meinem Hof." % [n, mat,
 				area[0], area[1], area[0] + area[2] - 1, area[1] + area[3] - 1]})
+	if lohn > 0.0:
+		j.lohn = lohn   # von der Firma selbst festgelegt
+		j["selbst_ausgeschrieben"] = true
 	jobs[j.id] = j
 	_next_job += 1
 	return j
@@ -955,7 +968,7 @@ const FIRM_ACTIONS := [
 	# Geld
 	"take_loan", "repay_loan", "entnahme",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
-	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival",
+	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen",
 	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage"]
 const FIRM_RESERVE := 5000.0
 const MAYOR_SALARY := 50.0          # Amtsgehalt je Echtzeitminute aus der Stadtkasse
@@ -1012,6 +1025,19 @@ func _firm_action(b: Dictionary, data: Dictionary) -> Dictionary:
 		a = JSON.parse_string(a)
 	if not (a is Dictionary) or str(a.get("action", "")) not in FIRM_ACTIONS:
 		return {"ok": false, "msg": "Firma braucht aktion: {\"action\": eine von %s, ...Parameter}." % ", ".join(FIRM_ACTIONS)}
+	if str(a.action) == "auftrag_an_wesen":   # Firma schreibt selbst einen Hilfsjob fuer freie Wesen aus
+		var c2 = sim.company(cid)
+		var lohn := clampf(float(a.get("lohn", 100.0)), 20.0, 2000.0)
+		if c2.ledger.cash < lohn + FIRM_RESERVE:
+			return {"ok": false, "msg": "Zu wenig Geld in der Firma für den Lohn (Reserve %s)." % Catalog.money(FIRM_RESERVE)}
+		if jobs.values().filter(func(j): return int(j.cid) == cid and j.status in ["offen", "angenommen"]).size() >= 2:
+			return {"ok": false, "msg": "Höchstens zwei offene Aufträge an Wesen je Firma."}
+		var art := str(a.get("art", "botengang"))
+		var nj := _new_job(c2, art if art in ["botengang", "mauer"] else "botengang", lohn)
+		if nj.is_empty():
+			return {"ok": false, "msg": "Kein passendes Ziel oder kein freier Platz gefunden – später noch einmal versuchen."}
+		_event(b, "schreibt Auftrag %s aus: %s (Lohn %s)" % [nj.id, nj.text, Catalog.money(lohn)])
+		return {"ok": true, "msg": "Auftrag %s ausgeschrieben: %s Lohn %s." % [nj.id, nj.text, Catalog.money(lohn)]}
 	if str(a.action) == "entnahme":   # Privatentnahme: Inhaber zahlt sich Geld aus der eigenen Firma aus
 		var c = sim.company(cid)
 		var want := float(a.get("betrag", a.get("amount", 0.0)))
@@ -1064,14 +1090,16 @@ func firm_obs(b: Dictionary) -> Dictionary:
 				"jede weitere Ermittlung kostet mehr (bis fünffach). Blockaden erst ab hoher Spannung. Schutz: guard_target, buy_security, set_insurance."},
 		"hofbau": (o.get("betriebshof", {}) as Dictionary).get("bauvorschlaege_xy_rot", {}),
 		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
-			"du musst nicht darauf warten. Den Tagesbetrieb (Fahrten zuweisen, tanken, reparieren) erledigt die Disposition. Du bist frei für dein Leben und dein Haus.",
+			"du musst nicht darauf warten. Fahrten zuweisen, Fahrer einsetzen und Aufträge annehmen ist deine Sache; die Disposition springt " +
+			"nur ein, wenn du drei Minuten lang nichts tust.",
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
 			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +
 			"recruit_foreman {worker_id} | assign_foreman {foreman_id, worker_ids} | guard_target {worker_id, site_id} | " +
 			"place_building {plot_id, typ, x, y, rot} (Hofbau, Vorschläge in hofbau) | free_build {name, form, material} | " +
 			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +
-			"attempt_vehicle_sabotage {worker_id, vehicle_id} | buy_security {level} | set_insurance {active} | offer_trade/propose_cooperation (siehe Spielregeln)}"}
+			"attempt_vehicle_sabotage {worker_id, vehicle_id} | buy_security {level} | set_insurance {active} | offer_trade/propose_cooperation (siehe Spielregeln) | " +
+			"auftrag_an_wesen {art: botengang|mauer, lohn} (Hilfsjob für freie Wesen wie Lumo)}"}
 
 
 # ------------------------------------------------------------------ Gefuehle und Beduerfnisse (15.11.2026)
@@ -1294,6 +1322,74 @@ func beings_info() -> Array:
 		out.append({"name": b.name, "art": b.art, "rolle": rolle, "seele": seele, "firma": firma,
 			"stadt": sim.towns.name_of(int(b.amt)) if int(b.get("amt", -1)) >= 0 else sim.towns.name_of(sim.city.town_of(tile_of(b)))})
 	return out
+
+
+# ------------------------------------------------------------------ Ablauf (15.11.2026)
+## Ersatz fuer Ekos Skripte: Das Wesen schickt bis zu ABLAUF_MAX Handlungen auf einmal. Die Welt fuehrt sie der Reihe nach aus,
+## wartet nach MoveTo auf die Ankunft und nach Rest auf das Ende der Pause und bricht beim ersten Fehlschlag ab. Kein Code wird
+## ausgefuehrt; jeder Schritt laeuft durch dieselben Regeln wie eine einzelne Handlung.
+const ABLAUF_MAX := 30
+
+
+func _start_plan(b: Dictionary, data: Dictionary) -> Dictionary:
+	var steps = data.get("schritte", data.get("steps"))
+	if steps is String:
+		steps = JSON.parse_string(steps)
+	if not (steps is Array) or steps.is_empty():
+		return {"ok": false, "msg": "Ablauf braucht schritte: [{\"type\": \"...\", \"data\": {...}}, ...] (höchstens %d)." % ABLAUF_MAX}
+	var clean: Array = []
+	for s in steps.slice(0, ABLAUF_MAX):
+		if s is Dictionary and s.has("type") and str(s.type) != "Ablauf":
+			clean.append({"type": str(s.type), "data": s.get("data", {}) if s.get("data", {}) is Dictionary else {}})
+	if clean.is_empty():
+		return {"ok": false, "msg": "Keine gültigen Schritte im Ablauf."}
+	b.ablauf = clean
+	b.ablauf_log = []
+	_event(b, "startet einen Ablauf mit %d Schritten" % clean.size())
+	_run_plan(b)
+	var left: int = (b.ablauf as Array).size()
+	var log: Array = b.ablauf_log
+	var failed: bool = not log.is_empty() and str(log[-1]).begins_with("FEHLER")
+	return {"ok": not failed, "msg": ("Ablauf abgebrochen: %s" % log[-1]) if failed else ("Ablauf läuft: %d von %d Schritten erledigt, %d folgen automatisch (siehe ablauf in observe)." % [clean.size() - left, clean.size(), left]),
+		"ergebnisse": log.slice(-8)}
+
+
+func _run_plan(b: Dictionary) -> void:
+	var plan: Array = b.ablauf
+	while not plan.is_empty():
+		if not (b.mover as Mover).arrived() or float(b.get("rest_left", 0.0)) > 0.0:
+			return
+		var s: Dictionary = plan.pop_front()
+		var r: Dictionary = input(str(b.name), str(s.type), s.data, true)
+		var log: Array = b.ablauf_log
+		log.append(("%s: %s" % [s.type, str(r.get("msg", "")).left(90)]) if bool(r.get("ok", false)) else ("FEHLER %s: %s" % [s.type, str(r.get("msg", "")).left(120)]))
+		if log.size() > 30:
+			b.ablauf_log = log.slice(-30)
+		if not bool(r.get("ok", false)):
+			plan.clear()
+			_event(b, "Ablauf abgebrochen bei %s" % s.type)
+			return
+	if (b.get("ablauf_log", []) as Array).size() > 0 and plan.is_empty() and not str(b.ablauf_log[-1]).begins_with("FEHLER"):
+		pass
+
+
+## Sekunden seit der letzten eigenen Handlung eines Wesens (INF, wenn es noch nie gehandelt hat).
+func idle_s(b: Dictionary) -> float:
+	if not b.has("last_act"):
+		return INF
+	return (Time.get_ticks_msec() - int(b.last_act)) / 1000.0
+
+
+func firm_idle_s(cid: int) -> float:
+	var n := firm_being(cid)
+	return INF if n == "" else idle_s(beings[n])
+
+
+func office_idle_s(k: int) -> float:
+	for b in beings.values():
+		if int(b.get("amt", -1)) == k:
+			return idle_s(b)
+	return INF
 
 
 # ------------------------------------------------------------------ Hilfen

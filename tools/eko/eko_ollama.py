@@ -28,6 +28,11 @@ MAX_MESSAGES = 60          # Gespraechslaenge, danach werden die aeltesten Schri
 KEEP_MESSAGES = 36
 MAX_CHARS = 30000          # Textlaenge des Verlaufs (~10.000 Token): darueber lief das 16k-Kontextfenster ueber (Ollama HTTP 500, 15.11.)
 REFLECT_EVERY = 40         # Werkzeugschritte zwischen zwei Erinnerungen an das Gedaechtnis
+DAY_STEPS = 150            # Schlaf-Zyklus wie bei Eko: nach so vielen Schritten endet der "Tag" (Sitzung)
+NIGHT_STEPS = 8            # so viele Schritte bleiben, um das Gedaechtnis zu schreiben
+EVENING = ("Dein Tag geht zu Ende. Schreib jetzt das Wichtigste auf: Erlebnisse mit append_memory, geprüftes Wissen und gute "
+           "Abläufe in SEMANTIC_MEMORY.md, deine Pläne für morgen. Gleich schläfst du, danach weißt du nur noch, was in deinen Dateien steht.")
+MORNING = "Ein neuer Tag beginnt. Lies zuerst deine Dateien (list_files, read_file), dann schau dich um (observe)."
 
 TOOLS = [
     {"name": "observe", "description": "Sieh dich um: wo du bist, was du trägst, Karte der Umgebung (21x21 Felder), Blöcke, "
@@ -40,11 +45,13 @@ TOOLS = [
      "(Baufirma baut dir ein Haus), Rest {} (ausruhen und Akku laden: draußen langsam, zu Hause in der Ladestation schnell), FoundCompany {name?, behalten?} (eigene "
      "Transportfirma gründen, ab 1.500 EUR Ersparnissen, Kapitalgeber legt 20.000 EUR dazu), Firma {aktion: {action, ...}} (deine Firma "
      "führen, siehe meine_firma.aktionen), MoveIn {} (in das selbst gebaute Haus auf deinem Grundstück einziehen), "
-     "Amt {aktion: {action, ...}} (nur Bürgermeister: Amtshandlung, siehe mein_amt.aktionen). Material und "
+     "Amt {aktion: {action, ...}} (nur Bürgermeister: Amtshandlung, siehe mein_amt.aktionen), "
+     "Ablauf {schritte: [{type, data}, ...]} (bis zu 30 Handlungen nacheinander; die Welt wartet nach MoveTo auf die Ankunft "
+     "und bricht beim ersten Fehler ab – spart dir viele Einzelschritte, z. B. Material holen, hingehen, mehrere Blöcke setzen). Material und "
      "Einrichtung (bett, ladestation, tisch, lampe, ...) kaufst du mit Pickup am Bauhof, Preise in material_preise. "
      "Blockraster: 4x4 Blöcke je Feld, z = Schicht ab 0.",
      "parameters": {"type": "object", "properties": {
-         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt"]},
+         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12]}"}},
          "required": ["type", "data"]}},
     {"name": "wait", "description": "Warte einige Sekunden (z. B. während du gehst).",
@@ -232,7 +239,18 @@ class Agent:
         system = {"role": "system", "content": self.system_prompt()}
         messages = [{"role": "user", "content": "Beginne. Lies zuerst deine Dateien (list_files, read_file)."}]
         steps = 0
+        day_start = 0
+        evening = False
         while self.args.max_steps == 0 or steps < self.args.max_steps:
+            if not evening and steps - day_start >= DAY_STEPS:   # Abend: Gedaechtnis schreiben lassen
+                evening = True
+                messages.append({"role": "user", "content": EVENING})
+                self.say("🌙 Abend – das Wesen schreibt sein Gedächtnis")
+            elif evening and steps - day_start >= DAY_STEPS + NIGHT_STEPS:   # Schlaf: neue Sitzung, nur die Dateien bleiben
+                evening = False
+                day_start = steps
+                messages = [{"role": "user", "content": MORNING}]
+                self.say("☀ Neuer Tag – frische Sitzung, Gedächtnis aus den Dateien")
             messages = self.trim(messages)
             try:
                 msg = self.chat([system] + messages)
