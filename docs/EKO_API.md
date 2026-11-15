@@ -16,6 +16,7 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 |------|------|---------|
 | `MoveTo` | `{"tile": [x, y]}` | zu Fuß zum Feld gehen (etwa 3 Felder je Sekunde, Wegsuche automatisch) |
 | `Stop` | `{}` | stehen bleiben |
+| `Fahrt` | `{"tile": [x, y]}` oder `{"ziel": "Rathaus Mainz"}` | Fahrdienst: fünfmal so schnell wie zu Fuß, 1 € je Feld (mindestens 5 €); das Geld bekommt die Transportfirma mit den meisten Fahrzeugen. Geht auch mit fast leerem Akku |
 | `Inspect` | `{"target_id": "Rathaus Mainz"}` | ein sichtbares Gebäude (Name aus `gebaeude_in_der_naehe` oder `building_<id>`), Wesen, Unternehmer oder Grundstück (`G…`) genauer ansehen: Art, Funktion, Betreiber, Zustand, erkennbare Probleme, mögliche Interaktionen. Ändert nichts; keine Interna fremder Firmen |
 | `Attack` | `{"ziel": "Mia", "waffe": "Klinge"}` oder `{"waffe": "...", "feld": [x, y]}` | eine getragene Waffe einsetzen (Reichweite je Entwurf; eine Bombe wird abgelegt und zündet später). Gewalt ist verboten: wer erwischt wird, zahlt Bußgeld (bei Wiederholung mehr) oder kommt in Gewahrsam |
 | `Attack` | `{"ziel": "Sägewerk Nord" \| "building_123" \| "fahrzeug_7", "waffe": "..."}` oder `{"waffe": "Sprengsatz", "feld": [x, y]}` | Gebäude, Fahrzeuge und Straßen angreifen: Gebäude verlieren Bauzustand (bei 0 Ruine, Betriebe darin stehen still), Fahrzeuge Zustand (bei 0 Totalschaden), gesprengte Straßen sind gesperrt, bis der Bauhof räumt. Die Polizei steht auf der Seite der Bürger |

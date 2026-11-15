@@ -14,6 +14,9 @@ const CARRY := 4                    # Bloecke, die ein Wesen gleichzeitig tragen
 const REACH := 2                    # Reichweite in Feldern (Schachbrett-Abstand) fuer Setzen/Aufnehmen
 const SOURCE_REACH := 2             # Abstand in Feldern zum Bauhof fuer Material
 const WALK_SPEED := 3.0             # Felder je Echtzeitsekunde
+const TAXI_SPEED := 5.0             # Fahrdienst: so viel schneller als zu Fuss (15.11.: Wesen liefen 600 Felder, 3,5 Minuten)
+const TAXI_EUR_PER_FIELD := 1.0
+const TAXI_MIN := 5.0
 const SAY_SECONDS := 8.0
 const MAX_BLOCKS := 20000
 const MAX_EVENTS := 30
@@ -271,6 +274,7 @@ func update(dt: float) -> void:
 			m.advance(dt, 1.0)
 			if m.arrived():
 				_event(b, "ist bei Feld %d,%d angekommen" % [m.tile().x, m.tile().y])
+				b["faehrt"] = false
 		if float(b.say_left) > 0.0:
 			b.say_left = maxf(0.0, float(b.say_left) - dt)
 		_feel_tick(b, dt)
@@ -369,6 +373,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			r = estates.gate(b, data)
 		"Bauplan":
 			r = estates.build_plan(b, data)
+		"Fahrt":
+			r = _ride(b, data)
 		"Give":
 			r = arms.give(b, data)
 		"Place":
@@ -404,7 +410,7 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		"Merke":
 			r = _lesson(b, data)
 		_:
-			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, Attack, Give, Bauwerk, Tor, Bauplan, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
+			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, Attack, Give, Bauwerk, Tor, Bauplan, Fahrt, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
 	if not bool(r.ok):
 		_event(b, "Fehlschlag %s: %s" % [type, r.msg])
 	if not r.has("status"):   # angenommen != abgeschlossen: Bewegung laeuft, bis du.unterwegs false ist
@@ -613,6 +619,50 @@ func _lesson(b: Dictionary, data: Dictionary) -> Dictionary:
 	return {"ok": true, "msg": "gemerkt"}
 
 
+## Fahrdienst: schnell ans Ziel (Feld oder Name eines Gebaeudes, Wesens, Unternehmers), 1 EUR je Feld. Das Geld bekommt die
+## Transportfirma mit den meisten Fahrzeugen (sonst die Stadt). Auch mit fast leerem Akku moeglich (nach Hause fahren).
+func _ride(b: Dictionary, data: Dictionary) -> Dictionary:
+	var to := Vector2i(-1, -1)
+	var t = data.get("tile", data.get("feld"))
+	if t is Array and t.size() >= 2:
+		to = Vector2i(int(t[0]), int(t[1]))
+	else:
+		var name := str(data.get("ziel", data.get("to", "")))
+		if beings.has(name):
+			to = tile_of(beings[name])
+		for c in sim.companies:
+			if to.x < 0 and (c.player_name == name or c.company_name == name):
+				to = sim.avatars[c.id].tile()
+		for bd in sim.city.buildings:
+			if to.x < 0 and str(bd.get("name", "")) == name:
+				to = Vector2i(int(bd.walk.x), int(bd.walk.y))
+	if to.x < 0 or not sim.city.inside(to):
+		return {"ok": false, "msg": "Fahrt braucht tile: [x, y] oder ziel: Name eines Gebäudes, Wesens oder Unternehmers."}
+	var m: Mover = b.mover
+	var p: Array[Vector2i] = sim.nav.walk_path(m.tile(), to)
+	if p.size() < 2:
+		return {"ok": false, "msg": "Dorthin kommt kein Fahrdienst."}
+	var cost: float = maxf(TAXI_MIN, float(p.size() - 1) * TAXI_EUR_PER_FIELD)
+	if float(b.get("geld", 0.0)) < cost:
+		return {"ok": false, "msg": "Die Fahrt (%d Felder) kostet %s, du hast %s." % [p.size() - 1, Catalog.money(cost), Catalog.money(float(b.get("geld", 0.0)))]}
+	var firm = null
+	for c in sim.companies:
+		if c.is_active() and not c.vehicle_ids.is_empty() and (firm == null or c.vehicle_ids.size() > firm.vehicle_ids.size()):
+			firm = c
+	b.geld = float(b.geld) - cost
+	if firm != null:
+		firm.ledger.book("transport", cost, true, "Fahrdienst für %s" % b.name, sim.game_min, "Y0")
+	else:
+		sim.economy.transfer("Y0", Towns.account_of(maxi(0, sim.city.town_of(m.tile()))), cost)
+	m.set_path(p)
+	b["faehrt"] = true
+	var end: Vector2i = p[-1]
+	_event(b, "fährt mit dem Fahrdienst nach %d,%d" % [end.x, end.y])
+	return {"ok": true, "status": "laeuft", "msg": "Fahrdienst%s bringt dich nach %d,%d (%d Felder, ca. %.0f s, %s)%s." % [
+		(" von " + firm.company_name) if firm != null else "", end.x, end.y, p.size() - 1, float(p.size() - 1) / (WALK_SPEED * TAXI_SPEED),
+		Catalog.money(cost), "" if end == to else "; Ziel nicht erreichbar, nächster Punkt"]}
+
+
 func _move_to(b: Dictionary, data: Dictionary) -> Dictionary:
 	var t = data.get("tile", data.get("feld"))
 	if not (t is Array) or t.size() < 2:
@@ -625,6 +675,7 @@ func _move_to(b: Dictionary, data: Dictionary) -> Dictionary:
 	if p.is_empty():
 		return {"ok": false, "msg": "Kein Fussweg zu %d,%d." % [to.x, to.y]}
 	m.set_path(p)
+	b["faehrt"] = false
 	var end: Vector2i = p[-1]
 	return {"ok": true, "msg": "unterwegs nach %d,%d (%d Felder, ca. %.0f s)%s" % [end.x, end.y, p.size() - 1,
 		(p.size() - 1) / WALK_SPEED, "" if end == to else "; Ziel nicht begehbar, naechster erreichbarer Punkt"]}
@@ -1642,7 +1693,7 @@ func _feel_tick(b: Dictionary, dt: float) -> void:
 	if resting:
 		akku += (CHARGE_HOME_S if home else CHARGE_OUT_S) * dt
 	else:
-		akku -= (DRAIN_S + (DRAIN_CARRY_S if not b.held.is_empty() else 0.0)) * (1.5 if nass > 90.0 else 1.0) * dt   # nur durchnaesst zehrt es staerker
+		akku -= (DRAIN_S + (DRAIN_CARRY_S if not b.held.is_empty() else 0.0)) * (1.5 if nass > 90.0 else 1.0) * (0.3 if bool(b.get("faehrt", false)) else 1.0) * dt   # nur durchnaesst zehrt es staerker; im Taxi kaum
 	if home:
 		nass -= 2.0 * dt
 		kalt -= 2.0 * dt
@@ -1659,7 +1710,7 @@ func _feel_tick(b: Dictionary, dt: float) -> void:
 	b.akku = clampf(akku, 0.0, 100.0)
 	b.nass = clampf(nass, 0.0, 100.0)
 	b.kalt = clampf(kalt, 0.0, 100.0)
-	(b.mover as Mover).speed = WALK_SPEED * (0.6 if float(b.akku) < LOW_AKKU else 1.0)
+	(b.mover as Mover).speed = WALK_SPEED * (TAXI_SPEED if bool(b.get("faehrt", false)) else (0.6 if float(b.akku) < LOW_AKKU else 1.0))
 	# laut sagen, wenn eine Schwelle ueberschritten wird (je Gefuehl hoechstens einmal, bis es wieder gut ist)
 	var said: Dictionary = b.get("gesagt", {})
 	b.gesagt = said

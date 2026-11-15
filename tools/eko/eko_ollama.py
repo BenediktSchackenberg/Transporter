@@ -120,6 +120,7 @@ TOOLS = [
      "Bauhof oder Pickup {block:[x,y,z]} oder Pickup {job} (Kisten eines Botengangs abholen), Place {block:[x,y,z], material?}, "
      "Say {text}, Talk {to, text} (mit einer Figur oder einem Wesen in der Nähe reden, höchstens 3 Felder; Unternehmer antworten), "
      "Inspect {target_id} (sichtbares Gebäude, Wesen, Unternehmer oder Grundstück G… genauer ansehen; ändert nichts), "
+     "Fahrt {tile: [x, y]} oder Fahrt {ziel: Name} (Fahrdienst: 5-mal so schnell wie zu Fuß, 1 € je Feld – für weite Wege), "
      "Attack {ziel, waffe} (Ziel: ein Wesen, ein Gebäude per Name oder building_<id>, ein Fahrzeug fahrzeug_<id>) oder Attack {waffe, feld} "
      "(Sprengsatz auf ein Feld, z. B. eine Straße; Bombe ablegen). Alles Gebaute kann beschädigt und zerstört werden. Gewalt ist verboten, "
      "die Polizei steht auf der Seite der Bürger und bestraft oft. "
@@ -142,7 +143,7 @@ TOOLS = [
      "Einrichtung (bett, ladestation, tisch, lampe, ...) kaufst du mit Pickup am Bauhof, Preise in material_preise. "
      "Blockraster: 4x4 Blöcke je Feld, z = Schicht ab 0.",
      "parameters": {"type": "object", "properties": {
-         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Bauwerk", "Bauplan", "Tor", "Ziel", "ZielStand", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
+         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Bauwerk", "Bauplan", "Tor", "Fahrt", "Ziel", "ZielStand", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12], \"warum\": \"Hafen erkunden\"}. "
                   "warum (kurz) ist bei jeder Handlung erlaubt und wird im Spiel angezeigt. Die Antwort hat status: laeuft, abgeschlossen, gescheitert oder doppelt."}},
          "required": ["type", "data"]}},

@@ -324,6 +324,13 @@ class BeingNode:
 		var nass := float(b.get("nass", 0.0))
 		var akku := float(b.get("akku", 100.0))
 		draw_circle(Vector2(0, 1), 6.5, Color(0, 0, 0, 0.25))                     # Schatten
+		if bool(b.get("faehrt", false)):   # Fahrdienst: kleines gelbes Taxi
+			draw_rect(Rect2(-11, -9, 22, 9), Color("#f2c94c"))
+			draw_rect(Rect2(-7, -14, 14, 5), Color("#f2c94c").darkened(0.1))
+			draw_rect(Rect2(-6, -13, 12, 3), Color("#9ad0f5"))
+			draw_rect(Rect2(-3, -16, 6, 2), Color("#222"))
+			draw_circle(Vector2(-7, 0), 2.2, Color("#222"))
+			draw_circle(Vector2(7, 0), 2.2, Color("#222"))
 		if kalt > 50.0:   # Zittern vor Kaelte
 			draw_set_transform(Vector2(sin(ms / 35.0) * 0.7, 0))
 		var robot := str(b.get("art", "mensch")) == "roboter"

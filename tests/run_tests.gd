@@ -35,6 +35,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_estates")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
+	test_names.append("test_eko_taxi")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -14265,3 +14266,35 @@ func test_eko_start_capital_and_home() -> void:
 	M.mover.pos = s.city.tile_center(Vector2i(int(hall.walk.x), int(hall.walk.y)) + Vector2i(25, 25))
 	ok(E.home_hint(M).contains("Rathaus"), "Weg nach Hause fuehrt zum Rathaus")
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geldbilanz")
+
+
+## Fahrdienst (15.11.2026): schnell ueber weite Wege, 1 EUR je Feld an die Transportfirma mit den meisten Fahrzeugen, auch mit
+## leerem Akku; Ziel per Feld oder Name; Geldbilanz.
+func test_eko_taxi() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.join("Mia")
+	var M: Dictionary = E.beings.Mia
+	ok(not E.input("Mia", "Fahrt", {"tile": [5, 5]}).ok, "ohne Geld keine Fahrt")
+	s.economy.transfer("X0", "Y0", 5000.0)
+	M.geld = 5000.0
+	M.akku = 3.0
+	var far := Vector2i(-1, -1)
+	var t := E.tile_of(M)
+	for bd in s.city.buildings:
+		var c := Vector2i(int(bd.walk.x), int(bd.walk.y))
+		if far.x < 0 and EkoWorld._dist(t, c) > 60 and s.nav.walk_reachable(t, c):
+			far = c
+	ok(far.x >= 0, "fernes erreichbares Ziel gefunden")
+	if far.x < 0:
+		return
+	var g0 := float(M.geld)
+	var r: Dictionary = E.input("Mia", "Fahrt", {"tile": [far.x, far.y]})
+	ok(r.ok and r.status == "laeuft" and float(M.geld) < g0 and bool(M.faehrt), "Fahrt gebucht, auch mit leerem Akku: %s" % str(r.msg))
+	var steps := 0
+	while not (M.mover as Mover).arrived() and steps < 2000:
+		E.update(0.1)
+		steps += 1
+	ok(E.tile_of(M) == far and not bool(M.faehrt), "angekommen in %.1f s (zu Fuss waeren es mehr als %.0f s)" % [steps * 0.1, EkoWorld._dist(t, far) / EkoWorld.WALK_SPEED])
+	ok(steps * 0.1 < EkoWorld._dist(t, far) / EkoWorld.WALK_SPEED / 2.0, "deutlich schneller als zu Fuss")
+	ok(absf(s.economy.conservation_error()) < 0.01 and identity_ok(s), "Geldbilanz")
