@@ -34,6 +34,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_play_fixes")
 	test_names.append("test_eko_estates")
 	test_names.append("test_eko_build_plan")
+	test_names.append("test_eko_start_capital_and_home")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13192,7 +13193,8 @@ func test_eko_world() -> void:
 	E.beings.Lumo.mover.pos = E.beings.Mia.mover.pos
 	ok(E.input("Lumo", "Talk", {"to": "Mia", "text": "Hallo Mia, ich komme vom Smaragdstern."}).ok, "Lumo spricht Mia an")
 	ok(str(E.beings.Mia.events.back()).contains("Lumo sagt zu dir") and E.observe("Mia").gehoert.any(func(m): return m.von == "Lumo"), "Mia hat es gehoert")
-	ok(not E.input("Lumo", "Talk", {"to": "Eko", "text": "Hallo?"}).ok, "zu weit weg fuer ein Gespraech")
+	var call: Dictionary = E.input("Lumo", "Talk", {"to": "Eko", "text": "Hallo?"})
+	ok(call.ok and str(call.msg).contains("angerufen") and str(E.beings.Eko.events.back()).contains("ruft dich an"), "zu weit weg: Anruf statt Gespraech")
 	var boss: Company = s.companies[0]
 	E.beings.Lumo.mover.pos = s.city.tile_center(s.avatars[0].tile())
 	ok(E.observe("Lumo").figuren_in_der_naehe.any(func(f): return f.name == boss.player_name), "Unternehmer in der Naehe sichtbar")
@@ -13389,9 +13391,9 @@ func test_eko_feelings() -> void:
 	s.wx.cur["cond"] = "Regen"
 	s.wx.cur["precip_mm_h"] = 3.0
 	s.wx.cur["temp"] = 2.0
-	for i in 120:
+	for i in 240:   # Regen macht seit 15.11. langsamer nass (0,35 je Sekunde): 4 Minuten draussen
 		E.update(1.0)
-	ok(float(b.akku) < 90.0 and float(b.nass) > 50.0 and float(b.kalt) > 20.0, "Akku %d, nass %d, kalt %d nach 2 Minuten im Regen" % [int(b.akku), int(b.nass), int(b.kalt)])
+	ok(float(b.akku) < 90.0 and float(b.nass) > 50.0 and float(b.kalt) > 20.0, "Akku %d, nass %d, kalt %d nach 4 Minuten im Regen" % [int(b.akku), int(b.nass), int(b.kalt)])
 	var f: Dictionary = E.observe("Lumo").gefuehle
 	ok(str(f.gefuehl).contains("nass") and str(f.gefuehl).contains("Zuhause"), "Gefuehle als Saetze, Sehnsucht nach Zuhause: %s" % str(f.gefuehl).left(70))
 	ok(b.events.any(func(e): return str(e).contains("fühlt:")), "sagt seine Gefuehle laut")
@@ -14221,4 +14223,25 @@ func test_eko_build_plan() -> void:
 	E2.setup(s)
 	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
 	ok(E2.estates.plans.size() == E.estates.plans.size(), "Bauplaene gespeichert")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geldbilanz")
+
+
+## Befunde 15.11. abends: Startkapital 150.000 EUR je KI (einmal, aus dem Ausland), Grundziel Stammsitz, Weg nach Hause beim
+## Doesen, Hinweis fuer Firmen ohne Fahrzeug.
+func test_eko_start_capital_and_home() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.auto_estates = true
+	E.join("Viktor")
+	var V: Dictionary = E.beings.Viktor
+	ok(is_equal_approx(float(V.geld), EkoWorld.START_CAPITAL) and bool(V.startkapital), "Startkapital erhalten")
+	E.ensure_estates()
+	ok(is_equal_approx(float(V.geld), EkoWorld.START_CAPITAL), "nur einmal")
+	ok(str(E.observe("Viktor").grundziel).contains("Stammsitz"), "Grundziel in der Beobachtung")
+	V.mover.pos = s.city.tile_center(E.estates.center_of("Viktor") + Vector2i(30, 30))
+	var r: Dictionary = E.input("Viktor", "Rest", {})
+	ok(str(r.msg).contains("Hütte") and str(r.msg).contains("MoveTo"), "draussen doesen nennt den Weg nach Hause: %s" % str(r.msg).right(90))
+	E.input("Viktor", "FoundCompany", {"name": "Vik", "behalten": 100000})
+	var fo: Dictionary = E.observe("Viktor").meine_firma
+	ok(str(fo.get("hinweis_fahrzeug", "")).contains("Ohne Fahrzeug"), "Hinweis fuer Firma ohne Fahrzeug")
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geldbilanz")

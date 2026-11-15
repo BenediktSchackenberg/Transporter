@@ -54,7 +54,7 @@ def main():
     ap.add_argument("--model", default="gpt-oss:20b")
     ap.add_argument("--ollama", default="http://127.0.0.1:11435")
     ap.add_argument("--root", default=os.path.join(os.path.expanduser("~"), "PixelTransportRivals-Eko"))
-    ap.add_argument("--ctx", type=int, default=16384)
+    ap.add_argument("--ctx", type=int, default=32768)
     ap.add_argument("--think", action="store_true")
     ap.add_argument("--max-steps", type=int, default=0)
     ap.add_argument("--kein-internet", action="store_true", help="Werkzeug nachschlagen (Wikipedia) fuer alle Wesen abschalten")

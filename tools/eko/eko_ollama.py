@@ -28,7 +28,7 @@ REFLECT = ("Nimm dir kurz Zeit: Wie fühlst du dich gerade (observe → gefuehle
            "(append_memory) und geprüftes Wissen in SEMANTIC_MEMORY.md fest. Danach mach weiter, womit du willst.")
 MAX_MESSAGES = 60          # Gespraechslaenge, danach werden die aeltesten Schritte verworfen (das Gedaechtnis liegt in Dateien)
 KEEP_MESSAGES = 36
-MAX_CHARS = 30000          # Textlaenge des Verlaufs (~10.000 Token): darueber lief das 16k-Kontextfenster ueber (Ollama HTTP 500, 15.11.)
+MAX_CHARS = 24000          # Textlaenge des Verlaufs: mit gpt-oss waren 30.000 Zeichen schon 10.600-13.500 Token (Ollama HTTP 500 bei 16k, 15.11.)
 REFLECT_EVERY = 40         # Werkzeugschritte zwischen zwei Erinnerungen an das Gedaechtnis
 DAY_STEPS = 150            # Schlaf-Zyklus wie bei Eko: nach so vielen Schritten endet der "Tag" (Sitzung)
 NIGHT_STEPS = 8            # so viele Schritte bleiben, um das Gedaechtnis zu schreiben
@@ -525,7 +525,7 @@ def main():
     ap.add_argument("--base-url", default=IONOS_BASE_URL, help="OpenAI-kompatible Adresse (fuer --anbieter ionos)")
     ap.add_argument("--key-env", default="IONOS_API_TOKEN", help="Umgebungsvariable mit dem API-Schluessel")
     ap.add_argument("--root", default=os.path.join(os.path.expanduser("~"), "PixelTransportRivals-Eko"))
-    ap.add_argument("--ctx", type=int, default=16384)
+    ap.add_argument("--ctx", type=int, default=32768, help="Kontextfenster (gpt-oss: 32k passt mit 16 GB Grafikspeicher)")
     ap.add_argument("--think", action="store_true", help="Denkmodus des Modells einschalten (langsamer)")
     ap.add_argument("--max-steps", type=int, default=0, help="0 = endlos")
     ap.add_argument("--kein-internet", action="store_true", help="Werkzeug nachschlagen (Wikipedia) abschalten")

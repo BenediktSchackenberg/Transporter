@@ -51,6 +51,8 @@ var _terrain_ready := false
 var arms := EkoArms.new()           # Waffen, Schutz, Gefahren (Benedikt 15.11.2026)
 var estates := EkoEstates.new()     # Stammsitz je KI-Spieler (Benedikt 15.11.2026)
 var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
+const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.000 EUR Privatgeld (Einlage von aussen X0 -> Y0)
+const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
 var _no_estate := false             # beim Laden und fuer Buergermeister keinen Stammsitz vergeben
 
 
@@ -80,6 +82,17 @@ func ensure_estates() -> void:
 	for b in beings.values():
 		if int(b.get("amt", -1)) < 0 and not estates.estates.has(b.name):
 			estates.assign(b.name)
+		grant_start_capital(b)
+
+
+## Startkapital einmal je Wesen (auch nachtraeglich fuer laufende Partien); Geld kommt von aussen, die Bilanz bleibt erhalten.
+func grant_start_capital(b: Dictionary) -> void:
+	if bool(b.get("startkapital", false)):
+		return
+	b["startkapital"] = true
+	sim.economy.transfer("X0", "Y0", START_CAPITAL)
+	b.geld = float(b.get("geld", 0.0)) + START_CAPITAL
+	_event(b, "erhält %s Startkapital" % Catalog.money(START_CAPITAL))
 
 
 func open_plot(id: String) -> void:
@@ -137,6 +150,8 @@ func join(name: String, art: String = "mensch") -> Dictionary:
 		if auto_estates and not _no_estate and estates.assign(name):   # erwacht auf dem eigenen Stammsitz
 			m.pos = sim.city.tile_center(estates.center_of(name))
 			_event(beings[name], "erwacht auf seinem Stammsitz")
+		if auto_estates and not _no_estate:
+			grant_start_capital(beings[name])
 		_restore_savings(beings[name])
 		sim.log_event("%s %s ist erwacht." % ["Der kleine Roboter" if art == "roboter" else "Das Wesen", name], "info")
 	changed.emit()
@@ -266,7 +281,7 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		return rp
 	if type in WORK_ACTIONS and float(b.get("akku", 100.0)) < EMPTY_AKKU:
 		_event(b, "ist zu erschöpft für %s" % type)
-		return {"ok": false, "msg": "Dein Akku ist fast leer (%d %%). Ruh dich erst aus (Rest) – zu Hause in der Ladestation geht es am schnellsten." % int(b.akku)}
+		return {"ok": false, "msg": "Dein Akku ist fast leer (%d %%). Ruh dich erst aus (Rest) – zu Hause in der Ladestation geht es am schnellsten.%s" % [int(b.akku), home_hint(b)]}
 	var r: Dictionary
 	match type:
 		"MoveTo":
@@ -694,17 +709,18 @@ func _talk(b: Dictionary, to: String, text: String) -> Dictionary:
 	b.say_left = SAY_SECONDS
 	if beings.has(to) and to != b.name:
 		var o: Dictionary = beings[to]
-		if _dist(t, tile_of(o)) > TALK_REACH:
-			return {"ok": false, "msg": "%s ist zu weit weg (hoechstens %d Felder)." % [to, TALK_REACH]}
+		if _dist(t, tile_of(o)) > TALK_REACH:   # zu weit fuer ein Gespraech: Anruf (Partie 15.11.: 44 gescheiterte Gespraeche)
+			_chat(b.name, to, "(Anruf) " + text, t)
+			_event(o, "%s ruft dich an: %s" % [b.name, text])
+			return {"ok": true, "msg": "%s ist weit weg – du hast angerufen; %s hat es gehört und kann antworten (Talk)." % [to, to]}
 		_chat(b.name, to, text, t)
 		_event(o, "%s sagt zu dir: %s" % [b.name, text])
 		return {"ok": true, "msg": "%s hat es gehoert und kann antworten." % to}
 	for c in sim.companies:
 		if str(c.player_name) == to or str(c.company_name) == to:
 			var at: Vector2i = sim.avatars[c.id].tile()
-			if _dist(t, at) > TALK_REACH:
-				return {"ok": false, "msg": "%s ist zu weit weg (bei Feld %d,%d, hoechstens %d Felder)." % [to, at.x, at.y, TALK_REACH]}
-			_chat(b.name, str(c.player_name), text, t)
+			var phone := _dist(t, at) > TALK_REACH   # weit weg: Anruf statt Gespraech
+			_chat(b.name, str(c.player_name), ("(Anruf) " if phone else "") + text, t)
 			sim.notify(c.id, "%s %s spricht dich an: \"%s\"" % ["Der kleine Roboter" if b.art == "roboter" else "Das Wesen", b.name, text])
 			var reply := _company_reply(c)
 			sim.avatars[c.id].say(reply.left(90), false)
@@ -823,7 +839,7 @@ func observe(name: String) -> Dictionary:
 		"jobangebote": _job_obs(b) if active_firm(b) < 0 and int(b.get("amt", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
 		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "mein_amt": office_obs(b), "gefuehle": feelings(b),
 		"ablauf": {"offen": (b.get("ablauf", []) as Array).size(), "letzte_ergebnisse": (b.get("ablauf_log", []) as Array).slice(-5)},
-		"mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
+		"grundziel": GRUNDZIEL if estates.estates.has(name) else "", "mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
 		"koerper": arms.body_obs(b), "gefahren": arms.dangers(b),
 		"mein_stammsitz": estates.obs(b), "stammsitze_in_sicht": estates.visible(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}
@@ -1261,7 +1277,29 @@ func _rest(b: Dictionary) -> Dictionary:
 	b.say = "Zzz … (draußen)"
 	b.say_left = REST_SECONDS
 	_event(b, "döst draußen")
-	return {"ok": true, "msg": "Du döst %d Sekunden draußen. Der Akku lädt nur langsam%s." % [int(REST_SECONDS), ", und du wirst nass" if sim.wx.is_rain() else ""]}
+	return {"ok": true, "msg": "Du döst %d Sekunden draußen. Der Akku lädt nur langsam%s.%s" % [int(REST_SECONDS), ", und du wirst nass" if sim.wx.is_rain() else "", home_hint(b)]}
+
+
+## Wo das Zuhause liegt (Starthuette auf dem Stammsitz, gebautes Haus, Grundstueck): fuer Ausruhen und leeren Akku
+## (Partie 15.11.: alle Wesen doesten 29-mal draussen im Regen, keines ging in seine Huette).
+func home_hint(b: Dictionary) -> String:
+	if is_home(b):
+		return ""
+	var t := tile_of(b)
+	var goal := Vector2i(-1, -1)
+	var what := ""
+	if estates.estates.has(b.name):
+		goal = estates.field_rect(b.name, EkoEstates.HUT_FIELD).get_center()
+		what = "Deine Hütte auf deinem Stammsitz"
+	elif houses.has(b.name) and str(houses[b.name].status) == "fertig":
+		goal = home_rect(b.name).position
+		what = "Dein Haus"
+	elif str(b.get("zuhause", "")) != "":
+		goal = plot_rect(str(b.zuhause)).get_center()
+		what = "Dein Zuhause"
+	if goal.x < 0:
+		return ""
+	return " %s steht bei Feld %d,%d (%d Felder entfernt): MoveTo dorthin, dann Rest – dort lädt der Akku schnell, du wirst trocken und warm." % [what, goal.x, goal.y, _dist(t, goal)]
 
 
 func _home_obs(b: Dictionary) -> Dictionary:
@@ -1422,6 +1460,19 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", "")), "pending": bool(r.get("pending", false))}
 
 
+## Ohne Fahrzeug verdient eine Transportfirma nichts (15.11.: drei von vier Firmen hatten nach 35 Minuten keines).
+func _no_vehicle_hint(cid: int) -> String:
+	if not sim.company(cid).vehicle_ids.is_empty():
+		return ""
+	var best := {}
+	for of in sim.resources.available_offers():
+		if best.is_empty() or float(of.price) < float(best.price):
+			best = of
+	if best.is_empty():
+		return "Ohne Fahrzeug verdient deine Firma nichts. Gerade ist kein Angebot frei – bald wieder nachsehen."
+	return "Ohne Fahrzeug verdient deine Firma nichts. Günstigstes Angebot: %s (%s, Angebot %s) – Firma {aktion: {action: buy_vehicle, offer_id: \"%s\"}}, dann einen Fahrer einstellen." % [str(best.model), Catalog.money(float(best.price)), str(best.id), str(best.id)]
+
+
 ## Kompakte Firmenlage fuer das Wesen (statt der grossen Unternehmer-Beobachtung): Kasse, Flotte, Auftraege, machbarer Markt,
 ## naechste Fahrzeugangebote, Bewerber, letzte Ergebnisse.
 func firm_obs(b: Dictionary) -> Dictionary:
@@ -1436,6 +1487,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var models: Dictionary = o.fahrzeugmodelle
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
 		"unternehmensplan": sim.plans.summary(cid) if sim.get("plans") != null else {},
+		"hinweis_fahrzeug": _no_vehicle_hint(cid),
 		"waffenschmiede": arms.firm_obs(cid),
 		"laufende_auftraege": me.buero.laufende_auftraege, "stellplaetze": me.stellplaetze,
 		"fahrzeuge": o.fahrzeuge.map(func(v): return {"id": v.id, "modell": v.modell, "kapazitaet": models[v.modell].kapazitaet, "status": v.status,
@@ -1503,13 +1555,13 @@ func _feel_tick(b: Dictionary, dt: float) -> void:
 	if resting:
 		akku += (CHARGE_HOME_S if home else CHARGE_OUT_S) * dt
 	else:
-		akku -= (DRAIN_S + (DRAIN_CARRY_S if not b.held.is_empty() else 0.0)) * (2.0 if nass > 80.0 else 1.0) * dt
+		akku -= (DRAIN_S + (DRAIN_CARRY_S if not b.held.is_empty() else 0.0)) * (1.5 if nass > 90.0 else 1.0) * dt   # nur durchnaesst zehrt es staerker
 	if home:
 		nass -= 2.0 * dt
 		kalt -= 2.0 * dt
 	else:
 		if wx.is_rain() or wx.is_snow():
-			nass += (1.2 if wx.is_heavy_rain() else 0.7) * dt
+			nass += (0.7 if wx.is_heavy_rain() else 0.35) * dt   # milder (15.11.: alle Wesen standen bei 96 %)
 		else:
 			nass -= 0.3 * dt
 		var alt := height_at(tile_of(b))
@@ -1604,6 +1656,8 @@ func adopt_players(n: int) -> Array:
 		if auto_estates and estates.assign(name):   # Startposition: eigener Stammsitz
 			b.mover.pos = sim.city.tile_center(estates.center_of(name))
 		_event(b, "führt jetzt selbst %s" % c.company_name)
+		if auto_estates:
+			grant_start_capital(b)
 		out.append(name)
 	return out
 
@@ -1840,7 +1894,8 @@ func to_dict() -> Dictionary:
 			"akku": float(b.get("akku", 100.0)), "nass": float(b.get("nass", 0.0)), "kalt": float(b.get("kalt", 0.0)),
 			"amt": int(b.get("amt", -1)), "seele": str(b.get("seele", "")), "orte": b.get("orte", {}), "besucht": b.get("besucht", {}),
 			"ziel": b.get("ziel", {}), "ziele_alt": b.get("ziele_alt", []), "gesundheit": float(b.get("gesundheit", 100.0)), "waffen": b.get("waffen", []),
-			"vergehen": int(b.get("vergehen", 0)), "out_left": float(b.get("out_left", 0.0)), "custody_left": float(b.get("custody_left", 0.0))})
+			"vergehen": int(b.get("vergehen", 0)), "out_left": float(b.get("out_left", 0.0)), "custody_left": float(b.get("custody_left", 0.0)),
+			"startkapital": bool(b.get("startkapital", false))})
 	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict(), "estates": estates.to_dict()}
 
 
@@ -1856,7 +1911,7 @@ func from_dict(d: Dictionary) -> void:
 		b.mover.pos = Vector2(float(e.x), float(e.y))
 		b.held = e.get("held", [])
 		b.events = e.get("events", [])
-		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt", "amt", "seele", "orte", "besucht", "ziel", "ziele_alt", "gesundheit", "waffen", "vergehen", "out_left", "custody_left"]:
+		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt", "amt", "seele", "orte", "besucht", "ziel", "ziele_alt", "gesundheit", "waffen", "vergehen", "out_left", "custody_left", "startkapital"]:
 			if e.has(k):
 				b[k] = e[k]
 	chat = d.get("chat", [])
