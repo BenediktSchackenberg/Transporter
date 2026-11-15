@@ -729,7 +729,8 @@ func _buy_plot(b: Dictionary, id: String) -> Dictionary:
 		return {"ok": false, "msg": "Schau es dir erst an: geh näher heran (Feld %d,%d)." % [c.x, c.y]}
 	var price := float(p.price)
 	if float(b.get("geld", 0.0)) < price:
-		return {"ok": false, "msg": "Zu teuer: %s kostet %s, du hast %s. Arbeite für die Firmen (jobangebote)." % [id, Catalog.money(price), Catalog.money(float(b.get("geld", 0.0)))]}
+		var how := "Entnimm Geld aus deiner Firma (Firma {aktion: {action: entnahme, betrag}})." if int(b.get("firma", -1)) >= 0 else "Arbeite für die Firmen (jobangebote)."
+		return {"ok": false, "msg": "Zu teuer: %s kostet %s, du hast %s. %s" % [id, Catalog.money(price), Catalog.money(float(b.get("geld", 0.0))), how]}
 	var town: int = sim.towns.of_parcel(id) if sim.towns.is_region() else 0
 	sim.economy.transfer("Y0", Towns.account_of(town), price)
 	b.geld = float(b.geld) - price
@@ -927,7 +928,8 @@ func _home_obs(b: Dictionary) -> Dictionary:
 const FOUND_MIN_OWN := 1500.0       # eigene Ersparnisse mindestens
 const FOUND_INVESTOR := 20000.0     # Einlage des Kapitalgeberpools I0
 const FIRM_ACTIONS := ["accept_contract", "assign_transport", "collect_contracts", "buy_vehicle", "sell_vehicle", "recruit_worker",
-	"dismiss_worker", "assign_worker_task", "rent_depot", "take_loan", "repay_loan", "install_internet", "send_message"]
+	"dismiss_worker", "assign_worker_task", "rent_depot", "take_loan", "repay_loan", "install_internet", "send_message", "entnahme"]
+const FIRM_RESERVE := 5000.0        # Privatentnahme laesst mindestens so viel in der Firmenkasse
 
 
 func firm_being(cid: int) -> String:
@@ -972,6 +974,18 @@ func _firm_action(b: Dictionary, data: Dictionary) -> Dictionary:
 		a = JSON.parse_string(a)
 	if not (a is Dictionary) or str(a.get("action", "")) not in FIRM_ACTIONS:
 		return {"ok": false, "msg": "Firma braucht aktion: {\"action\": eine von %s, ...Parameter}." % ", ".join(FIRM_ACTIONS)}
+	if str(a.action) == "entnahme":   # Privatentnahme: Inhaber zahlt sich Geld aus der eigenen Firma aus
+		var c = sim.company(cid)
+		var want := float(a.get("betrag", a.get("amount", 0.0)))
+		var room: float = maxf(0.0, c.ledger.cash - FIRM_RESERVE)
+		if want <= 0.0:
+			return {"ok": false, "msg": "entnahme braucht betrag (EUR)."}
+		if want > room:
+			return {"ok": false, "msg": "Höchstens %s entnehmbar (in der Firmenkasse bleiben mindestens %s)." % [Catalog.money(room), Catalog.money(FIRM_RESERVE)]}
+		c.ledger.withdraw(want, "Y0")
+		b.geld = float(b.get("geld", 0.0)) + want
+		_event(b, "entnimmt %s aus %s" % [Catalog.money(want), c.company_name])
+		return {"ok": true, "msg": "%s privat entnommen. Du hast jetzt %s, die Firma %s." % [Catalog.money(want), Catalog.money(float(b.geld)), Catalog.money(c.ledger.cash)]}
 	var r: Dictionary = sim.executor.execute(cid, a, "", "api")
 	_event(b, "Firma: %s → %s" % [a.action, str(r.get("msg", "")).left(80)])
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", ""))}
@@ -1003,7 +1017,8 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
 			"du musst nicht darauf warten. Den Tagesbetrieb (Fahrten zuweisen, tanken, reparieren) erledigt die Disposition. Du bist frei für dein Leben und dein Haus.",
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
-			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text}}"}
+			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
+			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma)}"}
 
 
 # ------------------------------------------------------------------ Gefuehle und Beduerfnisse (15.11.2026)

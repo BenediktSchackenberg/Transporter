@@ -13384,6 +13384,12 @@ func test_eko_players_and_mayors() -> void:
 	var am: Dictionary = E.input(ms[0], "Amt", {"aktion": {"action": "remember", "inhalt": "Mehr Spielplaetze"}})
 	ok(am.ok, "Amtshandlung ausgefuehrt: %s" % str(am.msg).left(60))
 	ok(not E.input(ms[0], "Amt", {"aktion": {"action": "sabotage"}}).ok and not E.input(ps[0], "Amt", {"aktion": {"action": "wait"}}).ok, "unbekannte Amtshandlung und Amt ohne Amt abgelehnt")
+	var c0: Company = s.companies[0]
+	var cash0 := c0.ledger.cash
+	ok(not E.input(ps[0], "Firma", {"aktion": {"action": "entnahme", "betrag": cash0}}).ok, "Entnahme darf die Firma nicht leeren")
+	var en: Dictionary = E.input(ps[0], "Firma", {"aktion": {"action": "entnahme", "betrag": 1000}})
+	ok(en.ok and is_equal_approx(float(E.beings[ps[0]].geld), 1000.0) and is_equal_approx(cash0 - c0.ledger.cash, 1000.0), "Privatentnahme 1.000 EUR")
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten (Entnahme, Abweichung %.2f)" % s.economy.conservation_error())
 	var info: Array = E.beings_info()
 	ok(info.any(func(x): return x.name == "Lumo" and x.seele == "lumo") and info.any(func(x): return x.rolle == "buergermeister") and info.filter(func(x): return x.rolle == "unternehmer").size() == 3, "Betreiberliste mit Rollen und Seelen")
 	var ws := WorldServer.new()

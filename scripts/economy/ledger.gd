@@ -136,6 +136,12 @@ func inject(amount: float) -> void:
 	start_capital += amount
 
 
+## Privatentnahme des Inhabers (Eko-Modus): Bargeld an das Gegenkonto, Eigenkapital sinkt (kein Aufwand, Bilanzidentitaet bleibt).
+func withdraw(amount: float, counter: String) -> void:
+	_move(-amount, counter)
+	start_capital -= amount
+
+
 ## Lohn laeuft auf (Aufwand sofort) und wird bezahlt, soweit Bargeld da ist. Der Rest bleibt als Lohnrueckstand stehen und wird bei
 ## naechster Gelegenheit zuerst beglichen. Gibt den tatsaechlich gezahlten Betrag zurueck (laufender Lohn plus beglichene Rueckstaende).
 ## by_cc: optionale Aufteilung des Lohnaufwands auf Kostenstellen {cc: Betrag}; Summe = amount, Rest geht an die Standard-Kostenstelle.
