@@ -164,6 +164,10 @@ TOOLS = [
 ]
 
 
+class ModelGlitch(RuntimeError):
+    """Zufaelliger Erzeugungsfehler des Modells (kaputter Werkzeugaufruf): Verlauf behalten, nur kurz warten."""
+
+
 class World:
     def __init__(self, base, name, keyfile=None):
         self.base = base
@@ -380,13 +384,26 @@ class Agent:
         think = self.args.think
         if "gpt-oss" in str(self.args.model):   # gpt-oss denkt immer; Stufe statt an/aus (low: schnell, --think: medium)
             think = "medium" if self.args.think is True else "low"
-        body = {"model": self.args.model, "messages": messages, "stream": False, "think": think,
-                "tools": [{"type": "function", "function": t} for t in TOOLS],
-                "options": {"num_ctx": self.args.ctx, "temperature": 0.8}}
-        req = urllib.request.Request(self.args.ollama + "/api/chat", data=json.dumps(body).encode("utf-8"),
-                                     headers={"Content-Type": "application/json"})
-        with MODEL_GATE, urllib.request.urlopen(req, timeout=600) as r:   # der Reihe nach, fair fuer alle Wesen
-            return json.loads(r.read().decode("utf-8"))["message"]
+        # Ollama antwortet mit HTTP 500, wenn das Modell einen Werkzeugaufruf mit kaputtem JSON erzeugt (gpt-oss, 15.11.: 69 von
+        # ~8.900 Aufrufen; die Antwort war vollstaendig berechnet). Das ist Zufall beim Erzeugen: sofort mit etwas niedrigerer
+        # Temperatur wiederholen statt den Verlauf zu kuerzen; der Fehlertext von Ollama kommt ins Protokoll.
+        last = ""
+        for attempt, temp in enumerate((0.8, 0.5, 0.3)):
+            body = {"model": self.args.model, "messages": messages, "stream": False, "think": think,
+                    "tools": [{"type": "function", "function": t} for t in TOOLS],
+                    "options": {"num_ctx": self.args.ctx, "temperature": temp}}
+            req = urllib.request.Request(self.args.ollama + "/api/chat", data=json.dumps(body).encode("utf-8"),
+                                         headers={"Content-Type": "application/json"})
+            try:
+                with MODEL_GATE, urllib.request.urlopen(req, timeout=600) as r:   # der Reihe nach, fair fuer alle Wesen
+                    return json.loads(r.read().decode("utf-8"))["message"]
+            except urllib.error.HTTPError as e:
+                last = e.read().decode("utf-8", "replace")[:300]
+                if e.code != 500:
+                    raise RuntimeError("Ollama HTTP %d: %s" % (e.code, last))
+                self.log.write(time.strftime("%H:%M:%S ") + "Ollama 500 (Versuch %d, Temperatur %.1f): %s\n" % (attempt + 1, temp, last))
+                self.log.flush()
+        raise ModelGlitch("Ollama 500 nach 3 Versuchen: %s" % last)
 
     def chat_openai(self, messages):
         """OpenAI-kompatibler Aufruf (IONOS): Verlauf ins OpenAI-Format (tool_call_id, Argumente als JSON-Text), Antwort zurueck
@@ -467,6 +484,11 @@ class Agent:
             messages = self.trim(messages)
             try:
                 msg = self.chat([system] + messages)
+            except ModelGlitch as e:   # kaputter Werkzeugaufruf trotz Wiederholung: Verlauf behalten, Hinweis, weiter
+                self.say("⚠ Modell hat dreimal einen ungültigen Werkzeugaufruf erzeugt – neuer Anlauf (%s)" % str(e)[:120])
+                messages.append({"role": "user", "content": "Dein letzter Werkzeugaufruf war ungültig. Wähle genau ein Werkzeug mit gültigen Parametern."})
+                time.sleep(2)
+                continue
             except Exception as e:   # Ollama ueberlastet oder Kontext voll: protokollieren, Verlauf kuerzen, kurz warten, weitermachen
                 self.say("⚠ Modellaufruf fehlgeschlagen: %s – Verlauf gekürzt, neuer Versuch in 10 s" % e)
                 messages = self.trim(messages, hard=True)
