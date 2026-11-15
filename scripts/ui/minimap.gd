@@ -20,11 +20,20 @@ func build(simulation: Simulation, cam: Camera2D) -> void:
 		G.SAND: Color("#d9c38c"), G.FIELD: Color("#8a6a3c"), G.CROP: Color("#7fa040"), G.WATER: Color("#2d6aa3"),
 		G.RAIL: Color("#6a6055"), G.ROAD: Color("#30333c"), G.PARKING: Color("#3d414c")}
 	var bcols := [Color("#c9a36b"), Color("#b0705a"), Color("#8a5a44"), Color("#5a7a9a"), Color("#9a8a70"), Color("#9a6a3a")]
+	var forest := {}
+	for t in c.trees:
+		forest[t[0]] = true
 	for y in c.size:
 		for x in c.size:
 			var p := Vector2i(x, y)
 			var b: int = c.building_at[c.idx(p)]
-			img.set_pixel(x, y, bcols[c.buildings[b].district] if b >= 0 else cols.get(c.g(p), Color.BLACK))
+			var col: Color = bcols[c.buildings[b].district] if b >= 0 else cols.get(c.g(p), Color.BLACK)
+			var h: int = c.height[c.idx(p)] if not c.height.is_empty() else 0
+			if b < 0 and h > 0:   # Berge: gruenbraun -> Fels -> Schnee
+				col = Color("#7d7a4a").lerp(Color("#8c8378"), clampf(float(h) / 6.0, 0.0, 1.0)) if h < 8 else Color("#e8ecef").lerp(Color("#b8bcc0"), 0.3)
+			elif b < 0 and forest.has(p):
+				col = Color("#2f5e2a")
+			img.set_pixel(x, y, col)
 	map_tex = ImageTexture.create_from_image(img)
 	custom_minimum_size = Vector2(220, 220)
 	mouse_filter = Control.MOUSE_FILTER_STOP

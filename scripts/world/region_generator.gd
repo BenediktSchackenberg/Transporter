@@ -9,7 +9,9 @@ extends CoastGenerator
 ## Gebaeude tragen "town"; CityData.towns beschreibt die Orte. validate() prueft alles und verwirft fehlerhafte Welten.
 
 var town_count := 4
-static var start_houses := -1   # Welt 2: hoechstens so viele Wohnhaeuser je Startort (-1 = wie bisher); die Orte wachsen durch Zuzug
+static var start_houses := -1
+var forest_threshold := 0.25     # Version 6: je Landschaftstyp dichter oder lichter Wald
+var forest_p := 0.55   # Welt 2: hoechstens so viele Wohnhaeuser je Startort (-1 = wie bisher); die Orte wachsen durch Zuzug
 ## Ortscharakter (je Ort aus dem Seed): praegt Strassennetz, Bebauung und Umland, damit die Staedte verschieden aussehen.
 const CHARACTERS := ["Fischerdorf", "Marktflecken", "Bauerndorf", "Handwerkerort"]
 ## Ab Generatorversion 4: vier von sechs Charakteren je Partie (Kurort: Promenade, Villen, Kurhaus; Hafenstadt: dichtes Raster,
@@ -507,7 +509,7 @@ func _land_cover_region() -> void:
 			if _rects.any(func(r): return r.has_point(p)) or _air_rects.any(func(r): return r.has_point(p)):
 				continue
 			var f := noise.get_noise_2d(x * 1.5 + 1000, y * 1.5)
-			if f > 0.25 and rng.randf() < 0.55:
+			if f > forest_threshold and rng.randf() < forest_p:
 				_tree(p)
 			elif f < _field_threshold(p) and _rects.any(func(r): return r.grow(30).has_point(p)):
 				c.ground[i] = G.CROP if (y / 3) % 2 == 0 else G.FIELD

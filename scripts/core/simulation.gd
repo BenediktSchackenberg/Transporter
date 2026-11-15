@@ -11,7 +11,7 @@ signal day_changed(day: int)       # absoluter Spieltag (0 = erster)
 signal month_changed(month: int)
 
 var city: CityData
-var region_generator_version := 5 # alte Regionsspielstaende behalten ihre bisherige Kartenlage (5: Gebirgslandschaft, Welt 2)
+var region_generator_version := 6 # alte Regionsspielstaende behalten ihre bisherige Kartenlage (5: Gebirge; 6: Landschaftstyp, eigene Kuesten)
 var nav := NavGrid.new()
 var rng := RandomNumberGenerator.new()
 var market := Market.new()

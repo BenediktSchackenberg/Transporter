@@ -17,6 +17,7 @@ func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: 
 	var cd := super.generate(seed_value, map_size, reserve_share)
 	if report.ok:
 		cd.gen_params["generator"] = maxi(3, version)
+		cd.gen_params["landschaft"] = landschaft if version >= 6 else ""
 		cd.gen_params["start_haeuser"] = start_houses   # Laden erzeugt die Karte neu: gleiche Zahl Startwohnhaeuser
 	return cd
 
@@ -36,7 +37,18 @@ static func selected_corners(seed_value: int, count: int) -> Array:
 	return result
 
 
+## Version 6 (15.11.2026, "die Karte sieht immer gleich aus"): Landschaftstyp je Seed und eigene, unabhaengige Kuesten.
+const LANDSCHAFTEN := ["hochgebirge", "gebirge", "huegelland", "seenplatte", "waldland"]
+var landschaft := "gebirge"
+
+
 func _sea() -> void:
+	if version >= 6:
+		landschaft = LANDSCHAFTEN[rng.randi() % LANDSCHAFTEN.size()]
+		forest_threshold = {"waldland": -0.05, "huegelland": 0.15, "seenplatte": 0.2}.get(landschaft, 0.25)
+		forest_p = 0.8 if landschaft == "waldland" else 0.55
+		_sea_v6()
+		return
 	super._sea()
 	west_coast.resize(n)
 	for y in n:
@@ -74,6 +86,8 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 		if version >= 4:   # Orte liegen mal weit aussen, mal naeher an der Kartenmitte
 			y = int(n * (rng.randf_range(0.13, 0.30) if top else rng.randf_range(0.70, 0.87)))
 		y = clampi(y, 62, n - 63)
+		if left and version >= 6:
+			_fit_west_coast(y)   # Westorte entstehen gespiegelt: dort Kuestenform der Ostkueste uebernehmen (weich angeglichen)
 		var east_x: int = coast[y] - 6
 		var x := n - 1 - east_x if left else east_x
 		var r := Rect2i(x - 5 if left else x - 40, y - 24, 46, 48)
@@ -112,7 +126,69 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 	return c
 
 
+## Ost- und Westkueste unabhaengig: eigene Breite, Wellen (Buchten, Halbinseln) und Phase je Seed.
+func _sea_v6() -> void:
+	coast = PackedInt32Array()
+	coast.resize(n)
+	west_coast = PackedInt32Array()
+	west_coast.resize(n)
+	var ew := n * rng.randf_range(0.08, 0.18)
+	var ww := n * rng.randf_range(0.08, 0.18)
+	var ea := rng.randf_range(4.0, 26.0)
+	var wa := rng.randf_range(4.0, 26.0)
+	var ef := rng.randf_range(0.008, 0.04)
+	var wf := rng.randf_range(0.008, 0.04)
+	var ep := rng.randf_range(0.0, TAU)
+	var wp := rng.randf_range(0.0, TAU)
+	for y in n:
+		coast[y] = clampi(n - int(ew) + int(round(ea * sin(y * ef + ep) + noise.get_noise_2d(0, y * 2) * 10.0)), int(n * 0.72), n - 8)
+		west_coast[y] = clampi(int(ww) + int(round(wa * sin(y * wf + wp) + noise.get_noise_2d(500, y * 2) * 10.0)), 8, int(n * 0.28))
+	for y in n:
+		for x in n:
+			var i := c.idx(Vector2i(x, y))
+			c.district[i] = 5
+			if x >= coast[y] or x < west_coast[y]:
+				c.ground[i] = G.WATER
+				c.blocked[i] = 1
+			elif x >= coast[y] - 2 or x <= west_coast[y] + 2:
+				c.ground[i] = G.SAND
+			else:
+				c.ground[i] = G.GRASS
+
+
+## Westkueste um einen Westort (y +-60) weich an das Spiegelbild der Ostkueste angleichen und den Boden dort neu setzen.
+func _fit_west_coast(ty: int) -> void:
+	for y in range(maxi(0, ty - 70), mini(n, ty + 71)):
+		var d := absi(y - ty)
+		var wgt := 1.0 if d <= 50 else 1.0 - float(d - 50) / 20.0
+		west_coast[y] = int(round(lerpf(float(west_coast[y]), float(n - 1 - coast[y]), wgt)))
+		for x in range(0, int(n * 0.32)):
+			var i := c.idx(Vector2i(x, y))
+			if x < west_coast[y]:
+				c.ground[i] = G.WATER
+				c.blocked[i] = 1
+			elif x <= west_coast[y] + 2:
+				c.ground[i] = G.SAND
+				c.blocked[i] = 0
+			else:
+				c.ground[i] = G.GRASS
+				c.blocked[i] = 0
+
+
 func _mountains_corners() -> void:
+	if version >= 6:
+		match landschaft:
+			"hochgebirge":
+				_mountains_v5(10, 14, 0.06, 0.13, 3, 4)
+			"gebirge":
+				_mountains_v5(6, 9, 0.05, 0.1, 1, 2)
+			"huegelland":
+				_mountains_v5(14, 20, 0.025, 0.05, 0, 1, 3.0, 6.0)
+			"seenplatte":
+				_mountains_v5(2, 4, 0.04, 0.07, 0, 1)
+			"waldland":
+				_mountains_v5(4, 6, 0.04, 0.08, 1, 1)
+		return
 	if version >= 5:
 		_mountains_v5()
 		return
@@ -153,19 +229,19 @@ func _mountains_corners() -> void:
 
 ## Version 5 (Welt 2, 15.11.2026): richtige Gebirgslandschaft – 6-9 grosse Massive und 1-2 lange Gebirgszuege ueber das ganze
 ## Land (Abstand zu den Orten und zum Meer); hohe Gipfel, Hochebenen am Rand. Das Grosslager sucht sich danach eine flache Stelle.
-func _mountains_v5() -> void:
-	var want := rng.randi_range(6, 9)
+func _mountains_v5(lo := 6, hi := 9, r_lo := 0.05, r_hi := 0.1, ridge_lo := 1, ridge_hi := 2, peak_lo := 8.0, peak_hi := 11.0) -> void:
+	var want := rng.randi_range(lo, hi)
 	var centers: Array = []
 	var tries := 0
 	while centers.size() < want and tries < 1200:
 		tries += 1
 		var p := Vector2(rng.randf_range(n * 0.12, n * 0.88), rng.randf_range(n * 0.08, n * 0.92))
-		if not _far_from_towns(p, n * 0.17) or centers.any(func(q): return q.distance_to(p) < n * 0.13) or not _inland(p, n * 0.07):
+		if not _far_from_towns(p, n * 0.17) or centers.any(func(q): return q.distance_to(p) < n * minf(0.13, 0.5 / sqrt(float(want)))) or not _inland(p, n * 0.07):
 			continue
 		centers.append(p)
 	for ctr in centers:
-		_corner_blob(ctr, n * rng.randf_range(0.05, 0.1), rng.randf_range(8.0, 11.0))
-	for r in rng.randi_range(1, 2):   # Gebirgszug
+		_corner_blob(ctr, n * rng.randf_range(r_lo, r_hi), rng.randf_range(peak_lo, peak_hi))
+	for r in rng.randi_range(ridge_lo, ridge_hi):   # Gebirgszug
 		var start := Vector2(rng.randf_range(n * 0.2, n * 0.8), rng.randf_range(n * 0.15, n * 0.85))
 		var dir := Vector2.from_angle(rng.randf_range(0.0, TAU))
 		for i in rng.randi_range(6, 10):
@@ -204,6 +280,8 @@ func _lakes_corners() -> void:
 	var made := 0
 	var tries := 0
 	var want := 2 if version < 4 else rng.randi_range(2, 4)
+	if version >= 6:
+		want = rng.randi_range(6, 9) if landschaft == "seenplatte" else rng.randi_range(2, 4)
 	while made < want and tries < 200:
 		tries += 1
 		var ctr := Vector2i(rng.randi_range(int(n * 0.34), int(n * 0.66)), rng.randi_range(int(n * 0.28), int(n * 0.72)))
