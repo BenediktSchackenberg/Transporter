@@ -27,6 +27,7 @@ func _initialize() -> void:
 	test_names.append("test_world_production_energy")
 	test_names.append("test_world_deposits")
 	test_names.append("test_lumberjack")
+	test_names.append("test_eko_autonomy")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13703,3 +13704,68 @@ func test_lumberjack() -> void:
 	next_day(s)
 	ok(int(B.get("today", 0)) == 0 and str(B.blockers).contains("Wald"), "ohne Wald ruht der Holzfaeller (%s)" % str(B.blockers))
 	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
+
+
+## Autonome Erkundung (15.11.2026): Schluessel gegen Namensuebernahme, Erkundung (entdeckte Orte), Inspect ohne Weltaenderung,
+## Ziele mit Begruendung, Status je Handlung (laeuft/abgeschlossen/gescheitert), Doppelschutz, Erkenntnisse, Speichern.
+func test_eko_autonomy() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	var ws := WorldServer.new()
+	ws.eko = E
+	var j: Array = ws.handle("POST", "/join", {"name": "Mia"}, {}, "")
+	ok(j[0] == 200 and str(j[1].get("schluessel", "")).length() == 32 and str(j[1].session).length() == 32, "erster Beitritt: Schluessel und sicherer Token")
+	var h := {"x-session": str(j[1].session)}
+	ok(ws.handle("POST", "/join", {"name": "Mia"}, {}, "")[0] == 403, "fremder Beitritt unter dem Namen Mia abgelehnt")
+	ok(ws.handle("POST", "/join", {"name": "Mia"}, {"x-schluessel": "falsch"}, "")[0] == 403, "falscher Schluessel abgelehnt")
+	var j2: Array = ws.handle("POST", "/join", {"name": "Mia"}, {"x-schluessel": str(j[1].schluessel)}, "")
+	ok(j2[0] == 200 and not j2[1].has("schluessel"), "mit Schluessel wieder angemeldet")
+	ok(ws.handle("GET", "/observe", {}, h, "")[0] == 401, "alte Sitzung ungueltig (nur die neueste gilt)")
+	h = {"x-session": str(j2[1].session)}
+	var st1: Array = ws.handle("POST", "/input", {}, h, JSON.stringify({"type": "Stop", "data": {}}))
+	ok(st1[0] == 200 and st1[1].status == "abgeschlossen", "Stop abgeschlossen")
+	ok(ws.handle("POST", "/input", {}, h, JSON.stringify({"type": "Stop", "data": {}}))[1].status == "doppelt", "doppelte Handlung abgefangen")
+	# Erkundung und Inspect
+	var o: Dictionary = E.observe("Mia")
+	ok(o.erkundung.anzahl_bekannt > 0 and o.erkundung.orte_der_region.size() == s.city.towns.size(), "entdeckte Orte (%d) und Orte der Region" % int(o.erkundung.anzahl_bekannt))
+	var near: String = o.gebaeude_in_der_naehe.keys()[0]
+	var geld0 := float(E.beings.Mia.geld)
+	var blocks0 := E.blocks.size()
+	var ins: Dictionary = E.input("Mia", "Inspect", {"target_id": near})
+	ok(ins.ok and ins.ziel.name == near and ins.ziel.has("interaktionen"), "Inspect %s: %s" % [near, str(ins.get("ziel", {})).left(120)])
+	ok(float(E.beings.Mia.geld) == geld0 and E.blocks.size() == blocks0, "Inspect aendert nichts")
+	var far := ""
+	for bd in s.city.buildings:
+		if EkoWorld._dist(E.tile_of(E.beings.Mia), Vector2i(int(bd.walk.x), int(bd.walk.y))) > 60 and str(bd.name) != "":
+			far = str(bd.name)
+			break
+	ok(far == "" or not E.input("Mia", "Inspect", {"target_id": far}).ok, "entferntes Gebaeude nicht untersuchbar (%s)" % far)
+	var c0: Company = s.companies[0]
+	var insc: Dictionary = E.input("Mia", "Inspect", {"target_id": c0.player_name})
+	ok(not str(insc).contains("bargeld") and not str(insc).contains("cash"), "keine Interna fremder Firmen")
+	# Ziele
+	ok(not E.input("Mia", "Ziel", {"ziel": "Haus bauen"}).ok, "Ziel ohne Begruendung abgelehnt")
+	ok(E.input("Mia", "Ziel", {"ziel": "Grundstueck kaufen", "warum": "Ich will ein Zuhause", "teilziele": ["Geld verdienen", "Grundstueck suchen"]}).ok, "Ziel gesetzt")
+	ok(not E.input("Mia", "Ziel", {"ziel": "Weltreise", "warum": "Lust"}).ok, "aktives Ziel nicht beilaeufig ersetzt")
+	ok(E.input("Mia", "ZielStand", {"fortschritt": 50, "teilziel_erledigt": 0}).ok and E.beings.Mia.ziel.teilziele[0].erledigt, "Fortschritt und Teilziel")
+	ok(E.input("Mia", "Ziel", {"ziel": "Weltreise", "warum": "Plan geaendert", "ersetzen": true}).ok and E.beings.Mia.ziele_alt.size() == 1, "bewusst ersetzt, altes Ziel archiviert")
+	ok(E.observe("Mia").mein_ziel.ziel == "Weltreise", "Ziel in der Beobachtung")
+	# Status: laeuft / gescheitert, Begruendung
+	var goal := Vector2i(-1, -1)
+	var t := E.tile_of(E.beings.Mia)
+	for r in range(4, 12):
+		var c := t + Vector2i(r, 0)
+		if goal.x < 0 and s.city.walkable(c) and s.nav.walk_path(t, c).size() > 3:
+			goal = c
+	if goal.x >= 0:
+		var mv: Dictionary = E.input("Mia", "MoveTo", {"tile": [goal.x, goal.y], "warum": "Hafen ansehen"})
+		ok(mv.status == "laeuft" and E.beings.Mia.entscheidung.warum == "Hafen ansehen", "MoveTo laeuft, Begruendung vermerkt")
+		ok(E.input("Mia", "MoveTo", {"tile": [goal.x, goal.y]}).msg.contains("bereits unterwegs"), "gleiches Ziel nicht neu gestartet")
+	ok(E.input("Mia", "Deliver", {"job": "J999"}).status == "gescheitert", "Fehlschlag als gescheitert gemeldet")
+	ok(E.input("Mia", "Merke", {"art": "fehlschlag", "text": "Ohne Auftrag kann ich nichts abliefern."}).ok and E.beings.Mia.erkenntnis.art == "fehlschlag", "Erkenntnis angezeigt")
+	ok(not E.input("Mia", "Merke", {"art": "geheim", "text": "x"}).ok, "unbekannte Erkenntnisart abgelehnt")
+	ok("set_plan" in EkoWorld.FIRM_ACTIONS, "Wesen-Unternehmer nutzen den Unternehmensplan (PlanBook)")
+	var E2 := EkoWorld.new()
+	E2.sim = s
+	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
+	ok(E2.beings.Mia.ziel.ziel == "Weltreise" and (E2.beings.Mia.orte as Dictionary).size() == (E.beings.Mia.orte as Dictionary).size(), "Ziel und entdeckte Orte gespeichert")

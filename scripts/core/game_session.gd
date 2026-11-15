@@ -457,7 +457,8 @@ func _start_eko_server() -> void:
 	var ws := WorldServer.new()
 	add_child(ws)
 	ws.on_save = save_game
-	ws.operator_token = "%08x%08x%08x" % [randi(), randi(), randi()]
+	ws.operator_token = Crypto.new().generate_random_bytes(16).hex_encode()
+	ws.keys_path = "user://eko_schluessel.json"   # Schluessel der Wesen (nur SHA-256), ueberdauert Neustarts
 	var tf := FileAccess.open("user://eko_betreiber.txt", FileAccess.WRITE)
 	if tf != null:
 		tf.store_string(ws.operator_token)

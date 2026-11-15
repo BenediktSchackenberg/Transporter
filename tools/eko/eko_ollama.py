@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import sys
+import threading
 import time
 import traceback
 import urllib.error
@@ -33,6 +34,35 @@ NIGHT_STEPS = 8            # so viele Schritte bleiben, um das Gedaechtnis zu sc
 EVENING = ("Dein Tag geht zu Ende. Schreib jetzt das Wichtigste auf: Erlebnisse mit append_memory, geprüftes Wissen und gute "
            "Abläufe in SEMANTIC_MEMORY.md, deine Pläne für morgen. Gleich schläfst du, danach weißt du nur noch, was in deinen Dateien steht.")
 MORNING = "Ein neuer Tag beginnt. Lies zuerst deine Dateien (list_files, read_file), dann schau dich um (observe)."
+# Wissen in SEMANTIC_MEMORY.md, getrennt nach Art (Werkzeug learn); Fehlschlaege und Bewaehrtes kommen in jede neue Sitzung
+SECTIONS = {"tatsache": "## Beobachtete Tatsachen", "vermutung": "## Vermutungen (noch nicht geprüft)",
+            "technik": "## Erprobte Techniken", "fehlschlag": "## Fehlgeschlagene Ansätze",
+            "strategie": "## Wiederholbar erfolgreiche Strategien", "korrektur": "## Korrekturen (widerlegte Annahmen)"}
+DIGEST = ("fehlschlag", "strategie", "korrektur")
+ARRIVAL_MAX_S = 90          # wait bis=ankunft: so lange hoechstens auf die Ankunft warten (ohne Modellaufruf)
+
+
+class FairGate:
+    """Faire Reihenfolge am lokalen Modellserver: Wesen im Schwarm (Threads) kommen der Reihe nach dran (Wartemarken)."""
+    def __init__(self):
+        self.cv = threading.Condition()
+        self.next_ticket = 0
+        self.serving = 0
+
+    def __enter__(self):
+        with self.cv:
+            me = self.next_ticket
+            self.next_ticket += 1
+            while me != self.serving:
+                self.cv.wait()
+
+    def __exit__(self, *exc):
+        with self.cv:
+            self.serving += 1
+            self.cv.notify_all()
+
+
+MODEL_GATE = FairGate()
 
 TOOLS = [
     {"name": "observe", "description": "Sieh dich um: wo du bist, was du trägst, Karte der Umgebung (21x21 Felder), Blöcke, "
@@ -40,6 +70,9 @@ TOOLS = [
     {"name": "act", "description": "Eine Handlung in der Welt. type: MoveTo {tile:[x,y]}, Stop {}, Pickup {material, count} am "
      "Bauhof oder Pickup {block:[x,y,z]} oder Pickup {job} (Kisten eines Botengangs abholen), Place {block:[x,y,z], material?}, "
      "Say {text}, Talk {to, text} (mit einer Figur oder einem Wesen in der Nähe reden, höchstens 3 Felder; Unternehmer antworten), "
+     "Inspect {target_id} (sichtbares Gebäude, Wesen, Unternehmer oder Grundstück G… genauer ansehen; ändert nichts), "
+     "Ziel {ziel, warum, teilziele?, nutzen?, ressourcen?, erwartung?, abbruch?, ersetzen?} (dein Hauptziel; ein aktives Ziel ersetzt du nur bewusst), "
+     "ZielStand {fortschritt 0-100?, teilziel_erledigt?, status?: aktiv|erreicht|aufgegeben, notiz?}, "
      "AcceptJob {job} (Arbeit einer Firma aus jobangebote annehmen), Deliver {job} (Auftrag abliefern, Lohn bekommen), "
      "BuyPlot {plot} (Wohngrundstück kaufen, höchstens 6 Felder entfernt), OrderHouse {wand?: ziegel|holz|stein|beton} "
      "(Baufirma baut dir ein Haus), Rest {} (ausruhen und Akku laden: draußen langsam, zu Hause in der Ladestation schnell), FoundCompany {name?, behalten?} (eigene "
@@ -51,11 +84,18 @@ TOOLS = [
      "Einrichtung (bett, ladestation, tisch, lampe, ...) kaufst du mit Pickup am Bauhof, Preise in material_preise. "
      "Blockraster: 4x4 Blöcke je Feld, z = Schicht ab 0.",
      "parameters": {"type": "object", "properties": {
-         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
-         "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12]}"}},
+         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Ziel", "ZielStand", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
+         "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12], \"warum\": \"Hafen erkunden\"}. "
+                  "warum (kurz) ist bei jeder Handlung erlaubt und wird im Spiel angezeigt. Die Antwort hat status: laeuft, abgeschlossen, gescheitert oder doppelt."}},
          "required": ["type", "data"]}},
-    {"name": "wait", "description": "Warte einige Sekunden (z. B. während du gehst).",
-     "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}}, "required": ["seconds"]}},
+    {"name": "wait", "description": "Warte einige Sekunden – oder mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist "
+     "(höchstens 90 s, ohne dass du dazwischen nachdenken musst). Danach bekommst du deine Lage.",
+     "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}, "bis": {"type": "string", "enum": ["ankunft"]}}}},
+    {"name": "learn", "description": "Eine Erkenntnis in SEMANTIC_MEMORY.md festhalten, getrennt nach Art: tatsache (beobachtet), "
+     "vermutung (noch ungeprüft), technik (erprobt), fehlschlag (hat nicht geklappt – warum), strategie (wiederholbar erfolgreich), "
+     "korrektur (eine frühere Annahme ist widerlegt; ersetzt = alter Text). Fehlschläge, Strategien und Korrekturen bekommst du jeden Morgen wieder vorgelegt.",
+     "parameters": {"type": "object", "properties": {"art": {"type": "string", "enum": list(SECTIONS.keys())}, "text": {"type": "string"},
+                                                    "ersetzt": {"type": "string"}}, "required": ["art", "text"]}},
     {"name": "list_files", "description": "Dateien in deinem Arbeitsordner.", "parameters": {"type": "object", "properties": {}}},
     {"name": "read_file", "description": "Datei aus deinem Arbeitsordner lesen.",
      "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
@@ -68,11 +108,12 @@ TOOLS = [
 
 
 class World:
-    def __init__(self, base, name):
+    def __init__(self, base, name, keyfile=None):
         self.base = base
         self.name = name
         self.token = ""
         self.art = "mensch"
+        self.keyfile = keyfile   # geheimer Schluessel des Wesens (ausserhalb des Arbeitsordners: das Modell sieht ihn nie)
 
     def _req(self, method, path, body=None, retry=True):
         r = self._send(method, path, body)
@@ -85,11 +126,13 @@ class World:
             return self._send(method, path, body)
         return r
 
-    def _send(self, method, path, body=None):
+    def _send(self, method, path, body=None, headers=None):
         data = json.dumps(body).encode("utf-8") if body is not None else (b"" if method == "POST" else None)
         req = urllib.request.Request(self.base + path, data=data, method=method)
         if self.token:
             req.add_header("X-Session", self.token)
+        for k, v in (headers or {}).items():
+            req.add_header(k, v)
         req.add_header("Content-Type", "application/json")
         try:
             with urllib.request.urlopen(req, timeout=15) as r:
@@ -102,7 +145,12 @@ class World:
 
     def join(self, art="mensch"):
         self.art = art
-        r = self._send("POST", "/join?name=" + urllib.request.quote(self.name) + "&art=" + art)
+        key = self.keyfile.read_text(encoding="utf-8").strip() if self.keyfile and self.keyfile.exists() else ""
+        r = self._send("POST", "/join?name=" + urllib.request.quote(self.name) + "&art=" + art, headers={"X-Schluessel": key} if key else None)
+        if not isinstance(r, dict) or "session" not in r:
+            raise RuntimeError("Anmeldung abgelehnt: %s" % (r.get("msg", r) if isinstance(r, dict) else r))
+        if r.get("schluessel") and self.keyfile:
+            self.keyfile.write_text(r["schluessel"], encoding="utf-8")
         self.token = r["session"]
 
     def api_md(self):
@@ -148,7 +196,8 @@ class Agent:
                         .replace("{STADT}", getattr(args, "stadt", "") or "meiner Stadt")
                     (self.ws / "SOUL.md").write_text(soul, encoding="utf-8")
         (self.ws / "EPISODIC_MEMORY.jsonl").touch()
-        self.world = World("http://127.0.0.1:%d" % args.port, args.name)
+        self.world = World("http://127.0.0.1:%d" % args.port, args.name, self.dir / "schluessel.txt")
+        self._arrival_failed = set()
         self.log = open(self.logs / "sitzung.log", "a", encoding="utf-8")
 
     def _path(self, name):
@@ -185,9 +234,22 @@ class Agent:
                     r["du"] = obs.get("du")
                 return r
             if name == "wait":
+                if a.get("bis") == "ankunft":   # deterministisch warten, kein Modellaufruf je Schritt
+                    t0 = time.time()
+                    while time.time() - t0 < ARRIVAL_MAX_S:
+                        o = self.world.observe()
+                        if not isinstance(o, dict) or not o.get("ok") or not o.get("du", {}).get("unterwegs"):
+                            break
+                        time.sleep(1.5)
+                    o = compact_obs(self.world.observe())
+                    arrived = isinstance(o, dict) and not o.get("du", {}).get("unterwegs", False)
+                    return {"ok": arrived, "status": "abgeschlossen" if arrived else "laeuft", "gewartet_s": round(time.time() - t0),
+                            "msg": "angekommen" if arrived else "noch unterwegs", "lage": o}
                 s = max(0.5, min(20.0, float(a.get("seconds", 3))))
                 time.sleep(s)
                 return {"ok": True, "gewartet_s": s}
+            if name == "learn":
+                return self.learn(str(a.get("art", "")), str(a.get("text", "")), str(a.get("ersetzt", "")))
             if name == "list_files":
                 return sorted(p.name for p in self.ws.iterdir())
             if name == "read_file":
@@ -205,13 +267,51 @@ class Agent:
         except Exception as e:   # Fehler gehen als Ergebnis an das Modell zurueck
             return {"ok": False, "msg": "%s: %s" % (type(e).__name__, e)}
 
+    def learn(self, art, text, ersetzt=""):
+        """Erkenntnis unter ihrer Art in SEMANTIC_MEMORY.md einordnen; korrektur streicht die widerlegte Annahme durch."""
+        if art not in SECTIONS or not text.strip():
+            return {"ok": False, "msg": "art muss eine von %s sein, text darf nicht leer sein." % ", ".join(SECTIONS)}
+        p = self.ws / "SEMANTIC_MEMORY.md"
+        doc = p.read_text(encoding="utf-8") if p.exists() else "# Wissen\n"
+        if art == "korrektur" and ersetzt.strip() and ersetzt.strip() in doc:
+            doc = doc.replace(ersetzt.strip(), "~~%s~~ (widerlegt)" % ersetzt.strip(), 1)
+        head = SECTIONS[art]
+        line = "- %s %s" % (time.strftime("%d.%m. %H:%M"), text.strip().replace("\n", " "))
+        if head in doc:
+            i = doc.index(head) + len(head)
+            j = doc.find("\n## ", i)
+            j = len(doc) if j < 0 else j
+            doc = doc[:j].rstrip("\n") + "\n" + line + "\n" + ("\n" + doc[j:].lstrip("\n") if j < len(doc) else "")
+        else:
+            doc = doc.rstrip("\n") + "\n\n" + head + "\n" + line + "\n"
+        p.write_text(doc, encoding="utf-8")
+        self.world.act("Merke", {"art": art, "text": text[:160]})   # nur Anzeige im Spiel; das Wissen liegt in der Datei
+        return {"ok": True, "msg": "unter „%s“ festgehalten" % head[3:]}
+
+    def digest(self):
+        """Gezielt in den Kontext: Fehlschlaege, bewaehrte Strategien, Korrekturen und das aktuelle Ziel."""
+        p = self.ws / "SEMANTIC_MEMORY.md"
+        doc = p.read_text(encoding="utf-8") if p.exists() else ""
+        parts = []
+        for k in DIGEST:
+            head = SECTIONS[k]
+            if head in doc:
+                i = doc.index(head)
+                j = doc.find("\n## ", i + len(head))
+                parts.append(doc[i:j if j > 0 else len(doc)].strip()[-1200:])
+        o = self.world.observe()
+        goal = o.get("mein_ziel", {}) if isinstance(o, dict) else {}
+        if goal:
+            parts.append("## Dein aktuelles Ziel\n%s (%s, %s %%) – warum: %s" % (goal.get("ziel"), goal.get("status"), goal.get("fortschritt"), goal.get("warum")))
+        return ("Erinnerung aus deinem Gedächtnis:\n" + "\n\n".join(parts)) if parts else ""
+
     def chat(self, messages):
         body = {"model": self.args.model, "messages": messages, "stream": False, "think": self.args.think,
                 "tools": [{"type": "function", "function": t} for t in TOOLS],
                 "options": {"num_ctx": self.args.ctx, "temperature": 0.8}}
         req = urllib.request.Request(self.args.ollama + "/api/chat", data=json.dumps(body).encode("utf-8"),
                                      headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=600) as r:
+        with MODEL_GATE, urllib.request.urlopen(req, timeout=600) as r:   # der Reihe nach, fair fuer alle Wesen
             return json.loads(r.read().decode("utf-8"))["message"]
 
     def say(self, text):
@@ -237,7 +337,7 @@ class Agent:
     def run(self):
         self.world.join(self.args.art)
         system = {"role": "system", "content": self.system_prompt()}
-        messages = [{"role": "user", "content": "Beginne. Lies zuerst deine Dateien (list_files, read_file)."}]
+        messages = [{"role": "user", "content": "Beginne. Lies zuerst deine Dateien (list_files, read_file). " + self.digest()}]
         steps = 0
         day_start = 0
         evening = False
@@ -249,7 +349,7 @@ class Agent:
             elif evening and steps - day_start >= DAY_STEPS + NIGHT_STEPS:   # Schlaf: neue Sitzung, nur die Dateien bleiben
                 evening = False
                 day_start = steps
-                messages = [{"role": "user", "content": MORNING}]
+                messages = [{"role": "user", "content": MORNING + " " + self.digest()}]
                 self.say("☀ Neuer Tag – frische Sitzung, Gedächtnis aus den Dateien")
             messages = self.trim(messages)
             try:
@@ -287,6 +387,10 @@ class Agent:
                 key = fn["name"] + json.dumps(a, sort_keys=True, ensure_ascii=False) if failed else ""
                 self._repeat = self._repeat + 1 if key and key == getattr(self, "_last_fail", "") else (1 if key else 0)
                 self._last_fail = key
+                if failed and self._repeat == 1 and fn["name"] == "act":
+                    with open(self.ws / "EPISODIC_MEMORY.jsonl", "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"zeit": time.strftime("%Y-%m-%d %H:%M"), "art": "fehlschlag", "was": "%s %s" % (a.get("type"), json.dumps(a.get("data", {}), ensure_ascii=False)[:120]),
+                                            "ergebnis": verdict, "automatisch": True}, ensure_ascii=False) + "\n")
                 if self._repeat >= 3:
                     messages.append({"role": "user", "content": "Du wiederholst dich: Dieselbe Handlung ist jetzt %d-mal hintereinander gescheitert (%s). "
                                      "So klappt es nicht – lies die Rückmeldung genau und versuche etwas anderes." % (self._repeat, verdict)})

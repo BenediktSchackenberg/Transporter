@@ -261,6 +261,22 @@ class BeingNode:
 		var money := float(b.get("geld", 0.0))
 		var tag := str(b.name) + ("  %s" % Catalog.money(money) if money > 0.0 else "")
 		draw_string(font, Vector2(-40, 12), tag, HORIZONTAL_ALIGNMENT_CENTER, 80, 7, Color.WHITE)
+		# Autonomie sichtbar: Ziel, letzte Entscheidung (warum, Ergebnis), frische Erkenntnis
+		var now := Time.get_ticks_msec()
+		var info_y := 19.0
+		var g: Dictionary = b.get("ziel", {})
+		if str(g.get("status", "")) == "aktiv":
+			draw_string(font, Vector2(-60, info_y), "Ziel: %s (%d %%)" % [str(g.ziel).left(34), int(g.fortschritt)], HORIZONTAL_ALIGNMENT_CENTER, 120, 6, Color("#ffe27a"))
+			info_y += 7.0
+		var dec: Dictionary = b.get("entscheidung", {})
+		if not dec.is_empty() and now - int(dec.get("ms", 0)) < 12000:
+			var dc: Color = {"gescheitert": Color("#ff8a80"), "laeuft": Color("#9be7ff"), "doppelt": Color("#ffcc80")}.get(str(dec.status), Color("#b9f6ca"))
+			var why := str(dec.warum) if str(dec.warum) != "" else str(dec.ergebnis)
+			draw_string(font, Vector2(-70, info_y), "%s → %s: %s" % [dec.aktion, dec.status, why.left(40)], HORIZONTAL_ALIGNMENT_CENTER, 140, 6, dc)
+			info_y += 7.0
+		var les: Dictionary = b.get("erkenntnis", {})
+		if not les.is_empty() and now - int(les.get("ms", 0)) < 15000:
+			draw_string(font, Vector2(-70, info_y), "Gelernt (%s): %s" % [les.art, str(les.text).left(40)], HORIZONTAL_ALIGNMENT_CENTER, 140, 6, Color("#e1bee7"))
 		if float(b.say_left) > 0.0 and str(b.say) != "":
 			var text := str(b.say)
 			var w := minf(160.0, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 7).x + 10.0)

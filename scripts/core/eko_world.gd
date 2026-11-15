@@ -198,8 +198,16 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 	if not from_plan and type in ["MoveTo", "Stop", "Pickup", "Place", "Ablauf"] and not (b.get("ablauf", []) as Array).is_empty():
 		b.ablauf = []   # eine direkte Handlung ersetzt einen laufenden Ablauf
 		_event(b, "bricht den laufenden Ablauf ab")
+	var warum := str(data.get("warum", "")).left(160)
+	if type == "MoveTo" and not from_plan and not (b.mover as Mover).arrived():
+		var t0 = data.get("tile", data.get("feld"))
+		if t0 is Array and t0.size() >= 2 and Vector2i(int(t0[0]), int(t0[1])) == (b.mover as Mover).goal:
+			return {"ok": true, "status": "laeuft", "msg": "Du bist bereits unterwegs zu diesem Ziel."}
 	if type == "Ablauf":
-		return _start_plan(b, data)
+		var rp := _start_plan(b, data)
+		rp["status"] = "laeuft" if rp.ok else "gescheitert"
+		_decide(b, type, warum, rp)
+		return rp
 	if type in WORK_ACTIONS and float(b.get("akku", 100.0)) < EMPTY_AKKU:
 		_event(b, "ist zu erschöpft für %s" % type)
 		return {"ok": false, "msg": "Dein Akku ist fast leer (%d %%). Ruh dich erst aus (Rest) – zu Hause in der Ladestation geht es am schnellsten." % int(b.akku)}
@@ -238,12 +246,215 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			r = _office_action(b, data)
 		"Firma":
 			r = _firm_action(b, data)
+		"Inspect":
+			r = inspect(b, str(data.get("target_id", data.get("ziel", ""))))
+		"Ziel":
+			r = _set_goal(b, data)
+		"ZielStand":
+			r = _goal_progress(b, data)
+		"Merke":
+			r = _lesson(b, data)
 		_:
-			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ablauf." % type}
+			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
 	if not bool(r.ok):
 		_event(b, "Fehlschlag %s: %s" % [type, r.msg])
+	if not r.has("status"):   # angenommen != abgeschlossen: Bewegung laeuft, bis du.unterwegs false ist
+		r["status"] = "gescheitert" if not bool(r.ok) else ("laeuft" if type == "MoveTo" else "abgeschlossen")
+	if type != "Merke":
+		_decide(b, type, warum if warum != "" or type != "Inspect" else "untersucht %s" % str(data.get("target_id", "")), r)
 	changed.emit()
 	return r
+
+
+# ------------------------------------------------------------------ Autonomie: Erkunden, Untersuchen, Ziele (15.11.2026)
+const MAX_PLACES := 150             # so viele entdeckte Orte merkt sich die Welt je Wesen
+const GOAL_STATES := ["aktiv", "erreicht", "aufgegeben"]
+
+
+## Letzte Entscheidung fuer Anzeige und Beobachtung: was, warum, was ist passiert.
+func _decide(b: Dictionary, type: String, warum: String, r: Dictionary) -> void:
+	b["entscheidung"] = {"aktion": type, "warum": warum, "status": str(r.get("status", "")), "ergebnis": str(r.get("msg", "")).left(120),
+		"zeit": Catalog.game_minutes_to_text(sim.game_min), "ms": Time.get_ticks_msec()}
+
+
+## Entdeckte Orte: Gebaeude, die das Wesen gesehen hat (Name, Art, Feld). Nur was es selbst gesehen hat.
+func _discover(b: Dictionary, bd: Dictionary) -> void:
+	var places: Dictionary = b.get("orte", {})
+	var key := str(bd.name)
+	if not places.has(key):
+		if places.size() >= MAX_PLACES:
+			return
+		places[key] = {"art": str(bd.get("type", "")), "feld": [int(bd.walk.x), int(bd.walk.y)], "entdeckt": Catalog.game_minutes_to_text(sim.game_min)}
+		b["orte"] = places
+
+
+## Erkundung fuer die Beobachtung: bekannte Orte (naechste zuerst), Orte der Region (allgemein bekannt, Ortsschilder) mit Besuchsstand.
+func _exploration_obs(b: Dictionary) -> Dictionary:
+	var t := tile_of(b)
+	var places: Dictionary = b.get("orte", {})
+	var known: Array = []
+	for k in places:
+		var f: Array = places[k].feld
+		known.append({"name": k, "art": places[k].art, "feld": f, "entfernung": _dist(t, Vector2i(int(f[0]), int(f[1])))})
+	known.sort_custom(func(x, y): return int(x.entfernung) < int(y.entfernung))
+	var visited: Dictionary = b.get("besucht", {})
+	var towns: Array = []
+	for tw in sim.city.towns:
+		towns.append({"ort": str(tw.name), "mitte": tw.center, "besucht": visited.has(str(tw.name))})
+	return {"bekannte_orte": known.slice(0, 25), "anzahl_bekannt": places.size(), "orte_der_region": towns,
+		"hinweis": "Du kennst nur, was du gesehen hast. Unbekannte Orte findest du, indem du hingehst (MoveTo) und dich umsiehst; Inspect {target_id} zeigt Einzelheiten."}
+
+
+func _mark_visit(b: Dictionary) -> void:
+	var k: int = sim.city.town_of(tile_of(b))
+	if k >= 0 and k < sim.city.towns.size():
+		var v: Dictionary = b.get("besucht", {})
+		v[str(sim.city.towns[k].name)] = true
+		b["besucht"] = v
+
+
+## Inspect: oeffentlich erkennbare Angaben zu einem sichtbaren Ziel (Gebaeude, Wesen, Unternehmer, Grundstueck). Aendert nichts.
+## Keine Interna: keine Kassenstaende, Strategien oder Lagerbestaende fremder Firmen.
+func inspect(b: Dictionary, target: String) -> Dictionary:
+	var t := tile_of(b)
+	if target == "":
+		return {"ok": false, "msg": "Inspect braucht target_id: Gebäudename (gebaeude_in_der_naehe), Wesen, Unternehmer oder Grundstück (G…)."}
+	b["blick"] = target
+	if beings.has(target) and target != b.name:
+		var o: Dictionary = beings[target]
+		if _dist(t, tile_of(o)) > VIEW_RADIUS:
+			return {"ok": false, "msg": "%s ist nicht in Sichtweite." % target}
+		var job := "Bürgermeister" if int(o.get("amt", -1)) >= 0 else ("Unternehmer (%s)" % sim.company(active_firm(o)).company_name if active_firm(o) >= 0 else "freies Wesen")
+		return {"ok": true, "msg": "Du siehst dir %s an." % target, "ziel": {"art": "wesen", "name": target, "gestalt": o.art, "rolle": job,
+			"traegt": o.held, "sagt": o.say if float(o.say_left) > 0.0 else "", "unterwegs": not (o.mover as Mover).arrived(),
+			"interaktionen": ["Talk {to: \"%s\", text} (höchstens %d Felder)" % [target, TALK_REACH]]}}
+	for c in sim.companies:
+		if c.player_name == target or c.company_name == target:
+			var at: Vector2i = sim.avatars[c.id].tile()
+			if _dist(t, at) > VIEW_RADIUS:
+				return {"ok": false, "msg": "%s ist nicht in Sichtweite." % target}
+			return {"ok": true, "msg": "Du siehst dir %s an." % target, "ziel": {"art": "unternehmer", "name": c.player_name, "firma": c.company_name,
+				"aktiv": c.is_active(), "fahrzeuge": c.vehicles.size(), "gerade": LiveText.figure_text(sim, c.id).left(100),
+				"interaktionen": ["Talk {to: \"%s\", text}" % c.player_name] + (["AcceptJob (siehe jobangebote)"] if jobs.values().any(func(j): return int(j.cid) == c.id and str(j.get("by", "")) == "") else [])}}
+	if target.begins_with("G") and target.substr(1).is_valid_int():
+		var p: Dictionary = sim.parcels.parcel(target)
+		if p.is_empty():
+			return {"ok": false, "msg": "Grundstück %s gibt es nicht." % target}
+		var pc := Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)
+		if _dist(t, pc) > VIEW_RADIUS + 4:
+			return {"ok": false, "msg": "Grundstück %s ist nicht in Sichtweite." % target}
+		var acts: Array = []
+		if p.state == "frei" and str(p.zone) == "wohnen" and int(p.area) <= 40:
+			acts.append("BuyPlot {plot: \"%s\"} (höchstens 6 Felder entfernt)" % target)
+		if p.state == "frei" and active_firm(b) >= 0:
+			acts.append("Firma {aktion: {action: buy_property / found_business ...}}")
+		return {"ok": true, "msg": "Du siehst dir Grundstück %s an." % target, "ziel": {"art": "grundstueck", "id": target, "zone": p.zone, "flaeche": int(p.area),
+			"zustand": p.state, "preis": float(p.price), "feld": [pc.x, pc.y], "lagerstaette": "unerkundet" if not sim.prod.deposit_of(target).is_empty() else "keine bekannt",
+			"interaktionen": acts}}
+	var bd := {}
+	if target.begins_with("building_") and target.substr(9).is_valid_int():
+		bd = sim.city.building(int(target.substr(9)))
+	else:
+		for x in sim.city.buildings:
+			if str(x.name) == target:
+				bd = x
+				break
+	if bd.is_empty():
+		return {"ok": false, "msg": "Unbekanntes Ziel %s. Nimm einen Namen aus gebaeude_in_der_naehe, andere_wesen, figuren_in_der_naehe oder ein Grundstück G…" % target}
+	if _dist(t, Vector2i(int(bd.walk.x), int(bd.walk.y))) > VIEW_RADIUS + 2:
+		return {"ok": false, "msg": "%s ist nicht in Sichtweite – geh näher heran." % target}
+	_discover(b, bd)
+	var info := {"art": "gebaeude", "name": str(bd.name), "typ": str(bd.type), "feld": [int(bd.walk.x), int(bd.walk.y)], "rolle": str(bd.get("role", ""))}
+	var acts: Array = []
+	var bid := int(bd.id)
+	for biz in sim.biz.items.values():
+		if int(biz.get("site", -1)) == bid:
+			var owner = sim.company(int(biz.owner))
+			info["betrieb"] = str(biz.name)
+			info["branche"] = str(Businesses.branches().get(str(biz.branch), {}).get("label", biz.branch))
+			info["betreiber"] = owner.company_name if owner != null else ""
+			info["zustand"] = {"aktiv": "in Betrieb", "blockiert": "steht still", "im_bau": "im Bau"}.get(str(biz.status), str(biz.status))
+			if str(biz.status) == "blockiert" and not (biz.get("blockers", []) as Array).is_empty():
+				info["erkennbares_problem"] = str(biz.blockers[0].text)   # sichtbar vor Ort (Schild am Tor)
+			if owner != null:
+				acts.append("Talk {to: \"%s\"} (Betreiber)" % owner.player_name)
+			break
+	if sources().any(func(s): return int(s.feld[0]) == int(bd.walk.x) and int(s.feld[1]) == int(bd.walk.y)):
+		info["funktion"] = "Bauhof: Material und Einrichtung kaufen"
+		acts.append("Pickup {material, count} (Preise in material_preise)")
+	elif str(bd.get("role", "")) == "town_hall":
+		info["funktion"] = "Rathaus: Sitz des Bürgermeisters"
+		for M in sim.towns.mayors:
+			if int(M.town) < sim.city.towns.size() and int(sim.city.towns[int(M.town)].get("town_hall", -1)) == bid:
+				info["buergermeister"] = str(M.name)
+	elif str(bd.type) == "plot":
+		info["funktion"] = "Bauplatz"
+	if houses.has(b.name) and home_rect(b.name).has_point(Vector2i(int(bd.walk.x), int(bd.walk.y))):
+		acts.append_array(["MoveIn {}", "Rest {}"])
+	info["interaktionen"] = acts
+	return {"ok": true, "msg": "Du siehst dir %s an." % str(bd.name), "ziel": info}
+
+
+## Ziel setzen: Hauptziel mit Begruendung, Teilzielen, Nutzen, Ressourcen, Erwartung und Abbruchbedingung.
+## Ein aktives Ziel wird nur mit ersetzen: true und Begruendung abgeloest (nicht jede Beobachtung ersetzt das Hauptziel).
+func _set_goal(b: Dictionary, data: Dictionary) -> Dictionary:
+	var text := str(data.get("ziel", "")).strip_edges().left(160)
+	var why := str(data.get("warum", "")).strip_edges().left(200)
+	if text == "" or why == "":
+		return {"ok": false, "msg": "Ziel braucht ziel und warum (Begründung)."}
+	var cur: Dictionary = b.get("ziel", {})
+	if str(cur.get("status", "")) == "aktiv" and not bool(data.get("ersetzen", false)):
+		return {"ok": false, "msg": "Du verfolgst schon das Ziel „%s“. Melde Fortschritt mit ZielStand oder ersetze es bewusst mit ersetzen: true." % cur.ziel}
+	if not cur.is_empty():
+		var old: Array = b.get("ziele_alt", [])
+		cur["status"] = "ersetzt" if str(cur.status) == "aktiv" else cur.status
+		old.append(cur)
+		b["ziele_alt"] = old.slice(-5)
+	var subs: Array = []
+	for s in (data.get("teilziele", []) as Array if data.get("teilziele", []) is Array else []).slice(0, 8):
+		subs.append({"text": str(s).left(100), "erledigt": false})
+	b["ziel"] = {"ziel": text, "warum": why, "teilziele": subs, "nutzen": str(data.get("nutzen", "")).left(120),
+		"ressourcen": str(data.get("ressourcen", "")).left(120), "erwartung": str(data.get("erwartung", "")).left(120),
+		"abbruch": str(data.get("abbruch", "")).left(120), "status": "aktiv", "fortschritt": 0, "seit": Catalog.game_minutes_to_text(sim.game_min)}
+	_event(b, "setzt sich ein Ziel: %s" % text)
+	sim.log_event("%s setzt sich ein Ziel: %s (%s)" % [b.name, text, why.left(80)], "info")
+	return {"ok": true, "msg": "Neues Ziel: %s" % text, "ziel": b.ziel}
+
+
+func _goal_progress(b: Dictionary, data: Dictionary) -> Dictionary:
+	var g: Dictionary = b.get("ziel", {})
+	if g.is_empty():
+		return {"ok": false, "msg": "Du hast kein Ziel. Setze eines mit Ziel {ziel, warum, ...}."}
+	if data.has("fortschritt"):
+		g.fortschritt = clampi(int(data.fortschritt), 0, 100)
+	if data.has("teilziel_erledigt"):
+		var i := int(data.teilziel_erledigt)
+		if i >= 0 and i < (g.teilziele as Array).size():
+			g.teilziele[i].erledigt = true
+	var st := str(data.get("status", g.status))
+	if st not in GOAL_STATES:
+		return {"ok": false, "msg": "status muss aktiv, erreicht oder aufgegeben sein."}
+	if st != str(g.status):
+		g.status = st
+		_event(b, "Ziel %s: %s" % [st, g.ziel])
+		sim.log_event("%s: Ziel %s – %s%s" % [b.name, st, g.ziel, (" (%s)" % str(data.get("notiz", "")).left(80)) if str(data.get("notiz", "")) != "" else ""], "good" if st == "erreicht" else "info")
+	if str(data.get("notiz", "")) != "":
+		g["notiz"] = str(data.notiz).left(160)
+	return {"ok": true, "msg": "Ziel: %s (%s, %d %%)" % [g.ziel, g.status, int(g.fortschritt)], "ziel": g}
+
+
+## Erkenntnis anzeigen (das Gedaechtnis selbst liegt in den Dateien des Wesens): Art und Text fuer Anzeige und Protokoll.
+const LESSON_KINDS := ["tatsache", "vermutung", "technik", "fehlschlag", "strategie", "korrektur"]
+
+
+func _lesson(b: Dictionary, data: Dictionary) -> Dictionary:
+	var kind := str(data.get("art", "tatsache"))
+	var text := str(data.get("text", "")).strip_edges().left(160)
+	if kind not in LESSON_KINDS or text == "":
+		return {"ok": false, "msg": "Merke braucht art (%s) und text." % ", ".join(LESSON_KINDS)}
+	b["erkenntnis"] = {"art": kind, "text": text, "ms": Time.get_ticks_msec()}
+	_event(b, "lernt (%s): %s" % [kind, text])
+	return {"ok": true, "msg": "gemerkt"}
 
 
 func _move_to(b: Dictionary, data: Dictionary) -> Dictionary:
@@ -473,6 +684,7 @@ func observe(name: String) -> Dictionary:
 		return {"ok": false, "msg": "Unbekanntes Wesen. Erst POST /join."}
 	var m: Mover = b.mover
 	var t := m.tile()
+	_mark_visit(b)
 	var near_blocks: Array = []
 	var near_buildings := {}
 	var rows: Array = []
@@ -500,6 +712,7 @@ func observe(name: String) -> Dictionary:
 				row += "#"
 				var bd: Dictionary = sim.city.building(int(sim.city.building_at[sim.city.idx(c)]))
 				near_buildings[str(bd.name)] = [int(bd.walk.x), int(bd.walk.y)]
+				_discover(b, bd)
 			elif not sim.city.height.is_empty() and sim.city.height[sim.city.idx(c)] > 0:
 				row += "h" if Terrain.climbable(sim.city, relief, c) else "^"
 			elif not sim.city.walkable(c):
@@ -537,6 +750,7 @@ func observe(name: String) -> Dictionary:
 		"jobangebote": _job_obs(b) if active_firm(b) < 0 and int(b.get("amt", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
 		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "mein_amt": office_obs(b), "gefuehle": feelings(b),
 		"ablauf": {"offen": (b.get("ablauf", []) as Array).size(), "letzte_ergebnisse": (b.get("ablauf_log", []) as Array).slice(-5)},
+		"mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}
 
 
@@ -1015,6 +1229,8 @@ const FIRM_ACTIONS := [
 	"build_access", "buy_property", "sell_property", "hub_sell", "buy_material", "sell_material",
 	# Geld
 	"take_loan", "repay_loan", "entnahme",
+	# Unternehmensplan (PlanBook): Ziel, Schritte, Nutzen, Risiken, Abbruchbedingungen
+	"set_plan", "update_plan_step", "cancel_plan",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
 	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen",
 	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage"]
@@ -1118,6 +1334,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var me: Dictionary = o.ich
 	var models: Dictionary = o.fahrzeugmodelle
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
+		"unternehmensplan": sim.plans.summary(cid) if sim.get("plans") != null else {},
 		"laufende_auftraege": me.buero.laufende_auftraege, "stellplaetze": me.stellplaetze,
 		"fahrzeuge": o.fahrzeuge.map(func(v): return {"id": v.id, "modell": v.modell, "kapazitaet": models[v.modell].kapazitaet, "status": v.status,
 			"fahrer": v.fahrer != null, "zustand": v.zustand}),
@@ -1512,7 +1729,8 @@ func to_dict() -> Dictionary:
 			"geld": float(b.get("geld", 0.0)), "job": str(b.get("job", "")), "grundstueck": str(b.get("grundstueck", "")),
 			"done_jobs": int(b.get("done_jobs", 0)), "firma": int(b.get("firma", -1)), "zuhause": str(b.get("zuhause", "")),
 			"akku": float(b.get("akku", 100.0)), "nass": float(b.get("nass", 0.0)), "kalt": float(b.get("kalt", 0.0)),
-			"amt": int(b.get("amt", -1)), "seele": str(b.get("seele", ""))})
+			"amt": int(b.get("amt", -1)), "seele": str(b.get("seele", "")), "orte": b.get("orte", {}), "besucht": b.get("besucht", {}),
+			"ziel": b.get("ziel", {}), "ziele_alt": b.get("ziele_alt", [])})
 	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses}
 
 
@@ -1527,7 +1745,7 @@ func from_dict(d: Dictionary) -> void:
 		b.mover.pos = Vector2(float(e.x), float(e.y))
 		b.held = e.get("held", [])
 		b.events = e.get("events", [])
-		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt", "amt", "seele"]:
+		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt", "amt", "seele", "orte", "besucht", "ziel", "ziele_alt"]:
 			if e.has(k):
 				b[k] = e[k]
 	chat = d.get("chat", [])

@@ -14,6 +14,15 @@ var _peers: Array = []              # [{peer, buf, since}]
 var _sessions := {}                 # Token -> Name
 var on_save: Callable                # Betreiber: Spielstand sichern (GameSession.save_game)
 var operator_token := ""             # nur fuer den Betreiber (Datei user://eko_betreiber.txt), nie an Wesen weitergeben
+## Identitaet (15.11.2026): Wer einen Namen zuerst beansprucht, bekommt einen geheimen Schluessel (einmalig in der Antwort von /join).
+## Spaeteres /join unter diesem Namen nur mit Kopf X-Schluessel; gespeichert wird nur der SHA-256-Wert. Pro Wesen gilt nur die
+## neueste Sitzung. "" = nicht dauerhaft speichern (Tests).
+var keys_path := ""                  # im Spiel: user://eko_schluessel.json (setzt GameSession)
+var _keys := {}                      # Name -> sha256(Schluessel)
+var _keys_loaded := false
+const DUPLICATE_MS := 3000
+var _last_input := {}                # Name -> letzte Handlung (Typ + Daten)
+var _last_input_ms := {}
 
 
 func setup(world: EkoWorld, p: int = 8790) -> bool:
@@ -100,13 +109,36 @@ func handle(method: String, path: String, query: Dictionary, headers: Dictionary
 		if operator_token == "" or str(headers.get("x-betreiber", "")) != operator_token:
 			return [403, {"ok": false, "msg": "Nur für den Betreiber."}]
 		return [200, eko.beings_info()]
+	if path == "/betreiber/schluessel_zuruecksetzen" and method == "POST":   # verlorener Schluessel: Name wieder frei
+		if operator_token == "" or str(headers.get("x-betreiber", "")) != operator_token:
+			return [403, {"ok": false, "msg": "Nur für den Betreiber."}]
+		_load_keys()
+		_keys.erase(str(query.get("name", "")))
+		_save_keys()
+		return [200, {"ok": true, "msg": "Schlüssel zurückgesetzt."}]
 	if path == "/join" and method == "POST":
-		var r := eko.join(str(query.get("name", "")), str(query.get("art", "mensch")))
+		_load_keys()
+		var want := str(query.get("name", "")).strip_edges().left(24)
+		var key := str(headers.get("x-schluessel", ""))
+		if _keys.has(want) and key.sha256_text() != str(_keys[want]):
+			return [403, {"ok": false, "msg": "Der Name %s gehört bereits einem Wesen. Ohne dessen Schlüssel (Kopf X-Schluessel) kein Zutritt – wähle einen anderen Namen." % want}]
+		var r := eko.join(want, str(query.get("art", "mensch")))
 		if not bool(r.ok):
 			return [400, r]
-		var token := "%08x%08x" % [randi(), randi()]
+		var out := {"ok": true, "name": r.name, "hinweis": "Sende den Token im Kopf X-Session. Beschreibung: GET /api.md"}
+		if not _keys.has(str(r.name)):
+			var fresh := _random_hex(16)
+			_keys[str(r.name)] = fresh.sha256_text()
+			_save_keys()
+			out["schluessel"] = fresh
+			out["hinweis"] += " Bewahre den Schlüssel auf: Ohne ihn kannst du dich unter diesem Namen nicht wieder anmelden."
+		for t in _sessions.keys():   # nur die neueste Sitzung je Wesen gilt
+			if _sessions[t] == r.name:
+				_sessions.erase(t)
+		var token := _random_hex(16)
 		_sessions[token] = r.name
-		return [200, {"ok": true, "session": token, "name": r.name, "hinweis": "Sende den Token im Kopf X-Session. Beschreibung: GET /api.md"}]
+		out["session"] = token
+		return [200, out]
 	var name := str(_sessions.get(str(headers.get("x-session", "")), ""))
 	if name == "":
 		return [401, {"ok": false, "msg": "Kopf X-Session fehlt oder ist ungueltig. Erst POST /join?name=DeinName."}]
@@ -118,6 +150,12 @@ func handle(method: String, path: String, query: Dictionary, headers: Dictionary
 			if not (a is Dictionary) or not a.has("type"):
 				return [400, {"ok": false, "msg": "Body muss JSON {\"type\": \"...\", \"data\": {...}} sein."}]
 			var d = a.get("data", {})
+			# Doppelschutz: dieselbe Handlung mit denselben Daten innerhalb von DUPLICATE_MS (z. B. Wiederholung nach Zeitueberschreitung)
+			var key := str(a.type) + JSON.stringify(d)
+			if str(a.type) not in ["Say", "Talk", "Inspect", "ZielStand", "Merke"] and key == str(_last_input.get(name, "")) 					and Time.get_ticks_msec() - int(_last_input_ms.get(name, 0)) < DUPLICATE_MS:
+				return [409, {"ok": false, "status": "doppelt", "msg": "Diese Handlung hast du gerade eben schon geschickt. Prüfe erst das Ergebnis (observe), statt sie zu wiederholen."}]
+			_last_input[name] = key
+			_last_input_ms[name] = Time.get_ticks_msec()
 			var r := eko.input(name, str(a.type), d if d is Dictionary else {})
 			r["beobachtung"] = eko.observe(name)
 			return [200 if bool(r.ok) else 400, r]
@@ -130,9 +168,31 @@ func handle(method: String, path: String, query: Dictionary, headers: Dictionary
 	return [404, {"ok": false, "msg": "Unbekannter Endpunkt %s %s. Siehe GET /api.md." % [method, path]}]
 
 
+func _random_hex(n: int) -> String:
+	return Crypto.new().generate_random_bytes(n).hex_encode()
+
+
+func _load_keys() -> void:
+	if _keys_loaded:
+		return
+	_keys_loaded = true
+	if keys_path != "" and FileAccess.file_exists(keys_path):
+		var d = JSON.parse_string(FileAccess.get_file_as_string(keys_path))
+		if d is Dictionary:
+			_keys = d
+
+
+func _save_keys() -> void:
+	if keys_path == "":
+		return
+	var f := FileAccess.open(keys_path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(_keys))
+
+
 func _send(peer: StreamPeerTCP, status: int, payload, ctype: String = "application/json") -> void:
 	var body: PackedByteArray = (payload if payload is String else JSON.stringify(payload)).to_utf8_buffer()
-	var reason: String = {200: "OK", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden", 404: "Not Found", 413: "Payload Too Large"}.get(status, "OK")
+	var reason: String = {200: "OK", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden", 404: "Not Found", 409: "Conflict", 413: "Payload Too Large"}.get(status, "OK")
 	var head := "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n" % [status, reason, ctype, body.size()]
 	peer.put_data(head.to_utf8_buffer())
 	peer.put_data(body)

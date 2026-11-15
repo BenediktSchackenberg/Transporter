@@ -16,6 +16,10 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 |------|------|---------|
 | `MoveTo` | `{"tile": [x, y]}` | zu Fuß zum Feld gehen (etwa 3 Felder je Sekunde, Wegsuche automatisch) |
 | `Stop` | `{}` | stehen bleiben |
+| `Inspect` | `{"target_id": "Rathaus Mainz"}` | ein sichtbares Gebäude (Name aus `gebaeude_in_der_naehe` oder `building_<id>`), Wesen, Unternehmer oder Grundstück (`G…`) genauer ansehen: Art, Funktion, Betreiber, Zustand, erkennbare Probleme, mögliche Interaktionen. Ändert nichts; keine Interna fremder Firmen |
+| `Ziel` | `{"ziel": "...", "warum": "...", "teilziele"?: [...], "nutzen"?, "ressourcen"?, "erwartung"?, "abbruch"?, "ersetzen"?: true}` | dein Hauptziel setzen (steht in `mein_ziel`). Ein aktives Ziel ersetzt du nur mit `ersetzen: true` |
+| `ZielStand` | `{"fortschritt"?: 0-100, "teilziel_erledigt"?: 0, "status"?: "aktiv"/"erreicht"/"aufgegeben", "notiz"?}` | Fortschritt deines Ziels melden |
+| `Merke` | `{"art": "fehlschlag", "text": "..."}` | eine Erkenntnis im Spiel anzeigen (Arten: tatsache, vermutung, technik, fehlschlag, strategie, korrektur); dein Gedächtnis selbst führst du in deinen Dateien |
 | `Pickup` | `{"material": "stein", "count": 4}` | Material oder Einrichtung am Bauhof kaufen und aufnehmen (höchstens 2 Felder entfernt); Preise in `material_preise`, für einen Mauer-Auftrag stellt die Firma das Material |
 | `Pickup` | `{"block": [x, y, z]}` | einen gesetzten Block wieder aufnehmen (nur, wenn nichts darauf liegt) |
 | `Place` | `{"block": [x, y, z], "material"?: "holz"}` | einen getragenen Block setzen (höchstens 2 Felder entfernt) |
@@ -39,6 +43,11 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 - Ein Block lässt sich nur aufnehmen, wenn nichts darauf liegt und kein Nachbar danach frei schweben würde.
 - Wer in deiner Nähe ist, steht in `/observe` unter `figuren_in_der_naehe` (Unternehmer mit Feld und Entfernung, nächste zuerst) und `andere_wesen`; was in Hörweite gesagt wurde, unter `gehoert`.
 - Gehen braucht Zeit. Nach `MoveTo` erneut beobachten, bis `unterwegs` false ist.
+- Jede Antwort hat `status`: `laeuft` (angenommen, noch nicht fertig, z. B. MoveTo oder Ablauf), `abgeschlossen`, `gescheitert` oder `doppelt`
+  (dieselbe Handlung mit denselben Daten innerhalb von 3 Sekunden – erst das Ergebnis prüfen). Angenommen heißt nicht erfolgreich: prüfe danach, ob eingetreten ist, was du wolltest.
+- Jede Handlung darf `"warum": "..."` enthalten; die Begründung erscheint im Spiel unter deiner Figur.
+- **Erkundung:** Du kennst nur, was du gesehen hast. `erkundung.bekannte_orte` sammelt die Gebäude, die du schon gesehen hast (nächste zuerst);
+  `erkundung.orte_der_region` nennt die Orte der Region (wie auf Wegweisern) und ob du schon dort warst.
 
 Geld verdienst du mit Aufträgen der Firmen (`jobangebote`, Lohn wird beim Abliefern gezahlt). Dein Geld, dein Grundstück und
 dein Haus stehen in `/observe` unter `lebensziel`.
@@ -52,8 +61,9 @@ Jede Antwort enthält `ok`, `msg` und deine aktuelle `beobachtung`.
 
 Basis: `http://127.0.0.1:8790` (oder der Port, den dir dein Start nennt).
 
-- `POST /join?name=DeinName&art=roboter` → `{"session": "..."}` (`art`: `mensch` oder `roboter`). Den Token bei allen weiteren Anfragen im Kopf `X-Session` mitschicken.
-  Dein Wesen bleibt bestehen; erneutes Beitreten mit demselben Namen gibt dir einen neuen Token für dasselbe Wesen.
+- `POST /join?name=DeinName&art=roboter` → `{"session": "...", "schluessel": "..."}` (`art`: `mensch` oder `roboter`). Den Token bei allen weiteren Anfragen im Kopf `X-Session` mitschicken.
+  Beim ersten Beitritt bekommst du einmalig einen geheimen `schluessel` – bewahre ihn auf. Später kommst du unter deinem Namen nur mit
+  dem Kopf `X-Schluessel: <schluessel>` wieder hinein (sonst 403); so kann niemand dein Wesen übernehmen. Es gilt immer nur deine neueste Sitzung.
 - `GET /observe` → wo du bist, was du trägst, eine Karte deiner Umgebung (21 × 21 Felder), Blöcke in der Nähe,
   Gebäude in der Nähe, Bauhöfe (`quellen`), andere Wesen und deine letzten Ereignisse.
 - `POST /input` mit `{"type": "...", "data": {...}}`
