@@ -1236,7 +1236,8 @@ func _home_obs(b: Dictionary) -> Dictionary:
 		var r := home_rect(b.name)
 		o["haus"] = {"status": h.status, "fortschritt": "%d %%" % int(100.0 * float(h.placed) / float(h.blocks.size())),
 			"baufirma": h.builder, "felder": [r.position.x, r.position.y, r.size.x, r.size.y],
-			"eingang_feld": [r.position.x + 1, r.end.y], "du_bist_zuhause": is_home(b)}
+			"eingang_feld": [r.position.x + 1, r.end.y], "du_bist_zuhause": is_home(b),
+			"hinein": "Dein Haus ist fertig gebaut – kein Einziehen nötig. Geh auf ein Feld darin (MoveTo %s), dann bist du zu Hause; Rest lädt dort schnell und du wirst trocken." % str([r.position.x, r.position.y])}
 	elif str(b.get("grundstueck", "")) == "":
 		o["grundstuecke_zu_kaufen"] = _plot_obs(b)
 	if str(b.get("grundstueck", "")) != "":
@@ -1246,8 +1247,9 @@ func _home_obs(b: Dictionary) -> Dictionary:
 		o["mein_grundstueck"] = {"id": b.grundstueck, "felder": [r.position.x, r.position.y, r.size.x, r.size.y],
 			"bloecke_x": [r.position.x * PER_TILE, r.end.x * PER_TILE - 1], "bloecke_y": [r.position.y * PER_TILE, r.end.y * PER_TILE - 1],
 			"mitte_feld": [c.x, c.y], "bausteine": st.bau, "hoehe": int(st.max_z) + 1, "einrichtung": st.einrichtung,
-			"bewohnt": str(b.get("zuhause", "")) != "",
-			"einziehen": "MoveIn, sobald mindestens %d Bausteine, %d Schichten Höhe, ein bett und eine ladestation auf dem Grundstück stehen" % [MOVE_IN_BLOCKS, MOVE_IN_HEIGHT]}
+			"bewohnt": str(b.get("zuhause", "")) != "" or (not h.is_empty() and h.status == "fertig")}
+		if h.is_empty():   # nur beim Selbstbau
+			o.mein_grundstueck["einziehen"] = "MoveIn, sobald mindestens %d Bausteine, %d Schichten Höhe, ein bett und eine ladestation auf dem Grundstück stehen" % [MOVE_IN_BLOCKS, MOVE_IN_HEIGHT]
 	return o
 
 
@@ -1380,7 +1382,7 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		return {"ok": true, "msg": "%s privat entnommen. Du hast jetzt %s, die Firma %s." % [Catalog.money(want), Catalog.money(float(b.geld)), Catalog.money(c.ledger.cash)]}
 	var r: Dictionary = sim.executor.execute(cid, a, "", "api")
 	_event(b, "Firma: %s → %s" % [a.action, str(r.get("msg", "")).left(80)])
-	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", ""))}
+	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", "")), "pending": bool(r.get("pending", false))}
 
 
 ## Kompakte Firmenlage fuer das Wesen (statt der grossen Unternehmer-Beobachtung): Kasse, Flotte, Auftraege, machbarer Markt,

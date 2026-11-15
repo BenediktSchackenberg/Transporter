@@ -14094,7 +14094,7 @@ func test_eko_play_fixes() -> void:
 	E.input("Viktor", "FoundCompany", {"name": "Vik"})
 	var r1: Dictionary = E.input("Viktor", "Firma", {"action": "collect_contracts", "warum": "Test"})
 	ok(not str(r1.msg).contains("Firma braucht aktion"), "verkuerzte Schreibweise verstanden: %s" % str(r1.msg).left(80))
-	ok(r1.status == "laeuft" if bool(r1.get("pending", false)) else true, "Weg zur Ausfuehrung: Status laeuft")
+	ok(r1.status == "laeuft" if str(r1.msg).contains("Ausführung bei Ankunft") else r1.status != "laeuft", "Weg zur Ausfuehrung: Status laeuft (%s)" % r1.status)
 	var cid: int = E.active_firm(V)
 	s.visit_completed.emit(cid, "collect_contracts", {"ok": true, "msg": "3 Auftraege eingesammelt"})
 	ok(str(V.events.back()).contains("3 Auftraege eingesammelt"), "Ergebnis vor Ort erreicht das Wesen")
