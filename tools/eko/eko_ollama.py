@@ -26,6 +26,7 @@ REFLECT = ("Nimm dir kurz Zeit: Halte Wichtiges in EPISODIC_MEMORY.jsonl (append
            "SEMANTIC_MEMORY.md fest. Danach mach weiter, womit du willst.")
 MAX_MESSAGES = 60          # Gespraechslaenge, danach werden die aeltesten Schritte verworfen (das Gedaechtnis liegt in Dateien)
 KEEP_MESSAGES = 36
+MAX_CHARS = 30000          # Textlaenge des Verlaufs (~10.000 Token): darueber lief das 16k-Kontextfenster ueber (Ollama HTTP 500, 15.11.)
 REFLECT_EVERY = 40         # Werkzeugschritte zwischen zwei Erinnerungen an das Gedaechtnis
 
 TOOLS = [
@@ -201,21 +202,32 @@ class Agent:
         self.log.write(line + "\n")
         self.log.flush()
 
+    def trim(self, messages, hard=False):
+        """Aelteste Schritte verwerfen (nach Anzahl und Textlaenge), ohne ein Werkzeugergebnis von seinem Aufruf zu trennen."""
+        size = lambda ms: sum(len(json.dumps(m, ensure_ascii=False)) for m in ms)
+        if not hard and len(messages) <= MAX_MESSAGES and size(messages) <= MAX_CHARS:
+            return messages
+        keep = 8 if hard else KEEP_MESSAGES
+        out = messages[-keep:]
+        while len(out) > 4 and size(out) > MAX_CHARS * 0.6:
+            out = out[2:]
+        while out and out[0]["role"] == "tool":   # Werkzeugergebnis ohne seinen Aufruf verwerfen
+            out.pop(0)
+        out.insert(0, {"role": "user", "content": "(Ältere Schritte sind ausgeblendet; dein Gedächtnis steht in deinen Dateien.) " + CONTINUE})
+        return out
+
     def run(self):
         self.world.join(self.args.art)
         system = {"role": "system", "content": self.system_prompt()}
         messages = [{"role": "user", "content": "Beginne. Lies zuerst deine Dateien (list_files, read_file)."}]
         steps = 0
         while self.args.max_steps == 0 or steps < self.args.max_steps:
-            if len(messages) > MAX_MESSAGES:   # aelteste Schritte verwerfen, ohne ein Werkzeugergebnis von seinem Aufruf zu trennen
-                messages = messages[-KEEP_MESSAGES:]
-                while messages and messages[0]["role"] != "user":
-                    messages.pop(0)
-                messages.insert(0, {"role": "user", "content": "(Ältere Schritte sind ausgeblendet; dein Gedächtnis steht in deinen Dateien.) " + CONTINUE})
+            messages = self.trim(messages)
             try:
                 msg = self.chat([system] + messages)
-            except Exception as e:   # Ollama ueberlastet oder neu gestartet: protokollieren, kurz warten, weitermachen
-                self.say("⚠ Modellaufruf fehlgeschlagen: %s – neuer Versuch in 10 s" % e)
+            except Exception as e:   # Ollama ueberlastet oder Kontext voll: protokollieren, Verlauf kuerzen, kurz warten, weitermachen
+                self.say("⚠ Modellaufruf fehlgeschlagen: %s – Verlauf gekürzt, neuer Versuch in 10 s" % e)
+                messages = self.trim(messages, hard=True)
                 self.log.write(traceback.format_exc())
                 time.sleep(10)
                 continue

@@ -23,8 +23,9 @@ func setup(simulation: Simulation, city_view) -> void:
 
 
 func _process(_delta: float) -> void:
-	if follow and not sim.eko.beings.is_empty():
-		cv.set_camera_world(sim.eko.beings.values()[0].mover.pos)
+	if follow and not sim.eko.beings.is_empty():   # dem zuletzt handelnden Wesen folgen (nicht einem stillstehenden)
+		var tb: Dictionary = sim.eko.beings.get(sim.eko.last_active, sim.eko.beings.values()[0])
+		cv.set_camera_world(tb.mover.pos)
 	for name in _beings:
 		var n: BeingNode = _beings[name]
 		var b: Dictionary = sim.eko.beings.get(name, {})

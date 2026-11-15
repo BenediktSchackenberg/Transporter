@@ -441,6 +441,7 @@ func _start_eko_server() -> void:
 			call_deferred("_eko_collapse_center")
 	if not on:
 		return
+	sim.eko.persist_path = "user://eko_ersparnisse.json"   # Ersparnisse der Wesen ueberstehen einen Neustart der Welt
 	var ws := WorldServer.new()
 	add_child(ws)
 	if ws.setup(sim.eko, port):

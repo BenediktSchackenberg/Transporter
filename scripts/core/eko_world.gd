@@ -29,6 +29,12 @@ var sim
 var beings := {}                    # Name -> {name, art, mover, held: [Material], say, say_left, events: [], color}
 var blocks := {}                    # Vector3i (Blockraster) -> Material
 var chat: Array = []                # [{t (Echtzeit-ISO), von, an, text, feld}]
+var last_active := ""               # Wesen mit der juengsten Handlung (Kamera folgt ihm)
+## Ersparnisse ueber Neustarts der Welt hinweg (nur im Spiel mit --eko): Datei mit {Name: Geld}; beim ersten Beitritt nach einem
+## Neustart wird das Geld aus dem Ausland (X0 -> Y0) zurueckgebucht, damit die Geldbilanz stimmt. In Tests leer (aus).
+var persist_path := ""
+var _persist_timer := 0.0
+var _restored := {}
 
 
 func setup(simulation) -> void:
@@ -50,6 +56,7 @@ func join(name: String, art: String = "mensch") -> Dictionary:
 			"job": "", "grundstueck": "", "done_jobs": 0, "rest_left": 0.0, "firma": -1,
 			"color": COLORS[beings.size() % COLORS.size()]}
 		_event(beings[name], "ist in der Welt erwacht")
+		_restore_savings(beings[name])
 		sim.log_event("%s %s ist erwacht." % ["Der kleine Roboter" if art == "roboter" else "Das Wesen", name], "info")
 	changed.emit()
 	return {"ok": true, "name": name}
@@ -100,6 +107,38 @@ func update(dt: float) -> void:
 			b.rest_left = maxf(0.0, float(b.rest_left) - dt)
 	_jobs_tick(dt)
 	_houses_tick(dt)
+	if persist_path != "":
+		_persist_timer -= dt
+		if _persist_timer <= 0.0:
+			_persist_timer = 15.0
+			var d := {}   # vorhandene Eintraege behalten: Wesen, die noch nicht wieder beigetreten sind, verlieren sonst ihre Ersparnisse
+			if FileAccess.file_exists(persist_path):
+				var old = JSON.parse_string(FileAccess.get_file_as_string(persist_path))
+				if old is Dictionary:
+					d = old
+			for b in beings.values():
+				if _restored.has(b.name) or not d.has(b.name):   # erst nach der Rueckbuchung ueberschreiben
+					d[b.name] = {"geld": float(b.get("geld", 0.0)), "done_jobs": int(b.get("done_jobs", 0))}
+			var f := FileAccess.open(persist_path, FileAccess.WRITE)
+			if f != null:
+				f.store_string(JSON.stringify(d))
+
+
+func _restore_savings(b: Dictionary) -> void:
+	if persist_path == "" or _restored.has(b.name):
+		return
+	_restored[b.name] = true
+	if not FileAccess.file_exists(persist_path):
+		return
+	var d = JSON.parse_string(FileAccess.get_file_as_string(persist_path))
+	if not (d is Dictionary) or not d.has(b.name):
+		return
+	var geld := float(d[b.name].get("geld", 0.0))
+	if geld > 0.0:
+		sim.economy.transfer("X0", "Y0", geld)
+		b.geld = float(b.get("geld", 0.0)) + geld
+		b.done_jobs = int(d[b.name].get("done_jobs", 0))
+		_event(b, "hat seine Ersparnisse von %s mitgebracht" % Catalog.money(geld))
 
 
 # ------------------------------------------------------------------ Handlungen
@@ -107,6 +146,7 @@ func input(name: String, type: String, data: Dictionary) -> Dictionary:
 	var b: Dictionary = beings.get(name, {})
 	if b.is_empty():
 		return {"ok": false, "msg": "Unbekanntes Wesen. Erst POST /join."}
+	last_active = name
 	var r: Dictionary
 	match type:
 		"MoveTo":
