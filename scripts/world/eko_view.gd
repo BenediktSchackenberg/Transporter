@@ -270,6 +270,30 @@ class BeingNode:
 	extends Node2D
 	var sim: Simulation
 	var being := ""
+	var _last_x := 0.0
+	var _facing := 1
+
+	## Zustand fuer die Figur: Blickrichtung aus der Bewegung, Taetigkeit aus der letzten Handlung (frisch, ca. 2,5 s).
+	func _ctx(b: Dictionary, ms: int) -> Dictionary:
+		var m: Mover = b.mover
+		var dx := float(m.pos.x) - _last_x
+		if absf(dx) > 0.05:
+			_facing = 1 if dx > 0.0 else -1
+		_last_x = float(m.pos.x)
+		var dec: Dictionary = b.get("entscheidung", {})
+		var act := str(dec.get("aktion", "")) if ms - int(dec.get("ms", 0)) < 2500 else ""
+		var A: EkoArms = sim.eko.arms
+		var weapon := ""
+		for it in b.get("waffen", []):
+			var t := str(A.designs.get(str(it.design), {}).get("typ", ""))
+			if t != "ruestung" and t != "":
+				weapon = t
+				break
+		var role := "buergermeister" if int(b.get("amt", -1)) >= 0 else ("unternehmer" if sim.eko.active_firm(b) >= 0 else "frei")
+		return {"ms": ms, "walking": not m.arrived(), "facing": _facing, "action": act, "out": float(b.get("out_left", 0.0)) > 0.0,
+			"custody": float(b.get("custody_left", 0.0)) > 0.0, "resting": float(b.get("rest_left", 0.0)) > 0.0 and m.arrived(),
+			"talking": float(b.get("say_left", 0.0)) > 0.0 and str(b.get("say", "")) != "" and not str(b.get("say", "")).begins_with("Zzz"),
+			"armor": A.armor_of(b), "weapon": weapon, "role": role, "carrying": not (b.held as Array).is_empty()}
 
 	func _draw() -> void:
 		var b: Dictionary = sim.eko.beings.get(being, {})
@@ -284,15 +308,11 @@ class BeingNode:
 		if kalt > 50.0:   # Zittern vor Kaelte
 			draw_set_transform(Vector2(sin(ms / 35.0) * 0.7, 0))
 		var robot := str(b.get("art", "mensch")) == "roboter"
-		var head_top := -30.0 if robot else -24.0
+		var head_top := -30.0 if robot else -26.0
 		if robot:
 			_draw_robot(b)
 		else:
-			draw_rect(Rect2(-3, -6, 2, 6), Color("#2d2a32"))                        # Beine
-			draw_rect(Rect2(1, -6, 2, 6), Color("#2d2a32"))
-			draw_rect(Rect2(-4, -16, 8, 10), col)                                   # Koerper
-			draw_rect(Rect2(-3, -23, 6, 7), Color("#f1c9a5"))                       # Kopf
-			draw_rect(Rect2(-3, -24, 6, 2), col.darkened(0.4))                      # Haare
+			EkoFigure.draw(self, b, _ctx(b, ms))   # animierte Pixelfigur nach Taetigkeit
 		draw_set_transform(Vector2.ZERO)
 		if nass > 40.0:   # Regentropfen laufen herunter
 			for i in 5:
