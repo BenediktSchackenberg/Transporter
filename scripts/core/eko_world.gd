@@ -41,10 +41,34 @@ var last_active := ""               # Wesen mit der juengsten Handlung (Kamera f
 var persist_path := ""
 var _persist_timer := 0.0
 var _restored := {}
+var relief := PackedFloat32Array()   # Gelaende (Terrain.relief), fuer Haenge, Hochebenen und Darstellung
+var _terrain_ready := false
 
 
 func setup(simulation) -> void:
 	sim = simulation
+
+
+## Begehbare Haenge und Hochebenen (5a, 15.11.2026): Bergzellen bis Terrain.CLIMB_MAX mit sanfter Steigung werden im
+## Fussweg-Raster frei (Gewicht steigt mit der Hoehe). Gilt fuer alle Fussgaenger; Fahrzeuge fahren weiter nur auf Strassen.
+func ensure_terrain() -> void:
+	if _terrain_ready or sim == null or sim.city == null:
+		return
+	_terrain_ready = true
+	relief = Terrain.relief(sim.city)
+	if relief.is_empty():
+		return
+	for i in relief.size():
+		if relief[i] <= 0.0:
+			continue
+		var c := Vector2i(i % sim.city.size, i / sim.city.size)
+		if Terrain.climbable(sim.city, relief, c) and sim.city.building_at[i] < 0:
+			sim.nav.walk.set_point_solid(c, false)
+			sim.nav.walk.set_point_weight_scale(c, 1.0 + relief[i] * 0.4)
+
+
+func height_at(t: Vector2i) -> float:
+	return Terrain.at(sim.city, relief, t)
 
 
 # ------------------------------------------------------------------ Wesen
@@ -53,6 +77,7 @@ func join(name: String, art: String = "mensch") -> Dictionary:
 	art = art if art in ARTEN else "mensch"
 	if name == "" or not RegEx.create_from_string("^[A-Za-z0-9_ÄÖÜäöüß -]+$").search(name):
 		return {"ok": false, "msg": "Name fehlt oder enthaelt ungueltige Zeichen."}
+	ensure_terrain()
 	if not beings.has(name):
 		var m := Mover.new()
 		m.lane = 0.0
@@ -320,6 +345,10 @@ func can_place(p: Vector3i) -> String:
 		return "Feld %d,%d ist eine Strasse." % [tile.x, tile.y]
 	if int(sim.city.building_at[sim.city.idx(tile)]) >= 0:
 		return "Auf Feld %d,%d steht ein Gebaeude." % [tile.x, tile.y]
+	if not sim.city.height.is_empty() and sim.city.height[sim.city.idx(tile)] > 0:
+		ensure_terrain()
+		if height_at(tile) > Terrain.CLIMB_MAX or Terrain.steepness(sim.city, relief, tile) > Terrain.FLAT_MAX:
+			return "Feld %d,%d ist zu steil oder zu hoch zum Bauen (nur Hochebenen und sanfte Hänge)." % [tile.x, tile.y]
 	if p.z == 0 and sim.city.g(tile) == CityData.G.WATER:   # ueber dem Wasser mit seitlichem Halt erlaubt (Bruecken)
 		return "Feld %d,%d ist Wasser (darueber geht es nur mit seitlichem Halt, z. B. als Bruecke vom Ufer)." % [tile.x, tile.y]
 	if not _supported(p, Vector3i(-1, -1, -1)):
@@ -458,6 +487,8 @@ func observe(name: String) -> Dictionary:
 				row += "#"
 				var bd: Dictionary = sim.city.building(int(sim.city.building_at[sim.city.idx(c)]))
 				near_buildings[str(bd.name)] = [int(bd.walk.x), int(bd.walk.y)]
+			elif not sim.city.height.is_empty() and sim.city.height[sim.city.idx(c)] > 0:
+				row += "h" if Terrain.climbable(sim.city, relief, c) else "^"
 			elif not sim.city.walkable(c):
 				row += "^"
 			else:
@@ -485,7 +516,8 @@ func observe(name: String) -> Dictionary:
 			"traegt": b.held, "tragkraft": CARRY, "am_bauhof": _at_source(b)},
 		"zeit": Catalog.game_minutes_to_text(sim.game_min), "wetter": sim.wx.headline(),
 		"karte": {"mitte": [t.x, t.y], "radius": VIEW_RADIUS, "zeilen": rows,
-			"legende": "@ du, . freier Boden, = Strasse, # Gebaeude, ~ Wasser, ^ unbegehbar (Baum/Berg), 1-9/+ hoechste Blockschicht auf dem Feld"},
+			"legende": "@ du, . freier Boden, = Strasse, # Gebaeude, ~ Wasser, h begehbarer Hang/Hochebene am Berg, ^ unbegehbar (Baum, Fels, Grat), 1-9/+ hoechste Blockschicht auf dem Feld"},
+		"gelaende": {"deine_hoehe": int(height_at(t)), "hinweis": "Am Berg kannst du auf h-Feldern laufen; bauen geht dort, wo es flach ist. Je höher, desto mühsamer der Weg – und desto weiter die Aussicht."},
 		"bloecke_in_der_naehe": near_blocks, "bloecke_gesamt": blocks.size(),
 		"gebaeude_in_der_naehe": near_buildings, "quellen": src, "material_preise": PRICES,
 		"andere_wesen": others, "figuren_in_der_naehe": figures, "gehoert": heard(name),
@@ -1136,8 +1168,9 @@ func _feel_tick(b: Dictionary, dt: float) -> void:
 			nass += (1.2 if wx.is_heavy_rain() else 0.7) * dt
 		else:
 			nass -= 0.3 * dt
-		if wx.is_cold() or wx.is_snow() or (night and nass > 30.0):
-			kalt += (0.5 if night else 0.3) * dt
+		var alt := height_at(tile_of(b))
+		if wx.is_cold() or wx.is_snow() or (night and nass > 30.0) or alt >= 8.0:
+			kalt += (0.5 if night else 0.3) * dt + alt * 0.02 * dt   # oben am Berg ist es kaelter
 		else:
 			kalt -= 0.3 * dt
 	b.akku = clampf(akku, 0.0, 100.0)
@@ -1191,6 +1224,11 @@ func feelings(b: Dictionary) -> Dictionary:
 	elif kalt > 30.0:
 		out.append("Mir ist ein bisschen kalt.")
 	var home := is_home(b)
+	var hh := height_at(tile_of(b))
+	if hh >= 6.0:
+		out.append("Ich stehe hoch oben am Berg – die Aussicht über die Stadt ist weit, aber der Wind ist kühl.")
+	elif hh >= 2.0:
+		out.append("Ich bin am Hang, der Weg ist mühsam.")
 	if home:
 		out.append("Ich bin zu Hause – hier ist es trocken und warm, und meine Ladestation ist da.")
 	elif str(b.get("zuhause", "")) == "" and not houses.has(b.name) and (nass > 30.0 or kalt > 30.0 or akku < 40.0):

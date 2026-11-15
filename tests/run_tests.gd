@@ -21,6 +21,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_feelings")
 	test_names.append("test_eko_players_and_mayors")
 	test_names.append("test_eko_plan_and_autonomy")
+	test_names.append("test_eko_terrain")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13460,3 +13461,46 @@ func test_eko_plan_and_autonomy() -> void:
 	var aj: Dictionary = E.input("Lumo", "Firma", {"aktion": {"action": "auftrag_an_wesen", "art": "botengang", "lohn": 250}})
 	ok(aj.ok and E.jobs.values().any(func(j): return int(j.cid) == int(b.firma) and is_equal_approx(float(j.lohn), 250.0) and j.get("selbst_ausgeschrieben", false)), "Firma schreibt Hilfsjob mit eigenem Lohn aus: %s" % str(aj.msg).left(60))
 	ok(E.firm_idle_s(int(b.firma)) < 5.0 and is_inf(E.firm_idle_s(0)), "Untaetigkeit je Firma fuer die Notfall-Disposition")
+
+
+## Begehbare Haenge (5a, 15.11.2026): sanfte Bergzellen sind fuer Fussgaenger frei, Bauen nur auf flachen Stellen, Karte zeigt h,
+## Gefuehl oben am Berg; Terrain.relief ist dieselbe Rechnung wie die Darstellung.
+func test_eko_terrain() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.join("Lumo", "roboter")
+	ok(not E.relief.is_empty() and E.relief.size() == s.city.size * s.city.size, "Gelaende berechnet")
+	var climb := Vector2i(-1, -1)
+	var flat := Vector2i(-1, -1)
+	var steep := Vector2i(-1, -1)
+	var high := Vector2i(-1, -1)
+	for i in E.relief.size():
+		if E.relief[i] <= 0.0:
+			continue
+		var c := Vector2i(i % s.city.size, i / s.city.size)
+		if Terrain.climbable(s.city, E.relief, c):
+			if climb.x < 0:
+				climb = c
+			if flat.x < 0 and Terrain.steepness(s.city, E.relief, c) <= Terrain.FLAT_MAX and s.city.building_at[i] < 0:
+				flat = c
+			if high.x < 0 and E.relief[i] >= 6.0:
+				high = c
+		elif steep.x < 0 and Terrain.steepness(s.city, E.relief, c) > Terrain.STEEP_MAX:
+			steep = c
+	ok(climb.x >= 0 and not s.nav.walk.is_point_solid(climb), "begehbarer Hang im Fussweg-Raster frei")
+	if steep.x >= 0:
+		ok(s.nav.walk.is_point_solid(steep), "Steilhang bleibt gesperrt")
+		ok(E.can_place(Vector3i(steep.x * 4, steep.y * 4, 0)) != "", "auf Steilhang kein Bau")
+	if flat.x >= 0:
+		ok(E.can_place(Vector3i(flat.x * 4, flat.y * 4, 0)) == "", "Hochebene bebaubar")
+	var b: Dictionary = E.beings.Lumo
+	b.mover.pos = s.city.tile_center(climb)
+	ok(str(E.observe("Lumo").karte.zeilen).contains("h"), "Karte zeigt begehbare Haenge")
+	if high.x >= 0:
+		b.mover.pos = s.city.tile_center(high)
+		ok(str(E.feelings(b).gefuehl).contains("hoch oben") and int(E.observe("Lumo").gelaende.deine_hoehe) >= 6, "Gefuehl und Hoehe oben am Berg")
+	var mv := MountainView.new()
+	mv.sim = s
+	mv._build_relief()
+	ok(mv.relief == E.relief, "Darstellung und Logik nutzen dasselbe Relief")
+	mv.free()

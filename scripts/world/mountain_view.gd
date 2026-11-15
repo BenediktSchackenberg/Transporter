@@ -67,61 +67,9 @@ func _build_regions() -> void:
 ## Schoene Berge (nur Darstellung): das Hoehenfeld des Generators wird geglaettet (kein Rauschen je Feld), mit einem Gratnetz
 ## (Ridged-Noise) ueberlagert und auf bis zu 15 Stufen gestreckt. Der Bergfuss bleibt niedrig, Gipfel und Grate ragen heraus.
 func _build_relief() -> void:
-	var H: PackedByteArray = sim.city.height
-	var n: int = sim.city.size
-	relief.resize(H.size())
-	relief.fill(0.0)
-	# 1) Glaetten: Mittel ueber 5x5 (zwei Durchgaenge mit Radius 2 als Kastenfilter, getrennt nach Zeilen und Spalten)
-	var a := PackedFloat32Array()
-	a.resize(H.size())
-	for i in H.size():
-		a[i] = float(H[i])
-	for pass_i in 2:
-		var b := PackedFloat32Array()
-		b.resize(a.size())
-		for y in n:
-			for x in n:
-				var i := y * n + x
-				if H[i] == 0:
-					continue
-				var sum := 0.0
-				var cnt := 0.0
-				for k in range(-2, 3):
-					var xx := clampi(x + k, 0, n - 1)
-					sum += a[y * n + xx]
-					cnt += 1.0
-				b[i] = sum / cnt
-		for y in n:
-			for x in n:
-				var i := y * n + x
-				if H[i] == 0:
-					continue
-				var sum := 0.0
-				var cnt := 0.0
-				for k in range(-2, 3):
-					var yy := clampi(y + k, 0, n - 1)
-					sum += b[yy * n + x]
-					cnt += 1.0
-				a[i] = sum / cnt
-	# 2) Grate und Strecken: hohe Lagen bekommen Grate, der Fuss bleibt sanft
-	var ridge := FastNoiseLite.new()
-	ridge.seed = sim.city.seed_value * 7 + 3
-	ridge.frequency = 0.03
-	ridge.fractal_type = FastNoiseLite.FRACTAL_RIDGED
-	ridge.fractal_octaves = 3
-	var top := 0.0
-	for i in H.size():
-		if H[i] > 0:
-			top = maxf(top, a[i])
-	for i in H.size():
-		if H[i] == 0:
-			continue
-		var x := i % n
-		var y := i / n
-		var k := clampf(a[i] / maxf(1.0, top), 0.0, 1.0)              # 0 am Fuss .. 1 am Gipfel
-		var crest := clampf(ridge.get_noise_2d(x, y) * 0.5 + 0.5, 0.0, 1.0)
-		var h := 1.0 + 14.0 * pow(k, 1.35) * (0.45 + 0.75 * pow(crest, 1.6))   # Grate hoch, dazwischen Kare und Taeler
-		relief[i] = clampf(round(h), 1.0, 15.0)
+	relief = Terrain.relief(sim.city)   # gemeinsame Rechnung mit der Spiellogik der freien Wesen (begehbare Haenge)
+	if relief.is_empty():
+		relief.resize(sim.city.height.size())
 
 
 ## Darstellungshoehe einer Zelle (Relief), ausserhalb der Berge 0.

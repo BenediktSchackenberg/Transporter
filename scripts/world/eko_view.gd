@@ -32,7 +32,7 @@ func _process(_delta: float) -> void:
 		var n: BeingNode = _beings[name]
 		var b: Dictionary = sim.eko.beings.get(name, {})
 		if not b.is_empty():
-			n.position = Iso.to_screen(b.mover.pos)
+			n.position = Iso.to_screen(b.mover.pos) - Vector2(0, sim.eko.height_at(sim.eko.tile_of(b)) * MountainView.STEP)   # am Hang hoeher
 			n.queue_redraw()
 	for name in _houses:
 		_houses[name].queue_redraw()   # Lampe und Ladestation leuchten, Baufortschritt
@@ -45,13 +45,13 @@ static func color_of(mat: String) -> Color:
 
 
 ## Iso-Wuerfel eines Blocks; occ: belegte Nachbarn (verdeckte Flaechen weglassen), origin: Knotenposition.
-static func draw_block(n: CanvasItem, p: Vector3i, mat: String, occ: Dictionary, origin: Vector2, cut_top := false, night := false) -> void:
+static func draw_block(n: CanvasItem, p: Vector3i, mat: String, occ: Dictionary, origin: Vector2, cut_top := false, night := false, lift := 0.0) -> void:
 	var col := color_of(mat)
 	if mat == "glas":
 		col = WINDOW_NIGHT if night else col
 		col.a = 0.85 if night else 0.6
 	var w0 := Vector2(p.x, p.y) * BLOCK
-	var up := Vector2(0, -float(p.z) * BLOCK_H)
+	var up := Vector2(0, -float(p.z) * BLOCK_H - lift)   # lift: Gelaendehoehe am Berg (Pixel)
 	var top := up + Vector2(0, -BLOCK_H)
 	var p00 := Iso.to_screen(w0) - origin
 	var p10 := Iso.to_screen(w0 + Vector2(BLOCK, 0)) - origin
@@ -119,6 +119,8 @@ func _refresh() -> void:
 			n = TileNode.new()
 			n.sim = sim
 			n.position = Iso.to_screen(Vector2(t + Vector2i.ONE) * 32.0)   # Sortierpunkt: vordere Ecke des Feldes
+			if sim.eko.height_at(t) > 0.0:
+				n.z_index = 1   # am Berg ueber dem Gelaende zeichnen
 			cv.buildings_node.add_child(n)
 			_tiles[t] = n
 		n.cells = by_tile[t]
@@ -165,7 +167,8 @@ class TileNode:
 		for p in order:
 			if bl.has(p):
 				var up: Vector3i = p + Vector3i(0, 0, 1)
-				EkoView.draw_block(self, p, str(bl[p]), occ, position, bl.has(up) and not occ.has(up), night)
+				var t := Vector2i(floori(float(p.x) / EkoWorld.PER_TILE), floori(float(p.y) / EkoWorld.PER_TILE))
+				EkoView.draw_block(self, p, str(bl[p]), occ, position, bl.has(up) and not occ.has(up), night, sim.eko.height_at(t) * MountainView.STEP)
 
 
 ## Haus eines Wesens als Schnitt: Dach weg, Vorderwaende (Sueden, Osten) nur bis zur ersten Schicht, damit man hineinsieht.
