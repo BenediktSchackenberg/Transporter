@@ -5,6 +5,7 @@ extends RefCounted
 
 signal logged(entry: Dictionary)                       # {t, text, kind, company}
 signal agent_event(company_id: int, text: String)      # Anlass fuer eine vorgezogene KI-Entscheidung
+signal visit_completed(company_id: int, action: String, result: Dictionary)   # Handlung vor Ort ausgefuehrt (Eko: Ergebnis an das Wesen)
 signal sfx(name: String)
 signal day_changed(day: int)       # absoluter Spieltag (0 = erster)
 signal month_changed(month: int)

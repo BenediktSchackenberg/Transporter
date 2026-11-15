@@ -31,6 +31,7 @@ func _initialize() -> void:
 	test_names.append("test_world_production_metal_textile")
 	test_names.append("test_eko_arms")
 	test_names.append("test_eko_destruction")
+	test_names.append("test_eko_play_fixes")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -14065,3 +14066,38 @@ func test_eko_destruction() -> void:
 	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
 	ok(E2.arms.walls.has(str(k)) and E2.arms.towers.size() == 1, "Mauer und Wachturm gespeichert")
 	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
+
+
+## Befunde aus dem Spielverlauf (15.11.2026): eigenes Grundstueck begehbar (Viktor kam nicht ins Haus), Ergebnis von Firmen-Handlungen
+## vor Ort erreicht das Wesen, verkuerzte Firma-Schreibweise, Firmen mit ID in der Amtslage.
+func test_eko_play_fixes() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.join("Viktor")
+	var V: Dictionary = E.beings.Viktor
+	s.economy.transfer("X0", "Y0", 5000.0)
+	V.geld = 5000.0
+	var pl: Array = E._plot_obs(V)
+	ok(not pl.is_empty(), "Grundstueck in der Naehe")
+	if not pl.is_empty():
+		V.mover.pos = s.city.tile_center(Vector2i(int(pl[0].feld[0]), int(pl[0].feld[1])))
+		ok(E.input("Viktor", "BuyPlot", {"plot": str(pl[0].id)}).ok, "Grundstueck gekauft")
+		var r := E.plot_rect(str(pl[0].id))
+		var all_open := true
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				if s.city.g(Vector2i(x, y)) != CityData.G.WATER and s.nav.walk.is_point_solid(Vector2i(x, y)):
+					all_open = false
+		ok(all_open, "eigenes Grundstueck ist begehbar")
+	s.economy.transfer("X0", "Y0", 3000.0)
+	V.geld = float(V.geld) + 3000.0
+	E.input("Viktor", "FoundCompany", {"name": "Vik"})
+	var r1: Dictionary = E.input("Viktor", "Firma", {"action": "collect_contracts", "warum": "Test"})
+	ok(not str(r1.msg).contains("Firma braucht aktion"), "verkuerzte Schreibweise verstanden: %s" % str(r1.msg).left(80))
+	ok(r1.status == "laeuft" if bool(r1.get("pending", false)) else true, "Weg zur Ausfuehrung: Status laeuft")
+	var cid: int = E.active_firm(V)
+	s.visit_completed.emit(cid, "collect_contracts", {"ok": true, "msg": "3 Auftraege eingesammelt"})
+	ok(str(V.events.back()).contains("3 Auftraege eingesammelt"), "Ergebnis vor Ort erreicht das Wesen")
+	var ms: Array = E.adopt_mayors()
+	var firms: Array = E.office_obs(E.beings[ms[0]]).firmen
+	ok(firms.any(func(f): return int(f.firma) == cid and f.name == "Vik"), "Amtslage nennt Firmen mit ID")

@@ -54,6 +54,32 @@ var arms := EkoArms.new()           # Waffen, Schutz, Gefahren (Benedikt 15.11.2
 func setup(simulation) -> void:
 	sim = simulation
 	arms.setup(self)
+	sim.visit_completed.connect(_on_visit_completed)
+
+
+## Ergebnis einer Firmen-Handlung, die erst vor Ort ausgefuehrt wurde, an das Wesen der Firma melden (vorher sah es nur "Figur geht zu ...").
+func _on_visit_completed(cid: int, action: String, r: Dictionary) -> void:
+	for b in beings.values():
+		if active_firm(b) == cid:
+			_event(b, "Firma vor Ort erledigt – %s: %s %s" % [action, "OK" if bool(r.get("ok", false)) else "ABGELEHNT", str(r.get("msg", "")).left(160)])
+			var dec: Dictionary = b.get("entscheidung", {})
+			if str(dec.get("aktion", "")) == "Firma" and str(dec.get("status", "")) == "laeuft":
+				dec.status = "abgeschlossen" if bool(r.get("ok", false)) else "gescheitert"
+				dec.ergebnis = str(r.get("msg", "")).left(120)
+				dec.ms = Time.get_ticks_msec()
+
+
+## Eigenes Grundstueck fuer Fussgaenger oeffnen (Parzellenfelder zaehlen sonst als Gebaeudeflaeche): sonst kommt das Wesen nie ins
+## eigene Haus und gilt nie als zu Hause (Viktor, 15.11.: "MoveTo ins eigene Haus: Ziel nicht begehbar").
+func open_plot(id: String) -> void:
+	if id == "":
+		return
+	var r := plot_rect(id)
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var c := Vector2i(x, y)
+			if sim.city.inside(c) and sim.city.g(c) != CityData.G.WATER:
+				sim.nav.walk.set_point_solid(c, false)
 
 
 ## Begehbare Haenge und Hochebenen (5a, 15.11.2026): Bergzellen bis Terrain.CLIMB_MAX mit sanfter Steigung werden im
@@ -62,6 +88,8 @@ func ensure_terrain() -> void:
 	if _terrain_ready or sim == null or sim.city == null:
 		return
 	_terrain_ready = true
+	for b0 in beings.values():
+		open_plot(str(b0.get("grundstueck", "")))
 	relief = Terrain.relief(sim.city)
 	if relief.is_empty():
 		return
@@ -1031,6 +1059,7 @@ func _buy_plot(b: Dictionary, id: String) -> Dictionary:
 	p["bewohner"] = b.name
 	sim.parcels.touch(id)
 	b.grundstueck = id
+	open_plot(id)
 	_event(b, "kauft Grundstück %s für %s" % [id, Catalog.money(price)])
 	sim.log_event("%s kauft das Grundstück %s für %s." % [b.name, id, Catalog.money(price)], "good")
 	return {"ok": true, "msg": "Grundstück %s gehört jetzt dir (%s bezahlt, %s übrig). Mit OrderHouse lässt du ein Haus bauen (%s)." % [id,
@@ -1297,12 +1326,27 @@ func _found_company(b: Dictionary, data: Dictionary) -> Dictionary:
 
 
 func _firm_action(b: Dictionary, data: Dictionary) -> Dictionary:
+	var r := _firm_action_inner(b, data)
+	if bool(r.get("pending", false)):   # Figur geht erst hin: angenommen, aber noch nicht ausgefuehrt
+		r["status"] = "laeuft"
+		r["msg"] = str(r.get("msg", "")) + " Das Ergebnis kommt als Ereignis (deine_letzten_ereignisse), sobald die Figur dort ist."
+	return r
+
+
+func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	var cid := int(b.get("firma", -1))
 	if cid < 0:
 		return {"ok": false, "msg": "Du hast noch keine Firma (FoundCompany)."}
 	var a = data.get("aktion", data.get("action"))
-	if a is String:
-		a = JSON.parse_string(a)
+	if a is String:   # auch {"action": "collect_contracts", ...Parameter} statt {"aktion": {...}}
+		var parsed = JSON.parse_string(a) if a.strip_edges().begins_with("{") else null
+		if parsed is Dictionary:
+			a = parsed
+		else:
+			a = data.duplicate()
+			a["action"] = str(data.get("aktion", data.get("action")))
+			a.erase("aktion")
+			a.erase("warum")
 	if not (a is Dictionary) or str(a.get("action", "")) not in FIRM_ACTIONS:
 		return {"ok": false, "msg": "Firma braucht aktion: {\"action\": eine von %s, ...Parameter}." % ", ".join(FIRM_ACTIONS)}
 	if str(a.action) in ["design_weapon", "forge_weapon"]:   # Waffenschmiede: Entwurf und Fertigung (EkoArms)
@@ -1570,7 +1614,8 @@ func office_obs(b: Dictionary) -> Dictionary:
 	var ind: Dictionary = sim.towns.mayors[k].indicators()
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
-	var out := {"stadt": sim.towns.name_of(k), "verteidigung": arms.defense_obs(k)}
+	var out := {"stadt": sim.towns.name_of(k), "verteidigung": arms.defense_obs(k),
+		"firmen": sim.companies.filter(func(c): return c.is_active()).map(func(c): return {"firma": c.id, "name": c.company_name, "inhaber": c.player_name})}
 	var size := 0
 	var skipped: Array = []
 	for key in keys:
@@ -1775,6 +1820,8 @@ func from_dict(d: Dictionary) -> void:
 	_next_job = int(d.get("next_job", 1))
 	houses = d.get("houses", {})
 	arms.from_dict(d.get("arms", {}))
+	for b in beings.values():   # eigene Grundstuecke wieder begehbar
+		open_plot(str(b.get("grundstueck", "")))
 
 
 ## Vorfuehrung (--eko-demo-haus): Wesen mit fertigem Haus auf dem naechsten Wohngrundstueck, steht drinnen.

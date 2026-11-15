@@ -1261,6 +1261,7 @@ func complete_visit(cid: int, pending: Dictionary) -> void:
 	sim.plans.visit_done(cid, str(pending.get("key", "")), r)
 	sim.decisions.record(cid, str(pending.get("origin", "api")), a, r, str(pending.get("key", "")) + "@vor_ort")
 	sim.agent_event.emit(cid, "Besuch abgeschlossen: " + name)
+	sim.visit_completed.emit(cid, name, r)
 
 
 ## Gewaehltes Fahrzeugangebot ist schon verkauft (mehrere Spieler wollten dasselbe): gleiches Modell zum hoechstens 25 % hoeheren Preis,
