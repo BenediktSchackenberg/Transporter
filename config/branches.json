@@ -615,5 +615,254 @@
       "artikel": "wurst",
       "kundschaft": "metzgerei"
     }
+  },
+  "kiesgrube": {
+    "label": "Kiesgrube",
+    "beschreibung": "Baggert Kies und Sand aus dem Boden (Flussbett, Strand, Kiesgrube) für Betonwerk, Glashütte, Straßenbau und Großlager.",
+    "standort": "markt",
+    "gebaeude": "warehouse",
+    "gruendungskosten": 0,
+    "ausstattung": 14000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 2,
+    "rollen": [
+      "baggern"
+    ],
+    "rezept": {
+      "ein": {},
+      "aus": {
+        "kies": 2,
+        "sand": 1
+      },
+      "chargen_je_person_tag": 10,
+      "lager_tage": 4,
+      "lager_max": 600
+    },
+    "naehe": "bauhof"
+  },
+  "lehmgrube": {
+    "label": "Lehmgrube",
+    "beschreibung": "Sticht Lehm und Ton für die Ziegelei.",
+    "standort": "markt",
+    "gebaeude": "warehouse",
+    "gruendungskosten": 0,
+    "ausstattung": 9000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 1,
+    "rollen": [
+      "graben"
+    ],
+    "rezept": {
+      "ein": {},
+      "aus": {
+        "lehm": 3
+      },
+      "chargen_je_person_tag": 10,
+      "lager_tage": 4,
+      "lager_max": 600
+    },
+    "naehe": "bauhof"
+  },
+  "saegewerk": {
+    "label": "Sägewerk",
+    "beschreibung": "Schneidet Holz aus dem Forst zu Brettern für Schreinereien und Baustellen.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 16000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 10.0,
+    "personal_min": 1,
+    "rollen": [
+      "saegen"
+    ],
+    "rezept": {
+      "ein": {
+        "holz": 2
+      },
+      "aus": {
+        "bretter": 3
+      },
+      "chargen_je_person_tag": 8,
+      "lager_tage": 6,
+      "lager_max": 300
+    },
+    "naehe": "bauhof"
+  },
+  "schreinerei": {
+    "label": "Schreinerei",
+    "beschreibung": "Baut aus Brettern und Beschlägen Tische, Betten, Regale und Stühle – für Haushalte, Möbelhäuser und die freien Wesen.",
+    "standort": "markt",
+    "gebaeude": "workshop",
+    "gruendungskosten": 0,
+    "ausstattung": 12000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 4.0,
+    "personal_min": 1,
+    "rollen": [
+      "schreinern"
+    ],
+    "rezept": {
+      "ein": {
+        "bretter": 3,
+        "beschlaege": 1
+      },
+      "aus": {
+        "tisch": 1
+      },
+      "chargen_je_person_tag": 3,
+      "lager_tage": 6,
+      "lager_max": 60
+    },
+    "naehe": "grosshandel",
+    "rezept_varianten": [
+      {
+        "ein": {
+          "bretter": 5,
+          "beschlaege": 1
+        },
+        "aus": {
+          "bett": 1
+        },
+        "chargen_je_person_tag": 2,
+        "lager_tage": 6,
+        "lager_max": 40
+      },
+      {
+        "ein": {
+          "bretter": 2,
+          "beschlaege": 1
+        },
+        "aus": {
+          "regal": 1
+        },
+        "chargen_je_person_tag": 4,
+        "lager_tage": 6,
+        "lager_max": 60
+      },
+      {
+        "ein": {
+          "bretter": 1
+        },
+        "aus": {
+          "stuhl": 1
+        },
+        "chargen_je_person_tag": 6,
+        "lager_tage": 6,
+        "lager_max": 80
+      }
+    ]
+  },
+  "ziegelei": {
+    "label": "Ziegelei",
+    "beschreibung": "Formt Lehm zu Ziegeln und brennt sie im Ofen (Kohle).",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 22000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 12.0,
+    "personal_min": 2,
+    "rollen": [
+      "brennen"
+    ],
+    "rezept": {
+      "ein": {
+        "lehm": 3,
+        "kohle": 1
+      },
+      "aus": {
+        "ziegel": 4
+      },
+      "chargen_je_person_tag": 6,
+      "lager_tage": 6,
+      "lager_max": 900
+    },
+    "naehe": "bauhof"
+  },
+  "zementwerk": {
+    "label": "Zementwerk",
+    "beschreibung": "Brennt Kalkstein mit Kohle zu Zement.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 28000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 20.0,
+    "personal_min": 2,
+    "rollen": [
+      "brennen"
+    ],
+    "rezept": {
+      "ein": {
+        "kalkstein": 3,
+        "kohle": 1
+      },
+      "aus": {
+        "zement": 2
+      },
+      "chargen_je_person_tag": 6,
+      "lager_tage": 6,
+      "lager_max": 500
+    },
+    "naehe": "bauhof"
+  },
+  "betonwerk": {
+    "label": "Betonwerk",
+    "beschreibung": "Mischt Zement, Kies und Sand zu Betonbauteilen.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 20000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 10.0,
+    "personal_min": 1,
+    "rollen": [
+      "mischen"
+    ],
+    "rezept": {
+      "ein": {
+        "zement": 1,
+        "kies": 2,
+        "sand": 1
+      },
+      "aus": {
+        "beton": 2
+      },
+      "chargen_je_person_tag": 6,
+      "lager_tage": 6,
+      "lager_max": 400
+    },
+    "naehe": "bauhof"
+  },
+  "glashuette": {
+    "label": "Glashütte",
+    "beschreibung": "Schmilzt Sand mit Kalkstein und Kohle zu Fensterglas.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 26000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 18.0,
+    "personal_min": 2,
+    "rollen": [
+      "schmelzen"
+    ],
+    "rezept": {
+      "ein": {
+        "sand": 3,
+        "kalkstein": 1,
+        "kohle": 1
+      },
+      "aus": {
+        "glas": 2
+      },
+      "chargen_je_person_tag": 5,
+      "lager_tage": 6,
+      "lager_max": 200
+    },
+    "naehe": "bauhof"
   }
 }

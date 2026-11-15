@@ -22,6 +22,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_players_and_mayors")
 	test_names.append("test_eko_plan_and_autonomy")
 	test_names.append("test_eko_terrain")
+	test_names.append("test_world_production_stage1")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13504,3 +13505,53 @@ func test_eko_terrain() -> void:
 	mv._build_relief()
 	ok(mv.relief == E.relief, "Darstellung und Logik nutzen dasselbe Relief")
 	mv.free()
+
+
+## Etappe 1 "Bauen aus der Welt" (15.11.2026): neue Werke als Daten (Gruben, Saegewerk, Schreinerei, Ziegelei, Zementwerk, Betonwerk,
+## Glashuette), Gruende und Produktion mit Personal, Wesen-Unternehmer sehen und gruenden Branchen, kaufen echten Bauhof-Bestand.
+func test_world_production_stage1() -> void:
+	var bj: Dictionary = Businesses.branches()
+	for k in ["kiesgrube", "lehmgrube", "saegewerk", "schreinerei", "ziegelei", "zementwerk", "betonwerk", "glashuette"]:
+		ok(bj.has(k) and bj[k].has("rezept"), "Branche %s mit Rezept" % k)
+	for a in ["kies", "sand", "lehm", "zement", "ziegel", "beton", "glas", "bretter", "tisch", "bett", "regal", "stuhl"]:
+		ok(not Production.art(a).is_empty(), "Artikel %s" % a)
+	ok(Production.variants(bj.schreinerei).size() == 4, "Schreinerei: Tisch, Bett, Regal, Stuhl")
+	var s := region_sim(2, 21)
+	var c: Company = s.companies[0]
+	c.ledger.inject(60000.0)
+	var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "kiesgrube", "reason": "Test"})
+	ok(r.ok, "Kiesgrube gegruendet: %s" % str(r.get("msg", "")).left(80))
+	if r.ok:
+		var bid := str(r.ref)
+		for i in 2:
+			var w := s.personnel.spawn_available("allrounder")
+			s.personnel.hire(0, w)
+			s.executor.execute(0, {"action": "assign_staff", "worker_id": w.id, "business_id": bid})
+		var B: Dictionary = s.biz.get_b(bid)
+		for d in 6:
+			next_day(s)
+		ok(s.stock.qty("kies", "C0", int(B.site)) + s.stock.qty("sand", "C0", int(B.site)) > 0 or int(B.get("total", 0)) > 0, "Kiesgrube foerdert (Status %s, Blockaden %s)" % [B.status, str(B.get("blocks", {}))])
+	ok(identity_ok(s), "Identitaet nach Gruendung und Foerderung")
+	# Wesen-Unternehmer sieht Branchen und kauft echten Bauhof-Bestand
+	var E: EkoWorld = s.eko
+	E.join("Lumo", "roboter")
+	var b: Dictionary = E.beings.Lumo
+	s.economy.transfer("X0", "Y0", 3000.0)
+	b.geld = 3000.0
+	E.input("Lumo", "FoundCompany", {"name": "Lumo Werke"})
+	var menu: Array = E.observe("Lumo").meine_firma.branchen_zum_gruenden
+	ok(menu.any(func(m): return m.branche == "schreinerei" and m.aus.has("tisch")), "Wesen sieht die Schreinerei mit Tischen")
+	var T: Trader = s.trader
+	if T.bauhof >= 0:
+		b.mover.pos = s.city.tile_center(s.city.building(T.bauhof).walk)
+		s.economy.transfer("X0", "Y0", 500.0)
+		b.geld = float(b.geld) + 500.0
+		var st0 := T.stock_of("holz")
+		var g0 := float(b.geld)
+		var pk: Dictionary = E.input("Lumo", "Pickup", {"material": "holz", "count": 4})
+		ok(pk.ok and T.stock_of("holz") == st0 - 1 and float(b.geld) < g0, "Holz aus dem echten Bauhof-Bestand (Bestand %d -> %d, %s, bauhof %d, quellen %s)" % [st0, T.stock_of("holz"), str(pk.get("msg","")).left(60), T.bauhof, str(E.sources())])
+	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
+	var mayor_ms: Array = E.adopt_mayors()
+	s.economy.transfer("X0", "Y0", 3000.0)
+	E.beings[mayor_ms[0]].geld = 3000.0
+	ok(not E.input(mayor_ms[0], "FoundCompany", {}).ok, "Buergermeister gruendet keine Firma")

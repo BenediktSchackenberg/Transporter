@@ -27,6 +27,9 @@ const ARTEN := ["mensch", "roboter"]
 ## fuer einen angenommenen Mauer-Auftrag stellt die Firma das Material. Einrichtung wird wie Bloecke gesetzt.
 const PRICES := {"stein": 3.0, "ziegel": 4.0, "holz": 4.0, "beton": 3.0, "glas": 6.0, "stahl": 8.0, "dach": 5.0, "boden": 3.0,
 	"teppich": 15.0, "bett": 60.0, "decke": 10.0, "tisch": 30.0, "lampe": 20.0, "pflanze": 10.0, "regal": 25.0, "buch": 5.0, "ladestation": 80.0}
+## Material der Wesen und Artikel des Bauhofs: eine Bauhof-Einheit ergibt so viele Bloecke (Preis je Block = Einheitspreis / Anzahl).
+const TRADER_ITEM := {"holz": "holz", "ziegel": "ziegel", "beton": "beton", "glas": "glas", "stahl": "stahl"}
+const BLOCKS_PER_UNIT := {"holz": 4, "ziegel": 4, "beton": 2, "glas": 2, "stahl": 2}
 const MOVE_IN_BLOCKS := 30          # Bausteine (ohne Einrichtung) auf dem eigenen Grundstueck
 const MOVE_IN_HEIGHT := 4           # Schichten (hoechster Block z >= 3)
 const COLORS := [Color("#e8c04a"), Color("#5fb3d9"), Color("#d96b5f"), Color("#7fcf6a"), Color("#b98ad9")]
@@ -294,8 +297,18 @@ func _pickup(b: Dictionary, data: Dictionary) -> Dictionary:
 	var j: Dictionary = jobs.get(str(b.get("job", "")), {})
 	var paid_by_firm: bool = not j.is_empty() and j.art == "mauer" and j.material == mat
 	var cost := 0.0 if paid_by_firm else float(PRICES[mat]) * n
+	var item := str(TRADER_ITEM.get(mat, ""))   # Baustoff mit echtem Bestand am Bauhof?
+	var T: Trader = sim.trader
+	var at_trader: bool = item != "" and T.bauhof >= 0 and _dist(tile_of(b), sim.city.building(T.bauhof).walk) <= SOURCE_REACH + 1
+	if at_trader and not paid_by_firm:
+		var per_block := T.price(item, n) / float(BLOCKS_PER_UNIT.get(mat, 1))
+		cost = snappedf(per_block * n, 0.01)
+		if T.stock_of(item) < 1:
+			return {"ok": false, "msg": "Der Bauhof hat gerade kein %s auf Lager (es wird hergestellt oder importiert). Versuch es später oder nimm ein anderes Material." % mat}
 	if cost > float(b.get("geld", 0.0)):
 		return {"ok": false, "msg": "%d x %s kosten %s, du hast %s." % [n, mat, Catalog.money(cost), Catalog.money(float(b.get("geld", 0.0)))]}
+	if at_trader and T.stock_of(item) >= 1:   # Bestand verbrauchen (1 Einheit reicht fuer BLOCKS_PER_UNIT Bloecke)
+		sim.stock.consume(item, maxi(1, ceili(float(n) / float(BLOCKS_PER_UNIT.get(mat, 1)))), "T0", T.bauhof, "Verkauf an %s" % b.name, sim.game_min)
 	if cost > 0.0:
 		sim.economy.transfer("Y0", "T0", cost)
 		b.geld = float(b.geld) - cost
@@ -997,6 +1010,9 @@ const FIRM_ACTIONS := [
 	"schedule_rest", "offer_training", "request_replacement_worker",
 	# Hof und Bauen
 	"rent_depot", "place_building", "build_office", "upgrade_office", "install_internet", "free_build", "create_stone_work", "hub_buy",
+	# Betriebe: gruenden, ausbauen, Personal zuordnen, Preise, Bergbau, Grundstuecke, Handel mit Grosslager und Bauhof
+	"found_business", "upgrade_business", "close_business", "set_business_price", "assign_staff", "explore_deposit", "request_mining",
+	"build_access", "buy_property", "sell_property", "hub_sell", "buy_material", "sell_material",
 	# Geld
 	"take_loan", "repay_loan", "entnahme",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
@@ -1025,6 +1041,8 @@ func firm_being(cid: int) -> String:
 func _found_company(b: Dictionary, data: Dictionary) -> Dictionary:
 	if active_firm(b) >= 0:
 		return {"ok": false, "msg": "Du hast schon eine Firma (%s)." % sim.company(int(b.firma)).company_name}
+	if int(b.get("amt", -1)) >= 0:
+		return {"ok": false, "msg": "Als Bürgermeister darfst du keine eigene Firma führen (Interessenkonflikt: du entscheidest über Genehmigungen und Aufträge)."}
 	var own := float(b.get("geld", 0.0))
 	if own < FOUND_MIN_OWN:
 		return {"ok": false, "msg": "Zum Gründen brauchst du mindestens %s eigene Ersparnisse (du hast %s). Der Kapitalgeber legt %s dazu." % [
@@ -1121,6 +1139,10 @@ func firm_obs(b: Dictionary) -> Dictionary:
 			"regeln": "Harte Mittel (block_road, attempt_sabotage, attempt_vehicle_sabotage) können entdeckt werden: Bußgeld, Schadensersatz, Ruf; " +
 				"jede weitere Ermittlung kostet mehr (bis fünffach). Blockaden erst ab hoher Spannung. Schutz: guard_target, buy_security, set_insurance."},
 		"hofbau": (o.get("betriebshof", {}) as Dictionary).get("bauvorschlaege_xy_rot", {}),
+		"betriebe": o.get("betriebe", []),
+		"branchen_zum_gruenden": _branch_menu(o.get("verfuegbare_branchen", [])),
+		"chancen": (o.get("chancen", []) as Array).slice(0, 6),
+		"bergbau": o.get("bergbau", []),
 		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
 			"du musst nicht darauf warten. Fahrten zuweisen, Fahrer einsetzen und Aufträge annehmen ist deine Sache; die Disposition springt " +
 			"nur alle drei Spielstunden für stehende Fahrzeuge ein (und normal, wenn du drei Minuten nichts tust). Aufträge sind schnell weg – nimm sie zügig an.",
@@ -1131,7 +1153,10 @@ func firm_obs(b: Dictionary) -> Dictionary:
 			"place_building {plot_id, typ, x, y, rot} (Hofbau, Vorschläge in hofbau) | free_build {name, form, material} | " +
 			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +
 			"attempt_vehicle_sabotage {worker_id, vehicle_id} | buy_security {level} | set_insurance {active} | offer_trade/propose_cooperation (siehe Spielregeln) | " +
-			"auftrag_an_wesen {art: botengang|mauer, lohn} (Hilfsjob für freie Wesen wie Lumo)}"}
+			"auftrag_an_wesen {art: botengang|mauer, lohn} (Hilfsjob für freie Wesen wie Lumo) | " +
+			"found_business {branche, stadt?} (Betrieb gründen: Werk, Grube, Laden …, siehe branchen_zum_gruenden) | assign_staff {worker_id, business_id} | " +
+			"upgrade_business {business_id} | set_business_price {business_id, preis} | explore_deposit {grundstueck} | request_mining {grundstueck} | " +
+			"hub_sell {item, qty} (Ware ans Großlager) | close_business {business_id}}"}
 
 
 # ------------------------------------------------------------------ Gefuehle und Beduerfnisse (15.11.2026)
@@ -1326,6 +1351,20 @@ func office_obs(b: Dictionary) -> Dictionary:
 	out["vorfaelle"] = sim.rivalry.incidents.slice(-8).map(func(i): return {"tag": GameCalendar.day_of(float(i.t)) + 1, "was": str(i.get("text", i.get("art", ""))).left(120)})
 	out["schiedsrichter"] = "Bei Sabotage, Blockaden oder unfairem Wettbewerb kannst du einschreiten: warn_company, order_inspection, mediate_rivalry."
 	out["hinweis"] = "Routinefälle erledigt deine Verwaltung nach Regeln; du setzt die Schwerpunkte für deine Stadt. Du bekommst ein Amtsgehalt von %s je Minute (Privatgeld, lebensziel.geld) – du musst nicht für Firmen arbeiten." % Catalog.money(MAYOR_SALARY)
+	return out
+
+
+## Branchen kurz: Name, was rein, was raus, Ausstattung (fuer die Gruendungsentscheidung des Wesens).
+func _branch_menu(avail) -> Array:   # avail: Branche -> Gruendungskosten (ObservationBuilder._branches)
+	var spec_all: Dictionary = Businesses.branches()
+	var out: Array = []
+	for key in (avail.keys() if avail is Dictionary else avail):
+		var sp: Dictionary = spec_all.get(str(key), {})
+		if sp.is_empty():
+			continue
+		var r: Dictionary = sp.get("rezept", {})
+		out.append({"branche": str(key), "name": sp.get("label", key), "ein": r.get("ein", {}), "aus": r.get("aus", sp.get("feld", {}).get("artikel", "")),
+			"kosten": int(avail.get(key, sp.get("ausstattung", 0))) if avail is Dictionary else sp.get("ausstattung", 0), "personal_min": sp.get("personal_min", 1)})
 	return out
 
 

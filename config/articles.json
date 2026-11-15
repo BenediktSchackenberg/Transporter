@@ -367,5 +367,125 @@
     "basispreis": 2.6,
     "importpreis": 3.6,
     "exportpreis": 1.8
+  },
+  "lehm": {
+    "name": "Lehm",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 3.0,
+    "importpreis": null,
+    "exportpreis": 2.0
+  },
+  "kies": {
+    "name": "Kies",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 6.0,
+    "importpreis": 8.0,
+    "exportpreis": 4.0
+  },
+  "sand": {
+    "name": "Sand",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 6.0,
+    "importpreis": 8.0,
+    "exportpreis": 4.0
+  },
+  "zement": {
+    "name": "Zement",
+    "einheit": "Sack-Palette",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 18.0,
+    "importpreis": 24.0,
+    "exportpreis": 12.0
+  },
+  "ziegel": {
+    "name": "Ziegel",
+    "einheit": "Einheit (100 Stk)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 12.0,
+    "importpreis": 16.0,
+    "exportpreis": 9.0
+  },
+  "beton": {
+    "name": "Betonbauteile",
+    "einheit": "Einheit",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 40.0,
+    "importpreis": 52.0,
+    "exportpreis": 30.0
+  },
+  "glas": {
+    "name": "Glas",
+    "einheit": "Einheit",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 35.0,
+    "importpreis": 45.0,
+    "exportpreis": 26.0
+  },
+  "bretter": {
+    "name": "Bretter",
+    "einheit": "Bund",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 22.0,
+    "importpreis": 28.0,
+    "exportpreis": 16.0
+  },
+  "tisch": {
+    "name": "Tisch",
+    "einheit": "Stk",
+    "ladung": "moebel",
+    "je_ladeeinheit": 5,
+    "haltbar_tage": 0,
+    "basispreis": 60.0,
+    "importpreis": 80.0,
+    "exportpreis": 45.0
+  },
+  "bett": {
+    "name": "Bett",
+    "einheit": "Stk",
+    "ladung": "moebel",
+    "je_ladeeinheit": 3,
+    "haltbar_tage": 0,
+    "basispreis": 120.0,
+    "importpreis": 150.0,
+    "exportpreis": 90.0
+  },
+  "regal": {
+    "name": "Regal",
+    "einheit": "Stk",
+    "ladung": "moebel",
+    "je_ladeeinheit": 5,
+    "haltbar_tage": 0,
+    "basispreis": 45.0,
+    "importpreis": 60.0,
+    "exportpreis": 35.0
+  },
+  "stuhl": {
+    "name": "Stuhl",
+    "einheit": "Stk",
+    "ladung": "moebel",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 25.0,
+    "importpreis": 35.0,
+    "exportpreis": 18.0
   }
 }
