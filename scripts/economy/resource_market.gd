@@ -249,8 +249,11 @@ func _daily_stations() -> void:
 			var qty := minf(float(s.max) - float(s.stock) - pending, floorf(maxf(0.0, sim.economy.accounts.G0) / wholesale))
 			qty = floorf(qty / 100.0) * 100.0
 			if qty >= 100.0:
-				var cost := qty * wholesale
-				sim.economy.transfer("G0", "X0", cost)
+				# zuerst Diesel aus Raffinerien in der Welt (je Einheit 1000 l, 5 % unter dem Grosshandelspreis), Rest Import
+				var local_units: int = sim.prod.sell_from_producers("diesel", int(qty / 1000.0), wholesale * 1000.0 * 0.95, "G0", "Diesel für Tankstelle")
+				var cost := maxf(0.0, qty - local_units * 1000.0) * wholesale
+				if cost > 0.0:
+					sim.economy.transfer("G0", "X0", cost)
 				tanker_orders.append({"station": sid, "qty": qty, "due": now + GameCalendar.day_game_min, "cost": cost})
 	for o in tanker_orders.duplicate():
 		if now >= float(o.due):

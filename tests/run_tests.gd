@@ -23,6 +23,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_plan_and_autonomy")
 	test_names.append("test_eko_terrain")
 	test_names.append("test_world_production_stage1")
+	test_names.append("test_world_production_oil")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13555,3 +13556,40 @@ func test_world_production_stage1() -> void:
 	s.economy.transfer("X0", "Y0", 3000.0)
 	E.beings[mayor_ms[0]].geld = 3000.0
 	ok(not E.input(mayor_ms[0], "FoundCompany", {}).ok, "Buergermeister gruendet keine Firma")
+
+
+## Etappe 2 Oel (15.11.2026): Bohrinsel und Raffinerie am Hafen, Rohoel -> Diesel, Asphalt, Kunststoff; Tankstellen kaufen zuerst
+## Diesel aus Raffinerien der Welt (Geld G0 -> Firma), nur der Rest wird importiert.
+func test_world_production_oil() -> void:
+	var bj: Dictionary = Businesses.branches()
+	ok(bj.has("bohrinsel") and bj.has("raffinerie") and str(bj.bohrinsel.naehe) == "hafen", "Bohrinsel und Raffinerie am Hafen")
+	ok(int(bj.raffinerie.rezept.aus.diesel) == 1 and int(bj.raffinerie.rezept.ein.rohoel) == 2, "Raffinerie: 2 Rohoel -> Diesel, Asphalt, Kunststoff")
+	var s := region_sim(2, 21)
+	var c: Company = s.companies[0]
+	c.ledger.inject(400000.0)
+	var rb: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "bohrinsel", "reason": "Test"})
+	var rr: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "raffinerie", "reason": "Test"})
+	ok(rb.ok and rr.ok, "Bohrinsel und Raffinerie gegruendet: %s / %s" % [str(rb.get("msg", "")).left(50), str(rr.get("msg", "")).left(50)])
+	if rb.ok and rr.ok:
+		var Bo: Dictionary = s.biz.get_b(str(rb.ref))
+		var hb: Harbor = s.towns.harbor(s.towns.of_building(int(Bo.site))) if s.towns.is_region() else s.harbor
+		var d_h: int = absi(s.city.building(int(Bo.site)).road.x - s.city.building(hb.building).road.x) + absi(s.city.building(int(Bo.site)).road.y - s.city.building(hb.building).road.y)
+		ok(d_h < 80, "Bohrinsel nahe am Hafen (%d Felder)" % d_h)
+		for bid in [str(rb.ref), str(rr.ref)]:
+			for i in 3:
+				var w := s.personnel.spawn_available("allrounder")
+				s.personnel.hire(0, w)
+				s.executor.execute(0, {"action": "assign_staff", "worker_id": w.id, "business_id": bid})
+		for d in 4:
+			next_day(s)
+		ok(int(Bo.get("total", 0)) > 0, "Bohrinsel foerdert Rohoel (%d Chargen, Blockaden %s)" % [int(Bo.get("total", 0)), str(Bo.get("blocks", {}))])
+		var Rf: Dictionary = s.biz.get_b(str(rr.ref))
+		s.stock.add("diesel", 5, "C0", int(Rf.site), "Test", s.game_min)
+		var have0: int = s.stock.available("diesel", "C0", int(Rf.site))
+		ok(have0 >= 5, "Raffinerie hat Diesel (%d Einheiten, davon %d selbst raffiniert)" % [have0, have0 - 5])
+		var cash0 := c.ledger.cash
+		var g0 := float(s.economy.accounts.G0)
+		var got: int = s.prod.sell_from_producers("diesel", 3, 1000.0, "G0", "Diesel für Tankstelle")
+		ok(got == 3 and is_equal_approx(c.ledger.cash - cash0, 3000.0) and is_equal_approx(g0 - float(s.economy.accounts.G0), 3000.0), "Tankstellenbetreiber kauft 3000 l Diesel bei der Raffinerie")
+		ok(s.stock.available("diesel", "C0", int(Rf.site)) == have0 - 3, "Diesel aus dem Raffinerielager verbraucht")
+	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")

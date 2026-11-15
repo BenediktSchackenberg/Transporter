@@ -864,5 +864,58 @@
       "lager_max": 200
     },
     "naehe": "bauhof"
+  },
+  "bohrinsel": {
+    "label": "Bohrinsel",
+    "beschreibung": "Fördert Erdöl vor der Küste; Versorgung und Abtransport über den Hafen. Teuer, braucht viel Personal und Diesel für die Pumpen.",
+    "standort": "markt",
+    "gebaeude": "port_office",
+    "gruendungskosten": 0,
+    "ausstattung": 120000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 3,
+    "rollen": [
+      "bohren",
+      "foerdern"
+    ],
+    "rezept": {
+      "ein": {},
+      "aus": {
+        "rohoel": 1
+      },
+      "chargen_je_person_tag": 2,
+      "lager_tage": 4,
+      "lager_max": 200
+    },
+    "naehe": "hafen"
+  },
+  "raffinerie": {
+    "label": "Raffinerie",
+    "beschreibung": "Verarbeitet Rohöl zu Diesel (für die Tankstellen), Asphalt (Straßenbau) und Kunststoffgranulat.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 150000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 40.0,
+    "personal_min": 3,
+    "rollen": [
+      "raffinieren"
+    ],
+    "rezept": {
+      "ein": {
+        "rohoel": 2
+      },
+      "aus": {
+        "diesel": 1,
+        "asphalt": 4,
+        "kunststoffgranulat": 2
+      },
+      "chargen_je_person_tag": 2,
+      "lager_tage": 6,
+      "lager_max": 200
+    },
+    "naehe": "hafen"
   }
 }

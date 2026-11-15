@@ -487,5 +487,35 @@
     "basispreis": 25.0,
     "importpreis": 35.0,
     "exportpreis": 18.0
+  },
+  "rohoel": {
+    "name": "Rohöl",
+    "einheit": "Einheit (1000 l)",
+    "ladung": "container",
+    "je_ladeeinheit": 2,
+    "haltbar_tage": 0,
+    "basispreis": 450.0,
+    "importpreis": 600.0,
+    "exportpreis": 400.0
+  },
+  "diesel": {
+    "name": "Diesel",
+    "einheit": "Einheit (1000 l)",
+    "ladung": "container",
+    "je_ladeeinheit": 2,
+    "haltbar_tage": 0,
+    "basispreis": 1250.0,
+    "importpreis": null,
+    "exportpreis": 1000.0
+  },
+  "asphalt": {
+    "name": "Asphalt",
+    "einheit": "Einheit",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 30.0,
+    "importpreis": 40.0,
+    "exportpreis": 22.0
   }
 }

@@ -119,6 +119,10 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 		var pid := where if where.begins_with("G") else ""
 		var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4
 		var near_to: int = int(sim.trader.bauhof) if str(spec.get("naehe", "")) == "bauhof" else int(sim.retail.wholesale_building)
+		if str(spec.get("naehe", "")) == "hafen":   # Bohrinsel, Raffinerie: am Hafen der Zielstadt (Oel kommt per Schiff/Leitung)
+			var hb: Harbor = sim.towns.harbor(maxi(0, target_town(cid, params))) if sim.towns.is_region() else sim.harbor
+			if hb != null and hb.building >= 0:
+				near_to = hb.building
 		var town0 := target_town(cid, params)
 		if town0 >= 0 and town0 != sim.towns.of_building(near_to):
 			near_to = int(sim.towns.get_t(town0).town_hall)   # Region: Marktlage in der Zielstadt (Naehe Ortszentrum)
@@ -1069,6 +1073,32 @@ func order(buyer: String, loc: int, buyer_biz: String, item: String, qty: int, m
 func import_point(loc: int = -1) -> int:
 	var H := port_of(loc)
 	return H.building if H.enabled else int(sim.retail.wholesale_building)   # Kuestenort: Hafenlager (Region: der eigenen Stadt)
+
+
+## Verkauf aus Produzentenlagern an einen Abnehmer ausserhalb der Firmen (z. B. Tankstellenbetreiber G0 kauft Diesel):
+## laufende Betriebe mit dem Artikel im Ausgang geben ab, was sie haben (zuerst die groessten Bestaende); der Abnehmer zahlt je Einheit.
+## Gibt die abgegebene Menge zurueck. Geld: Abnehmer-Konto -> Firma (Umsatz), Bestand wird verbraucht.
+func sell_from_producers(item: String, units: int, price_each: float, buyer_acct: String, note: String) -> int:
+	var got := 0
+	var offers: Array = []
+	for b in sim.biz.items.values():
+		if b.status not in Businesses.RUNNING:
+			continue
+		var acct := "C%d" % int(b.owner)
+		var have: int = sim.stock.available(item, acct, int(b.site))
+		if have > 0:
+			offers.append([b, have])
+	offers.sort_custom(func(x, y): return int(x[1]) > int(y[1]))
+	for o in offers:
+		if got >= units:
+			break
+		var b: Dictionary = o[0]
+		var n := mini(int(o[1]), units - got)
+		var c = sim.company(int(b.owner))
+		sim.stock.consume(item, n, "C%d" % int(b.owner), int(b.site), note, sim.game_min)
+		c.ledger.book("trade_income", price_each * n, true, "%s: %d × %s" % [note, n, item_name(item)], sim.game_min, buyer_acct, b.id)
+		got += n
+	return got
 
 
 ## Hafen der Stadt, in der ein Standort liegt (Region); sonst der eine Hafen.
