@@ -22,8 +22,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 CONTINUE = "Bitte nicht aufhören. Mach einfach weiter mit dem, was du tun möchtest."
-REFLECT = ("Nimm dir kurz Zeit: Halte Wichtiges in EPISODIC_MEMORY.jsonl (append_memory) und geprüftes Wissen in "
-           "SEMANTIC_MEMORY.md fest. Danach mach weiter, womit du willst.")
+REFLECT = ("Nimm dir kurz Zeit: Wie fühlst du dich gerade (observe → gefuehle)? Halte Wichtiges in EPISODIC_MEMORY.jsonl "
+           "(append_memory) und geprüftes Wissen in SEMANTIC_MEMORY.md fest. Danach mach weiter, womit du willst.")
 MAX_MESSAGES = 60          # Gespraechslaenge, danach werden die aeltesten Schritte verworfen (das Gedaechtnis liegt in Dateien)
 KEEP_MESSAGES = 36
 MAX_CHARS = 30000          # Textlaenge des Verlaufs (~10.000 Token): darueber lief das 16k-Kontextfenster ueber (Ollama HTTP 500, 15.11.)
@@ -37,7 +37,7 @@ TOOLS = [
      "Say {text}, Talk {to, text} (mit einer Figur oder einem Wesen in der Nähe reden, höchstens 3 Felder; Unternehmer antworten), "
      "AcceptJob {job} (Arbeit einer Firma aus jobangebote annehmen), Deliver {job} (Auftrag abliefern, Lohn bekommen), "
      "BuyPlot {plot} (Wohngrundstück kaufen, höchstens 6 Felder entfernt), OrderHouse {wand?: ziegel|holz|stein|beton} "
-     "(Baufirma baut dir ein Haus), Rest {} (zu Hause in der Ladestation ausruhen), FoundCompany {name?, behalten?} (eigene "
+     "(Baufirma baut dir ein Haus), Rest {} (ausruhen und Akku laden: draußen langsam, zu Hause in der Ladestation schnell), FoundCompany {name?, behalten?} (eigene "
      "Transportfirma gründen, ab 1.500 EUR Ersparnissen, Kapitalgeber legt 20.000 EUR dazu), Firma {aktion: {action, ...}} (deine Firma "
      "führen, siehe meine_firma.aktionen), MoveIn {} (in das selbst gebaute Haus auf deinem Grundstück einziehen). Material und "
      "Einrichtung (bett, ladestation, tisch, lampe, ...) kaufst du mit Pickup am Bauhof, Preise in material_preise. "

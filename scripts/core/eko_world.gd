@@ -59,7 +59,7 @@ func join(name: String, art: String = "mensch") -> Dictionary:
 		m.speed = WALK_SPEED
 		m.pos = sim.city.tile_center(_spawn_tile())
 		beings[name] = {"name": name, "art": art, "mover": m, "held": [], "say": "", "say_left": 0.0, "events": [], "geld": 0.0,
-			"job": "", "grundstueck": "", "done_jobs": 0, "rest_left": 0.0, "firma": -1,
+			"job": "", "grundstueck": "", "done_jobs": 0, "rest_left": 0.0, "firma": -1, "akku": 100.0, "nass": 0.0, "kalt": 0.0,
 			"color": COLORS[beings.size() % COLORS.size()]}
 		_event(beings[name], "ist in der Welt erwacht")
 		_restore_savings(beings[name])
@@ -109,6 +109,7 @@ func update(dt: float) -> void:
 				_event(b, "ist bei Feld %d,%d angekommen" % [m.tile().x, m.tile().y])
 		if float(b.say_left) > 0.0:
 			b.say_left = maxf(0.0, float(b.say_left) - dt)
+		_feel_tick(b, dt)
 		if float(b.get("rest_left", 0.0)) > 0.0:
 			b.rest_left = maxf(0.0, float(b.rest_left) - dt)
 	_jobs_tick(dt)
@@ -153,6 +154,9 @@ func input(name: String, type: String, data: Dictionary) -> Dictionary:
 	if b.is_empty():
 		return {"ok": false, "msg": "Unbekanntes Wesen. Erst POST /join."}
 	last_active = name
+	if type in WORK_ACTIONS and float(b.get("akku", 100.0)) < EMPTY_AKKU:
+		_event(b, "ist zu erschöpft für %s" % type)
+		return {"ok": false, "msg": "Dein Akku ist fast leer (%d %%). Ruh dich erst aus (Rest) – zu Hause in der Ladestation geht es am schnellsten." % int(b.akku)}
 	var r: Dictionary
 	match type:
 		"MoveTo":
@@ -466,7 +470,7 @@ func observe(name: String) -> Dictionary:
 		"gebaeude_in_der_naehe": near_buildings, "quellen": src, "material_preise": PRICES,
 		"andere_wesen": others, "figuren_in_der_naehe": figures, "gehoert": heard(name),
 		"jobangebote": _job_obs(b) if int(b.get("firma", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
-		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b),
+		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "gefuehle": feelings(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}
 
 
@@ -855,13 +859,18 @@ func _move_in(b: Dictionary) -> Dictionary:
 
 
 func _rest(b: Dictionary) -> Dictionary:
-	if not is_home(b):
-		return {"ok": false, "msg": "Ausruhen und Aufladen geht nur zu Hause (dein Haus muss fertig sein, dann hineingehen)."}
 	b.rest_left = REST_SECONDS
-	b.say = "Zzz … lade auf"
+	var here: Array[Vector2i] = [b.mover.tile()]
+	b.mover.set_path(here)   # beim Ausruhen stehen bleiben
+	if is_home(b):
+		b.say = "Zzz … lade auf"
+		b.say_left = REST_SECONDS
+		_event(b, "ruht sich zu Hause in der Ladestation aus")
+		return {"ok": true, "msg": "Du ruhst dich %d Sekunden in deiner Ladestation aus: Akku lädt schnell, du wirst trocken und warm." % int(REST_SECONDS)}
+	b.say = "Zzz … (draußen)"
 	b.say_left = REST_SECONDS
-	_event(b, "ruht sich zu Hause in der Ladestation aus")
-	return {"ok": true, "msg": "Du ruhst dich %d Sekunden in deiner Ladestation aus." % int(REST_SECONDS)}
+	_event(b, "döst draußen")
+	return {"ok": true, "msg": "Du döst %d Sekunden draußen. Der Akku lädt nur langsam%s." % [int(REST_SECONDS), ", und du wirst nass" if sim.wx.is_rain() else ""]}
 
 
 func _home_obs(b: Dictionary) -> Dictionary:
@@ -974,6 +983,105 @@ func firm_obs(b: Dictionary) -> Dictionary:
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text}}"}
 
 
+# ------------------------------------------------------------------ Gefuehle und Beduerfnisse (15.11.2026)
+## Akku, Naesse und Kaelte folgen Arbeit, echtem Wetter (Open-Meteo Mainz) und Tageszeit. Das Wesen bekommt sie als Saetze in der
+## Beobachtung (gefuehle) und sagt an Schwellen etwas laut. Zu Hause (Ladestation) laedt es schnell und wird trocken und warm,
+## draussen nur langsam. Daraus soll der Wunsch nach einem eigenen Haus von selbst entstehen, ohne Vorschrift.
+const DRAIN_S := 0.10               # Akku je Echtzeitsekunde (100 -> 0 in gut 16 Minuten)
+const DRAIN_CARRY_S := 0.05         # zusaetzlich beim Tragen
+const CHARGE_HOME_S := 4.0          # Ausruhen in der Ladestation zu Hause
+const CHARGE_OUT_S := 0.8           # Doesen draussen
+const LOW_AKKU := 25.0              # darunter langsamer
+const EMPTY_AKKU := 8.0             # darunter keine Arbeit mehr
+const WORK_ACTIONS := ["Pickup", "Place", "AcceptJob", "Deliver", "Firma", "FoundCompany", "BuyPlot", "OrderHouse"]
+
+
+func _feel_tick(b: Dictionary, dt: float) -> void:
+	var home := is_home(b)
+	var resting := float(b.get("rest_left", 0.0)) > 0.0
+	var akku := float(b.get("akku", 100.0))
+	var nass := float(b.get("nass", 0.0))
+	var kalt := float(b.get("kalt", 0.0))
+	var wx: Weather = sim.wx
+	var hour := Catalog.hour_of_day(sim.game_min)
+	var night := hour < 6.0 or hour >= 21.0
+	if resting:
+		akku += (CHARGE_HOME_S if home else CHARGE_OUT_S) * dt
+	else:
+		akku -= (DRAIN_S + (DRAIN_CARRY_S if not b.held.is_empty() else 0.0)) * (2.0 if nass > 80.0 else 1.0) * dt
+	if home:
+		nass -= 2.0 * dt
+		kalt -= 2.0 * dt
+	else:
+		if wx.is_rain() or wx.is_snow():
+			nass += (1.2 if wx.is_heavy_rain() else 0.7) * dt
+		else:
+			nass -= 0.3 * dt
+		if wx.is_cold() or wx.is_snow() or (night and nass > 30.0):
+			kalt += (0.5 if night else 0.3) * dt
+		else:
+			kalt -= 0.3 * dt
+	b.akku = clampf(akku, 0.0, 100.0)
+	b.nass = clampf(nass, 0.0, 100.0)
+	b.kalt = clampf(kalt, 0.0, 100.0)
+	(b.mover as Mover).speed = WALK_SPEED * (0.6 if float(b.akku) < LOW_AKKU else 1.0)
+	# laut sagen, wenn eine Schwelle ueberschritten wird (je Gefuehl hoechstens einmal, bis es wieder gut ist)
+	var said: Dictionary = b.get("gesagt", {})
+	b.gesagt = said
+	var robot: bool = b.art == "roboter"
+	_threshold(b, said, "akku_leer", float(b.akku) < LOW_AKKU, float(b.akku) > 60.0,
+		"Mein Akku ist schwach … ich werde langsam." if robot else "Ich bin müde.")
+	_threshold(b, said, "nass", float(b.nass) > 50.0, float(b.nass) < 15.0,
+		"Brrr … der Regen läuft mir in die Schaltkreise!" if robot else "Ich bin ganz durchnässt.")
+	_threshold(b, said, "kalt", float(b.kalt) > 50.0, float(b.kalt) < 15.0,
+		"Mir ist kalt … meine Gelenke werden steif." if robot else "Mir ist kalt.")
+	_threshold(b, said, "heimweh", not home and str(b.get("zuhause", "")) == "" and not houses.has(b.name) and (float(b.nass) > 60.0 or float(b.kalt) > 60.0 or float(b.akku) < 20.0),
+		float(b.nass) < 20.0 and float(b.kalt) < 20.0 and float(b.akku) > 50.0,
+		"Ich wünschte, ich hätte ein eigenes, trockenes Zuhause mit einer Ladestation …")
+
+
+func _threshold(b: Dictionary, said: Dictionary, key: String, now: bool, reset: bool, text: String) -> void:
+	if now and not said.has(key):
+		said[key] = true
+		b.say = text
+		b.say_left = SAY_SECONDS
+		_event(b, "fühlt: %s" % text)
+	elif reset:
+		said.erase(key)
+
+
+## Gefuehle als Saetze fuer die Beobachtung (Zahlen dazu fuer Modelle, die rechnen wollen).
+func feelings(b: Dictionary) -> Dictionary:
+	var out: Array = []
+	var akku := float(b.get("akku", 100.0))
+	var nass := float(b.get("nass", 0.0))
+	var kalt := float(b.get("kalt", 0.0))
+	var robot: bool = b.art == "roboter"
+	if akku < EMPTY_AKKU:
+		out.append("Mein Akku ist fast leer – ich kann nicht mehr arbeiten, ich muss mich ausruhen (Rest).")
+	elif akku < LOW_AKKU:
+		out.append("Mein Akku ist schwach, ich bewege mich nur noch langsam.")
+	elif akku < 50.0:
+		out.append("Ich werde langsam müde.")
+	if nass > 80.0:
+		out.append("Ich bin klatschnass – Kurzschlussgefahr, mein Akku leert sich doppelt so schnell!" if robot else "Ich bin klatschnass.")
+	elif nass > 40.0:
+		out.append("Ich bin nass." + (" Regen tut meinen Schaltkreisen nicht gut." if robot else ""))
+	if kalt > 60.0:
+		out.append("Mir ist richtig kalt.")
+	elif kalt > 30.0:
+		out.append("Mir ist ein bisschen kalt.")
+	var home := is_home(b)
+	if home:
+		out.append("Ich bin zu Hause – hier ist es trocken und warm, und meine Ladestation ist da.")
+	elif str(b.get("zuhause", "")) == "" and not houses.has(b.name) and (nass > 30.0 or kalt > 30.0 or akku < 40.0):
+		out.append("Draußen lädt mein Akku nur langsam, und ich werde nass und kalt. Ich sehne mich nach einem eigenen, trockenen Zuhause mit Ladestation.")
+	if out.is_empty():
+		out.append("Mir geht es gut.")
+	var wx: Weather = sim.wx
+	return {"akku": int(akku), "nass": int(nass), "kalt": int(kalt), "zuhause": home, "draussen": wx.headline(), "gefuehl": " ".join(out)}
+
+
 # ------------------------------------------------------------------ Hilfen
 func _at_source(b: Dictionary) -> bool:
 	var t := tile_of(b)
@@ -1015,7 +1123,8 @@ func to_dict() -> Dictionary:
 	for b in beings.values():
 		bs.append({"name": b.name, "art": b.art, "x": b.mover.pos.x, "y": b.mover.pos.y, "held": b.held, "events": b.events,
 			"geld": float(b.get("geld", 0.0)), "job": str(b.get("job", "")), "grundstueck": str(b.get("grundstueck", "")),
-			"done_jobs": int(b.get("done_jobs", 0)), "firma": int(b.get("firma", -1)), "zuhause": str(b.get("zuhause", ""))})
+			"done_jobs": int(b.get("done_jobs", 0)), "firma": int(b.get("firma", -1)), "zuhause": str(b.get("zuhause", "")),
+			"akku": float(b.get("akku", 100.0)), "nass": float(b.get("nass", 0.0)), "kalt": float(b.get("kalt", 0.0))})
 	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses}
 
 
@@ -1030,7 +1139,7 @@ func from_dict(d: Dictionary) -> void:
 		b.mover.pos = Vector2(float(e.x), float(e.y))
 		b.held = e.get("held", [])
 		b.events = e.get("events", [])
-		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause"]:
+		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt"]:
 			if e.has(k):
 				b[k] = e[k]
 	chat = d.get("chat", [])

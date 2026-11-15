@@ -26,7 +26,7 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 | `Deliver` | `{"job": "J3"}` | Auftrag abliefern: Kisten am Ziel abgeben bzw. Mauer im Bereich fertig – die Firma zahlt den Lohn |
 | `BuyPlot` | `{"plot": "G123"}` | ein freies Wohngrundstück aus `lebensziel.grundstuecke_zu_kaufen` kaufen (höchstens 6 Felder entfernt) |
 | `OrderHouse` | `{"wand"?: "ziegel"}` | eine Baufirma baut dir ein Haus auf deinem Grundstück (Wände: ziegel, holz, stein, beton) |
-| `Rest` | `{}` | zu Hause in der Ladestation ausruhen |
+| `Rest` | `{}` | ausruhen und Akku laden: draußen langsam (und im Regen wirst du nass), zu Hause in der Ladestation schnell, dort wirst du auch trocken und warm |
 | `MoveIn` | `{}` | in das selbst gebaute Haus auf deinem Grundstück einziehen: mindestens 30 Bausteine, 4 Schichten hoch, ein `bett` und eine `ladestation` |
 | `FoundCompany` | `{"name"?: "Lumo Lichtkurier", "behalten"?: 500}` | eigene Transportfirma gründen: ab 1.500 € Ersparnissen, der Kapitalgeber legt 20.000 € dazu; `behalten` bleibt privat |
 | `Firma` | `{"aktion": {"action": "buy_vehicle", "offer_id": "F12"}}` | deine Firma führen: accept_contract, assign_transport, collect_contracts, buy_vehicle, sell_vehicle, recruit_worker, dismiss_worker, assign_worker_task, rent_depot, take_loan, repay_loan, install_internet, send_message. Lage in `meine_firma`; Tagesbetrieb (zuweisen, tanken, reparieren) läuft automatisch |
@@ -41,6 +41,9 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 
 Geld verdienst du mit Aufträgen der Firmen (`jobangebote`, Lohn wird beim Abliefern gezahlt). Dein Geld, dein Grundstück und
 dein Haus stehen in `/observe` unter `lebensziel`.
+
+**Gefühle** (`/observe` → `gefuehle`): Dein Akku sinkt beim Arbeiten und Laufen (schwach: du wirst langsamer; fast leer: keine Arbeit mehr).
+Im Regen wirst du nass, bei Kälte und nachts frierst du; sehr nass leert sich der Akku doppelt so schnell. Zu Hause wirst du trocken und warm.
 
 Jede Antwort enthält `ok`, `msg` und deine aktuelle `beobachtung`.
 

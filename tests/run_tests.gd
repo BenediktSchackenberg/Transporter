@@ -18,6 +18,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_world")
 	test_names.append("test_eko_life")
 	test_names.append("test_eko_founder")
+	test_names.append("test_eko_feelings")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13311,3 +13312,41 @@ func test_eko_founder() -> void:
 	ok(str(E.observe("Lumo").meine_firma.hinweis).contains("Büroleitung"), "Hinweis: Firmengaenge erledigt die Bueroleitung")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.eko.firm_being(c.id) == "Lumo", "Zuordnung Firma - Wesen gespeichert")
+
+
+## Gefuehle (15.11.2026): Akku sinkt, Regen macht nass, Kaelte; leerer Akku verhindert Arbeit; draussen laedt es langsam,
+## zu Hause schnell und trocknet; Gefuehle als Saetze in der Beobachtung, Sehnsucht nach einem Zuhause ohne eigenes Haus.
+func test_eko_feelings() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.join("Lumo", "roboter")
+	var b: Dictionary = E.beings.Lumo
+	s.wx.cur["cond"] = "Regen"
+	s.wx.cur["precip_mm_h"] = 3.0
+	s.wx.cur["temp"] = 2.0
+	for i in 120:
+		E.update(1.0)
+	ok(float(b.akku) < 90.0 and float(b.nass) > 50.0 and float(b.kalt) > 20.0, "Akku %d, nass %d, kalt %d nach 2 Minuten im Regen" % [int(b.akku), int(b.nass), int(b.kalt)])
+	var f: Dictionary = E.observe("Lumo").gefuehle
+	ok(str(f.gefuehl).contains("nass") and str(f.gefuehl).contains("Zuhause"), "Gefuehle als Saetze, Sehnsucht nach Zuhause: %s" % str(f.gefuehl).left(70))
+	ok(b.events.any(func(e): return str(e).contains("fühlt:")), "sagt seine Gefuehle laut")
+	b.akku = 5.0
+	ok(not E.input("Lumo", "Pickup", {"material": "stein"}).ok and E.input("Lumo", "MoveTo", {"tile": [E.tile_of(b).x, E.tile_of(b).y]}).ok, "leerer Akku: keine Arbeit, gehen geht")
+	var a0 := float(b.akku)
+	ok(E.input("Lumo", "Rest", {}).ok, "draussen doesen")
+	for i in 10:
+		E.update(1.0)
+	var out_gain := float(b.akku) - a0
+	ok(out_gain > 0.0 and out_gain < 15.0, "draussen laedt der Akku langsam (+%d)" % int(out_gain))
+	s.economy.transfer("X0", "Y0", 10000.0)
+	b.geld = 10000.0
+	ok(E.demo_house("Lumo"), "Haus vorhanden")
+	b.akku = 10.0
+	b.nass = 90.0
+	E.input("Lumo", "Rest", {})
+	for i in 10:
+		E.update(1.0)
+	ok(float(b.akku) > 40.0 and float(b.nass) < 80.0, "zu Hause laedt der Akku schnell und trocknet (Akku %d, nass %d)" % [int(b.akku), int(b.nass)])
+	ok(str(E.observe("Lumo").gefuehle.gefuehl).contains("zu Hause"), "fuehlt sich zu Hause")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(is_equal_approx(float(s2.eko.beings.Lumo.akku), float(b.akku)), "Gefuehle gespeichert")

@@ -6,6 +6,8 @@ extends Node2D
 
 const BLOCK := 8.0          # Welteinheiten je Block (4 je Feld)
 const BLOCK_H := 16.0       # Bildhoehe eines Blocks
+const CUT := Color("e2c09a")         # Schnittkante (Mauerkrone) wie beim Fahrzeugwerk
+const WINDOW_NIGHT := Color("f5d77a")   # bewohnte Haeuser: Fenster leuchten nachts warm
 
 var sim: Simulation
 var cv
@@ -43,10 +45,11 @@ static func color_of(mat: String) -> Color:
 
 
 ## Iso-Wuerfel eines Blocks; occ: belegte Nachbarn (verdeckte Flaechen weglassen), origin: Knotenposition.
-static func draw_block(n: CanvasItem, p: Vector3i, mat: String, occ: Dictionary, origin: Vector2) -> void:
+static func draw_block(n: CanvasItem, p: Vector3i, mat: String, occ: Dictionary, origin: Vector2, cut_top := false, night := false) -> void:
 	var col := color_of(mat)
 	if mat == "glas":
-		col.a = 0.6
+		col = WINDOW_NIGHT if night else col
+		col.a = 0.85 if night else 0.6
 	var w0 := Vector2(p.x, p.y) * BLOCK
 	var up := Vector2(0, -float(p.z) * BLOCK_H)
 	var top := up + Vector2(0, -BLOCK_H)
@@ -58,12 +61,20 @@ static func draw_block(n: CanvasItem, p: Vector3i, mat: String, occ: Dictionary,
 		n.draw_colored_polygon(PackedVector2Array([p01 + up, p11 + up, p11 + top, p01 + top]), col.darkened(0.15))
 	if not occ.has(p + Vector3i(1, 0, 0)):   # Ostseite
 		n.draw_colored_polygon(PackedVector2Array([p10 + up, p11 + up, p11 + top, p10 + top]), col.darkened(0.32))
-	if not occ.has(p + Vector3i(0, 0, 1)):   # Oberseite
-		n.draw_colored_polygon(PackedVector2Array([p00 + top, p10 + top, p11 + top, p01 + top]), col.lightened(0.08))
-		n.draw_polyline(PackedVector2Array([p00 + top, p10 + top, p11 + top, p01 + top, p00 + top]), col.darkened(0.25), 0.6)
-	if mat in ["lampe", "ladestation"]:   # Leuchten
+	if not occ.has(p + Vector3i(0, 0, 1)):   # Oberseite (an einer Schnittkante als helle Mauerkrone)
+		var tc := CUT if cut_top else col.lightened(0.08)
+		n.draw_colored_polygon(PackedVector2Array([p00 + top, p10 + top, p11 + top, p01 + top]), tc)
+		n.draw_polyline(PackedVector2Array([p00 + top, p10 + top, p11 + top, p01 + top, p00 + top]), tc.darkened(0.25), 0.6)
+	if mat in ["lampe", "ladestation"]:   # Leuchten (nachts mit Lichtkegel auf dem Boden)
 		var glow := Color(col.r, col.g, col.b, 0.25 + 0.1 * sin(Time.get_ticks_msec() / 300.0))
 		n.draw_circle((p00 + p11) * 0.5 + top, 9.0, glow)
+		if night and mat == "lampe":
+			n.draw_circle((p00 + p11) * 0.5 + up, 26.0, Color(1.0, 0.88, 0.5, 0.16))
+
+
+static func is_night(sim) -> bool:
+	var h := Catalog.hour_of_day(sim.game_min)
+	return h < 6.0 or h >= 20.0
 
 
 ## Schnitt fuer Haeuser, die ein Wesen auf seinem Grundstueck selbst baut: je Feld die Grenzen der Bloecke auf dem Grundstueck.
@@ -144,14 +155,17 @@ class TileNode:
 		var order := cells.duplicate()
 		order.sort_custom(func(a, b): return a.x + a.y < b.x + b.y or (a.x + a.y == b.x + b.y and a.z < b.z))
 		var occ := bl
+		var night := false
 		if not cut.is_empty():
 			occ = {}
+			night = EkoView.is_night(sim)
 			order = order.filter(func(p): return bl.has(p) and not (p.z == int(cut.mz) and p.z >= 3) and not ((p.x == int(cut.mx) or p.y == int(cut.my)) and p.z >= 2))
 			for p in order:
 				occ[p] = true
 		for p in order:
 			if bl.has(p):
-				EkoView.draw_block(self, p, str(bl[p]), occ, position)
+				var up: Vector3i = p + Vector3i(0, 0, 1)
+				EkoView.draw_block(self, p, str(bl[p]), occ, position, bl.has(up) and not occ.has(up), night)
 
 
 ## Haus eines Wesens als Schnitt: Dach weg, Vorderwaende (Sueden, Osten) nur bis zur ersten Schicht, damit man hineinsieht.
@@ -180,8 +194,10 @@ class HouseNode:
 			shown.append([p, str(e[3])])
 			occ[p] = true
 		shown.sort_custom(func(a, b): return a[0].x + a[0].y < b[0].x + b[0].y or (a[0].x + a[0].y == b[0].x + b[0].y and a[0].z < b[0].z))
+		var night: bool = EkoView.is_night(sim) and h.status == "fertig"
 		for s in shown:
-			EkoView.draw_block(self, s[0], s[1], occ, position)
+			var up: Vector3i = s[0] + Vector3i(0, 0, 1)
+			EkoView.draw_block(self, s[0], s[1], occ, position, (s[0].z == 1 and (s[0].x - o.x == last or s[0].y - o.y == last)) or s[0].z == EkoWorld.HOUSE_WALL, night)
 		var font := ThemeDB.fallback_font
 		var label := "Zuhause von %s" % owner_name if h.status == "fertig" else "%s baut: %d %%" % [h.builder, int(100.0 * float(h.placed) / float(h.blocks.size()))]
 		var top := Iso.to_screen(Vector2(o.x + EkoWorld.HOUSE_SIDE / 2, o.y + EkoWorld.HOUSE_SIDE / 2) * EkoView.BLOCK) - position + Vector2(0, -EkoView.BLOCK_H * (EkoWorld.HOUSE_WALL + 2))
@@ -200,7 +216,13 @@ class BeingNode:
 		if b.is_empty():
 			return
 		var col: Color = b.color
+		var ms := Time.get_ticks_msec()
+		var kalt := float(b.get("kalt", 0.0))
+		var nass := float(b.get("nass", 0.0))
+		var akku := float(b.get("akku", 100.0))
 		draw_circle(Vector2(0, 1), 6.5, Color(0, 0, 0, 0.25))                     # Schatten
+		if kalt > 50.0:   # Zittern vor Kaelte
+			draw_set_transform(Vector2(sin(ms / 35.0) * 0.7, 0))
 		var robot := str(b.get("art", "mensch")) == "roboter"
 		var head_top := -30.0 if robot else -24.0
 		if robot:
@@ -211,10 +233,23 @@ class BeingNode:
 			draw_rect(Rect2(-4, -16, 8, 10), col)                                   # Koerper
 			draw_rect(Rect2(-3, -23, 6, 7), Color("#f1c9a5"))                       # Kopf
 			draw_rect(Rect2(-3, -24, 6, 2), col.darkened(0.4))                      # Haare
+		draw_set_transform(Vector2.ZERO)
+		if nass > 40.0:   # Regentropfen laufen herunter
+			for i in 5:
+				var ph := fmod(ms / 600.0 + i * 0.37, 1.0)
+				var x := -6.0 + 3.0 * i
+				draw_line(Vector2(x, head_top + 4 + 22 * ph), Vector2(x, head_top + 6 + 22 * ph), Color(0.55, 0.75, 1.0, 0.9 * (1.0 - ph)), 0.8)
+		if robot:   # Akkubalken
+			var bar := Rect2(-6, head_top - 4, 12, 2)
+			draw_rect(bar, Color(0, 0, 0, 0.55))
+			var bc := Color("7dff8a") if akku > 50.0 else (Color("ffd166") if akku > EkoWorld.LOW_AKKU else Color("ff5a5a"))
+			draw_rect(Rect2(bar.position, Vector2(12.0 * akku / 100.0, 2)), bc)
+			if float(b.get("rest_left", 0.0)) > 0.0 and sim.eko.is_home(b):   # Laden in der Ladestation
+				draw_arc(Vector2(0, -14), 11.0 + sin(ms / 200.0), 0.0, TAU, 24, Color(0.36, 0.9, 1.0, 0.6), 1.0)
 		var held: Array = b.held
 		for i in held.size():   # getragene Bloecke/Kisten ueber dem Kopf gestapelt
 			var c := EkoView.color_of(str(held[i]))
-			var r := Rect2(-4, head_top - 7 - i * 5, 8, 5)
+			var r := Rect2(-4, head_top - 11 - i * 5, 8, 5)
 			draw_rect(r, c)
 			draw_rect(r, c.darkened(0.4), false, 0.6)
 			if str(held[i]) == "kiste":
@@ -269,11 +304,12 @@ class BeingNode:
 		var face := Rect2(-4.5, -22.5 + bob, 9, 6)
 		draw_rect(face, Color("#10202a"))
 		var blink := resting or (ms % 3400) < 140
+		var eye := Color("6ff3ff").lerp(Color("2a5560"), clampf((EkoWorld.LOW_AKKU - float(b.get("akku", 100.0))) / EkoWorld.LOW_AKKU, 0.0, 0.8))
 		for ex in [-2.8, 1.2]:
 			if blink:
-				draw_line(Vector2(ex, -19.5 + bob), Vector2(ex + 1.8, -19.5 + bob), Color("#6ff3ff"), 0.7)
+				draw_line(Vector2(ex, -19.5 + bob), Vector2(ex + 1.8, -19.5 + bob), eye, 0.7)
 			else:
-				draw_rect(Rect2(ex, -21 + bob, 1.8, 2.6), Color("#6ff3ff"))
+				draw_rect(Rect2(ex, -21 + bob, 1.8, 2.6 if float(b.get("akku", 100.0)) > EkoWorld.LOW_AKKU else 1.4), eye)
 				draw_rect(Rect2(ex + 0.3, -20.8 + bob, 0.6, 0.6), Color.WHITE)
 		draw_rect(Rect2(-5.6, -18.5 + bob, 1.2, 0.8), Color("#ff8fab"))                 # Wangen
 		draw_rect(Rect2(4.4, -18.5 + bob, 1.2, 0.8), Color("#ff8fab"))
