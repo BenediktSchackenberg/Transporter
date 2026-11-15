@@ -180,8 +180,11 @@ func request(p: Dictionary, now: float, need_idx: int = -1, force_cause: String 
 	if k == null:
 		return null
 	var cause: String = force_cause if force_cause != "" else sim.world_events.boost_cause(str(need.cargo))
-	for c in sim.companies:   # Kunden melden sich online: wer Internet hat, sieht die Anfrage sofort (sonst Jobbörse/Büro)
-		if c.internet_level >= 1:
+	# Kunden melden sich online: wer Internet hat, sieht die Anfrage sofort; Firmen im eigenen Ort hoeren davon (Mundpropaganda).
+	# Messung 15.11.: ohne Ortsbezug kannte keine Firma eines der 74 Anliegen (kein Internet zu Beginn), alle verfielen.
+	var town: int = sim.towns.of_building(int(p.building))
+	for c in sim.companies:
+		if c.internet_level >= 1 or c.home_town == town:
 			c.known[k.id] = true
 	k.requester = p.id
 	k.cause = cause

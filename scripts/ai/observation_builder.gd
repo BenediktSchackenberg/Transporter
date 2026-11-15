@@ -80,6 +80,8 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	for v in sim.company_vehicles(cid):
 		models_owned[v.model] = true
 	var doable := market.filter(func(m):
+		if not bool(m.machbar):   # Fernauftraege quer durch die Region verdraengten sonst die rechtzeitig fahrbaren (Messung 15.11.)
+			return false
 		for mid in models_owned:
 			if sim.contracts[m.id].vehicle_ok(mid):
 				return true
@@ -594,7 +596,12 @@ static func _resources(sim: Simulation, cid: int) -> Dictionary:
 			"ort": b.name, "bestand": int(sp.stock), "preis": sim.resources.fuel_price(sp) if sp.kind == "fuel" else sp.price,
 			"pos": [b.road.x, b.road.y]})
 	workers.sort_custom(func(a, b): return a.lohn_h < b.lohn_h)
-	offers.sort_custom(func(a, b): return a.preis < b.preis)
+	# Naechster Haendler zuerst, dort nach Preis: sonst sahen alle Firmen der Region dieselben billigsten Angebote, liefen quer ueber
+	# die Karte zum selben Haendler und nur eine bekam das Fahrzeug (Messung 15.11.: 4 von 6 Firmen nach 12 Tagen ohne Fahrzeug).
+	var home: Vector2i = sim.depot_road(cid) if not sim.company(cid).depots.is_empty() else sim.avatars[cid].tile()
+	for of in offers:
+		of["entfernung"] = absi(int(of.pos[0]) - home.x) + absi(int(of.pos[1]) - home.y)
+	offers.sort_custom(func(a, b): return [a.entfernung, a.haendler, a.preis] < [b.entfernung, b.haendler, b.preis])
 	return {"arbeitskraefte": workers.slice(0, 8), "fahrzeugangebote": offers.slice(0, 8), "betriebsmittel": supplies,
 		"nachtanken_ohne_vorrat_preis_l": sim.resources.emergency_fuel_price()}
 

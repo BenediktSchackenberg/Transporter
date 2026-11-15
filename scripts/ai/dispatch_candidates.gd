@@ -38,7 +38,7 @@ static func build(obs: Dictionary, first_nr: int = 1) -> Dictionary:
 			pool.erase(best)
 			var tiles := float(best.strecke) + RuleBrain._dist(best.von_pos, v.pos)
 			var revenue := float(best.verguetung) + float(best.get("praemie_stadt", 0))
-			var margin := revenue - tiles * float(spec.kosten_pro_tile) * 1.1
+			var margin := revenue - tiles * float(spec.kosten_pro_tile) * RuleBrain.FUEL_COST_FACTOR
 			if margin < maxf(MIN_MARGIN, MIN_MARGIN_SHARE * revenue):
 				continue   # lohnt nicht: gar nicht erst zur Wahl stellen
 			out.candidates.append({"nr": nr, "vehicle_id": int(v.id), "contract_id": str(best.id), "ware": str(best.get("bezeichnung", "")),

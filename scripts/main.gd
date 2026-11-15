@@ -453,6 +453,11 @@ func _process_timed(_delta: float) -> void:
 		_shot_done = true
 		if args.has("shot-zoom"):
 			session.city_view.camera.zoom = Vector2.ONE * float(args["shot-zoom"])
+		if args.has("shot-eko") and not session.sim.eko.beings.is_empty():   # Kamera auf das erste Eko-Wesen (Sichtpruefung Eko-Modus)
+			session.set_follow(false)
+			session.city_view.set_camera_world(session.sim.eko.beings.values()[0].mover.pos)
+			if session.hud and session.hud.control_center:
+				session.hud.control_center.set_expanded(false)   # Zentrale einklappen, sonst verdeckt sie die Bildmitte
 		if args.has("shot-activity") and not session.sim.activity.items.is_empty():   # Kamera auf die neueste KI-Aktivitaet (Pruefung der Kartenebene)
 			var e: Dictionary = session.sim.activity.items.back()
 			session.set_follow(false)

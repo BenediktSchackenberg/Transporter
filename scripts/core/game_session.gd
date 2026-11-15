@@ -93,6 +93,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	activity_layer = ActivityLayer.new()
 	activity_canvas.add_child(activity_layer)
 	activity_layer.setup(sim, city_view)
+	_start_eko_server()
 	if loaded.is_empty() and cfg.get("carry_memory", false):
 		# Uebernahme gespeicherter Erfahrungen: gleiche Regel fuer alle Spieler (Vergleichbarkeit)
 		for i in cfg.players.size():
@@ -416,6 +417,35 @@ func _on_logged(e: Dictionary) -> void:
 		hud.show_toast(e.text.left(110))
 
 
+## Eko-Modus (15.11.2026): Weltschnittstelle fuer freie Wesen, wenn die Konfiguration "eko" setzt oder das Spiel mit --eko
+## (optional --eko-port=8790) gestartet wurde. Agenten starten mit tools/eko/start_eko.ps1.
+func _start_eko_server() -> void:
+	var port := int(cfg.get("eko_port", 8790))
+	var on := bool(cfg.get("eko", false))
+	for a in OS.get_cmdline_user_args():
+		if str(a) == "--eko":
+			on = true
+		elif str(a).begins_with("--eko-port="):
+			on = true
+			port = int(str(a).trim_prefix("--eko-port="))
+		elif str(a) == "--eko-folgen":   # Zuschauen: Kamera folgt dem ersten Wesen, KI-Zentrale eingeklappt
+			on = true
+			city_view.eko_view.follow = true
+			call_deferred("_eko_collapse_center")
+	if not on:
+		return
+	var ws := WorldServer.new()
+	add_child(ws)
+	if ws.setup(sim.eko, port):
+		sim.log_event("Eko-Modus: Weltschnittstelle auf http://127.0.0.1:%d – Agent mit tools/eko/start_eko.ps1 starten." % port, "system")
+
+
+func _eko_collapse_center() -> void:
+	if hud and hud.control_center:
+		hud.control_center.set_expanded(false)
+	city_view.camera.zoom = Vector2(2.0, 2.0)   # nah genug, um Bloecke und Sprechblasen zu lesen
+
+
 func _process(delta: float) -> void:
 	var _pt := Time.get_ticks_usec()
 	ProcTimer.mark("spielsitzung")
@@ -453,6 +483,7 @@ func _process_timed(delta: float) -> void:
 		ctl.speed = float(speed())
 		ctl.remaining_real_min = sim.remaining_real_min
 	if running:
+		sim.eko.update(minf(delta, 1.0))   # Eko-Wesen laufen in Echtzeit (ungedeckelt, sonst bei langsamen Bildern zu langsam)
 		active_seconds += delta   # Partiedauer zaehlt volle Echtzeit, auch bei langsamen Bildern
 		_sim_acc += dt * speed()
 		var t0 := Time.get_ticks_usec()

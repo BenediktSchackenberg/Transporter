@@ -16,6 +16,7 @@ const LINES := {
 }
 const BUFFER := {"kostenoptimierer": 20000.0, "wachstum": 6000.0, "netzwerker": 12000.0, "risikospieler": 9000.0}
 const MAX_ACTIONS := 6
+const FUEL_COST_FACTOR := 2.0   # Treibstoffkosten je Kachel relativ zu kosten_pro_tile (Messung 15.11.), siehe _best_contract
 ## Investitionskredit: Anteil des freien Kreditrahmens, den die Persoenlichkeit fuer eine lohnende Anschaffung leiht.
 const LOAN_APPETITE := {"wachstum": 0.6, "risikospieler": 0.5, "netzwerker": 0.3, "kostenoptimierer": 0.0}
 const LOAN_MONTHS := 12
@@ -270,10 +271,13 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 					growth.append({"action": "recruit_worker", "worker_id": sc.id})
 					planned.append("recruit_worker")
 			planned.append("buy_vehicle")
+	# Ein bereites Fahrzeug, das keinen offenen Auftrag fahren kann (Lastenrad, 3 Einheiten), blockiert den Kauf nicht.
+	# Messung 15.11.: nach 12 Tagen nur Lastenraeder, 186 von 316 Marktauftraegen brauchten 4-8 Einheiten.
+	var ready_useful := ready.any(func(v): return not _best_contract(market, v, models[v.modell], float(me.reputation), min_margin).is_empty())
 	if not growth.is_empty():
 		pass
-	elif ready.is_empty() and not ops.get("linien", []).any(func(l): return l.active and int(l.get("pending", 0)) == 0) and good_jobs >= 3 and util_ok and _free_slots(me) > 0 and active < capacity and "buy_vehicle" not in planned:
-		var wanted := ["van", "transporter", "cargobike"]
+	elif not ready_useful and not ops.get("linien", []).any(func(l): return l.active and int(l.get("pending", 0)) == 0) and good_jobs >= 3 and util_ok and _free_slots(me) > 0 and active < capacity and "buy_vehicle" not in planned:
+		var wanted := ["van", "transporter"]   # kein Lastenrad: als billigstes Angebot wurde es sonst fast immer gekauft
 		if personality == "wachstum" and good_jobs >= 6:
 			wanted = ["truck", "transporter", "van"]
 		var offer := _cheapest_offer(res.fahrzeugangebote, wanted)
@@ -924,7 +928,9 @@ static func _best_contract(market: Array, v: Dictionary, spec: Dictionary, rep: 
 		var minutes_needed := Logistics.travel_minutes(tiles, float(spec.tempo)) + 2.0 * Catalog.LOADING_MIN   # gleiche Schaetzung wie die Annahmepruefung
 		if minutes_needed * Logistics.ETA_BUFFER > k.frist_in_min:
 			continue
-		var margin := float(k.verguetung) + float(k.get("praemie_stadt", 0)) - tiles * float(spec.kosten_pro_tile) * 1.1
+		# Faktor 2,0: gemessener Treibstoff je Kachel (Messung 15.11., 30 Tage) – Strassenumweg gegenueber Luftlinie, Tankstellenpreis
+		# ueber dem Grundpreis, Tankwagengebuehr. Mit 1,1 galten schwach beladene Fahrten (2-4 EUR/Kachel) als lohnend.
+		var margin := float(k.verguetung) + float(k.get("praemie_stadt", 0)) - tiles * float(spec.kosten_pro_tile) * FUEL_COST_FACTOR
 		var score := margin / (tiles + 30.0)
 		var revenue := float(k.verguetung) + float(k.get("praemie_stadt", 0))
 		if margin > 30.0 and margin >= min_margin * revenue and score > best_score:

@@ -33,6 +33,7 @@ var estate_view := EstateView.new()
 var civic_view := CivicView.new()         # Auftrag 19: Anlagen und Denkmaeler der Buergermeister, Leben im Grosslager
 var stone_view := StoneView.new()        # Auftrag 23: Steinbauten und Stein-Kreationen der Unternehmer
 var free_build_view := FreeBuildView.new()   # freie Bauwerke Stein auf Stein (13.11.2026)
+var eko_view := EkoView.new()   # Eko-Modus: freie Wesen und ihre Bloecke (15.11.2026)
 var site_view := SiteView.new()
 var works_view := WorksView.new()      # Auftrag 24: Fahrzeugwerk im Querschnitt, Mechaniker an den Stadtwerkstaetten
 var depot_view := DepotView.new()
@@ -131,6 +132,8 @@ func build(simulation: Simulation) -> void:
 	stone_view.setup(sim, self)
 	add_child(free_build_view)
 	free_build_view.setup(sim, self)
+	add_child(eko_view)
+	eko_view.setup(sim, self)
 	if sim.civic != null:
 		sim.civic.ground_changed.connect(repaint_cells)
 	buildings_node.add_child(site_view)
