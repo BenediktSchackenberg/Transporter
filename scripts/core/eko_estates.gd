@@ -63,8 +63,8 @@ func assign(name: String) -> bool:
 	var busy := PackedByteArray()
 	busy.resize(n * n)
 	for p in _sim().parcels.items.values():
-		if str(p.state) == "frei":
-			continue   # freies Land ausserhalb der Orte darf Stammsitz werden (wird dann reserviert)
+		if str(p.state) in ["frei", "zur_entwicklung"] and str(p.zone) != "korridor":
+			continue   # freies Land und Entwicklungsreserve ausserhalb der Orte darf Stammsitz werden (wird reserviert); Privatland und Trassen nicht
 		for y in range(int(p.rect[1]), int(p.rect[1]) + int(p.rect[3])):
 			for x in range(int(p.rect[0]), int(p.rect[0]) + int(p.rect[2])):
 				if x >= 0 and y >= 0 and x < n and y < n:
@@ -104,7 +104,7 @@ func _try(name: String, cands: Array, busy: PackedByteArray, stat: Dictionary, h
 			continue
 		estates[name] = {"rect": [r.position.x, r.position.y], "tor_offen": true, "gate": [], "wall_tiles": [], "bauten": []}
 		for p in _sim().parcels.items.values():   # Land reservieren: hier waechst keine Stadt hin
-			if Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3])).intersects(r) and str(p.state) == "frei":
+			if Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3])).intersects(r) and str(p.state) in ["frei", "zur_entwicklung"]:
 				p.state = "privat_gehalten"
 				p["use"] = "stammsitz"
 		_sim().log_event("%s erhält einen Stammsitz bei %d,%d." % [name, ctr.x, ctr.y], "info")
