@@ -13314,6 +13314,17 @@ func test_eko_founder() -> void:
 		var bv: Dictionary = E.input("Lumo", "Firma", {"aktion": {"action": "buy_vehicle", "offer_id": offers[0].id}})
 		ok(bv.ok, "Fahrzeugkauf ueber die Firma: %s" % str(bv.msg).left(70))
 	ok(not E.input("Lumo", "FoundCompany", {}).ok, "nur eine Firma je Wesen")
+	var fo2: Dictionary = E.observe("Lumo").meine_firma
+	ok(fo2.rangliste.size() >= 3 and fo2.rangliste.any(func(r): return r.firma == "Lumo Lichtkurier" and r.wesen) and fo2.has("konkurrenz") and fo2.has("hofbau"), "Rangliste, Konkurrenzlage und Hofbau in der Firmenlage")
+	var br: Dictionary = E.input("Lumo", "Firma", {"aktion": {"action": "block_road", "target": 0}})
+	ok(not str(br.msg).begins_with("Firma braucht"), "harte Mittel stehen zur Wahl (Engine prueft Spannung): %s" % str(br.msg).left(60))
+	ok(is_equal_approx(s.rivalry.repeat_factor(c.id), 1.0), "erster Verstoss: einfache Strafe")
+	s.rivalry._offense(c.id)
+	s.rivalry._offense(c.id)
+	ok(is_equal_approx(s.rivalry.repeat_factor(c.id), 3.0), "Wiederholungstaeter: dreifache Strafe")
+	for i in 6:
+		s.rivalry._offense(c.id)
+	ok(is_equal_approx(s.rivalry.repeat_factor(c.id), 5.0), "hoechstens fuenffach")
 	c.status = "geschlossen"
 	ok(E.active_firm(b) < 0 and str(E.observe("Lumo").meine_firma.hinweis).contains("Insolvenz"), "nach Insolvenz wieder frei")
 	c.status = "aktiv"

@@ -263,7 +263,7 @@ class Agent:
                 short = json.dumps(a, ensure_ascii=False)[:120]
                 verdict = (res.get("msg", "") if isinstance(res, dict) else "")[:100]
                 self.say("→ %s %s %s" % (fn["name"], short, ("· " + verdict) if verdict else ""))
-                messages.append({"role": "tool", "tool_name": fn["name"], "content": json.dumps(res, ensure_ascii=False)[:8000]})
+                messages.append({"role": "tool", "tool_name": fn["name"], "content": json.dumps(res, ensure_ascii=False)[:14000]})
                 # Schleifenbremse: dieselbe fehlgeschlagene Handlung dreimal hintereinander -> deutlicher Hinweis (Ralf fragte Greta 20-mal)
                 failed = isinstance(res, dict) and res.get("ok") is False
                 key = fn["name"] + json.dumps(a, sort_keys=True, ensure_ascii=False) if failed else ""

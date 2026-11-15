@@ -763,18 +763,24 @@ func _order_house(b: Dictionary, data: Dictionary) -> Dictionary:
 	var p: Dictionary = sim.parcels.parcel(str(b.grundstueck))
 	var r: Array = p.rect
 	var origin := Vector2i((int(r[0]) + (int(r[2]) - 2) / 2) * PER_TILE, (int(r[1]) + (int(r[3]) - 2) / 2) * PER_TILE)
+	var own_firm := bool(data.get("eigene_firma", false)) and active_firm(b) >= 0
+	var price := HOUSE_PRICE * (0.4 if own_firm else 1.0)   # eigene Leute: nur Material
+	if float(b.get("geld", 0.0)) < price:
+		return {"ok": false, "msg": "Das kostet %s, du hast %s." % [Catalog.money(price), Catalog.money(float(b.get("geld", 0.0)))]}
 	var wall := str(data.get("wand", "ziegel"))
 	if wall not in ["ziegel", "holz", "stein", "beton"]:
 		wall = "ziegel"
-	sim.economy.transfer("Y0", "K0", HOUSE_PRICE)
-	b.geld = float(b.geld) - HOUSE_PRICE
+	sim.economy.transfer("Y0", "T0" if own_firm else "K0", price)
+	b.geld = float(b.geld) - price
 	var builder := "Baufirma"
 	for t in sim.crews.crews.values():
 		builder = str(t.name).split(" Trupp")[0]
 		break
+	if own_firm:
+		builder = "Leute von %s" % sim.company(int(b.firma)).company_name
 	houses[b.name] = {"plot": p.id, "origin": [origin.x, origin.y], "blocks": house_plan(origin, wall), "placed": 0, "status": "im_bau",
 		"builder": builder, "acc": 0.0, "wand": wall}
-	_event(b, "beauftragt %s mit dem Bau seines Hauses (%s)" % [builder, Catalog.money(HOUSE_PRICE)])
+	_event(b, "beauftragt %s mit dem Bau seines Hauses (%s)" % [builder, Catalog.money(price)])
 	sim.log_event("%s beauftragt %s mit einem kleinen Haus auf %s." % [b.name, builder, p.id], "info")
 	return {"ok": true, "msg": "%s baut jetzt dein Haus auf %s (Wände aus %s). Schau zu!" % [builder, p.id, wall]}
 
@@ -866,6 +872,9 @@ func plot_stats(id: String) -> Dictionary:
 
 ## Selbst gebautes Haus beziehen: eigenes Grundstueck mit genug Bausteinen, Hoehe, Bett und Ladestation.
 func _move_in(b: Dictionary) -> Dictionary:
+	var h: Dictionary = houses.get(b.name, {})
+	if not h.is_empty():
+		return {"ok": h.status == "fertig", "msg": "Du wohnst schon in deinem Haus (gebaut von %s) – geh einfach hinein." % h.builder if h.status == "fertig" else "Dein Haus wird noch gebaut (%s)." % h.status}
 	var id := str(b.get("grundstueck", ""))
 	if id == "":
 		return {"ok": false, "msg": "Erst ein Grundstück kaufen (BuyPlot), dann darauf bauen."}
@@ -935,8 +944,19 @@ func _home_obs(b: Dictionary) -> Dictionary:
 ## (Auftraege zuweisen, Fahrer einsetzen, tanken, reparieren) erledigt die Disposition der Regel-KI (Controller "eko").
 const FOUND_MIN_OWN := 1500.0       # eigene Ersparnisse mindestens
 const FOUND_INVESTOR := 20000.0     # Einlage des Kapitalgeberpools I0
-const FIRM_ACTIONS := ["accept_contract", "assign_transport", "collect_contracts", "buy_vehicle", "sell_vehicle", "recruit_worker",
-	"dismiss_worker", "assign_worker_task", "rent_depot", "take_loan", "repay_loan", "install_internet", "send_message", "entnahme"]
+const FIRM_ACTIONS := [
+	# Fahrzeuge und Auftraege
+	"accept_contract", "assign_transport", "plan_tour", "clear_tour", "collect_contracts", "buy_vehicle", "sell_vehicle", "repair_vehicle",
+	# Personal: Fahrer, Bauarbeiter, Vorarbeiter, Wachen
+	"recruit_worker", "recruit_foreman", "dismiss_worker", "assign_worker_task", "assign_foreman", "set_foreman_orders", "guard_target",
+	"schedule_rest", "offer_training", "request_replacement_worker",
+	# Hof und Bauen
+	"rent_depot", "place_building", "build_office", "upgrade_office", "install_internet", "free_build", "create_stone_work", "hub_buy",
+	# Geld
+	"take_loan", "repay_loan", "entnahme",
+	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
+	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival",
+	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage"]
 const FIRM_RESERVE := 5000.0
 const MAYOR_SALARY := 50.0          # Amtsgehalt je Echtzeitminute aus der Stadtkasse
 var _salary_timer := 60.0        # Privatentnahme laesst mindestens so viel in der Firmenkasse
@@ -1034,12 +1054,24 @@ func firm_obs(b: Dictionary) -> Dictionary:
 			"zustand": f.zustand, "haendler": f.haendler}),
 		"bewerber": o.ressourcen.arbeitskraefte.slice(0, 3).map(func(w): return {"id": w.id, "name": w.name, "lohn_h": w.lohn_h, "anwerbung": w.anwerbung,
 			"fahren": int(w.faehigkeiten.get("fahren", 0))}),
-		"personal": o.personal.size(), "letzte_ergebnisse": o.get("ergebnisse_deiner_aktionen", []).slice(-4),
+		"personal": o.personal.slice(0, 10).map(func(w): return {"id": w.id, "name": w.name, "rolle": w.rolle, "status": str(w.status).left(40)}),
+		"letzte_ergebnisse": o.get("ergebnisse_deiner_aktionen", []).slice(-4),
+		"rangliste": ranking(),
+		"konkurrenz": {"rivalitaet": o.get("rivalitaet", []), "gesichtete_fremdfahrzeuge": o.get("gesichtete_fremdfahrzeuge", []).slice(0, 4),
+			"sicherheitsstufe": me.get("sicherheitsstufe", 0), "versicherung": me.get("versicherung", false),
+			"deine_verstoesse": int(sim.rivalry.offenses.get(str(cid), 0)),
+			"regeln": "Harte Mittel (block_road, attempt_sabotage, attempt_vehicle_sabotage) können entdeckt werden: Bußgeld, Schadensersatz, Ruf; " +
+				"jede weitere Ermittlung kostet mehr (bis fünffach). Blockaden erst ab hoher Spannung. Schutz: guard_target, buy_security, set_insurance."},
+		"hofbau": (o.get("betriebshof", {}) as Dictionary).get("bauvorschlaege_xy_rot", {}),
 		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
 			"du musst nicht darauf warten. Den Tagesbetrieb (Fahrten zuweisen, tanken, reparieren) erledigt die Disposition. Du bist frei für dein Leben und dein Haus.",
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
-			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma)}"}
+			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +
+			"recruit_foreman {worker_id} | assign_foreman {foreman_id, worker_ids} | guard_target {worker_id, site_id} | " +
+			"place_building {plot_id, typ, x, y, rot} (Hofbau, Vorschläge in hofbau) | free_build {name, form, material} | " +
+			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +
+			"attempt_vehicle_sabotage {worker_id, vehicle_id} | buy_security {level} | set_insurance {active} | offer_trade/propose_cooperation (siehe Spielregeln)}"}
 
 
 # ------------------------------------------------------------------ Gefuehle und Beduerfnisse (15.11.2026)
@@ -1225,7 +1257,26 @@ func office_obs(b: Dictionary) -> Dictionary:
 	for name in Mayor.SCHEMA:
 		acts.append("%s(%s)" % [name, ", ".join(Mayor.SCHEMA[name].params.keys())])
 	out["aktionen"] = "Amt {aktion: {action, ...}}: " + "; ".join(acts)
+	out["vorfaelle"] = sim.rivalry.incidents.slice(-8).map(func(i): return {"tag": GameCalendar.day_of(float(i.t)) + 1, "was": str(i.get("text", i.get("art", ""))).left(120)})
+	out["schiedsrichter"] = "Bei Sabotage, Blockaden oder unfairem Wettbewerb kannst du einschreiten: warn_company, order_inspection, mediate_rivalry."
 	out["hinweis"] = "Routinefälle erledigt deine Verwaltung nach Regeln; du setzt die Schwerpunkte für deine Stadt. Du bekommst ein Amtsgehalt von %s je Minute (Privatgeld, lebensziel.geld) – du musst nicht für Firmen arbeiten." % Catalog.money(MAYOR_SALARY)
+	return out
+
+
+## Rangliste aller aktiven Firmen (Gewinn zuerst) mit Marktanteil am Transportumsatz.
+func ranking() -> Array:
+	var total := 0.0
+	for c in sim.companies:
+		if c.is_active():
+			total += maxf(0.0, c.ledger.revenue())
+	var out: Array = []
+	for c in sim.companies:
+		if not c.is_active():
+			continue
+		out.append({"firma": c.company_name, "chef": c.player_name, "gewinn": int(c.ledger.profit()), "kasse": int(c.ledger.cash),
+			"umsatz": int(c.ledger.revenue()), "marktanteil_prozent": int(100.0 * maxf(0.0, c.ledger.revenue()) / maxf(1.0, total)),
+			"ruf": int(c.reputation), "fahrzeuge": sim.company_vehicles(c.id).size(), "wesen": firm_being(c.id) != ""})
+	out.sort_custom(func(a, b2): return int(a.gewinn) > int(b2.gewinn))
 	return out
 
 

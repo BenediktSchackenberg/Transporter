@@ -61,6 +61,16 @@ var sim
 var cooldowns := {}     # "art:firma" -> Spielminute
 var tension := {}       # Social.pair_key -> 0..100
 var incidents: Array = []   # {t, a, b, art, delta, text}; a = Verursacher, b = Betroffener
+var offenses := {}          # Firma -> Zahl ermittelter Regelverstoesse (Sabotage, Blockade); jede weitere Strafe steigt (Benedikt 15.11.)
+
+
+## Strafe fuer Wiederholungstaeter: 1x beim ersten ermittelten Verstoss, dann 2x, 3x ... hoechstens 5x.
+func repeat_factor(cid: int) -> float:
+	return 1.0 + minf(4.0, float(offenses.get(str(cid), 0)))
+
+
+func _offense(cid: int) -> void:
+	offenses[str(cid)] = int(offenses.get(str(cid), 0)) + 1
 var blockades: Array = []   # {cell: [x, y], by, target, placed, clear_at}
 var truces := {}            # Social.pair_key -> Stillhalteabkommen bis Spielminute (Schlichtung des Buergermeisters)
 var warnings := {}          # "Firmen-ID" -> oeffentlich verwarnt bis Spielminute
@@ -122,7 +132,9 @@ func execute_sabotage(cid: int, target: int, kind: String) -> Dictionary:
 	else:
 		result = "%s gegen %s ist fehlgeschlagen." % [s.name, t.company_name]
 	if detected:
-		c.ledger.book("fines", -(s.fine + s.compensation), true, "Bußgeld/Schadensersatz " + s.name, now)
+		var rf := repeat_factor(cid)
+		_offense(cid)
+		c.ledger.book("fines", -(s.fine * rf + s.compensation), true, "Bußgeld/Schadensersatz " + s.name + (" (Wiederholungstäter x%d)" % int(rf) if rf > 1.0 else ""), now)
 		t.ledger.book("compensation", s.compensation, true, "Schadensersatz von " + c.company_name, now)
 		c.reputation = maxf(0.0, c.reputation - s.rep_loss)
 		sim.social.add_trust(cid, target, -40.0)
@@ -387,7 +399,8 @@ func tick(now: float) -> void:
 		var c: Company = sim.company(int(b.by))
 		var t: Company = sim.company(int(b.target))
 		if sim.rng.randf() < BLOCK_DETECT + 0.1 * t.security_level:
-			var fine := minf(BLOCK_FINE, maxf(0.0, c.ledger.cash))
+			var fine := minf(BLOCK_FINE * repeat_factor(c.id), maxf(0.0, c.ledger.cash))
+			_offense(c.id)
 			if fine > 0.01:
 				c.ledger.book("fines", -fine, true, "Bußgeld Straßenblockade", now)
 			c.reputation = maxf(0.0, c.reputation - BLOCK_REP)
@@ -562,7 +575,7 @@ func mayor_summary() -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"cooldowns": cooldowns, "tension": tension, "incidents": incidents, "blockades": blockades, "truces": truces, "warnings": warnings}
+	return {"cooldowns": cooldowns, "tension": tension, "incidents": incidents, "blockades": blockades, "truces": truces, "warnings": warnings, "offenses": offenses}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -572,5 +585,6 @@ func from_dict(d: Dictionary) -> void:
 	blockades = d.get("blockades", [])
 	truces = d.get("truces", {})
 	warnings = d.get("warnings", {})
+	offenses = d.get("offenses", {})
 	for b in blockades:
 		sim.nav.add_roadwork(Vector2i(int(b.cell[0]), int(b.cell[1])), float(b.clear_at))
