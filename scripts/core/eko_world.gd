@@ -175,7 +175,13 @@ func sources() -> Array:
 
 
 ## Echtzeit-Takt (Sekunden). Laeuft nur, wenn die Partie nicht pausiert ist.
+var _estates_checked := false
+
+
 func update(dt: float) -> void:
+	if auto_estates and not _estates_checked:   # Nachvergabe im ersten Takt (dann ist der Spielstand sicher geladen)
+		_estates_checked = true
+		ensure_estates()
 	for b in beings.values():
 		var m: Mover = b.mover
 		if not m.arrived():
