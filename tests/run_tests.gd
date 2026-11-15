@@ -24,6 +24,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_terrain")
 	test_names.append("test_world_production_stage1")
 	test_names.append("test_world_production_oil")
+	test_names.append("test_world_production_energy")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13593,3 +13594,55 @@ func test_world_production_oil() -> void:
 		ok(got == 3 and is_equal_approx(c.ledger.cash - cash0, 3000.0) and is_equal_approx(g0 - float(s.economy.accounts.G0), 3000.0), "Tankstellenbetreiber kauft 3000 l Diesel bei der Raffinerie")
 		ok(s.stock.available("diesel", "C0", int(Rf.site)) == have0 - 3, "Diesel aus dem Raffinerielager verbraucht")
 	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
+
+
+## Etappe 3 Energie (15.11.2026): Kraftwerke als Betriebe (Kohle, Wind, Sonne) erzeugen Strom (Ware strom_mwh), die Netzgesellschaft
+## kauft ihn taeglich und speist ein; Uran-Kette; Kernkraftwerk kauft Brennelemente zuerst in der Welt; Stoerfaelle mit Folgen.
+func test_world_production_energy() -> void:
+	var bj: Dictionary = Businesses.branches()
+	for k in ["kohlekraftwerk", "windpark", "solarpark", "uranbergwerk", "brennelementwerk"]:
+		ok(bj.has(k), "Branche %s" % k)
+	var s := region_sim(2, 21)
+	s.wx.cur["wind"] = 0.0
+	ok(is_zero_approx(s.prod.weather_yield("wind")), "Flaute: Windpark steht")
+	s.wx.cur["wind"] = 40.0
+	ok(s.prod.weather_yield("wind") > 0.7, "Wind 40 km/h: Windpark laeuft")
+	var c: Company = s.companies[0]
+	c.ledger.inject(400000.0)
+	var rk: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": "kohlekraftwerk", "reason": "Test"})
+	ok(rk.ok, "Kohlekraftwerk gegruendet: %s" % str(rk.get("msg", "")).left(60))
+	if rk.ok:
+		var K: Dictionary = s.biz.get_b(str(rk.ref))
+		s.stock.add("kohle", 60, "C0", int(K.site), "Test", s.game_min)
+		for i in 2:
+			var w := s.personnel.spawn_available("allrounder")
+			s.personnel.hire(0, w)
+			s.executor.execute(0, {"action": "assign_staff", "worker_id": w.id, "business_id": str(rk.ref)})
+		var inc0 := float(c.ledger.totals.get("trade_income", 0.0))
+		for d in 3:
+			next_day(s)
+		ok(int(K.get("total", 0)) > 0, "Kohlekraftwerk verbrennt Kohle (%d Chargen)" % int(K.get("total", 0)))
+		ok(float(c.ledger.totals.get("trade_income", 0.0)) > inc0 and s.grid.private_kw > 0.0, "Netz kauft Strom ab und speist ein (%d kW)" % int(s.grid.private_kw))
+	# Kernkraftwerk: Brennelemente aus der Welt
+	if rk.ok:
+		var K2: Dictionary = s.biz.get_b(str(rk.ref))
+		s.stock.add("brennelement", 2, "C0", int(K2.site), "Test", s.game_min)
+		var have0: int = s.plant.fuel_elements()
+		var cash0 := c.ledger.cash
+		ok(s.plant._ship(2) and s.plant.fuel_elements() == have0 + 2 and c.ledger.cash > cash0, "Kernkraftwerk kauft 2 Brennelemente aus heimischer Fertigung")
+	# Stoerfall: bei ueberfaelliger Wartung frueher oder spaeter
+	s.plant.maint_due = -100
+	var ap0 := float(s.towns.mayors[0].approval)
+	var day := GameCalendar.day_of(s.game_min)
+	var hit := false
+	for i in 1500:
+		s.plant._incident_roll(day)
+		if s.plant.offline_until > day:
+			hit = true
+			break
+	ok(hit and not s.plant.incidents.is_empty(), "Stoerfall eingetreten")
+	if hit:
+		ok(is_zero_approx(s.plant.available_kw(1600.0)) and float(s.towns.mayors[0].approval) < ap0, "abgeschaltet, Buergerprotest (Zustimmung %d -> %d)" % [int(ap0), int(s.towns.mayors[0].approval)])
+	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.plant.offline_until == s.plant.offline_until and s2.plant.incidents.size() == s.plant.incidents.size(), "Stoerfall gespeichert")

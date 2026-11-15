@@ -97,12 +97,18 @@ func on_day(day: int) -> void:
 	net.ensure()
 	net.on_day(day)   # Leitungsschaeden und Netztrupps (Auftrag 22 Phase 3 Schritt 3)
 	_bill()
+	# Private Kraftwerke (Kohle, Wind, Sonne): die Netzgesellschaft E0 kauft allen Strom zum Erzeugungspreis (je MWh)
+	var mwh: int = sim.prod.sell_from_producers("strom_mwh", 100000, float(cfg().erzeugung_eur_kwh) * 1000.0, PowerPlant.ACCT, "Stromeinspeisung")
+	private_kw = float(mwh) * 1000.0 / 24.0
 	_allocate()
+
+
+var private_kw := 0.0   # mittlere Einspeisung privater Kraftwerke des Tages (kW)
 
 
 func _allocate() -> void:
 	var base := base_load()
-	var plant_kw: float = sim.plant.available_kw(capacity)
+	var plant_kw: float = sim.plant.available_kw(capacity) + private_kw
 	var iv_kw: float = sim.waste.iv_available_kw() if sim.waste != null else 0.0   # Mue llverbrennung (Auftrag 22 Phase 2 Schritt 4)
 	net.ensure()
 	var consumers: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING and float(b.energy_kw) > 0.0 and not sim.biz.frozen(int(b.owner)))

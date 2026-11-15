@@ -917,5 +917,131 @@
       "lager_max": 200
     },
     "naehe": "hafen"
+  },
+  "kohlekraftwerk": {
+    "label": "Kohlekraftwerk",
+    "beschreibung": "Verbrennt Kohle aus dem Bergwerk zu Strom; die Netzgesellschaft kauft den Strom täglich ab. Billig, aber Rauch und Ruß.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 140000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 2,
+    "rollen": [
+      "kraftwerk"
+    ],
+    "rezept": {
+      "ein": {
+        "kohle": 2
+      },
+      "aus": {
+        "strom_mwh": 3
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 6,
+      "lager_max": 60
+    },
+    "naehe": "bauhof"
+  },
+  "windpark": {
+    "label": "Windpark",
+    "beschreibung": "Erzeugt Strom aus Wind – viel bei Sturm, nichts bei Flaute (echtes Wetter). Kein Brennstoff, aber teuer im Bau.",
+    "standort": "markt",
+    "gebaeude": "warehouse",
+    "gruendungskosten": 0,
+    "ausstattung": 90000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 1,
+    "rollen": [
+      "warten"
+    ],
+    "rezept": {
+      "ein": {},
+      "aus": {
+        "strom_mwh": 2
+      },
+      "chargen_je_person_tag": 6,
+      "lager_tage": 2,
+      "lager_max": 40,
+      "wetter": "wind"
+    },
+    "naehe": "bauhof"
+  },
+  "solarpark": {
+    "label": "Solarpark",
+    "beschreibung": "Erzeugt Strom aus Sonne – tagsüber und bei klarem Himmel (echtes Wetter).",
+    "standort": "markt",
+    "gebaeude": "warehouse",
+    "gruendungskosten": 0,
+    "ausstattung": 70000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 1,
+    "rollen": [
+      "warten"
+    ],
+    "rezept": {
+      "ein": {},
+      "aus": {
+        "strom_mwh": 2
+      },
+      "chargen_je_person_tag": 5,
+      "lager_tage": 2,
+      "lager_max": 40,
+      "wetter": "sonne"
+    },
+    "naehe": "bauhof"
+  },
+  "uranbergwerk": {
+    "label": "Uranbergwerk",
+    "beschreibung": "Fördert seltenes Uranerz tief im Gebirge. Strenge Auflagen, viel Personal, teuer.",
+    "standort": "markt",
+    "gebaeude": "warehouse",
+    "gruendungskosten": 0,
+    "ausstattung": 200000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 30.0,
+    "personal_min": 3,
+    "rollen": [
+      "foerdern"
+    ],
+    "rezept": {
+      "ein": {},
+      "aus": {
+        "uranerz": 1
+      },
+      "chargen_je_person_tag": 1,
+      "lager_tage": 6,
+      "lager_max": 100
+    },
+    "naehe": "bauhof"
+  },
+  "brennelementwerk": {
+    "label": "Brennelementwerk",
+    "beschreibung": "Reichert Uranerz an und fertigt Brennelemente für das Kernkraftwerk.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 300000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 100.0,
+    "personal_min": 3,
+    "rollen": [
+      "anreichern"
+    ],
+    "rezept": {
+      "ein": {
+        "uranerz": 10
+      },
+      "aus": {
+        "brennelement": 1
+      },
+      "chargen_je_person_tag": 1,
+      "lager_tage": 10,
+      "lager_max": 10
+    },
+    "naehe": "bauhof"
   }
 }

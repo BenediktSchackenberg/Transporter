@@ -69,6 +69,8 @@ func maintenance_overdue() -> bool:
 
 ## Verfuegbare Leistung aus dem Kraftwerk (ohne Notstrom).
 func available_kw(nominal: float) -> float:
+	if GameCalendar.day_of(sim.game_min) < offline_until:
+		return 0.0   # nach einem Stoerfall abgeschaltet
 	if loaded_mwh <= 0.0 and fuel_elements() <= 0:
 		return 0.0
 	return nominal * (0.5 if maintenance_overdue() else 1.0)
@@ -92,7 +94,34 @@ func generate(kwh: float, emergency_kwh: float) -> void:
 		stats.emergency_cost = float(stats.emergency_cost) + cost
 
 
+## Atomrisiko (Benedikt 15.11.: Kernkraftwerke haben Risiken): seltener Stoerfall, deutlich haeufiger bei ueberfaelliger Wartung.
+## Stoerfall: Abschaltung, Reparatur an die Baufirmen, Zustimmung der Buergermeister sinkt (Buergerprotest). Schwerer Stoerfall
+## (jeder fuenfte): lange Abschaltung, hohe Kosten, starker Protest. Waehrend der Abschaltung deckt teurer Notstrom die Luecke.
+const INCIDENT_P := 0.002
+const INCIDENT_P_OVERDUE := 0.02
+var offline_until := -1
+var incidents: Array = []        # {tag, schwer, kosten, tage}
+
+
+func _incident_roll(day: int) -> void:
+	if day < offline_until or (loaded_mwh <= 0.0 and fuel_elements() <= 0):
+		return
+	if sim.rng.randf() >= INCIDENT_P + (INCIDENT_P_OVERDUE if maintenance_overdue() else 0.0):
+		return
+	var severe: bool = sim.rng.randf() < 0.2
+	var days: int = 30 if severe else sim.rng.randi_range(4, 10)
+	var cost: float = 300000.0 if severe else 50000.0
+	offline_until = day + days
+	sim.economy.transfer(ACCT, "K0", cost)   # Reparatur und Sicherheitspruefung durch Baufirmen
+	incidents.append({"tag": day + 1, "schwer": severe, "kosten": cost, "tage": days})
+	for M in sim.towns.mayors:
+		M.approval = maxf(0.0, float(M.approval) - (20.0 if severe else 8.0))
+	sim.log_event(("SCHWERER STÖRFALL im Kernkraftwerk! %d Tage abgeschaltet, %s Kosten, Bürger protestieren." if severe else
+		"Störfall im Kernkraftwerk: %d Tage abgeschaltet, %s Reparatur. Die Bürger sind beunruhigt.") % [days, Catalog.money(cost)], "bad")
+
+
 func on_day(day: int) -> void:
+	_incident_roll(day)
 	sim.economy.transfer(ACCT, "H0", CREW_PER_DAY)   # Betriebsmannschaft
 	stats.crew = float(stats.crew) + CREW_PER_DAY
 	# Ankunft bestellter Elemente am Importterminal -> Spezialtransport zum Kraftwerk (echter Transportauftrag, Zahler P0)
@@ -117,6 +146,13 @@ func on_day(day: int) -> void:
 func _ship(n: int) -> bool:
 	var port: int = int(sim.city_depot.port)
 	var ip := float(Production.art(ITEM).get("importpreis", 0.0))
+	var local: int = sim.prod.sell_from_producers(ITEM, n, ip * 0.9, ACCT, "Brennelemente für das Kernkraftwerk")   # zuerst aus der Welt
+	if local > 0:
+		sim.stock.add(ITEM, local, "P0", building, "Brennelemente aus dem Brennelementwerk", sim.game_min)
+		sim.log_event("Kernkraftwerk erhält %d Brennelemente aus heimischer Fertigung." % local, "info")
+		n -= local
+		if n <= 0:
+			return true
 	if sim.harbor.enabled and sim.harbor.available(ITEM) < n:   # Kuestenort: Brennstoff kommt mit dem naechsten Schiff
 		sim.harbor.demand(ITEM, n - sim.harbor.available(ITEM))
 		return false
@@ -142,13 +178,15 @@ func summary() -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"building": building, "loaded_mwh": loaded_mwh, "pending": pending, "maint_due": maint_due, "stats": stats}
+	return {"building": building, "loaded_mwh": loaded_mwh, "pending": pending, "maint_due": maint_due, "stats": stats, "offline_until": offline_until, "incidents": incidents}
 
 
 func from_dict(d: Dictionary) -> void:
 	if d.is_empty():
 		return
 	building = int(d.get("building", building))
+	offline_until = int(d.get("offline_until", -1))
+	incidents = d.get("incidents", [])
 	loaded_mwh = float(d.get("loaded_mwh", loaded_mwh))
 	pending = d.get("pending", [])
 	maint_due = int(d.get("maint_due", maint_due))

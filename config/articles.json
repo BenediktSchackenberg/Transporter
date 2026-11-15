@@ -517,5 +517,24 @@
     "basispreis": 30.0,
     "importpreis": 40.0,
     "exportpreis": 22.0
+  },
+  "strom_mwh": {
+    "name": "Strom (MWh)",
+    "einheit": "MWh",
+    "ladung": "pakete",
+    "je_ladeeinheit": 1000,
+    "haltbar_tage": 0,
+    "basispreis": 170.0,
+    "importpreis": null
+  },
+  "uranerz": {
+    "name": "Uranerz",
+    "einheit": "Einheit (100 kg)",
+    "ladung": "container",
+    "je_ladeeinheit": 5,
+    "haltbar_tage": 0,
+    "basispreis": 400.0,
+    "importpreis": null,
+    "exportpreis": 300.0
   }
 }

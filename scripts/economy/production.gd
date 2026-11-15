@@ -755,6 +755,8 @@ func _recipe_day(b: Dictionary, spec: Dictionary) -> void:
 	var shop: Dictionary = spec.get("laden", {})
 	b["counter"] = not shop.is_empty() and staff >= int(spec.get("personal_min", 1)) + int(shop.personal)
 	var cap := (staff - (int(shop.personal) if b.counter else 0)) * int(R.chargen_je_person_tag)
+	if R.has("wetter"):   # Wind- und Solarpark: Ertrag nach echtem Wetter (Open-Meteo Mainz)
+		cap = int(round(float(cap) * weather_yield(str(R.wetter))))
 	# Verderbliche Ware nach Absatz: Zielbestand = 1,5 Tagesabsaetze (mindestens START_BATCHES Chargen zum Anlaufen);
 	# Einkauf und Produktion richten sich danach statt nach der vollen Kapazitaet.
 	var out_cap := -1
@@ -1073,6 +1075,19 @@ func order(buyer: String, loc: int, buyer_biz: String, item: String, qty: int, m
 func import_point(loc: int = -1) -> int:
 	var H := port_of(loc)
 	return H.building if H.enabled else int(sim.retail.wholesale_building)   # Kuestenort: Hafenlager (Region: der eigenen Stadt)
+
+
+## Ertragsfaktor 0..1 fuer Wind (Windgeschwindigkeit, Sturm drosselt) und Sonne (Tag, Bewoelkung).
+func weather_yield(kind: String) -> float:
+	var cur: Dictionary = sim.wx.cur
+	if kind == "wind":
+		var v := float(cur.get("wind", 10.0))
+		return 0.0 if v < 8.0 else (0.6 if v > 75.0 else clampf((v - 8.0) / 40.0, 0.1, 1.0))
+	if kind == "sonne":
+		if not bool(cur.get("is_day", true)):
+			return 0.15   # Tagesmittel: ein Teil des Tages war hell
+		return clampf(1.0 - float(cur.get("cloud", 0)) / 120.0, 0.15, 1.0)
+	return 1.0
 
 
 ## Verkauf aus Produzentenlagern an einen Abnehmer ausserhalb der Firmen (z. B. Tankstellenbetreiber G0 kauft Diesel):
