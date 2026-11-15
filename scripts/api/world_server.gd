@@ -96,6 +96,10 @@ func handle(method: String, path: String, query: Dictionary, headers: Dictionary
 			return [403, {"ok": false, "msg": "Nur für den Betreiber."}]
 		on_save.call()
 		return [200, {"ok": true, "msg": "Spielstand gesichert."}]
+	if path == "/betreiber/wesen" and method == "GET":   # Schwarm: welche Wesen gibt es, mit welcher Seele
+		if operator_token == "" or str(headers.get("x-betreiber", "")) != operator_token:
+			return [403, {"ok": false, "msg": "Nur für den Betreiber."}]
+		return [200, eko.beings_info()]
 	if path == "/join" and method == "POST":
 		var r := eko.join(str(query.get("name", "")), str(query.get("art", "mensch")))
 		if not bool(r.ok):

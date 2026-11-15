@@ -24,6 +24,7 @@ var stats := {"requests": 0, "ok": 0, "errors": 0, "invalid": 0, "tokens": 0, "a
 var status := "bereit"
 var last_error := ""
 var fallback_active := false
+var eko_managed := false       # Buergermeister als freies Wesen (--eko-spieler): hier nur noch Amtsverwaltung nach Regeln
 var summaries: Array = []
 var real_time := 0.0
 
@@ -110,6 +111,10 @@ func _process_timed(delta: float) -> void:
 
 ## Eine Entscheidungsrunde: mit Modell (asynchron) oder per Regeln.
 func think() -> void:
+	if eko_managed:
+		_run_rules("Verwaltung")
+		status = "Wesen entscheidet, Verwaltung nach Regeln"
+		return
 	if adapter == null or fallback_active or not budget_left():
 		if adapter != null and not budget_left():
 			status = "Budget erschöpft – Ersatzmodus (regelbasiert)"

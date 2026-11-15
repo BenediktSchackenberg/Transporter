@@ -70,6 +70,24 @@ Der Agent darf nur `curl` ausführen und Dateien in seinem Arbeitsordner lesen u
   Disposition der Regel-KI über einen Controller mit Anbieter `eko`, der selbst keine Modellanfragen stellt.
 - Die Firmenfigur ist ausgeblendet; sichtbar ist das Wesen selbst. Die Firma erscheint wie jede Gründung in HUD und KI-Zentrale.
 
+## Alle KI-Spieler und Bürgermeister als Wesen (`--eko-spieler`)
+
+```powershell
+Godot_v4.4.1-stable_win64.exe --path . -- --eko-spieler --eko-folgen      # neue Partie oder mit --autotest --load ein Spielstand
+python tools\eko\eko_schwarm.py                                          # alle Wesen gleichzeitig über Ollama
+```
+
+- Jede Startfirma bekommt ein Wesen mit dem Namen des Spielers und einer Seele nach seiner Persönlichkeit
+  (`tools/eko/seelen/kostenoptimierer|wachstum|netzwerker|risikospieler.md`). Es entscheidet über `Firma {aktion}`; der Firmen-Controller
+  macht nur noch den Tagesbetrieb (Anbieter `eko`). Start wie bisher mit kleiner Firma (Hof, zwei Allrounder, Startkapital).
+- Jeder Bürgermeister bekommt ein Wesen (Seele `buergermeister.md`) mit `Amt {aktion}` (alle Amtshandlungen aus `Mayor.SCHEMA`)
+  und einer kompakten Amtslage `mein_amt`. Der Bürgermeister-Agent erledigt nur noch Routinefälle nach Regeln (`eko_managed`, alle 120 s).
+- `eko_schwarm.py` fragt `GET /betreiber/wesen` (Betreiberschlüssel aus `user://eko_betreiber.txt`) und startet je Wesen einen Agenten
+  in einem eigenen Faden; neue Wesen (Gründungen) kommen automatisch dazu. Konsolenzeilen tragen den Namen des Wesens.
+- Spielstand sichern ohne Tastendruck: `POST /betreiber/speichern` mit Kopf `X-Betreiber`.
+- Grenzen: Alle Wesen teilen sich ein Modell auf einer Grafikkarte; mit 7 Wesen kommt jedes etwa alle 20 Sekunden an die Reihe.
+  Nach einer Bürgermeisterwahl behält das Wesen sein Amt (Name des Wesens bleibt).
+
 ## Gespräche mit anderen KIs
 
 - `Talk {to, text}` (höchstens 3 Felder Abstand) spricht eine Figur an:

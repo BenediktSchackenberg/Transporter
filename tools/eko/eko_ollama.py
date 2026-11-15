@@ -39,11 +39,12 @@ TOOLS = [
      "BuyPlot {plot} (Wohngrundstück kaufen, höchstens 6 Felder entfernt), OrderHouse {wand?: ziegel|holz|stein|beton} "
      "(Baufirma baut dir ein Haus), Rest {} (ausruhen und Akku laden: draußen langsam, zu Hause in der Ladestation schnell), FoundCompany {name?, behalten?} (eigene "
      "Transportfirma gründen, ab 1.500 EUR Ersparnissen, Kapitalgeber legt 20.000 EUR dazu), Firma {aktion: {action, ...}} (deine Firma "
-     "führen, siehe meine_firma.aktionen), MoveIn {} (in das selbst gebaute Haus auf deinem Grundstück einziehen). Material und "
+     "führen, siehe meine_firma.aktionen), MoveIn {} (in das selbst gebaute Haus auf deinem Grundstück einziehen), "
+     "Amt {aktion: {action, ...}} (nur Bürgermeister: Amtshandlung, siehe mein_amt.aktionen). Material und "
      "Einrichtung (bett, ladestation, tisch, lampe, ...) kaufst du mit Pickup am Bauhof, Preise in material_preise. "
      "Blockraster: 4x4 Blöcke je Feld, z = Schicht ab 0.",
      "parameters": {"type": "object", "properties": {
-         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn"]},
+         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt"]},
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12]}"}},
          "required": ["type", "data"]}},
     {"name": "wait", "description": "Warte einige Sekunden (z. B. während du gehst).",
@@ -133,7 +134,10 @@ class Agent:
             if not (self.ws / f.name).exists():
                 shutil.copy(f, self.ws / f.name)
                 if f.name == "SOUL.md" and args.seele:   # eigene Seele nur beim ersten Start, danach gehoert die Datei dem Wesen
-                    shutil.copy(HERE / "seelen" / (args.seele + ".md"), self.ws / "SOUL.md")
+                    soul = (HERE / "seelen" / (args.seele + ".md")).read_text(encoding="utf-8")
+                    soul = soul.replace("{NAME}", args.name).replace("{FIRMA}", getattr(args, "firma", "") or "meine Firma") \
+                        .replace("{STADT}", getattr(args, "stadt", "") or "meiner Stadt")
+                    (self.ws / "SOUL.md").write_text(soul, encoding="utf-8")
         (self.ws / "EPISODIC_MEMORY.jsonl").touch()
         self.world = World("http://127.0.0.1:%d" % args.port, args.name)
         self.log = open(self.logs / "sitzung.log", "a", encoding="utf-8")
@@ -164,6 +168,9 @@ class Agent:
                 if isinstance(data, str):
                     data = json.loads(data) if data.strip().startswith("{") else {}
                 r = self.world.act(str(a.get("type", "")), data)
+                if str(a.get("type", "")) == "Rest" and isinstance(r, dict) and r.get("ok"):
+                    time.sleep(20)   # die Pause wirklich abwarten (das Modell schickte sonst alle 2 s erneut Rest)
+                    r["msg"] = str(r.get("msg", "")) + " Die Pause ist vorbei."
                 obs = r.pop("beobachtung", {}) if isinstance(r, dict) else {}
                 if isinstance(obs, dict) and obs.get("ok"):
                     r["du"] = obs.get("du")
@@ -200,7 +207,7 @@ class Agent:
 
     def say(self, text):
         line = time.strftime("%H:%M:%S ") + text
-        print(line, flush=True)
+        print("%s [%s] %s" % (line[:9], self.args.name, text), flush=True)   # im Schwarm-Fenster: wer spricht
         self.log.write(line + "\n")
         self.log.flush()
 

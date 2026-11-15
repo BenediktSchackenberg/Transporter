@@ -60,6 +60,7 @@ func join(name: String, art: String = "mensch") -> Dictionary:
 		m.pos = sim.city.tile_center(_spawn_tile())
 		beings[name] = {"name": name, "art": art, "mover": m, "held": [], "say": "", "say_left": 0.0, "events": [], "geld": 0.0,
 			"job": "", "grundstueck": "", "done_jobs": 0, "rest_left": 0.0, "firma": -1, "akku": 100.0, "nass": 0.0, "kalt": 0.0,
+			"amt": -1, "seele": "",
 			"color": COLORS[beings.size() % COLORS.size()]}
 		_event(beings[name], "ist in der Welt erwacht")
 		_restore_savings(beings[name])
@@ -188,10 +189,12 @@ func input(name: String, type: String, data: Dictionary) -> Dictionary:
 			r = _found_company(b, data)
 		"MoveIn":
 			r = _move_in(b)
+		"Amt":
+			r = _office_action(b, data)
 		"Firma":
 			r = _firm_action(b, data)
 		_:
-			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn." % type}
+			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt." % type}
 	if not bool(r.ok):
 		_event(b, "Fehlschlag %s: %s" % [type, r.msg])
 	changed.emit()
@@ -469,8 +472,8 @@ func observe(name: String) -> Dictionary:
 		"bloecke_in_der_naehe": near_blocks, "bloecke_gesamt": blocks.size(),
 		"gebaeude_in_der_naehe": near_buildings, "quellen": src, "material_preise": PRICES,
 		"andere_wesen": others, "figuren_in_der_naehe": figures, "gehoert": heard(name),
-		"jobangebote": _job_obs(b) if int(b.get("firma", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
-		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "gefuehle": feelings(b),
+		"jobangebote": _job_obs(b) if int(b.get("firma", -1)) < 0 and int(b.get("amt", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
+		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "mein_amt": office_obs(b), "gefuehle": feelings(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}
 
 
@@ -1102,6 +1105,110 @@ func feelings(b: Dictionary) -> Dictionary:
 	return {"akku": int(akku), "nass": int(nass), "kalt": int(kalt), "zuhause": home, "draussen": wx.headline(), "gefuehl": " ".join(out)}
 
 
+# ------------------------------------------------------------------ Alle KI-Spieler und Buergermeister als Wesen (15.11.2026)
+## --eko-spieler: Jede Startfirma bekommt ein Wesen (Name des Spielers, Seele nach Persoenlichkeit), das die Geschaeftsentscheidungen
+## trifft (Firma); jeder Buergermeister ein Wesen mit Seele "buergermeister", das ueber Amt die Amtshandlungen nutzt. Den Tagesbetrieb
+## erledigen weiter Disposition (Firmen) und Amtsverwaltung nach Regeln (Buergermeister), damit nichts liegen bleibt.
+func adopt_players(n: int) -> Array:
+	var out: Array = []
+	for cid in mini(n, sim.companies.size()):
+		var c = sim.company(cid)
+		if c == null or not c.is_active() or firm_being(cid) != "":
+			continue
+		var name := str(c.player_name).left(24)
+		if beings.has(name):
+			continue
+		join(name, "mensch")
+		var b: Dictionary = beings[name]
+		b.firma = cid
+		b.seele = str(c.personality)
+		b.mover.pos = sim.avatars[cid].pos
+		_event(b, "führt jetzt selbst %s" % c.company_name)
+		out.append(name)
+	return out
+
+
+func adopt_mayors() -> Array:
+	var out: Array = []
+	for k in sim.towns.count():
+		if beings.values().any(func(x): return int(x.get("amt", -1)) == k):
+			continue
+		var M = sim.towns.mayors[k]
+		var name := str(M.name).left(24)
+		if name == "" or beings.has(name):
+			continue
+		join(name, "mensch")
+		var b: Dictionary = beings[name]
+		b.amt = k
+		b.seele = "buergermeister"
+		var hall: int = int(sim.towns.get_t(k).get("town_hall", -1))
+		if hall >= 0:
+			b.mover.pos = sim.city.tile_center(sim.city.building(hall).walk)
+		_event(b, "ist Bürgermeister von %s" % sim.towns.name_of(k))
+		out.append(name)
+	return out
+
+
+func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
+	var k := int(b.get("amt", -1))
+	if k < 0:
+		return {"ok": false, "msg": "Du hast kein Amt."}
+	var a = data.get("aktion", data.get("action"))
+	if a is String:
+		a = JSON.parse_string(a)
+	if not (a is Dictionary) or not Mayor.SCHEMA.has(str(a.get("action", ""))):
+		return {"ok": false, "msg": "Amt braucht aktion: {\"action\": eine von %s, ...}. Parameter siehe mein_amt.aktionen." % ", ".join(Mayor.SCHEMA.keys())}
+	if not a.has("reason"):
+		a["reason"] = "Entscheidung von %s" % b.name
+	var r: Dictionary = sim.towns.mayors[k].execute(a)
+	_event(b, "Amt: %s → %s" % [a.action, str(r.get("msg", "")).left(80)])
+	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", ""))}
+
+
+## Kompakte Amtslage: Kennzahlen der Stadt bis etwa 6.000 Zeichen (groesste Teile zuletzt), Aktionen mit Parametern.
+func office_obs(b: Dictionary) -> Dictionary:
+	var k := int(b.get("amt", -1))
+	if k < 0:
+		return {}
+	var ind: Dictionary = sim.towns.mayors[k].indicators()
+	var keys: Array = ind.keys()
+	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
+	var out := {"stadt": sim.towns.name_of(k)}
+	var size := 0
+	var skipped: Array = []
+	for key in keys:
+		var t := JSON.stringify(ind[key]).length()
+		if size + t > 6000:
+			skipped.append(key)
+			continue
+		out[key] = ind[key]
+		size += t
+	if not skipped.is_empty():
+		out["ausgelassen"] = skipped
+	var acts: Array = []
+	for name in Mayor.SCHEMA:
+		acts.append("%s(%s)" % [name, ", ".join(Mayor.SCHEMA[name].params.keys())])
+	out["aktionen"] = "Amt {aktion: {action, ...}}: " + "; ".join(acts)
+	out["hinweis"] = "Routinefälle erledigt deine Verwaltung nach Regeln; du setzt die Schwerpunkte für deine Stadt."
+	return out
+
+
+## Fuer den Betreiber (Schwarm): welche Wesen es gibt und welche Seele sie haben.
+func beings_info() -> Array:
+	var out: Array = []
+	for b in beings.values():
+		var rolle := "buergermeister" if int(b.get("amt", -1)) >= 0 else ("unternehmer" if int(b.get("firma", -1)) >= 0 else "wesen")
+		var seele := str(b.get("seele", ""))
+		if seele == "" and str(b.name) == "Lumo":
+			seele = "lumo"
+		var firma := ""
+		if int(b.get("firma", -1)) >= 0 and sim.company(int(b.firma)) != null:
+			firma = str(sim.company(int(b.firma)).company_name)
+		out.append({"name": b.name, "art": b.art, "rolle": rolle, "seele": seele, "firma": firma,
+			"stadt": sim.towns.name_of(int(b.amt)) if int(b.get("amt", -1)) >= 0 else sim.towns.name_of(sim.city.town_of(tile_of(b)))})
+	return out
+
+
 # ------------------------------------------------------------------ Hilfen
 func _at_source(b: Dictionary) -> bool:
 	var t := tile_of(b)
@@ -1144,7 +1251,8 @@ func to_dict() -> Dictionary:
 		bs.append({"name": b.name, "art": b.art, "x": b.mover.pos.x, "y": b.mover.pos.y, "held": b.held, "events": b.events,
 			"geld": float(b.get("geld", 0.0)), "job": str(b.get("job", "")), "grundstueck": str(b.get("grundstueck", "")),
 			"done_jobs": int(b.get("done_jobs", 0)), "firma": int(b.get("firma", -1)), "zuhause": str(b.get("zuhause", "")),
-			"akku": float(b.get("akku", 100.0)), "nass": float(b.get("nass", 0.0)), "kalt": float(b.get("kalt", 0.0))})
+			"akku": float(b.get("akku", 100.0)), "nass": float(b.get("nass", 0.0)), "kalt": float(b.get("kalt", 0.0)),
+			"amt": int(b.get("amt", -1)), "seele": str(b.get("seele", ""))})
 	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses}
 
 
@@ -1159,7 +1267,7 @@ func from_dict(d: Dictionary) -> void:
 		b.mover.pos = Vector2(float(e.x), float(e.y))
 		b.held = e.get("held", [])
 		b.events = e.get("events", [])
-		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt"]:
+		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt", "amt", "seele"]:
 			if e.has(k):
 				b[k] = e[k]
 	chat = d.get("chat", [])

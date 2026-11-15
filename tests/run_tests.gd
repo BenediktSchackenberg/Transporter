@@ -19,6 +19,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_life")
 	test_names.append("test_eko_founder")
 	test_names.append("test_eko_feelings")
+	test_names.append("test_eko_players_and_mayors")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13363,3 +13364,32 @@ func test_eko_feelings() -> void:
 	ok(str(E.observe("Lumo").gefuehle.gefuehl).contains("zu Hause"), "fuehlt sich zu Hause")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(is_equal_approx(float(s2.eko.beings.Lumo.akku), float(b.akku)), "Gefuehle gespeichert")
+
+
+## Alle KI-Spieler und Buergermeister als Wesen (15.11.2026): Startfirmen bekommen ein Wesen mit Seele nach Persoenlichkeit,
+## Buergermeister eines mit Seele "buergermeister" und Amtshandlungen; Betreiberliste; keine Hilfsjobs fuer sie; Speichern.
+func test_eko_players_and_mayors() -> void:
+	var s := region_sim(3)
+	var E: EkoWorld = s.eko
+	E.join("Lumo", "roboter")
+	var ps: Array = E.adopt_players(3)
+	ok(ps.size() == 3 and ps.all(func(n): return E.beings.has(n)), "drei Unternehmer-Wesen: %s" % str(ps))
+	ok(E.firm_being(0) == str(s.companies[0].player_name) and E.beings[ps[0]].seele == str(s.companies[0].personality), "Wesen fuehrt Firma 0 mit passender Seele")
+	ok(E.adopt_players(3).is_empty(), "nicht doppelt")
+	var ms: Array = E.adopt_mayors()
+	ok(ms.size() == s.towns.count() and E.beings[ms[0]].amt == 0 and E.beings[ms[0]].seele == "buergermeister", "Buergermeister-Wesen je Stadt: %s" % str(ms))
+	var mo: Dictionary = E.observe(ms[0])
+	ok(not mo.mein_amt.is_empty() and str(mo.mein_amt.aktionen).contains("propose_project") and JSON.stringify(mo.mein_amt).length() < 12000, "kompakte Amtslage mit Aktionen")
+	ok(mo.jobangebote.is_empty() and E.observe(ps[0]).jobangebote.is_empty(), "keine Hilfsjobs fuer Buergermeister und Unternehmer")
+	var am: Dictionary = E.input(ms[0], "Amt", {"aktion": {"action": "remember", "inhalt": "Mehr Spielplaetze"}})
+	ok(am.ok, "Amtshandlung ausgefuehrt: %s" % str(am.msg).left(60))
+	ok(not E.input(ms[0], "Amt", {"aktion": {"action": "sabotage"}}).ok and not E.input(ps[0], "Amt", {"aktion": {"action": "wait"}}).ok, "unbekannte Amtshandlung und Amt ohne Amt abgelehnt")
+	var info: Array = E.beings_info()
+	ok(info.any(func(x): return x.name == "Lumo" and x.seele == "lumo") and info.any(func(x): return x.rolle == "buergermeister") and info.filter(func(x): return x.rolle == "unternehmer").size() == 3, "Betreiberliste mit Rollen und Seelen")
+	var ws := WorldServer.new()
+	ws.eko = E
+	ws.operator_token = "geheim"
+	ok(ws.handle("GET", "/betreiber/wesen", {}, {}, "")[0] == 403 and ws.handle("GET", "/betreiber/wesen", {}, {"x-betreiber": "geheim"}, "")[1].size() == info.size(), "Wesenliste nur fuer den Betreiber")
+	ws.free()
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(int(s2.eko.beings[ms[0]].amt) == 0 and s2.eko.firm_being(0) == ps[0], "Amt und Firma gespeichert")

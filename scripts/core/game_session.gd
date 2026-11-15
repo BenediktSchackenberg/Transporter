@@ -148,6 +148,8 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	ui.add_child(hud)
 	hud.build(self)
 	sim.founders.company_founded.connect(func(cid): hud.add_company_card(cid))
+	if bool(cfg.get("eko_spieler", false)):
+		_eko_adopt()
 	end_screen = EndScreen.new()
 	end_screen.visible = false
 	ui.add_child(end_screen)
@@ -435,6 +437,9 @@ func _start_eko_server() -> void:
 		elif str(a) == "--eko-demo-haus":   # Vorfuehrung: Lumo mit fertigem Haus (Schnittansicht)
 			on = true
 			sim.eko.demo_house("Lumo")
+		elif str(a) == "--eko-spieler":   # alle Startfirmen und Buergermeister werden von Wesen gefuehrt
+			on = true
+			cfg["eko_spieler"] = true
 		elif str(a) == "--eko-folgen":   # Zuschauen: Kamera folgt dem ersten Wesen, KI-Zentrale eingeklappt
 			on = true
 			city_view.eko_view.follow = true
@@ -452,6 +457,23 @@ func _start_eko_server() -> void:
 		tf.close()
 	if ws.setup(sim.eko, port):
 		sim.log_event("Eko-Modus: Weltschnittstelle auf http://127.0.0.1:%d – Agent mit tools/eko/start_eko.ps1 starten." % port, "system")
+
+
+## Startfirmen und Buergermeister an Wesen uebergeben: Firmen-Controller nur noch Tagesbetrieb (Anbieter eko),
+## Buergermeister-Agenten nur noch Amtsverwaltung nach Regeln (seltener), die Wesen entscheiden ueber die Weltschnittstelle.
+func _eko_adopt() -> void:
+	var players: Array = sim.eko.adopt_players(cfg.players.size())
+	var mayors: Array = sim.eko.adopt_mayors()
+	for cid in mini(controllers.size(), sim.companies.size()):
+		if sim.eko.firm_being(cid) != "":
+			var ctl: AgentController = controllers[cid]
+			ctl.config["provider"] = "eko"
+			ctl.fallback_active = false
+	for ag in mayor_agents:
+		ag.eko_managed = true
+		ag.config["interval"] = 120.0
+	if not players.is_empty() or not mayors.is_empty():
+		sim.log_event("Freie Wesen übernehmen: Unternehmer %s, Bürgermeister %s." % [", ".join(players), ", ".join(mayors)], "system")
 
 
 func _eko_collapse_center() -> void:
