@@ -427,7 +427,7 @@ func inspect(b: Dictionary, target: String) -> Dictionary:
 				break
 	if bd.is_empty():
 		return {"ok": false, "msg": "Unbekanntes Ziel %s. Nimm einen Namen aus gebaeude_in_der_naehe, andere_wesen, figuren_in_der_naehe oder ein Grundstück G…" % target}
-	if _dist(t, Vector2i(int(bd.walk.x), int(bd.walk.y))) > VIEW_RADIUS + 2:
+	if _building_dist(t, bd) > VIEW_RADIUS:   # Abstand zum naechsten Feld des Gebaeudes (grosse Gebaeude: Eingang liegt weit weg)
 		return {"ok": false, "msg": "%s ist nicht in Sichtweite – geh näher heran." % target}
 	_discover(b, bd)
 	var info := {"art": "gebaeude", "name": str(bd.name), "typ": str(bd.type), "feld": [int(bd.walk.x), int(bd.walk.y)], "rolle": str(bd.get("role", ""))}
@@ -459,6 +459,13 @@ func inspect(b: Dictionary, target: String) -> Dictionary:
 		acts.append_array(["MoveIn {}", "Rest {}"])
 	info["interaktionen"] = acts
 	return {"ok": true, "msg": "Du siehst dir %s an." % str(bd.name), "ziel": info}
+
+
+func _building_dist(t: Vector2i, bd: Dictionary) -> int:
+	var r := Rect2i(int(bd.get("x", bd.walk.x)), int(bd.get("y", bd.walk.y)), maxi(1, int(bd.get("w", 1))), maxi(1, int(bd.get("h", 1))))
+	var cx := clampi(t.x, r.position.x, r.end.x - 1)
+	var cy := clampi(t.y, r.position.y, r.end.y - 1)
+	return mini(_dist(t, Vector2i(cx, cy)), _dist(t, Vector2i(int(bd.walk.x), int(bd.walk.y))))
 
 
 ## Ziel setzen: Hauptziel mit Begruendung, Teilzielen, Nutzen, Ressourcen, Erwartung und Abbruchbedingung.

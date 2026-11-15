@@ -280,6 +280,8 @@ class Agent:
         try:
             if name == "observe":
                 return compact_obs(self.world.observe())
+            if name == "act" and str(a.get("type", "")).lower() in ("observe", "beobachten"):   # Modelle rufen observe auch als Handlung auf
+                return compact_obs(self.world.observe())
             if name == "act":
                 data = a.get("data", {})
                 if isinstance(data, str):
