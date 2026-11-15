@@ -17,6 +17,24 @@ var _houses := {}           # Name -> HouseNode
 var follow := false         # Kamera folgt dem ersten Wesen (--eko-folgen)
 
 
+## Wer selbst die Kamera bewegt (Maus ziehen/klicken/scrollen, Minikarte, Pfeiltasten), uebernimmt sie: Folgen aus.
+## Taste F: wieder dem zuletzt handelnden Wesen folgen (Benedikt 15.11.: "ich kann mich mit der Maus nicht bewegen").
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F:
+			follow = not follow
+			sim.log_event("Kamera folgt den Wesen%s." % ("" if follow else " nicht mehr (F: wieder folgen)"), "info")
+		elif follow and event.keycode in [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_W, KEY_A, KEY_S, KEY_D]:
+			_stop_follow()
+	elif follow and event is InputEventMouseButton and event.pressed:
+		_stop_follow()
+
+
+func _stop_follow() -> void:
+	follow = false
+	sim.log_event("Freie Kamera – mit F folgst du wieder den Wesen.", "info")
+
+
 func setup(simulation: Simulation, city_view) -> void:
 	sim = simulation
 	cv = city_view

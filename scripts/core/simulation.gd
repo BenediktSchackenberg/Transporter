@@ -10,7 +10,7 @@ signal day_changed(day: int)       # absoluter Spieltag (0 = erster)
 signal month_changed(month: int)
 
 var city: CityData
-var region_generator_version := 4 # alte Regionsspielstaende behalten ihre bisherige Kartenlage
+var region_generator_version := 5 # alte Regionsspielstaende behalten ihre bisherige Kartenlage (5: Gebirgslandschaft, Welt 2)
 var nav := NavGrid.new()
 var rng := RandomNumberGenerator.new()
 var market := Market.new()
@@ -1563,6 +1563,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.world_mode = str(d.get("world", "stadt"))
 	s.region_town_count = int(d.get("region", {}).get("orte", 0))
 	s.region_generator_version = int(d.get("region", {}).get("generator", {}).get("generator", 2))
+	RegionGenerator.start_houses = int(d.get("region", {}).get("generator", {}).get("start_haeuser", -1))   # gleiche Startorte wie beim Erzeugen
 	s.population_target = int(d.get("population_target", 0))
 	s.setup(int(d.seed), players, int(d.map_size), 1.0, float(d.get("reserve", 0.0)))   # alte Staende: Karte ohne Reserve
 	# Ausgangszustand durch gespeicherten Zustand ersetzen

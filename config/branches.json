@@ -1309,5 +1309,27 @@
       "lager_max": 300
     },
     "naehe": "grosshandel"
+  },
+  "waffenschmiede": {
+    "label": "Waffenschmiede",
+    "beschreibung": "Entwirft und fertigt Waffen und Rüstungen nach eigenen Entwürfen (Firma: design_weapon {name, typ, material}, forge_weapon {design, anzahl}). Typen: nahkampf, fernkampf, sprengsatz, atom, ruestung; die Welt berechnet aus dem Material Schaden, Reichweite, Schutz, Bauzeit und Kosten. Gewalt ist verboten: wer erwischt wird, zahlt Bußgeld.",
+    "standort": "markt",
+    "gebaeude": "workshop",
+    "gruendungskosten": 0,
+    "ausstattung": 30000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 10.0,
+    "personal_min": 1,
+    "rollen": [
+      "schmieden"
+    ],
+    "rezept": {
+      "ein": {},
+      "aus": {},
+      "chargen_je_person_tag": 1,
+      "lager_tage": 1,
+      "lager_max": 10
+    },
+    "naehe": "bauhof"
   }
 }

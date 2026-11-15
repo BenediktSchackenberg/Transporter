@@ -17,6 +17,7 @@ func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: 
 	var cd := super.generate(seed_value, map_size, reserve_share)
 	if report.ok:
 		cd.gen_params["generator"] = maxi(3, version)
+		cd.gen_params["start_haeuser"] = start_houses   # Laden erzeugt die Karte neu: gleiche Zahl Startwohnhaeuser
 	return cd
 
 
@@ -112,6 +113,9 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 
 
 func _mountains_corners() -> void:
+	if version >= 5:
+		_mountains_v5()
+		return
 	var centers: Array = []
 	var tries := 0
 	var want := 4
@@ -145,6 +149,55 @@ func _mountains_corners() -> void:
 				heights[i] = maxi(heights[i], clampi(int((1.0 - d) * 11.0), 1, 11))
 				c.blocked[i] = 1
 	_prune_specks()
+
+
+## Version 5 (Welt 2, 15.11.2026): richtige Gebirgslandschaft – 6-9 grosse Massive und 1-2 lange Gebirgszuege ueber das ganze
+## Land (Abstand zu den Orten und zum Meer); hohe Gipfel, Hochebenen am Rand. Das Grosslager sucht sich danach eine flache Stelle.
+func _mountains_v5() -> void:
+	var want := rng.randi_range(6, 9)
+	var centers: Array = []
+	var tries := 0
+	while centers.size() < want and tries < 1200:
+		tries += 1
+		var p := Vector2(rng.randf_range(n * 0.12, n * 0.88), rng.randf_range(n * 0.08, n * 0.92))
+		if not _far_from_towns(p, n * 0.17) or centers.any(func(q): return q.distance_to(p) < n * 0.13) or not _inland(p, n * 0.07):
+			continue
+		centers.append(p)
+	for ctr in centers:
+		_corner_blob(ctr, n * rng.randf_range(0.05, 0.1), rng.randf_range(8.0, 11.0))
+	for r in rng.randi_range(1, 2):   # Gebirgszug
+		var start := Vector2(rng.randf_range(n * 0.2, n * 0.8), rng.randf_range(n * 0.15, n * 0.85))
+		var dir := Vector2.from_angle(rng.randf_range(0.0, TAU))
+		for i in rng.randi_range(6, 10):
+			var p := start + dir * (n * 0.045) * i + Vector2(rng.randf_range(-4, 4), rng.randf_range(-4, 4))
+			if p.x < n * 0.08 or p.x > n * 0.92 or p.y < n * 0.06 or p.y > n * 0.94:
+				break
+			if _far_from_towns(p, n * 0.15) and _inland(p, n * 0.06):
+				_corner_blob(p, n * rng.randf_range(0.04, 0.065), rng.randf_range(9.0, 11.0))
+	_prune_specks()
+
+
+## Punkt liegt mindestens `margin` Felder vom Meer (Ost- und Westkueste) entfernt.
+func _inland(p: Vector2, margin: float) -> bool:
+	var y := clampi(int(p.y), 0, n - 1)
+	return p.x > float(west_coast[y]) + margin and p.x < float(coast[y]) - margin
+
+
+func _corner_blob(ctr: Vector2, rad: float, peak: float) -> void:
+	for y in range(maxi(1, int(ctr.y - rad - 4)), mini(n - 1, int(ctr.y + rad + 4))):
+		for x in range(maxi(1, int(ctr.x - rad - 4)), mini(n - 1, int(ctr.x + rad + 4))):
+			var p := Vector2i(x, y)
+			if not _inland(Vector2(p), 6.0) or _rects.any(func(r): return r.grow(6).has_point(p)):
+				continue
+			var d := Vector2(p).distance_to(ctr) / rad + noise.get_noise_2d(x * 3, y * 3) * 0.35
+			if d >= 1.0:
+				continue
+			var h := int(round(pow(1.0 - d, 1.1) * peak + noise.get_noise_2d(x * 7 + 99, y * 7) * 1.5))
+			var i := c.idx(p)
+			if h < 1 or c.ground[i] == G.WATER:
+				continue
+			heights[i] = maxi(heights[i], clampi(h, 1, 11))
+			c.blocked[i] = 1
 
 
 func _lakes_corners() -> void:

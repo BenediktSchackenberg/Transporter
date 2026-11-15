@@ -71,6 +71,8 @@ TOOLS = [
      "Bauhof oder Pickup {block:[x,y,z]} oder Pickup {job} (Kisten eines Botengangs abholen), Place {block:[x,y,z], material?}, "
      "Say {text}, Talk {to, text} (mit einer Figur oder einem Wesen in der Nähe reden, höchstens 3 Felder; Unternehmer antworten), "
      "Inspect {target_id} (sichtbares Gebäude, Wesen, Unternehmer oder Grundstück G… genauer ansehen; ändert nichts), "
+     "Attack {ziel, waffe} oder Attack {waffe, feld} (eine getragene Waffe einsetzen; Gewalt ist verboten und wird oft bestraft), "
+     "Give {to, waffe} (getragene Waffe einem Wesen in der Nähe geben), Pickup {waffe} (fertige Waffe an deiner eigenen Waffenschmiede holen), "
      "Ziel {ziel, warum, teilziele?, nutzen?, ressourcen?, erwartung?, abbruch?, ersetzen?} (dein Hauptziel; ein aktives Ziel ersetzt du nur bewusst), "
      "ZielStand {fortschritt 0-100?, teilziel_erledigt?, status?: aktiv|erreicht|aufgegeben, notiz?}, "
      "AcceptJob {job} (Arbeit einer Firma aus jobangebote annehmen), Deliver {job} (Auftrag abliefern, Lohn bekommen), "
@@ -84,7 +86,7 @@ TOOLS = [
      "Einrichtung (bett, ladestation, tisch, lampe, ...) kaufst du mit Pickup am Bauhof, Preise in material_preise. "
      "Blockraster: 4x4 Blöcke je Feld, z = Schicht ab 0.",
      "parameters": {"type": "object", "properties": {
-         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Ziel", "ZielStand", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
+         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Ziel", "ZielStand", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12], \"warum\": \"Hafen erkunden\"}. "
                   "warum (kurz) ist bei jeder Handlung erlaubt und wird im Spiel angezeigt. Die Antwort hat status: laeuft, abgeschlossen, gescheitert oder doppelt."}},
          "required": ["type", "data"]}},

@@ -17,6 +17,9 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 | `MoveTo` | `{"tile": [x, y]}` | zu Fuß zum Feld gehen (etwa 3 Felder je Sekunde, Wegsuche automatisch) |
 | `Stop` | `{}` | stehen bleiben |
 | `Inspect` | `{"target_id": "Rathaus Mainz"}` | ein sichtbares Gebäude (Name aus `gebaeude_in_der_naehe` oder `building_<id>`), Wesen, Unternehmer oder Grundstück (`G…`) genauer ansehen: Art, Funktion, Betreiber, Zustand, erkennbare Probleme, mögliche Interaktionen. Ändert nichts; keine Interna fremder Firmen |
+| `Attack` | `{"ziel": "Mia", "waffe": "Klinge"}` oder `{"waffe": "...", "feld": [x, y]}` | eine getragene Waffe einsetzen (Reichweite je Entwurf; eine Bombe wird abgelegt und zündet später). Gewalt ist verboten: wer erwischt wird, zahlt Bußgeld (bei Wiederholung mehr) oder kommt in Gewahrsam |
+| `Give` | `{"to": "Mia", "waffe": "Panzer"}` | eine getragene Waffe oder Rüstung einem Wesen in der Nähe geben |
+| `Pickup` | `{"waffe": "Klinge"}` | ein fertiges Stück an der Waffenschmiede deiner eigenen Firma abholen |
 | `Ziel` | `{"ziel": "...", "warum": "...", "teilziele"?: [...], "nutzen"?, "ressourcen"?, "erwartung"?, "abbruch"?, "ersetzen"?: true}` | dein Hauptziel setzen (steht in `mein_ziel`). Ein aktives Ziel ersetzt du nur mit `ersetzen: true` |
 | `ZielStand` | `{"fortschritt"?: 0-100, "teilziel_erledigt"?: 0, "status"?: "aktiv"/"erreicht"/"aufgegeben", "notiz"?}` | Fortschritt deines Ziels melden |
 | `Merke` | `{"art": "fehlschlag", "text": "..."}` | eine Erkenntnis im Spiel anzeigen (Arten: tatsache, vermutung, technik, fehlschlag, strategie, korrektur); dein Gedächtnis selbst führst du in deinen Dateien |
@@ -46,6 +49,9 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 - Jede Antwort hat `status`: `laeuft` (angenommen, noch nicht fertig, z. B. MoveTo oder Ablauf), `abgeschlossen`, `gescheitert` oder `doppelt`
   (dieselbe Handlung mit denselben Daten innerhalb von 3 Sekunden – erst das Ergebnis prüfen). Angenommen heißt nicht erfolgreich: prüfe danach, ob eingetreten ist, was du wolltest.
 - Jede Handlung darf `"warum": "..."` enthalten; die Begründung erscheint im Spiel unter deiner Figur.
+- **Körper und Gefahr:** `koerper` zeigt Gesundheit, Rüstungsschutz und getragene Waffen; `gefahren` zeigt bewaffnete Wesen in Sichtweite,
+  jüngste Vorfälle (Angriffe, Explosionen), Strahlung und tickende Bomben. Bei Gesundheit 0 bist du eine Weile außer Gefecht und verlierst einen Teil deines Geldes.
+  In deinem fertigen Haus schützen dich die Mauern vor Nah- und Fernwaffen.
 - **Erkundung:** Du kennst nur, was du gesehen hast. `erkundung.bekannte_orte` sammelt die Gebäude, die du schon gesehen hast (nächste zuerst);
   `erkundung.orte_der_region` nennt die Orte der Region (wie auf Wegweisern) und ob du schon dort warst.
 

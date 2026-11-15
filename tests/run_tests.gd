@@ -29,6 +29,7 @@ func _initialize() -> void:
 	test_names.append("test_lumberjack")
 	test_names.append("test_eko_autonomy")
 	test_names.append("test_world_production_metal_textile")
+	test_names.append("test_eko_arms")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -7658,8 +7659,11 @@ func test_access_road() -> void:
 	for pid in P._deposits if not P._deposits.is_empty() else (func(): P.deposit_of("x"); return P._deposits).call():
 		kinds[P._deposits[pid].art] = true
 	ok(Production.DEPOSIT_KINDS.all(func(k): return kinds.has(k)), "jeder Rohstoff kommt im Küstenort vor (%s)" % str(kinds.keys()))
-	ok(P.best_deposit("").is_empty(), "anfangs hat keine Lagerstätte Straßenanschluss (Berge unerschlossen)")
-	var far := P.remote_deposit("")
+	ok(Production.DEPOSIT_KINDS.all(func(k): return P.best_deposit(k).is_empty()), "anfangs hat keine Berg-Lagerstätte Straßenanschluss (Berge unerschlossen; Sand und Lehm liegen am Ufer)")
+	var far := {}
+	for k in Production.DEPOSIT_KINDS:   # Bergrohstoff (Vorkommen am Wasser brauchen keine Zufahrt durchs Gebirge)
+		if far.is_empty():
+			far = P.remote_deposit(k)
 	ok(not far.is_empty() and int(far.kosten) > int(AccessRoads.BASE_COST), "erreichbare Lagerstätte mit Zufahrtsplan (%s)" % str(far))
 	if far.is_empty():
 		return
@@ -13822,3 +13826,101 @@ func test_world_production_metal_textile() -> void:
 			ok(rb.ok and s.stock.available("fahrzeugbausatz", "C0", int(F.site)) == have0 - 1 and is_equal_approx(c.ledger.cash - cash0, float(offer.price) * 0.4),
 				"Fahrzeugkauf nimmt einen Bausatz aus dem Werk (%s, Werk +%s)" % [str(rb.get("msg", "")).left(60), Catalog.money(c.ledger.cash - cash0)])
 	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
+
+
+## Waffen und Schutz (15.11.2026): Waffenschmiede als Branche, eigene Entwuerfe mit Werten aus dem Material, Fertigung, Abholung,
+## Angriff (Treffer, Mauern schuetzen, Ruestung), Ausschalten mit Beute, Gefahren in der Beobachtung, Atombombe mit Zuender,
+## Zerstoerung und Strahlung, Strafen; Speichern; Geldbilanz.
+func test_eko_arms() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.join("Viktor")
+	E.join("Mia")
+	var V: Dictionary = E.beings.Viktor
+	var M: Dictionary = E.beings.Mia
+	s.economy.transfer("X0", "Y0", 3000.0)
+	V.geld = 3000.0
+	ok(E.input("Viktor", "FoundCompany", {"name": "Vik Waffen"}).ok, "Viktor gruendet eine Firma")
+	var cid: int = E.active_firm(V)
+	s.company(cid).ledger.inject(300000.0)
+	ok(not E.input("Viktor", "Firma", {"aktion": {"action": "design_weapon", "name": "Klinge", "typ": "nahkampf", "material": {"stahl": 2}}}).ok, "ohne Waffenschmiede kein Entwurf")
+	var rf: Dictionary = E.input("Viktor", "Firma", {"aktion": {"action": "found_business", "branche": "waffenschmiede", "reason": "Test"}})
+	ok(rf.ok, "Waffenschmiede gegruendet: %s" % str(rf.get("msg", "")).left(60))
+	if not rf.ok:
+		return
+	var bid := str(rf.get("ref", ""))
+	for B in s.biz.items.values():
+		if str(B.branch) == "waffenschmiede":
+			bid = str(B.id)
+	var w := s.personnel.spawn_available("allrounder")
+	s.personnel.hire(cid, w)
+	s.executor.execute(cid, {"action": "assign_staff", "worker_id": w.id, "business_id": bid})
+	next_day(s)
+	ok(s.biz.get_b(bid).status in Businesses.RUNNING, "Waffenschmiede laeuft (%s)" % s.biz.get_b(bid).status)
+	ok(not EkoArms.evaluate("atom", {"stahl": 5}).ok and not EkoArms.evaluate("laser", {}).ok, "Regeln der Welt pruefen Entwuerfe")
+	var d1: Dictionary = E.input("Viktor", "Firma", {"aktion": {"action": "design_weapon", "name": "Klinge", "typ": "nahkampf", "material": {"stahl": 2}}})
+	ok(d1.ok and int(d1.entwurf.schaden) == 35, "eigener Entwurf: %s" % str(d1.get("msg", "")))
+	E.input("Viktor", "Firma", {"aktion": {"action": "design_weapon", "name": "Panzer", "typ": "ruestung", "material": {"stahl": 4}}})
+	var cash0: float = s.company(cid).ledger.cash
+	ok(E.input("Viktor", "Firma", {"aktion": {"action": "forge_weapon", "design": "Klinge", "anzahl": 2}}).ok and s.company(cid).ledger.cash < cash0, "Fertigung kostet")
+	var site: Dictionary = s.city.building(int(s.biz.get_b(bid).site))
+	V.mover.pos = s.city.tile_center(site.walk + Vector2i(12, 12))
+	ok(not E.input("Viktor", "Pickup", {"waffe": "Klinge"}).ok, "nur an der eigenen Waffenschmiede abholen")
+	V.mover.pos = s.city.tile_center(site.walk)
+	ok(E.input("Viktor", "Pickup", {"waffe": "Klinge"}).ok and (V.waffen as Array).size() == 1, "Klinge aufgenommen")
+	# Gefahr sichtbar, Angriff
+	M.mover.pos = V.mover.pos
+	s.economy.transfer("X0", "Y0", 1000.0)
+	M.geld = 1000.0
+	var dg: Dictionary = E.observe("Mia").gefahren
+	ok(dg.bewaffnete_in_sicht.any(func(x): return x.wer == "Viktor" and "nahkampf" in x.sichtbar), "Mia sieht, dass Viktor bewaffnet ist")
+	var hits := 0
+	for i in 12:
+		if arms_out(E, M):
+			break
+		var r: Dictionary = E.input("Viktor", "Attack", {"ziel": "Mia", "waffe": "Klinge"})
+		if r.ok and str(r.msg).begins_with("Treffer"):
+			hits += 1
+	ok(hits >= 3 and E.arms.is_out(M), "Mia nach %d Treffern ausser Gefecht" % hits)
+	ok(float(M.geld) < 1000.0 and not E.input("Mia", "MoveTo", {"tile": [1, 1]}).ok, "Beute genommen, ausser Gefecht handlungsunfaehig")
+	ok(E.observe("Mia").gefahren.zuletzt_angegriffen_vor_s >= 0, "Mia weiss, dass sie angegriffen wurde")
+	ok(int(V.get("vergehen", 0)) >= 1, "Gewalt wurde entdeckt und bestraft (%d Vergehen)" % int(V.get("vergehen", 0)))
+	E.arms.tick(EkoArms.OUT_S + 1.0)
+	ok(not E.arms.is_out(M) and is_equal_approx(float(M.gesundheit), 40.0), "Mia erwacht wieder (Gesundheit 40)")
+	# Ruestung
+	E.input("Viktor", "Firma", {"aktion": {"action": "forge_weapon", "design": "Panzer"}})
+	next_day(s)
+	V.custody_left = 0.0
+	V.mover.pos = s.city.tile_center(site.walk)
+	ok(E.input("Viktor", "Pickup", {"waffe": "Panzer"}).ok, "Ruestung abgeholt")
+	M.mover.pos = V.mover.pos
+	ok(E.input("Viktor", "Give", {"to": "Mia", "waffe": "Panzer"}).ok and is_equal_approx(E.arms.armor_of(M), 0.4), "Ruestung weitergegeben, schuetzt 40 %")
+	# Atombombe: nur mit Brennelementen aus eigenen Lagern
+	E.input("Viktor", "Firma", {"aktion": {"action": "design_weapon", "name": "Sonne", "typ": "atom", "material": {"brennelement": 2, "elektronik": 3, "stahl": 5}}})
+	ok(not E.input("Viktor", "Firma", {"aktion": {"action": "forge_weapon", "design": "Sonne"}}).ok, "ohne eigene Brennelemente keine Atombombe")
+	s.stock.add("brennelement", 2, "C%d" % cid, int(s.biz.get_b(bid).site), "Test", s.game_min)
+	ok(E.input("Viktor", "Firma", {"aktion": {"action": "forge_weapon", "design": "Sonne"}}).ok, "Atombombe in Fertigung")
+	for d in 5:
+		next_day(s)
+	V.custody_left = 0.0
+	V.mover.pos = s.city.tile_center(site.walk)
+	ok(E.input("Viktor", "Pickup", {"waffe": "Sonne"}).ok, "Atombombe abgeholt")
+	var at := E.tile_of(V)
+	for x in 3:
+		E.blocks[Vector3i(at.x * EkoWorld.PER_TILE + x, at.y * EkoWorld.PER_TILE, 0)] = "stein"
+	var ap0 := float(s.towns.mayors[0].approval)
+	var ab: Dictionary = E.input("Viktor", "Attack", {"waffe": "Sonne", "feld": [at.x, at.y]})
+	ok(ab.ok and ab.status == "laeuft" and E.observe("Mia").gefahren.tickende_bomben.size() == 1, "Bombe scharf, fuer andere sichtbar")
+	E.arms.tick(EkoArms.FUSE_S + 1.0)
+	ok(E.blocks.is_empty() or not E.blocks.has(Vector3i(at.x * EkoWorld.PER_TILE, at.y * EkoWorld.PER_TILE, 0)), "Explosion zerstoert Bloecke")
+	ok(not E.arms.zones.is_empty() and float(s.towns.mayors[0].approval) < ap0, "Strahlung und Entsetzen der Buerger")
+	ok(E.arms.is_out(V), "wer neben der eigenen Bombe steht, ist ausser Gefecht")
+	var E2 := EkoWorld.new()
+	E2.setup(s)
+	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
+	ok(E2.arms.designs.has("Klinge") and not E2.arms.zones.is_empty(), "Entwuerfe und Strahlung gespeichert")
+	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
+
+
+func arms_out(E: EkoWorld, b: Dictionary) -> bool:
+	return E.arms.is_out(b)

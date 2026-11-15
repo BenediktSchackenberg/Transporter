@@ -48,8 +48,12 @@ var relief := PackedFloat32Array()   # Gelaende (Terrain.relief), fuer Haenge, H
 var _terrain_ready := false
 
 
+var arms := EkoArms.new()           # Waffen, Schutz, Gefahren (Benedikt 15.11.2026)
+
+
 func setup(simulation) -> void:
 	sim = simulation
+	arms.setup(self)
 
 
 ## Begehbare Haenge und Hochebenen (5a, 15.11.2026): Bergzellen bis Terrain.CLIMB_MAX mit sanfter Steigung werden im
@@ -88,7 +92,7 @@ func join(name: String, art: String = "mensch") -> Dictionary:
 		m.pos = sim.city.tile_center(_spawn_tile())
 		beings[name] = {"name": name, "art": art, "mover": m, "held": [], "say": "", "say_left": 0.0, "events": [], "geld": 0.0,
 			"job": "", "grundstueck": "", "done_jobs": 0, "rest_left": 0.0, "firma": -1, "akku": 100.0, "nass": 0.0, "kalt": 0.0,
-			"amt": -1, "seele": "",
+			"amt": -1, "seele": "", "gesundheit": 100.0, "waffen": [],
 			"color": COLORS[beings.size() % COLORS.size()]}
 		_event(beings[name], "ist in der Welt erwacht")
 		_restore_savings(beings[name])
@@ -143,6 +147,7 @@ func update(dt: float) -> void:
 			b.rest_left = maxf(0.0, float(b.rest_left) - dt)
 	_jobs_tick(dt)
 	_houses_tick(dt)
+	arms.tick(dt)
 	for b in beings.values():   # laufende Ablaeufe fortsetzen, sobald das Wesen angekommen ist und nicht ruht
 		if not (b.get("ablauf", []) as Array).is_empty() and (b.mover as Mover).arrived() and float(b.get("rest_left", 0.0)) <= 0.0:
 			_run_plan(b)
@@ -195,6 +200,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		return {"ok": false, "msg": "Unbekanntes Wesen. Erst POST /join."}
 	last_active = name
 	b.last_act = Time.get_ticks_msec()
+	if arms.is_out(b) and type not in ["Inspect"]:
+		return {"ok": false, "status": "gescheitert", "msg": arms.out_msg(b)}
 	if not from_plan and type in ["MoveTo", "Stop", "Pickup", "Place", "Ablauf"] and not (b.get("ablauf", []) as Array).is_empty():
 		b.ablauf = []   # eine direkte Handlung ersetzt einen laufenden Ablauf
 		_event(b, "bricht den laufenden Ablauf ab")
@@ -221,7 +228,11 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			m.set_path(here)
 			r = {"ok": true, "msg": "angehalten"}
 		"Pickup":
-			r = _pickup(b, data)
+			r = arms.pickup(b, str(data.waffe)) if data.has("waffe") else _pickup(b, data)
+		"Attack":
+			r = arms.attack(b, data)
+		"Give":
+			r = arms.give(b, data)
 		"Place":
 			r = _place(b, data)
 		"Say":
@@ -255,7 +266,7 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		"Merke":
 			r = _lesson(b, data)
 		_:
-			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
+			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, Attack, Give, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
 	if not bool(r.ok):
 		_event(b, "Fehlschlag %s: %s" % [type, r.msg])
 	if not r.has("status"):   # angenommen != abgeschlossen: Bewegung laeuft, bis du.unterwegs false ist
@@ -751,6 +762,7 @@ func observe(name: String) -> Dictionary:
 		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "mein_amt": office_obs(b), "gefuehle": feelings(b),
 		"ablauf": {"offen": (b.get("ablauf", []) as Array).size(), "letzte_ergebnisse": (b.get("ablauf_log", []) as Array).slice(-5)},
 		"mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
+		"koerper": arms.body_obs(b), "gefahren": arms.dangers(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}
 
 
@@ -1233,7 +1245,9 @@ const FIRM_ACTIONS := [
 	"set_plan", "update_plan_step", "cancel_plan",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
 	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen",
-	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage"]
+	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage",
+	# Waffenschmiede (nur mit eigener, laufender Waffenschmiede)
+	"design_weapon", "forge_weapon"]
 const FIRM_RESERVE := 5000.0
 const MAYOR_SALARY := 50.0          # Amtsgehalt je Echtzeitminute aus der Stadtkasse
 var _salary_timer := 60.0        # Privatentnahme laesst mindestens so viel in der Firmenkasse
@@ -1291,6 +1305,8 @@ func _firm_action(b: Dictionary, data: Dictionary) -> Dictionary:
 		a = JSON.parse_string(a)
 	if not (a is Dictionary) or str(a.get("action", "")) not in FIRM_ACTIONS:
 		return {"ok": false, "msg": "Firma braucht aktion: {\"action\": eine von %s, ...Parameter}." % ", ".join(FIRM_ACTIONS)}
+	if str(a.action) in ["design_weapon", "forge_weapon"]:   # Waffenschmiede: Entwurf und Fertigung (EkoArms)
+		return arms.firm_action(b, cid, a)
 	if str(a.action) == "auftrag_an_wesen":   # Firma schreibt selbst einen Hilfsjob fuer freie Wesen aus
 		var c2 = sim.company(cid)
 		var lohn := clampf(float(a.get("lohn", 100.0)), 20.0, 2000.0)
@@ -1335,6 +1351,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var models: Dictionary = o.fahrzeugmodelle
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
 		"unternehmensplan": sim.plans.summary(cid) if sim.get("plans") != null else {},
+		"waffenschmiede": arms.firm_obs(cid),
 		"laufende_auftraege": me.buero.laufende_auftraege, "stellplaetze": me.stellplaetze,
 		"fahrzeuge": o.fahrzeuge.map(func(v): return {"id": v.id, "modell": v.modell, "kapazitaet": models[v.modell].kapazitaet, "status": v.status,
 			"fahrer": v.fahrer != null, "zustand": v.zustand}),
@@ -1730,8 +1747,9 @@ func to_dict() -> Dictionary:
 			"done_jobs": int(b.get("done_jobs", 0)), "firma": int(b.get("firma", -1)), "zuhause": str(b.get("zuhause", "")),
 			"akku": float(b.get("akku", 100.0)), "nass": float(b.get("nass", 0.0)), "kalt": float(b.get("kalt", 0.0)),
 			"amt": int(b.get("amt", -1)), "seele": str(b.get("seele", "")), "orte": b.get("orte", {}), "besucht": b.get("besucht", {}),
-			"ziel": b.get("ziel", {}), "ziele_alt": b.get("ziele_alt", [])})
-	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses}
+			"ziel": b.get("ziel", {}), "ziele_alt": b.get("ziele_alt", []), "gesundheit": float(b.get("gesundheit", 100.0)), "waffen": b.get("waffen", []),
+			"vergehen": int(b.get("vergehen", 0)), "out_left": float(b.get("out_left", 0.0)), "custody_left": float(b.get("custody_left", 0.0))})
+	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict()}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -1745,13 +1763,14 @@ func from_dict(d: Dictionary) -> void:
 		b.mover.pos = Vector2(float(e.x), float(e.y))
 		b.held = e.get("held", [])
 		b.events = e.get("events", [])
-		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt", "amt", "seele", "orte", "besucht", "ziel", "ziele_alt"]:
+		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt", "amt", "seele", "orte", "besucht", "ziel", "ziele_alt", "gesundheit", "waffen", "vergehen", "out_left", "custody_left"]:
 			if e.has(k):
 				b[k] = e[k]
 	chat = d.get("chat", [])
 	jobs = d.get("jobs", {})
 	_next_job = int(d.get("next_job", 1))
 	houses = d.get("houses", {})
+	arms.from_dict(d.get("arms", {}))
 
 
 ## Vorfuehrung (--eko-demo-haus): Wesen mit fertigem Haus auf dem naechsten Wohngrundstueck, steht drinnen.
