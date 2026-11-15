@@ -7,12 +7,14 @@
 param(
     [string]$Godot = "C:\Users\Benedikt\Tools\godot441\Godot_v4.4.1-stable_win64_console.exe",
     [string]$Projekt = (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\..")).Path,
-    [switch]$NeuePartie            # ohne Spielstand starten (neue Partie mit Wesen)
+    [switch]$NeuePartie,           # ohne Spielstand starten (neue Partie mit Wesen, neuer Zufalls-Seed)
+    [int]$StartHaeuser = -1        # neue Partie: hoechstens so viele Wohnhaeuser je Startort (die Orte wachsen dann selbst)
 )
 $ErrorActionPreference = "Continue"
 $logs = Join-Path $env:USERPROFILE "PixelTransportRivals-Eko\welt"
 New-Item -ItemType Directory -Force $logs | Out-Null
 $args0 = @("--path", $Projekt, "--", "--autotest", "--eko-spieler", "--eko-endlos", "--eko-folgen")
+if ($StartHaeuser -ge 0) { $args0 += "--start-haeuser=$StartHaeuser" }
 if (-not $NeuePartie) { $args0 = @("--path", $Projekt, "--", "--autotest", "--load", "--eko-spieler", "--eko-endlos", "--eko-folgen") }
 $runs = 0
 while ($true) {

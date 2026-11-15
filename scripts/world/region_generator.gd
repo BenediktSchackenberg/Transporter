@@ -9,6 +9,7 @@ extends CoastGenerator
 ## Gebaeude tragen "town"; CityData.towns beschreibt die Orte. validate() prueft alles und verwirft fehlerhafte Welten.
 
 var town_count := 4
+static var start_houses := -1   # Welt 2: hoechstens so viele Wohnhaeuser je Startort (-1 = wie bisher); die Orte wachsen durch Zuzug
 ## Ortscharakter (je Ort aus dem Seed): praegt Strassennetz, Bebauung und Umland, damit die Staedte verschieden aussehen.
 const CHARACTERS := ["Fischerdorf", "Marktflecken", "Bauerndorf", "Handwerkerort"]
 ## Ab Generatorversion 4: vier von sechs Charakteren je Partie (Kurort: Promenade, Villen, Kurhaus; Hafenstadt: dichtes Raster,
@@ -133,35 +134,48 @@ func _far_from_towns(p: Vector2, dist: float) -> bool:
 	return true
 
 
+## Welt 2 (15.11.2026): mehr Gebirge – 5-7 Massive und 1-2 lange Gebirgszuege (Kette ueberlappender Kuppen), groesser und hoeher.
+## Alles westlich des Kuestenbands mit den Orten; der Streifen am Band bleibt frei (Fluss, Wege).
 func _mountains_region() -> void:
-	var count := 3 + (1 if rng.randf() < 0.5 else 0)
+	var count := 5 + rng.randi_range(0, 2)
 	var centers: Array = []
 	var tries := 0
-	while centers.size() < count and tries < 600:
+	while centers.size() < count and tries < 900:
 		tries += 1
-		var p := Vector2(rng.randf_range(n * 0.08, _band.position.x - n * 0.12), rng.randf_range(n * 0.08, n * 0.92))
-		if p.x < n * 0.06 or not _far_from_towns(p, n * 0.26):
+		var p := Vector2(rng.randf_range(n * 0.06, _band.position.x - n * 0.1), rng.randf_range(n * 0.06, n * 0.94))
+		if p.x < n * 0.05 or not _far_from_towns(p, n * 0.22):
 			continue
-		if centers.any(func(q): return q.distance_to(p) < n * 0.22):
+		if centers.any(func(q): return q.distance_to(p) < n * 0.16):
 			continue
 		centers.append(p)
 	for ctr in centers:
-		var rad := n * rng.randf_range(0.06, 0.1)
-		var peak := rng.randf_range(8.0, 11.0)
-		for y in range(maxi(1, int(ctr.y - rad - 4)), mini(n - 1, int(ctr.y + rad + 4))):
-			for x in range(maxi(1, int(ctr.x - rad - 4)), mini(n - 1, int(ctr.x + rad + 4))):
-				var p := Vector2i(x, y)
-				var d := Vector2(p).distance_to(ctr) / rad + noise.get_noise_2d(x * 3, y * 3) * 0.35
-				if d >= 1.0 or p.x >= _band.position.x - 14:   # Streifen westlich des Kuestenbands bleibt frei (Fluss, Wege)
-					continue
-				var h := int(round(pow(1.0 - d, 1.1) * peak + noise.get_noise_2d(x * 7 + 99, y * 7) * 1.5))
-				if h < 1 or c.ground[c.idx(p)] == G.WATER:
-					continue
-				var i := c.idx(p)
-				heights[i] = maxi(heights[i], clampi(h, 1, 11))
-				c.blocked[i] = 1
-				c.district[i] = 5
+		_mountain_blob(ctr, n * rng.randf_range(0.06, 0.12), rng.randf_range(8.0, 11.0))
+	for r in rng.randi_range(1, 2):   # Gebirgszug
+		var start := Vector2(rng.randf_range(n * 0.08, _band.position.x - n * 0.15), rng.randf_range(n * 0.1, n * 0.9))
+		var dir := Vector2.from_angle(rng.randf_range(-PI * 0.4, PI * 0.4) + (PI * 0.5 if rng.randf() < 0.5 else 0.0))
+		var steps := rng.randi_range(5, 8)
+		for i in steps:
+			var p := start + dir * (n * 0.05) * i + Vector2(rng.randf_range(-3, 3), rng.randf_range(-3, 3))
+			if p.x < n * 0.04 or p.y < n * 0.04 or p.y > n * 0.96 or not _far_from_towns(p, n * 0.2):
+				continue
+			_mountain_blob(p, n * rng.randf_range(0.045, 0.07), rng.randf_range(9.0, 11.0))
 	_prune_specks()
+
+
+func _mountain_blob(ctr: Vector2, rad: float, peak: float) -> void:
+	for y in range(maxi(1, int(ctr.y - rad - 4)), mini(n - 1, int(ctr.y + rad + 4))):
+		for x in range(maxi(1, int(ctr.x - rad - 4)), mini(n - 1, int(ctr.x + rad + 4))):
+			var p := Vector2i(x, y)
+			var d := Vector2(p).distance_to(ctr) / rad + noise.get_noise_2d(x * 3, y * 3) * 0.35
+			if d >= 1.0 or p.x >= _band.position.x - 14:   # Streifen westlich des Kuestenbands bleibt frei (Fluss, Wege)
+				continue
+			var h := int(round(pow(1.0 - d, 1.1) * peak + noise.get_noise_2d(x * 7 + 99, y * 7) * 1.5))
+			if h < 1 or c.ground[c.idx(p)] == G.WATER:
+				continue
+			var i := c.idx(p)
+			heights[i] = maxi(heights[i], clampi(h, 1, 11))
+			c.blocked[i] = 1
+			c.district[i] = 5
 
 
 func _lakes_region() -> void:
@@ -344,6 +358,8 @@ func _town_core(k: int) -> void:
 		towns_out[k]["airport"] = c.airport
 		_air_rects.append(airport_rect)
 	var budget := MAX_BUILDINGS - _counted_from(first)
+	if start_houses >= 0:
+		budget = mini(budget, start_houses)
 	var k2 := 0
 	var tries := 0
 	# Bebauung nach Charakter: Fischerdorf dicht am Wasser, Bauerndorf weit verstreut mit Hoefen, Marktflecken mit Doppelhaeusern
