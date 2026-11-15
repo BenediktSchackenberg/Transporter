@@ -437,6 +437,9 @@ func _start_eko_server() -> void:
 		elif str(a) == "--eko-demo-haus":   # Vorfuehrung: Lumo mit fertigem Haus (Schnittansicht)
 			on = true
 			sim.eko.demo_house("Lumo")
+		elif str(a) == "--eko-endlos":   # geladene Partie ohne Zeitlimit fortsetzen (Langzeitbeobachtung)
+			on = true
+			duration_seconds = 0.0
 		elif str(a) == "--eko-spieler":   # alle Startfirmen und Buergermeister werden von Wesen gefuehrt
 			on = true
 			cfg["eko_spieler"] = true

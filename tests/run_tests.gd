@@ -13314,6 +13314,9 @@ func test_eko_founder() -> void:
 		var bv: Dictionary = E.input("Lumo", "Firma", {"aktion": {"action": "buy_vehicle", "offer_id": offers[0].id}})
 		ok(bv.ok, "Fahrzeugkauf ueber die Firma: %s" % str(bv.msg).left(70))
 	ok(not E.input("Lumo", "FoundCompany", {}).ok, "nur eine Firma je Wesen")
+	c.status = "geschlossen"
+	ok(E.active_firm(b) < 0 and str(E.observe("Lumo").meine_firma.hinweis).contains("Insolvenz"), "nach Insolvenz wieder frei")
+	c.status = "aktiv"
 	s.companies[c.id].ledger.inject(10000.0)
 	E._job_timer = 0.0
 	for i in 5:

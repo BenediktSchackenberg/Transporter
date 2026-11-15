@@ -480,7 +480,7 @@ func observe(name: String) -> Dictionary:
 		"bloecke_in_der_naehe": near_blocks, "bloecke_gesamt": blocks.size(),
 		"gebaeude_in_der_naehe": near_buildings, "quellen": src, "material_preise": PRICES,
 		"andere_wesen": others, "figuren_in_der_naehe": figures, "gehoert": heard(name),
-		"jobangebote": _job_obs(b) if int(b.get("firma", -1)) < 0 and int(b.get("amt", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
+		"jobangebote": _job_obs(b) if active_firm(b) < 0 and int(b.get("amt", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
 		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "mein_amt": office_obs(b), "gefuehle": feelings(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}
 
@@ -942,6 +942,14 @@ const MAYOR_SALARY := 50.0          # Amtsgehalt je Echtzeitminute aus der Stadt
 var _salary_timer := 60.0        # Privatentnahme laesst mindestens so viel in der Firmenkasse
 
 
+## Firma des Wesens, solange sie aktiv ist (nach einer Insolvenz ist das Wesen wieder frei: Hilfsjobs, Neugruendung).
+func active_firm(b: Dictionary) -> int:
+	var cid := int(b.get("firma", -1))
+	if cid < 0 or sim.company(cid) == null or not sim.company(cid).is_active():
+		return -1
+	return cid
+
+
 func firm_being(cid: int) -> String:
 	for b in beings.values():
 		if int(b.get("firma", -1)) == cid:
@@ -950,7 +958,7 @@ func firm_being(cid: int) -> String:
 
 
 func _found_company(b: Dictionary, data: Dictionary) -> Dictionary:
-	if int(b.get("firma", -1)) >= 0:
+	if active_firm(b) >= 0:
 		return {"ok": false, "msg": "Du hast schon eine Firma (%s)." % sim.company(int(b.firma)).company_name}
 	var own := float(b.get("geld", 0.0))
 	if own < FOUND_MIN_OWN:
@@ -1007,6 +1015,9 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var cid := int(b.get("firma", -1))
 	if cid < 0 or sim.company(cid) == null:
 		return {}
+	if active_firm(b) < 0:
+		return {"firma": sim.company(cid).company_name, "status": str(sim.company(cid).status),
+			"hinweis": "Deine Firma ist nicht mehr aktiv (Insolvenz). Du bist wieder frei: Hilfsjobs annehmen oder später neu gründen (FoundCompany)."}
 	var o := ObservationBuilder.build(sim, cid, [], 0.0, 10.0)
 	var me: Dictionary = o.ich
 	var models: Dictionary = o.fahrzeugmodelle
