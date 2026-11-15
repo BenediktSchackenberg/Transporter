@@ -1068,5 +1068,246 @@
       "rodung": 60
     },
     "naehe": "grosshandel"
+  },
+  "kupferhuette": {
+    "label": "Kupferhütte",
+    "beschreibung": "Schmilzt Kupfererz aus dem Bergwerk mit Koks zu Kupferbarren.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 60000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 40.0,
+    "personal_min": 2,
+    "rollen": [
+      "schmelzen"
+    ],
+    "rezept": {
+      "ein": {
+        "kupfererz": 4,
+        "koks": 1
+      },
+      "aus": {
+        "kupfer": 1
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 6,
+      "lager_max": 200
+    },
+    "naehe": "bauhof"
+  },
+  "kabelwerk": {
+    "label": "Kabelwerk",
+    "beschreibung": "Zieht Kupfer zu Draht und ummantelt ihn mit Kunststoff aus der Raffinerie: Kabel für Bau, Netz und Fahrzeuge.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 40000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 25.0,
+    "personal_min": 1,
+    "rollen": [
+      "ziehen"
+    ],
+    "rezept": {
+      "ein": {
+        "kupfer": 1,
+        "kunststoffgranulat": 1
+      },
+      "aus": {
+        "kabel": 4
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 6,
+      "lager_max": 200
+    },
+    "naehe": "bauhof"
+  },
+  "schlosserei": {
+    "label": "Schlosserei",
+    "beschreibung": "Fertigt aus Stahl Beschläge für Möbelwerke und Schreinereien.",
+    "standort": "markt",
+    "gebaeude": "workshop",
+    "gruendungskosten": 0,
+    "ausstattung": 15000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 8.0,
+    "personal_min": 1,
+    "rollen": [
+      "schlossern"
+    ],
+    "rezept": {
+      "ein": {
+        "stahl": 1
+      },
+      "aus": {
+        "beschlaege": 20
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 6,
+      "lager_max": 600
+    },
+    "naehe": "grosshandel"
+  },
+  "elektronikwerk": {
+    "label": "Elektronikwerk",
+    "beschreibung": "Bestückt Platinen aus Kupfer, Kunststoff und Glas: Elektronikbauteile für Handel und Fahrzeugbau.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 90000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 30.0,
+    "personal_min": 2,
+    "rollen": [
+      "bestuecken"
+    ],
+    "rezept": {
+      "ein": {
+        "kupfer": 1,
+        "kunststoffgranulat": 2,
+        "glas": 1
+      },
+      "aus": {
+        "elektronik": 3
+      },
+      "chargen_je_person_tag": 3,
+      "lager_tage": 6,
+      "lager_max": 200
+    },
+    "naehe": "grosshandel"
+  },
+  "fahrzeugwerk": {
+    "label": "Fahrzeugwerk",
+    "beschreibung": "Baut aus Stahl, Kabeln, Elektronik, Kunststoff und Glas Fahrzeugbausätze. Jedes Fahrzeug, das eine Firma beim Händler kauft, enthält zuerst einen Bausatz aus der Welt – das Werk bekommt dafür 40 % des Kaufpreises.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 250000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 60.0,
+    "personal_min": 3,
+    "rollen": [
+      "montieren"
+    ],
+    "rezept": {
+      "ein": {
+        "stahl": 6,
+        "kabel": 2,
+        "elektronik": 1,
+        "kunststoffgranulat": 3,
+        "glas": 1
+      },
+      "aus": {
+        "fahrzeugbausatz": 1
+      },
+      "chargen_je_person_tag": 1,
+      "lager_tage": 8,
+      "lager_max": 20
+    },
+    "naehe": "bauhof"
+  },
+  "fischerei": {
+    "label": "Fischerei",
+    "beschreibung": "Fährt mit Kuttern vom Hafen aufs Meer; bei Sturm bleiben die Boote im Hafen (echtes Wetter). Frischer Fisch für Großhandel und Restaurants.",
+    "standort": "markt",
+    "gebaeude": "port_office",
+    "gruendungskosten": 0,
+    "ausstattung": 45000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 4.0,
+    "personal_min": 2,
+    "rollen": [
+      "fischen"
+    ],
+    "rezept": {
+      "ein": {},
+      "aus": {
+        "fisch": 2
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 2,
+      "lager_max": 120,
+      "wetter": "see"
+    },
+    "naehe": "hafen"
+  },
+  "schaeferei": {
+    "label": "Schäferei",
+    "beschreibung": "Hält Schafe mit Getreide als Winterfutter und schert Wolle.",
+    "standort": "markt",
+    "gebaeude": "farm",
+    "gruendungskosten": 0,
+    "ausstattung": 20000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 0.0,
+    "personal_min": 1,
+    "rollen": [
+      "hueten"
+    ],
+    "rezept": {
+      "ein": {
+        "getreide": 1
+      },
+      "aus": {
+        "wolle": 2
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 8,
+      "lager_max": 300
+    },
+    "naehe": "bauhof"
+  },
+  "weberei": {
+    "label": "Weberei",
+    "beschreibung": "Spinnt und webt Wolle zu Stoff.",
+    "standort": "markt",
+    "gebaeude": "factory",
+    "gruendungskosten": 0,
+    "ausstattung": 35000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 15.0,
+    "personal_min": 1,
+    "rollen": [
+      "weben"
+    ],
+    "rezept": {
+      "ein": {
+        "wolle": 3
+      },
+      "aus": {
+        "stoff": 2
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 6,
+      "lager_max": 300
+    },
+    "naehe": "bauhof"
+  },
+  "naeherei": {
+    "label": "Näherei",
+    "beschreibung": "Näht aus Stoff Kleidung für Läden und Großhandel.",
+    "standort": "markt",
+    "gebaeude": "workshop",
+    "gruendungskosten": 0,
+    "ausstattung": 18000,
+    "abschreibung_tag": 0.002,
+    "strom_kw": 6.0,
+    "personal_min": 1,
+    "rollen": [
+      "naehen"
+    ],
+    "rezept": {
+      "ein": {
+        "stoff": 2
+      },
+      "aus": {
+        "kleidung": 3
+      },
+      "chargen_je_person_tag": 4,
+      "lager_tage": 6,
+      "lager_max": 300
+    },
+    "naehe": "grosshandel"
   }
 }

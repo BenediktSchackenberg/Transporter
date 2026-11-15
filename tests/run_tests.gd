@@ -28,6 +28,7 @@ func _initialize() -> void:
 	test_names.append("test_world_deposits")
 	test_names.append("test_lumberjack")
 	test_names.append("test_eko_autonomy")
+	test_names.append("test_world_production_metal_textile")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -13769,3 +13770,55 @@ func test_eko_autonomy() -> void:
 	E2.sim = s
 	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
 	ok(E2.beings.Mia.ziel.ziel == "Weltreise" and (E2.beings.Mia.orte as Dictionary).size() == (E.beings.Mia.orte as Dictionary).size(), "Ziel und entdeckte Orte gespeichert")
+
+
+## Etappe 4 Metall/Elektro und Etappe 5 Fischerei/Kleidung (15.11.2026): Ketten Kupfererz -> Kupfer -> Kabel/Elektronik -> Fahrzeugbausatz,
+## Stahl -> Beschlaege; Fischerei am Hafen nach Wetter; Schaf -> Wolle -> Stoff -> Kleidung. Fahrzeugkauf nimmt zuerst einen Bausatz aus der Welt.
+func test_world_production_metal_textile() -> void:
+	var bj: Dictionary = Businesses.branches()
+	for k in ["kupferhuette", "kabelwerk", "schlosserei", "elektronikwerk", "fahrzeugwerk", "fischerei", "schaeferei", "weberei", "naeherei"]:
+		ok(bj.has(k) and bj[k].has("rezept"), "Branche %s" % k)
+	for item in ["kupfer", "kabel", "elektronik", "fahrzeugbausatz", "fisch", "wolle", "stoff", "kleidung"]:
+		ok(not Production.art(item).is_empty(), "Artikel %s" % item)
+	var s := region_sim(2, 21)
+	s.wx.cur["wind"] = 80.0
+	ok(is_zero_approx(s.prod.weather_yield("see")), "Sturm: Kutter bleiben im Hafen")
+	s.wx.cur["wind"] = 15.0
+	s.wx.cur["gust"] = 20.0
+	ok(is_equal_approx(s.prod.weather_yield("see"), 1.0), "ruhige See: voller Fang")
+	var c: Company = s.companies[0]
+	c.ledger.inject(400000.0)
+	var made := {}
+	for pair in [["kabelwerk", {"kupfer": 10, "kunststoffgranulat": 10}, "kabel"], ["naeherei", {"stoff": 20}, "kleidung"], ["fahrzeugwerk", {"stahl": 12, "kabel": 4, "elektronik": 2, "kunststoffgranulat": 6, "glas": 2}, "fahrzeugbausatz"]]:
+		var r: Dictionary = s.executor.execute(0, {"action": "found_business", "branche": pair[0], "reason": "Test"})
+		ok(r.ok, "%s gegruendet: %s" % [pair[0], str(r.get("msg", "")).left(60)])
+		if not r.ok:
+			continue
+		var B: Dictionary = s.biz.get_b(str(r.ref))
+		for item in pair[1]:
+			s.stock.add(item, int(pair[1][item]), "C0", int(B.site), "Test", s.game_min)
+		for i in int(bj[pair[0]].personal_min):
+			var w := s.personnel.spawn_available("allrounder")
+			s.personnel.hire(0, w)
+			s.executor.execute(0, {"action": "assign_staff", "worker_id": w.id, "business_id": str(r.ref)})
+		made[pair[0]] = B
+	for d in 3:
+		next_day(s)
+	for k in made:
+		ok(int(made[k].get("total", 0)) > 0, "%s produziert (%d Chargen, %s)" % [k, int(made[k].get("total", 0)), str(made[k].blockers)])
+	# Fahrzeugkauf: Bausatz aus dem Fahrzeugwerk
+	if made.has("fahrzeugwerk"):
+		var F: Dictionary = made.fahrzeugwerk
+		s.stock.add("fahrzeugbausatz", 1, "C0", int(F.site), "Test", s.game_min)
+		var have0: int = s.stock.available("fahrzeugbausatz", "C0", int(F.site))
+		var c1: Company = s.companies[1]
+		c1.ledger.inject(200000.0)
+		var offs: Array = s.resources.available_offers().filter(func(o): return o.model in ["van", "transporter"])
+		if not offs.is_empty():
+			var offer: Dictionary = offs[0]
+			teleport_avatar(s, 1, s.city.building(offer.dealer).walk)
+			var cash0 := c.ledger.cash
+			var rb: Dictionary = s.executor.execute(1, {"action": "buy_vehicle", "offer_id": offer.id})
+			ok(rb.ok and s.stock.available("fahrzeugbausatz", "C0", int(F.site)) == have0 - 1 and is_equal_approx(c.ledger.cash - cash0, float(offer.price) * 0.4),
+				"Fahrzeugkauf nimmt einen Bausatz aus dem Werk (%s, Werk +%s)" % [str(rb.get("msg", "")).left(60), Catalog.money(c.ledger.cash - cash0)])
+	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")

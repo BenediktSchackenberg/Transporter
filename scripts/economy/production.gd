@@ -1165,6 +1165,9 @@ func weather_yield(kind: String) -> float:
 		if not bool(cur.get("is_day", true)):
 			return 0.15   # Tagesmittel: ein Teil des Tages war hell
 		return clampf(1.0 - float(cur.get("cloud", 0)) / 120.0, 0.15, 1.0)
+	if kind == "see":   # Fischerei: bei Sturm bleiben die Kutter im Hafen, bei starkem Wind halber Fang
+		var w := maxf(float(cur.get("wind", 10.0)), float(cur.get("gust", 0.0)) * 0.7)
+		return 0.0 if w > 60.0 else (0.5 if w > 40.0 else 1.0)
 	return 1.0
 
 

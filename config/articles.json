@@ -546,5 +546,86 @@
     "basispreis": 20.0,
     "importpreis": 28.0,
     "exportpreis": 15.0
+  },
+  "kupfer": {
+    "name": "Kupfer",
+    "einheit": "Barren (100 kg)",
+    "ladung": "baustoffe",
+    "je_ladeeinheit": 10,
+    "haltbar_tage": 0,
+    "basispreis": 700.0,
+    "importpreis": 900.0,
+    "exportpreis": 600.0
+  },
+  "kabel": {
+    "name": "Kabel",
+    "einheit": "Trommel",
+    "ladung": "pakete",
+    "je_ladeeinheit": 20,
+    "haltbar_tage": 0,
+    "basispreis": 220.0,
+    "importpreis": 290.0,
+    "exportpreis": 170.0
+  },
+  "elektronik": {
+    "name": "Elektronikbauteile",
+    "einheit": "Karton",
+    "ladung": "elektronik",
+    "je_ladeeinheit": 40,
+    "haltbar_tage": 0,
+    "basispreis": 260.0,
+    "importpreis": 340.0,
+    "exportpreis": 200.0
+  },
+  "fahrzeugbausatz": {
+    "name": "Fahrzeugbausatz",
+    "einheit": "Satz (ein Fahrzeug)",
+    "ladung": "container",
+    "je_ladeeinheit": 1,
+    "haltbar_tage": 0,
+    "basispreis": 9000.0,
+    "importpreis": null,
+    "exportpreis": 7000.0
+  },
+  "fisch": {
+    "name": "Fisch",
+    "einheit": "Kiste (10 kg)",
+    "ladung": "lebensmittel",
+    "je_ladeeinheit": 60,
+    "haltbar_tage": 3,
+    "kuehlung": true,
+    "basispreis": 45.0,
+    "importpreis": 60.0,
+    "exportpreis": 32.0
+  },
+  "wolle": {
+    "name": "Wolle",
+    "einheit": "Ballen",
+    "ladung": "pakete",
+    "je_ladeeinheit": 30,
+    "haltbar_tage": 0,
+    "basispreis": 40.0,
+    "importpreis": 55.0,
+    "exportpreis": 30.0
+  },
+  "stoff": {
+    "name": "Stoff",
+    "einheit": "Rolle",
+    "ladung": "pakete",
+    "je_ladeeinheit": 30,
+    "haltbar_tage": 0,
+    "basispreis": 70.0,
+    "importpreis": 95.0,
+    "exportpreis": 50.0
+  },
+  "kleidung": {
+    "name": "Kleidung",
+    "einheit": "Karton",
+    "ladung": "pakete",
+    "je_ladeeinheit": 40,
+    "haltbar_tage": 0,
+    "basispreis": 120.0,
+    "importpreis": 160.0,
+    "exportpreis": 90.0
   }
 }
