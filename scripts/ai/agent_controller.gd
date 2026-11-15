@@ -282,6 +282,7 @@ func _run_fallback() -> void:
 ## Regel-Disposition fuer Modellspieler mit offenen Modellen (lokal per Ollama oder gehostet bei IONOS): in der Partie vom 09.11.
 ## lief sie mit IONOS gar nicht, Fahrzeuge mit angenommenem Auftrag standen ohne Fahrer.
 const DISPATCH_PROVIDERS := ["ollama", "ionos", "eko"]
+const EKO_NO_INVEST := ["set_plan", "execute_plan_step", "place_building", "build_office", "upgrade_building", "upgrade_office", "install_internet"]
 const EKO_IDLE_S := 180.0   # Firma eines Wesens: Disposition nur, wenn das Wesen so lange (Echtzeit) nichts getan hat
 
 
@@ -361,6 +362,8 @@ func _run_dispatch_help() -> void:
 	# (sonst bleibt die Anwerbung beim Modell)
 	var understaffed: bool = sim.biz.of(cid).any(func(b): return b.status in Businesses.RUNNING and sim.biz.staff_of(b.id).size() < int(sim.biz.branches().get(b.branch, {}).get("personal_min", 0)))
 	var allowed: Array = DISPATCH + (["recruit_worker"] if understaffed or sim.company_vehicles(cid).any(func(v): return sim.driver_of(v) == null) else [])
+	if str(config.get("provider", "")) == "eko":   # Firma eines Wesens: Investitionen (Hofausbau, Plaene) entscheidet nur das Wesen
+		allowed = allowed.filter(func(a): return a not in EKO_NO_INVEST)   # (15.11.: Regeln bauten Bodo fuer 50.000 EUR Buero/Internet/Werkstatt vor den Fahrzeugen)
 	d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) in allowed)
 	if sim.dispatcher != null and sim.dispatcher.covers(cid):   # Auftragszuweisung macht der Claude-Disponent; die Regeln bleiben fuer Fahrer, Reparatur, Tanken und Hofaufbau
 		d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) not in ["accept_contract", "assign_transport"] \

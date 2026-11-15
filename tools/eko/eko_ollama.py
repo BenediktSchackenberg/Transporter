@@ -30,6 +30,10 @@ MAX_MESSAGES = 60          # Gespraechslaenge, danach werden die aeltesten Schri
 KEEP_MESSAGES = 36
 MAX_CHARS = 24000          # Textlaenge des Verlaufs: mit gpt-oss waren 30.000 Zeichen schon 10.600-13.500 Token (Ollama HTTP 500 bei 16k, 15.11.)
 REFLECT_EVERY = 40         # Werkzeugschritte zwischen zwei Erinnerungen an das Gedaechtnis
+LEARN_GAP = 6              # Lernanstoss nach Erfolg/Fehlschlag hoechstens alle so viele Schritte
+LEARN_ACTS = ("Firma", "Amt", "FoundCompany", "BuyPlot", "OrderHouse", "Bauwerk", "Bauplan", "AcceptJob", "Deliver", "Attack", "MoveIn")
+LEARN_NUDGE = ("Halte kurz fest, was du daraus lernst – mit learn: strategie (was wiederholbar klappt), fehlschlag (was nicht klappt "
+               "und warum) oder technik (wie es geht). Dann mach weiter.")
 DAY_STEPS = 150            # Schlaf-Zyklus wie bei Eko: nach so vielen Schritten endet der "Tag" (Sitzung)
 NIGHT_STEPS = 8            # so viele Schritte bleiben, um das Gedaechtnis zu schreiben
 EVENING = ("Dein Tag geht zu Ende. Schreib jetzt das Wichtigste auf: Erlebnisse mit append_memory, geprüftes Wissen und gute "
@@ -522,6 +526,11 @@ class Agent:
                 key = fn["name"] + json.dumps(a, sort_keys=True, ensure_ascii=False) if failed else ""
                 self._repeat = self._repeat + 1 if key and key == getattr(self, "_last_fail", "") else (1 if key else 0)
                 self._last_fail = key
+                done = isinstance(res, dict) and res.get("ok") is True and res.get("status") == "abgeschlossen"
+                if fn["name"] == "act" and str(a.get("type", "")) in LEARN_ACTS and (done or (failed and self._repeat == 1)) \
+                        and steps - getattr(self, "_last_nudge", -999) >= LEARN_GAP:   # nach Erfolg oder Fehlschlag: festhalten lassen
+                    self._last_nudge = steps
+                    self._nudge = LEARN_NUDGE
                 if failed and self._repeat == 1 and fn["name"] == "act":
                     with open(self.ws / "EPISODIC_MEMORY.jsonl", "a", encoding="utf-8") as f:
                         f.write(json.dumps({"zeit": time.strftime("%Y-%m-%d %H:%M"), "art": "fehlschlag", "was": "%s %s" % (a.get("type"), json.dumps(a.get("data", {}), ensure_ascii=False)[:120]),
@@ -531,6 +540,9 @@ class Agent:
                                      "So klappt es nicht – lies die Rückmeldung genau und versuche etwas anderes." % (self._repeat, verdict)})
                     self.say("↺ Schleifenbremse nach %d gleichen Fehlschlägen" % self._repeat)
                     self._repeat = 0
+            if getattr(self, "_nudge", ""):
+                messages.append({"role": "user", "content": self._nudge})
+                self._nudge = ""
             if steps % REFLECT_EVERY < len(calls):
                 messages.append({"role": "user", "content": REFLECT})
 

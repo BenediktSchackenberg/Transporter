@@ -53,6 +53,9 @@ var estates := EkoEstates.new()     # Stammsitz je KI-Spieler (Benedikt 15.11.20
 var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
 const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.000 EUR Privatgeld (Einlage von aussen X0 -> Y0)
 const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
+const GRUNDZIEL_AMT := "Bringe deine Stadt voran: Versorgung, Wohnraum, Arbeit, Sicherheit und Zufriedenheit der Bürger (Amt). Dein Zuhause ist dein Rathaus."
+const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
+var towns_funded := {}              # "k" -> true
 var _no_estate := false             # beim Laden und fuer Buergermeister keinen Stammsitz vergeben
 
 
@@ -83,6 +86,19 @@ func ensure_estates() -> void:
 		if int(b.get("amt", -1)) < 0 and not estates.estates.has(b.name):
 			estates.assign(b.name)
 		grant_start_capital(b)
+	for k in sim.towns.count() if sim.towns.is_region() else 0:   # Startkapital der Staedte (einmal je Stadt, auch nachtraeglich)
+		if not towns_funded.has(str(k)):
+			towns_funded[str(k)] = true
+			sim.economy.transfer("X0", Towns.account_of(k), TOWN_START_CAPITAL)
+			sim.log_event("%s erhält %s Startkapital." % [sim.towns.name_of(k), Catalog.money(TOWN_START_CAPITAL)], "good")
+
+
+## Rathaus des Buergermeister-Wesens (sein Zuhause); {} ohne Amt.
+func town_hall_of(b: Dictionary) -> Dictionary:
+	var k := int(b.get("amt", -1))
+	if k < 0 or k >= sim.city.towns.size():
+		return {}
+	return sim.city.building(int(sim.city.towns[k].get("town_hall", -1)))
 
 
 ## Startkapital einmal je Wesen (auch nachtraeglich fuer laufende Partien); Geld kommt von aussen, die Bilanz bleibt erhalten.
@@ -839,7 +855,7 @@ func observe(name: String) -> Dictionary:
 		"jobangebote": _job_obs(b) if active_firm(b) < 0 and int(b.get("amt", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
 		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "mein_amt": office_obs(b), "gefuehle": feelings(b),
 		"ablauf": {"offen": (b.get("ablauf", []) as Array).size(), "letzte_ergebnisse": (b.get("ablauf_log", []) as Array).slice(-5)},
-		"grundziel": GRUNDZIEL if estates.estates.has(name) else "", "mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
+		"grundziel": GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else (GRUNDZIEL if estates.estates.has(name) else ""), "mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
 		"koerper": arms.body_obs(b), "gefahren": arms.dangers(b),
 		"mein_stammsitz": estates.obs(b), "stammsitze_in_sicht": estates.visible(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}
@@ -1209,6 +1225,9 @@ func is_home(b: Dictionary) -> bool:
 		return true
 	if estates.at_home(b):
 		return true
+	var hall := town_hall_of(b)   # Buergermeister: im Rathaus zu Hause
+	if not hall.is_empty() and _building_dist(tile_of(b), hall) <= SOURCE_REACH:
+		return true
 	return str(b.get("zuhause", "")) != "" and plot_rect(str(b.zuhause)).has_point(tile_of(b))
 
 
@@ -1288,7 +1307,11 @@ func home_hint(b: Dictionary) -> String:
 	var t := tile_of(b)
 	var goal := Vector2i(-1, -1)
 	var what := ""
-	if estates.estates.has(b.name):
+	if not town_hall_of(b).is_empty():
+		var hall := town_hall_of(b)
+		goal = Vector2i(int(hall.walk.x), int(hall.walk.y))
+		what = "Dein Rathaus (%s)" % str(hall.name)
+	elif estates.estates.has(b.name):
 		goal = estates.field_rect(b.name, EkoEstates.HUT_FIELD).get_center()
 		what = "Deine Hütte auf deinem Stammsitz"
 	elif houses.has(b.name) and str(houses[b.name].status) == "fertig":
@@ -1913,7 +1936,8 @@ func to_dict() -> Dictionary:
 			"ziel": b.get("ziel", {}), "ziele_alt": b.get("ziele_alt", []), "gesundheit": float(b.get("gesundheit", 100.0)), "waffen": b.get("waffen", []),
 			"vergehen": int(b.get("vergehen", 0)), "out_left": float(b.get("out_left", 0.0)), "custody_left": float(b.get("custody_left", 0.0)),
 			"startkapital": bool(b.get("startkapital", false))})
-	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict(), "estates": estates.to_dict()}
+	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict(), "estates": estates.to_dict(),
+		"towns_funded": towns_funded}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -1935,6 +1959,7 @@ func from_dict(d: Dictionary) -> void:
 	jobs = d.get("jobs", {})
 	_next_job = int(d.get("next_job", 1))
 	_no_estate = false
+	towns_funded = d.get("towns_funded", {})
 	houses = d.get("houses", {})
 	arms.from_dict(d.get("arms", {}))
 	estates.from_dict(d.get("estates", {}))
