@@ -286,8 +286,6 @@ const EKO_IDLE_S := 180.0   # Firma eines Wesens: Disposition nur, wenn das Wese
 
 
 func _dispatch_help_on() -> bool:
-	if str(config.get("provider", "")) == "eko" and sim.eko.firm_idle_s(cid) < EKO_IDLE_S:
-		return false   # das Wesen fuehrt seine Firma selbst; Regeln nur als Notfall
 	return config.get("provider", "") in DISPATCH_PROVIDERS and bool(config.get("dispatch_help", true))
 
 
@@ -306,7 +304,10 @@ const DISPATCH_EVERY_MIN := 60.0   # Spielminuten zwischen zwei Hofrunden der Di
 func _dispatch_tick() -> void:
 	if not _dispatch_help_on() or fallback_active:
 		return
-	if sim.game_min - _dispatch_min < DISPATCH_EVERY_MIN:
+	# Firma eines aktiven Wesens: das Wesen disponiert selbst; die Regeln fuellen nur alle drei Spielstunden Luecken
+	# (stehende Fahrzeuge ohne Auftrag). Ist das Wesen EKO_IDLE_S lang untaetig, wieder im normalen Takt.
+	var every := DISPATCH_EVERY_MIN * (3.0 if str(config.get("provider", "")) == "eko" and sim.eko.firm_idle_s(cid) < EKO_IDLE_S else 1.0)
+	if sim.game_min - _dispatch_min < every:
 		return
 	_dispatch_min = sim.game_min
 	var idle: bool = sim.company_vehicles(cid).any(func(v): return v.state == "idle" and v.stops.is_empty() and v.contract_id == "")   # auch ohne Fahrer: die Regeln setzen einen ein (Partie 08.11.: Fahrzeug 27 Runden ohne Fahrer)

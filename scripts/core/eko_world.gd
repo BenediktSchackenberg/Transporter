@@ -1091,7 +1091,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"hofbau": (o.get("betriebshof", {}) as Dictionary).get("bauvorschlaege_xy_rot", {}),
 		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
 			"du musst nicht darauf warten. Fahrten zuweisen, Fahrer einsetzen und Aufträge annehmen ist deine Sache; die Disposition springt " +
-			"nur ein, wenn du drei Minuten lang nichts tust.",
+			"nur alle drei Spielstunden für stehende Fahrzeuge ein (und normal, wenn du drei Minuten nichts tust). Aufträge sind schnell weg – nimm sie zügig an.",
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
 			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +
