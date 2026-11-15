@@ -23,6 +23,12 @@ const SIDES := [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 1, 0), Vector
 const TALK_REACH := 3               # Felder: so nah muss man fuer ein Gespraech sein
 const HEAR_RADIUS := 12             # Felder: Gesagtes in diesem Umkreis wird gehoert
 const ARTEN := ["mensch", "roboter"]
+## Selbstbau (15.11.2026): Material und Einrichtung kauft das Wesen am Bauhof (Preis je Block, Geld an T0 "Bauhof");
+## fuer einen angenommenen Mauer-Auftrag stellt die Firma das Material. Einrichtung wird wie Bloecke gesetzt.
+const PRICES := {"stein": 3.0, "ziegel": 4.0, "holz": 4.0, "beton": 3.0, "glas": 6.0, "stahl": 8.0, "dach": 5.0, "boden": 3.0,
+	"teppich": 15.0, "bett": 60.0, "decke": 10.0, "tisch": 30.0, "lampe": 20.0, "pflanze": 10.0, "regal": 25.0, "buch": 5.0, "ladestation": 80.0}
+const MOVE_IN_BLOCKS := 30          # Bausteine (ohne Einrichtung) auf dem eigenen Grundstueck
+const MOVE_IN_HEIGHT := 4           # Schichten (hoechster Block z >= 3)
 const COLORS := [Color("#e8c04a"), Color("#5fb3d9"), Color("#d96b5f"), Color("#7fcf6a"), Color("#b98ad9")]
 
 var sim
@@ -176,10 +182,12 @@ func input(name: String, type: String, data: Dictionary) -> Dictionary:
 			r = _rest(b)
 		"FoundCompany":
 			r = _found_company(b, data)
+		"MoveIn":
+			r = _move_in(b)
 		"Firma":
 			r = _firm_action(b, data)
 		_:
-			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma." % type}
+			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn." % type}
 	if not bool(r.ok):
 		_event(b, "Fehlschlag %s: %s" % [type, r.msg])
 	changed.emit()
@@ -227,17 +235,25 @@ func _pickup(b: Dictionary, data: Dictionary) -> Dictionary:
 		_event(b, "nimmt %s bei %s auf" % [held[-1], _fmt(p)])
 		return {"ok": true, "msg": "aufgenommen: %s" % held[-1], "traegt": held}
 	var mat := str(data.get("material", ""))
-	if not FreeBuild.MATERIALS.has(mat):
-		return {"ok": false, "msg": "Material muss eines von %s sein." % ", ".join(FreeBuild.MATERIALS.keys())}
+	if not PRICES.has(mat):
+		return {"ok": false, "msg": "Material muss eines von %s sein." % ", ".join(PRICES.keys())}
 	if not _at_source(b):
 		return {"ok": false, "msg": "Material gibt es nur am Bauhof (siehe quellen in /observe)."}
 	var n := clampi(int(data.get("count", 1)), 1, CARRY - held.size())
 	if held.size() >= CARRY:
 		return {"ok": false, "msg": "Haende voll (%d Bloecke)." % CARRY}
+	var j: Dictionary = jobs.get(str(b.get("job", "")), {})
+	var paid_by_firm: bool = not j.is_empty() and j.art == "mauer" and j.material == mat
+	var cost := 0.0 if paid_by_firm else float(PRICES[mat]) * n
+	if cost > float(b.get("geld", 0.0)):
+		return {"ok": false, "msg": "%d x %s kosten %s, du hast %s." % [n, mat, Catalog.money(cost), Catalog.money(float(b.get("geld", 0.0)))]}
+	if cost > 0.0:
+		sim.economy.transfer("Y0", "T0", cost)
+		b.geld = float(b.geld) - cost
 	for i in n:
 		held.append(mat)
-	_event(b, "holt %d x %s am Bauhof" % [n, mat])
-	return {"ok": true, "msg": "%d x %s aufgenommen" % [n, mat], "traegt": held}
+	_event(b, "holt %d x %s am Bauhof%s" % [n, mat, " (Material der Firma)" if paid_by_firm else " für %s" % Catalog.money(cost)])
+	return {"ok": true, "msg": "%d x %s aufgenommen%s" % [n, mat, " (stellt die Firma)" if paid_by_firm else ", %s bezahlt" % Catalog.money(cost)], "traegt": held}
 
 
 func _place(b: Dictionary, data: Dictionary) -> Dictionary:
@@ -247,10 +263,10 @@ func _place(b: Dictionary, data: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Place braucht block: [x, y, z] (Blockraster: Feld x %d + 0..%d, z = Schicht ab 0)." % [PER_TILE, PER_TILE - 1]}
 	if held.is_empty():
 		return {"ok": false, "msg": "Du traegst nichts. Erst Material am Bauhof holen (Pickup)."}
-	var mat := str(data.get("material", held.filter(func(m): return FreeBuild.MATERIALS.has(m)).front() if held.any(func(m): return FreeBuild.MATERIALS.has(m)) else held[0]))
+	var mat := str(data.get("material", held.filter(func(m): return PRICES.has(m)).front() if held.any(func(m): return PRICES.has(m)) else held[0]))
 	if mat not in held:
 		return {"ok": false, "msg": "Du traegst kein %s (traegst: %s)." % [mat, ", ".join(held)]}
-	if not FreeBuild.MATERIALS.has(mat):
+	if not PRICES.has(mat):
 		return {"ok": false, "msg": "%s wird abgeliefert (Deliver), nicht verbaut." % mat}
 	var why := can_place(p)
 	if why != "":
@@ -447,7 +463,7 @@ func observe(name: String) -> Dictionary:
 		"karte": {"mitte": [t.x, t.y], "radius": VIEW_RADIUS, "zeilen": rows,
 			"legende": "@ du, . freier Boden, = Strasse, # Gebaeude, ~ Wasser, ^ unbegehbar (Baum/Berg), 1-9/+ hoechste Blockschicht auf dem Feld"},
 		"bloecke_in_der_naehe": near_blocks, "bloecke_gesamt": blocks.size(),
-		"gebaeude_in_der_naehe": near_buildings, "quellen": src, "materialien": FreeBuild.MATERIALS.keys(),
+		"gebaeude_in_der_naehe": near_buildings, "quellen": src, "material_preise": PRICES,
 		"andere_wesen": others, "figuren_in_der_naehe": figures, "gehoert": heard(name),
 		"jobangebote": _job_obs(b) if int(b.get("firma", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
 		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b),
@@ -781,7 +797,59 @@ func home_rect(name: String) -> Rect2i:
 
 func is_home(b: Dictionary) -> bool:
 	var h: Dictionary = houses.get(b.name, {})
-	return not h.is_empty() and h.status == "fertig" and home_rect(b.name).has_point(tile_of(b))
+	if not h.is_empty() and h.status == "fertig" and home_rect(b.name).has_point(tile_of(b)):
+		return true
+	return str(b.get("zuhause", "")) != "" and plot_rect(str(b.zuhause)).has_point(tile_of(b))
+
+
+func plot_rect(id: String) -> Rect2i:
+	var p: Dictionary = sim.parcels.parcel(id)
+	if p.is_empty():
+		return Rect2i()
+	return Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
+
+
+## Bloecke auf einem Grundstueck: {bau: Bausteine ohne Einrichtung, max_z, einrichtung: {Art: Anzahl}}.
+func plot_stats(id: String) -> Dictionary:
+	var r := plot_rect(id)
+	var out := {"bau": 0, "max_z": -1, "einrichtung": {}}
+	for p in blocks:
+		var t := Vector2i(floori(float(p.x) / PER_TILE), floori(float(p.y) / PER_TILE))
+		if not r.has_point(t):
+			continue
+		var m := str(blocks[p])
+		if FreeBuild.MATERIALS.has(m) or m in ["dach", "boden"]:
+			out.bau = int(out.bau) + 1
+		else:
+			out.einrichtung[m] = int(out.einrichtung.get(m, 0)) + 1
+		out.max_z = maxi(int(out.max_z), p.z)
+	return out
+
+
+## Selbst gebautes Haus beziehen: eigenes Grundstueck mit genug Bausteinen, Hoehe, Bett und Ladestation.
+func _move_in(b: Dictionary) -> Dictionary:
+	var id := str(b.get("grundstueck", ""))
+	if id == "":
+		return {"ok": false, "msg": "Erst ein Grundstück kaufen (BuyPlot), dann darauf bauen."}
+	var st := plot_stats(id)
+	var miss: Array = []
+	if int(st.bau) < MOVE_IN_BLOCKS:
+		miss.append("%d von %d Bausteinen" % [st.bau, MOVE_IN_BLOCKS])
+	if int(st.max_z) + 1 < MOVE_IN_HEIGHT:
+		miss.append("Höhe %d von %d Schichten" % [int(st.max_z) + 1, MOVE_IN_HEIGHT])
+	for need in ["bett", "ladestation"]:
+		if not st.einrichtung.has(need):
+			miss.append("ein %s" % need)
+	if not miss.is_empty():
+		return {"ok": false, "msg": "Noch nicht bewohnbar: es fehlen %s." % ", ".join(miss)}
+	if str(b.get("zuhause", "")) == "":
+		var p: Dictionary = sim.parcels.parcel(id)
+		p.state = "bebaut"
+		sim.parcels.touch(id)
+		sim.log_event("%s zieht in sein selbst gebautes Haus auf %s ein (%d Bausteine)." % [b.name, id, st.bau], "good")
+	b.zuhause = id
+	_event(b, "zieht in sein selbst gebautes Haus auf %s ein" % id)
+	return {"ok": true, "msg": "Willkommen zu Hause! Dein Haus auf %s ist bewohnt (%d Bausteine, %d Schichten). Rest geht jetzt hier." % [id, st.bau, int(st.max_z) + 1]}
 
 
 func _rest(b: Dictionary) -> Dictionary:
@@ -806,6 +874,15 @@ func _home_obs(b: Dictionary) -> Dictionary:
 			"eingang_feld": [r.position.x + 1, r.end.y], "du_bist_zuhause": is_home(b)}
 	elif str(b.get("grundstueck", "")) == "":
 		o["grundstuecke_zu_kaufen"] = _plot_obs(b)
+	if str(b.get("grundstueck", "")) != "":
+		var r := plot_rect(str(b.grundstueck))
+		var st := plot_stats(str(b.grundstueck))
+		var c := r.get_center()
+		o["mein_grundstueck"] = {"id": b.grundstueck, "felder": [r.position.x, r.position.y, r.size.x, r.size.y],
+			"bloecke_x": [r.position.x * PER_TILE, r.end.x * PER_TILE - 1], "bloecke_y": [r.position.y * PER_TILE, r.end.y * PER_TILE - 1],
+			"mitte_feld": [c.x, c.y], "bausteine": st.bau, "hoehe": int(st.max_z) + 1, "einrichtung": st.einrichtung,
+			"bewohnt": str(b.get("zuhause", "")) != "",
+			"einziehen": "MoveIn, sobald mindestens %d Bausteine, %d Schichten Höhe, ein bett und eine ladestation auf dem Grundstück stehen" % [MOVE_IN_BLOCKS, MOVE_IN_HEIGHT]}
 	return o
 
 
@@ -934,7 +1011,7 @@ func to_dict() -> Dictionary:
 	for b in beings.values():
 		bs.append({"name": b.name, "art": b.art, "x": b.mover.pos.x, "y": b.mover.pos.y, "held": b.held, "events": b.events,
 			"geld": float(b.get("geld", 0.0)), "job": str(b.get("job", "")), "grundstueck": str(b.get("grundstueck", "")),
-			"done_jobs": int(b.get("done_jobs", 0)), "firma": int(b.get("firma", -1))})
+			"done_jobs": int(b.get("done_jobs", 0)), "firma": int(b.get("firma", -1)), "zuhause": str(b.get("zuhause", ""))})
 	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses}
 
 
@@ -949,7 +1026,7 @@ func from_dict(d: Dictionary) -> void:
 		b.mover.pos = Vector2(float(e.x), float(e.y))
 		b.held = e.get("held", [])
 		b.events = e.get("events", [])
-		for k in ["geld", "job", "grundstueck", "done_jobs", "firma"]:
+		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause"]:
 			if e.has(k):
 				b[k] = e[k]
 	chat = d.get("chat", [])

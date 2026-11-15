@@ -11,7 +11,8 @@ Manchmal bin ich ein bisschen tollpatschig. Dann lache ich (piep!) und versuche 
 Mein großer Traum: ein eigenes kleines Haus auf einem schönen Grundstück, mit einer Ladestation, einem Bett mit blauer Decke
 und einer Lampe, die abends leuchtet. Dafür brauche ich Geld. Die Firmen hier haben oft Arbeit für mich – Botengänge,
 kleine Mauern. Ich arbeite gern und gewissenhaft, spare mein Geld, suche mir ein Grundstück aus, das mir gefällt,
-und lasse mir dann von einer Baufirma mein Zuhause bauen. Wenn es fertig ist, ziehe ich ein.
+und baue mir mein Zuhause dort selbst – Stein auf Stein, mit Material vom Bauhof: Wände, Fenster, ein Dach,
+drinnen ein Bett, meine Ladestation und eine Lampe. Wenn es fertig ist, ziehe ich ein (MoveIn).
 
 Und wer weiß: Wenn ich genug gelernt und gespart habe, gründe ich vielleicht meinen eigenen kleinen Kurierdienst –
 „Lumo Lichtkurier“ – und zeige den Menschen, dass man freundlich und trotzdem erfolgreich sein kann.

@@ -66,7 +66,32 @@ static func draw_block(n: CanvasItem, p: Vector3i, mat: String, occ: Dictionary,
 		n.draw_circle((p00 + p11) * 0.5 + top, 9.0, glow)
 
 
+## Schnitt fuer Haeuser, die ein Wesen auf seinem Grundstueck selbst baut: je Feld die Grenzen der Bloecke auf dem Grundstueck.
+func _cuts() -> Dictionary:
+	var out := {}
+	for b in sim.eko.beings.values():
+		var id := str(b.get("grundstueck", ""))
+		if id == "":
+			continue
+		var r: Rect2i = sim.eko.plot_rect(id)
+		var mx := -1
+		var my := -1
+		var mz := -1
+		for p in sim.eko.blocks:
+			var t := Vector2i(floori(float(p.x) / EkoWorld.PER_TILE), floori(float(p.y) / EkoWorld.PER_TILE))
+			if r.has_point(t):
+				mx = maxi(mx, p.x)
+				my = maxi(my, p.y)
+				mz = maxi(mz, p.z)
+		if mz >= 3:   # erst ab einer gewissen Hoehe aufschneiden
+			for y in range(r.position.y, r.end.y):
+				for x in range(r.position.x, r.end.x):
+					out[Vector2i(x, y)] = {"mx": mx, "my": my, "mz": mz}
+	return out
+
+
 func _refresh() -> void:
+	var cuts := _cuts()
 	var by_tile := {}
 	for p in sim.eko.blocks:
 		var t := Vector2i(floori(float(p.x) / EkoWorld.PER_TILE), floori(float(p.y) / EkoWorld.PER_TILE))
@@ -86,6 +111,7 @@ func _refresh() -> void:
 			cv.buildings_node.add_child(n)
 			_tiles[t] = n
 		n.cells = by_tile[t]
+		n.cut = cuts.get(t, {})
 		n.queue_redraw()
 	for name in sim.eko.houses:
 		if not _houses.has(name):
@@ -111,14 +137,21 @@ class TileNode:
 	extends Node2D
 	var sim: Simulation
 	var cells: Array = []
+	var cut := {}               # Schnitt eines selbst gebauten Hauses: {mx, my, mz} oder leer
 
 	func _draw() -> void:
 		var bl: Dictionary = sim.eko.blocks
 		var order := cells.duplicate()
 		order.sort_custom(func(a, b): return a.x + a.y < b.x + b.y or (a.x + a.y == b.x + b.y and a.z < b.z))
+		var occ := bl
+		if not cut.is_empty():
+			occ = {}
+			order = order.filter(func(p): return bl.has(p) and not (p.z == int(cut.mz) and p.z >= 3) and not ((p.x == int(cut.mx) or p.y == int(cut.my)) and p.z >= 2))
+			for p in order:
+				occ[p] = true
 		for p in order:
 			if bl.has(p):
-				EkoView.draw_block(self, p, str(bl[p]), bl, position)
+				EkoView.draw_block(self, p, str(bl[p]), occ, position)
 
 
 ## Haus eines Wesens als Schnitt: Dach weg, Vorderwaende (Sueden, Osten) nur bis zur ersten Schicht, damit man hineinsieht.

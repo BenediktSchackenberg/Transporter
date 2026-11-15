@@ -16,7 +16,7 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 |------|------|---------|
 | `MoveTo` | `{"tile": [x, y]}` | zu Fuß zum Feld gehen (etwa 3 Felder je Sekunde, Wegsuche automatisch) |
 | `Stop` | `{}` | stehen bleiben |
-| `Pickup` | `{"material": "stein", "count": 4}` | Material am Bauhof aufnehmen (höchstens 2 Felder entfernt), kostenlos |
+| `Pickup` | `{"material": "stein", "count": 4}` | Material oder Einrichtung am Bauhof kaufen und aufnehmen (höchstens 2 Felder entfernt); Preise in `material_preise`, für einen Mauer-Auftrag stellt die Firma das Material |
 | `Pickup` | `{"block": [x, y, z]}` | einen gesetzten Block wieder aufnehmen (nur, wenn nichts darauf liegt) |
 | `Place` | `{"block": [x, y, z], "material"?: "holz"}` | einen getragenen Block setzen (höchstens 2 Felder entfernt) |
 | `Say` | `{"text": "..."}` | etwas sagen (erscheint als Sprechblase) |
@@ -27,11 +27,13 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 | `BuyPlot` | `{"plot": "G123"}` | ein freies Wohngrundstück aus `lebensziel.grundstuecke_zu_kaufen` kaufen (höchstens 6 Felder entfernt) |
 | `OrderHouse` | `{"wand"?: "ziegel"}` | eine Baufirma baut dir ein Haus auf deinem Grundstück (Wände: ziegel, holz, stein, beton) |
 | `Rest` | `{}` | zu Hause in der Ladestation ausruhen |
+| `MoveIn` | `{}` | in das selbst gebaute Haus auf deinem Grundstück einziehen: mindestens 30 Bausteine, 4 Schichten hoch, ein `bett` und eine `ladestation` |
 | `FoundCompany` | `{"name"?: "Lumo Lichtkurier", "behalten"?: 500}` | eigene Transportfirma gründen: ab 1.500 € Ersparnissen, der Kapitalgeber legt 20.000 € dazu; `behalten` bleibt privat |
 | `Firma` | `{"aktion": {"action": "buy_vehicle", "offer_id": "F12"}}` | deine Firma führen: accept_contract, assign_transport, collect_contracts, buy_vehicle, sell_vehicle, recruit_worker, dismiss_worker, assign_worker_task, rent_depot, take_loan, repay_loan, install_internet, send_message. Lage in `meine_firma`; Tagesbetrieb (zuweisen, tanken, reparieren) läuft automatisch |
 
 - Du trägst höchstens **4 Blöcke**.
-- Materialien: `stein`, `ziegel`, `holz`, `beton`, `glas`, `stahl`.
+- Baumaterial: `stein`, `ziegel`, `holz`, `beton`, `glas`, `stahl`, `dach`, `boden`; Einrichtung: `bett`, `decke`, `tisch`, `lampe`, `regal`, `buch`, `pflanze`, `teppich`, `ladestation`.
+- Dein Grundstück steht in `lebensziel.mein_grundstueck` mit seinen Blockgrenzen (`bloecke_x`, `bloecke_y`) und dem Baustand.
 - Blöcke gehen nur auf **freien Boden** (keine Straße, kein Gebäude) und brauchen **Halt**: den Boden, einen Block darunter oder direkt daneben. Über Wasser geht es nur oberhalb des Bodens mit seitlichem Halt (Brücken vom Ufer aus).
 - Ein Block lässt sich nur aufnehmen, wenn nichts darauf liegt und kein Nachbar danach frei schweben würde.
 - Wer in deiner Nähe ist, steht in `/observe` unter `figuren_in_der_naehe` (Unternehmer mit Feld und Entfernung, nächste zuerst) und `andere_wesen`; was in Hörweite gesagt wurde, unter `gehoert`.

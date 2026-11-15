@@ -13084,7 +13084,11 @@ func test_eko_world() -> void:
 	ok(o.ok and o.karte.zeilen.size() == 2 * EkoWorld.VIEW_RADIUS + 1 and str(o.karte.zeilen[EkoWorld.VIEW_RADIUS]).contains("@"), "Karte 21 x 21 mit eigener Position")
 	ok(not o.quellen.is_empty() and bool(o.du.am_bauhof), "startet am Bauhof (%s)" % str(o.quellen))
 	ok(E.input("Eko", "Pickup", {"material": "gold"}).ok == false, "unbekanntes Material abgelehnt")
+	ok(not E.input("Eko", "Pickup", {"material": "stein"}).ok, "ohne Geld kein Material")
+	s.economy.transfer("X0", "Y0", 1000.0)
+	E.beings.Eko.geld = 1000.0
 	ok(E.input("Eko", "Pickup", {"material": "stein", "count": 9}).ok and E.beings.Eko.held.size() == EkoWorld.CARRY, "traegt hoechstens %d" % EkoWorld.CARRY)
+	ok(is_equal_approx(float(E.beings.Eko.geld), 1000.0 - 4 * float(EkoWorld.PRICES.stein)) and absf(s.economy.conservation_error()) < 0.01, "Material bezahlt (an den Bauhof), Geld bleibt erhalten")
 	ok(not E.input("Eko", "Pickup", {"material": "holz"}).ok, "Haende voll")
 	var t := E.tile_of(E.beings.Eko)
 	var free := Vector2i(-1, -1)
@@ -13234,8 +13238,38 @@ func test_eko_life() -> void:
 	b.mover.pos = s.city.tile_center(r.position + Vector2i(1, 1))
 	ok(E.is_home(b) and E.input("Lumo", "Rest", {}).ok, "Lumo ruht zu Hause")
 	ok(E.observe("Lumo").lebensziel.haus.du_bist_zuhause, "Beobachtung: zu Hause")
+	# Selbstbau: zweites Wesen kauft ein Grundstueck, baut selbst und zieht ein
+	E.join("Pia", "roboter")
+	var pia: Dictionary = E.beings.Pia
+	s.economy.transfer("X0", "Y0", 5000.0)
+	pia.geld = 5000.0
+	var pl2: Dictionary = E.observe("Pia").lebensziel.grundstuecke_zu_kaufen.filter(func(x): return x.id != pl.id)[0]
+	pia.mover.pos = s.city.tile_center(Vector2i(int(pl2.feld[0]), int(pl2.feld[1])))
+	ok(E.input("Pia", "BuyPlot", {"plot": pl2.id}).ok, "Pia kauft ein Grundstueck")
+	ok(not E.input("Pia", "MoveIn", {}).ok, "leeres Grundstueck nicht bewohnbar")
+	var mg: Dictionary = E.observe("Pia").lebensziel.mein_grundstueck
+	ok(mg.bloecke_x.size() == 2 and int(mg.bausteine) == 0, "Grundstueck mit Blockgrenzen in der Beobachtung")
+	var x0 := int(mg.bloecke_x[0])
+	var y0 := int(mg.bloecke_y[0])
+	for z in 4:
+		for i in 6:
+			E.blocks[Vector3i(x0 + i, y0, z)] = "holz"
+			E.blocks[Vector3i(x0, y0 + 1 + i % 5, z)] = "holz"
+	ok(str(E.input("Pia", "MoveIn", {}).msg).contains("bett"), "ohne Bett und Ladestation nicht bewohnbar")
+	var src: Array = E.sources()[0].feld
+	pia.mover.pos = s.city.tile_center(Vector2i(int(src[0]), int(src[1])))
+	var g0 := float(pia.geld)
+	ok(E.input("Pia", "Pickup", {"material": "bett", "count": 1}).ok and E.input("Pia", "Pickup", {"material": "ladestation", "count": 1}).ok, "Einrichtung am Bauhof gekauft")
+	ok(is_equal_approx(g0 - float(pia.geld), float(EkoWorld.PRICES.bett) + float(EkoWorld.PRICES.ladestation)), "Einrichtung bezahlt")
+	pia.mover.pos = s.city.tile_center(Vector2i(int(mg.felder[0]) + 1, int(mg.felder[1]) + 1))
+	var t1 := E.tile_of(pia)
+	ok(E.input("Pia", "Place", {"block": [t1.x * 4 + 2, t1.y * 4 + 2, 0], "material": "bett"}).ok and E.input("Pia", "Place", {"block": [t1.x * 4 + 3, t1.y * 4 + 3, 0], "material": "ladestation"}).ok, "Bett und Ladestation gesetzt")
+	var mi: Dictionary = E.input("Pia", "MoveIn", {})
+	ok(mi.ok and E.is_home(pia) and E.input("Pia", "Rest", {}).ok, "eingezogen und ausgeruht: %s" % str(mi.msg).left(60))
+	ok(s.parcels.parcel(pl2.id).state == "bebaut" and absf(s.economy.conservation_error()) < 0.01, "Grundstueck bebaut, Geld bleibt erhalten")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.eko.houses.Lumo.status == "fertig" and is_equal_approx(float(s2.eko.beings.Lumo.geld), float(b.geld)) and s2.eko.beings.Lumo.grundstueck == pl.id, "Haus, Geld und Grundstueck gespeichert")
+	ok(s2.eko.beings.Pia.zuhause == pl2.id, "selbst gebautes Zuhause gespeichert")
 
 
 ## Lumo-Unternehmer (15.11.2026): Wesen gruendet mit Ersparnissen plus Kapitalgeber eine Firma, fuehrt sie ueber Firma-Aktionen,
