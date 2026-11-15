@@ -107,6 +107,7 @@ func _try(name: String, cands: Array, busy: PackedByteArray, stat: Dictionary, h
 			if Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3])).intersects(r) and str(p.state) in ["frei", "zur_entwicklung"]:
 				p.state = "privat_gehalten"
 				p["use"] = "stammsitz"
+		_starter_hut(name)
 		_sim().log_event("%s erhält einen Stammsitz bei %d,%d." % [name, ctr.x, ctr.y], "info")
 		return true
 	return false
@@ -201,6 +202,40 @@ func order(b: Dictionary, data: Dictionary) -> Dictionary:
 	w._event(b, "lässt auf seinem Stammsitz bauen: %s" % art)
 	_sim().log_event("%s lässt auf dem Stammsitz bauen: %s (%d Blöcke, %s)." % [name, art, blocks.size(), Catalog.money(cost)], "info")
 	return {"ok": true, "status": "laeuft", "msg": "%s beauftragt: %d Blöcke %s, %s, fertig in etwa %d s." % [art, blocks.size(), mat, Catalog.money(cost), int(blocks.size() / BUILD_RATE)]}
+
+
+## Starthuette (Feld 7, suedlich des Bauplatzes): Holzhaus mit Tuer, Dach, Bett und Ladestation, sofort fertig. Damit ist das Wesen
+## von Anfang an zu Hause und laedt schnell; der Bauplatz bleibt frei fuer das, was es selbst baut.
+const HUT_FIELD := 7
+
+
+func _starter_hut(name: String) -> void:
+	var F := field_rect(name, HUT_FIELD)
+	var x0 := F.position.x * P + 10
+	var y0 := F.position.y * P + 10
+	var blocks: Array = []
+	for z in 3:
+		for x in range(x0, x0 + 12):
+			for y in range(y0, y0 + 12):
+				var edge := x == x0 or y == y0 or x == x0 + 11 or y == y0 + 11
+				if not edge:
+					continue
+				if y == y0 + 11 and x in [x0 + 5, x0 + 6] and z < 2:   # Tuer nach Sueden
+					continue
+				blocks.append([x, y, z, "glas" if z == 1 and (x == x0 or x == x0 + 11) and y in [y0 + 4, y0 + 7] else "holz"])
+	for x in range(x0, x0 + 12):
+		for y in range(y0, y0 + 12):
+			blocks.append([x, y, 3, "dach"])
+	blocks.append([x0 + 2, y0 + 2, 0, "bett"])
+	blocks.append([x0 + 9, y0 + 2, 0, "ladestation"])
+	blocks.append([x0 + 2, y0 + 8, 0, "tisch"])
+	blocks.append([x0 + 9, y0 + 8, 0, "lampe"])
+	for bl in blocks:
+		w.blocks[Vector3i(int(bl[0]), int(bl[1]), int(bl[2]))] = str(bl[3])
+	(estates[name].bauten as Array).append({"id": "S%d" % _next, "art": "huette", "feld": HUT_FIELD, "material": "holz", "blocks": [],
+		"placed": 0, "acc": 0.0, "status": "fertig"})
+	_next += 1
+	w.changed.emit()
 
 
 ## Blocklisten der Bauwerke ([x, y, z, material] in Blockkoordinaten).
@@ -410,7 +445,10 @@ func at_home(b: Dictionary) -> bool:
 	var e: Dictionary = estates.get(b.name, {})
 	if e.is_empty():
 		return false
-	return (e.bauten as Array).any(func(s): return s.status == "fertig" and s.art in ["burg", "festung", "schloss"]) and field_rect(b.name, 4).has_point(w.tile_of(b))
+	for s in e.bauten:
+		if s.status == "fertig" and s.art in ["burg", "festung", "schloss", "huette"] and field_rect(b.name, int(s.feld)).has_point(w.tile_of(b)):
+			return true
+	return false
 
 
 ## Nach Zerstoerung: Loecher in der Mauer werden begehbar.
@@ -466,6 +504,8 @@ func from_dict(d: Dictionary) -> void:
 	plans = d.get("plans", [])
 	for name in estates:
 		_open(rect_of(name))
+		if not (estates[name].bauten as Array).any(func(x): return x.art == "huette"):   # aeltere Stammsitze bekommen die Starthuette nachgeliefert
+			_starter_hut(name)
 		if not (estates[name].wall_tiles as Array).is_empty():
 			apply_walls(name)
 

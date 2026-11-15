@@ -852,6 +852,10 @@ func selected_position() -> Vector2:
 				return sim.vehicles[selected.id].pos
 		"avatar":
 			return sim.avatars[selected.id].pos
+		"being":   # Eko: das Wesen, das die Firma fuehrt
+			var eb: Dictionary = sim.eko.beings.get(str(selected.id), {})
+			if not eb.is_empty():
+				return eb.mover.pos
 		"worker":
 			var w: Worker = sim.personnel.workers.get(selected.id)
 			if w and not w.lost:

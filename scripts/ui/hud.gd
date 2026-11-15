@@ -466,8 +466,9 @@ func _update_mayor_card() -> void:
 func _card_action(kind: String, cid: int) -> void:
 	_close_entrepreneur()
 	match kind:
-		"Folgen":
-			session.follow({"kind": "avatar", "id": cid})
+		"Folgen":   # fuehrt ein Wesen die Firma, folgt die Kamera dem Wesen (es lebt auf seinem Stammsitz, nicht bei der Firmenfigur)
+			var being: String = sim.eko.firm_being(cid) if sim.eko != null else ""
+			session.follow({"kind": "being", "id": being} if being != "" else {"kind": "avatar", "id": cid})
 		"Betriebshof":
 			for p in sim.estate.plot_of(cid):
 				if int(p.parent) < 0:
