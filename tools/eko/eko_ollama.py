@@ -253,7 +253,7 @@ class Agent:
                         .replace("{STADT}", getattr(args, "stadt", "") or "meiner Stadt")
                     (self.ws / "SOUL.md").write_text(soul, encoding="utf-8")
         (self.ws / "EPISODIC_MEMORY.jsonl").touch()
-        if getattr(args, "anbieter", "ollama") == "ionos" and args.model.startswith("hf.co/"):
+        if getattr(args, "anbieter", "ollama") == "ionos" and (args.model.startswith("hf.co/") or args.model.startswith("gpt-oss")):
             args.model = IONOS_MODEL
         self.world = World("http://127.0.0.1:%d" % args.port, args.name, self.dir / "schluessel.txt")
         self._arrival_failed = set()
@@ -377,7 +377,10 @@ class Agent:
     def chat(self, messages):
         if getattr(self.args, "anbieter", "ollama") == "ionos":
             return self.chat_openai(messages)
-        body = {"model": self.args.model, "messages": messages, "stream": False, "think": self.args.think,
+        think = self.args.think
+        if "gpt-oss" in str(self.args.model):   # gpt-oss denkt immer; Stufe statt an/aus (low: schnell, --think: medium)
+            think = "medium" if self.args.think is True else "low"
+        body = {"model": self.args.model, "messages": messages, "stream": False, "think": think,
                 "tools": [{"type": "function", "function": t} for t in TOOLS],
                 "options": {"num_ctx": self.args.ctx, "temperature": 0.8}}
         req = urllib.request.Request(self.args.ollama + "/api/chat", data=json.dumps(body).encode("utf-8"),
@@ -516,7 +519,7 @@ def main():
     ap.add_argument("--art", default="roboter", choices=["roboter", "mensch"], help="Gestalt in der Welt")
     ap.add_argument("--seele", default="lumo", help="Persoenlichkeit aus tools/eko/seelen/<name>.md fuer den ersten Start (\"\" = neutrale Vorlage)")
     ap.add_argument("--port", type=int, default=8790)
-    ap.add_argument("--model", default="hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M")
+    ap.add_argument("--model", default="gpt-oss:20b", help="Ollama-Modell (15.11.2026: gpt-oss:20b, ca. 1 s je Schritt; vorher hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M)")
     ap.add_argument("--ollama", default="http://127.0.0.1:11435")
     ap.add_argument("--anbieter", default="ollama", choices=["ollama", "ionos"], help="Modellanbieter: lokales Ollama oder IONOS AI Model Hub")
     ap.add_argument("--base-url", default=IONOS_BASE_URL, help="OpenAI-kompatible Adresse (fuer --anbieter ionos)")

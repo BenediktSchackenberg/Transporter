@@ -51,7 +51,7 @@ def run_agent(info, args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=8790)
-    ap.add_argument("--model", default="hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M")
+    ap.add_argument("--model", default="gpt-oss:20b")
     ap.add_argument("--ollama", default="http://127.0.0.1:11435")
     ap.add_argument("--root", default=os.path.join(os.path.expanduser("~"), "PixelTransportRivals-Eko"))
     ap.add_argument("--ctx", type=int, default=16384)
