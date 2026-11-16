@@ -39,6 +39,7 @@ def run_agent(info, args):
     a.seele = info.get("seele", "") or ""
     a.firma = info.get("firma", "")
     a.stadt = info.get("stadt", "")
+    a.rolle = info.get("rolle", "")   # Gewicht in der Warteschlange am Modell (Buergermeister seltener)
     agent = eko_ollama.Agent(a)
     while True:   # wie eko_ollama.main: nichts beendet ein Wesen dauerhaft
         try:

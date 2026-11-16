@@ -32,7 +32,17 @@ Gleisen räumt die Bahn ab. Prüfskript `tests/probe_estate_conflicts.gd`, Zusta
 **Nächste Schritte (16.11.2026):** `/observe` enthält `naechste_schritte` (höchstens 3, nur Ausführbares): Fahrzeug kaufen, wenn die
 Firma keines hat und es bezahlen kann; nächstes bezahlbares Bauwerk für den Stammsitz (privat oder `zahlung: "firma"`, auch der
 Firmenname gilt); Ziel setzen bzw. Hinweis, wenn ein Ziel seit 3 Spieltagen nicht vorankommt. Nach drei Gesprächen in den letzten
-sechs Handlungen hängt jede weitere Gesprächsantwort den nächsten Schritt als `hinweis` an.
+sechs Handlungen hängt jede weitere Gesprächsantwort den nächsten Schritt als `hinweis` an. Ergänzt: Heimweg/Ausruhen zuerst bei
+Akku < 30 %, Nässe oder Kälte (auch als `hinweis` an Arbeitshandlungen); mit Fahrzeug: Fahrer einsetzen bzw. besten machbaren
+gesammelten Auftrag annehmen (`_fleet_step`).
+
+**Tempo mit lokalem Modell (16.11.2026, Qwen 27B):** Mit 8 Wesen kam jedes nur etwa einmal pro Minute dran (Aufrufe 2–19 s, eine
+Unternehmer-Beobachtung ~28.000 Zeichen). Deshalb:
+- `eko_ollama.compact_obs` kürzt die Beobachtung für das Modell (Unternehmer ~30.000 → ~16.000 Zeichen): Blöcke zusammengefasst,
+  Firma ohne Branchenkatalog/Bergbau/Hofbau, Listen gekürzt; `observe {voll: true}` liefert alles. Die Welt-API bleibt vollständig.
+- Gewichtete Warteschlange am Modell (`FairGate`, Stride-Verfahren): Unternehmer und freie Wesen Gewicht 2, Bürgermeister 1.
+- Amtshandlungen tolerant (`EkoWorld.normalize_office`): `priority` als Wort, Tippfehler bei `infra_ausbau.anlage`, kommunale
+  Einrichtungen bei `infra_ausbau` mit Hinweis auf `kommunal_bauen`, `kommunal_bauen.typ` als Name („Feuerwehr“ → FW-01).
 
 Von Hand (einzelnes Wesen, Claude Code):
 

@@ -14226,6 +14226,23 @@ func test_eko_next_steps() -> void:
 		V["inbox"] = int(V.get("inbox", 0)) + 1   # Antwort simulieren, damit die Wiederholungssperre nicht greift
 		last = E.input("Viktor", "Talk", {"to": "Mia", "text": "Hallo %d" % i})
 	ok(str(last.get("hinweis", "")).contains("Nächster sinnvoller Schritt"), "viel geredet: Hinweis auf den nächsten Schritt")
+	# Fahrzeug da: Fahrer einsetzen bzw. Auftrag annehmen statt nur einsammeln (Partie 16.11.: Viktor sammelte, nahm aber nichts an)
+	if cid >= 0 and not s.resources.available_offers().is_empty():
+		var of: Dictionary = s.resources.available_offers()[0]
+		s.add_vehicle(cid, of.model, float(of.price), s.city.building(of.dealer).road)
+		var fs := E._fleet_step(cid)
+		ok(fs.contains("assign_worker_task") or fs.contains("recruit_worker") or fs.contains("accept_contract") or fs.contains("collect_contracts"),
+			"Fahrzeug vorhanden: konkreter Flottenschritt (%s)" % fs.left(70))
+	# Amtshandlungen tolerant (Partie 16.11.: priority als Wort, "klaeanlage", "polizeiwache" bei infra_ausbau)
+	var a1 := {"action": "propose_project", "priority": "hoch"}
+	ok(EkoWorld.normalize_office(a1) == "" and int(a1.priority) == 4, "priority hoch -> 4")
+	var a2 := {"action": "infra_ausbau", "anlage": "klaeanlage"}
+	ok(EkoWorld.normalize_office(a2) == "" and a2.anlage == "klaeranlage", "Tippfehler klaeanlage erkannt")
+	var a3 := {"action": "infra_ausbau", "anlage": "Polizeiwache"}
+	ok(EkoWorld.normalize_office(a3).contains("kommunal_bauen"), "Polizeiwache: Hinweis auf kommunal_bauen (%s)" % EkoWorld.normalize_office(a3).left(60))
+	var a4 := {"action": "kommunal_bauen", "typ": "Feuerwehr"}
+	EkoWorld.normalize_office(a4)
+	ok(Municipal.TYPES.has(a4.typ), "kommunal_bauen typ Feuerwehr -> Kennung %s" % a4.typ)
 	# Akku schwach, nicht zu Hause: Heimweg steht vorn und haengt an Arbeitshandlungen (Partie 16.11.: Viktor arbeitete mit 14 % weiter)
 	V.mover.pos = s.city.tile_center(E.estates.rect_of("Viktor").position + Vector2i(-30, -30))
 	V.akku = 14.0

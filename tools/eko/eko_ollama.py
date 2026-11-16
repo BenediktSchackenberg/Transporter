@@ -90,23 +90,49 @@ def wiki_lookup(term):
 
 
 class FairGate:
-    """Faire Reihenfolge am lokalen Modellserver: Wesen im Schwarm (Threads) kommen der Reihe nach dran (Wartemarken)."""
+    """Gewichtete Reihenfolge am lokalen Modellserver (Stride-Verfahren): Unter den Wartenden kommt das Wesen mit der kleinsten
+    virtuellen Zeit dran; jeder Aufruf erhoeht sie um 1/Gewicht. Benedikt 16.11.2026: Unternehmer (Gewicht 2) kommen doppelt so oft
+    dran wie Buergermeister (Gewicht 1), deren Routine die Verwaltung nach Regeln miterledigt. Neue Wesen starten bei der kleinsten
+    vorhandenen Zeit (kein Vordraengeln, kein Verhungern)."""
     def __init__(self):
         self.cv = threading.Condition()
-        self.next_ticket = 0
-        self.serving = 0
+        self.busy = False
+        self.vt = {}
+        self.waiting = set()
 
-    def __enter__(self):
+    def slot(self, name, weight=1.0):
+        gate = self
+
+        class _Slot:
+            def __enter__(self):
+                gate.enter(name)
+
+            def __exit__(self, *exc):
+                gate.leave(name, weight)
+        return _Slot()
+
+    def enter(self, name):
         with self.cv:
-            me = self.next_ticket
-            self.next_ticket += 1
-            while me != self.serving:
+            if name not in self.vt:
+                self.vt[name] = min(self.vt.values(), default=0.0)
+            self.waiting.add(name)
+            while self.busy or name != min(self.waiting, key=lambda n: (self.vt[n], n)):
                 self.cv.wait()
+            self.waiting.discard(name)
+            self.busy = True
+
+    def leave(self, name, weight=1.0):
+        with self.cv:
+            self.vt[name] += 1.0 / max(0.1, float(weight))
+            self.busy = False
+            self.cv.notify_all()
+
+    # ohne Namen (aeltere Aufrufer): alle gleich gewichtet
+    def __enter__(self):
+        self.enter(threading.current_thread().name)
 
     def __exit__(self, *exc):
-        with self.cv:
-            self.serving += 1
-            self.cv.notify_all()
+        self.leave(threading.current_thread().name)
 
 
 MODEL_GATE = FairGate()
@@ -117,7 +143,8 @@ IONOS_PARALLEL = threading.Semaphore(4)   # gehostet: einige Wesen gleichzeitig,
 
 TOOLS = [
     {"name": "observe", "description": "Sieh dich um: wo du bist, was du trägst, Karte der Umgebung (21x21 Felder), Blöcke, "
-     "Gebäude, Bauhöfe, andere Wesen, deine letzten Ereignisse.", "parameters": {"type": "object", "properties": {}}},
+     "Gebäude, Bauhöfe, andere Wesen, deine letzten Ereignisse, naechste_schritte. Gekürzt; mit voll: true alles (Firmen-Branchen, Bergbau, Konkurrenz …).",
+     "parameters": {"type": "object", "properties": {"voll": {"type": "boolean"}}}},
     {"name": "act", "description": "Eine Handlung in der Welt. type: MoveTo {tile:[x,y]}, Stop {}, Pickup {material, count} am "
      "Bauhof oder Pickup {block:[x,y,z]} oder Pickup {job} (Kisten eines Botengangs abholen), Place {block:[x,y,z], material?}, "
      "Say {text}, Talk {to, text} (mit einer Figur oder einem Wesen in der Nähe reden, höchstens 3 Felder; Unternehmer antworten), "
@@ -294,15 +321,52 @@ def repair_tool_call(error_body):
     return None
 
 
-def compact_obs(o):
-    """Beobachtung fuer kleine Kontexte: Karte als Zeilen, Bloecke gekuerzt."""
-    if not isinstance(o, dict) or not o.get("ok", False):
+def compact_obs(o, full=False):
+    """Beobachtung fuer das lokale Modell kuerzen (16.11.2026: eine Unternehmer-Beobachtung hatte ~28.000 Zeichen, davon >50 %
+    Firmenballast; jeder Zug dauerte mit Qwen 27B 2-19 s). Die Welt liefert weiter alles; mit observe {voll: true} sieht das Wesen
+    die ungekuerzte Fassung. Gekuerzt: Bloecke (Zusammenfassung), Firmen-Nebenteile, Amtsdetails, bekannte Orte."""
+    if not isinstance(o, dict) or not o.get("ok", False) or full:
         return o
     o = dict(o)
     blocks = o.get("bloecke_in_der_naehe", [])
-    if len(blocks) > 60:
-        o["bloecke_in_der_naehe"] = blocks[:60]
-        o["bloecke_hinweis"] = "%d Blöcke in der Nähe, die ersten 60 gezeigt" % len(blocks)
+    if len(blocks) > 12:
+        mats = {}
+        for b in blocks:
+            m = b.get("material", "?") if isinstance(b, dict) else (b[3] if isinstance(b, list) and len(b) > 3 else "?")
+            mats[m] = mats.get(m, 0) + 1
+        o["bloecke_in_der_naehe"] = blocks[:12]
+        o["bloecke_hinweis"] = "%d Blöcke in der Nähe (%s), die nächsten 12 gezeigt" % (len(blocks), ", ".join("%s %d" % kv for kv in sorted(mats.items(), key=lambda kv: -kv[1])[:6]))
+    f = o.get("meine_firma")
+    if isinstance(f, dict) and f.get("firma"):
+        f = dict(f)
+        for k, n in (("markt", 3), ("fahrzeugangebote", 3), ("bewerber", 3), ("personal", 6), ("meine_auftraege", 5), ("chancen", 2), ("letzte_ergebnisse", 3)):
+            if isinstance(f.get(k), list):
+                f[k] = f[k][:n]
+        if isinstance(f.get("branchen_zum_gruenden"), list):
+            f["branchen_zum_gruenden"] = [b.get("branche") for b in f["branchen_zum_gruenden"] if isinstance(b, dict)]
+        if isinstance(f.get("bergbau"), list):
+            f["bergbau"] = "%d Lagerstätten – Details mit observe {voll: true}" % len(f["bergbau"]) if f["bergbau"] else []
+        if isinstance(f.get("konkurrenz"), dict):
+            k = f["konkurrenz"]
+            f["konkurrenz"] = {"rivalitaet": (k.get("rivalitaet") or [])[:2], "deine_verstoesse": k.get("deine_verstoesse", 0)}
+        f.pop("hofbau", None)
+        f.pop("unternehmensplan", None)
+        o["meine_firma"] = f
+    amt = o.get("mein_amt")
+    if isinstance(amt, dict) and amt:
+        amt = dict(amt)
+        for k in ("entwicklungsvorschlaege", "entscheidungen_zuletzt"):
+            if isinstance(amt.get(k), list):
+                amt[k] = amt[k][:3]
+        o["mein_amt"] = amt
+        o.pop("material_preise", None)   # Buergermeister bauen nicht selbst Block fuer Block
+        o.pop("quellen", None)
+    e = o.get("erkundung")
+    if isinstance(e, dict) and isinstance(e.get("bekannte_orte"), list) and len(e["bekannte_orte"]) > 8:
+        e = dict(e)
+        e["bekannte_orte"] = e["bekannte_orte"][-8:]
+        o["erkundung"] = e
+    o["hinweis_kurzfassung"] = "Gekürzte Lage. Alles ausführlich: observe {voll: true}."
     return o
 
 
@@ -351,7 +415,7 @@ class Agent:
     def call_tool(self, name, a):
         try:
             if name == "observe":
-                return compact_obs(self.world.observe())
+                return compact_obs(self.world.observe(), full=bool(a.get("voll", False)))
             if name == "act" and str(a.get("type", "")).lower() in ("observe", "beobachten"):   # Modelle rufen observe auch als Handlung auf
                 return compact_obs(self.world.observe())
             if name == "act":
@@ -482,7 +546,8 @@ class Agent:
             req = urllib.request.Request(self.args.ollama + "/api/chat", data=json.dumps(body).encode("utf-8"),
                                          headers={"Content-Type": "application/json"})
             try:
-                with MODEL_GATE, urllib.request.urlopen(req, timeout=600) as r:   # der Reihe nach, fair fuer alle Wesen
+                weight = 1.0 if getattr(self.args, "rolle", "") == "buergermeister" else 2.0
+                with MODEL_GATE.slot(self.args.name, weight), urllib.request.urlopen(req, timeout=600) as r:   # gewichtet: Unternehmer 2, Buergermeister 1
                     return json.loads(r.read().decode("utf-8"))["message"]
             except urllib.error.HTTPError as e:
                 full = e.read().decode("utf-8", "replace")

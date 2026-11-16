@@ -658,6 +658,10 @@ func next_steps(b: Dictionary) -> Array:
 			if not best.is_empty() and c.ledger.cash >= float(best.price):
 				out.append("Fahrzeug kaufen – ohne Fahrzeug verdient %s nichts: Firma {aktion: {action: \"buy_vehicle\", offer_id: \"%s\"}} (%s, %s; Firmenkasse %s). Angebots-IDs stehen in meine_firma.fahrzeugangebote, nicht bei anderen Unternehmern." % [
 					c.company_name, best.id, best.model, Catalog.money(float(best.price)), Catalog.money(c.ledger.cash)])
+		else:
+			var step := _fleet_step(cid)
+			if step != "":
+				out.append(step)
 	if int(b.get("amt", -1)) < 0:
 		var sug := estates.suggestion(str(b.name))
 		if not sug.is_empty():
@@ -680,6 +684,38 @@ func next_steps(b: Dictionary) -> Array:
 			out.append("Dein Ziel „%s“ steht seit %d Tagen bei %d %%. Melde Fortschritt (ZielStand), ändere den Weg oder ersetze es (Ziel {..., ersetzen: true})." % [
 				str(g.ziel).left(60), int(days), int(g.get("fortschritt", 0))])
 	return out.slice(0, 3)
+
+
+## Fahrzeug ohne Fahrer -> Fahrer einsetzen; Fahrzeug frei -> besten machbaren gesammelten Auftrag annehmen (Partie 16.11.: Viktor
+## sammelte zweimal 35 Auftraege, nahm aber keinen an). "" = nichts Dringendes.
+func _fleet_step(cid: int) -> String:
+	var c = sim.company(cid)
+	var now: float = sim.game_min
+	for v in sim.company_vehicles(cid):
+		if sim.driver_of(v) == null:
+			for w in sim.personnel.employed(cid):
+				if w.role != "foreman" and str(w.task_id) == "" and int(w.vehicle_id) < 0:
+					return "Fahrer einsetzen – Fahrzeug #%d steht ohne Fahrer: Firma {aktion: {action: \"assign_worker_task\", kind: \"fahren\", worker_id: \"%s\", vehicle_id: %d}}." % [v.id, w.id, v.id]
+			return "Fahrzeug #%d hat keinen Fahrer und niemand ist frei: Firma {aktion: {action: \"recruit_worker\", worker_id: <id aus meine_firma.bewerber>}}." % v.id
+	for v in sim.company_vehicles(cid):
+		if v.state != "idle" or not v.queue.is_empty() or str(v.contract_id) != "":
+			continue
+		var best = null
+		var best_s := -1.0
+		for k in sim.market.open_contracts():
+			if not c.known.has(k.id) or k.held_by_other(cid, now) or (k.exclusive_for >= 0 and k.exclusive_for != cid and k.exclusive_until > now):
+				continue
+			if sim.executor._too_late(cid, k, v.id) != "":
+				continue
+			var s := (float(k.reward) + float(k.bonus)) / float(k.distance + 30)
+			if s > best_s:
+				best_s = s
+				best = k
+		if best != null:
+			return "Auftrag annehmen – Fahrzeug #%d ist frei: Firma {aktion: {action: \"accept_contract\", contract_id: \"%s\", vehicle_id: %d}} (%s, %s, Frist %d min). Aufträge sind schnell weg." % [
+				v.id, best.id, v.id, str(best.cargo_name()), Catalog.money(float(best.reward)), int(best.deadline - now)]
+		return "Fahrzeug #%d ist frei, aber kein gesammelter Auftrag passt: Firma {aktion: {action: \"collect_contracts\"}}." % v.id
+	return ""
 
 
 func _set_goal(b: Dictionary, data: Dictionary) -> Dictionary:
@@ -1995,9 +2031,72 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Amt braucht aktion: {\"action\": eine von %s, ...}. Parameter siehe mein_amt.aktionen." % ", ".join(Mayor.SCHEMA.keys())}
 	if not a.has("reason"):
 		a["reason"] = "Entscheidung von %s" % b.name
+	var fix := normalize_office(a)
+	if fix != "":
+		return {"ok": false, "msg": fix}
 	var r: Dictionary = sim.towns.mayors[k].execute(a)
 	_event(b, "Amt: %s → %s" % [a.action, str(r.get("msg", "")).left(80)])
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", ""))}
+
+
+## Amtshandlungen tolerant lesen (Partie 16.11.: priority als Wort, anlage "klaeanlage" oder "polizeiwache" bei infra_ausbau).
+## Aendert a; Rueckgabe: Hinweis statt Ausfuehrung ("" = weiter).
+const PRIORITY_WORDS := {"niedrig": 1, "low": 1, "gering": 1, "mittel": 3, "normal": 3, "medium": 3, "hoch": 4, "high": 4,
+	"sehr hoch": 5, "dringend": 5, "kritisch": 5, "urgent": 5, "critical": 5}
+const INFRA_PLANTS := ["wasserwerk", "hochbehaelter", "klaeranlage", "gleis"]
+
+
+static func _plain(s: String) -> String:
+	return s.strip_edges().to_lower().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss").replace(" ", "").replace("-", "").replace("_", "")
+
+
+static func _best(word: String, options: Array, min_sim := 0.7) -> String:
+	var w := _plain(word)
+	var best := ""
+	var best_s := 0.0
+	for o in options:
+		var s := w.similarity(_plain(str(o)))
+		if w == _plain(str(o)) or (w.length() >= 4 and _plain(str(o)).begins_with(w)):
+			s = 1.0
+		if s > best_s:
+			best_s = s
+			best = str(o)
+	return best if best_s >= min_sim else ""
+
+
+static func _municipal_code(word: String) -> String:
+	var w := _plain(word)
+	for code in Municipal.TYPES:
+		var label := _plain(str(Municipal.TYPES[code].label))
+		var dienst := _plain(str(Municipal.TYPES[code].get("dienst", "")))
+		if w == _plain(code) or label.contains(w) or w.contains(dienst) and dienst != "" or w.similarity(label) >= 0.7:
+			return code
+	return ""
+
+
+static func normalize_office(a: Dictionary) -> String:
+	for key in ["priority"]:
+		if a.get(key) is String and not str(a[key]).is_valid_int():
+			var low := str(a[key]).strip_edges().to_lower()
+			a[key] = int(PRIORITY_WORDS.get(low, 3))
+	match str(a.get("action", "")):
+		"infra_ausbau":
+			var want := str(a.get("anlage", ""))
+			var hit := _best(want, INFRA_PLANTS)
+			if hit != "":
+				a["anlage"] = hit
+				return ""
+			var code := _municipal_code(want)
+			if code != "":
+				return "%s ist keine Versorgungsanlage (infra_ausbau: %s). Kommunale Einrichtungen baust du mit Amt {aktion: {action: \"kommunal_bauen\", typ: \"%s\"}} (%s)." % [
+					want, " | ".join(INFRA_PLANTS), code, str(Municipal.TYPES[code].label)]
+		"kommunal_bauen":
+			var t := str(a.get("typ", ""))
+			if not Municipal.TYPES.has(t):
+				var code := _municipal_code(t)
+				if code != "":
+					a["typ"] = code
+	return ""
 
 
 ## Kompakte Amtslage: Kennzahlen der Stadt bis etwa 6.000 Zeichen (groesste Teile zuletzt), Aktionen mit Parametern.
