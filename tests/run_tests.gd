@@ -14226,6 +14226,13 @@ func test_eko_next_steps() -> void:
 		V["inbox"] = int(V.get("inbox", 0)) + 1   # Antwort simulieren, damit die Wiederholungssperre nicht greift
 		last = E.input("Viktor", "Talk", {"to": "Mia", "text": "Hallo %d" % i})
 	ok(str(last.get("hinweis", "")).contains("Nächster sinnvoller Schritt"), "viel geredet: Hinweis auf den nächsten Schritt")
+	# Akku schwach, nicht zu Hause: Heimweg steht vorn und haengt an Arbeitshandlungen (Partie 16.11.: Viktor arbeitete mit 14 % weiter)
+	V.mover.pos = s.city.tile_center(E.estates.rect_of("Viktor").position + Vector2i(-30, -30))
+	V.akku = 14.0
+	ok(str(E.next_steps(V)[0]).begins_with("Nach Hause (Akku 14 %)"), "schwacher Akku: Heimweg zuerst (%s)" % str(E.next_steps(V)[0]).left(80))
+	ok(str(E.input("Viktor", "Inspect", {"target_id": "Mia"}).get("hinweis", "")).begins_with("Nach Hause"), "Arbeitshandlung bekommt den Heimweg als Hinweis")
+	V.mover.pos = s.city.tile_center(E.estates.field_rect("Viktor", EkoEstates.HUT_FIELD).get_center())
+	ok(str(E.next_steps(V)[0]).begins_with("Ausruhen"), "zu Hause: Ausruhen zuerst")
 
 
 func test_eko_estates() -> void:

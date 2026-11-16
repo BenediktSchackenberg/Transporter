@@ -481,6 +481,10 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		var steps := next_steps(b)
 		if not steps.is_empty():
 			r["hinweis"] = "Du redest gerade viel und handelst wenig. Nächster sinnvoller Schritt: " + str(steps[0])
+	if not r.has("hinweis") and type not in ["MoveTo", "Fahrt", "Rest", "Stop"] and float(b.get("akku", 100.0)) < HOME_AKKU:
+		var first: Array = next_steps(b)
+		if not first.is_empty() and (str(first[0]).begins_with("Nach Hause") or str(first[0]).begins_with("Ausruhen")):
+			r["hinweis"] = str(first[0])
 	changed.emit()
 	return r
 
@@ -629,8 +633,20 @@ func _building_dist(t: Vector2i, bd: Dictionary) -> int:
 const GOAL_STALE_DAYS := 3
 
 
+const HOME_AKKU := 30.0   # darunter (oder nass/kalt) steht der Heimweg an erster Stelle (Partie 16.11.: Viktor arbeitete mit 14 % Akku, nass und kalt weiter)
+
+
 func next_steps(b: Dictionary) -> Array:
 	var out: Array = []
+	var akku := float(b.get("akku", 100.0))
+	if float(b.get("rest_left", 0.0)) <= 0.0 and (akku < HOME_AKKU or float(b.get("nass", 0.0)) > 60.0 or float(b.get("kalt", 0.0)) > 60.0):
+		var why := "Akku %d %%" % int(akku) if akku < HOME_AKKU else ("du bist nass" if float(b.get("nass", 0.0)) > 60.0 else "dir ist kalt")
+		if is_home(b):
+			out.append("Ausruhen (%s): Rest – du bist zu Hause, dort lädst du schnell und wirst trocken und warm." % why)
+		else:
+			var hint := home_hint(b)
+			if hint != "":
+				out.append("Nach Hause (%s):%s Für weite Wege: Fahrt." % [why, hint])
 	var cid := active_firm(b)
 	if cid >= 0:
 		var c = sim.company(cid)
