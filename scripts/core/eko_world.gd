@@ -1635,7 +1635,11 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		b.geld = float(b.get("geld", 0.0)) + want
 		_event(b, "entnimmt %s aus %s" % [Catalog.money(want), c.company_name])
 		return {"ok": true, "msg": "%s privat entnommen. Du hast jetzt %s, die Firma %s." % [Catalog.money(want), Catalog.money(float(b.geld)), Catalog.money(c.ledger.cash)]}
+	# Wie eine Modellentscheidung behandeln: verkauftes Fahrzeugangebot durch gleichwertiges ersetzen, verschwundenen Auftrag ersetzen usw.
+	# (Partie 16.11.: Bodo scheiterte an "Angebot F12 ist bereits verkauft", weil das Wesen erst nach einigen Sekunden Denken kaufte.)
+	sim.executor.eko_call = true
 	var r: Dictionary = sim.executor.execute(cid, a, "", "api")
+	sim.executor.eko_call = false
 	_event(b, "Firma: %s → %s" % [a.action, str(r.get("msg", "")).left(80)])
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", "")), "pending": bool(r.get("pending", false))}
 

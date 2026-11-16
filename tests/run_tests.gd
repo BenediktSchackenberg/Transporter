@@ -14123,6 +14123,16 @@ func test_eko_play_fixes() -> void:
 	var cid: int = E.active_firm(V)
 	s.visit_completed.emit(cid, "collect_contracts", {"ok": true, "msg": "3 Auftraege eingesammelt"})
 	ok(str(V.events.back()).contains("3 Auftraege eingesammelt"), "Ergebnis vor Ort erreicht das Wesen")
+	# Verkauftes Fahrzeugangebot (Wesen dachte zu lange): gleichwertiges Ersatzangebot statt Fehlschlag (Partie 16.11., Bodo/F12)
+	var offers: Array = s.resources.available_offers()
+	if offers.size() >= 2:
+		offers.sort_custom(func(x, y): return float(x.price) < float(y.price))
+		var sold: Dictionary = offers[0]
+		sold.status = "verkauft"
+		var rb: Dictionary = E.input("Viktor", "Firma", {"aktion": {"action": "buy_vehicle", "offer_id": sold.id}})
+		ok(not str(rb.msg).contains("bereits verkauft") or str(rb.msg).contains("Frei sind"),
+			"verkauftes Angebot: Ersatz oder freie Angebote genannt (%s)" % str(rb.msg).left(90))
+		ok(not s.executor.eko_call, "Nachsicht-Schalter nach dem Aufruf wieder aus")
 	var ms: Array = E.adopt_mayors()
 	var firms: Array = E.office_obs(E.beings[ms[0]]).firmen
 	ok(firms.any(func(f): return int(f.firma) == cid and f.name == "Vik"), "Amtslage nennt Firmen mit ID")

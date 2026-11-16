@@ -12,6 +12,7 @@ Nur Standardbibliothek. Abbruch mit Strg+C; das Gedaechtnis bleibt im Arbeitsord
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import threading
@@ -231,6 +232,67 @@ class World:
         return self._req("POST", "/input", {"type": typ, "data": data or {}})
 
 
+TOOL_BY_KEYS = [({"type", "data"}, "act"), ({"name", "content"}, "write_file"), ({"entry"}, "append_memory"),
+                ({"begriff"}, "nachschlagen"), ({"art", "text"}, "learn"), ({"name"}, "read_file"), ({"bis"}, "wait"), ({"seconds"}, "wait")]
+
+
+def close_json(s):
+    """Offene Zeichenkette, haengendes Komma/Doppelpunkt und offene Klammern eines abgebrochenen JSON-Texts schliessen."""
+    stack, in_str, esc = [], False, False
+    for ch in s:
+        if in_str:
+            esc = (ch == "\\" and not esc)
+            if ch == '"' and not esc:
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]" and stack:
+            stack.pop()
+    if in_str:
+        s += '"'
+    s = s.rstrip()
+    if s.endswith(","):
+        s = s[:-1]
+    return s + "".join(reversed(stack))
+
+
+def repair_tool_call(error_body):
+    """Kaputten Werkzeugaufruf aus Ollamas Fehlertext retten (gpt-oss, 16.11.2026: fast immer fehlte nur die letzte Klammer
+    oder es stand ein leerer Schluessel ,\"\"} am Ende). Gibt eine Antwort im Format von /api/chat zurueck oder None."""
+    try:
+        msg = json.loads(error_body).get("error", "")
+    except ValueError:
+        return None
+    m = re.search(r"raw='(.*)', err=", msg, re.S)
+    if not m:
+        return None
+    raw = m.group(1).strip()
+    if "{" not in raw:   # nur Denktext ("We need to stop.") – nichts zu retten
+        return None
+    raw = raw[raw.index("{"):]   # Denktext vor dem Objekt abschneiden
+    args = None
+    for cut in range(0, 8):   # hinten Muell (", \" } Leerzeichen) schrittweise abschneiden, dann Klammern schliessen
+        cand = raw[:len(raw) - cut] if cut else raw
+        if cut and raw[len(raw) - cut] not in ',"} ':
+            break
+        try:
+            args = json.loads(close_json(cand))
+            break
+        except ValueError:
+            continue
+    if not isinstance(args, dict):
+        return None
+    if "type" in args and "data" not in args:   # {"type": "observe"} o. ae.: Handlung ohne Parameter
+        args["data"] = {}
+    for keys, name in TOOL_BY_KEYS:
+        if keys <= set(args):
+            return {"content": "", "tool_calls": [{"function": {"name": name, "arguments": args}}]}
+    return None
+
+
 def compact_obs(o):
     """Beobachtung fuer kleine Kontexte: Karte als Zeilen, Bloecke gekuerzt."""
     if not isinstance(o, dict) or not o.get("ok", False):
@@ -422,11 +484,16 @@ class Agent:
                 with MODEL_GATE, urllib.request.urlopen(req, timeout=600) as r:   # der Reihe nach, fair fuer alle Wesen
                     return json.loads(r.read().decode("utf-8"))["message"]
             except urllib.error.HTTPError as e:
-                last = e.read().decode("utf-8", "replace")[:300]
+                full = e.read().decode("utf-8", "replace")
+                last = full[:300]
                 if e.code != 500:
                     raise RuntimeError("Ollama HTTP %d: %s" % (e.code, last))
-                self.log.write(time.strftime("%H:%M:%S ") + "Ollama 500 (Versuch %d, Temperatur %.1f): %s\n" % (attempt + 1, temp, last))
+                fixed = repair_tool_call(full)
+                self.log.write(time.strftime("%H:%M:%S ") + "Ollama 500 (Versuch %d, Temperatur %.1f%s): %s\n"
+                               % (attempt + 1, temp, ", repariert" if fixed else "", last))
                 self.log.flush()
+                if fixed:   # Aufruf war bis auf Klammern/Kommas vollstaendig: ausfuehren statt neu rechnen (16.11.: 381 Fehler)
+                    return fixed
         raise ModelGlitch("Ollama 500 nach 3 Versuchen: %s" % last)
 
     def chat_openai(self, messages):

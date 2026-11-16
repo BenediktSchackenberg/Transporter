@@ -143,8 +143,10 @@ var _cur_origin := "api"
 
 ## Aktion aus einer Modellantwort (Herkunft api mit Ausfuehrungsschluessel)? Nur dann greifen die Ersatzregeln fuer verschwundene
 ## Auftraege und verkaufte Fahrzeugangebote - direkte Aufrufe (Oberflaeche, Tests) bekommen die ehrliche Ablehnung.
+var eko_call := false   # Aufruf eines freien Wesens (EkoWorld, ohne Schluessel): gleiche Nachsicht wie bei Modellentscheidungen
+
 func _from_model() -> bool:
-	return _cur_origin == "api" and _cur_key != ""
+	return _cur_origin == "api" and (_cur_key != "" or eko_call)
 
 
 func setup(simulation) -> void:
@@ -603,11 +605,11 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			if offer.status != "verfügbar" and _from_model():
 				var alt := _substitute_offer(offer)
 				if alt.is_empty():
-					return {"ok": false, "msg": "Angebot %s ist bereits verkauft (kein gleichwertiges Ersatzangebot)." % offer.id}
+					return {"ok": false, "msg": "Angebot %s ist bereits verkauft (kein gleichwertiges Ersatzangebot).%s" % [offer.id, _free_offers_hint()]}
 				swapped = " (Ersatz für verkauftes %s)" % offer.id
 				offer = alt
 			if offer.status != "verfügbar":
-				return {"ok": false, "msg": "Angebot %s ist bereits verkauft." % offer.id}
+				return {"ok": false, "msg": "Angebot %s ist bereits verkauft.%s" % [offer.id, _free_offers_hint()]}
 			var spec := Catalog.model(offer.model)
 			if c.vehicle_ids.size() >= c.fleet_limit():
 				return {"ok": false, "msg": "Alle %d Stellplätze belegt – Stellplätze/Halle bauen (place_building) oder Depot anmieten.%s" % [c.fleet_limit(), _yard_hint(cid)]}
@@ -1266,6 +1268,15 @@ func complete_visit(cid: int, pending: Dictionary) -> void:
 
 ## Gewaehltes Fahrzeugangebot ist schon verkauft (mehrere Spieler wollten dasselbe): gleiches Modell zum hoechstens 25 % hoeheren Preis,
 ## sonst ein Modell mit mindestens gleicher Kapazitaet und Eignung (Kuehlung, schwer) im selben Preisrahmen; das guenstigste.
+## Die drei guenstigsten freien Fahrzeugangebote als Hinweis (statt nur "verkauft" ohne Ausweg).
+func _free_offers_hint() -> String:
+	var free: Array = sim.resources.available_offers().duplicate()
+	if free.is_empty():
+		return " Gerade ist kein Fahrzeugangebot frei."
+	free.sort_custom(func(x, y): return float(x.price) < float(y.price))
+	return " Frei sind: " + ", ".join(free.slice(0, 3).map(func(o): return "%s %s (%s)" % [o.id, o.model, Catalog.money(float(o.price))])) + "."
+
+
 func _substitute_offer(sold: Dictionary) -> Dictionary:
 	var want := Catalog.model(str(sold.model))
 	var best := {}
