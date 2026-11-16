@@ -10,6 +10,19 @@ Stand 15.11.2026. Idee nach „Is this machine playing?“ (MIT, machineplaying.
 
 ## Starten
 
+**Standard seit 16.11.2026:** Das Startmenü hat oben „KI-Steuerung“ mit der Voreinstellung **Freie Wesen (Eko-Modus)**. Eine neue Partie
+oder ein geladener Spielstand läuft dann komplett über die Wesen: Jeder Unternehmer und jeder Bürgermeister ist ein Wesen, das Spiel
+öffnet die Weltschnittstelle und startet den Wesen-Schwarm (`tools/eko/eko_schwarm.py`) in einer eigenen Konsole selbst; beim Verlassen
+der Partie wird er beendet. „Wesen denken mit“ wählt Ollama lokal (gpt-oss:20b) oder IONOS (Qwen 27B, Schlüssel aus `IONOS_API_TOKEN`).
+Claude-Disponent und Regel-Rivalendialoge sind in diesem Modus aus; die Spieler-Anbieter unten im Menü gelten nur für „Klassisch“.
+Es läuft immer nur ein Schwarm je Welt (Sperre über Port 9790): ein zweiter Start – von Hand, über den Welt-Wächter oder nach einem
+Neustart der Welt – beendet sich selbst. `--ohne-schwarm` verhindert den automatischen Start (z. B. für Claude Code je Wesen).
+
+Dauerbetrieb mit Neustart nach Absturz: `powershell -ExecutionPolicy Bypass -File tools\eko\welt_waechter.ps1` (lädt den letzten
+Spielstand, Schwarm startet automatisch mit).
+
+Von Hand (einzelnes Wesen, Claude Code):
+
 ```powershell
 # 1. Spiel mit Weltschnittstelle starten (lauscht nur auf 127.0.0.1:8790)
 Godot_v4.4.1-stable_win64.exe --path . -- --eko            # oder --eko-port=8791
@@ -124,7 +137,6 @@ die behoben sind: Abbauen ließ Blöcke schweben, Gehen war bei langsamen Bilder
 ## Grenzen und nächste Schritte
 
 - Blöcke versperren keine Wege (Wesen und Fahrzeuge gehen hindurch).
-- Keine Verbindung zur Wirtschaft: Material kostet nichts, Wesen haben kein Geld und keine Bedürfnisse.
 - Kein Bild aus der Sicht des Wesens (`/observe/image` wie bei Clawblox fehlt).
 - Kosten: Ein Dauerlauf mit Claude Code verbraucht laufend Kontingent des Claude-Kontos (mit Ollama nicht).
 - Bürgermeister und Bürger lassen sich noch nicht ansprechen; Unternehmer antworten mit festem Satzbau aus ihrem Zustand, nicht frei.

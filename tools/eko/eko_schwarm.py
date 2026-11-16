@@ -13,6 +13,7 @@ Abbruch mit Strg+C; jedes Gedaechtnis bleibt im Arbeitsordner seines Wesens.
 import argparse
 import json
 import os
+import socket
 import sys
 import threading
 import time
@@ -65,6 +66,15 @@ def main():
     args = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    # Nur ein Schwarm je Welt: das Spiel startet ihn selbst (Startmenue "Freie Wesen"), der Welt-Waechter oder man von Hand.
+    # Ein zweiter wuerde jedes Wesen doppelt steuern; die Sperre ist ein lokaler Port, den das Betriebssystem beim Ende freigibt.
+    lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        lock.bind(("127.0.0.1", args.port + 1000))
+    except OSError:
+        print("Eko-Schwarm läuft schon für diese Welt – dieser Start wird beendet.", flush=True)
+        time.sleep(3)
+        return
     base = "http://127.0.0.1:%d" % args.port
     skip = {x.strip() for x in args.ohne.split(",") if x.strip()}
     running = {}

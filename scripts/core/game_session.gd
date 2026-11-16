@@ -429,7 +429,11 @@ func _on_logged(e: Dictionary) -> void:
 ## (optional --eko-port=8790) gestartet wurde. Agenten starten mit tools/eko/start_eko.ps1.
 func _start_eko_server() -> void:
 	var port := int(cfg.get("eko_port", 8790))
-	var on := bool(cfg.get("eko", false))
+	var on := bool(cfg.get("eko", false)) or bool(cfg.get("eko_spieler", false))   # Startmenue "Freie Wesen" setzt beides
+	if bool(cfg.get("eko_folgen", false)):
+		city_view.eko_view.follow = true
+		call_deferred("_eko_collapse_center")
+	var swarm := bool(cfg.get("eko_spieler", false))
 	for a in OS.get_cmdline_user_args():
 		if str(a) == "--eko":
 			on = true
@@ -444,7 +448,10 @@ func _start_eko_server() -> void:
 			duration_seconds = 0.0
 		elif str(a) == "--eko-spieler":   # alle Startfirmen und Buergermeister werden von Wesen gefuehrt
 			on = true
+			swarm = true
 			cfg["eko_spieler"] = true
+		elif str(a) == "--ohne-schwarm":   # Wesen-Agenten nicht selbst starten (z. B. Claude Code je Wesen per start_eko.ps1)
+			cfg["eko_schwarm"] = false
 		elif str(a) == "--eko-folgen":   # Zuschauen: Kamera folgt dem ersten Wesen, KI-Zentrale eingeklappt
 			on = true
 			city_view.eko_view.follow = true
@@ -467,6 +474,28 @@ func _start_eko_server() -> void:
 		tf.close()
 	if ws.setup(sim.eko, port):
 		sim.log_event("Eko-Modus: Weltschnittstelle auf http://127.0.0.1:%d – Agent mit tools/eko/start_eko.ps1 starten." % port, "system")
+		if swarm and bool(cfg.get("eko_schwarm", true)):
+			_launch_swarm(port)
+
+
+## Wesen-Schwarm (tools/eko/eko_schwarm.py) mit dem Spiel starten, damit eine Partie mit freien Wesen ohne zweite Konsole laeuft.
+## Laeuft schon einer (von Hand, Welt-Waechter), beendet sich der neue selbst (Port-Sperre im Schwarm). Nicht in Tests/headless.
+var _swarm_pid := -1
+func _launch_swarm(port: int) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var script := ProjectSettings.globalize_path("res://tools/eko/eko_schwarm.py")
+	if not FileAccess.file_exists(script):
+		sim.log_event("Eko-Schwarm nicht gefunden (%s) – Wesen bitte von Hand starten." % script, "bad")
+		return
+	var args := [script, "--port", str(port), "--anbieter", str(cfg.get("eko_anbieter", "ollama"))]
+	if str(cfg.get("eko_modell", "")) != "":
+		args += ["--model", str(cfg.eko_modell)]
+	_swarm_pid = OS.create_process("python", args, true)   # eigene Konsole: dort sieht man, was die Wesen denken
+	if _swarm_pid < 0:
+		sim.log_event("Eko-Schwarm ließ sich nicht starten (python nicht gefunden?) – python tools/eko/eko_schwarm.py von Hand starten.", "bad")
+	else:
+		sim.log_event("Eko-Schwarm gestartet: die Wesen melden sich in einigen Sekunden an.", "system")
 
 
 ## Startfirmen und Buergermeister an Wesen uebergeben: Firmen-Controller nur noch Tagesbetrieb (Anbieter eko),
@@ -769,6 +798,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Beim Verlassen laufende KI-Anfragen abbrechen, damit keine Antwort mehr auf die alte Partie trifft.
 func _exit_tree() -> void:
+	if _swarm_pid > 0:   # Schwarm gehoert zu dieser Partie; Gedaechtnisse bleiben in den Arbeitsordnern der Wesen
+		OS.kill(_swarm_pid)
+		_swarm_pid = -1
 	for ctl in controllers:
 		ctl.active = false
 		if is_instance_valid(ctl.adapter):

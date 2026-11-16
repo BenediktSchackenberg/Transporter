@@ -3647,6 +3647,13 @@ func test_provider_choice() -> void:
 		and cfg.players[1].api_key == "TEST_KEY_REMOTE", "Externe API behält eigene URL, Modell und Key")
 	ok(SetupMenu.validate(cfg) == "", "gemischte Anbieter-Konfiguration gültig")
 	ok(cfg.mayor.provider == "demo", "Bürgermeister standardmäßig regelbasiert")
+	ok(cfg.eko and cfg.eko_spieler and cfg.eko_anbieter == "ollama" and cfg.eko_folgen, "Standard: freie Wesen führen Firmen und Ämter")
+	ok(cfg.dispatcher.provider == "demo" and cfg.talk.provider == "demo" and not cfg.rivalry_talk,
+		"freie Wesen: kein Claude-Disponent, keine Regel-Dialoge neben den Wesen")
+	menu.ki_opt.select(1)
+	var classic := menu.collect()
+	ok(not classic.eko_spieler and classic.rivalry_talk and not classic.has("eko_anbieter"), "Klassisch: Anbieter je Spieler wie bisher")
+	menu.ki_opt.select(0)
 	SetupMenu.setup_path = saved_path
 	menu.mayor_opt.select(1)
 	ok(menu.collect().mayor.provider == "global", "Bürgermeister-Zugang im Startmenü wählbar")

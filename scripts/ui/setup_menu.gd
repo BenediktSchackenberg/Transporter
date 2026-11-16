@@ -26,6 +26,9 @@ var dispatch_opt: OptionButton
 var talk_opt: OptionButton
 var profile_opt: OptionButton
 var world_opt: OptionButton
+var ki_opt: OptionButton          # 0 = freie Wesen (Eko-Modus, Standard), 1 = klassisch (Anbieter je Spieler)
+var eko_brain_opt: OptionButton   # womit die Wesen denken
+const EKO_BRAINS := [["ollama", "gpt-oss:20b", "Ollama lokal · gpt-oss:20b"], ["ionos", "", "IONOS · Qwen 27B (Umgebungsvariable IONOS_API_TOKEN)"]]
 const WORLDS := ["region", "kueste", "stadt"]   # Auftrag 17: neue Partien standardmaessig als Region mehrerer Staedte
 const WORLDS_LABEL := ["Region (je Spieler eine Stadt)", "Küstenort", "Rasterstadt"]
 var town_label: Label
@@ -56,6 +59,21 @@ func _ready() -> void:
 	var title := UITheme.label("PIXEL TRANSPORT RIVALS", 32, UITheme.ACCENT)
 	root.add_child(title)
 	root.add_child(UITheme.label("Partie einrichten – bis zu vier autonome KI-Unternehmer bauen Speditionen auf. Du schaust zu.", 16, UITheme.MUTED))
+	var ki := HBoxContainer.new()
+	ki.add_theme_constant_override("separation", 12)
+	root.add_child(ki)
+	ki.add_child(UITheme.label("KI-Steuerung:", 16, UITheme.ACCENT))
+	ki_opt = OptionButton.new()
+	for t in ["Freie Wesen (Eko-Modus): Unternehmer und Bürgermeister handeln selbst in der Welt", "Klassisch: Anbieter und Modell je Spieler (unten)"]:
+		ki_opt.add_item(t)
+	ki_opt.tooltip_text = "Freie Wesen: Jeder Unternehmer und jeder Bürgermeister ist ein Wesen mit Seele und Gedächtnis, das über die Weltschnittstelle geht, spricht, baut und entscheidet. Das Spiel startet dafür den Wesen-Schwarm (tools/eko/eko_schwarm.py) selbst. Anbieter, Bürgermeister-, Disponenten- und Dialog-Einstellungen unten gelten dann nicht."
+	ki.add_child(ki_opt)
+	ki.add_child(UITheme.label("Wesen denken mit:"))
+	eko_brain_opt = OptionButton.new()
+	for b in EKO_BRAINS:
+		eko_brain_opt.add_item(b[2])
+	ki.add_child(eko_brain_opt)
+	ki_opt.item_selected.connect(func(i): eko_brain_opt.disabled = i != 0)
 	# Globale Einstellungen
 	var g := HBoxContainer.new()
 	g.add_theme_constant_override("separation", 12)
@@ -316,10 +334,29 @@ func collect() -> Dictionary:
 			"max_tokens": int(r.max_tokens.value), "max_tokens_per_request": int(r.tokens_per_request.value),
 			"fallback": r.fallback.button_pressed, "strategy": r.strategy.text.strip_edges(),
 			"timeout": 300.0 if provider == "ollama" else 45.0, "num_ctx": OLLAMA_CTX})
-	return {"seed": seed_edit.text.to_int(), "duration_min": DURATIONS[duration_opt.selected],
+	var cfg := {"seed": seed_edit.text.to_int(), "duration_min": DURATIONS[duration_opt.selected],
 		"speed_idx": speed_opt.selected, "demo_fault_rate": fault_spin.value, "carry_memory": carry_check.button_pressed,
 		"mayor": _mayor_config(), "dispatcher": {"provider": "anthropic" if dispatch_opt.selected == 1 else "demo"}, "talk": {"provider": "anthropic" if talk_opt.selected == 1 else "demo"}, "rivalry_talk": talk_opt.selected != 2, "start_profil": "spedition" if profile_opt.selected == 1 else "unternehmer", "welt": WORLDS[world_opt.selected], "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
 		"players": players}
+	return with_eko(cfg, ki_opt.selected == 0, eko_brain_opt.selected)
+
+
+## Freie Wesen (Eko-Modus): alles laeuft ueber die Wesen. Claude-Disponent und Regel-Rivalendialoge sind aus, weil sie sonst neben den
+## Wesen fuer deren Firmen entscheiden bzw. sprechen wuerden; die Wesen reden selbst (Talk). Die Spieler-Anbieter bleiben gespeichert
+## (fuer "Klassisch"), werden aber nicht benutzt: die Sitzung stellt die Firmen auf Anbieter "eko" um.
+static func with_eko(cfg: Dictionary, eko: bool, brain: int) -> Dictionary:
+	cfg["eko"] = eko
+	cfg["eko_spieler"] = eko
+	if not eko:
+		return cfg
+	var b: Array = EKO_BRAINS[clampi(brain, 0, EKO_BRAINS.size() - 1)]
+	cfg["eko_anbieter"] = b[0]
+	cfg["eko_modell"] = b[1]
+	cfg["eko_folgen"] = true
+	cfg["dispatcher"] = {"provider": "demo"}
+	cfg["talk"] = {"provider": "demo"}
+	cfg["rivalry_talk"] = false
+	return cfg
 
 
 ## Gemeinsame Kontextgroesse aller Ollama-Agenten (Spieler und Buergermeister): Ollama laedt ein Modell neu, sobald eine Anfrage
@@ -374,6 +411,9 @@ func _apply_config(cfg: Dictionary, keep_seed: bool = false) -> void:
 	_update_town_name()
 	talk_opt.select(2 if not bool(cfg.get("rivalry_talk", true)) else (1 if str(cfg.get("talk", {}).get("provider", "demo")) == "anthropic" else 0))
 	mayor_opt.select({"global": 1, "anthropic": 2, "ollama": 3}.get(str(_mayor_extra.get("provider", "demo")), 0))
+	ki_opt.select(0 if bool(cfg.get("eko_spieler", true)) else 1)   # ohne Angabe (alte Einstellungen): freie Wesen
+	eko_brain_opt.select(maxi(0, EKO_BRAINS.map(func(b): return b[0]).find(str(cfg.get("eko_anbieter", "ollama")))))
+	eko_brain_opt.disabled = ki_opt.selected != 0
 	for r in rows:
 		r.enabled.button_pressed = false
 	for p in cfg.get("players", []):
@@ -408,7 +448,7 @@ func _on_start() -> void:
 		return
 	# Erst alle externen Zugänge prüfen; bei einem Fehler keine Tresoreinträge ändern.
 	for p in cfg.players:
-		if p.provider in ["demo", "ollama"]:
+		if p.provider in ["demo", "ollama"] or bool(cfg.get("eko_spieler", false)):   # freie Wesen brauchen keine Spieler-Schluessel
 			continue
 		var slot := "slot%d" % p.slot
 		if p.api_key == "" and p.save_key:
@@ -451,7 +491,7 @@ static func validate(cfg: Dictionary) -> String:
 			return "%s: Externe API nur über HTTPS verbinden." % p.player_name
 	if int(cfg.duration_min) not in DURATIONS:
 		return "Ungültige Partiedauer."
-	if (str(cfg.get("mayor", {}).get("provider", "")) == "anthropic" or str(cfg.get("dispatcher", {}).get("provider", "")) == "anthropic" or str(cfg.get("talk", {}).get("provider", "")) == "anthropic") and AnthropicAdapter.mayor_key() == "":
+	if not bool(cfg.get("eko_spieler", false)) and (str(cfg.get("mayor", {}).get("provider", "")) == "anthropic" or str(cfg.get("dispatcher", {}).get("provider", "")) == "anthropic" or str(cfg.get("talk", {}).get("provider", "")) == "anthropic") and AnthropicAdapter.mayor_key() == "":
 		return "Claude (Bürgermeister/Disponent): Es ist kein Schlüssel hinterlegt (Umgebungsvariable ANTHROPIC_API_KEY setzen und das Spiel neu starten)."
 	return ""
 
