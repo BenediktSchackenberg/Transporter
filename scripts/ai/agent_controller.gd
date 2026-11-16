@@ -23,7 +23,19 @@ var api_log: ApiLog
 var active := false               # false = pausiert (keine neuen Anfragen, Antworten werden zurueckgestellt)
 var remaining_real_min := 0.0
 var memory_note := ""
-var goal := ""                    # selbst formuliertes Ziel des Spielers (aus der Antwort)
+var _goal := ""
+## Selbst formuliertes Ziel des Spielers (aus der Antwort). Firma eines freien Wesens (Eko): das Ziel des Wesens – die Anzeige las
+## sonst das leere Controller-Feld ("noch keines formuliert", Partie 16.11.: Greta hatte laengst ein Ziel).
+var goal: String:
+	get:
+		if str(config.get("provider", "")) == "eko" and sim != null and sim.eko != null:
+			var n: String = sim.eko.firm_being(cid)
+			var z: Dictionary = sim.eko.beings.get(n, {}).get("ziel", {}) if n != "" else {}
+			if str(z.get("ziel", "")) != "":
+				return "%s (%d %%, %s)" % [str(z.ziel), int(z.get("fortschritt", 0)), str(z.get("status", "aktiv"))]
+		return _goal
+	set(v):
+		_goal = v
 var passive_streak := 0           # Entscheidungen in Folge ohne wirksame Aktion
 var summaries: Array = []         # [{t, text, source}]
 var stats := {"requests": 0, "ok": 0, "errors": 0, "invalid": 0, "tokens": 0, "actions_ok": 0, "actions_rejected": 0}
@@ -738,7 +750,7 @@ Weitere Aktionen stehen in verfuegbare_aktionen und der Spielengine bereit. Antw
 
 
 func to_dict() -> Dictionary:
-	return {"memory_note": memory_note, "summaries": summaries, "stats": stats, "next_req": _next_req, "goal": goal,
+	return {"memory_note": memory_note, "summaries": summaries, "stats": stats, "next_req": _next_req, "goal": _goal,
 		"passive_streak": passive_streak}
 
 

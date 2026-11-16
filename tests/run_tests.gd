@@ -14204,6 +14204,16 @@ func test_eko_next_steps() -> void:
 		ok(E.next_steps(V).any(func(x): return str(x).contains("buy_vehicle")) or s.company(cid).ledger.cash < 1000.0, "Firma ohne Fahrzeug: Kauf vorgeschlagen")
 		ok(E.estates.pays_firm(V, {"zahlung": s.company(cid).company_name}) and E.estates.pays_firm(V, {"zahlung": "Firma"}), "Firmenname als Zahlung erkannt")
 	ok(E.input("Viktor", "Ziel", {"ziel": "Flotte aufbauen", "warum": "Umsatz"}).ok, "Ziel gesetzt")
+	if cid >= 0:   # Anzeige (Firmenkarte, KI-Zentrale) liest ctl.goal: bei Eko-Firmen das Ziel des Wesens
+		var ctl := AgentController.new()
+		ctl.sim = s
+		ctl.cid = cid
+		ctl.config = {"provider": "eko"}
+		ok(ctl.goal.begins_with("Flotte aufbauen"), "Anzeige zeigt das Ziel des Wesens (%s)" % ctl.goal)
+		ctl.config = {"provider": "demo"}
+		ctl.goal = "eigenes"
+		ok(ctl.goal == "eigenes", "ohne Eko bleibt das Controller-Ziel")
+		ctl.free()
 	s.game_min += GameCalendar.days_to_min(4)
 	ok(E.next_steps(V).any(func(x): return str(x).contains("steht seit")), "Ziel ohne Fortschritt nach 4 Tagen gemeldet")
 	E.input("Viktor", "ZielStand", {"fortschritt": 20})
