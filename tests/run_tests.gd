@@ -13203,6 +13203,16 @@ func test_eko_world() -> void:
 	ok(str(E.beings.Mia.events.back()).contains("Lumo sagt zu dir") and E.observe("Mia").gehoert.any(func(m): return m.von == "Lumo"), "Mia hat es gehoert")
 	var call: Dictionary = E.input("Lumo", "Talk", {"to": "Eko", "text": "Hallo?"})
 	ok(call.ok and str(call.msg).contains("angerufen") and str(E.beings.Eko.events.back()).contains("ruft dich an"), "zu weit weg: Anruf statt Gespraech")
+	var inbox_eko := int(E.observe("Eko").du.nachrichten)
+	var again: Dictionary = E.input("Lumo", "Talk", {"to": "Eko", "text": "Hallo? Hörst du mich?"})
+	ok(not again.ok and str(again.msg).contains("bis: \"antwort\"") and int(E.observe("Eko").du.nachrichten) == inbox_eko,
+		"unbeantwortete Frage nicht wiederholen (Hinweis auf wait bis=antwort)")
+	ok(E.input("Eko", "talk", {"to": "Lumo", "text": "Ja, ich höre dich."}).ok, "Handlungsname ohne Grossschreibung angenommen")
+	ok(E.input("Lumo", "Talk", {"to": "Eko", "text": "Schön!"}).ok, "nach der Antwort darf weitergeredet werden")
+	ok(EkoWorld.canonical_type("mein_amt") == "Amt" and EkoWorld.canonical_type("MOVETO") == "MoveTo" and EkoWorld.canonical_type("Fliegen") == "Fliegen",
+		"Ersatznamen für Handlungen")
+	ok(EkoWorld.parse_tile("331,257") == [331, 257] and EkoWorld.parse_tile({"x": 3, "y": 4}) == [3, 4] and EkoWorld.parse_tile("[5, 6]") == [5, 6]
+		and EkoWorld.parse_tile("Rathaus") == null, "Feldangaben als Text oder Objekt")
 	E.beings.Lumo.mover.pos = s.city.tile_center(E.tile_of(E.beings.Lumo) + Vector2i(40, 40))
 	var far_pick: Dictionary = E.input("Lumo", "Pickup", {"material": "stein"})
 	ok(not far_pick.ok and str(far_pick.msg).contains("Feld") and str(far_pick.msg).contains("Felder entfernt"), "fern vom Bauhof: Meldung nennt Lage und Entfernung")

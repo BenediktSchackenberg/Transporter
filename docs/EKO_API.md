@@ -32,7 +32,7 @@ Andere Figuren (Firmen, Bürger, Bürgermeister) leben dort ihr eigenes Leben. D
 | `Pickup` | `{"block": [x, y, z]}` | einen gesetzten Block wieder aufnehmen (nur, wenn nichts darauf liegt) |
 | `Place` | `{"block": [x, y, z], "material"?: "holz"}` | einen getragenen Block setzen (höchstens 2 Felder entfernt) |
 | `Say` | `{"text": "..."}` | etwas sagen (erscheint als Sprechblase) |
-| `Talk` | `{"to": "Greta", "text": "..."}` | mit einer Figur oder einem Wesen in der Nähe reden (höchstens 3 Felder). Unternehmer antworten sofort; Wesen hören es und können antworten |
+| `Talk` | `{"to": "Greta", "text": "..."}` | mit einer Figur oder einem Wesen in der Nähe reden (höchstens 3 Felder). Unternehmer antworten sofort; Wesen hören es und können antworten. Weiter weg wird angerufen. Dieselbe Person erneut ansprechen geht erst nach ihrer Antwort (oder nach 90 s); `du.nachrichten` zählt, wie oft man selbst angesprochen wurde |
 | `AcceptJob` | `{"job": "J3"}` | Arbeit einer Firma aus `jobangebote` annehmen (eine zur Zeit) |
 | `Pickup` | `{"job": "J3"}` | bei einem Botengang die Kisten am Abholort aufnehmen (höchstens 2 Felder entfernt) |
 | `Deliver` | `{"job": "J3"}` | Auftrag abliefern: Kisten am Ziel abgeben bzw. Mauer im Bereich fertig – die Firma zahlt den Lohn |

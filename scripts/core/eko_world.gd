@@ -25,6 +25,7 @@ const VIEW_RADIUS := 10             # Kartenausschnitt in Feldern um das Wesen
 const SIDES := [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 1, 0), Vector3i(0, -1, 0)]
 const TALK_REACH := 3               # Felder: so nah muss man fuer ein Gespraech sein
 const HEAR_RADIUS := 12             # Felder: Gesagtes in diesem Umkreis wird gehoert
+const TALK_REPEAT_MS := 90000       # so lange sperrt eine unbeantwortete Ansprache dieselbe Person (Echtzeit)
 const ARTEN := ["mensch", "roboter"]
 ## Selbstbau (15.11.2026): Material und Einrichtung kauft das Wesen am Bauhof (Preis je Block, Geld an T0 "Bauhof");
 ## fuer einen angenommenen Mauer-Auftrag stellt die Firma das Material. Einrichtung wird wie Bloecke gesetzt.
@@ -330,12 +331,32 @@ func _restore_savings(b: Dictionary) -> void:
 
 
 # ------------------------------------------------------------------ Handlungen
+const ACTIONS := ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Bauwerk", "Tor", "Bauplan", "Fahrt",
+	"AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ziel", "ZielStand", "Merke", "Ablauf"]
+## Namen, unter denen Modelle eine Handlung aufrufen (Partie 16.11.: Buergermeisterin rief "mein_amt" statt "Amt" auf – so heisst ihre Lage).
+const ACTION_ALIASES := {"mein_amt": "Amt", "office": "Amt", "amt_aktion": "Amt", "meine_firma": "Firma", "company": "Firma", "firm": "Firma",
+	"move": "MoveTo", "goto": "MoveTo", "gehe": "MoveTo", "sprich": "Talk", "sage": "Say", "anrufen": "Talk", "call": "Talk"}
+
+
+## Handlungsname tolerant lesen: Gross-/Kleinschreibung egal, bekannte Ersatznamen; Unbekanntes bleibt unveraendert (Fehlermeldung).
+static func canonical_type(type: String) -> String:
+	var t := type.strip_edges()
+	var low := t.to_lower()
+	if ACTION_ALIASES.has(low):
+		return ACTION_ALIASES[low]
+	for a in ACTIONS:
+		if a.to_lower() == low:
+			return a
+	return t
+
+
 func input(name: String, type: String, data: Dictionary, from_plan := false) -> Dictionary:
 	var b: Dictionary = beings.get(name, {})
 	if b.is_empty():
 		return {"ok": false, "msg": "Unbekanntes Wesen. Erst POST /join."}
 	last_active = name
 	b.last_act = Time.get_ticks_msec()
+	type = canonical_type(type)
 	if arms.is_out(b) and type not in ["Inspect"]:
 		return {"ok": false, "status": "gescheitert", "msg": arms.out_msg(b)}
 	if not from_plan and type in ["MoveTo", "Stop", "Pickup", "Place", "Ablauf"] and not (b.get("ablauf", []) as Array).is_empty():
@@ -343,8 +364,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		_event(b, "bricht den laufenden Ablauf ab")
 	var warum := str(data.get("warum", "")).left(160)
 	if type == "MoveTo" and not from_plan and not (b.mover as Mover).arrived():
-		var t0 = data.get("tile", data.get("feld"))
-		if t0 is Array and t0.size() >= 2 and Vector2i(int(t0[0]), int(t0[1])) == (b.mover as Mover).goal:
+		var t0 = parse_tile(data.get("tile", data.get("feld")))
+		if t0 != null and Vector2i(int(t0[0]), int(t0[1])) == (b.mover as Mover).goal:
 			return {"ok": true, "status": "laeuft", "msg": "Du bist bereits unterwegs zu diesem Ziel."}
 	if type == "Ablauf":
 		var rp := _start_plan(b, data)
@@ -410,7 +431,7 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		"Merke":
 			r = _lesson(b, data)
 		_:
-			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: MoveTo, Stop, Pickup, Place, Say, Talk, Inspect, Attack, Give, Bauwerk, Tor, Bauplan, Fahrt, AcceptJob, Deliver, BuyPlot, OrderHouse, Rest, FoundCompany, Firma, MoveIn, Amt, Ziel, ZielStand, Merke, Ablauf." % type}
+			r = {"ok": false, "msg": "Unbekannte Handlung %s. Erlaubt: %s." % [type, ", ".join(ACTIONS)]}
 	if not bool(r.ok):
 		_event(b, "Fehlschlag %s: %s" % [type, r.msg])
 	if not r.has("status"):   # angenommen != abgeschlossen: Bewegung laeuft, bis du.unterwegs false ist
@@ -663,9 +684,22 @@ func _ride(b: Dictionary, data: Dictionary) -> Dictionary:
 		Catalog.money(cost), "" if end == to else "; Ziel nicht erreichbar, nächster Punkt"]}
 
 
+## Feldangabe tolerant lesen: [x, y], "x,y" / "x y" oder {x, y} (Partie 16.11.: MoveTo mit target_id "331,257" scheiterte).
+static func parse_tile(t) -> Variant:
+	if t is Array and t.size() >= 2:
+		return [int(t[0]), int(t[1])]
+	if t is Dictionary and t.has("x") and t.has("y"):
+		return [int(t.x), int(t.y)]
+	if t is String:
+		var parts := (t as String).replace("[", "").replace("]", "").replace(";", ",").replace(" ", ",").split(",", false)
+		if parts.size() >= 2 and parts[0].is_valid_int() and parts[1].is_valid_int():
+			return [int(parts[0]), int(parts[1])]
+	return null
+
+
 func _move_to(b: Dictionary, data: Dictionary) -> Dictionary:
-	var t = data.get("tile", data.get("feld"))
-	if not (t is Array) or t.size() < 2:
+	var t = parse_tile(data.get("tile", data.get("feld", data.get("target_id", data.get("ziel")))))
+	if t == null:
 		return {"ok": false, "msg": "MoveTo braucht tile: [x, y] (Feldkoordinaten)."}
 	var to := Vector2i(int(t[0]), int(t[1]))
 	if not sim.city.inside(to):
@@ -824,10 +858,18 @@ func _talk(b: Dictionary, to: String, text: String) -> Dictionary:
 	if to == "" or text == "":
 		return {"ok": false, "msg": "Talk braucht to (Name aus figuren_in_der_naehe oder andere_wesen) und text."}
 	var t := tile_of(b)
+	if beings.has(to) and to != b.name:
+		# Gleiche Person erneut, bevor sie geantwortet hat (Partie 16.11.: dieselbe Preisfrage dreimal in 25 s, das andere Wesen denkt noch)
+		var last: Dictionary = b.get("talk_last", {})
+		if str(last.get("to", "")) == to and int(last.get("inbox", -1)) == int(b.get("inbox", 0)) \
+				and Time.get_ticks_msec() - int(last.get("ms", 0)) < TALK_REPEAT_MS:
+			return {"ok": false, "msg": "Du hast %s gerade schon angesprochen, %s hat noch nicht geantwortet. Warte auf die Antwort (wait mit bis: \"antwort\") oder tu inzwischen etwas anderes." % [to, to]}
+		b["talk_last"] = {"to": to, "ms": Time.get_ticks_msec(), "inbox": int(b.get("inbox", 0))}
 	b.say = text
 	b.say_left = SAY_SECONDS
 	if beings.has(to) and to != b.name:
 		var o: Dictionary = beings[to]
+		o["inbox"] = int(o.get("inbox", 0)) + 1   # Zaehler fuer wait bis=antwort und die Wiederholungssperre
 		if _dist(t, tile_of(o)) > TALK_REACH:   # zu weit fuer ein Gespraech: Anruf (Partie 15.11.: 44 gescheiterte Gespraeche)
 			_chat(b.name, to, "(Anruf) " + text, t)
 			_event(o, "%s ruft dich an: %s" % [b.name, text])
@@ -947,7 +989,7 @@ func observe(name: String) -> Dictionary:
 		src.append(s)
 	return {"ok": true,
 		"du": {"name": name, "feld": [t.x, t.y], "unterwegs": not m.arrived(), "ziel": [m.goal.x, m.goal.y] if not m.arrived() else null,
-			"traegt": b.held, "tragkraft": CARRY, "am_bauhof": _at_source(b)},
+			"traegt": b.held, "tragkraft": CARRY, "am_bauhof": _at_source(b), "nachrichten": int(b.get("inbox", 0))},
 		"zeit": Catalog.game_minutes_to_text(sim.game_min), "wetter": sim.wx.headline(),
 		"karte": {"mitte": [t.x, t.y], "radius": VIEW_RADIUS, "zeilen": rows,
 			"legende": "@ du, . freier Boden, = Strasse, # Gebaeude, ~ Wasser, h begehbarer Hang/Hochebene am Berg, ^ unbegehbar (Baum, Fels, Grat), 1-9/+ hoechste Blockschicht auf dem Feld"},

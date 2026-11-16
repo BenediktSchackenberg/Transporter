@@ -147,9 +147,9 @@ TOOLS = [
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12], \"warum\": \"Hafen erkunden\"}. "
                   "warum (kurz) ist bei jeder Handlung erlaubt und wird im Spiel angezeigt. Die Antwort hat status: laeuft, abgeschlossen, gescheitert oder doppelt."}},
          "required": ["type", "data"]}},
-    {"name": "wait", "description": "Warte einige Sekunden – oder mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist "
-     "(höchstens 90 s, ohne dass du dazwischen nachdenken musst). Danach bekommst du deine Lage.",
-     "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}, "bis": {"type": "string", "enum": ["ankunft"]}}}},
+    {"name": "wait", "description": "Warte einige Sekunden – mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist, oder mit "
+     "bis: \"antwort\", bis dich jemand anspricht oder anruft (höchstens 90 s, ohne dass du dazwischen nachdenken musst). Danach bekommst du deine Lage.",
+     "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}, "bis": {"type": "string", "enum": ["ankunft", "antwort"]}}}},
     {"name": "nachschlagen", "description": "Einen Begriff in der Wikipedia nachschlagen (z. B. Baustile wie Fachwerkhaus, Jugendstil, "
      "Burg, Bauhaus, oder Wissen über Handel, Rohstoffe, Verteidigung) und dir Ideen holen. Liefert den Anfang des Artikels als Text.",
      "parameters": {"type": "object", "properties": {"begriff": {"type": "string"}}, "required": ["begriff"]}},
@@ -315,6 +315,21 @@ class Agent:
                     arrived = isinstance(o, dict) and not o.get("du", {}).get("unterwegs", False)
                     return {"ok": arrived, "status": "abgeschlossen" if arrived else "laeuft", "gewartet_s": round(time.time() - t0),
                             "msg": "angekommen" if arrived else "noch unterwegs", "lage": o}
+                if a.get("bis") == "antwort":   # bis jemand dich anspricht (Zaehler du.nachrichten der Welt), ohne Modellaufruf
+                    def inbox():
+                        o = self.world.observe()
+                        return o.get("du", {}).get("nachrichten", 0) if isinstance(o, dict) and o.get("ok") else None
+                    t0, n0 = time.time(), inbox()
+                    got = False
+                    while n0 is not None and time.time() - t0 < ARRIVAL_MAX_S:
+                        time.sleep(2.0)
+                        n = inbox()
+                        if n is None or n > n0:
+                            got = n is not None
+                            break
+                    return {"ok": got, "status": "abgeschlossen" if got else "laeuft", "gewartet_s": round(time.time() - t0),
+                            "msg": "jemand hat dir geantwortet (siehe gehoert/ereignisse)" if got else "noch keine Antwort – tu etwas anderes",
+                            "lage": compact_obs(self.world.observe())}
                 s = max(0.5, min(20.0, float(a.get("seconds", 3))))
                 time.sleep(s)
                 return {"ok": True, "gewartet_s": s}
