@@ -43,6 +43,54 @@ func rect_of(name: String) -> Rect2i:
 	return Rect2i(int(e.rect[0]), int(e.rect[1]), SIDE, SIDE)
 
 
+## Zahlt die Firma? zahlung "firma" oder der eigene Firmenname (Partie 16.11.: Bodo schrieb zahlung "Bodo & Söhne").
+func pays_firm(b: Dictionary, data: Dictionary) -> bool:
+	var cid: int = w.active_firm(b)
+	if cid < 0:
+		return false
+	var z := str(data.get("zahlung", "")).strip_edges().to_lower()
+	return z in ["firma", "company", "unternehmen"] or (z != "" and z == str(_sim().company(cid).company_name).to_lower())
+
+
+## Ausbau-Vorschlag fuer den Stammsitz (naechste_schritte): erstes noch fehlendes Bauwerk in sinnvoller Reihenfolge mit Preis.
+## Rueckgabe {art, feld, kosten} oder {} (alles gebaut). Preise je Stammsitz und Art zwischengespeichert (Vorlagen haben Tausende Bloecke).
+const SUGGEST := [["mauer", 0], ["turm", 0], ["schloss", 4], ["garten", 3], ["turm", 2], ["garten", 5]]
+var _cost_cache := {}
+
+
+func suggestion(name: String) -> Dictionary:
+	if not estates.has(name):
+		return {}
+	var e: Dictionary = estates[name]
+	var has_main := (e.bauten as Array).any(func(x): return int(x.feld) == 4 and x.art != "huette")
+	for s in SUGGEST:
+		var art: String = s[0]
+		var f: int = s[1]
+		if (e.bauten as Array).any(func(x): return x.art == art and (int(x.feld) == f or art in ["mauer", "zaun"])):
+			continue
+		if art == "mauer" and (e.bauten as Array).any(func(x): return x.art == "zaun"):
+			continue
+		if f == 4 and has_main:
+			continue
+		var key := "%s/%s/%d" % [name, art, f]
+		if not _cost_cache.has(key):
+			var mat: String = {"mauer": "stein", "schloss": "stein", "turm": "stein", "garten": "boden"}[art]
+			var c := 0.0
+			for bl in _template(name, art, f, mat, 4 if art == "mauer" else 2):
+				c += float(EkoWorld.PRICES.get(str(bl[3]), 3.0)) + LABOR
+			_cost_cache[key] = snappedf(c, 1.0)
+		return {"art": art, "feld": f, "kosten": float(_cost_cache[key])}
+	return {}
+
+
+## Liegt das Feld in einem Stammsitz oder direkt daneben (Rand von einem Feld fuer Mauer und Zaun)?
+func covers(q: Vector2i) -> bool:
+	for e in estates.values():
+		if q.x >= int(e.rect[0]) - 1 and q.y >= int(e.rect[1]) - 1 and q.x <= int(e.rect[0]) + SIDE and q.y <= int(e.rect[1]) + SIDE:
+			return true
+	return false
+
+
 func field_rect(name: String, f: int) -> Rect2i:
 	var r := rect_of(name)
 	return Rect2i(r.position.x + (f % 3) * FIELD, r.position.y + (f / 3) * FIELD, FIELD, FIELD)
@@ -118,14 +166,22 @@ var last_failure := {}
 
 func _block_reason(r: Rect2i, busy: PackedByteArray, hills_ok: int = 0) -> String:
 	var C = _sim().city
-	var cnt := {"parzelle": 0, "wasser": 0, "gebaeude": 0, "strasse": 0, "berg": 0}
-	for y in range(r.position.y, r.end.y):
-		for x in range(r.position.x, r.end.x):
-			var i: int = C.idx(Vector2i(x, y))
+	var cnt := {"parzelle": 0, "wasser": 0, "gebaeude": 0, "strasse": 0, "gleis": 0, "trasse": 0, "berg": 0}
+	var S = _sim()
+	for y in range(r.position.y - 1, r.end.y + 1):   # mit Rand: Mauer und Zaun nicht direkt an Strasse oder Gleis
+		for x in range(r.position.x - 1, r.end.x + 1):
+			var q := Vector2i(x, y)
+			if not C.inside(q):
+				continue
+			var i: int = C.idx(q)
+			if C.is_road(q): cnt.strasse += 1
+			if C.ground[i] == CityData.G.RAIL or (S.rail != null and S.rail.is_rail(q)): cnt.gleis += 1
+			if S.access != null and S.access.reserved(q): cnt.trasse += 1
+			if not r.has_point(q):
+				continue
 			if busy[i] == 1: cnt.parzelle += 1
 			if C.ground[i] == CityData.G.WATER: cnt.wasser += 1
 			if C.building_at[i] >= 0: cnt.gebaeude += 1
-			if C.is_road(Vector2i(x, y)): cnt.strasse += 1
 			if not C.height.is_empty() and C.height[i] > 0: cnt.berg += 1
 	for k in cnt:
 		if int(cnt[k]) > (hills_ok if k == "berg" else 0):
@@ -186,7 +242,7 @@ func order(b: Dictionary, data: Dictionary) -> Dictionary:
 	for bl in blocks:
 		cost += float(EkoWorld.PRICES.get(str(bl[3]), 3.0)) + LABOR
 	cost = snappedf(cost, 1.0)
-	var from_firm: bool = str(data.get("zahlung", "")) == "firma" and w.active_firm(b) >= 0
+	var from_firm: bool = pays_firm(b, data)
 	if from_firm:
 		var c = _sim().company(w.active_firm(b))
 		if c.ledger.cash < cost:
@@ -386,11 +442,18 @@ func _finish(name: String, s: Dictionary) -> void:
 ## Mauerkacheln sperren (nur solange dort noch Mauer steht), Tor nach Zustand.
 func apply_walls(name: String) -> void:
 	var e: Dictionary = estates[name]
-	for t in e.wall_tiles:
+	var N = _sim().nav
+	for t in e.wall_tiles:   # Mauer und Zaun sperren Fussgaenger und Fahrzeuge (Benedikt 16.11.: "nicht mit dem Auto durchfahren")
 		var c := Vector2i(int(t[0]), int(t[1]))
-		_sim().nav.walk.set_point_solid(c, _has_wall(c))
-	for t in e.gate:
-		_sim().nav.walk.set_point_solid(Vector2i(int(t[0]), int(t[1])), not bool(e.tor_offen))
+		var wall := _has_wall(c)
+		N.walk.set_point_solid(c, wall)
+		if N.road.is_in_boundsv(c) and (wall or _sim().city.is_road(c)):
+			N.road.set_point_solid(c, wall)   # Loch in der Mauer: Strasse dort wieder frei
+	for t in e.gate:   # durchs offene Tor duerfen auch Fahrzeuge (falls dort eine Strasse ist)
+		var g := Vector2i(int(t[0]), int(t[1]))
+		N.walk.set_point_solid(g, not bool(e.tor_offen))
+		if N.road.is_in_boundsv(g) and _sim().city.is_road(g):
+			N.road.set_point_solid(g, not bool(e.tor_offen))
 
 
 func _has_wall(c: Vector2i) -> bool:
@@ -568,7 +631,7 @@ func build_plan(b: Dictionary, data: Dictionary) -> Dictionary:
 	if blocks.is_empty() or blocks.size() > PLAN_MAX_BLOCKS:
 		return {"ok": false, "msg": "Ein Plan hat 1-%d Blöcke (deiner: %d)." % [PLAN_MAX_BLOCKS, blocks.size()]}
 	cost = snappedf(cost, 1.0)
-	if str(data.get("zahlung", "")) == "firma" and w.active_firm(b) >= 0:
+	if pays_firm(b, data):
 		var c = _sim().company(w.active_firm(b))
 		if c.ledger.cash < cost:
 			return {"ok": false, "msg": "Der Bau kostet %s, die Firmenkasse hat %s." % [Catalog.money(cost), Catalog.money(c.ledger.cash)]}

@@ -182,6 +182,8 @@ func _passable(q: Vector2i, allow_water: bool, start: bool) -> bool:
 		return false
 	if city.building_at[i] >= 0:
 		return false
+	if sim.eko != null and sim.eko.protected(q):   # Stammsitz oder Bauten freier Wesen: Zufahrt fuehrt darum herum (16.11.2026)
+		return false
 	if city.ground[i] == CityData.G.WATER:
 		return allow_water and not start and not sim.bridges.is_sea(q)
 	return true

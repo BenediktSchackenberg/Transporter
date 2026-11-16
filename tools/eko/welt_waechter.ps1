@@ -9,15 +9,20 @@ param(
     [string]$Projekt = (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\..")).Path,
     [switch]$NeuePartie,           # ohne Spielstand starten (neue Partie mit Wesen, neuer Zufalls-Seed)
     [int]$StartHaeuser = -1,       # neue Partie: hoechstens so viele Wohnhaeuser je Startort (die Orte wachsen dann selbst)
-    [int]$TagSekunden = -1         # neue Partie: Laenge eines Spieltags in Sim-Sekunden (Standard 60; Eko empfohlen 600)
+    [int]$TagSekunden = -1,        # neue Partie: Laenge eines Spieltags in Sim-Sekunden (Standard 60; Eko empfohlen 600)
+    [int]$Tempo = 2,               # neue Partie: Spielgeschwindigkeit 1/2/4/8/16 (Autotest-Standard waere 16 – zu schnell fuer denkende Wesen)
+    [string]$Modell = "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M",   # Modell der Wesen (Ollama); Benedikt 16.11.: Qwen 27B lokal
+    [int]$Ctx = 0                  # Kontextfenster der Wesen (0 = Standard des Schwarms)
 )
 $ErrorActionPreference = "Continue"
 $logs = Join-Path $env:USERPROFILE "PixelTransportRivals-Eko\welt"
 New-Item -ItemType Directory -Force $logs | Out-Null
-$args0 = @("--path", $Projekt, "--", "--autotest", "--eko-spieler", "--eko-endlos", "--eko-folgen")
+$eko = @("--eko-spieler", "--eko-endlos", "--eko-folgen", "--eko-modell=$Modell")
+if ($Ctx -gt 0) { $eko += "--eko-ctx=$Ctx" }
+$args0 = @("--path", $Projekt, "--", "--autotest", "--speed=$Tempo") + $eko
 if ($StartHaeuser -ge 0) { $args0 += "--start-haeuser=$StartHaeuser" }
 if ($TagSekunden -gt 0) { $args0 += "--tag-sekunden=$TagSekunden" }
-if (-not $NeuePartie) { $args0 = @("--path", $Projekt, "--", "--autotest", "--load", "--eko-spieler", "--eko-endlos", "--eko-folgen") }
+if (-not $NeuePartie) { $args0 = @("--path", $Projekt, "--", "--autotest", "--load") + $eko }
 $runs = 0
 while ($true) {
     $runs++
@@ -34,6 +39,6 @@ while ($true) {
     } else {
         Write-Host "[$ende] Welt beendet (Code $($p.ExitCode)). Neustart in 5 s, Strg+C zum Beenden." -ForegroundColor Gray
     }
-    $args0 = @("--path", $Projekt, "--", "--autotest", "--load", "--eko-spieler", "--eko-endlos", "--eko-folgen")   # danach immer aus dem Spielstand
+    $args0 = @("--path", $Projekt, "--", "--autotest", "--load") + $eko   # danach immer aus dem Spielstand
     Start-Sleep -Seconds 5
 }

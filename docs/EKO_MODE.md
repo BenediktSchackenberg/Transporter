@@ -19,7 +19,20 @@ Es läuft immer nur ein Schwarm je Welt (Sperre über Port 9790): ein zweiter St
 Neustart der Welt – beendet sich selbst. `--ohne-schwarm` verhindert den automatischen Start (z. B. für Claude Code je Wesen).
 
 Dauerbetrieb mit Neustart nach Absturz: `powershell -ExecutionPolicy Bypass -File tools\eko\welt_waechter.ps1` (lädt den letzten
-Spielstand, Schwarm startet automatisch mit).
+Spielstand, Schwarm startet automatisch mit). Neue Partie: `-NeuePartie -TagSekunden 600` (Tempo Standard 2x; der Autotest-Standard
+16x war für denkende Wesen viel zu schnell: ein Spieltag in 37 s). `-Modell` (Standard Qwen 27B lokal, `hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M`),
+`-Ctx` für das Kontextfenster.
+
+**Stammsitze und Verkehrswege (16.11.2026):** Stammsitze (mit einem Feld Rand) und Felder mit Blöcken der Wesen sind geschützt
+(`EkoWorld.protected`): Autobahn, Verbindungsstraßen, Zufahrten und Bahn planen darum herum, Blöcke dürfen nicht auf Gleise oder
+geplante Trassen. Mauer und Zaun sperren Fußgänger und Fahrzeuge (offenes Tor lässt durch). Ältere Spielstände: eine fertige Straße
+oder Autobahn durch einen Stammsitz wird beim Laden zurückgebaut und umfahren (`RegionalProjects.repair_protected`), Blöcke auf
+Gleisen räumt die Bahn ab. Prüfskript `tests/probe_estate_conflicts.gd`, Zustand der Wesen `tests/probe_beings.gd`.
+
+**Nächste Schritte (16.11.2026):** `/observe` enthält `naechste_schritte` (höchstens 3, nur Ausführbares): Fahrzeug kaufen, wenn die
+Firma keines hat und es bezahlen kann; nächstes bezahlbares Bauwerk für den Stammsitz (privat oder `zahlung: "firma"`, auch der
+Firmenname gilt); Ziel setzen bzw. Hinweis, wenn ein Ziel seit 3 Spieltagen nicht vorankommt. Nach drei Gesprächen in den letzten
+sechs Handlungen hängt jede weitere Gesprächsantwort den nächsten Schritt als `hinweis` an.
 
 Von Hand (einzelnes Wesen, Claude Code):
 

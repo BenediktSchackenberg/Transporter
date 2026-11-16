@@ -33,6 +33,8 @@ func _initialize() -> void:
 	test_names.append("test_eko_destruction")
 	test_names.append("test_eko_play_fixes")
 	test_names.append("test_eko_estates")
+	test_names.append("test_eko_estates_vs_traffic")
+	test_names.append("test_eko_next_steps")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
@@ -14140,6 +14142,82 @@ func test_eko_play_fixes() -> void:
 
 ## Stammsitz (15.11.2026): feste Startposition je KI-Spieler (3 x 3 Felder, Mitte Bauplatz), Bauwerke aus Bloecken, Mauer mit Tor
 ## als echtes Hindernis, Schutz drinnen, Einreissen schafft eine Luecke, Turm, Zuhause im Schloss, Speichern, Geldbilanz.
+## Stammsitze gegen Verkehrswege (Benedikt 16.11.2026): Autobahn plant um Stammsitze herum, eine alte Autobahn durch einen Stammsitz
+## bekommt beim Laden eine Umfahrung, Mauern sperren Fahrzeuge, Bloecke nicht auf Gleise.
+func test_eko_estates_vs_traffic() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.auto_estates = true
+	E.join("Viktor")
+	var R: Rect2i = E.estates.rect_of("Viktor")
+	ok(E.protected(R.get_center()) and E.protected(R.position - Vector2i(1, 1)) and not E.protected(R.position - Vector2i(2, 2)),
+		"Stammsitz mit einem Feld Rand geschuetzt")
+	var hw := s.regional.plan_highway()
+	ok(hw.ok and not hw.cells.any(func(c): return E.protected(Vector2i(int(c[0]), int(c[1])))), "Autobahnplanung führt um den Stammsitz herum")
+	# alte, fertige Strasse quer durch den Stammsitz (Spielstand vor dem 16.11.)
+	var y := R.get_center().y
+	var cells: Array = []
+	for x in range(R.position.x - 6, R.end.x + 6):
+		if s.city.g(Vector2i(x, y)) != CityData.G.ROAD:
+			cells.append([x, y])
+	s.regional.items["R99"] = {"id": "R99", "kind": "verbindung", "status": "fertig", "from": 0, "to": 1, "cells": cells}
+	s.access._apply_cells(cells.map(func(c): return Vector2i(int(c[0]), int(c[1]))))
+	ok(s.city.is_road(R.get_center()), "Ausgangslage: Straße durch den Stammsitz")
+	ok(s.regional.repair_protected() >= 1, "Abschnitt umgelegt")
+	var fixed: Array = s.regional.items.R99.cells.map(func(c): return Vector2i(int(c[0]), int(c[1])))
+	ok(not fixed.any(func(q): return E.protected(q)) and not s.city.is_road(R.get_center()), "keine Straße mehr im Stammsitz")
+	var a := Vector2i(R.position.x - 6, y)
+	var b := Vector2i(R.end.x + 5, y)
+	ok(s.city.is_road(a) and s.city.is_road(b) and not s.nav.road_path(a, b).is_empty(), "Umfahrung verbindet beide Enden")
+	# Mauer sperrt Fahrzeuge, Bloecke nicht auf Gleise
+	var wt := Vector2i(R.position.x, R.position.y + 2)
+	E.blocks[Vector3i(wt.x * EkoWorld.PER_TILE, wt.y * EkoWorld.PER_TILE, 0)] = "stein"
+	E.estates.estates.Viktor.wall_tiles = [[wt.x, wt.y]]
+	E.estates.apply_walls("Viktor")
+	ok(s.nav.road.is_point_solid(wt) and s.nav.walk.is_point_solid(wt), "Mauer sperrt Fußgänger und Fahrzeuge")
+	s.rail.ensure()
+	var rail_cell = s.rail.cells.keys()[0] if not s.rail.cells.is_empty() else null
+	if rail_cell != null:
+		ok(E.can_place(Vector3i(rail_cell.x * EkoWorld.PER_TILE, rail_cell.y * EkoWorld.PER_TILE, 0)).contains("Gleis"), "kein Block auf ein Gleis")
+		ok(not s.rail.cells.keys().any(func(q): return E.estates.covers(q)), "Bahnstrecke meidet den Stammsitz")
+
+
+## Naechste Schritte (Partie 16.11.: kein Fahrzeug, kein Ausbau, Ziele bei 0 %, Gerede ueber ein erfundenes Angebot).
+func test_eko_next_steps() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.auto_estates = true
+	E.join("Viktor")
+	var V: Dictionary = E.beings.Viktor
+	ok(E.observe("Viktor").has("naechste_schritte"), "Beobachtung nennt naechste_schritte")
+	var st: Array = E.next_steps(V)
+	ok(st.any(func(x): return str(x).contains("Ziel {")), "ohne Ziel: Ziel setzen vorgeschlagen")
+	s.economy.transfer("X0", "Y0", 150000.0)
+	V.geld = 150000.0
+	st = E.next_steps(V)
+	ok(st.any(func(x): return str(x).contains("Bauwerk {art: \"mauer\"")), "genug Privatgeld: Mauer als erster Ausbau vorgeschlagen")
+	var rm: Dictionary = E.input("Viktor", "Bauwerk", {"art": "mauer"})
+	ok(rm.ok and E.next_steps(V).any(func(x): return str(x).contains("\"turm\"")), "nach der Mauer: Turm vorgeschlagen")
+	E.input("Viktor", "FoundCompany", {"name": "Vik"})
+	var cid := E.active_firm(V)
+	if cid >= 0 and s.company(cid).vehicle_ids.is_empty() and not s.resources.available_offers().is_empty():
+		ok(E.next_steps(V).any(func(x): return str(x).contains("buy_vehicle")) or s.company(cid).ledger.cash < 1000.0, "Firma ohne Fahrzeug: Kauf vorgeschlagen")
+		ok(E.estates.pays_firm(V, {"zahlung": s.company(cid).company_name}) and E.estates.pays_firm(V, {"zahlung": "Firma"}), "Firmenname als Zahlung erkannt")
+	ok(E.input("Viktor", "Ziel", {"ziel": "Flotte aufbauen", "warum": "Umsatz"}).ok, "Ziel gesetzt")
+	s.game_min += GameCalendar.days_to_min(4)
+	ok(E.next_steps(V).any(func(x): return str(x).contains("steht seit")), "Ziel ohne Fortschritt nach 4 Tagen gemeldet")
+	E.input("Viktor", "ZielStand", {"fortschritt": 20})
+	ok(not E.next_steps(V).any(func(x): return str(x).contains("steht seit")), "Fortschritt setzt die Stillstandsuhr zurück")
+	E.join("Mia")
+	E.beings.Mia.mover.pos = V.mover.pos
+	var last := {}
+	for i in 3:
+		E.beings.Mia["inbox"] = int(E.beings.Mia.get("inbox", 0))
+		V["inbox"] = int(V.get("inbox", 0)) + 1   # Antwort simulieren, damit die Wiederholungssperre nicht greift
+		last = E.input("Viktor", "Talk", {"to": "Mia", "text": "Hallo %d" % i})
+	ok(str(last.get("hinweis", "")).contains("Nächster sinnvoller Schritt"), "viel geredet: Hinweis auf den nächsten Schritt")
+
+
 func test_eko_estates() -> void:
 	var s := region_sim(2)
 	var E: EkoWorld = s.eko

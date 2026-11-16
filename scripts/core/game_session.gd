@@ -450,6 +450,12 @@ func _start_eko_server() -> void:
 			on = true
 			swarm = true
 			cfg["eko_spieler"] = true
+		elif str(a).begins_with("--eko-modell="):   # Modell der Wesen (Welt-Waechter: -Modell)
+			cfg["eko_modell"] = str(a).trim_prefix("--eko-modell=")
+		elif str(a).begins_with("--eko-anbieter="):   # ollama | ionos
+			cfg["eko_anbieter"] = str(a).trim_prefix("--eko-anbieter=")
+		elif str(a).begins_with("--eko-ctx="):   # Kontextfenster der Wesen (Grafikspeicher)
+			cfg["eko_ctx"] = int(str(a).trim_prefix("--eko-ctx="))
 		elif str(a) == "--ohne-schwarm":   # Wesen-Agenten nicht selbst starten (z. B. Claude Code je Wesen per start_eko.ps1)
 			cfg["eko_schwarm"] = false
 		elif str(a) == "--eko-folgen":   # Zuschauen: Kamera folgt dem ersten Wesen, KI-Zentrale eingeklappt
@@ -491,6 +497,8 @@ func _launch_swarm(port: int) -> void:
 	var args := [script, "--port", str(port), "--anbieter", str(cfg.get("eko_anbieter", "ollama"))]
 	if str(cfg.get("eko_modell", "")) != "":
 		args += ["--model", str(cfg.eko_modell)]
+	if int(cfg.get("eko_ctx", 0)) > 0:
+		args += ["--ctx", str(int(cfg.eko_ctx))]
 	_swarm_pid = OS.create_process("python", args, true)   # eigene Konsole: dort sieht man, was die Wesen denken
 	if _swarm_pid < 0:
 		sim.log_event("Eko-Schwarm ließ sich nicht starten (python nicht gefunden?) – python tools/eko/eko_schwarm.py von Hand starten.", "bad")

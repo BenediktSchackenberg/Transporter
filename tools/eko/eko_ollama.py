@@ -27,7 +27,8 @@ HERE = Path(__file__).resolve().parent
 CONTINUE = "Bitte nicht aufhören. Mach einfach weiter mit dem, was du tun möchtest."
 REFLECT = ("Nimm dir kurz Zeit: Wie fühlst du dich gerade (observe → gefuehle)? Halte Wichtiges in EPISODIC_MEMORY.jsonl "
            "(append_memory) und geprüftes Wissen in SEMANTIC_MEMORY.md fest. Danach mach weiter, womit du willst.")
-MAX_MESSAGES = 60          # Gespraechslaenge, danach werden die aeltesten Schritte verworfen (das Gedaechtnis liegt in Dateien)
+DEFAULT_MODEL = "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M"   # Benedikt 16.11.2026: Qwen 27B lokal (gpt-oss:20b erfand Angebote, kaputte Aufrufe)
+MAX_MESSAGES = 60         # Gespraechslaenge, danach werden die aeltesten Schritte verworfen (das Gedaechtnis liegt in Dateien)
 KEEP_MESSAGES = 36
 MAX_CHARS = 24000          # Textlaenge des Verlaufs: mit gpt-oss waren 30.000 Zeichen schon 10.600-13.500 Token (Ollama HTTP 500 bei 16k, 15.11.)
 REFLECT_EVERY = 40         # Werkzeugschritte zwischen zwei Erinnerungen an das Gedaechtnis
@@ -655,7 +656,7 @@ def main():
     ap.add_argument("--art", default="roboter", choices=["roboter", "mensch"], help="Gestalt in der Welt")
     ap.add_argument("--seele", default="lumo", help="Persoenlichkeit aus tools/eko/seelen/<name>.md fuer den ersten Start (\"\" = neutrale Vorlage)")
     ap.add_argument("--port", type=int, default=8790)
-    ap.add_argument("--model", default="gpt-oss:20b", help="Ollama-Modell (15.11.2026: gpt-oss:20b, ca. 1 s je Schritt; vorher hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M)")
+    ap.add_argument("--model", default=DEFAULT_MODEL, help="Ollama-Modell (15.11.2026: gpt-oss:20b, ca. 1 s je Schritt; vorher hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M)")
     ap.add_argument("--ollama", default="http://127.0.0.1:11435")
     ap.add_argument("--anbieter", default="ollama", choices=["ollama", "ionos"], help="Modellanbieter: lokales Ollama oder IONOS AI Model Hub")
     ap.add_argument("--base-url", default=IONOS_BASE_URL, help="OpenAI-kompatible Adresse (fuer --anbieter ionos)")

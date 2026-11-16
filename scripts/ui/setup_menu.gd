@@ -28,7 +28,9 @@ var profile_opt: OptionButton
 var world_opt: OptionButton
 var ki_opt: OptionButton          # 0 = freie Wesen (Eko-Modus, Standard), 1 = klassisch (Anbieter je Spieler)
 var eko_brain_opt: OptionButton   # womit die Wesen denken
-const EKO_BRAINS := [["ollama", "gpt-oss:20b", "Ollama lokal · gpt-oss:20b"], ["ionos", "", "IONOS · Qwen 27B (Umgebungsvariable IONOS_API_TOKEN)"]]
+## Benedikt 16.11.2026: Qwen 27B lokal ist Standard (sorgfaeltiger als gpt-oss:20b, das Angebote erfand und oft kaputte Werkzeugaufrufe schrieb).
+const EKO_BRAINS := [["ollama", "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M", "Ollama lokal · Qwen 27B (sorgfältig)"], ["ollama", "gpt-oss:20b", "Ollama lokal · gpt-oss:20b (schnell)"],
+	["ionos", "", "IONOS · Qwen 27B (Umgebungsvariable IONOS_API_TOKEN)"]]
 const WORLDS := ["region", "kueste", "stadt"]   # Auftrag 17: neue Partien standardmaessig als Region mehrerer Staedte
 const WORLDS_LABEL := ["Region (je Spieler eine Stadt)", "Küstenort", "Rasterstadt"]
 var town_label: Label
@@ -412,7 +414,12 @@ func _apply_config(cfg: Dictionary, keep_seed: bool = false) -> void:
 	talk_opt.select(2 if not bool(cfg.get("rivalry_talk", true)) else (1 if str(cfg.get("talk", {}).get("provider", "demo")) == "anthropic" else 0))
 	mayor_opt.select({"global": 1, "anthropic": 2, "ollama": 3}.get(str(_mayor_extra.get("provider", "demo")), 0))
 	ki_opt.select(0 if bool(cfg.get("eko_spieler", true)) else 1)   # ohne Angabe (alte Einstellungen): freie Wesen
-	eko_brain_opt.select(maxi(0, EKO_BRAINS.map(func(b): return b[0]).find(str(cfg.get("eko_anbieter", "ollama")))))
+	var bi := 0
+	for i in EKO_BRAINS.size():
+		if EKO_BRAINS[i][0] == str(cfg.get("eko_anbieter", "ollama")) and (EKO_BRAINS[i][1] == str(cfg.get("eko_modell", EKO_BRAINS[0][1])) or EKO_BRAINS[i][0] == "ionos"):
+			bi = i
+			break
+	eko_brain_opt.select(bi)
 	eko_brain_opt.disabled = ki_opt.selected != 0
 	for r in rows:
 		r.enabled.button_pressed = false

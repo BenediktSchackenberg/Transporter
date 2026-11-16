@@ -1661,6 +1661,8 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.street_cleaning.from_dict(d.get("street_cleaning", {}))
 	s.water.from_dict(d.get("water", {}))
 	s.rail.from_dict(d.get("rail", {}))
+	s.regional.repair_protected()   # Spielstaende vor dem 16.11.: Strasse/Autobahn durch einen Stammsitz -> Umfahrung
+	s.eko.clear_rails()              # Bloecke auf Gleisen raeumt die Bahn ab
 	s.trains.from_dict(d.get("trains", {}))
 	s.transit.from_dict(d.get("transit", {}))
 	s.education.from_dict(d.get("education", {}))

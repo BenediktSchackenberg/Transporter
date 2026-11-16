@@ -46,7 +46,7 @@ func plan_link(a: int, b: int) -> Dictionary:
 		for x in n:
 			var p := Vector2i(x, y)
 			var i := cd.idx(p)
-			if cd.ground[i] in [CityData.G.WATER, CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON] or (cd.height.size() > 0 and cd.height[i] > 0) or cd.building_at[i] >= 0:
+			if cd.ground[i] in [CityData.G.WATER, CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON] or (cd.height.size() > 0 and cd.height[i] > 0) or cd.building_at[i] >= 0 or _protected(p):
 				astar.set_point_solid(p, true)
 			elif cd.ground[i] == CityData.G.ROAD:
 				astar.set_point_weight_scale(p, 6.0)   # vorhandene Strassen moeglichst nicht mitbenutzen
@@ -193,15 +193,126 @@ func reserved(q: Vector2i) -> bool:
 	return _res.has(q)
 
 
-## Felder der Trasse, auf denen inzwischen ein Gebaeude, ein Firmenhof oder ein Bauwerk steht.
+## Stammsitz oder Bauten freier Wesen: Strassen und Autobahn fuehren darum herum (Benedikt 16.11.2026).
+func _protected(p: Vector2i) -> bool:
+	return sim.eko != null and sim.eko.protected(p)
+
+
+## Felder der Trasse, auf denen inzwischen ein Gebaeude, ein Firmenhof, ein Bauwerk oder ein Stammsitz steht.
 func _blocked_cells(r: Dictionary) -> int:
 	var cd: CityData = sim.city
 	var n := 0
 	for c in r.get("cells", []):
 		var q := Vector2i(int(c[0]), int(c[1]))
-		if cd.inside(q) and cd.building_at[cd.idx(q)] >= 0:
+		if cd.inside(q) and (cd.building_at[cd.idx(q)] >= 0 or _protected(q)):
 			n += 1
 	return n
+
+
+## Spielstaende vor dem 16.11.: Eine fertige Strasse oder Autobahn fuehrt durch einen Stammsitz (Fahrzeuge fuhren durch Mauer und Zaun).
+## Beim Laden (vor dem Aufbau der Ansicht) wird der Abschnitt im Stammsitz zurueckgebaut und durch eine Umfahrung ersetzt; die neue Trasse
+## wird gespeichert. Rueckgabe: Anzahl umgelegter Abschnitte.
+func repair_protected() -> int:
+	var fixed := 0
+	for r in items.values():
+		if str(r.status) != "fertig":
+			continue
+		var guard := 0
+		while guard < 8:
+			guard += 1
+			var cells: Array = r.cells.map(func(c): return Vector2i(int(c[0]), int(c[1])))
+			var i0 := -1
+			var i1 := -1
+			for i in cells.size():
+				if _protected(cells[i]):
+					if i0 < 0:
+						i0 = i
+					i1 = i
+			if i0 < 0:
+				break
+			# zusammenhaengenden Abschnitt durch denselben Stammsitz bestimmen (Zellen liegen in Bauordnung: Spur, Gerade, Spur)
+			var j := i0
+			while j + 1 < cells.size() and (_protected(cells[j + 1]) or (j + 2 < cells.size() and _protected(cells[j + 2]))):
+				j += 1
+			i1 = j
+			var a: int = maxi(0, i0 - 2)
+			var b: int = mini(cells.size() - 1, i1 + 2)
+			var detour := _detour(cells[a], cells[b])
+			if detour.is_empty():
+				sim.log_event("%s: Abschnitt durch einen Stammsitz ohne Umfahrung (kein Landweg) – dort gesperrt." % r.id, "warn")
+				_unlay(cells.slice(i0, i1 + 1))
+				r.cells = (cells.slice(0, i0) + cells.slice(i1 + 1)).map(func(q): return [q.x, q.y])
+				continue
+			var removed: Array = cells.slice(a + 1, b).filter(func(q): return not detour.has(q))
+			_unlay(removed)
+			var new_cells: Array = cells.slice(0, a + 1) + detour + cells.slice(b)
+			r.cells = new_cells.map(func(q): return [q.x, q.y])
+			if str(r.kind) == "autobahn":
+				_open_highway(r)
+			else:
+				sim.access._apply_cells(detour)
+			fixed += 1
+			sim.log_event("%s: Abschnitt durch einen Stammsitz zurückgebaut, Umfahrung mit %d Feldern angelegt." % [
+				"Autobahn " + str(r.id) if str(r.kind) == "autobahn" else "Straße " + str(r.id), detour.size()], "info")
+	return fixed
+
+
+## Umfahrung zwischen zwei Trassenfeldern: zweibahnig (Feld plus Nachbar quer zur Fahrtrichtung), um Stammsitze, Gebaeude, Wasser
+## und Berge herum; vorhandene Strassen werden gequert, die alte Trasse darf mitbenutzt werden.
+func _detour(from: Vector2i, to: Vector2i) -> Array:
+	var cd: CityData = sim.city
+	var n := cd.size
+	var astar := AStarGrid2D.new()
+	# Suchfenster um Anfang und Ende (die Umfahrung bleibt in der Naehe)
+	var box := Rect2i(mini(from.x, to.x), mini(from.y, to.y), absi(from.x - to.x) + 1, absi(from.y - to.y) + 1).grow(SIDE_MARGIN).intersection(Rect2i(0, 0, n, n))
+	astar.region = box
+	astar.cell_size = Vector2.ONE
+	astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
+	astar.update()
+	for y in range(box.position.y, box.end.y):
+		for x in range(box.position.x, box.end.x):
+			var p := Vector2i(x, y)
+			var i := cd.idx(p)
+			if cd.ground[i] in [CityData.G.WATER, CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON, CityData.G.RAIL] or (cd.height.size() > 0 and cd.height[i] > 0) \
+					or cd.building_at[i] >= 0 or _protected(p) or (sim.rail != null and sim.rail.is_rail(p)):
+				astar.set_point_solid(p, true)
+	astar.set_point_solid(from, false)
+	astar.set_point_solid(to, false)
+	var path: Array = astar.get_id_path(from, to)
+	if path.is_empty():
+		return []
+	var out: Array = []
+	var seen := {}
+	for k in path.size():
+		var q: Vector2i = path[k]
+		if not seen.has(q):
+			seen[q] = true
+			out.append(q)
+		var d: Vector2i = (path[mini(k + 1, path.size() - 1)] - path[maxi(k - 1, 0)]).sign()
+		var side := Vector2i(0, 1) if d.x != 0 else Vector2i(1, 0)
+		var q2: Vector2i = q + side
+		if box.has_point(q2) and not seen.has(q2) and not astar.is_point_solid(q2):
+			seen[q2] = true
+			out.append(q2)
+	return out
+
+
+const SIDE_MARGIN := 40   # Suchfenster der Umfahrung um Anfang und Ende (Felder)
+
+
+## Strassenfelder zurueckbauen (nur beim Laden, vor dem Aufbau der Ansicht): Boden wird Wiese, Fahrzeuge kommen nicht mehr hin.
+func _unlay(cells: Array) -> void:
+	var cd: CityData = sim.city
+	for q in cells:
+		if not cd.inside(q) or cd.ground[cd.idx(q)] != CityData.G.ROAD:
+			continue
+		cd.ground[cd.idx(q)] = CityData.G.GRASS
+		cd.road_count -= 1
+		highway.erase(q)
+		if sim.nav != null:
+			sim.nav.road.set_point_solid(q, true)
+			sim.nav.base_weight.erase(q)
+			sim.nav.walk.set_point_weight_scale(q, 1.0)
 
 
 ## Steht etwas auf der Trasse (Spielstaende vor der Freihaltung), wird sie um die Bebauung herum neu geplant; geht das nicht, bleiben die
@@ -445,7 +556,7 @@ func plan_highway() -> Dictionary:
 		for x in n:
 			var p := Vector2i(x, y)
 			var i := cd.idx(p)
-			if cd.ground[i] in [CityData.G.WATER, CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON] or (cd.height.size() > 0 and cd.height[i] > 0) or cd.building_at[i] >= 0:
+			if cd.ground[i] in [CityData.G.WATER, CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON] or (cd.height.size() > 0 and cd.height[i] > 0) or cd.building_at[i] >= 0 or _protected(p):
 				astar.set_point_solid(p, true)
 			elif cd.ground[i] == CityData.G.ROAD:
 				astar.set_point_weight_scale(p, 3.0)   # kreuzen ja, laengs nein

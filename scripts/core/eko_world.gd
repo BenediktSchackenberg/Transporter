@@ -63,10 +63,44 @@ var towns_funded := {}              # "k" -> true
 var _no_estate := false             # beim Laden und fuer Buergermeister keinen Stammsitz vergeben
 
 
+## Geschuetzte Felder (Benedikt 16.11.2026: "Gebaeude nicht auf Strassen und Eisenbahnen, Mauern darf man nicht mit Auto oder Zug
+## durchfahren, die Autobahn muss drumherum"): Stammsitze mit einem Feld Rand und jedes Feld mit Bloecken der Wesen. Strassen-,
+## Autobahn-, Zufahrts- und Bahnplanung behandeln sie wie Gebaeude und planen darum herum.
+var _block_tiles := {}
+var _block_tiles_n := -1
+
+func protected(q: Vector2i) -> bool:
+	return estates.covers(q) or block_tile(q)
+
+
+func block_tile(q: Vector2i) -> bool:
+	if blocks.size() != _block_tiles_n:
+		_block_tiles = {}
+		for p in blocks:
+			_block_tiles[Vector2i(floori(float(p.x) / PER_TILE), floori(float(p.y) / PER_TILE))] = true
+		_block_tiles_n = blocks.size()
+	return _block_tiles.has(q)
+
+
+## Spielstaende vor dem 16.11.: Bloecke, die Wesen auf Gleise gesetzt hatten (die Bahn fuhr hindurch), raeumt die Bahn beim Laden ab.
+func clear_rails() -> int:
+	if sim.rail == null:
+		return 0
+	var gone: Array = blocks.keys().filter(func(p): return sim.rail.is_rail(Vector2i(floori(float(p.x) / PER_TILE), floori(float(p.y) / PER_TILE))))
+	for p in gone:
+		blocks.erase(p)
+	if not gone.is_empty():
+		_block_tiles_n = -1
+		sim.log_event("Bahn räumt %d Blöcke von den Gleisen – auf Gleisen darf nicht gebaut werden." % gone.size(), "warn")
+		changed.emit()
+	return gone.size()
+
+
 func setup(simulation) -> void:
 	sim = simulation
 	arms.setup(self)
 	estates.setup(self)
+	changed.connect(func(): _block_tiles_n = -1)
 	sim.visit_completed.connect(_on_visit_completed)
 
 
@@ -438,6 +472,15 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		r["status"] = "gescheitert" if not bool(r.ok) else ("laeuft" if type == "MoveTo" else "abgeschlossen")
 	if type != "Merke":
 		_decide(b, type, warum if warum != "" or type != "Inspect" else "untersucht %s" % str(data.get("target_id", "")), r)
+	# Viel geredet, wenig getan (Partie 16.11.: ein Viertel aller Handlungen waren Gespraeche ueber ein erfundenes Angebot):
+	# ab drei Gespraechen in den letzten sechs Handlungen haengt jede weitere Antwort den naechsten sinnvollen Schritt an.
+	var recent: Array = b.get("recent", [])
+	recent.append(type)
+	b["recent"] = recent.slice(-6)
+	if type in ["Talk", "Say"] and (b.recent as Array).count("Talk") + (b.recent as Array).count("Say") >= 3:
+		var steps := next_steps(b)
+		if not steps.is_empty():
+			r["hinweis"] = "Du redest gerade viel und handelst wenig. Nächster sinnvoller Schritt: " + str(steps[0])
 	changed.emit()
 	return r
 
@@ -580,6 +623,49 @@ func _building_dist(t: Vector2i, bd: Dictionary) -> int:
 
 ## Ziel setzen: Hauptziel mit Begruendung, Teilzielen, Nutzen, Ressourcen, Erwartung und Abbruchbedingung.
 ## Ein aktives Ziel wird nur mit ersetzen: true und Begruendung abgeloest (nicht jede Beobachtung ersetzt das Hauptziel).
+## Naechste sinnvolle Schritte (hoechstens 3, sofort ausfuehrbar). Partie 16.11.: Drei von vier Unternehmern hatten nach drei
+## Monaten kein Fahrzeug, keiner baute den Stammsitz aus, Ziele standen seit Monat 1 bei 0 %, und ein erfundenes Fahrzeugangebot
+## ging per Anruf reihum – das kleine Modell verlor in der grossen Beobachtung den Faden. Diese Liste nennt nur, was wirklich geht.
+const GOAL_STALE_DAYS := 3
+
+
+func next_steps(b: Dictionary) -> Array:
+	var out: Array = []
+	var cid := active_firm(b)
+	if cid >= 0:
+		var c = sim.company(cid)
+		if c.vehicle_ids.is_empty():
+			var best := {}
+			for of in sim.resources.available_offers():
+				if best.is_empty() or float(of.price) < float(best.price):
+					best = of
+			if not best.is_empty() and c.ledger.cash >= float(best.price):
+				out.append("Fahrzeug kaufen – ohne Fahrzeug verdient %s nichts: Firma {aktion: {action: \"buy_vehicle\", offer_id: \"%s\"}} (%s, %s; Firmenkasse %s). Angebots-IDs stehen in meine_firma.fahrzeugangebote, nicht bei anderen Unternehmern." % [
+					c.company_name, best.id, best.model, Catalog.money(float(best.price)), Catalog.money(c.ledger.cash)])
+	if int(b.get("amt", -1)) < 0:
+		var sug := estates.suggestion(str(b.name))
+		if not sug.is_empty():
+			var geld := float(b.get("geld", 0.0))
+			var firm_cash: float = sim.company(cid).ledger.cash if cid >= 0 else 0.0
+			if geld >= float(sug.kosten):
+				out.append("Stammsitz ausbauen: Bauwerk {art: \"%s\", feld: %d} kostet etwa %s, du hast privat %s. Oder eigener Entwurf mit Bauplan." % [
+					sug.art, int(sug.feld), Catalog.money(float(sug.kosten)), Catalog.money(geld)])
+			elif firm_cash >= float(sug.kosten) + FIRM_RESERVE:
+				out.append("Stammsitz ausbauen: Bauwerk {art: \"%s\", feld: %d, zahlung: \"firma\"} kostet etwa %s (Firmenkasse %s)." % [
+					sug.art, int(sug.feld), Catalog.money(float(sug.kosten)), Catalog.money(firm_cash)])
+	var g: Dictionary = b.get("ziel", {})
+	if g.is_empty() or str(g.get("status", "")) != "aktiv":
+		out.append("Setze dir ein Ziel: Ziel {ziel, warum, teilziele}. Grundziel: %s" % (GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else GRUNDZIEL))
+	else:
+		if not g.has("stand_min"):
+			g["stand_min"] = sim.game_min   # aeltere Ziele: ab jetzt messen
+		var days: float = (float(sim.game_min) - float(g.stand_min)) / float(GameCalendar.days_to_min(1))
+		if days >= GOAL_STALE_DAYS:
+			out.append("Dein Ziel „%s“ steht seit %d Tagen bei %d %%. Melde Fortschritt (ZielStand), ändere den Weg oder ersetze es (Ziel {..., ersetzen: true})." % [
+				str(g.ziel).left(60), int(days), int(g.get("fortschritt", 0))])
+	return out.slice(0, 3)
+
+
 func _set_goal(b: Dictionary, data: Dictionary) -> Dictionary:
 	var text := str(data.get("ziel", "")).strip_edges().left(160)
 	var why := str(data.get("warum", "")).strip_edges().left(200)
@@ -598,7 +684,8 @@ func _set_goal(b: Dictionary, data: Dictionary) -> Dictionary:
 		subs.append({"text": str(s).left(100), "erledigt": false})
 	b["ziel"] = {"ziel": text, "warum": why, "teilziele": subs, "nutzen": str(data.get("nutzen", "")).left(120),
 		"ressourcen": str(data.get("ressourcen", "")).left(120), "erwartung": str(data.get("erwartung", "")).left(120),
-		"abbruch": str(data.get("abbruch", "")).left(120), "status": "aktiv", "fortschritt": 0, "seit": Catalog.game_minutes_to_text(sim.game_min)}
+		"abbruch": str(data.get("abbruch", "")).left(120), "status": "aktiv", "fortschritt": 0, "seit": Catalog.game_minutes_to_text(sim.game_min),
+		"stand_min": sim.game_min}
 	_event(b, "setzt sich ein Ziel: %s" % text)
 	sim.log_event("%s setzt sich ein Ziel: %s (%s)" % [b.name, text, why.left(80)], "info")
 	return {"ok": true, "msg": "Neues Ziel: %s" % text, "ziel": b.ziel}
@@ -609,6 +696,8 @@ func _goal_progress(b: Dictionary, data: Dictionary) -> Dictionary:
 	if g.is_empty():
 		return {"ok": false, "msg": "Du hast kein Ziel. Setze eines mit Ziel {ziel, warum, ...}."}
 	if data.has("fortschritt"):
+		if clampi(int(data.fortschritt), 0, 100) > int(g.get("fortschritt", 0)):
+			g["stand_min"] = sim.game_min   # echter Fortschritt: Stillstandsuhr neu
 		g.fortschritt = clampi(int(data.fortschritt), 0, 100)
 	if data.has("teilziel_erledigt"):
 		var i := int(data.teilziel_erledigt)
@@ -808,6 +897,10 @@ func can_place(p: Vector3i) -> String:
 		return "Die Welt traegt keine weiteren Bloecke (%d)." % MAX_BLOCKS
 	if sim.city.is_road(tile):
 		return "Feld %d,%d ist eine Strasse." % [tile.x, tile.y]
+	if sim.city.g(tile) == CityData.G.RAIL or (sim.rail != null and sim.rail.is_rail(tile)):
+		return "Feld %d,%d ist ein Gleis – dort fährt die Bahn." % [tile.x, tile.y]
+	if sim.access != null and sim.access.reserved(tile):
+		return "Feld %d,%d gehört zu einer geplanten Straße oder Autobahn (Trasse freihalten)." % [tile.x, tile.y]
 	if int(sim.city.building_at[sim.city.idx(tile)]) >= 0:
 		return "Auf Feld %d,%d steht ein Gebaeude." % [tile.x, tile.y]
 	if not sim.city.height.is_empty() and sim.city.height[sim.city.idx(tile)] > 0:
@@ -857,6 +950,9 @@ func _talk(b: Dictionary, to: String, text: String) -> Dictionary:
 	text = text.strip_edges().left(200)
 	if to == "" or text == "":
 		return {"ok": false, "msg": "Talk braucht to (Name aus figuren_in_der_naehe oder andere_wesen) und text."}
+	var own := active_firm(b)
+	if to == str(b.name) or (own >= 0 and to in [str(sim.company(own).player_name), str(sim.company(own).company_name)]):
+		return {"ok": false, "msg": "Das bist du selbst bzw. deine eigene Firma – die Lage deiner Firma steht in meine_firma, Entscheidungen triffst du mit Firma {aktion}."}
 	var t := tile_of(b)
 	if beings.has(to) and to != b.name:
 		# Gleiche Person erneut, bevor sie geantwortet hat (Partie 16.11.: dieselbe Preisfrage dreimal in 25 s, das andere Wesen denkt noch)
@@ -990,6 +1086,7 @@ func observe(name: String) -> Dictionary:
 	return {"ok": true,
 		"du": {"name": name, "feld": [t.x, t.y], "unterwegs": not m.arrived(), "ziel": [m.goal.x, m.goal.y] if not m.arrived() else null,
 			"traegt": b.held, "tragkraft": CARRY, "am_bauhof": _at_source(b), "nachrichten": int(b.get("inbox", 0))},
+		"naechste_schritte": next_steps(b),
 		"zeit": Catalog.game_minutes_to_text(sim.game_min), "wetter": sim.wx.headline(),
 		"karte": {"mitte": [t.x, t.y], "radius": VIEW_RADIUS, "zeilen": rows,
 			"legende": "@ du, . freier Boden, = Strasse, # Gebaeude, ~ Wasser, h begehbarer Hang/Hochebene am Berg, ^ unbegehbar (Baum, Fels, Grat), 1-9/+ hoechste Blockschicht auf dem Feld"},

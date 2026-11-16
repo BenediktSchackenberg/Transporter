@@ -199,7 +199,12 @@ func _blocked(q: Vector2i, allow_road := false) -> bool:
 		return not allow_road
 	if g in [CityData.G.WATER, CityData.G.RAIL, CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON, CityData.G.PARKING]:
 		return true
-	return sim.access != null and sim.access.reserved(q)
+	return (sim.access != null and sim.access.reserved(q)) or _protected(q)
+
+
+## Stammsitze und Bauten freier Wesen: die Bahn fuehrt darum herum (Benedikt 16.11.2026: Mauern darf kein Zug durchfahren).
+func _protected(q: Vector2i) -> bool:
+	return sim.eko != null and sim.eko.protected(q)
 
 
 func _free(lay: Dictionary) -> bool:
@@ -374,7 +379,7 @@ func _blocks() -> Dictionary:
 					var p := Vector2i(bx * BLOCK + dx, by * BLOCK + dy)
 					var i := C.idx(p)
 					var g: int = C.ground[i]
-					if C.building_at[i] >= 0 or station_cells.has(p) or g in [CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON, CityData.G.PARKING]:
+					if C.building_at[i] >= 0 or station_cells.has(p) or g in [CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON, CityData.G.PARKING] or _protected(p):
 						c = 0.0
 					elif c > 0.0:
 						if g == CityData.G.WATER:
@@ -571,7 +576,7 @@ func _astar() -> AStarGrid2D:
 			if g == CityData.G.RAIL:
 				if cells.get(p, "") != "gleis":
 					astar.set_point_solid(p, true)   # Bahnsteig und Bahnhofsgleis
-			elif g in [CityData.G.WATER, CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON, CityData.G.PARKING] or (C.height.size() > 0 and C.height[i] > 0) or C.building_at[i] >= 0:
+			elif g in [CityData.G.WATER, CityData.G.QUAY, CityData.G.RUNWAY, CityData.G.APRON, CityData.G.PARKING] or (C.height.size() > 0 and C.height[i] > 0) or C.building_at[i] >= 0 or _protected(p):
 				astar.set_point_solid(p, true)
 			elif g == CityData.G.ROAD:
 				astar.set_point_weight_scale(p, ROAD_COST)
