@@ -2103,6 +2103,9 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		return arms.firm_action(b, cid, a)
 	if str(a.action) in ["fortify_building", "rebuild_building"]:   # eigene Gebaeude befestigen / wieder aufbauen
 		return arms.firm_object_action(b, cid, a)
+	if str(a.action) in ["collect_contracts", "accept_contract"] and sim.wildnis and not range(sim.towns.count()).any(func(k): return sim.town_ready(k)):
+		var hint := homes.next_step(cid) if settle.founded(sim.companies[cid].home_town) else settle.next_step(b, cid)
+		return {"ok": false, "msg": "In der Wildnis gibt es noch keine Kunden und keine Transportaufträge – erst wenn eine Stadt ein Bürgeramt hat. Jetzt: %s" % hint}
 	if str(a.action) == "buergeramt_bauen":   # Wildnis: Buergeramt selbst bauen – danach gibt es die Stadt
 		return homes.plan_town_hall(cid, a)
 	if str(a.action) == "haus_bauen":   # Neubeginn (Etappe B): Wohnhaus selbst bauen

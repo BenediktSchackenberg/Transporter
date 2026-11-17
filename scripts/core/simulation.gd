@@ -739,7 +739,8 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 		_trip_why = "blockiert"
 		return
 	var before := v.tiles_moved
-	var spf := _speed_factor(v) * _flow_step(v, dt) * (0.35 if not city.is_road(v.tile()) else 1.0)
+	var offroad: bool = bool(Catalog.model(v.model).get("offroad", false))   # Gelaende-LKW: im Gelaende 60 % statt 35 % (Partie 18.11.: Fahrten dauerten ewig)
+	var spf := _speed_factor(v) * _flow_step(v, dt) * ((0.6 if offroad else 0.35) if not city.is_road(v.tile()) else 1.0)
 	_trip_speed = spf
 	v.advance(dt, spf)
 	var moved := v.tiles_moved - before
