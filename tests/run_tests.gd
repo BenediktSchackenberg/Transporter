@@ -35,6 +35,9 @@ func _initialize() -> void:
 	test_names.append("test_eko_estates")
 	test_names.append("test_eko_estates_vs_traffic")
 	test_names.append("test_eko_next_steps")
+	test_names.append("test_eko_office_and_goals")
+	test_names.append("test_neubeginn_start")
+	test_names.append("test_neubeginn_homes")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
@@ -8368,6 +8371,107 @@ func test_coast_growth() -> void:
 
 # ================================================================== Auftrag 17: Region mehrerer Staedte (docs/REGION.md)
 ## Neue Region mit n Startspielern (je Stadt ein Unternehmer), Tests ohne Bauantraege/Gebote wie coast_sim.
+## Neubeginn (Benedikt 17.11.): Orte mit einer Strasse, Rathaus, Anleger, Bauhof und Startplatz; Dienste am Zentrallager;
+## je KI-Firma 1 Mio. und ein LKW, den der Inhaber faehrt; keine Einwohner, kein Bautraeger, keine fremden Gruendungen.
+func neubeginn_sim(n: int = 4, seed_v: int = 4242) -> Simulation:
+	RegionGenerator.neubeginn = true
+	var s := Simulation.new()
+	s.neubeginn = true
+	s.world_mode = "region"
+	s.start_profile = "unternehmer"
+	s.setup(seed_v, players(n), Catalog.MAP_SIZE, 0.5)
+	RegionGenerator.neubeginn = false
+	return s
+
+
+func test_neubeginn_start() -> void:
+	var s := neubeginn_sim(4)
+	for k in s.towns.count():
+		var bs: Array = s.city.buildings.filter(func(b): return int(b.get("town", -1)) == k and not b.get("hub", false))
+		var types: Array = bs.map(func(b): return str(b.type))
+		ok(types.has("townhall") and types.has("port_office") and not types.has("house") and not types.has("shop") and bs.size() <= 8,
+			"Stadt %d: nur Grundausstattung (%s)" % [k, ", ".join(types)])
+	for role in ["job_board", "staffing", "dealer", "workshop", "bank"]:
+		var b: Dictionary = s.nearest_building_of(role, Vector2i(0, 0))
+		ok(not b.is_empty() and bool(b.get("hub", false)), "%s steht am Zentrallager" % role)
+	ok(s.city.buildings.any(func(b): return b.type == "gas_station" and bool(b.get("hub", false))), "Tankstelle am Zentrallager")
+	for c in s.companies:
+		ok(is_equal_approx(c.ledger.cash, Simulation.NEUBEGINN_CAPITAL) and c.vehicle_ids.size() == 1 and s.vehicles[c.vehicle_ids[0]].model == "truck",
+			"%s: 1 Mio. und ein LKW (Kasse %s)" % [c.company_name, Catalog.money(c.ledger.cash)])
+		var staff: Array = s.personnel.employed(c.id)
+		ok(staff.size() == 1 and staff[0].role == "owner" and staff[0].vehicle_id == c.vehicle_ids[0], "%s: nur der Inhaber, er fährt den LKW" % c.company_name)
+	ok(s.citizens.people.is_empty() and s.citizens.population() == s.companies.size() and s.personnel.available().is_empty(), "keine Einwohner und Bewerber, nur die Inhaber (%d)" % s.citizens.population())
+	var hub_holz := int(s.stock.qty("holz", CentralHub.ACCT, s.hub.loc)) if s.hub.enabled else 0
+	ok(hub_holz >= 800, "Großlager mit doppeltem Baumaterial (Holz %d)" % hub_holz)
+	ok(absf(s.economy.conservation_error()) < 1.0, "Geldbuch stimmt (%.2f)" % s.economy.conservation_error())
+	var end_min := s.game_min + GameCalendar.days_to_min(5)
+	while s.game_min < end_min:
+		s.step(1.0)
+	var dev := s.permits.apps.values().filter(func(a): return a.applicant == Construction.DEVELOPER)
+	ok(dev.is_empty(), "kein Bauträger-Antrag")
+	ok(s.companies.size() == 4, "keine fremden Gründungen (%d Firmen)" % s.companies.size())
+	var d := s.to_dict()
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(d)))
+	ok(s2.neubeginn and s2.city.buildings.size() == s.city.buildings.size(), "Neubeginn gespeichert und Karte gleich neu erzeugt")
+	RegionGenerator.neubeginn = false
+
+
+## Neubeginn Etappe B: KI-Firma baut ein Wohnhaus – Grundstueck kaufen, Antrag, Material auf den Hof, Bautruppe, fertig mit Wohnungen.
+func test_neubeginn_homes() -> void:
+	var s := neubeginn_sim(2)
+	var E: EkoWorld = s.eko
+	var ps: Array = E.adopt_players(2)
+	var p0: String = ps[0]
+	var cid := E.active_firm(E.beings[p0])
+	var cash0: float = s.company(cid).ledger.cash
+	ok(E.next_steps(E.beings[p0]).any(func(x): return str(x).contains("haus_bauen")), "nächster Schritt: Wohnraum bauen")
+	var r: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}})
+	ok(r.ok, "haus_bauen: %s" % str(r.msg).left(140))
+	if not r.ok:
+		return
+	var site: Dictionary = E.homes.sites[r.baustelle]
+	ok(s.company(cid).ledger.cash < cash0 and str(s.parcels.parcel(site.parcel).owner) == "C%d" % cid, "Grundstück gekauft")
+	ok(s.permits.apps.has(site.app), "Bauantrag gestellt")
+	var app: Dictionary = s.permits.apps[site.app]
+	app.status = "entschieden"
+	app.result = "genehmigt"
+	E.homes.tick(1.0)
+	ok(site.status == "material", "genehmigt: wartet auf Material")
+	ok(E.homes.next_step(cid).contains("hub_buy"), "nächster Schritt: Material im Großlager kaufen (%s)" % E.homes.next_step(cid).left(90))
+	var hb: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "holz", "qty": 16}})
+	ok(hb.ok and str(hb.msg).contains("Abholung"), "Holz im Großlager gekauft: %s" % str(hb.msg).left(100))
+	var dep := int(s.company(cid).depots[0])
+	for item in site.need:   # Anlieferung abkuerzen: Material liegt auf dem Hof
+		s.stock.add(item, int(site.need[item]), "C%d" % cid, dep, "Test")
+	E.homes.tick(1.0)
+	ok(site.status == "bau", "Material da: Bau beginnt")
+	ok(E.homes.crew_now(site) == 1, "der Inhaber baut (LKW steht)")
+	E.homes.tick(60.0 * 30.0)
+	ok(site.status == "fertig" and int(site.building) >= 0, "nach 30 Stunden fertig (%s)" % str(site.get("blockiert", site.status)))
+	if site.status == "fertig":
+		var units: Array = s.housing.units.values().filter(func(u): return int(u.building) == int(site.building))
+		ok(units.size() >= 1 and units.all(func(u): return str(u.owner) == "C%d" % cid), "Wohnungen gehören der Firma (%d)" % units.size())
+		# Etappe C/D: Siedlerschiff bringt Haushalte, aus ihnen werden Bewerber
+		var k: int = s.towns.of_building(int(site.building))
+		var at: Dictionary = s.sea.attractiveness(k)
+		ok(int(at.freie_wohnungen) >= 1 and int(at.punkte) >= SeaTraffic.SETTLER_MIN_SCORE, "Stadt attraktiv mit freier Wohnung (%s)" % str(at.gruende))
+		var day := GameCalendar.day_of(s.game_min)
+		s.sea.on_day(day)
+		var leg: Dictionary = s.sea.legs.get("SI%d" % k, {})
+		ok(not leg.is_empty() and leg.kind == "siedler", "Siedlerschiff unterwegs")
+		var pop0: int = s.citizens.people.size()
+		s.sea.tick(float(leg.get("arrive", 0.0)) + 1.0)
+		ok(s.citizens.people.size() > pop0 and units.any(func(u): return str(u.tenant) != ""), "Siedler ziehen ein (%d Einwohner)" % s.citizens.people.size())
+		ok(s.personnel.pool_limit() >= 1, "mit Einwohnern gibt es Bewerber (Grenze %d)" % s.personnel.pool_limit())
+		ok(s.personnel._take_resident() and s.citizens.people.size() == pop0 + int(round(Mayor.PERSONS_PER_UNIT)) * int(leg.haushalte) - 1, "Bewerber kommen aus den Einwohnern")
+		s.sea.on_day(day + 1)
+		ok(s.sea.legs["SI%d" % k].day == day, "kein zweites Schiff am nächsten Tag")
+	ok(absf(s.economy.conservation_error()) < 1.0, "Geldbuch stimmt")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.eko.homes.sites.has(site.id) and str(s2.eko.homes.sites[site.id].status) == str(site.status), "Baustellen gespeichert")
+	RegionGenerator.neubeginn = false
+
+
 func region_sim(n: int = 4, seed_v: int = 4242) -> Simulation:
 	var s := Simulation.new()
 	s.world_mode = "region"
@@ -14233,6 +14337,27 @@ func test_eko_next_steps() -> void:
 		var fs := E._fleet_step(cid)
 		ok(fs.contains("assign_worker_task") or fs.contains("recruit_worker") or fs.contains("accept_contract") or fs.contains("collect_contracts"),
 			"Fahrzeug vorhanden: konkreter Flottenschritt (%s)" % fs.left(70))
+		# vorgeschlagenen Auftrag fuer die Firma vormerken (Partie 16.11.: Annahmen meist "nicht (mehr) verfuegbar")
+		if fs.contains("recruit_worker") and not s.personnel.applicants.is_empty():
+			E.input("Viktor", "Firma", {"aktion": {"action": "recruit_worker", "worker_id": s.personnel.applicants[0].id}})
+			fs = E._fleet_step(cid)
+		if fs.contains("assign_worker_task"):
+			var wr: Dictionary = E.input("Viktor", "Firma", {"aktion": {"action": "assign_worker_task", "kind": "fahren", "worker_id": fs.get_slice("worker_id: \"", 1).get_slice("\"", 0),
+				"vehicle_id": s.company_vehicles(cid)[0].id}})
+			ok(wr.ok, "Fahrer eingesetzt (%s)" % str(wr.msg).left(60))
+		E.input("Viktor", "Firma", {"aktion": {"action": "collect_contracts"}})
+		fs = E._fleet_step(cid, 50.0)
+		if fs.contains("accept_contract"):
+			var kid := fs.get_slice("contract_id: \"", 1).get_slice("\"", 0)
+			var k: Contract = s.contracts.get(kid)
+			ok(k != null and k.held_for == cid and k.held_until > s.game_min + 200.0, "vorgeschlagener Auftrag %s ist vorgemerkt" % kid)
+			ok(E._fleet_step(cid, 50.0).contains(kid), "Vorschlag bleibt stabil")
+		var oc: Array = s.market.open_contracts().filter(func(x): return x.deadline > s.game_min + 120.0 and not x.held_by_other(cid, s.game_min))
+		if oc.size() >= 2:
+			E._hold_for(cid, oc[0], 50.0)
+			ok(oc[0].held_for == cid and oc[0].held_until > s.game_min + 60.0 and oc[0].held_by_other(cid + 1, s.game_min), "Vormerkung sperrt andere Firmen")
+			E._hold_for(cid, oc[1], 50.0)
+			ok(oc[0].held_for == -1 and oc[1].held_for == cid, "neue Vormerkung gibt die alte frei")
 	# Amtshandlungen tolerant (Partie 16.11.: priority als Wort, "klaeanlage", "polizeiwache" bei infra_ausbau)
 	var a1 := {"action": "propose_project", "priority": "hoch"}
 	ok(EkoWorld.normalize_office(a1) == "" and int(a1.priority) == 4, "priority hoch -> 4")
@@ -14250,6 +14375,73 @@ func test_eko_next_steps() -> void:
 	ok(str(E.input("Viktor", "Inspect", {"target_id": "Mia"}).get("hinweis", "")).begins_with("Nach Hause"), "Arbeitshandlung bekommt den Heimweg als Hinweis")
 	V.mover.pos = s.city.tile_center(E.estates.field_rect("Viktor", EkoEstates.HUT_FIELD).get_center())
 	ok(str(E.next_steps(V)[0]).begins_with("Ausruhen"), "zu Hause: Ausruhen zuerst")
+
+
+## Partie 16.11. (Auswertung 17.11.): type "act" statt Handlung, decision "approved", assess_financing ohne project_id,
+## Status "beauftragt" als Fehler gelesen, Wohnziel bei 0 % trotz fertiger Bauten.
+func test_eko_office_and_goals() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.auto_estates = true
+	var ms: Array = E.adopt_mayors()
+	var m: String = ms[0]
+	var r: Dictionary = E.input(m, "act", {"aktion": {"action": "remember", "inhalt": "Wasser im Blick"}})
+	ok(r.ok, "type act mit aktion -> Amt (%s)" % str(r.msg).left(60))
+	ok(E.input(m, "act", {"type": "Rest", "warum": "laden"}).ok or not str(E.input(m, "act", {"type": "Rest"}).msg).contains("Unbekannte Handlung"), "type act mit data.type Rest -> Rest")
+	ok(str(E.input(m, "Fliegen", {}).msg).contains("Unbekannte Handlung"), "wirklich Unbekanntes bleibt ein Fehler")
+	for w in [["approved", "genehmigen"], ["Genehmigt", "genehmigen"], ["nein", "ablehnen"], ["mit Auflagen", "bedingungen"], ["Rückfrage", "rueckfrage"]]:
+		var a := {"action": "decide_application", "decision": w[0]}
+		ok(EkoWorld.normalize_office(a) == "" and a.decision == w[1], "decision %s -> %s" % w)
+	ok(EkoWorld.normalize_office({"action": "decide_application", "decision": "vielleicht"}).contains("genehmigen, bedingungen"), "unklare decision: Hinweis")
+	var af: Dictionary = E.input(m, "Amt", {"aktion": {"action": "assess_financing"}})
+	ok(af.ok and str(af.msg).contains("Offene Projekte"), "assess_financing ohne project_id: Übersicht (%s)" % str(af.msg).left(80))
+	var M: Mayor = s.towns.mayor(0)
+	var prj := {"id": "TST1", "status": "beauftragt", "builder": "", "cost": 1000.0}
+	M.projects["TST1"] = prj
+	var tr: Dictionary = E.input(m, "Amt", {"aktion": {"action": "tender", "project_id": "TST1"}})
+	ok(not tr.ok and str(tr.msg).contains("kein Handlungsbedarf"), "tender auf beauftragtes Projekt erklärt den Status (%s)" % str(tr.msg).left(90))
+	M.projects.erase("TST1")
+	# Lage statt Fehler (17.11.: "Tageslage prüfen" ohne aktion, erfundene Aktionen projekte/kommunale_dienste)
+	for d in [{"warum": "Tageslage"}, {"aktion": {"action": "projekte"}}, {"aktion": {"action": "kommunale_dienste", "einrichtung": "polizeiwache"}}]:
+		var ov: Dictionary = E.input(m, "Amt", d)
+		ok(ov.ok and bool(ov.get("uebersicht", false)) and str(ov.msg).contains("Anträge zur Entscheidung"), "Amt-Lage für %s" % JSON.stringify(d).left(50))
+	ok(not E.input(m, "Amt", {"aktion": {"action": "sabotage"}}).ok, "unbekannte Amtshandlung bleibt ein Fehler")
+	E.join("Fritz")
+	E.input("Fritz", "FoundCompany", {"name": "Fritz Fracht"})
+	if E.active_firm(E.beings.Fritz) >= 0:
+		var fo: Dictionary = E.input("Fritz", "Firma", {"aktion": {"action": "status"}})
+		ok(fo.ok and str(fo.msg).contains("Kasse"), "Firmenlage statt Fehler (%s)" % str(fo.msg).left(70))
+		ok(E.input("Fritz", "Firma", {"warum": "Lage"}).ok, "Firma ohne aktion: Lage")
+	# Gespraechsanlaesse (17.11.: niemand redete; Anrufe kamen nicht unter gehoert an)
+	var ps: Array = E.adopt_players(2)
+	if not ps.is_empty():
+		var p0: String = ps[0]
+		ok(E.next_steps(E.beings[m]).any(func(x): return str(x).begins_with("Kontakt: Sprich Unternehmer")), "Bürgermeister: Kontakt zu Unternehmer vorgeschlagen")
+		E.beings[p0].mover.pos = E.beings[m].mover.pos + Vector2(5000, 5000)
+		ok(E.input(m, "Talk", {"to": p0, "text": "Braucht Ihre Firma Bauland?"}).ok, "Bürgermeister ruft Unternehmer an")
+		ok(E.heard(p0).any(func(x): return str(x.text).contains("Bauland")), "Anruf aus der Ferne steht unter gehoert")
+		ok(str(E.next_steps(E.beings[p0])[0]).begins_with("Antworten – %s" % m) or E.next_steps(E.beings[p0]).any(func(x): return str(x).begins_with("Antworten")), "Angerufener: Antworten in naechste_schritte")
+		ok(not E.next_steps(E.beings[m]).any(func(x): return str(x).begins_with("Kontakt:")), "nach dem Gespräch kein Kontakt-Hinweis mehr")
+		E.input(p0, "Talk", {"to": m, "text": "Ja, gern."})
+		ok(not E.beings[p0].has("offen") and E.beings[m].has("offen"), "Antwort erledigt das Offene, Bürgermeister hat nun selbst eine offene Nachricht")
+	# Wohnziel: Fortschritt aus fertigen Stammsitz-Bauten
+	E.join("Viktor")
+	var V: Dictionary = E.beings.Viktor
+	ok(E.input("Viktor", "Ziel", {"ziel": "Ein eigenes Zuhause schaffen", "warum": "Schutz"}).ok, "Wohnziel gesetzt")
+	var bauten: Array = E.estates.estates.Viktor.bauten
+	E.next_steps(V)
+	ok(int(V.ziel.fortschritt) == 0, "nur Starthuette: 0 %")
+	bauten.append({"art": "mauer", "feld": 0, "status": "fertig"})
+	E.next_steps(V)
+	ok(int(V.ziel.fortschritt) == 33 and V.ziel.status == "aktiv", "eine Mauer: 33 %% (%d)" % int(V.ziel.fortschritt))
+	bauten.append({"art": "turm", "feld": 0, "status": "im_bau"})
+	bauten.append({"art": "schloss", "feld": 4, "status": "fertig"})
+	bauten.append({"art": "garten", "feld": 3, "status": "fertig"})
+	E.next_steps(V)
+	ok(V.ziel.status == "erreicht" and int(V.ziel.fortschritt) == 100, "drei fertige Bauten: Ziel erreicht")
+	ok(E.input("Viktor", "Ziel", {"ziel": "Flotte aufbauen", "warum": "Umsatz"}).ok, "neues Ziel nach Erreichen")
+	E.next_steps(V)
+	ok(int(V.ziel.fortschritt) == 0, "Firmenziel bleibt unberührt")
 
 
 func test_eko_estates() -> void:

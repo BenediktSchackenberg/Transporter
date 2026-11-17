@@ -105,6 +105,8 @@ func request_replacement(cid: int, kind: String) -> Dictionary:
 	var open: int = pending.filter(func(p): return p.cid == cid).size()
 	if open >= AGENCY_MAX_PENDING:
 		return {"ok": false, "msg": "Es laufen schon %d Vermittlungen." % open}
+	if sim.neubeginn and sim.citizens.people.filter(func(p): return str(p.employer) == "").is_empty():
+		return {"ok": false, "msg": "Es gibt noch keine arbeitssuchenden Einwohner – Mitarbeiter kommen erst mit dem Zuzug (Wohnraum bauen)."}
 	var c := sim.company(cid)
 	var fee := AGENCY_FEE * (2.0 if kind == "foreman" else 1.0)
 	if c.ledger.cash < fee:
@@ -122,6 +124,8 @@ func on_day(_day: int) -> void:
 		var c := sim.company(int(p.cid))
 		if not c.is_active():
 			continue
+		if sim.neubeginn and not sim.personnel._take_resident():
+			continue   # niemand mehr arbeitssuchend
 		var w: Worker = sim.personnel.spawn_available(str(p.kind))
 		if c.ledger.cash < w.hire_fee:
 			sim.notify(c.id, "Die Vermittlung hat %s gefunden, aber die Anwerbegebühr %s fehlt." % [w.name, Catalog.money(w.hire_fee)])

@@ -56,7 +56,9 @@ func setup(simulation) -> void:
 		sim.economy.accounts[ACCT] = 0.0
 	for item in GOODS:
 		if int(GOODS[item].t) > 0:   # Waren ohne Zielbestand (Schrott) kommen nur ueber Ankauf
-			sim.stock.add(item, int(GOODS[item].t), ACCT, loc, "Erstausstattung Großlager")
+			# Neubeginn: doppelter Startvorrat an Baumaterial – die KI baut die Orte erst auf (Benedikt 17.11.: "ausreichend Waren")
+			var f := 2 if sim.neubeginn and str(GOODS[item].g) == "baumaterial" else 1
+			sim.stock.add(item, int(GOODS[item].t) * f, ACCT, loc, "Erstausstattung Großlager")
 	sim.day_changed.connect(on_day)
 
 

@@ -19,6 +19,7 @@ func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: 
 		cd.gen_params["generator"] = maxi(3, version)
 		cd.gen_params["landschaft"] = landschaft if version >= 6 else ""
 		cd.gen_params["start_haeuser"] = start_houses   # Laden erzeugt die Karte neu: gleiche Zahl Startwohnhaeuser
+		cd.gen_params["neubeginn"] = neubeginn
 	return cd
 
 
@@ -483,7 +484,10 @@ func _build_hub() -> void:
 	B["baustoffe"] = _put("freight_shed", q_sw.position + Vector2i(3, 2), "hub_materials", "Großlager – Baustoffhandel")
 	B["grosshandel"] = _put("warehouse", q_sw.position + Vector2i(12, 2), "hub_wholesale", "Großlager – Großhandelsmarkt")
 	B["verwaltung"] = _put("office", q_sw.position + Vector2i(16, 9), "hub_admin", "Großlager – Verwaltung")
-	var plaza := _hub_area(q_sw, Vector2i(7, 5), q_sw.position + Vector2i(3, 8), G.PLAZA)
+	if neubeginn:   # Neubeginn: die Dienste der Orte stehen hier (Arbeitsamt, Personalbuero, Bank; Werkstatt und Tankstelle im Suedosten)
+		B["arbeitsamt"] = _put("job_board", q_sw.position + Vector2i(2, 8), "job_board", "Arbeitsamt am Großlager")
+		B["personal"] = _put("staffing", q_sw.position + Vector2i(7, 8), "staffing", "Personalbüro am Großlager")
+	var plaza := _hub_area(q_sw, Vector2i(7, 5), q_sw.position + Vector2i(3, 8), G.PLAZA) if not neubeginn else Rect2i()
 	if plaza.size.x > 0:
 		B["brunnen"] = _put_in("fountain", Rect2i(plaza.position + Vector2i(2, 1), Vector2i(2, 2)), "decor", "Brunnen am Händlermarkt")
 		c.benches.append(plaza.position + Vector2i(1, 4))
@@ -495,8 +499,13 @@ func _build_hub() -> void:
 	B["fahrzeughandel"] = _put("dealer", q_se.position + Vector2i(3, 2), "dealer", "Großlager – Fahrzeug- und Maschinenhandel")
 	var trucks := _hub_area(q_se, Vector2i(9, 4), q_se.position + Vector2i(11, 2), G.PARKING)
 	var officials := _hub_area(q_se, Vector2i(6, 2), q_se.position + Vector2i(3, 10), G.PARKING)
-	B["container1"] = _put("containers", q_se.position + Vector2i(13, 10), "decor", "Containerlager")
-	B["container2"] = _put("containers", q_se.position + Vector2i(16, 10), "decor", "Containerlager")
+	if neubeginn:
+		B["werkstatt"] = _put("workshop", q_se.position + Vector2i(11, 8), "workshop", "Werkstatt am Großlager")
+		B["tankstelle"] = _put("gas_station", q_se.position + Vector2i(16, 8), "", "Tankstelle am Großlager")
+		B["bank"] = _put("bank", q_se.position + Vector2i(13, 10), "bank", "Sparkasse am Großlager")
+	else:
+		B["container1"] = _put("containers", q_se.position + Vector2i(13, 10), "decor", "Containerlager")
+		B["container2"] = _put("containers", q_se.position + Vector2i(16, 10), "decor", "Containerlager")
 	town = keep_town
 	town_rect = keep_rect
 	for y in range(R.position.y - 4, R.end.y + 4):

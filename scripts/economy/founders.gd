@@ -183,7 +183,7 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 	if not bool(via.ok):
 		return _refuse(town, branch, str(via.msg).left(120))
 	var firms: int = sim.companies.filter(func(x): return x.status not in ["geschlossen", "verwertung"]).size()
-	if branch not in INDUSTRY and float(sim.citizens.population()) < pop_per_firm * float(firms + 1):
+	if (branch not in INDUSTRY or sim.neubeginn) and float(sim.citizens.population()) < pop_per_firm * float(firms + 1):
 		return _refuse(town, branch, "Markt zu klein: %d Einwohner für %d Unternehmen (eine Gründung je %d Einwohner)" % [sim.citizens.population(), firms + 1, int(pop_per_firm)])
 	var bsize: Array = CityGenerator.TYPES[str(spec.get("gebaeude", "farm"))]
 	var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4

@@ -10,6 +10,7 @@ extends CoastGenerator
 
 var town_count := 4
 static var start_houses := -1
+static var neubeginn := false   # Benedikt 17.11.: Orte nur mit einer Strasse, Rathaus, Anleger und Startplatz; Dienste am Zentrallager
 var forest_threshold := 0.25     # Version 6: je Landschaftstyp dichter oder lichter Wald
 var forest_p := 0.55   # Welt 2: hoechstens so viele Wohnhaeuser je Startort (-1 = wie bisher); die Orte wachsen durch Zuzug
 ## Ortscharakter (je Ort aus dem Seed): praegt Strassennetz, Bebauung und Umland, damit die Staedte verschieden aussehen.
@@ -296,7 +297,10 @@ func _first_id(from: int, pred: Callable) -> int:
 func _town_core(k: int) -> void:
 	var t := town
 	var ch: String = str(towns_out[k].charakter)
-	_streets(t, ch)
+	if neubeginn:
+		_streets_neubeginn(t)
+	else:
+		_streets(t, ch)
 	for x in range(t.x, coast[t.y] - 1):
 		c.ground[c.idx(Vector2i(x, t.y))] = G.ROAD
 	for x in range(t.x + 1, coast[t.y]):   # Kai beginnt hinter der Hauptstrasse (sonst trennt er deren Suedteil ab)
@@ -312,6 +316,9 @@ func _town_core(k: int) -> void:
 	_put("warehouse", Vector2i(t.x + 3, t.y + 4), "", "Hafenlager")
 	var core := Vector2i(t.x - 8 + _j(3), t.y - 4 + _j(6))   # ab Version 4 liegt der Ortskern jedes Mal etwas anders
 	_put("townhall", core, "town_hall", "Rathaus %s" % nm)
+	if neubeginn:
+		_core_neubeginn(k, t, nm)
+		return
 	_market_square(core + Vector2i(2, 2))
 	_put("job_board", core + Vector2i(-6, 2), "job_board", "Arbeitsamt %s" % nm)
 	_put("staffing", core + Vector2i(-6, -4), "staffing", "Personalbüro %s" % nm)
@@ -389,6 +396,30 @@ func _town_core(k: int) -> void:
 		if id2 >= 0:
 			budget -= 1
 			k2 += 1
+
+
+## Neubeginn: eine Strasse – Uferstrasse mit Abzweig zur Hinterstrasse, an der der Startplatz der KI liegt (Anschluss zum Zentrallager
+## legt _connect_towns). Alles Weitere bauen die KI und die Stadt selbst.
+func _streets_neubeginn(t: Vector2i) -> void:
+	_road(Vector2i(t.x, t.y - 10), Vector2i(t.x, t.y + 10))
+	_road(Vector2i(t.x, t.y), Vector2i(t.x - 30, t.y))
+	_road(Vector2i(t.x - 30, t.y - 9), Vector2i(t.x - 30, t.y + 2))
+
+
+## Neubeginn: neben Rathaus und Anleger nur der staedtische Bauhof (Lager der Stadt), das regionale Kraftwerk (Ort 0) und das
+## Startgrundstueck der KI; keine Laeden, Wohnhaeuser oder Dienste (die stehen am Zentrallager).
+func _core_neubeginn(k: int, t: Vector2i, nm: String) -> void:
+	_put("freight_shed", Vector2i(t.x - 22, t.y + 6), "", "Städtischer Bauhof")
+	if k == 0:
+		_put("factory", Vector2i(t.x - 22, t.y - 17), "", "Kraftwerk")
+	var y0 := t.y - 9
+	var r := Rect2i(t.x - 38, y0, PLOT_W, PLOT_H)
+	var r2 := Rect2i(t.x - 38 - EXT_W, y0, EXT_W, PLOT_H)
+	if _free(r) and _free(r2):
+		var id := _plot_building(r, "Firmengrundstück %s" % nm, -1)
+		_plot_building(r2, "Erweiterungsfläche %s" % nm, id)
+		c.start_depots.append(id)
+		_road(Vector2i(t.x - 31, y0 + 2), Vector2i(t.x - 30, y0 + 2))
 
 
 ## Strassennetz des Orts nach Charakter. Allen gemeinsam: Hauptstrasse an der Kueste (x = Ortsmitte), Querstrasse auf Hoehe der
@@ -559,7 +590,7 @@ func validate(cd: CityData) -> Dictionary:
 			errs.append("%s: nicht genau ein Bauhof" % t.name)
 		if own.filter(func(b): return b.type == "port_office").size() != 1:
 			errs.append("%s: kein Hafen" % t.name)
-		if not t.has("airport") or t.airport.is_empty():
+		if (not t.has("airport") or t.airport.is_empty()) and not neubeginn:   # Neubeginn: Flughafen baut die Stadt spaeter
 			errs.append("%s: kein Flughafen" % t.name)
 		if int(t.get("start_plot", -1)) < 0:
 			errs.append("%s: kein Startgrundstück" % t.name)

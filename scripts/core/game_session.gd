@@ -67,6 +67,8 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 				"personality": p.personality, "form": p.get("form", "einzel")})
 		sim = Simulation.new()
 		sim.start_profile = str(cfg.get("start_profil", "unternehmer"))   # Auftrag 14: branchenneutraler Start; "spedition" = bisheriger Start
+		sim.neubeginn = bool(cfg.get("neubeginn", false))
+		RegionGenerator.neubeginn = sim.neubeginn
 		sim.world_mode = str(cfg.get("welt", "region"))   # Auftrag 17: neue Partien beginnen als Region (je Startspieler eine Stadt)
 		sim.setup(int(cfg.seed), players, int(cfg.get("map_size", Catalog.MAP_SIZE)))
 		sim.game_master.enabled = bool(cfg.get("game_master", true))

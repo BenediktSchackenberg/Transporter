@@ -30,7 +30,9 @@ REFLECT = ("Nimm dir kurz Zeit: Wie fühlst du dich gerade (observe → gefuehle
 DEFAULT_MODEL = "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M"   # Benedikt 16.11.2026: Qwen 27B lokal (gpt-oss:20b erfand Angebote, kaputte Aufrufe)
 MAX_MESSAGES = 60         # Gespraechslaenge, danach werden die aeltesten Schritte verworfen (das Gedaechtnis liegt in Dateien)
 KEEP_MESSAGES = 36
-MAX_CHARS = 24000          # Textlaenge des Verlaufs: mit gpt-oss waren 30.000 Zeichen schon 10.600-13.500 Token (Ollama HTTP 500 bei 16k, 15.11.)
+REREAD_S = 900            # dieselbe unveraenderte Datei so lange nur als Kurzfassung (Leseschleife 17.11.)
+AGENT_TOOLS = ("learn", "wait", "list_files", "read_file", "write_file", "append_memory", "nachschlagen")
+MAX_CHARS = 24000         # Textlaenge des Verlaufs: mit gpt-oss waren 30.000 Zeichen schon 10.600-13.500 Token (Ollama HTTP 500 bei 16k, 15.11.)
 REFLECT_EVERY = 40         # Werkzeugschritte zwischen zwei Erinnerungen an das Gedaechtnis
 LEARN_GAP = 6              # Lernanstoss nach Erfolg/Fehlschlag hoechstens alle so viele Schritte
 LEARN_ACTS = ("Firma", "Amt", "FoundCompany", "BuyPlot", "OrderHouse", "Bauwerk", "Bauplan", "AcceptJob", "Deliver", "Attack", "MoveIn")
@@ -377,6 +379,7 @@ class Agent:
         self._last_fail = ""
         self.dir = Path(args.root) / args.name
         self.ws = self.dir / "workspace"
+        self._reads = {}   # Datei -> (Lesezeit, Aenderungszeit), Bremse gegen Leseschleifen
         self.logs = self.dir / "logs"
         self.ws.mkdir(parents=True, exist_ok=True)
         self.logs.mkdir(parents=True, exist_ok=True)
@@ -418,6 +421,9 @@ class Agent:
                 return compact_obs(self.world.observe(), full=bool(a.get("voll", False)))
             if name == "act" and str(a.get("type", "")).lower() in ("observe", "beobachten"):   # Modelle rufen observe auch als Handlung auf
                 return compact_obs(self.world.observe())
+            if name == "act" and str(a.get("type", "")) in AGENT_TOOLS:   # 17.11.: learn/wait als Handlung -> "Unbekannte Handlung"
+                data = a.get("data", {})
+                return self.call_tool(str(a["type"]), data if isinstance(data, dict) else {})
             if name == "act":
                 data = a.get("data", {})
                 if isinstance(data, str):
@@ -473,7 +479,18 @@ class Agent:
             if name == "list_files":
                 return sorted(p.name for p in self.ws.iterdir())
             if name == "read_file":
-                return self._path(a["name"]).read_text(encoding="utf-8")[:6000]
+                p = self._path(a["name"])
+                text = p.read_text(encoding="utf-8")[:6000]
+                # Leseschleife bremsen (17.11.: Greta las 23 min nur ihre Dateien, weil das Kuerzen des Verlaufs sie wieder "vergass"):
+                # dieselbe unveraenderte Datei innerhalb von REREAD_S nur als Kurzfassung
+                seen = self._reads.get(p.name)
+                mtime = p.stat().st_mtime
+                if seen and seen[1] == mtime and time.time() - seen[0] < REREAD_S:
+                    return {"ok": True, "unveraendert": True, "msg": "Diese Datei hast du vor %d min gelesen, sie ist unverändert. "
+                            "Hier nur der Anfang – handle jetzt (act) statt weiter zu lesen." % int((time.time() - seen[0]) / 60),
+                            "anfang": text[:800]}
+                self._reads[p.name] = (time.time(), mtime)
+                return text
             if name == "write_file":
                 if str(a["name"]).endswith("EPISODIC_MEMORY.jsonl"):
                     return {"ok": False, "msg": "EPISODIC_MEMORY.jsonl nur mit append_memory erweitern."}
@@ -618,7 +635,9 @@ class Agent:
             out = out[2:]
         while out and out[0]["role"] == "tool":   # Werkzeugergebnis ohne seinen Aufruf verwerfen
             out.pop(0)
-        out.insert(0, {"role": "user", "content": "(Ältere Schritte sind ausgeblendet; dein Gedächtnis steht in deinen Dateien.) " + CONTINUE})
+        # nicht auf die Dateien verweisen: das loeste eine Leseschleife aus (17.11.); die Lage steht im digest
+        out.insert(0, {"role": "user", "content": "(Ältere Schritte sind ausgeblendet. Dein Gedächtnis hast du schon gelesen – lies es nicht erneut, "
+                       "handle mit act oder schau mit observe.) " + self.digest()})
         return out
 
     def run(self):
@@ -637,6 +656,7 @@ class Agent:
                 evening = False
                 day_start = steps
                 messages = [{"role": "user", "content": MORNING + " " + self.digest()}]
+                self._reads = {}   # frische Sitzung: Dateien duerfen neu gelesen werden
                 self.say("☀ Neuer Tag – frische Sitzung, Gedächtnis aus den Dateien")
             messages = self.trim(messages)
             try:
@@ -664,6 +684,7 @@ class Agent:
                 if self._no_tool >= 6:
                     self.say("↺ Schleifenbremse: frische Sitzung nach %d Antworten ohne Handlung" % self._no_tool)
                     messages = [{"role": "user", "content": MORNING + " " + self.digest()}]
+                    self._reads = {}   # frische Sitzung: Dateien duerfen neu gelesen werden
                     self._no_tool = 0
                 elif self._no_tool >= 3:
                     o = compact_obs(self.world.observe())

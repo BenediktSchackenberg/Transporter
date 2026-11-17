@@ -133,6 +133,8 @@ func generate() -> void:
 	var target: int = int(sim.population_target) if int(sim.population_target) > 0 else int(Population.cfg().get("bevoelkerung", POPULATION))
 	# Kuestenort (Auftrag 15): das Ziel ist die Zahl der Buerger im vorhandenen Wohnraum; Firmenpersonal und Bewerber kommen hinzu
 	var total := target + real if int(sim.population_target) > 0 else maxi(target, real + 1)
+	if sim.neubeginn:
+		total = real   # Neubeginn: niemand ausser den Inhabern; Einwohner kommen per Siedlerschiff
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(sim.city.seed_value) + 4711
 	var real_employed := 0

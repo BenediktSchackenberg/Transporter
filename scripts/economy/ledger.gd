@@ -131,8 +131,8 @@ func forgive_debt(amount: float) -> void:
 
 
 ## Kapitaleinlage von aussen (Startkapital-Aufstockung, Tests): erhoeht auch das Startkapital der Bilanzidentitaet.
-func inject(amount: float) -> void:
-	_move(amount, "I0")
+func inject(amount: float, counter: String = "I0") -> void:
+	_move(amount, counter)
 	start_capital += amount
 
 

@@ -789,6 +789,8 @@ const SHOP_PER_RESIDENTS := 15        # Region: ein Laden je 15 Einwohner
 const WORKSHOP_PER_RESIDENTS := 25    # Region: eine Werkstatt/Lagerhalle im Gewerbegebiet je 25 Einwohner
 const SHOP_DEFS := ["baeckerei_laden", "getraenkemarkt", "drogerie_laden", "supermarkt"]
 func _developer_town(town: int) -> void:
+	if sim.neubeginn:
+		return   # Neubeginn: Wohnhaeuser bauen die KI-Unternehmer (Etappe B), kein Bautraeger
 	for i in (DEV_STEPS if sim.towns.is_region() else 1):
 		if not _developer_once(town):
 			return

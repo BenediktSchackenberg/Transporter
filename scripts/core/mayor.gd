@@ -40,7 +40,7 @@ const SCHEMA := {
 	"improve_traffic": {"params": {"kind": "string", "x": "int", "y": "int", "reason": "string"},
 		"desc": "Verkehrsmaßnahme auf einem wiederkehrenden Engpass (obs.verkehr.engpaesse mit wiederkehrend=true): kind ampel (Kreuzung, 12 000 EUR, 2 Tage), ladezone (Strecke neben einem Gebäude, 8 000 EUR, 3 Tage, Haltebucht für Lieferfahrzeuge, +1 Kapazität) oder ausbau (Straßenabschnitt, 40 000 EUR, 6 Tage, währenddessen eine Spur weniger). Ein einzelner Stau rechtfertigt keinen Ausbau."},
 	"reject_procurement": {"params": {"order_id": "string", "reason": "string"}, "desc": "Beschaffungsvorschlag ablehnen (Begründung nötig, z. B. Budget oder kein Bedarf)."},
-	"assess_financing": {"params": {"project_id": "string"}, "desc": "Finanzierungsbedarf eines Projekts oder Plans bewerten (nur Auskunft)."},
+	"assess_financing": {"params": {"project_id": "string?"}, "desc": "Finanzierungsbedarf und Status eines Projekts bewerten (nur Auskunft); ohne project_id: Kasse und alle offenen Projekte."},
 	"set_property_tax": {"params": {"satz_prozent": "number", "reason": "string"},
 		"desc": "Grundsteuersatz in Prozent des Immobilienwerts je Jahr festlegen (0,2–3,0; je Beschluss höchstens ±0,5 Punkte). Alle Bürger-Eigentümer zahlen ihn an die Stadtkasse; siehe obs.bevoelkerungsmodell."},
 	"hire_staff": {"params": {"abteilung": "string", "anzahl": "int", "reason": "string"},
@@ -170,6 +170,8 @@ func town_units() -> Array:
 ## freie Wohnungen des eigenen Gebiets. Wer keine Wohnung findet, wartet (Wohnungssuchende dieser Stadt).
 const REGION_ARRIVALS := 10.0  # Region: Zuzug je Monat das Zehnfache der Grundrate (Staedte sollen sichtbar wachsen; Zuzug ist der Taktgeber des Bautraegers)
 func _arrivals_town() -> void:
+	if sim.neubeginn:
+		return   # Neubeginn: Zuzug nur per Siedlerschiff (SeaTraffic)
 	var Z: Citizens = sim.citizens
 	var month := GameCalendar.month_of(sim.game_min)
 	var boost := marketing_boost if month <= marketing_until else 0.0
@@ -1138,18 +1140,42 @@ func _tender(a: Dictionary) -> Dictionary:
 	if prj.is_empty():
 		return {"ok": false, "msg": "Projekt %s gibt es nicht." % a.project_id}
 	if prj.status != "beschlossen":
-		return {"ok": false, "msg": "Projekt %s hat den Status %s; nur beschlossene Projekte werden ausgeschrieben." % [prj.id, prj.status]}
+		return {"ok": false, "msg": "Projekt %s: %s Nur beschlossene Projekte werden ausgeschrieben." % [prj.id, status_hint(prj)]}
 	prj.status = "ausgeschrieben"
 	prj.tender = {"opened_day": _today(), "bids": []}
 	return {"ok": true, "msg": "Projekt %s ausgeschrieben (Budget %s)." % [prj.id, Catalog.money(float(prj.cost))], "ref": prj.id}
 
 
 func _assess_financing(a: Dictionary) -> Dictionary:
-	var prj: Dictionary = projects.get(str(a.project_id), {})
-	if prj.is_empty():
-		return {"ok": false, "msg": "Projekt %s gibt es nicht." % a.project_id}
-	return {"ok": true, "msg": "Projekt %s: Kosten %s, reserviert %s, verfügbar %s, Kasse %s." % [prj.id, Catalog.money(float(prj.cost)), Catalog.money(commitments),
-		Catalog.money(available_budget()), Catalog.money(cash())]}
+	var prj: Dictionary = projects.get(str(a.get("project_id", "")), {})
+	if prj.is_empty():   # ohne (gueltige) project_id: Uebersicht statt Fehler (Partie 16.11.: Buergermeisterin vergass das Feld)
+		var open: Array = []
+		for p in projects.values():
+			if str(p.status) not in ["fertig", "abgelehnt"]:
+				open.append("%s %s (%s)" % [p.id, str(p.get("name", p.get("kind", ""))), p.status])
+		return {"ok": true, "msg": "Kasse %s, reserviert %s, verfügbar %s. Offene Projekte: %s." % [Catalog.money(cash()), Catalog.money(commitments),
+			Catalog.money(available_budget()), ", ".join(open.slice(-8)) if not open.is_empty() else "keine"]}
+	return {"ok": true, "msg": "Projekt %s: Kosten %s, %s Reserviert %s, verfügbar %s, Kasse %s." % [prj.id, Catalog.money(float(prj.cost)), status_hint(prj),
+		Catalog.money(commitments), Catalog.money(available_budget()), Catalog.money(cash())]}
+
+
+## Was bedeutet der Projektstatus und ist etwas zu tun? (Partie 16.11.: "beauftragt" wurde als Fehler gelesen, ~20 Schritte vergeudet)
+func status_hint(prj: Dictionary) -> String:
+	match str(prj.status):
+		"geplant":
+			return "Status geplant – noch nicht beschlossen."
+		"beschlossen":
+			return "Status beschlossen – jetzt ausschreiben (tender)."
+		"ausgeschrieben":
+			return "Status ausgeschrieben – Baufirmen bieten, die Vergabe läuft automatisch. Nichts zu tun."
+		"beauftragt", "laufend":
+			var run: Dictionary = sim.construction.public.get(str(prj.id), {}) if sim.construction != null else {}
+			var firm := str(sim.construction.builders.get(str(prj.get("builder", "")), {}).get("name", "eine Baufirma")) if sim.construction != null else "eine Baufirma"
+			var rest := (" Noch etwa %d Tage." % int(run.days_left)) if run.has("days_left") else ""
+			return "Status %s – %s baut, alles in Ordnung, kein Handlungsbedarf.%s" % [prj.status, firm, rest]
+		"fertig":
+			return "Status fertig."
+	return "Status %s." % prj.status
 
 
 ## Liegt das Grundstueck im eigenen Verwaltungsgebiet? (Region; Einzelstadt: immer)

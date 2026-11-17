@@ -310,6 +310,7 @@ class ShipNode extends Node2D:
 		"schuettgut": {"len": 7.0, "beam": 1.9, "bow": 1.3, "h": 1.6, "hull": "5b2420", "deck": "55534f", "band": "1e1e1e"},
 		"kreuzfahrt": {"len": 8.6, "beam": 2.1, "bow": 1.9, "h": 1.8, "hull": "f2f3f5", "deck": "c9b48c", "band": "1d2f5e"},
 		"autotransporter": {"len": 7.8, "beam": 2.0, "bow": 0.8, "h": 4.2, "hull": "e3e3e0", "deck": "9c9c98", "band": "8c1c1c"},
+		"siedler": {"len": 7.4, "beam": 1.9, "bow": 1.7, "h": 1.7, "hull": "2b3a4a", "deck": "b8a27a", "band": "b8352c"},   # Neubeginn
 	}
 
 	func _w(dx: float, dy: float) -> Vector2:
@@ -387,7 +388,7 @@ class ShipNode extends Node2D:
 				draw_line(_p(-l - 0.3 - i * 1.1, b * 0.6 + i * 0.25, 0.0), _p(-l - 1.2 - i * 1.1, b * 1.1 + i * 0.35, 0.0), a, 3.0)
 			draw_line(_p(l + 0.1, -0.3, 0.0), _p(l - 0.8, -b - 0.4, 0.0), Color(1, 1, 1, 0.5 * wake), 2.5)   # Bugwelle
 			draw_line(_p(l + 0.1, 0.3, 0.0), _p(l - 0.8, b + 0.4, 0.0), Color(1, 1, 1, 0.5 * wake), 2.5)
-		var outline := _hull_outline(l, b, float(sp.bow), kind == "kreuzfahrt")
+		var outline := _hull_outline(l, b, float(sp.bow), kind in ["kreuzfahrt", "siedler"])
 		var bands: Array = [[0.0, 0.28, BOOT]]
 		if str(sp.band) != "":
 			bands.append([0.28, 0.62 if kind != "autotransporter" else 1.3, Color(str(sp.band))])
@@ -397,7 +398,7 @@ class ShipNode extends Node2D:
 				_draw_container(l, b, h, lit)
 			"schuettgut":
 				_draw_bulk(l, b, h, lit)
-			"kreuzfahrt":
+			"kreuzfahrt", "siedler":
 				_draw_cruise(l, b, h, lit)
 			"autotransporter":
 				_draw_carrier(l, b, h, lit)

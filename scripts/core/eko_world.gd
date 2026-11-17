@@ -54,6 +54,8 @@ var _terrain_ready := false
 
 var arms := EkoArms.new()           # Waffen, Schutz, Gefahren (Benedikt 15.11.2026)
 var estates := EkoEstates.new()     # Stammsitz je KI-Spieler (Benedikt 15.11.2026)
+var homes := EkoHomes.new()         # Neubeginn: Wohnhaeuser der KI-Firmen (Benedikt 17.11.2026)
+var _homes_min := -1.0
 var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
 const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.000 EUR Privatgeld (Einlage von aussen X0 -> Y0)
 const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
@@ -100,6 +102,7 @@ func setup(simulation) -> void:
 	sim = simulation
 	arms.setup(self)
 	estates.setup(self)
+	homes.setup(self)
 	changed.connect(func(): _block_tiles_n = -1)
 	sim.visit_completed.connect(_on_visit_completed)
 
@@ -144,6 +147,8 @@ func grant_start_capital(b: Dictionary) -> void:
 	if bool(b.get("startkapital", false)):
 		return
 	b["startkapital"] = true
+	if sim.neubeginn:
+		return   # Neubeginn: das Startkapital (1 Mio.) liegt in der Firma; privat nur per entnahme
 	sim.economy.transfer("X0", "Y0", START_CAPITAL)
 	b.geld = float(b.get("geld", 0.0)) + START_CAPITAL
 	_event(b, "erhält %s Startkapital" % Catalog.money(START_CAPITAL))
@@ -319,6 +324,9 @@ func update(dt: float) -> void:
 	_houses_tick(dt)
 	arms.tick(dt)
 	estates.tick(dt)
+	if _homes_min >= 0.0 and sim.game_min > _homes_min:
+		homes.tick(float(sim.game_min) - _homes_min)
+	_homes_min = float(sim.game_min)
 	for b in beings.values():   # laufende Ablaeufe fortsetzen, sobald das Wesen angekommen ist und nicht ruht
 		if not (b.get("ablauf", []) as Array).is_empty() and (b.mover as Mover).arrived() and float(b.get("rest_left", 0.0)) <= 0.0:
 			_run_plan(b)
@@ -390,7 +398,18 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		return {"ok": false, "msg": "Unbekanntes Wesen. Erst POST /join."}
 	last_active = name
 	b.last_act = Time.get_ticks_msec()
+	var gap := float(sim.game_min) - float(b.get("last_game_min", -1.0))
+	if b.has("last_game_min") and gap > 0.0 and gap < AgentController.HOLD_GAME_MIN:   # Takt des Wesens in Spielminuten (fuer Vormerkungen)
+		b["takt_min"] = gap if not b.has("takt_min") else lerpf(float(b.takt_min), gap, 0.3)
+	b["last_game_min"] = float(sim.game_min)
+	if data.get("data") is Dictionary and not data.has("aktion"):   # {"data": {"data": {"aktion": ...}}} (Partie 16.11.)
+		data = data.data
 	type = canonical_type(type)
+	if type not in ACTIONS:   # Partie 16.11.: 11x type "act" (Werkzeugname), echte Art in data.type oder aus data.aktion ableitbar
+		if data.get("type") is String and canonical_type(str(data.type)) in ACTIONS:
+			type = canonical_type(str(data.type))
+		elif data.has("aktion") and type.to_lower() in ["act", "aktion", "handlung", ""]:
+			type = "Amt" if int(b.get("amt", -1)) >= 0 else "Firma"
 	if arms.is_out(b) and type not in ["Inspect"]:
 		return {"ok": false, "status": "gescheitert", "msg": arms.out_msg(b)}
 	if not from_plan and type in ["MoveTo", "Stop", "Pickup", "Place", "Ablauf"] and not (b.get("ablauf", []) as Array).is_empty():
@@ -631,12 +650,38 @@ func _building_dist(t: Vector2i, bd: Dictionary) -> int:
 ## Monaten kein Fahrzeug, keiner baute den Stammsitz aus, Ziele standen seit Monat 1 bei 0 %, und ein erfundenes Fahrzeugangebot
 ## ging per Anruf reihum – das kleine Modell verlor in der grossen Beobachtung den Faden. Diese Liste nennt nur, was wirklich geht.
 const GOAL_STALE_DAYS := 3
+## Ziele rund um das eigene Heim (Partie 16.11.: Viktor "eigenes Zuhause" 0 % trotz Huette, Burg und Mauer) – Woerter in Kleinschreibung.
+const HOME_GOAL_WORDS := ["zuhause", "stammsitz", "basis", "burg", "schloss", "festung", "heim", "anwesen", "haus", "mauer", "residenz"]
+const HOME_GOAL_FULL := 3   # so viele fertige Bauten (ausser der Starthuette) = Ziel erreicht
+
+
+## Wohn-/Stammsitz-Ziel: Fortschritt aus den fertigen Bauten ableiten (nur nach oben), ab HOME_GOAL_FULL erreicht.
+func _estate_goal_sync(b: Dictionary) -> void:
+	var g: Dictionary = b.get("ziel", {})
+	if g.is_empty() or str(g.get("status", "")) != "aktiv" or not estates.estates.has(str(b.name)):
+		return
+	var low := str(g.ziel).to_lower()
+	if not HOME_GOAL_WORDS.any(func(w): return low.contains(w)):
+		return
+	var done: Array = (estates.estates[b.name].bauten as Array).filter(func(x): return x.art != "huette" and str(x.get("status", "")) == "fertig")
+	var pct := mini(100, int(round(100.0 * done.size() / HOME_GOAL_FULL)))
+	if pct <= int(g.get("fortschritt", 0)):
+		return
+	g.fortschritt = pct
+	g["stand_min"] = sim.game_min
+	if pct >= 100:
+		g.status = "erreicht"
+		_event(b, "Ziel erreicht: %s (Stammsitz mit %s)" % [g.ziel, ", ".join(done.map(func(x): return x.art))])
+		sim.log_event("%s: Ziel erreicht – %s" % [b.name, g.ziel], "good")
+	else:
+		_event(b, "Ziel „%s“: %d %% (fertig: %s)" % [str(g.ziel).left(60), pct, ", ".join(done.map(func(x): return x.art))])
 
 
 const HOME_AKKU := 30.0   # darunter (oder nass/kalt) steht der Heimweg an erster Stelle (Partie 16.11.: Viktor arbeitete mit 14 % Akku, nass und kalt weiter)
 
 
 func next_steps(b: Dictionary) -> Array:
+	_estate_goal_sync(b)
 	var out: Array = []
 	var akku := float(b.get("akku", 100.0))
 	if float(b.get("rest_left", 0.0)) <= 0.0 and (akku < HOME_AKKU or float(b.get("nass", 0.0)) > 60.0 or float(b.get("kalt", 0.0)) > 60.0):
@@ -648,6 +693,19 @@ func next_steps(b: Dictionary) -> Array:
 			if hint != "":
 				out.append("Nach Hause (%s):%s Für weite Wege: Fahrt." % [why, hint])
 	var cid := active_firm(b)
+	var offen: Dictionary = b.get("offen", {})
+	if not offen.is_empty():
+		if float(sim.game_min) - float(offen.min) > GameCalendar.days_to_min(1):
+			b.erase("offen")   # zu alt: nicht mehr draengen
+		else:
+			out.append("Antworten – %s hat dir gesagt: „%s“. Antworte mit Talk {to: \"%s\", text: ...} (geht auch als Anruf aus der Ferne)." % [
+				offen.von, str(offen.text).left(120), offen.von])
+	if cid >= 0:
+		for o in sim.social.offers.values():
+			if o.status == "open" and int(o.awaiting) == cid and float(o.expires) > sim.game_min:
+				out.append("Angebot %s von %s wartet auf deine Antwort (%s): Firma {aktion: {action: \"accept_trade\", offer_id: \"%s\"}} – oder reject_trade bzw. counter_offer." % [
+					o.id, sim.company(int(o.from)).player_name, sim.social.describe(o).left(100), o.id])
+				break
 	if cid >= 0:
 		var c = sim.company(cid)
 		if c.vehicle_ids.is_empty():
@@ -659,9 +717,13 @@ func next_steps(b: Dictionary) -> Array:
 				out.append("Fahrzeug kaufen – ohne Fahrzeug verdient %s nichts: Firma {aktion: {action: \"buy_vehicle\", offer_id: \"%s\"}} (%s, %s; Firmenkasse %s). Angebots-IDs stehen in meine_firma.fahrzeugangebote, nicht bei anderen Unternehmern." % [
 					c.company_name, best.id, best.model, Catalog.money(float(best.price)), Catalog.money(c.ledger.cash)])
 		else:
-			var step := _fleet_step(cid)
+			var step := _fleet_step(cid, float(b.get("takt_min", 0.0)))
 			if step != "":
 				out.append(step)
+		if sim.neubeginn:
+			var hs := homes.next_step(cid)
+			if hs != "":
+				out.append(hs)
 	if int(b.get("amt", -1)) < 0:
 		var sug := estates.suggestion(str(b.name))
 		if not sug.is_empty():
@@ -683,16 +745,86 @@ func next_steps(b: Dictionary) -> Array:
 		if days >= GOAL_STALE_DAYS:
 			out.append("Dein Ziel „%s“ steht seit %d Tagen bei %d %%. Melde Fortschritt (ZielStand), ändere den Weg oder ersetze es (Ziel {..., ersetzen: true})." % [
 				str(g.ziel).left(60), int(days), int(g.get("fortschritt", 0))])
+	var hint := _contact_hint(b, cid)
+	if hint != "":
+		out.insert(mini(1, out.size()), hint)   # vor Ziel-Erinnerungen (17.11.: als Letztes fiel er immer hinter die ersten drei)
 	return out.slice(0, 3)
+
+
+## Hoechstens einmal je Spieltag ohne Gespraech: ein konkreter Anlass, jemanden anzusprechen (17.11.: nach der Talk-Sperre redete
+## niemand mehr). Buergermeister -> Unternehmer der eigenen Stadt (sonst irgendeiner), Unternehmer -> Buergermeister ihrer Stadt
+## bzw. abwechselnd ein anderer Unternehmer (Kooperation).
+func _contact_hint(b: Dictionary, cid: int) -> String:
+	if float(sim.game_min) - float(b.get("kontakt_min", -1.0e9)) < GameCalendar.days_to_min(1):
+		return ""
+	var k := int(b.get("amt", -1))
+	if k >= 0:
+		var firms: Array = []
+		for c in sim.companies:
+			var n := firm_being(c.id)
+			if n != "" and n != b.name:
+				firms.append([n, c])
+		if firms.is_empty():
+			return ""
+		firms.sort_custom(func(x, y): return int(sim.towns.home_of(x[1].id) == k) > int(sim.towns.home_of(y[1].id) == k))
+		var M: Mayor = sim.towns.mayors[k]
+		var prj := ""
+		for p in M.projects.values():
+			if str(p.status) in ["beschlossen", "ausgeschrieben", "beauftragt", "laufend"]:
+				prj = " (z. B. %s %s, %s)" % [p.id, str(p.get("name", p.get("kind", ""))), p.status]
+				break
+		return "Kontakt: Sprich Unternehmer %s (%s) an – was braucht die Firma in %s, was plant die Stadt%s? Talk {to: \"%s\", text: ...}." % [
+			firms[0][0], firms[0][1].company_name, sim.towns.name_of(k), prj, firms[0][0]]
+	if cid < 0:
+		return ""
+	var town: int = sim.towns.home_of(cid)
+	var mayor_name := ""
+	for n in beings:
+		if int(beings[n].get("amt", -1)) == town:
+			mayor_name = str(n)
+	var other: Array = []
+	for c in sim.companies:
+		var n := firm_being(c.id)
+		if n != "" and n != b.name:
+			other.append([n, c.id])
+	var turn := int(float(sim.game_min) / GameCalendar.days_to_min(1)) % 2
+	if mayor_name != "" and (turn == 0 or other.is_empty()):
+		return "Kontakt: Bürgermeister %s (%s) – frag nach Bauprojekten, Anträgen oder Transporten der Stadt: Talk {to: \"%s\", text: ...}." % [
+			mayor_name, sim.towns.name_of(town), mayor_name]
+	if not other.is_empty():
+		var o: Array = other[int(float(sim.game_min) / GameCalendar.days_to_min(1)) % other.size()]
+		return "Kontakt: Unternehmer %s – Aufträge teilen, Fahrzeuge vermieten oder zusammenarbeiten: Talk {to: \"%s\", text: ...} oder Firma {aktion: {action: \"propose_cooperation\", to: %d}}." % [
+			o[0], o[0], int(o[1])]
+	return ""
 
 
 ## Fahrzeug ohne Fahrer -> Fahrer einsetzen; Fahrzeug frei -> besten machbaren gesammelten Auftrag annehmen (Partie 16.11.: Viktor
 ## sammelte zweimal 35 Auftraege, nahm aber keinen an). "" = nichts Dringendes.
-func _fleet_step(cid: int) -> String:
+## Der vorgeschlagene Auftrag wird fuer die Firma vorgemerkt (Partie 16.11.: Annahmen scheiterten meist an "nicht (mehr) verfuegbar",
+## das Wesen braucht mehrere Schritte von der Beobachtung bis zur Handlung): etwa vier Takte des Wesens, wie AgentController._hold_market.
+var _fleet_holds := {}   # Firma -> vorgemerkte Auftrags-ID
+
+
+func _hold_for(cid: int, k, takt_min: float) -> void:
+	var old = sim.contracts.get(str(_fleet_holds.get(cid, "")))
+	if old != null and old != k and old.held_for == cid:
+		old.held_for = -1
+		old.held_until = 0.0
+	k.held_for = cid
+	k.held_until = minf(sim.game_min + clampf(takt_min * 4.0 + 30.0, 60.0, AgentController.HOLD_GAME_MIN), k.deadline - 30.0)
+	_fleet_holds[cid] = k.id
+
+
+func _fleet_step(cid: int, takt_min := 0.0) -> String:
 	var c = sim.company(cid)
 	var now: float = sim.game_min
+	var coming := {}   # Fahrer unterwegs zum Fahrzeug (Aufgabe fahren erteilt, vehicle_id erst bei Ankunft) – nicht erneut einsetzen lassen
+	for w in sim.personnel.employed(cid):
+		var t = sim.personnel.tasks.get(str(w.task_id))
+		if t != null and t.kind == "fahren" and t.status not in WorkerTask.FINAL:
+			coming[int(t.target.get("vehicle_id", -1))] = true
 	for v in sim.company_vehicles(cid):
-		if sim.driver_of(v) == null:
+		if sim.driver_of(v) == null and not coming.has(v.id):
 			for w in sim.personnel.employed(cid):
 				if w.role != "foreman" and str(w.task_id) == "" and int(w.vehicle_id) < 0:
 					return "Fahrer einsetzen – Fahrzeug #%d steht ohne Fahrer: Firma {aktion: {action: \"assign_worker_task\", kind: \"fahren\", worker_id: \"%s\", vehicle_id: %d}}." % [v.id, w.id, v.id]
@@ -712,7 +844,8 @@ func _fleet_step(cid: int) -> String:
 				best_s = s
 				best = k
 		if best != null:
-			return "Auftrag annehmen – Fahrzeug #%d ist frei: Firma {aktion: {action: \"accept_contract\", contract_id: \"%s\", vehicle_id: %d}} (%s, %s, Frist %d min). Aufträge sind schnell weg." % [
+			_hold_for(cid, best, takt_min)
+			return "Auftrag annehmen (für dich vorgemerkt) – Fahrzeug #%d ist frei: Firma {aktion: {action: \"accept_contract\", contract_id: \"%s\", vehicle_id: %d}} (%s, %s, Frist %d min). Aufträge sind schnell weg." % [
 				v.id, best.id, v.id, str(best.cargo_name()), Catalog.money(float(best.reward)), int(best.deadline - now)]
 		return "Fahrzeug #%d ist frei, aber kein gesammelter Auftrag passt: Firma {aktion: {action: \"collect_contracts\"}}." % v.id
 	return ""
@@ -1015,9 +1148,13 @@ func _talk(b: Dictionary, to: String, text: String) -> Dictionary:
 		b["talk_last"] = {"to": to, "ms": Time.get_ticks_msec(), "inbox": int(b.get("inbox", 0))}
 	b.say = text
 	b.say_left = SAY_SECONDS
+	b["kontakt_min"] = float(sim.game_min)
+	if str(b.get("offen", {}).get("von", "")) == to:
+		b.erase("offen")   # beantwortet
 	if beings.has(to) and to != b.name:
 		var o: Dictionary = beings[to]
 		o["inbox"] = int(o.get("inbox", 0)) + 1   # Zaehler fuer wait bis=antwort und die Wiederholungssperre
+		o["offen"] = {"von": str(b.name), "text": text, "min": float(sim.game_min)}   # naechste_schritte: "Antworten"
 		if _dist(t, tile_of(o)) > TALK_REACH:   # zu weit fuer ein Gespraech: Anruf (Partie 15.11.: 44 gescheiterte Gespraeche)
 			_chat(b.name, to, "(Anruf) " + text, t)
 			_event(o, "%s ruft dich an: %s" % [b.name, text])
@@ -1062,7 +1199,8 @@ func heard(name: String, n: int = 6) -> Array:
 	var t := tile_of(beings[name])
 	var out: Array = []
 	for m in chat:
-		if str(m.von) != name and m.has("feld") and _dist(t, Vector2i(int(m.feld[0]), int(m.feld[1]))) <= HEAR_RADIUS:
+		# an mich gerichtet (auch Anrufe aus der Ferne – 17.11.: kamen sonst nur als Ereignis an, niemand antwortete) oder in Hoerweite
+		if str(m.von) != name and (str(m.get("an", "")) == name or m.has("feld") and _dist(t, Vector2i(int(m.feld[0]), int(m.feld[1]))) <= HEAR_RADIUS):
 			out.append({"von": m.von, "an": m.get("an", ""), "text": m.text})
 	return out.slice(-n)
 
@@ -1679,7 +1817,7 @@ const FIRM_ACTIONS := [
 	# Unternehmensplan (PlanBook): Ziel, Schritte, Nutzen, Risiken, Abbruchbedingungen
 	"set_plan", "update_plan_step", "cancel_plan",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
-	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen",
+	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "bauleute",
 	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage",
 	# Waffenschmiede (nur mit eigener, laufender Waffenschmiede)
 	"design_weapon", "forge_weapon", "fortify_building", "rebuild_building"]
@@ -1753,12 +1891,20 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 			a["action"] = str(data.get("aktion", data.get("action")))
 			a.erase("aktion")
 			a.erase("warum")
-	if not (a is Dictionary) or str(a.get("action", "")) not in FIRM_ACTIONS:
+	if not (a is Dictionary) or str(a.get("action", "")).to_lower() in OVERVIEW_WORDS:   # 16./17.11.: "Firmenlage prüfen", action "status"
+		return _firm_overview(cid)
+	if str(a.get("action", "")) not in FIRM_ACTIONS:
 		return {"ok": false, "msg": "Firma braucht aktion: {\"action\": eine von %s, ...Parameter}." % ", ".join(FIRM_ACTIONS)}
 	if str(a.action) in ["design_weapon", "forge_weapon"]:   # Waffenschmiede: Entwurf und Fertigung (EkoArms)
 		return arms.firm_action(b, cid, a)
 	if str(a.action) in ["fortify_building", "rebuild_building"]:   # eigene Gebaeude befestigen / wieder aufbauen
 		return arms.firm_object_action(b, cid, a)
+	if str(a.action) == "haus_bauen":   # Neubeginn (Etappe B): Wohnhaus selbst bauen
+		var rh := homes.plan(cid, a)
+		_event(b, "Firma: haus_bauen → %s" % str(rh.msg).left(80))
+		return rh
+	if str(a.action) == "bauleute":
+		return homes.assign_crew(cid, a)
 	if str(a.action) == "auftrag_an_wesen":   # Firma schreibt selbst einen Hilfsjob fuer freie Wesen aus
 		var c2 = sim.company(cid)
 		var lohn := clampf(float(a.get("lohn", 100.0)), 20.0, 2000.0)
@@ -1819,6 +1965,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var me: Dictionary = o.ich
 	var models: Dictionary = o.fahrzeugmodelle
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
+		"baustellen": homes.summary(cid),
 		"unternehmensplan": sim.plans.summary(cid) if sim.get("plans") != null else {},
 		"hinweis_fahrzeug": _no_vehicle_hint(cid),
 		"waffenschmiede": arms.firm_obs(cid),
@@ -1853,6 +2000,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
 			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +
+			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus, grundstueck?} (Wohnhaus selbst bauen: Material per hub_buy holen, vermieten oder sell_property) | bauleute {baustelle, worker_ids} | hub_buy {item, qty} | sell_property {gebaeude} | " +
 			"recruit_foreman {worker_id} | assign_foreman {foreman_id, worker_ids} | guard_target {worker_id, site_id} | " +
 			"place_building {plot_id, typ, x, y, rot} (Hofbau, Vorschläge in hofbau) | free_build {name, form, material} | " +
 			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +
@@ -2018,6 +2166,32 @@ func adopt_mayors() -> Array:
 	return out
 
 
+## Firma/Amt ohne Aktion oder mit einem Lage-Wort: kurze Uebersicht statt Fehler (Wesen wollen "die Lage pruefen").
+const OVERVIEW_WORDS := ["", "status", "lage", "uebersicht", "übersicht", "info", "bericht", "projekte", "kommunale_dienste", "firmenlage", "tageslage", "pruefen", "prüfen"]
+
+
+func _office_overview(k: int) -> Dictionary:
+	var M: Mayor = sim.towns.mayors[k]
+	var apps: Array = []
+	for app in sim.permits.apps.values():
+		if app.status == "zur_entscheidung" and M._mine(str(app.parcel)):
+			apps.append(str(app.id))
+	var fin: Dictionary = M._assess_financing({})
+	return {"ok": true, "uebersicht": true, "msg": "Lage %s: %s Anträge zur Entscheidung: %s. Handeln mit Amt {aktion: {action: ...}} – neue Einrichtungen mit kommunal_bauen {typ}." % [
+		sim.towns.name_of(k), str(fin.msg), ", ".join(apps) if not apps.is_empty() else "keine"]}
+
+
+func _firm_overview(cid: int) -> Dictionary:
+	var c = sim.company(cid)
+	var vs: Array = []
+	for v in sim.company_vehicles(cid):
+		var d = sim.driver_of(v)
+		vs.append("#%d %s (%s%s%s)" % [v.id, v.model, v.state, ", Fahrer %s" % d.name if d != null else ", ohne Fahrer", ", Auftrag %s" % v.contract_id if str(v.contract_id) != "" else ""])
+	var step := _fleet_step(cid)
+	return {"ok": true, "uebersicht": true, "msg": "%s: Kasse %s, Personal %d, Fahrzeuge: %s.%s" % [c.company_name, Catalog.money(c.ledger.cash),
+		sim.personnel.employed(cid).size(), ", ".join(vs) if not vs.is_empty() else "keine", (" Nächster Schritt: " + step) if step != "" else ""]}
+
+
 func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 	var k := int(b.get("amt", -1))
 	if k < 0:
@@ -2027,7 +2201,9 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 		a = JSON.parse_string(a)
 	if a is Dictionary and str(a.get("action", "")) in ["build_defense", "rebuild_building"]:   # Verteidigung und Wiederaufbau (EkoArms)
 		return arms.office_action(b, k, a)
-	if not (a is Dictionary) or not Mayor.SCHEMA.has(str(a.get("action", ""))):
+	if not (a is Dictionary) or str(a.get("action", "")).to_lower() in OVERVIEW_WORDS:   # 17.11.: "Tageslage prüfen" ohne aktion, "projekte", "kommunale_dienste"
+		return _office_overview(k)
+	if not Mayor.SCHEMA.has(str(a.get("action", ""))):
 		return {"ok": false, "msg": "Amt braucht aktion: {\"action\": eine von %s, ...}. Parameter siehe mein_amt.aktionen." % ", ".join(Mayor.SCHEMA.keys())}
 	if not a.has("reason"):
 		a["reason"] = "Entscheidung von %s" % b.name
@@ -2044,6 +2220,12 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 const PRIORITY_WORDS := {"niedrig": 1, "low": 1, "gering": 1, "mittel": 3, "normal": 3, "medium": 3, "hoch": 4, "high": 4,
 	"sehr hoch": 5, "dringend": 5, "kritisch": 5, "urgent": 5, "critical": 5}
 const INFRA_PLANTS := ["wasserwerk", "hochbehaelter", "klaeranlage", "gleis"]
+## Permits.mayor_decide kennt nur diese vier Werte; Wesen schreiben auch "genehmigt", "ja", "approve" (Woerter in _plain-Form).
+const DECISION_WORDS := {
+	"genehmigen": ["genehmigen", "genehmigt", "genehmigung", "ja", "yes", "approve", "approved", "zustimmen", "zugestimmt", "annehmen", "angenommen", "erteilen"],
+	"bedingungen": ["bedingungen", "mitbedingungen", "unterbedingungen", "auflagen", "mitauflagen", "conditions", "bedingt"],
+	"ablehnen": ["ablehnen", "abgelehnt", "ablehnung", "nein", "no", "reject", "rejected", "versagen", "verweigern"],
+	"rueckfrage": ["rueckfrage", "rueckfragen", "nachfrage", "query", "nachbessern", "ueberarbeiten"]}
 
 
 static func _plain(s: String) -> String:
@@ -2080,6 +2262,13 @@ static func normalize_office(a: Dictionary) -> String:
 			var low := str(a[key]).strip_edges().to_lower()
 			a[key] = int(PRIORITY_WORDS.get(low, 3))
 	match str(a.get("action", "")):
+		"decide_application":
+			var d := _plain(str(a.get("decision", "")))
+			for key in DECISION_WORDS:
+				if d in DECISION_WORDS[key]:
+					a["decision"] = key
+			if str(a.get("decision", "")) not in DECISION_WORDS:
+				return "decision muss genehmigen, bedingungen, ablehnen oder rueckfrage sein (nicht „%s“)." % str(a.get("decision", ""))
 		"infra_ausbau":
 			var want := str(a.get("anlage", ""))
 			var hit := _best(want, INFRA_PLANTS)
@@ -2309,7 +2498,7 @@ func to_dict() -> Dictionary:
 			"ziel": b.get("ziel", {}), "ziele_alt": b.get("ziele_alt", []), "gesundheit": float(b.get("gesundheit", 100.0)), "waffen": b.get("waffen", []),
 			"vergehen": int(b.get("vergehen", 0)), "out_left": float(b.get("out_left", 0.0)), "custody_left": float(b.get("custody_left", 0.0)),
 			"startkapital": bool(b.get("startkapital", false))})
-	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict(), "estates": estates.to_dict(),
+	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict(), "estates": estates.to_dict(), "homes": homes.to_dict(),
 		"towns_funded": towns_funded}
 
 
@@ -2336,6 +2525,7 @@ func from_dict(d: Dictionary) -> void:
 	houses = d.get("houses", {})
 	arms.from_dict(d.get("arms", {}))
 	estates.from_dict(d.get("estates", {}))
+	homes.from_dict(d.get("homes", {}))
 	for b in beings.values():   # eigene Grundstuecke wieder begehbar
 		open_plot(str(b.get("grundstueck", "")))
 

@@ -43,8 +43,27 @@ func setup(simulation) -> void:
 	for c in sim.companies:
 		seen[c.id] = {}
 	var kinds := ["driver", "driver", "loader", "mechanic", "guard", "driver", "foreman", "loader", "mechanic", "driver", "maler"]
-	for i in 4 + 3 * sim.companies.size():
+	for i in (0 if sim.neubeginn else 4 + 3 * sim.companies.size()):   # Neubeginn: Bewerber erst aus zugezogenen Einwohnern
 		spawn_available(kinds[i % kinds.size()])
+
+
+## Groesse des Bewerberpools. Neubeginn (Benedikt 17.11.): Mitarbeiter kommen nur aus den Einwohnern – hoechstens ein Viertel
+## der arbeitslosen Einwohner steht als Bewerber bereit; ohne Einwohner gibt es niemanden.
+func pool_limit() -> int:
+	var base: int = 4 + 2 * sim.companies.size()
+	if not sim.neubeginn:
+		return base
+	var jobless: int = sim.citizens.people.filter(func(p): return str(p.employer) == "").size()
+	return mini(base, (jobless + 3) / 4)
+
+
+## Neubeginn: ein arbeitsloser Einwohner wird Bewerber (verlaesst die Buergerliste, zaehlt jetzt als Arbeitskraft). false = keiner da.
+func _take_resident() -> bool:
+	for i in sim.citizens.people.size():
+		if str(sim.citizens.people[i].employer) == "":
+			sim.citizens.people.remove_at(i)
+			return true
+	return false
 
 
 # ------------------------------------------------------------------ Arbeitsmarkt
@@ -138,6 +157,18 @@ func start_staff(cid: int, vehicle_id: int) -> void:
 			break
 		var x := _new_employee(cid, e[0], e[1])
 		x.pos = a.pos
+
+
+## Neubeginn: einziger "Mitarbeiter" ist der Inhaber selbst (Name des Unternehmers, kein Lohn) – er faehrt den Start-LKW,
+## laedt und baut. Weitere Leute gibt es erst, wenn Einwohner zugezogen sind.
+func start_owner(cid: int, vehicle_id: int) -> void:
+	var w := _new_employee(cid, {"fahren": 2, "verladen": 2, "reparieren": 1, "bewachen": 1}, 0.0)
+	w.name = "%s (Inhaber)" % sim.companies[cid].player_name
+	w.role = "owner"
+	w.loyalty = 100.0
+	w.reliability = 0.95
+	w.vehicle_id = vehicle_id
+	w.pos = sim.vehicles[vehicle_id].pos
 
 
 ## Startprofil Unternehmer: zwei Allrounder am Hauptsitz (Verwaltung, Einkauf, notfalls fahren); weitere Fachkraefte stellt der Unternehmer
@@ -1045,9 +1076,10 @@ func minute_tick(now: float) -> void:
 		foremen_tick()
 	if sim.minute_index % 15 == 7:
 		idle_tick(now)
-	if sim.minute_index % 90 == 0 and now >= shortage_until and available().size() < 4 + 2 * sim.companies.size():
-		var kinds := ["driver", "loader", "mechanic", "guard", "driver", "foreman"]
-		spawn_available(kinds[sim.rng.randi() % kinds.size()])
+	if sim.minute_index % 90 == 0 and now >= shortage_until and available().size() < pool_limit():
+		if not sim.neubeginn or _take_resident():
+			var kinds := ["driver", "loader", "mechanic", "guard", "driver", "foreman"]
+			spawn_available(kinds[sim.rng.randi() % kinds.size()])
 
 
 func wages_per_hour(cid: int) -> float:

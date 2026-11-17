@@ -33,6 +33,8 @@ const SAVE_VERSION := 2            # 2 = Betriebe und Kostenstellen (Auftrag 14)
 ## Startprofil: "spedition" = Transportbetrieb mit Van und 10 Mitarbeitern (bisheriger Start, Standard der Tests);
 ## "unternehmer" = Hauptsitz auf dem Startgrundstueck, zwei Allrounder, kein Fahrzeug (Spiel, Auftrag 14). Vor setup() setzen.
 var start_profile := "spedition"
+var neubeginn := false   # Benedikt 17.11.: Aufbau von null (siehe docs/NEUBEGINN.md)
+const NEUBEGINN_CAPITAL := 1000000.0   # Startkapital je KI-Firma (der Start-LKW kommt dazu)
 var talk := RivalryTalk.new()      # Gespraechsregie der Rivalitaet (standardmaessig aus)
 var executor := ActionExecutor.new()
 var personnel := Personnel.new()
@@ -277,7 +279,11 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 		action_results[i] = []
 		_fuel[i] = 0.0
 		# Startausstattung Spedition: 1 Kleintransporter (aus dem Startkapital gekauft = Investition), Personal siehe unten
-		if start_profile == "spedition":
+		if neubeginn:   # eigener LKW; danach Kasse auf das Startkapital aufgefuellt (Einlage von aussen)
+			var lkw := _create_vehicle(i, "truck", Catalog.model("truck").price, depot_road(i))
+			c.ledger.invest(lkw.purchase_price)
+			c.ledger.inject(maxf(0.0, NEUBEGINN_CAPITAL - c.ledger.cash), "X0")
+		elif start_profile == "spedition":
 			var v := _create_vehicle(i, "van", Catalog.model("van").price, depot_road(i))
 			c.ledger.invest(v.purchase_price)
 		var a := Avatar.new()
@@ -294,7 +300,9 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	events.buildings_added.connect(residents.add_for_buildings)
 	events.buildings_added.connect(func(_ids): parcels.sync_buildings())
 	for c in companies:   # Startpersonal (fuer alle gleich): Spedition = Fahrer + Stammbelegschaft, Unternehmer = zwei Allrounder am Hauptsitz
-		if start_profile == "spedition":
+		if neubeginn:
+			personnel.start_owner(c.id, c.vehicle_ids[0])   # nur der Inhaber selbst, er faehrt den LKW
+		elif start_profile == "spedition":
 			personnel.start_staff(c.id, c.vehicle_ids[0])
 		else:
 			personnel.start_staff_small(c.id)
@@ -1511,7 +1519,7 @@ func to_dict() -> Dictionary:
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "access": access.to_dict(), "bridges": bridges.to_dict(), "crews": crews.to_dict(), "hub": hub.to_dict(), "stone": stone.to_dict(), "freebuild": freebuild.to_dict(), "eko": eko.to_dict(), "civic": civic.to_dict(), "municipal": municipal.to_dict(), "vworks": vworks.to_dict(), "fire": fire.to_dict(), "rescue": rescue.to_dict(), "police": police.to_dict(), "winter": winter.to_dict(), "street_cleaning": street_cleaning.to_dict(), "water": water.to_dict(), "rail": rail.to_dict(), "trains": trains.to_dict(), "transit": transit.to_dict(), "education": education.to_dict(), "recycling": recycling.to_dict(), "council": council.to_dict(), "services": services.to_dict(), "center": center.to_dict(), "finance": finance.to_dict(), "regional": regional.to_dict(), "air": air.to_dict(), "sea": sea.to_dict(), "founders": founders.to_dict(), "commute": commute.to_dict(), "mining": mining.to_dict(), "stages": stages.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "tourism": tourism.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "region": _region_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
-		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
+		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "neubeginn": neubeginn, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
 
 
 func _storage_dict() -> Dictionary:
@@ -1565,6 +1573,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.region_town_count = int(d.get("region", {}).get("orte", 0))
 	s.region_generator_version = int(d.get("region", {}).get("generator", {}).get("generator", 2))
 	RegionGenerator.start_houses = int(d.get("region", {}).get("generator", {}).get("start_haeuser", -1))   # gleiche Startorte wie beim Erzeugen
+	RegionGenerator.neubeginn = bool(d.get("region", {}).get("generator", {}).get("neubeginn", false))
 	s.population_target = int(d.get("population_target", 0))
 	s.setup(int(d.seed), players, int(d.map_size), 1.0, float(d.get("reserve", 0.0)))   # alte Staende: Karte ohne Reserve
 	# Ausgangszustand durch gespeicherten Zustand ersetzen
@@ -1712,6 +1721,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 			s.city.buildings[int(hb.site)].sprite = str(BusinessStages.stage_def(hb).get("sprite", "hotel_pension"))
 	s.tourism.from_dict(d.get("tourism", {}))
 	s.start_profile = str(d.get("start_profile", "spedition"))
+	s.neubeginn = bool(d.get("neubeginn", false))
 	s.grid.from_dict(d.get("grid", {}))
 	var migrated := s.biz.migrate() if int(d.get("save_version", 1)) < 2 else 0   # Spielstand vor Version 2: Speditionen werden Transportbetriebe
 	if migrated > 0:
