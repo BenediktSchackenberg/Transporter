@@ -8537,6 +8537,11 @@ func test_wildnis_found() -> void:
 	ok(not E.settle.founded(k) and not E.estates.estates.has(p0) and float(B.geld) == 0.0, "vor der Gründung: kein Hof, keine Basis, kein Privatgeld")
 	ok(not E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister schlafen, solange es ihre Stadt nicht gibt")
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}}).ok, "Hausbau erst nach der Gründung")
+	ok(str(E.next_steps(B)[0]).contains("LKW {ziel") or str(E.next_steps(B)[0]).contains("Siedlung {feld"), "vor der Gründung zuerst Platz suchen (%s)" % str(E.next_steps(B)[0]).left(60))
+	ok(not E.next_steps(B).any(func(x): return str(x).contains("collect_contracts")), "kein Auftragssammeln vor der Gründung")
+	B.mover.pos = v.pos
+	B.akku = 20.0
+	ok(str(E.input(p0, "Rest", {}).msg).contains("LKW aus"), "Ausruhen im LKW lädt schnell")
 	var best: Array = []
 	for y in range(40, s.city.size - 40, 25):
 		for x in range(40, s.city.size - 40, 25):

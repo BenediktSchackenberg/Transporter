@@ -732,7 +732,15 @@ func next_steps(b: Dictionary) -> Array:
 				out.append("Angebot %s von %s wartet auf deine Antwort (%s): Firma {aktion: {action: \"accept_trade\", offer_id: \"%s\"}} – oder reject_trade bzw. counter_offer." % [
 					o.id, sim.company(int(o.from)).player_name, sim.social.describe(o).left(100), o.id])
 				break
-	if cid >= 0:
+	var wild_build: bool = sim.wildnis and cid >= 0 and sim.personnel.employed(cid).all(func(x): return x.role == "owner")
+	if wild_build:
+		# Wildnis, noch ohne Angestellte (17.11.: Greta und Viktor sammelten Transportauftraege statt zu gruenden): erst gruenden, dann bauen
+		var st0 := settle.next_step(b, cid)
+		if st0 == "":
+			st0 = homes.next_step(cid)
+		if st0 != "":
+			out.append(st0)
+	if cid >= 0 and not wild_build:
 		var c = sim.company(cid)
 		if c.vehicle_ids.is_empty():
 			var best := {}
@@ -1921,6 +1929,17 @@ func _rest(b: Dictionary) -> Dictionary:
 		b.say_left = REST_SECONDS
 		_event(b, "ruht sich zu Hause in der Ladestation aus")
 		return {"ok": true, "msg": "Du ruhst dich %d Sekunden in deiner Ladestation aus: Akku lädt schnell, du wirst trocken und warm." % int(REST_SECONDS)}
+	var tv = own_truck(int(b.get("firma", -1))) if sim.wildnis and int(b.get("firma", -1)) >= 0 else null
+	if tv != null and not _truck_busy(tv):
+		if tile_of(b).distance_to(tv.tile()) <= 2.0:
+			b.say = "Zzz … (im LKW)"
+			b.say_left = REST_SECONDS
+			_event(b, "ruht sich in der Kabine seines LKW aus")
+			return {"ok": true, "msg": "Du ruhst dich %d Sekunden in deinem LKW aus: Akku lädt schnell, du wirst trocken und warm." % int(REST_SECONDS)}
+		b.say = "Zzz … (draußen)"
+		b.say_left = REST_SECONDS
+		return {"ok": true, "msg": "Du döst %d Sekunden draußen (Akku lädt langsam). In deinem LKW bei %s lädst du schnell – hingehen (MoveTo) und dort Rest." % [
+			int(REST_SECONDS), str([tv.tile().x, tv.tile().y])]}
 	b.say = "Zzz … (draußen)"
 	b.say_left = REST_SECONDS
 	_event(b, "döst draußen")
@@ -2222,6 +2241,10 @@ func _feel_tick(b: Dictionary, dt: float) -> void:
 	var hour := Catalog.hour_of_day(sim.game_min)
 	var night := hour < 6.0 or hour >= 21.0
 	var cab := b.has("im_lkw")   # 17.11.: Amira fuhr mit leerem Akku stundenlang mit – in der Kabine laedt und trocknet man langsam
+	if not home and resting and sim.wildnis:   # Wildnis vor dem eigenen Haus: Ausruhen im/am eigenen LKW laedt wie zu Hause (Kabine mit Ladekabel)
+		var tv = own_truck(int(b.get("firma", -1))) if int(b.get("firma", -1)) >= 0 else null
+		if tv != null and not _truck_busy(tv) and tile_of(b).distance_to(tv.tile()) <= 2.0:
+			home = true
 	if resting or cab:
 		akku += (CHARGE_HOME_S if home else CHARGE_OUT_S) * dt
 	else:
