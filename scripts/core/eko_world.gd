@@ -55,6 +55,7 @@ var _terrain_ready := false
 var arms := EkoArms.new()           # Waffen, Schutz, Gefahren (Benedikt 15.11.2026)
 var estates := EkoEstates.new()     # Stammsitz je KI-Spieler (Benedikt 15.11.2026)
 var homes := EkoHomes.new()         # Neubeginn: Wohnhaeuser der KI-Firmen (Benedikt 17.11.2026)
+var settle := EkoSettle.new()       # Wildnis: Standortwahl und Gruendung der Siedlung (Benedikt 17.11.2026)
 var _homes_min := -1.0
 var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
 const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.000 EUR Privatgeld (Einlage von aussen X0 -> Y0)
@@ -103,6 +104,7 @@ func setup(simulation) -> void:
 	arms.setup(self)
 	estates.setup(self)
 	homes.setup(self)
+	settle.setup(self)
 	changed.connect(func(): _block_tiles_n = -1)
 	sim.visit_completed.connect(_on_visit_completed)
 
@@ -124,7 +126,7 @@ func _on_visit_completed(cid: int, action: String, r: Dictionary) -> void:
 ## Nachvergabe: KI-Spieler (keine Buergermeister) ohne Stammsitz bekommen einen (z. B. war beim Start kein Platz frei).
 func ensure_estates() -> void:
 	for b in beings.values():
-		if int(b.get("amt", -1)) < 0 and not estates.estates.has(b.name):
+		if int(b.get("amt", -1)) < 0 and not estates.estates.has(b.name) and not sim.wildnis:   # Wildnis: Stammsitz erst mit der Gruendung
 			estates.assign(b.name)
 		grant_start_capital(b)
 	for k in sim.towns.count() if sim.towns.is_region() else 0:   # Startkapital der Staedte (einmal je Stadt, auch nachtraeglich)
@@ -374,9 +376,10 @@ func _restore_savings(b: Dictionary) -> void:
 
 # ------------------------------------------------------------------ Handlungen
 const ACTIONS := ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Bauwerk", "Tor", "Bauplan", "Fahrt",
-	"AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ziel", "ZielStand", "Merke", "Ablauf"]
+	"AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ziel", "ZielStand", "Merke", "Ablauf", "Siedlung"]
 ## Namen, unter denen Modelle eine Handlung aufrufen (Partie 16.11.: Buergermeisterin rief "mein_amt" statt "Amt" auf – so heisst ihre Lage).
 const ACTION_ALIASES := {"mein_amt": "Amt", "office": "Amt", "amt_aktion": "Amt", "meine_firma": "Firma", "company": "Firma", "firm": "Firma",
+	"gruenden": "Siedlung", "gründen": "Siedlung", "siedlung_gruenden": "Siedlung", "found_town": "Siedlung", "settle": "Siedlung",
 	"move": "MoveTo", "goto": "MoveTo", "gehe": "MoveTo", "sprich": "Talk", "sage": "Say", "anrufen": "Talk", "call": "Talk"}
 
 
@@ -473,6 +476,15 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			r = _move_in(b)
 		"Amt":
 			r = _office_action(b, data)
+		"Siedlung":   # Wildnis: Siedlung am gewaehlten Platz gruenden (EkoSettle)
+			var fc := active_firm(b)
+			var f = data.get("feld", data.get("tile", []))
+			if not sim.wildnis or fc < 0:
+				r = {"ok": false, "msg": "Siedlungen gründen nur Unternehmer in der Wildnis-Partie."}
+			elif not (f is Array) or (f as Array).size() < 2:
+				r = {"ok": false, "msg": "Siedlung braucht feld: [x, y] (Kachel). Ohne Angabe: dein aktueller Platz.", "bewertung": settle.score_at(tile_of(b))} if data.get("hier", false) == false else settle.found(b, fc, tile_of(b))
+			else:
+				r = settle.found(b, fc, Vector2i(int(f[0]), int(f[1])))
 		"Firma":
 			r = _firm_action(b, data)
 		"Inspect":
@@ -720,7 +732,10 @@ func next_steps(b: Dictionary) -> Array:
 			var step := _fleet_step(cid, float(b.get("takt_min", 0.0)))
 			if step != "":
 				out.append(step)
-		if sim.neubeginn:
+		var st := settle.next_step(b, cid)
+		if st != "":
+			out.append(st)
+		elif sim.neubeginn:
 			var hs := homes.next_step(cid)
 			if hs != "":
 				out.append(hs)
@@ -1817,7 +1832,7 @@ const FIRM_ACTIONS := [
 	# Unternehmensplan (PlanBook): Ziel, Schritte, Nutzen, Risiken, Abbruchbedingungen
 	"set_plan", "update_plan_step", "cancel_plan",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
-	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "bauleute",
+	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "bauleute", "strasse_bauen",
 	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage",
 	# Waffenschmiede (nur mit eigener, laufender Waffenschmiede)
 	"design_weapon", "forge_weapon", "fortify_building", "rebuild_building"]
@@ -1899,12 +1914,16 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		return arms.firm_action(b, cid, a)
 	if str(a.action) in ["fortify_building", "rebuild_building"]:   # eigene Gebaeude befestigen / wieder aufbauen
 		return arms.firm_object_action(b, cid, a)
+	if str(a.action) == "haus_bauen" and sim.wildnis and not sim.town_ready(sim.companies[cid].home_town):
+		return {"ok": false, "msg": "Erst eine Siedlung gründen: Siedlung {feld: [x, y]} (siehe siedlung.beste_plaetze_in_der_naehe)."}
 	if str(a.action) == "haus_bauen":   # Neubeginn (Etappe B): Wohnhaus selbst bauen
 		var rh := homes.plan(cid, a)
 		_event(b, "Firma: haus_bauen → %s" % str(rh.msg).left(80))
 		return rh
 	if str(a.action) == "bauleute":
 		return homes.assign_crew(cid, a)
+	if str(a.action) == "strasse_bauen":   # Wildnis: eigene Strassen im Ortsgebiet (EkoSettle)
+		return settle.build_road(b, cid, a)
 	if str(a.action) == "auftrag_an_wesen":   # Firma schreibt selbst einen Hilfsjob fuer freie Wesen aus
 		var c2 = sim.company(cid)
 		var lohn := clampf(float(a.get("lohn", 100.0)), 20.0, 2000.0)
@@ -1965,7 +1984,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var me: Dictionary = o.ich
 	var models: Dictionary = o.fahrzeugmodelle
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
-		"baustellen": homes.summary(cid),
+		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),
 		"unternehmensplan": sim.plans.summary(cid) if sim.get("plans") != null else {},
 		"hinweis_fahrzeug": _no_vehicle_hint(cid),
 		"waffenschmiede": arms.firm_obs(cid),
@@ -2000,7 +2019,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
 			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +
-			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus, grundstueck?} (Wohnhaus selbst bauen: Material per hub_buy holen, vermieten oder sell_property) | bauleute {baustelle, worker_ids} | hub_buy {item, qty} | sell_property {gebaeude} | " +
+			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus, grundstueck?} (Wohnhaus selbst bauen: Material per hub_buy holen, vermieten oder sell_property) | bauleute {baustelle, worker_ids} | strasse_bauen {bis: [x, y]} (Straße zur nächsten Straße, Kies vom Hof) | hub_buy {item, qty} | sell_property {gebaeude} | " +
 			"recruit_foreman {worker_id} | assign_foreman {foreman_id, worker_ids} | guard_target {worker_id, site_id} | " +
 			"place_building {plot_id, typ, x, y, rot} (Hofbau, Vorschläge in hofbau) | free_build {name, form, material} | " +
 			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +
@@ -2161,7 +2180,12 @@ func adopt_mayors() -> Array:
 		var hall: int = int(sim.towns.get_t(k).get("town_hall", -1))
 		if hall >= 0:
 			b.mover.pos = sim.city.tile_center(sim.city.building(hall).walk)
-		_event(b, "ist Bürgermeister von %s" % sim.towns.name_of(k))
+			_event(b, "ist Bürgermeister von %s" % sim.towns.name_of(k))
+		else:   # Wildnis: die Stadt gibt es noch nicht – warten in der Verwaltung am Grosslager, bis ein Unternehmer sie gruendet
+			var adm: int = int(sim.city.hub.get("buildings", {}).get("verwaltung", -1))
+			if adm >= 0:
+				b.mover.pos = sim.city.tile_center(sim.city.building(adm).walk)
+			_event(b, "wird Bürgermeister der Stadt, die %s gründen wird – bis dahin wartest du in der Verwaltung am Großlager" % sim.company(k).player_name if k < sim.companies.size() else "wartet auf die Gründung von %s" % sim.towns.name_of(k))
 		out.append(name)
 	return out
 

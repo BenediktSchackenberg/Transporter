@@ -75,6 +75,25 @@ Im Regen wirst du nass, bei Kälte und nachts frierst du; sehr nass leert sich d
 
 Jede Antwort enthält `ok`, `msg` und deine aktuelle `beobachtung`.
 
+### Wildnis: von null aufbauen (Unternehmer)
+
+Am Anfang gibt es **keine Städte** – nur Land, Küsten, Berge mit Lagerstätten, Landstraßen und das Großlager in der Mitte
+(dort: Arbeitsamt, Personalbüro, Bank, Werkstatt, Tankstelle, Fahrzeughandel). Deine Firma hat 1.000.000 EUR und einen LKW, den du
+selbst fährst; Mitarbeiter gibt es erst, wenn Menschen zugezogen sind.
+
+1. **Platz finden:** `meine_firma.siedlung.hier` bewertet deinen Standort, `beste_plaetze_in_der_naehe` die besten Plätze ringsum
+   (Wasser = Anleger und Siedlerschiff, Lagerstätte = Bergwerk, freie ebene Fläche, Hügel als Schutz, Weg zur Straße).
+   Erkunde mit `MoveTo` oder `Fahrt`.
+2. **Gründen:** `Siedlung {feld: [x, y]}` – Bürgeramt, Bauhof, dein Betriebshof, Zufahrt zur Straße, Bauland ringsum,
+   dein Stammsitz am Ortsrand. Ein Bürgermeister übernimmt das Amt. Nur einmal je Firma.
+3. **Material holen:** `Firma {aktion: {action: "hub_buy", item, qty}}` kauft im Großlager; dein LKW holt es auf den Betriebshof.
+4. **Bauen:** `Firma {aktion: {action: "haus_bauen", typ: "einfamilienhaus" | "doppelhaus" | "mehrfamilienhaus"}}` – Grundstück
+   kaufen, Bauantrag (der Bürgermeister entscheidet), Material vom Hof, du und deine Bautruppe (`bauleute {baustelle, worker_ids}`) bauen.
+   Fertige Wohnungen gehören deiner Firma: Miete kommt automatisch, `sell_property {gebaeude}` verkauft.
+5. **Straßen:** `strasse_bauen {bis: [x, y]}` erschließt Bauland (Kies vom Hof, Kosten je Feld).
+6. **Menschen:** Mit freien Wohnungen kommt ein Siedlerschiff (Küste) oder ein Siedlertreck (Inland). Wie viele, hängt an der
+   Attraktivität (Wohnraum, Einrichtungen, Läden und Betriebe, Stadtmarketing). Aus den Einwohnern werden Bewerber.
+
 ## Endpunkte
 
 Basis: `http://127.0.0.1:8790` (oder der Port, den dir dein Start nennt).

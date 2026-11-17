@@ -106,6 +106,8 @@ func spawn(now: float) -> Contract:
 		qmin = ch[4]
 		qmax = ch[5]
 	else:
+		if source_total <= 0:
+			return null   # Wildnis: noch keine Versender auf der Karte
 		var r := rng.randi() % source_total
 		for s in sources:
 			r -= s[1]

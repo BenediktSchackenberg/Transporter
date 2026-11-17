@@ -340,6 +340,8 @@ func housing_reserve(k: int) -> float:
 
 func _find_site(k: int, w: int, h: int, district: String = "") -> Dictionary:
 	var C: CityData = sim.city
+	if int(sim.towns.get_t(k).get("town_hall", -1)) < 0:
+		return {}   # Wildnis: Ort noch nicht gegruendet
 	var th: Dictionary = C.building(int(sim.towns.get_t(k).town_hall))
 	var anchor := Vector2i(int(th.x), int(th.y))
 	var d := district.to_lower()
@@ -617,6 +619,8 @@ func on_day(day: int) -> void:
 	if not enabled():
 		return
 	for k in profiles:
+		if not sim.town_ready(int(k)):
+			continue
 		_evaluate(k)
 		var tr: Dictionary = trips.get(k, {})
 		if tr.is_empty() and day >= int(profiles[k].next_visit):

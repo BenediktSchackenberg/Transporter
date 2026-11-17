@@ -98,6 +98,8 @@ func convene() -> void:
 	_next += 1
 	for t in sim.towns.list:
 		var k := int(t.id)
+		if int(t.get("town_hall", -1)) < 0:
+			continue   # Wildnis: noch nicht gegruendet
 		var from: Vector2i = sim.city.building(int(t.town_hall)).road
 		var v: Dictionary = sim.fleet._spawn("dienstwagen", from, hall_road(), INF, from, "%s fährt zum Regionalrat" % sim.towns.mayor(k).name)
 		v["town"] = k

@@ -57,6 +57,8 @@ func setup(s: Simulation) -> void:
 	var best_d := INF
 	if s.city.towns.size() > 1:
 		bauhof = int(s.city.towns[0].get("bauhof", -1))   # Region: ein privater Grosshandel im Bauhof des ersten Orts (regionaler Anbieter)
+		if s.wildnis:   # Wildnis: kein Ort, der Grosshandel sitzt im Baustoffhandel am Grosslager
+			bauhof = int(s.city.hub.get("buildings", {}).get("baustoffe", -1))
 	for b in (s.city.buildings if bauhof < 0 else []):
 		if s.city.coastal() and b.name != "Städtischer Bauhof":
 			continue   # Kuestenort: genau ein staedtischer Bauhof (nicht das Kraftwerk)

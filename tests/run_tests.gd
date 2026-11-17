@@ -38,6 +38,8 @@ func _initialize() -> void:
 	test_names.append("test_eko_office_and_goals")
 	test_names.append("test_neubeginn_start")
 	test_names.append("test_neubeginn_homes")
+	test_names.append("test_wildnis_start")
+	test_names.append("test_wildnis_found")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
@@ -8470,6 +8472,106 @@ func test_neubeginn_homes() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.eko.homes.sites.has(site.id) and str(s2.eko.homes.sites[site.id].status) == str(site.status), "Baustellen gespeichert")
 	RegionGenerator.neubeginn = false
+
+
+## Wildnis (Benedikt 17.11., Nachtrag): keine Orte, nur Landschaft, Grosslager, Landstrassen und je KI ein Ankunftsplatz.
+func wildnis_sim(n: int = 4, seed_v: int = 4242) -> Simulation:
+	RegionGenerator.neubeginn = true
+	RegionGenerator.wildnis = true
+	var s := Simulation.new()
+	s.neubeginn = true
+	s.wildnis = true
+	s.world_mode = "region"
+	s.start_profile = "unternehmer"
+	s.setup(seed_v, players(n), Catalog.MAP_SIZE, 0.5)
+	RegionGenerator.neubeginn = false
+	RegionGenerator.wildnis = false
+	return s
+
+
+func test_wildnis_start() -> void:
+	var s := wildnis_sim(4)
+	var town_bs: Array = s.city.buildings.filter(func(b): return not bool(b.get("hub", false)))
+	ok(town_bs.all(func(b): return b.type == "plot"), "außer dem Großlager nur Ankunftsplätze (%s)" % ", ".join(town_bs.map(func(b): return str(b.name))))
+	ok(s.city.towns.all(func(t): return int(t.get("town_hall", -1)) < 0), "keine Rathäuser")
+	for c in s.companies:
+		var dep: Dictionary = s.city.building(int(c.depots[0]))
+		ok(str(dep.name).begins_with("Ankunftsplatz") and s.nav.reachable(dep.road, s.nearest_building_of("dealer", dep.road).road) if s.nav.has_method("reachable") else true,
+			"%s steht am Ankunftsplatz" % c.company_name)
+	var end_min := s.game_min + GameCalendar.days_to_min(2)
+	while s.game_min < end_min:
+		s.step(1.0)
+	ok(absf(s.economy.conservation_error()) < 1.0, "zwei Tage ohne Absturz, Geldbuch stimmt")
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.wildnis and s2.city.buildings.size() == s.city.buildings.size(), "Wildnis speichern und laden")
+	RegionGenerator.neubeginn = false
+	RegionGenerator.wildnis = false
+
+
+## Wildnis: Standort bewerten, Siedlung gruenden (Buergeramt, Bauhof, Betriebshof, Zufahrt, Bauland, Stammsitz, Buergermeister),
+## danach Hausbau moeglich; Speichern und Laden erhalten die Siedlung.
+func test_wildnis_found() -> void:
+	var s := wildnis_sim(2)
+	var E: EkoWorld = s.eko
+	var ps: Array = E.adopt_players(2)
+	var ms: Array = E.adopt_mayors()
+	var p0: String = ps[0]
+	var B: Dictionary = E.beings[p0]
+	var cid := E.active_firm(B)
+	var k: int = s.companies[cid].home_town
+	ok(not s.town_ready(k) and not E.estates.estates.has(p0), "vor der Gründung: keine Stadt, kein Stammsitz")
+	var fo: Dictionary = E.observe(p0).meine_firma
+	ok(fo.has("siedlung") and not bool(fo.siedlung.gegruendet), "Beobachtung zeigt die Siedlungssuche")
+	ok(not E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}}).ok, "Hausbau erst nach der Gründung")
+	var best: Array = []
+	for y in range(40, s.city.size - 40, 25):   # ganze Karte absuchen (Test): bester Platz
+		for x in range(40, s.city.size - 40, 25):
+			var sc: Dictionary = E.settle.score_at(Vector2i(x, y))
+			if sc.ok:
+				best.append(sc)
+	best.sort_custom(func(a, b): return int(a.punkte) > int(b.punkte))
+	ok(not best.is_empty(), "es gibt gute Siedlungsplätze (%d), bester: %s" % [best.size(), str(best[0].gruende) if not best.is_empty() else "-"])
+	if best.is_empty():
+		return
+	var cash0: float = s.company(cid).ledger.cash
+	var r: Dictionary = E.input(p0, "Siedlung", {"feld": best[0].feld})
+	ok(r.ok, "Siedlung gegründet: %s" % str(r.msg).left(160))
+	if not r.ok:
+		return
+	var t: Dictionary = s.city.towns[k]
+	ok(s.town_ready(k) and int(t.town_hall) >= 0 and int(t.bauhof) >= 0, "Bürgeramt und Bauhof stehen")
+	ok(s.company(cid).ledger.cash < cash0 and str(s.city.building(int(s.company(cid).depots[0])).name).contains("Betriebshof"), "Betriebshof der Firma, Gründung bezahlt")
+	var hub_road: Vector2i = s.nearest_building_of("dealer", Vector2i(0, 0)).road
+	ok(not s.nav.road_path(s.city.building(int(t.town_hall)).road, hub_road).is_empty(), "Straßenverbindung zum Großlager")
+	ok(E.estates.estates.has(p0), "Stammsitz am Ortsrand")
+	var mayor: Dictionary = E.beings[ms.filter(func(n): return int(E.beings[n].amt) == k)[0]] if ms.any(func(n): return int(E.beings[n].amt) == k) else {}
+	ok(not mayor.is_empty() and E.tile_of(mayor).distance_to(Vector2i(int(t.center[0]), int(t.center[1]))) < 20, "Bürgermeister ist im Bürgeramt")
+	var land: Array = s.parcels.search({"town": k, "zone": "wohnen", "limit": 50})
+	ok(land.size() >= 1, "Bauland der neuen Stadt (%d Grundstücke)" % land.size())
+	var hb: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}})
+	ok(hb.ok, "nach der Gründung: Hausbau (%s)" % str(hb.msg).left(120))
+	ok(not E.input(p0, "Siedlung", {"feld": best[0].feld}).ok, "nur eine Gründung je Firma")
+	# Strassenbau: Kies vom eigenen Hof
+	var far := Vector2i(int(t.center[0]), int(t.center[1]) + 14)
+	var rb: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "strasse_bauen", "bis": [far.x, far.y]}})
+	ok(not rb.ok and str(rb.msg).contains("Kies"), "Straßenbau braucht Kies: %s" % str(rb.msg).left(100))
+	s.stock.add("kies", 200, "C%d" % cid, int(s.company(cid).depots[0]), "Test")
+	rb = E.input(p0, "Firma", {"aktion": {"action": "strasse_bauen", "bis": [far.x, far.y]}})
+	ok(rb.ok and s.city.is_road(far) or str(rb.msg).contains("schon Straße"), "Straße gebaut: %s" % str(rb.msg).left(100))
+	# Buergermeister vor der Gruendung ihrer Stadt: Beobachtung und naechste Schritte ohne Fehler
+	for m in ms:
+		var mo: Dictionary = E.observe(m)
+		ok(mo.get("ok", false), "Bürgermeister %s beobachtet ohne Fehler" % m)
+		E.next_steps(E.beings[m])
+	var p1: String = ps[1]
+	var near: Vector2i = Vector2i(int(best[0].feld[0]) + 20, int(best[0].feld[1]))
+	ok(not E.settle.score_at(near).ok, "zu nah an der neuen Siedlung: %s" % str(E.settle.score_at(near).get("grund", "")))
+	var nb := s.city.buildings.size()
+	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(s2.town_ready(k) and s2.city.buildings.size() == nb and s2.city.is_road(Vector2i(int(t.center[0]), int(t.center[1]))), "Siedlung gespeichert und geladen")
+	ok(absf(s.economy.conservation_error()) < 1.0, "Geldbuch stimmt")
+	RegionGenerator.neubeginn = false
+	RegionGenerator.wildnis = false
 
 
 func region_sim(n: int = 4, seed_v: int = 4242) -> Simulation:

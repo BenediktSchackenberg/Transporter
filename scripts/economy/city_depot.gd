@@ -95,6 +95,10 @@ func harbor() -> Harbor:
 
 func setup(s) -> void:
 	sim = s
+	if s.wildnis:   # Wildnis: das Stadtlager entsteht mit der Gruendung (EkoSettle setzt building und ruft activate)
+		s.day_changed.connect(on_day)
+		s.month_changed.connect(on_month)
+		return
 	if town > 0:
 		_setup_town()
 		return
@@ -172,7 +176,7 @@ func material_offer(units: int) -> Dictionary:
 	for it in need:
 		total += int(need[it])
 		have += mini(int(need[it]), material_qty(it))
-	return {"deckt": have, "von": total, "rabatt_prozent": roundi((1.0 - MATERIAL_DISCOUNT) * 100.0), "abholung": sim.city.building(building).name}
+	return {"deckt": have, "von": total, "rabatt_prozent": roundi((1.0 - MATERIAL_DISCOUNT) * 100.0), "abholung": str(sim.city.building(building).get("name", "–")) if building >= 0 else "–"}
 
 
 ## Verkauf an eine Firma: Eigentum geht ueber, die Ware bleibt bis zur Abholung im Stadtlager. Bezahlt wird im Aufrufer (Rueckgabe: Preis).
@@ -242,7 +246,17 @@ func _today() -> int:
 
 
 # ------------------------------------------------------------------ Tagesablauf
+## Wildnis: Stadtlager am gegruendeten Bauhof in Betrieb nehmen.
+func activate(bauhof: int) -> void:
+	building = bauhof
+	port = harbor().building if harbor().enabled else building
+	_seed_stock()
+	add_materials(MATERIAL_SEED, "Erstausstattung der neuen Stadt")
+
+
 func on_day(day: int) -> void:
+	if building < 0 or not sim.town_ready(town):
+		return
 	# Material fuer beschlossene Projekte bestellt das Bauamt selbst (kein zweiter Budgetbeschluss)
 	for o in orders.values():
 		if o.status == "vorschlag" and str(o.get("project", "")) != "":
@@ -472,6 +486,8 @@ func reject(order_id: String, by: String, reason: String) -> Dictionary:
 func _freight(item: String, qty: int, from_loc: int) -> float:
 	var src: Dictionary = sim.city.building(from_loc)
 	var dst: Dictionary = sim.city.building(building)
+	if src.is_empty() or dst.is_empty():
+		return 0.0   # Wildnis: Stadtlager noch nicht gegruendet
 	var dist := absi(src.road.x - dst.road.x) + absi(src.road.y - dst.road.y)
 	var cq := _cargo_qty(qty)
 	return snappedf(FREIGHT_BASE + float(dist) * 3.2 * (1.0 + float(cq) / 8.0) * 0.85 * 0.5, 1.0)
@@ -1108,6 +1124,8 @@ func issue_to_staff(item: String, qty: int, to: String, reason: String) -> Dicti
 # ------------------------------------------------------------------ Monat: Ueberschuesse verkaufen
 ## Transparente Regel: Bestand ueber dem 1,5-fachen Zielbestand wird zum halben Katalogpreis verkauft (Grosshaendler T0, sonst Ausland).
 func on_month(_month: int) -> void:
+	if building < 0 or not sim.town_ready(town):
+		return
 	add_materials(MATERIAL_MONTHLY, "Restposten aus Stadtprojekten")
 	for id in CityGoods.items():
 		var it: Dictionary = CityGoods.get_item(id)

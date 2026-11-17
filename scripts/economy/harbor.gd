@@ -109,6 +109,8 @@ func waiting_units() -> int:
 
 
 func on_day(day: int) -> void:
+	if not enabled:
+		return
 	_staff_day()
 	if not ship.is_empty() and ship.status == "am_kai" and day > int(ship.day) and queue.is_empty():
 		ship.status = "abgefahren"

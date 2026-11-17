@@ -34,6 +34,8 @@ const SAVE_VERSION := 2            # 2 = Betriebe und Kostenstellen (Auftrag 14)
 ## "unternehmer" = Hauptsitz auf dem Startgrundstueck, zwei Allrounder, kein Fahrzeug (Spiel, Auftrag 14). Vor setup() setzen.
 var start_profile := "spedition"
 var neubeginn := false   # Benedikt 17.11.: Aufbau von null (siehe docs/NEUBEGINN.md)
+var wildnis := false     # Neubeginn ohne Orte: jede KI gruendet ihre Siedlung selbst (EkoSettle); setzt neubeginn voraus
+var settlements := {}    # Wildnis: Ortsnummer -> {center, rect, roads} der gegruendeten Siedlungen (vor den Gebaeuden geladen)
 const NEUBEGINN_CAPITAL := 1000000.0   # Startkapital je KI-Firma (der Start-LKW kommt dazu)
 var talk := RivalryTalk.new()      # Gespraechsregie der Rivalitaet (standardmaessig aus)
 var executor := ActionExecutor.new()
@@ -385,6 +387,11 @@ func at_depot(v: FleetVehicle) -> bool:
 		if absi(r.x - v.tile().x) + absi(r.y - v.tile().y) <= 2:
 			return true
 	return false
+
+
+## Wildnis: ist Ort k schon gegruendet? (ohne Wildnis immer)
+func town_ready(k: int) -> bool:
+	return not wildnis or (k >= 0 and k < city.towns.size() and bool(city.towns[k].get("gegruendet", false)))
 
 
 func nearest_building_of(role: String, from: Vector2i) -> Dictionary:
@@ -1519,7 +1526,7 @@ func to_dict() -> Dictionary:
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "access": access.to_dict(), "bridges": bridges.to_dict(), "crews": crews.to_dict(), "hub": hub.to_dict(), "stone": stone.to_dict(), "freebuild": freebuild.to_dict(), "eko": eko.to_dict(), "civic": civic.to_dict(), "municipal": municipal.to_dict(), "vworks": vworks.to_dict(), "fire": fire.to_dict(), "rescue": rescue.to_dict(), "police": police.to_dict(), "winter": winter.to_dict(), "street_cleaning": street_cleaning.to_dict(), "water": water.to_dict(), "rail": rail.to_dict(), "trains": trains.to_dict(), "transit": transit.to_dict(), "education": education.to_dict(), "recycling": recycling.to_dict(), "council": council.to_dict(), "services": services.to_dict(), "center": center.to_dict(), "finance": finance.to_dict(), "regional": regional.to_dict(), "air": air.to_dict(), "sea": sea.to_dict(), "founders": founders.to_dict(), "commute": commute.to_dict(), "mining": mining.to_dict(), "stages": stages.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
 		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "tourism": tourism.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "region": _region_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
-		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "neubeginn": neubeginn, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
+		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "neubeginn": neubeginn, "wildnis": wildnis, "settlements": settlements, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
 
 
 func _storage_dict() -> Dictionary:
@@ -1574,7 +1581,11 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.region_generator_version = int(d.get("region", {}).get("generator", {}).get("generator", 2))
 	RegionGenerator.start_houses = int(d.get("region", {}).get("generator", {}).get("start_haeuser", -1))   # gleiche Startorte wie beim Erzeugen
 	RegionGenerator.neubeginn = bool(d.get("region", {}).get("generator", {}).get("neubeginn", false))
+	RegionGenerator.wildnis = bool(d.get("region", {}).get("generator", {}).get("wildnis", false))
 	s.population_target = int(d.get("population_target", 0))
+	s.neubeginn = bool(d.get("neubeginn", false))   # vor setup: Stadtlager, Bewerberpool und Start richten sich danach
+	s.wildnis = bool(d.get("wildnis", false))
+	s.settlements = d.get("settlements", {})
 	s.setup(int(d.seed), players, int(d.map_size), 1.0, float(d.get("reserve", 0.0)))   # alte Staende: Karte ohne Reserve
 	# Ausgangszustand durch gespeicherten Zustand ersetzen
 	s.companies.clear()
@@ -1603,6 +1614,12 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.permits.from_dict(d.get("permits", {}))
 	s.mayor.from_dict(d.get("mayor", {}))
 	s._region_from_dict(d.get("region", {}))
+	for key in s.settlements:   # Wildnis: gegruendete Siedlungen (Ortsmitte, Gebiet, Zufahrt) vor den Laufzeit-Gebaeuden wiederherstellen
+		var st: Dictionary = s.settlements[key]
+		s.city.towns[int(key)]["center"] = st.center
+		s.city.towns[int(key)]["rect"] = st.rect
+		s.city.towns[int(key)]["gegruendet"] = true
+		s.access.reapply(st.get("roads", []))
 	for M in s.towns.mayors:   # Strassen aus fertigen Erschliessungen wieder anlegen
 		for prj in M.projects.values():
 			if prj.get("status", "") == "fertig" and prj.has("road_cells"):
@@ -1704,7 +1721,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	for site in d.depot_owner:
 		s.depot_owner[int(site)] = int(d.depot_owner[site])
 	for c in s.companies:
-		if not c.depots.is_empty():
+		if not c.depots.is_empty() and int(c.depots[0]) < s.city.buildings.size():
 			s.city.buildings[c.depots[0]].name = c.company_name + " (Betriebshof)"
 	if d.get("weather") is Dictionary:
 		s.wx.from_dict(d.weather)
@@ -1722,6 +1739,8 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.tourism.from_dict(d.get("tourism", {}))
 	s.start_profile = str(d.get("start_profile", "spedition"))
 	s.neubeginn = bool(d.get("neubeginn", false))
+	s.wildnis = bool(d.get("wildnis", false))
+	s.settlements = d.get("settlements", {})
 	s.grid.from_dict(d.get("grid", {}))
 	var migrated := s.biz.migrate() if int(d.get("save_version", 1)) < 2 else 0   # Spielstand vor Version 2: Speditionen werden Transportbetriebe
 	if migrated > 0:

@@ -8,6 +8,7 @@ param(
     [string]$Godot = "C:\Users\Benedikt\Tools\godot441\Godot_v4.4.1-stable_win64_console.exe",
     [string]$Projekt = (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\..")).Path,
     [switch]$NeuePartie,           # ohne Spielstand starten (neue Partie mit Wesen, neuer Zufalls-Seed)
+    [switch]$Wildnis,              # neue Partie ohne Staedte: jede KI sucht ihren Platz und gruendet ihre Siedlung (Benedikt 17.11.)
     [int]$StartHaeuser = -1,       # neue Partie: hoechstens so viele Wohnhaeuser je Startort (die Orte wachsen dann selbst)
     [int]$TagSekunden = -1,        # neue Partie: Laenge eines Spieltags in Sim-Sekunden (Standard 60; Eko empfohlen 600)
     [int]$Tempo = 2,               # neue Partie: Spielgeschwindigkeit 1/2/4/8/16 (Autotest-Standard waere 16 – zu schnell fuer denkende Wesen)
@@ -22,6 +23,7 @@ if ($Ctx -gt 0) { $eko += "--eko-ctx=$Ctx" }
 $args0 = @("--path", $Projekt, "--", "--autotest", "--speed=$Tempo") + $eko
 if ($StartHaeuser -ge 0) { $args0 += "--start-haeuser=$StartHaeuser" }
 if ($TagSekunden -gt 0) { $args0 += "--tag-sekunden=$TagSekunden" }
+if ($Wildnis) { $args0 += "--wildnis" }
 if (-not $NeuePartie) { $args0 = @("--path", $Projekt, "--", "--autotest", "--load") + $eko }
 $runs = 0
 while ($true) {

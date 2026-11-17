@@ -491,13 +491,13 @@ static func _bauhof(sim: Simulation, cid: int) -> Dictionary:
 		prices[it] = "%.2f EUR, Bestand %d" % [sim.trader.price(it), sim.trader.stock_of(it)]
 	var own: Array = []
 	for l in sim.stock.of_owner("C%d" % cid):
-		own.append({"material": l.item, "menge": l.qty, "ort": sim.city.building(int(l.loc)).name})
+		own.append({"material": l.item, "menge": l.qty, "ort": str(sim.city.building(int(l.loc)).get("name", "–"))})
 	var jobs: Array = []
 	for d in sim.construction.open_deliveries().slice(0, 6):
 		jobs.append({"id": d.id, "baustelle": d.project, "material": d.need, "frachtlohn": d.freight, "warenwert": d.value})
 	for j in sim.construction.open_jobs().slice(0, 4):
 		jobs.append({"id": j.id, "art": Construction.MOVE_JOBS[j.kind].label, "wohnung": j.unit, "frachtlohn": j.fee})
-	return {"standort": sim.city.building(sim.trader.bauhof).name, "preise": prices, "dein_material": own, "lieferauftraege": jobs}
+	return {"standort": str(sim.city.building(sim.trader.bauhof).get("name", "–")), "preise": prices, "dein_material": own, "lieferauftraege": jobs}
 
 
 ## Unversorgte Bedürfnisse der Viertel: wohin sich Lieferungen lohnen (Geschäfte mit leeren Regalen bestellen Nachschub per Transportauftrag).

@@ -56,7 +56,7 @@ func plan(cid: int, a: Dictionary) -> Dictionary:
 	else:
 		var town: int = sim.towns.home_of(cid)
 		for z in ["wohnen", "mischgebiet"]:
-			for u in ["voll", "teilweise", "keine"]:
+			for u in ["voll", "teilweise"]:   # nur an einer Strasse (sonst kann das fertige Haus nicht uebergeben werden)
 				cands += sim.parcels.search({"zone": z, "utilities": u, "town": town, "min_area": 12, "limit": 30})
 	var why := "kein freies, bebaubares Wohngrundstück an einer Straße deiner Stadt – erst eine Straße bauen (strasse_bauen)"
 	for p in cands:

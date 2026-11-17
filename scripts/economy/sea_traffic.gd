@@ -31,7 +31,7 @@ func setup(simulation) -> void:
 	for k in sim.towns.count():
 		if sim.towns.harbor(k).enabled:
 			ports.append(k)
-	enabled = ports.size() >= 2 or (sim.neubeginn and ports.size() >= 1)
+	enabled = ports.size() >= 2 or sim.neubeginn   # Neubeginn: Siedlerschiff/-treck auch fuer spaeter gegruendete Orte
 	if enabled:
 		sim.day_changed.connect(on_day)
 
@@ -69,7 +69,14 @@ func attractiveness(k: int) -> Dictionary:
 
 
 func _settlers_day(day: int) -> void:
-	for k in ports:
+	ports.clear()
+	for k in sim.towns.count():
+		if sim.town_ready(k) and sim.towns.harbor(k).enabled:
+			ports.append(k)
+	for k in sim.towns.count():
+		if not sim.town_ready(k):
+			continue
+		var by_ship: bool = ports.has(k)
 		var key := "SI%d" % k
 		var leg: Dictionary = legs.get(key, {})
 		if not leg.is_empty() and (not bool(leg.done) or day - int(leg.get("day", -99)) < SETTLER_EVERY):
@@ -77,12 +84,15 @@ func _settlers_day(day: int) -> void:
 		var at := attractiveness(k)
 		if int(at.freie_wohnungen) <= 0 or int(at.punkte) < SETTLER_MIN_SCORE:
 			continue
-		var from: int = ports[(ports.find(k) + ports.size() - 1) % ports.size()] if ports.size() > 1 else k
-		var start := GameCalendar.day_start(day) + DEPART_MIN + 40.0 * float(ports.find(k))
+		var from: int = ports[(ports.find(k) + ports.size() - 1) % ports.size()] if by_ship and ports.size() > 1 else k
+		var start := GameCalendar.day_start(day) + DEPART_MIN + 40.0 * float(k)
 		var hh := clampi(1 + (int(at.punkte) - SETTLER_MIN_SCORE) / 10, 1, int(at.freie_wohnungen))
-		legs[key] = {"ship": key, "kind": "siedler", "name": "Siedlerschiff Neue Heimat", "from": from, "to": k, "depart": start, "arrive": start + TRIP_MIN,
-			"done": false, "day": day, "haushalte": hh}
-		sim.log_event("Ein Siedlerschiff nimmt Kurs auf %s: %d Haushalte wollen dort leben (Attraktivität %d)." % [sim.towns.name_of(k), hh, int(at.punkte)], "good")
+		if not by_ship:
+			hh = maxi(1, hh * 3 / 5)   # Siedlertreck ueber Land: weniger Leute als ein Schiff (Benedikt 17.11.)
+		legs[key] = {"ship": key, "kind": "siedler" if by_ship else "treck", "name": "Siedlerschiff Neue Heimat" if by_ship else "Siedlertreck",
+			"from": from, "to": k, "depart": start, "arrive": start + (TRIP_MIN if by_ship else TRIP_MIN * 1.5), "done": false, "day": day, "haushalte": hh}
+		sim.log_event("%s nimmt Kurs auf %s: %d Haushalte wollen dort leben (Attraktivität %d)." % ["Ein Siedlerschiff" if by_ship else "Ein Siedlertreck vom Großlager",
+			sim.towns.name_of(k), hh, int(at.punkte)], "good")
 
 
 func _settlers_arrive(leg: Dictionary) -> void:
@@ -98,8 +108,8 @@ func _settlers_arrive(leg: Dictionary) -> void:
 		free[i].arrears = 0
 	leg["angekommen"] = n
 	stats["siedler"] = int(stats.get("siedler", 0)) + n
-	sim.log_event("Das Siedlerschiff legt in %s an: %d Haushalte ziehen ein." % [sim.towns.name_of(k), n] if n > 0 else
-		"Das Siedlerschiff legt in %s an, aber alle Wohnungen sind inzwischen belegt – die Siedler fahren weiter." % sim.towns.name_of(k), "good" if n > 0 else "warn")
+	var what := "Das Siedlerschiff legt in %s an" % sim.towns.name_of(k) if leg.kind == "siedler" else "Der Siedlertreck erreicht %s" % sim.towns.name_of(k)
+	sim.log_event("%s: %d Haushalte ziehen ein." % [what, n] if n > 0 else "%s, aber alle Wohnungen sind inzwischen belegt – die Siedler ziehen weiter." % what, "good" if n > 0 else "warn")
 
 
 func ship_def(id: String) -> Dictionary:
@@ -144,14 +154,14 @@ func tick(now: float) -> void:
 
 ## Etappen, die gerade sichtbar sind (unterwegs oder am Kai), fuer die Ansicht.
 func visible_legs(now: float) -> Array:
-	return legs.values().filter(func(l): return now >= float(l.depart) and now <= float(l.arrive) + DOCK_MIN)
+	return legs.values().filter(func(l): return l.kind != "treck" and now >= float(l.depart) and now <= float(l.arrive) + DOCK_MIN)
 
 
 func _arrive(leg: Dictionary) -> void:
 	leg.done = true
 	stats.etappen = int(stats.etappen) + 1
 	var to := int(leg.to)
-	if leg.kind == "siedler":
+	if leg.kind in ["siedler", "treck"]:
 		_settlers_arrive(leg)
 		return
 	if leg.kind == "kreuzfahrt":

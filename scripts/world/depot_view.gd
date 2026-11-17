@@ -49,6 +49,8 @@ func setup(simulation: Simulation, city_view) -> void:
 
 func _footprint() -> Rect2:
 	var b: Dictionary = sim.city.building(sim.city_depot.building)
+	if b.is_empty():
+		return Rect2()   # Wildnis: Stadtlager entsteht erst mit der Gruendung
 	return Rect2(float(b.x) * 32.0, float(b.y) * 32.0, float(b.w) * 32.0, float(b.h) * 32.0)
 
 

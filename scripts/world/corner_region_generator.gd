@@ -20,6 +20,7 @@ func generate(seed_value: int, map_size: int = Catalog.MAP_SIZE, reserve_share: 
 		cd.gen_params["landschaft"] = landschaft if version >= 6 else ""
 		cd.gen_params["start_haeuser"] = start_houses   # Laden erzeugt die Karte neu: gleiche Zahl Startwohnhaeuser
 		cd.gen_params["neubeginn"] = neubeginn
+		cd.gen_params["wildnis"] = wildnis
 	return cd
 
 
@@ -114,7 +115,8 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 		else:
 			_build_town(k)
 	_build_hub()
-	_connect_towns()
+	if not wildnis:   # Wildnis: nur die Landstrassen vom Grosslager (_connect_hub), keine Kuestenstrassen zwischen den Ankunftsplaetzen
+		_connect_towns()
 	_connect_hub()
 	_land_cover_region()
 	c.height = heights

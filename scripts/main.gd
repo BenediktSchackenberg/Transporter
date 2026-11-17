@@ -241,6 +241,11 @@ func _start_autotest() -> void:
 	if args.has("neubeginn"):   # neue Partie "Neubeginn" (Benedikt 17.11.): Orte fast leer, KI baut alles auf
 		RegionGenerator.neubeginn = true
 		cfg["neubeginn"] = true
+	if args.has("wildnis"):   # Neubeginn ohne Orte: jede KI sucht ihren Platz und gruendet ihre Siedlung
+		RegionGenerator.neubeginn = true
+		RegionGenerator.wildnis = true
+		cfg["neubeginn"] = true
+		cfg["wildnis"] = true
 	print("AUTOTEST: %d Spieler, %s s aktive Echtzeit, %sx, Anbieter %s, Seed %d" % [n, args.get("seconds", "60"), args.get("speed", "16"), args.get("provider", "demo"), int(cfg.seed)])
 	_start(cfg)
 

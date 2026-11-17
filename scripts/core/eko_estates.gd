@@ -103,7 +103,12 @@ func center_of(name: String) -> Vector2i:
 # ------------------------------------------------------------------ Standort
 ## Flaches, freies Land ausserhalb der Orte, ohne Strassen, Gebaeude, Wasser, Berge und Parzellen; Abstand zu anderen Anwesen;
 ## zu Fuss mit einem Ort verbunden. Reihenfolge nach Seed, damit jede Partie andere Lagen hat.
-func assign(name: String) -> bool:
+## Wildnis: Stammsitz am Rand der eben gegruendeten Siedlung (naechster freier Platz zur Ortsmitte statt Zufallsplatz).
+func assign_near(name: String, ctr: Vector2i) -> bool:
+	return assign(name, ctr)
+
+
+func assign(name: String, near := Vector2i(-1, -1)) -> bool:
 	if estates.has(name):
 		return true
 	var C = _sim().city
@@ -128,7 +133,10 @@ func assign(name: String) -> bool:
 				continue
 			cands.append(r)
 	var seed_v: int = int(C.seed_value)
-	cands.sort_custom(func(a, b): return hash([seed_v, a.position, name]) < hash([seed_v, b.position, name]))
+	if near.x >= 0:
+		cands.sort_custom(func(a, b): return (a.get_center() - near).length_squared() < (b.get_center() - near).length_squared())
+	else:
+		cands.sort_custom(func(a, b): return hash([seed_v, a.position, name]) < hash([seed_v, b.position, name]))
 	var stat := {"kand": cands.size(), "frei": 0, "ohne_weg": 0}
 	for pass_i in 2:   # zweiter Durchgang: einzelne Huegelfelder erlaubt (hoechstens 10 %)
 		if _try(name, cands, busy, stat, 0 if pass_i == 0 else SIDE * SIDE / 10):

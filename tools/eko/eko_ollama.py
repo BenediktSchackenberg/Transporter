@@ -174,7 +174,7 @@ TOOLS = [
      "Einrichtung (bett, ladestation, tisch, lampe, ...) kaufst du mit Pickup am Bauhof, Preise in material_preise. "
      "Blockraster: 4x4 Blöcke je Feld, z = Schicht ab 0.",
      "parameters": {"type": "object", "properties": {
-         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Bauwerk", "Bauplan", "Tor", "Fahrt", "Ziel", "ZielStand", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf"]},
+         "type": {"type": "string", "enum": ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Bauwerk", "Bauplan", "Tor", "Fahrt", "Ziel", "ZielStand", "AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ablauf", "Siedlung"]},
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12], \"warum\": \"Hafen erkunden\"}. "
                   "warum (kurz) ist bei jeder Handlung erlaubt und wird im Spiel angezeigt. Die Antwort hat status: laeuft, abgeschlossen, gescheitert oder doppelt."}},
          "required": ["type", "data"]}},

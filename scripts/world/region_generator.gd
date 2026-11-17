@@ -10,6 +10,7 @@ extends CoastGenerator
 
 var town_count := 4
 static var start_houses := -1
+static var wildnis := false     # Benedikt 17.11. (Nachtrag): keine Orte; je KI nur ein Ankunftsplatz am Ende einer Landstrasse
 static var neubeginn := false   # Benedikt 17.11.: Orte nur mit einer Strasse, Rathaus, Anleger und Startplatz; Dienste am Zentrallager
 var forest_threshold := 0.25     # Version 6: je Landschaftstyp dichter oder lichter Wald
 var forest_p := 0.55   # Welt 2: hoechstens so viele Wohnhaeuser je Startort (-1 = wie bisher); die Orte wachsen durch Zuzug
@@ -297,6 +298,9 @@ func _first_id(from: int, pred: Callable) -> int:
 func _town_core(k: int) -> void:
 	var t := town
 	var ch: String = str(towns_out[k].charakter)
+	if wildnis:
+		_wild_camp(t, c.town_name)
+		return
 	if neubeginn:
 		_streets_neubeginn(t)
 	else:
@@ -396,6 +400,17 @@ func _town_core(k: int) -> void:
 		if id2 >= 0:
 			budget -= 1
 			k2 += 1
+
+
+## Wildnis: kein Ort, nur das Ende der Landstrasse und ein Ankunftsplatz (Lkw-Stellplatz) fuer die KI; ihre Siedlung gruendet sie
+## spaeter selbst an einem Platz ihrer Wahl (EkoSettle).
+func _wild_camp(t: Vector2i, nm: String) -> void:
+	_road(Vector2i(t.x - 12, t.y), Vector2i(t.x, t.y))
+	var r := Rect2i(t.x - 11, t.y - 5, 6, 4)
+	if not _free(r):
+		r = Rect2i(t.x - 11, t.y + 1, 6, 4)
+	if _free(r):
+		c.start_depots.append(_plot_building(r, "Ankunftsplatz %s" % nm, -1))
 
 
 ## Neubeginn: eine Strasse – Uferstrasse mit Abzweig zur Hinterstrasse, an der der Startplatz der KI liegt (Anschluss zum Zentrallager
@@ -584,11 +599,11 @@ func validate(cd: CityData) -> Dictionary:
 		per.append(counted)
 		if counted > MAX_BUILDINGS:
 			errs.append("%s: %d Startgebaeude (> %d)" % [t.name, counted, MAX_BUILDINGS])
-		if own.filter(func(b): return b.role == "town_hall").size() != 1:
+		if own.filter(func(b): return b.role == "town_hall").size() != 1 and not wildnis:
 			errs.append("%s: nicht genau ein Rathaus" % t.name)
-		if own.filter(func(b): return b.name == "Städtischer Bauhof").size() != 1:
+		if own.filter(func(b): return b.name == "Städtischer Bauhof").size() != 1 and not wildnis:
 			errs.append("%s: nicht genau ein Bauhof" % t.name)
-		if own.filter(func(b): return b.type == "port_office").size() != 1:
+		if own.filter(func(b): return b.type == "port_office").size() != 1 and not wildnis:
 			errs.append("%s: kein Hafen" % t.name)
 		if (not t.has("airport") or t.airport.is_empty()) and not neubeginn:   # Neubeginn: Flughafen baut die Stadt spaeter
 			errs.append("%s: kein Flughafen" % t.name)
