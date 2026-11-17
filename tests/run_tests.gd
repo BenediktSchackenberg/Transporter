@@ -8554,6 +8554,7 @@ func test_wildnis_found() -> void:
 	var rt: Dictionary = E.input(p0, "LKW", {"ziel": [site.x, site.y]})
 	ok(rt.ok and B.has("im_lkw"), "LKW-Fahrt ins Gelände: %s" % str(rt.msg).left(90))
 	ok(not E.input(p0, "MoveTo", {"tile": [site.x, site.y]}).ok, "im LKW kein Laufen")
+	ok(bool(E.observe(p0).du.unterwegs) and bool(E.observe(p0).du.im_lkw), "im LKW gilt man als unterwegs (wait bis ankunft wartet)")
 	var arrived := _run_until(s, func(): return not B.has("im_lkw"), 4000)
 	ok(arrived and E.tile_of(B).distance_to(site) < 4.0, "angekommen und ausgestiegen bei %s (%s)" % [str(site), str(E.tile_of(B))])
 	# Betriebshof und Basis eroeffnen

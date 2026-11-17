@@ -1457,7 +1457,8 @@ func observe(name: String) -> Dictionary:
 		s["entfernung"] = absi(int(s.feld[0]) - t.x) + absi(int(s.feld[1]) - t.y)
 		src.append(s)
 	return {"ok": true,
-		"du": {"name": name, "feld": [t.x, t.y], "unterwegs": not m.arrived(), "ziel": [m.goal.x, m.goal.y] if not m.arrived() else null,
+		"du": {"name": name, "feld": [t.x, t.y], "unterwegs": not m.arrived() or b.has("im_lkw"), "im_lkw": b.has("im_lkw"),   # 17.11.: im LKW galt man als angekommen - wait bis ankunft kehrte sofort zurueck
+			"ziel": [m.goal.x, m.goal.y] if not m.arrived() else null,
 			"traegt": b.held, "tragkraft": CARRY, "am_bauhof": _at_source(b), "nachrichten": int(b.get("inbox", 0))},
 		"naechste_schritte": next_steps(b),
 		"zeit": Catalog.game_minutes_to_text(sim.game_min), "wetter": sim.wx.headline(),
