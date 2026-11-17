@@ -171,8 +171,12 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 	if not w.estates.assign_near(str(b.name), cell):
 		return {"ok": false, "msg": "Für deine Basis (24 × 24 Felder) ist hier kein freier Platz – etwas versetzt versuchen."}
 	var ctr: Vector2i = w.estates.center_of(str(b.name))
-	var fr: Rect2i = w.estates.field_rect(str(b.name), 1)   # oberes Mittelfeld der Basis
-	var yard := _place("freight_shed", fr.position + Vector2i(1, 1), fr.end - Vector2i(2, 2), "%s (Betriebshof)" % c.company_name)
+	var yard := -1
+	for f in [1, 3, 5, 0, 2, 6, 8]:   # erst das obere Mittelfeld, sonst ein anderes freies Feld der Basis (Wasser/Huegel in der Basis)
+		var fr: Rect2i = w.estates.field_rect(str(b.name), f)
+		yard = _place("freight_shed", fr.position + Vector2i(1, 1), fr.end - Vector2i(2, 2), "%s (Betriebshof)" % c.company_name)
+		if yard >= 0:
+			break
 	if yard < 0:
 		return {"ok": false, "msg": "Der Betriebshof passt hier nicht – etwas versetzt versuchen."}
 	c.depots.push_front(yard)

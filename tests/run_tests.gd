@@ -8563,6 +8563,7 @@ func test_wildnis_found() -> void:
 		return
 	var dep: Dictionary = s.city.building(int(s.company(cid).depots[0]))
 	ok(str(dep.name).contains("Betriebshof") and E.estates.estates.has(p0) and E.estates.covers(Vector2i(int(dep.x), int(dep.y))), "Betriebshof steht in der Basis")
+	ok(Vector2(E.estates.center_of(p0)).distance_to(Vector2(site)) <= EkoEstates.NEAR_MAX + 1.0, "Basis am gewählten Platz (%d Felder daneben)" % int(Vector2(E.estates.center_of(p0)).distance_to(Vector2(site))))
 	ok(not s.town_ready(k) and int(s.city.towns[k].get("town_hall", -1)) < 0, "noch keine Stadt (kein Bürgeramt)")
 	ok((s.settlements[str(k)].plots as Array).size() >= 2, "Bauland um den Hof (%d Grundstücke)" % (s.settlements[str(k)].plots as Array).size())
 	# Buergeramt: Material kaufen, selbst abholen, selbst bauen

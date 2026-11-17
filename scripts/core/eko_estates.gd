@@ -103,7 +103,8 @@ func center_of(name: String) -> Vector2i:
 # ------------------------------------------------------------------ Standort
 ## Flaches, freies Land ausserhalb der Orte, ohne Strassen, Gebaeude, Wasser, Berge und Parzellen; Abstand zu anderen Anwesen;
 ## zu Fuss mit einem Ort verbunden. Reihenfolge nach Seed, damit jede Partie andere Lagen hat.
-## Wildnis: Stammsitz am Rand der eben gegruendeten Siedlung (naechster freier Platz zur Ortsmitte statt Zufallsplatz).
+## Wildnis: Basis am gewaehlten Platz (naechster passender Platz, hoechstens NEAR_MAX Felder entfernt).
+const NEAR_MAX := 20.0
 func assign_near(name: String, ctr: Vector2i) -> bool:
 	return assign(name, ctr)
 
@@ -115,18 +116,25 @@ func assign(name: String, near := Vector2i(-1, -1)) -> bool:
 	var n: int = C.size
 	var busy := PackedByteArray()
 	busy.resize(n * n)
+	var wild: bool = _sim().wildnis and near.x >= 0
 	for p in _sim().parcels.items.values():
 		if str(p.state) in ["frei", "zur_entwicklung"] and str(p.zone) != "korridor":
 			continue   # freies Land und Entwicklungsreserve ausserhalb der Orte darf Stammsitz werden (wird reserviert); Privatland und Trassen nicht
+		if wild and int(p.get("building", -1)) < 0 and not str(p.owner).begins_with("C") 				and not _sim().prod._deposits.has(str(p.id)):
+			continue   # Wildnis: noch niemand besitzt das Land (17.11.: Basis fand 20 Felder um den Platz nur "Privatland" der Kartenerzeugung)
 		for y in range(int(p.rect[1]), int(p.rect[1]) + int(p.rect[3])):
 			for x in range(int(p.rect[0]), int(p.rect[0]) + int(p.rect[2])):
 				if x >= 0 and y >= 0 and x < n and y < n:
 					busy[y * n + x] = 1
-	var towns: Array = C.towns.map(func(t): return Rect2i(int(t.rect[0]), int(t.rect[1]), int(t.rect[2]), int(t.rect[3])).grow(12))
+	var towns: Array = C.towns.filter(func(t): return not _sim().wildnis or bool(t.get("siedlung", false))).map(func(t): return Rect2i(int(t.rect[0]), int(t.rect[1]), int(t.rect[2]), int(t.rect[3])).grow(12))
+	if near.x >= 0:   # Wildnis: die Basis entsteht am gewaehlten Platz (17.11.: Liorfurt rutschte 50 Felder weg)
+		towns = towns.filter(func(t): return not t.has_point(near))
 	var cands: Array = []
-	for y in range(4, n - SIDE - 4, 6):
-		for x in range(4, n - SIDE - 4, 6):
+	for y in range(4, n - SIDE - 4, 6 if near.x < 0 else 2):
+		for x in range(4, n - SIDE - 4, 6 if near.x < 0 else 2):
 			var r := Rect2i(x, y, SIDE, SIDE)
+			if near.x >= 0 and (r.get_center() - near).length() > NEAR_MAX:
+				continue
 			if towns.any(func(t): return t.intersects(r)):
 				continue
 			if estates.values().any(func(e): return Rect2i(int(e.rect[0]), int(e.rect[1]), SIDE, SIDE).grow(8).intersects(r)):
@@ -139,15 +147,16 @@ func assign(name: String, near := Vector2i(-1, -1)) -> bool:
 		cands.sort_custom(func(a, b): return hash([seed_v, a.position, name]) < hash([seed_v, b.position, name]))
 	var stat := {"kand": cands.size(), "frei": 0, "ohne_weg": 0}
 	for pass_i in 2:   # zweiter Durchgang: einzelne Huegelfelder erlaubt (hoechstens 10 %)
-		if _try(name, cands, busy, stat, 0 if pass_i == 0 else SIDE * SIDE / 10):
+		var rough := SIDE * SIDE / 4 if near.x >= 0 else 0   # Wildnis: Wasser und Huegel in der Basis sind natuerlicher Schutz
+		if _try(name, cands, busy, stat, (0 if pass_i == 0 else SIDE * SIDE / 10) + rough, rough):
 			return true
 	last_failure = stat
 	return false
 
 
-func _try(name: String, cands: Array, busy: PackedByteArray, stat: Dictionary, hills_ok: int) -> bool:
+func _try(name: String, cands: Array, busy: PackedByteArray, stat: Dictionary, hills_ok: int, water_ok := 0) -> bool:
 	for r in cands:
-		var why := _block_reason(r, busy, hills_ok)
+		var why := _block_reason(r, busy, hills_ok, water_ok)
 		if why != "":
 			stat[why] = int(stat.get(why, 0)) + 1
 			continue
@@ -172,7 +181,7 @@ func _try(name: String, cands: Array, busy: PackedByteArray, stat: Dictionary, h
 var last_failure := {}
 
 
-func _block_reason(r: Rect2i, busy: PackedByteArray, hills_ok: int = 0) -> String:
+func _block_reason(r: Rect2i, busy: PackedByteArray, hills_ok: int = 0, water_ok: int = 0) -> String:
 	var C = _sim().city
 	var cnt := {"parzelle": 0, "wasser": 0, "gebaeude": 0, "strasse": 0, "gleis": 0, "trasse": 0, "berg": 0}
 	var S = _sim()
@@ -192,7 +201,7 @@ func _block_reason(r: Rect2i, busy: PackedByteArray, hills_ok: int = 0) -> Strin
 			if C.building_at[i] >= 0: cnt.gebaeude += 1
 			if not C.height.is_empty() and C.height[i] > 0: cnt.berg += 1
 	for k in cnt:
-		if int(cnt[k]) > (hills_ok if k == "berg" else 0):
+		if int(cnt[k]) > (hills_ok if k == "berg" else (water_ok if k == "wasser" else 0)):
 			return k
 	return ""
 
