@@ -478,7 +478,11 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			r = _office_action(b, data)
 		"Siedlung":   # Wildnis: Siedlung am gewaehlten Platz gruenden (EkoSettle)
 			var fc := active_firm(b)
-			var f = data.get("feld", data.get("tile", []))
+			var f = []
+			for key in ["feld", "tile", "ort", "platz", "pos", "position", "kachel"]:   # 17.11.: Wesen schrieben "ort"
+				if data.get(key) is Array and (data[key] as Array).size() >= 2:
+					f = data[key]
+					break
 			if not sim.wildnis or fc < 0:
 				r = {"ok": false, "msg": "Siedlungen gründen nur Unternehmer in der Wildnis-Partie."}
 			elif not (f is Array) or (f as Array).size() < 2:
