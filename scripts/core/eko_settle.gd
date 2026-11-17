@@ -249,6 +249,7 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 	sim.parcels.sync_buildings()
 	sim.events.buildings_added.emit([hall, bauhof] + ([yard] if yard >= 0 else []) + ([harbor] if harbor >= 0 else []))
 	sim.settlements[str(k)] = {"center": t.center, "rect": t.rect, "roads": roads.map(func(q): return [q.x, q.y])}
+	carve_plots(k, roads, 10)   # Baugrundstuecke an Dorfstrasse und Zufahrt
 	# Stammsitz am Ortsrand, Buergermeister uebernimmt das Amt
 	w.estates.assign_near(str(b.name), cell)
 	for n in w.beings:
@@ -299,8 +300,46 @@ func build_road(b: Dictionary, cid: int, a: Dictionary) -> Dictionary:
 	var st: Dictionary = sim.settlements.get(str(k), {})
 	st["roads"] = (st.get("roads", []) as Array) + path.map(func(q): return [q.x, q.y])
 	sim.settlements[str(k)] = st
+	var plots := carve_plots(k, path, 6)
 	sim.log_event("%s baut %d Felder Straße in %s." % [c.company_name, path.size(), sim.towns.name_of(k)], "info", cid)
-	return {"ok": true, "msg": "%d Felder Straße gebaut (%s, %d Kies). Die Grundstücke daran sind jetzt erschlossen." % [path.size(), Catalog.money(cost), kies]}
+	return {"ok": true, "msg": "%d Felder Straße gebaut (%s, %d Kies), %d neue Baugrundstücke daran." % [path.size(), Catalog.money(cost), kies, plots.size()]}
+
+
+## Baugrundstuecke (9 x 8 Felder) beidseits entlang der Strassenzellen anlegen, jedes 9. Feld; hoechstens `limit`.
+const PLOT := Vector2i(9, 8)
+func carve_plots(k: int, cells: Array, limit: int = 8) -> Array:
+	var sim = _sim()
+	var C: CityData = sim.city
+	var st: Dictionary = sim.settlements.get(str(k), {})
+	var have: Array = (st.get("plots", []) as Array).map(func(a): return Rect2i(int(a[0]), int(a[1]), int(a[2]), int(a[3])))
+	var made: Array = []
+	for i in range(0, cells.size(), 5):
+		if made.size() >= limit:
+			break
+		var c: Vector2i = cells[i]
+		for o in [Vector2i(1, -4), Vector2i(-PLOT.x, -4), Vector2i(-4, 1), Vector2i(-4, -PLOT.y)]:
+			var r := Rect2i(c + o, PLOT)
+			if have.any(func(h): return h.intersects(r)) or not _plot_free(r):
+				continue
+			sim.parcels.carve(r, "wohnen", Towns.owner_of(k))
+			have.append(r)
+			made.append([r.position.x, r.position.y, r.size.x, r.size.y])
+	st["plots"] = (st.get("plots", []) as Array) + made
+	sim.settlements[str(k)] = st
+	return made
+
+
+func _plot_free(r: Rect2i) -> bool:
+	var C: CityData = _sim().city
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var q := Vector2i(x, y)
+			if not C.inside(q):
+				return false
+			var i := C.idx(q)
+			if C.ground[i] in [CityData.G.ROAD, CityData.G.WATER] or C.building_at[i] >= 0 or (not C.height.is_empty() and C.height[i] > 0):
+				return false
+	return true
 
 
 ## Gebaeude im Rechteck zwischen a und b (beliebige Ecken) an die Dorfstrasse setzen; -1 wenn nichts passt.

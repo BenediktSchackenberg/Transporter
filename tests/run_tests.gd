@@ -8551,6 +8551,12 @@ func test_wildnis_found() -> void:
 	ok(not mayor.is_empty() and E.tile_of(mayor).distance_to(Vector2i(int(t.center[0]), int(t.center[1]))) < 20, "Bürgermeister ist im Bürgeramt")
 	var land: Array = s.parcels.search({"town": k, "zone": "wohnen", "limit": 50})
 	ok(land.size() >= 1, "Bauland der neuen Stadt (%d Grundstücke)" % land.size())
+	var plots: Array = s.settlements[str(k)].get("plots", [])
+	ok(plots.size() >= 2, "Baugrundstücke an der Dorfstraße (%d)" % plots.size())
+	for typ in ["einfamilienhaus", "doppelhaus", "mehrfamilienhaus"]:
+		var pp: Dictionary = s.parcels.at_cell(Vector2i(int(plots[0][0]) + 1, int(plots[0][1]) + 1)) if not plots.is_empty() else {}
+		var chk := Planning.assess(pp, {"def": typ, "floors": 3 if typ == "mehrfamilienhaus" else 1, "parking": int(Planning.DEFS[typ].parking), "financing": {"eigenmittel": 1.0e9}}) if not pp.is_empty() else {"ok": false, "blocking": ["kein Grundstück"]}
+		ok(bool(chk.ok), "%s passt aufs Baugrundstück (%s)" % [typ, " ".join(chk.get("blocking", []))])
 	var hb: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}})
 	ok(hb.ok, "nach der Gründung: Hausbau (%s)" % str(hb.msg).left(120))
 	ok(not E.input(p0, "Siedlung", {"feld": best[0].feld}).ok, "nur eine Gründung je Firma")
@@ -8571,6 +8577,10 @@ func test_wildnis_found() -> void:
 	ok(not E.settle.score_at(near).ok, "zu nah an der neuen Siedlung: %s" % str(E.settle.score_at(near).get("grund", "")))
 	var nb := s.city.buildings.size()
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	var dmig: Dictionary = JSON.parse_string(JSON.stringify(s.to_dict()))
+	dmig.settlements[str(k)].erase("plots")
+	var s3 := Simulation.from_dict(dmig)
+	ok((s3.settlements[str(k)].get("plots", []) as Array).size() >= 2 and s3.city.buildings.size() == nb, "alte Siedlung: Grundstücke beim Laden nachgeholt, Gebäude unversehrt")
 	ok(s2.town_ready(k) and s2.city.buildings.size() == nb and s2.city.is_road(Vector2i(int(t.center[0]), int(t.center[1]))), "Siedlung gespeichert und geladen")
 	ok(absf(s.economy.conservation_error()) < 1.0, "Geldbuch stimmt")
 	RegionGenerator.neubeginn = false

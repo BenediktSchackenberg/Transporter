@@ -25,7 +25,7 @@ const ZONES := {
 }
 ## Stadtbezirk (CityData.district) -> Zone
 const ZONE_OF_DISTRICT := ["mischgebiet", "wohnen", "industrie", "industrie", "gewerbe", "wohnen"]
-const DYNAMIC := ["owner", "state", "rights", "reservation", "application", "project", "use", "building", "erschliessung"]
+const DYNAMIC := ["owner", "state", "rights", "reservation", "application", "project", "use", "building", "erschliessung", "zone"]   # zone: Wildnis-Gruendung widmet Land um
 
 var city: CityData
 var sim
@@ -339,6 +339,20 @@ func mark(pid: String, state: String, application: String) -> void:
 	p.state = state
 	p.application = application
 	_touch(p)
+
+
+## Wildnis (17.11.): Baugrundstueck an einer neuen Strasse anlegen. Ueberdeckte freie Restflaechen werden zum Korridor (nicht mehr
+## bebaubar). Beim Laden in gleicher Reihenfolge wiederholt (gleiche IDs, danach greifen die gespeicherten Aenderungen).
+func carve(r: Rect2i, zone: String, owner: String) -> String:
+	for p in items.values():
+		var pr := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
+		if pr.intersects(r) and str(p.state) == "frei":
+			p.zone = "korridor"
+			_touch(p)
+	var q := _new(r, zone, "frei", owner, "")
+	q["erschliessung"] = utilities_of(q)
+	_touch(q)
+	return str(q.id)
 
 
 ## Kauf durch einen Haushalt. Nur reservierte Flaechen des Reservierers; der Kaufpreis geht an die Stadt (P0).

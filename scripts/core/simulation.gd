@@ -1620,6 +1620,10 @@ static func from_dict(d: Dictionary) -> Simulation:
 		s.city.towns[int(key)]["rect"] = st.rect
 		s.city.towns[int(key)]["gegruendet"] = true
 		s.access.reapply(st.get("roads", []))
+		if st.has("plots"):   # Baugrundstuecke in gleicher Reihenfolge (gleiche IDs; Zustand kommt aus parcels.from_dict)
+			for pl in st.plots:
+				s.parcels.carve(Rect2i(int(pl[0]), int(pl[1]), int(pl[2]), int(pl[3])), "wohnen", Towns.owner_of(int(key)))
+
 	for M in s.towns.mayors:   # Strassen aus fertigen Erschliessungen wieder anlegen
 		for prj in M.projects.values():
 			if prj.get("status", "") == "fertig" and prj.has("road_cells"):
@@ -1661,6 +1665,9 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.events.from_dict(d.get("events", {}))
 	s.parcels.sync_buildings()
 	s.parcels.from_dict(d.get("parcels", {}))
+	for key in s.settlements:   # Siedlung von vor den Baugrundstuecken (17.11.): Grundstuecke an ihren Strassen nachholen (nach den Gebaeuden)
+		if not s.settlements[key].has("plots"):
+			s.eko.settle.carve_plots(int(key), (s.settlements[key].get("roads", []) as Array).map(func(a): return Vector2i(int(a[0]), int(a[1]))), 10)
 	s.world_events.from_dict(d.get("world_events", {}))
 	s.game_master.from_dict(d.get("game_master", {}))
 	s.town_hall.from_dict(d.get("town_hall", {}))
