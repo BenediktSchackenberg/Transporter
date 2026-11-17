@@ -72,6 +72,8 @@ const VEHICLE_MODELS := {
 		"cost_per_tile": 0.85, "wear": 0.022, "refrigerated": false, "heavy": false},
 	"reefer": {"name": "Kühltransporter", "price": 32000.0, "capacity": 14, "speed": 2.4,
 		"cost_per_tile": 1.1, "wear": 0.025, "refrigerated": true, "heavy": false},
+	"gelaende_lkw": {"name": "Gelände-LKW", "price": 95000.0, "capacity": 30, "speed": 1.8,   # Wildnis-Start (Benedikt 17.11.): faehrt auch ohne Strasse
+		"cost_per_tile": 2.0, "wear": 0.03, "refrigerated": false, "heavy": true, "offroad": true},
 	"truck": {"name": "LKW 12t", "price": 46000.0, "capacity": 40, "speed": 2.1,
 		"cost_per_tile": 1.5, "wear": 0.02, "refrigerated": false, "heavy": true},
 	"semi": {"name": "Sattelzug", "price": 80000.0, "capacity": 80, "speed": 1.8,
@@ -154,6 +156,8 @@ static func model(id: String) -> Dictionary:
 
 ## Grundmodell fuer Bild und Regel-Einkauf: eigene Entwuerfe zeigen sich als ihr Grundtyp (transporter, truck, semi).
 static func base_model(id: String) -> String:
+	if id == "gelaende_lkw":
+		return "truck"   # Darstellung wie der LKW (eigenes Bild folgt)
 	return str(custom_models[id].base) if custom_models.has(id) else id
 
 

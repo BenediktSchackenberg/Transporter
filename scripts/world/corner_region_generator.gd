@@ -118,6 +118,8 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 	if not wildnis:   # Wildnis: nur die Landstrassen vom Grosslager (_connect_hub), keine Kuestenstrassen zwischen den Ankunftsplaetzen
 		_connect_towns()
 	_connect_hub()
+	if wildnis:
+		_hub_camps()
 	_land_cover_region()
 	c.height = heights
 	_finish()
@@ -589,6 +591,26 @@ func _connect_hub() -> void:
 				c.district[c.idx(p)] = 4
 				cells += 1
 		hub_out.links.append({"stadt": k, "zufahrt": HUB_EXIT_OF.get(corner, "N"), "zellen": cells, "laenge": path.size(), "verbunden": not path.is_empty()})
+
+
+## Wildnis: je KI ein Ankunftsplatz (Lkw-Stellplatz) vor der Ausfahrt des Grosslagers in Richtung ihrer Region; von hier faehrt
+## sie mit dem Gelaende-LKW los und sucht ihren Platz.
+func _hub_camps() -> void:
+	for k in towns_out.size():
+		var ex: Array = hub_out.exits[HUB_EXIT_OF.get(str(towns_out[k].get("ecke", "")), "N")]
+		var e := Vector2i(int(ex[0]), int(ex[1]))
+		var id := -1
+		for rad in range(1, 14):
+			for off in [Vector2i(rad, -2), Vector2i(-rad - 6, -2), Vector2i(-3, rad), Vector2i(-3, -rad - 4), Vector2i(rad, rad), Vector2i(-rad - 6, -rad - 4)]:
+				var r := Rect2i(e + off, Vector2i(6, 4))
+				if id < 0 and _free(r) and not hub_rect.intersects(r):
+					id = _plot_building(r, "Ankunftsplatz %s" % towns_out[k].name, -1)
+			if id >= 0:
+				break
+		if id >= 0:
+			c.buildings[id]["town"] = k
+			c.start_depots.append(id)
+			towns_out[k]["start_plot"] = id
 
 
 ## Ziel der Zufahrt: naechstgelegene Ortsstrasse, die nachweislich mit der Ortsmitte verbunden ist (sonst endete die Zufahrt

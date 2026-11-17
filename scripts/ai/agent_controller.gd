@@ -319,6 +319,8 @@ func _dispatch_tick() -> void:
 		return
 	# Firma eines aktiven Wesens: das Wesen disponiert selbst; die Regeln fuellen nur alle drei Spielstunden Luecken
 	# (stehende Fahrzeuge ohne Auftrag). Ist das Wesen EKO_IDLE_S lang untaetig, wieder im normalen Takt.
+	if sim.neubeginn and str(config.get("provider", "")) == "eko" and sim.personnel.employed(cid).all(func(w): return w.role == "owner"):
+		return   # Neubeginn: solange nur der Inhaber faehrt, faehrt das Wesen selbst (EkoWorld LKW) – keine automatische Disposition
 	var every := DISPATCH_EVERY_MIN * (3.0 if str(config.get("provider", "")) == "eko" and sim.eko.firm_idle_s(cid) < EKO_IDLE_S else 1.0)
 	if sim.game_min - _dispatch_min < every:
 		return

@@ -329,6 +329,7 @@ func update(dt: float) -> void:
 	if _homes_min >= 0.0 and sim.game_min > _homes_min:
 		homes.tick(float(sim.game_min) - _homes_min)
 	_homes_min = float(sim.game_min)
+	_body_tick()
 	for b in beings.values():   # laufende Ablaeufe fortsetzen, sobald das Wesen angekommen ist und nicht ruht
 		if not (b.get("ablauf", []) as Array).is_empty() and (b.mover as Mover).arrived() and float(b.get("rest_left", 0.0)) <= 0.0:
 			_run_plan(b)
@@ -376,9 +377,10 @@ func _restore_savings(b: Dictionary) -> void:
 
 # ------------------------------------------------------------------ Handlungen
 const ACTIONS := ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Bauwerk", "Tor", "Bauplan", "Fahrt",
-	"AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ziel", "ZielStand", "Merke", "Ablauf", "Siedlung"]
+	"AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ziel", "ZielStand", "Merke", "Ablauf", "Siedlung", "Bauen", "LKW"]
 ## Namen, unter denen Modelle eine Handlung aufrufen (Partie 16.11.: Buergermeisterin rief "mein_amt" statt "Amt" auf – so heisst ihre Lage).
 const ACTION_ALIASES := {"mein_amt": "Amt", "office": "Amt", "amt_aktion": "Amt", "meine_firma": "Firma", "company": "Firma", "firm": "Firma",
+	"bauen": "Bauen", "arbeiten": "Bauen", "build": "Bauen", "work": "Bauen", "lkw": "LKW", "truck": "LKW", "lastwagen": "LKW",
 	"gruenden": "Siedlung", "gründen": "Siedlung", "siedlung_gruenden": "Siedlung", "found_town": "Siedlung", "settle": "Siedlung",
 	"move": "MoveTo", "goto": "MoveTo", "gehe": "MoveTo", "sprich": "Talk", "sage": "Say", "anrufen": "Talk", "call": "Talk"}
 
@@ -415,6 +417,10 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			type = "Amt" if int(b.get("amt", -1)) >= 0 else "Firma"
 	if arms.is_out(b) and type not in ["Inspect"]:
 		return {"ok": false, "status": "gescheitert", "msg": arms.out_msg(b)}
+	if b.has("im_lkw") and type in ["MoveTo", "Pickup", "Place", "Bauwerk", "Bauen", "Attack", "Fahrt", "Siedlung", "LKW", "MoveIn"]:
+		return {"ok": false, "msg": "Du sitzt im LKW und fährst noch – warte, bis du ankommst (wait bis: \"ankunft\"). Denken, Reden und Firma gehen auch unterwegs."}
+	if type in ["MoveTo", "Fahrt", "LKW", "Pickup", "Stop", "Siedlung"] and b.has("baut"):
+		b.erase("baut")   # wer weggeht, baut nicht mehr
 	if not from_plan and type in ["MoveTo", "Stop", "Pickup", "Place", "Ablauf"] and not (b.get("ablauf", []) as Array).is_empty():
 		b.ablauf = []   # eine direkte Handlung ersetzt einen laufenden Ablauf
 		_event(b, "bricht den laufenden Ablauf ab")
@@ -476,6 +482,10 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			r = _move_in(b)
 		"Amt":
 			r = _office_action(b, data)
+		"Bauen":   # selbst auf einer Baustelle arbeiten (EkoHomes) oder an der Basis (Stammsitz-Bauwerk)
+			r = _work(b, data)
+		"LKW":     # mit dem eigenen LKW fahren: Grosslager (Ware abholen, tanken), Hof oder ein Feld
+			r = _truck(b, data)
 		"Siedlung":   # Wildnis: Siedlung am gewaehlten Platz gruenden (EkoSettle)
 			var fc := active_firm(b)
 			var f = []
@@ -768,6 +778,160 @@ func next_steps(b: Dictionary) -> Array:
 	if hint != "":
 		out.insert(mini(1, out.size()), hint)   # vor Ziel-Erinnerungen (17.11.: als Letztes fiel er immer hinter die ersten drei)
 	return out.slice(0, 3)
+
+
+# ------------------------------------------------------------------ Koerperliche Arbeit (Wildnis, Benedikt 17.11.)
+## Fahrzeug, das der Inhaber selbst faehrt (nur er, solange es keine Angestellten gibt).
+func own_truck(cid: int) -> FleetVehicle:
+	for wk in sim.personnel.employed(cid):
+		if wk.role == "owner" and int(wk.vehicle_id) >= 0:
+			return sim.vehicles.get(int(wk.vehicle_id))
+	return null
+
+
+func _truck_busy(v: FleetVehicle) -> bool:
+	return v.state not in ["idle"] or not v.queue.is_empty() or str(v.contract_id) != "" or not v.stops.is_empty()
+
+
+## LKW {ziel: "grosslager" | "hof" | [x, y]} – das Wesen faehrt selbst mit.
+func _truck(b: Dictionary, data: Dictionary) -> Dictionary:
+	var cid := active_firm(b)
+	if cid < 0:
+		return {"ok": false, "msg": "Du hast keine Firma und keinen LKW."}
+	var v := own_truck(cid)
+	if v == null:
+		return {"ok": false, "msg": "Kein Fahrzeug, das du selbst fährst."}
+	if _truck_busy(v):
+		return {"ok": false, "msg": "Dein LKW ist gerade unterwegs (%s)." % v.state}
+	var here := tile_of(b)
+	if maxi(absi(here.x - v.tile().x), absi(here.y - v.tile().y)) > 3:
+		var p: Array[Vector2i] = sim.nav.walk_path(here, v.tile())
+		if p.is_empty():
+			return {"ok": false, "msg": "Du kommst zu Fuß nicht zu deinem LKW (%s)." % str([v.tile().x, v.tile().y])}
+		(b.mover as Mover).set_path(p)
+		b["lkw_auftrag"] = data.duplicate()
+		return {"ok": true, "status": "laeuft", "msg": "Du gehst zu deinem LKW bei %s und fährst dann los." % str([v.tile().x, v.tile().y])}
+	b.erase("lkw_auftrag")
+	var c = sim.company(cid)
+	var ziel = data.get("ziel", "grosslager")
+	if ziel is Array and (ziel as Array).size() >= 2:
+		var cell := Vector2i(int(ziel[0]), int(ziel[1]))
+		if not sim.route(v, cell, "erkunden"):
+			return {"ok": false, "msg": "Dorthin kommt der LKW nicht (Wasser, Berg oder kein Weg)."}
+		b["im_lkw"] = v.id
+		return {"ok": true, "status": "laeuft", "msg": "Du fährst mit deinem LKW nach %s (querfeldein langsamer als auf Straßen)." % str(ziel)}
+	var z := str(ziel).to_lower()
+	if z in ["hof", "betriebshof", "heim", "basis"]:
+		var dep: Dictionary = sim.city.building(int(c.depots[0]))
+		if dep.is_empty() or not sim.route(v, dep.road, "erkunden"):
+			return {"ok": false, "msg": "Kein Weg zu deinem Betriebshof."}
+		b["im_lkw"] = v.id
+		return {"ok": true, "status": "laeuft", "msg": "Du fährst zu deinem Betriebshof."}
+	# Grosslager: gekaufte Ware abholen (eigene Abholauftraege), tanken
+	var taken: Array = []
+	for k in sim.contracts.values():
+		if k.status == "open" and str(k.order_ref).begins_with("hub:") and int(k.exclusive_for) == cid:
+			c.known[k.id] = true
+			var r: Dictionary = sim.executor._accept_contract(cid, k.id, v.id)
+			if bool(r.get("ok", false)):
+				taken.append(k.id)
+	var fuel_note := ""
+	if c.fuel < 1500.0:
+		var liters: float = 1500.0 - float(c.fuel)
+		var cost := snappedf(liters * ResourceMarket.FUEL_BASE_PRICE, 0.01)
+		if c.ledger.cash >= cost:
+			c.ledger.book("fuel", -cost, true, "Tanken am Großlager (%d l)" % int(liters), sim.game_min)
+			c.fuel = 1500.0
+			fuel_note = " Am Großlager tankst du %d l nach (%s)." % [int(liters), Catalog.money(cost)]
+	if taken.is_empty():
+		var hub_b: Dictionary = sim.city.building(int(sim.city.hub.get("buildings", {}).get("hauptlager", -1)))
+		if hub_b.is_empty() or not sim.route(v, hub_b.road, "erkunden"):
+			return {"ok": false, "msg": "Kein Weg zum Großlager."}
+		b["im_lkw"] = v.id
+		return {"ok": true, "status": "laeuft", "msg": "Nichts abzuholen (erst hub_buy) – du fährst zum Großlager.%s" % fuel_note}
+	b["im_lkw"] = v.id
+	return {"ok": true, "status": "laeuft", "msg": "Du fährst mit deinem LKW zum Großlager, lädst %d Abholungen (%s) und bringst sie auf deinen Hof.%s" % [
+		taken.size(), ", ".join(taken), fuel_note]}
+
+
+## Bauen {baustelle?} – das Wesen geht zur Baustelle und arbeitet dort, bis es etwas anderes tut ("stammsitz" = Bauwerke der Basis).
+func _work(b: Dictionary, data: Dictionary) -> Dictionary:
+	var cid := active_firm(b)
+	var id := str(data.get("baustelle", data.get("id", "")))
+	if id in ["stammsitz", "basis"]:
+		if not estates.estates.has(str(b.name)):
+			return {"ok": false, "msg": "Du hast noch keine Basis."}
+		if not (estates.estates[b.name].bauten as Array).any(func(x): return x.status == "im_bau"):
+			return {"ok": false, "msg": "An deiner Basis ist nichts im Bau – erst ein Bauwerk beauftragen (Bauwerk {art, feld})."}
+		b["baut"] = "stammsitz"
+		var p: Array[Vector2i] = sim.nav.walk_path(tile_of(b), estates.center_of(str(b.name)))
+		if not p.is_empty():
+			(b.mover as Mover).set_path(p)
+		return {"ok": true, "status": "laeuft", "msg": "Du gehst zu deiner Basis und baust dort selbst."}
+	if cid < 0:
+		return {"ok": false, "msg": "Bauen geht auf Baustellen deiner Firma."}
+	var s: Dictionary = homes.sites.get(id, {})
+	if s.is_empty():
+		var open: Array = homes.open_sites(cid).filter(func(x): return x.status == "bau")
+		if open.is_empty():
+			var mat: Array = homes.open_sites(cid).filter(func(x): return x.status == "material")
+			if not mat.is_empty():
+				return {"ok": false, "msg": "Baustelle %s wartet auf Material: %s – kaufen (hub_buy) und mit dem LKW holen." % [mat[0].id, str(homes.missing(mat[0]))]}
+			return {"ok": false, "msg": "Keine Baustelle bereit. Neue: haus_bauen, buergeramt_bauen, strasse_bauen."}
+		s = open[0]
+	if int(s.cid) != cid:
+		return {"ok": false, "msg": "Baustelle %s gehört dir nicht." % id}
+	if s.status == "material":
+		return {"ok": false, "msg": "Baustelle %s wartet auf Material vom Hof: %s." % [s.id, str(homes.missing(s))]}
+	if s.status != "bau":
+		return {"ok": false, "msg": "Baustelle %s ist %s." % [s.id, s.status]}
+	b["baut"] = str(s.id)
+	var target := homes.work_cell(s)
+	var p: Array[Vector2i] = sim.nav.walk_path(tile_of(b), target)
+	if not p.is_empty():
+		(b.mover as Mover).set_path(p)
+	return {"ok": true, "status": "laeuft", "msg": "Du gehst zur Baustelle %s (%s) und arbeitest dort, bis du etwas anderes tust. Bauen kostet Akku." % [s.id, s.typ]}
+
+
+## Je Takt: im LKW mitfahren und aussteigen, eine wartende Fahrt fortsetzen, der Arbeitsstelle nachgehen (Strasse Feld fuer Feld).
+func _body_tick() -> void:
+	for b in beings.values():
+		var cid := int(b.get("firma", -1))
+		if cid < 0:
+			continue
+		var v := own_truck(cid)
+		if b.has("im_lkw"):
+			var tv: FleetVehicle = sim.vehicles.get(int(b.im_lkw))
+			if tv == null or not _truck_busy(tv):
+				b.erase("im_lkw")
+				if tv != null:
+					(b.mover as Mover).pos = tv.pos
+					(b.mover as Mover).set_path([tv.tile()] as Array[Vector2i])
+				_event(b, "Du bist angekommen und steigst aus dem LKW.")
+			else:
+				(b.mover as Mover).pos = tv.pos
+			continue
+		if v != null and _truck_busy(v) and v.state not in ["broken", "repairing", "to_workshop"]:
+			b["im_lkw"] = v.id   # der Inhaber faehrt selbst: wer den LKW losschickt, sitzt drin
+			(b.mover as Mover).pos = v.pos
+			_event(b, "Du steigst in deinen LKW und fährst selbst.")
+			continue
+		if b.has("lkw_auftrag") and (b.mover as Mover).arrived() and v != null:
+			var r := _truck(b, b.lkw_auftrag)
+			if not bool(r.get("ok", false)):
+				b.erase("lkw_auftrag")
+				_event(b, "LKW: %s" % str(r.msg).left(100))
+		var sid := str(b.get("baut", ""))
+		if sid != "" and sid != "stammsitz" and (b.mover as Mover).arrived():
+			var s: Dictionary = homes.sites.get(sid, {})
+			if s.is_empty() or s.status != "bau":
+				continue
+			var c := homes.work_cell(s)
+			var t := tile_of(b)
+			if maxi(absi(t.x - c.x), absi(t.y - c.y)) > EkoHomes.NEAR - 2:
+				var p: Array[Vector2i] = sim.nav.walk_path(t, c)
+				if not p.is_empty():
+					(b.mover as Mover).set_path(p)
 
 
 ## Hoechstens einmal je Spieltag ohne Gespraech: ein konkreter Anlass, jemanden anzusprechen (17.11.: nach der Talk-Sperre redete
@@ -1836,7 +2000,7 @@ const FIRM_ACTIONS := [
 	# Unternehmensplan (PlanBook): Ziel, Schritte, Nutzen, Risiken, Abbruchbedingungen
 	"set_plan", "update_plan_step", "cancel_plan",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
-	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "bauleute", "strasse_bauen",
+	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "bauleute", "strasse_bauen", "buergeramt_bauen",
 	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage",
 	# Waffenschmiede (nur mit eigener, laufender Waffenschmiede)
 	"design_weapon", "forge_weapon", "fortify_building", "rebuild_building"]
@@ -1918,16 +2082,16 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		return arms.firm_action(b, cid, a)
 	if str(a.action) in ["fortify_building", "rebuild_building"]:   # eigene Gebaeude befestigen / wieder aufbauen
 		return arms.firm_object_action(b, cid, a)
-	if str(a.action) == "haus_bauen" and sim.wildnis and not sim.town_ready(sim.companies[cid].home_town):
-		return {"ok": false, "msg": "Erst eine Siedlung gründen: Siedlung {feld: [x, y]} (siehe siedlung.beste_plaetze_in_der_naehe)."}
+	if str(a.action) == "buergeramt_bauen":   # Wildnis: Buergeramt selbst bauen – danach gibt es die Stadt
+		return homes.plan_town_hall(cid, a)
 	if str(a.action) == "haus_bauen":   # Neubeginn (Etappe B): Wohnhaus selbst bauen
 		var rh := homes.plan(cid, a)
 		_event(b, "Firma: haus_bauen → %s" % str(rh.msg).left(80))
 		return rh
 	if str(a.action) == "bauleute":
 		return homes.assign_crew(cid, a)
-	if str(a.action) == "strasse_bauen":   # Wildnis: eigene Strassen im Ortsgebiet (EkoSettle)
-		return settle.build_road(b, cid, a)
+	if str(a.action) == "strasse_bauen":   # Wildnis: Strassenbaustelle (EkoSettle -> EkoHomes), gebaut wird mit Bauen
+		return settle.plan_road(cid, a)
 	if str(a.action) == "auftrag_an_wesen":   # Firma schreibt selbst einen Hilfsjob fuer freie Wesen aus
 		var c2 = sim.company(cid)
 		var lohn := clampf(float(a.get("lohn", 100.0)), 20.0, 2000.0)
@@ -2023,7 +2187,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
 			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +
-			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus, grundstueck?} (Wohnhaus selbst bauen: Material per hub_buy holen, vermieten oder sell_property) | bauleute {baustelle, worker_ids} | strasse_bauen {bis: [x, y]} (Straße zur nächsten Straße, Kies vom Hof) | hub_buy {item, qty} | sell_property {gebaeude} | " +
+			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus, grundstueck?} (Wohnhaus selbst bauen: Material per hub_buy holen, vermieten oder sell_property) | bauleute {baustelle, worker_ids} | strasse_bauen {bis: [x, y], von?: [x, y]} (Straßenbaustelle, Kies vom Hof) | buergeramt_bauen {} (danach gibt es die Stadt) | hub_buy {item, qty} | sell_property {gebaeude} | " +
 			"recruit_foreman {worker_id} | assign_foreman {foreman_id, worker_ids} | guard_target {worker_id, site_id} | " +
 			"place_building {plot_id, typ, x, y, rot} (Hofbau, Vorschläge in hofbau) | free_build {name, form, material} | " +
 			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +

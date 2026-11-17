@@ -238,7 +238,10 @@ func _add_building(type: String, r: Rect2i, name: String, replay: Dictionary = {
 					return {}   # geplante Zufahrt freihalten
 	var road := _nearest(fp, func(p): return c.is_road(p))
 	if not c.is_road(road):
-		return {}
+		if not sim.wildnis:
+			return {}
+		# Wildnis: Gelaendefahrzeuge erreichen Gebaeude auch ohne Strasse – Anfahrt ist das naechste begehbare Feld
+		road = _nearest(fp, func(p): return c.walkable(p) and c.building_at[c.idx(p)] < 0 and not fp.has_point(p))
 	var b := {"id": c.buildings.size(), "type": type, "sprite": sprite, "x": fp.position.x, "y": fp.position.y,
 		"w": fp.size.x, "h": fp.size.y, "district": c.district_of(fp.position), "in": info[3], "out": info[4], "role": "customer",
 		"name": name, "lot": [r.position.x, r.position.y, r.size.x, r.size.y]}

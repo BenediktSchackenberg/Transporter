@@ -405,12 +405,7 @@ func _town_core(k: int) -> void:
 ## Wildnis: kein Ort, nur das Ende der Landstrasse und ein Ankunftsplatz (Lkw-Stellplatz) fuer die KI; ihre Siedlung gruendet sie
 ## spaeter selbst an einem Platz ihrer Wahl (EkoSettle).
 func _wild_camp(t: Vector2i, nm: String) -> void:
-	_road(Vector2i(t.x - 12, t.y), Vector2i(t.x, t.y))
-	var r := Rect2i(t.x - 11, t.y - 5, 6, 4)
-	if not _free(r):
-		r = Rect2i(t.x - 11, t.y + 1, 6, 4)
-	if _free(r):
-		c.start_depots.append(_plot_building(r, "Ankunftsplatz %s" % nm, -1))
+	_road(Vector2i(t.x - 12, t.y), Vector2i(t.x, t.y))   # Ende der Landstrasse an der Kueste; Ankunftsplaetze am Grosslager (CornerRegionGenerator)
 
 
 ## Neubeginn: eine Strasse – Uferstrasse mit Abzweig zur Hinterstrasse, an der der Startplatz der KI liegt (Anschluss zum Zentrallager

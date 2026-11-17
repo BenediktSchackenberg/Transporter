@@ -282,9 +282,11 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 		_fuel[i] = 0.0
 		# Startausstattung Spedition: 1 Kleintransporter (aus dem Startkapital gekauft = Investition), Personal siehe unten
 		if neubeginn:   # eigener LKW; danach Kasse auf das Startkapital aufgefuellt (Einlage von aussen)
-			var lkw := _create_vehicle(i, "truck", Catalog.model("truck").price, depot_road(i))
+			var start_model := "gelaende_lkw" if wildnis else "truck"   # Wildnis: Gelaende-LKW, faehrt ohne Strassen
+			var lkw := _create_vehicle(i, start_model, Catalog.model(start_model).price, depot_road(i))
 			c.ledger.invest(lkw.purchase_price)
 			c.ledger.inject(maxf(0.0, NEUBEGINN_CAPITAL - c.ledger.cash), "X0")
+			c.fuel = 1500.0   # voller Tank zum Start (17.11.: LKW blieb mit leerem Tank liegen)
 		elif start_profile == "spedition":
 			var v := _create_vehicle(i, "van", Catalog.model("van").price, depot_road(i))
 			c.ledger.invest(v.purchase_price)
@@ -532,6 +534,16 @@ func remove_vehicle(v: FleetVehicle) -> void:
 
 
 func route(v: Mover, to: Vector2i, new_state: String = "") -> bool:
+	if v is FleetVehicle and bool(Catalog.model(v.model).get("offroad", false)):
+		# Gelaendefahrzeug (Wildnis): querfeldein ueber Gras und Wege (Fusswegenetz ohne Wasser, Berge, Gebaeude)
+		var lp := nav.walk_path(v.tile(), to)
+		if lp.is_empty() or lp[-1] != to:
+			return false
+		v.lane = 0.0
+		v.set_path(lp)
+		if new_state != "":
+			v.state = new_state
+		return true
 	var from := v.tile()
 	var yard_site := estate.on_plot(v.owner, v.pos) if v is FleetVehicle else -1
 	var yard := v is FleetVehicle and not city.is_road(from) and yard_site >= 0
@@ -678,7 +690,7 @@ func _update_vehicle_inner(v: FleetVehicle, dt: float) -> void:
 				if c.is_disrupted(game_min) and at_depot(v):
 					return   # Betriebsstoerung: Depot kann nicht disponieren
 				start_next_job(v)
-			elif operations.enabled(v.owner, "return_home") and driver_of(v) != null and not at_depot(v) and v.stops.is_empty() and game_min - v.idle_since > 20.0:
+			elif not wildnis and operations.enabled(v.owner, "return_home") and driver_of(v) != null and not at_depot(v) and v.stops.is_empty() and game_min - v.idle_since > 20.0:
 				route(v, nearest_depot_road(v.owner, v.tile()), "returning")
 		"broken":
 			if v.no_fuel:
@@ -841,6 +853,9 @@ func tow_to_workshop(v: FleetVehicle) -> void:
 
 func _on_arrival(v: FleetVehicle) -> void:
 	match v.state:
+		"erkunden":   # Wildnis: Fahrt des Wesens an einen freien Punkt (EkoWorld LKW) – dort anhalten
+			v.state = "idle"
+			v.idle_since = game_min
 		"to_dispatch":
 			operations.begin_dispatch(v)
 		"to_pickup", "to_dropoff":
@@ -1618,7 +1633,8 @@ static func from_dict(d: Dictionary) -> Simulation:
 		var st: Dictionary = s.settlements[key]
 		s.city.towns[int(key)]["center"] = st.center
 		s.city.towns[int(key)]["rect"] = st.rect
-		s.city.towns[int(key)]["gegruendet"] = true
+		s.city.towns[int(key)]["siedlung"] = true
+		s.city.towns[int(key)]["gegruendet"] = bool(st.get("gegruendet", false))   # Stadt erst mit dem Buergeramt
 		s.access.reapply(st.get("roads", []))
 		if st.has("plots"):   # Baugrundstuecke in gleicher Reihenfolge (gleiche IDs; Zustand kommt aus parcels.from_dict)
 			for pl in st.plots:
@@ -1665,6 +1681,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.events.from_dict(d.get("events", {}))
 	s.parcels.sync_buildings()
 	s.parcels.from_dict(d.get("parcels", {}))
+	s.eko.settle.reapply_loaded()   # Wildnis: Buergeramt, Bauhof, Hafen der Siedlungen zurueck an die Staedte (nach den Laufzeit-Gebaeuden)
 	for key in s.settlements:   # Siedlung von vor den Baugrundstuecken (17.11.): Grundstuecke an ihren Strassen nachholen (nach den Gebaeuden)
 		if (s.settlements[key].get("plots", []) as Array).is_empty():
 			s.eko.settle.carve_plots(int(key), (s.settlements[key].get("roads", []) as Array).map(func(a): return Vector2i(int(a[0]), int(a[1]))), 10)

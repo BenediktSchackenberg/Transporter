@@ -78,21 +78,24 @@ Jede Antwort enthält `ok`, `msg` und deine aktuelle `beobachtung`.
 ### Wildnis: von null aufbauen (Unternehmer)
 
 Am Anfang gibt es **keine Städte** – nur Land, Küsten, Berge mit Lagerstätten, Landstraßen und das Großlager in der Mitte
-(dort: Arbeitsamt, Personalbüro, Bank, Werkstatt, Tankstelle, Fahrzeughandel). Deine Firma hat 1.000.000 EUR und einen LKW, den du
-selbst fährst; Mitarbeiter gibt es erst, wenn Menschen zugezogen sind.
+(dort: Arbeitsamt, Personalbüro, Bank, Werkstatt, Tankstelle, Fahrzeughandel). Du startest am Großlager mit 1.000.000 EUR in der Firma
+und einem **Gelände-LKW**, den du selbst fährst – er kommt auch ohne Straße voran (querfeldein langsamer). Mitarbeiter gibt es erst,
+wenn Menschen zugezogen sind. Bis dahin baust du **alles selbst**.
 
-1. **Platz finden:** `meine_firma.siedlung.hier` bewertet deinen Standort, `beste_plaetze_in_der_naehe` die besten Plätze ringsum
-   (Wasser = Anleger und Siedlerschiff, Lagerstätte = Bergwerk, freie ebene Fläche, Hügel als Schutz, Weg zur Straße).
-   Erkunde mit `MoveTo` oder `Fahrt`.
-2. **Gründen:** `Siedlung {feld: [x, y]}` – Bürgeramt, Bauhof, dein Betriebshof, Zufahrt zur Straße, Bauland ringsum,
-   dein Stammsitz am Ortsrand. Ein Bürgermeister übernimmt das Amt. Nur einmal je Firma.
-3. **Material holen:** `Firma {aktion: {action: "hub_buy", item, qty}}` kauft im Großlager; dein LKW holt es auf den Betriebshof.
-4. **Bauen:** `Firma {aktion: {action: "haus_bauen", typ: "einfamilienhaus" | "doppelhaus" | "mehrfamilienhaus"}}` – Grundstück
-   kaufen, Bauantrag (der Bürgermeister entscheidet), Material vom Hof, du und deine Bautruppe (`bauleute {baustelle, worker_ids}`) bauen.
-   Fertige Wohnungen gehören deiner Firma: Miete kommt automatisch, `sell_property {gebaeude}` verkauft.
-5. **Straßen:** `strasse_bauen {bis: [x, y]}` erschließt Bauland (Kies vom Hof, Kosten je Feld).
-6. **Menschen:** Mit freien Wohnungen kommt ein Siedlerschiff (Küste) oder ein Siedlertreck (Inland). Wie viele, hängt an der
-   Attraktivität (Wohnraum, Einrichtungen, Läden und Betriebe, Stadtmarketing). Aus den Einwohnern werden Bewerber.
+1. **Platz finden:** `meine_firma.siedlung.hier` und `beste_plaetze_in_der_naehe` bewerten Plätze: freie ebene Fläche, natürlicher
+   Schutz (Wasser und Hügel ringsum), Wasser (Anleger), Lagerstätte (Bergwerk), Weg zum Großlager. Hinfahren: `LKW {ziel: [x, y]}`.
+2. **Betriebshof und Basis eröffnen:** `Siedlung {feld: [x, y]}` – dein Betriebshof steht in deiner Basis (Stammsitz). Das Land
+   ringsum wird Bauland. Sichere deine Basis: `Bauwerk {art: "mauer"}`, Tor, Turm – gebaut wird nur, während du dort arbeitest
+   (`Bauen {baustelle: "stammsitz"}`).
+3. **Material:** `Firma {aktion: {action: "hub_buy", item, qty}}` kauft im Großlager. Abholen: `LKW {ziel: "grosslager"}` – du fährst
+   selbst hin, lädst alles Gekaufte, tankst auf und bringst es auf deinen Hof. Im LKW kannst du nicht laufen oder bauen.
+4. **Bürgeramt:** `Firma {aktion: {action: "buergeramt_bauen"}}` – erst damit gibt es deine Stadt, einen Bürgermeister und Siedler.
+5. **Häuser:** `Firma {aktion: {action: "haus_bauen", typ: "einfamilienhaus" | "doppelhaus" | "mehrfamilienhaus"}}`.
+   Nach dem Bürgeramt entscheidet der Bürgermeister über den Bauantrag. Fertige Wohnungen gehören deiner Firma.
+6. **Straßen:** `Firma {aktion: {action: "strasse_bauen", bis: [x, y], von?: [x, y]}}` – Kies vom Hof; Baugrundstücke entstehen daran.
+7. **Bauen:** `Bauen {baustelle: "BS3"}` – du gehst hin und arbeitest, bis du etwas anderes tust. Häuser wachsen Block für Block,
+   Straßen Feld für Feld. Bauen kostet Akku. Mitarbeiter teilst du mit `bauleute {baustelle, worker_ids}` zu.
+8. **Menschen:** Mit Bürgeramt und freien Wohnungen kommt ein Siedlerschiff (Küste) oder ein Siedlertreck (Inland).
 
 ## Endpunkte
 

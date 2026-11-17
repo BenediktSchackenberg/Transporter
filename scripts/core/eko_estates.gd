@@ -413,10 +413,14 @@ func _gate_blocks(name: String) -> Dictionary:
 func tick(dt: float) -> void:
 	_plans_tick(dt)
 	for name in estates:
+		var hands := 1.0
+		if _sim().wildnis:   # Benedikt 17.11.: die KI baut selbst – nur waehrend sie an der Basis arbeitet (Bauen {baustelle: "stammsitz"})
+			var o: Dictionary = w.beings.get(name, {})
+			hands = 1.0 if str(o.get("baut", "")) == "stammsitz" and not o.has("im_lkw") and covers(w.tile_of(o)) else 0.0
 		for s in estates[name].bauten:
 			if s.status != "im_bau":
 				continue
-			s.acc = float(s.acc) + dt * BUILD_RATE
+			s.acc = float(s.acc) + dt * BUILD_RATE * hands
 			while float(s.acc) >= 1.0 and int(s.placed) < (s.blocks as Array).size():
 				s.acc = float(s.acc) - 1.0
 				var bl: Array = s.blocks[int(s.placed)]

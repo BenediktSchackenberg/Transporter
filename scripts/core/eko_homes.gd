@@ -1,23 +1,30 @@
 class_name EkoHomes
 extends RefCounted
-## Neubeginn, Etappe B (Benedikt 17.11.2026): KI-Unternehmer bauen Wohnhaeuser selbst.
+## Neubeginn/Wildnis (Benedikt 17.11.2026): KI-Unternehmer bauen selbst – "er muss alles bauen, Strassen, Haeuser, solange er selber
+## keine Angestellten hat".
 ##
-## Ablauf je Baustelle: Grundstueck der Stadt kaufen und Bauantrag stellen (Buergermeister bzw. Bauamt entscheiden) -> Material im
-## Grosslager kaufen und mit dem eigenen LKW auf den Betriebshof holen (hub_buy) -> sobald alles da ist, wird es verbaut -> die
-## Bautruppe arbeitet: der Inhaber (wenn sein LKW steht) und die Mitarbeiter, die der Unternehmer der Baustelle zuteilt (bauleute) ->
-## fertig: Gebaeude mit Wohnungen im Eigentum der Firma. Mieter zahlen an die Firma (Housing); verkaufen mit sell_property.
+## Baustellen: Wohnhaus (haus_bauen), Buergeramt (buergeramt_bauen; danach gibt es die Stadt und ihren Buergermeister), Strasse
+## (strasse_bauen, EkoSettle.plan_road). Ablauf: Material im Grosslager kaufen und mit dem eigenen LKW auf den Betriebshof holen ->
+## sobald alles da ist, beginnt der Bau -> gearbeitet wird nur, wenn das Wesen selbst vor Ort arbeitet (Handlung Bauen) oder
+## zugeteilte Mitarbeiter (bauleute) da sind. Haeuser wachsen sichtbar Block fuer Block, Strassen Feld fuer Feld.
+## Fertige Wohnungen gehoeren der Firma (Miete ueber Housing, Verkauf mit sell_property).
 
-const BOM := {   # Material je Haus (Grosslager-Waren)
+const BOM := {   # Material je Bau (Grosslager-Waren)
 	"einfamilienhaus": {"holz": 16, "ziegel": 40, "beton": 12, "glas": 4, "installation": 2},
 	"doppelhaus": {"holz": 24, "ziegel": 64, "beton": 20, "glas": 6, "installation": 4},
 	"mehrfamilienhaus": {"holz": 30, "ziegel": 120, "beton": 50, "glas": 14, "stahl": 10, "installation": 6},
+	"buergeramt": {"holz": 20, "ziegel": 60, "beton": 30, "glas": 8, "installation": 4},
 }
-const WORK_HOURS := {"einfamilienhaus": 24.0, "doppelhaus": 36.0, "mehrfamilienhaus": 80.0}   # Arbeitsstunden der Bautruppe
-const MAX_SITES := 3        # gleichzeitige Baustellen je Firma
+const WORK_HOURS := {"einfamilienhaus": 24.0, "doppelhaus": 36.0, "mehrfamilienhaus": 80.0, "buergeramt": 30.0}
+const ROAD_HOURS_PER_CELL := 0.5
+const MAX_SITES := 3
 const MAX_CREW := 6
+const NEAR := 6                 # so nah muss das Wesen an der Arbeitsstelle sein (Felder)
+const AKKU_PER_MIN := 0.12      # Akkuverbrauch beim Bauen je Spielminute
+const WALL_H := 6               # Wandhoehe der Bau-Bloecke
 
-var w                       # EkoWorld
-var sites := {}             # ID -> Baustelle
+var w                           # EkoWorld
+var sites := {}                 # ID -> Baustelle
 var _next := 1
 
 
@@ -34,33 +41,57 @@ func _depot(cid: int) -> int:
 	return int(c.depots[0]) if not c.depots.is_empty() else -1
 
 
+func open_sites(cid: int) -> Array:
+	return sites.values().filter(func(s): return int(s.cid) == cid and s.status in ["genehmigung", "material", "bau"])
+
+
+# ------------------------------------------------------------------ Baustellen anlegen
 ## Firma {aktion: {action: "haus_bauen", typ, grundstueck?}}
 func plan(cid: int, a: Dictionary) -> Dictionary:
-	var sim = _sim()
 	var typ := str(a.get("typ", a.get("art", "einfamilienhaus"))).to_lower().replace(" ", "")
-	if not BOM.has(typ):
+	if not BOM.has(typ) or typ == "buergeramt":
 		return {"ok": false, "msg": "typ: einfamilienhaus | doppelhaus | mehrfamilienhaus."}
-	if sites.values().filter(func(s): return int(s.cid) == cid and s.status not in ["fertig", "abgelehnt"]).size() >= MAX_SITES:
+	return _plan_building(cid, typ, str(a.get("grundstueck", "")))
+
+
+## Firma {aktion: {action: "buergeramt_bauen", grundstueck?}} – erst danach gibt es die Stadt (Buergermeister, Siedler, Dienste).
+func plan_town_hall(cid: int, a: Dictionary) -> Dictionary:
+	var sim = _sim()
+	var k: int = sim.companies[cid].home_town
+	if sim.town_ready(k):
+		return {"ok": false, "msg": "%s hat schon ein Bürgeramt." % sim.towns.name_of(k)}
+	if sites.values().any(func(s): return s.typ == "buergeramt" and int(s.cid) == cid and s.status != "abgelehnt"):
+		return {"ok": false, "msg": "Das Bürgeramt ist schon in Arbeit."}
+	return _plan_building(cid, "buergeramt", str(a.get("grundstueck", "")))
+
+
+func _plan_building(cid: int, typ: String, want: String) -> Dictionary:
+	var sim = _sim()
+	if open_sites(cid).size() >= MAX_SITES:
 		return {"ok": false, "msg": "Höchstens %d Baustellen gleichzeitig – erst eine fertigstellen." % MAX_SITES}
-	if not sim.tiers.unlocked(typ):
+	var k: int = sim.companies[cid].home_town
+	if sim.wildnis and not w.settle.founded(k):
+		return {"ok": false, "msg": "Erst deinen Betriebshof eröffnen: Siedlung {feld: [x, y]}."}
+	var is_hall := typ == "buergeramt"
+	if not is_hall and not sim.tiers.unlocked(typ):
 		return {"ok": false, "msg": sim.tiers.unlock_text(typ)}
 	var who := "C%d" % cid
 	var floors := 3 if typ == "mehrfamilienhaus" else 1
-	var probe := {"def": typ, "floors": floors, "parking": int(Planning.DEFS[typ].parking), "financing": {"eigenmittel": sim.company(cid).ledger.cash}}
+	var def_id := "einfamilienhaus" if is_hall else typ
+	var probe := {"def": def_id, "floors": floors, "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": sim.company(cid).ledger.cash}}
 	var cands: Array = []
-	if str(a.get("grundstueck", "")) != "":
-		var p0: Dictionary = sim.parcels.parcel(str(a.grundstueck))
+	if want != "":
+		var p0: Dictionary = sim.parcels.parcel(want)
 		if p0.is_empty():
-			return {"ok": false, "msg": "Grundstück %s gibt es nicht." % a.grundstueck}
-		cands = [p0]
-		if not Planning.assess(p0, probe).ok:   # 17.11.: Bodo nannte einen 2x6-Streifen - dann selbst ein passendes suchen
-			cands = []
+			return {"ok": false, "msg": "Grundstück %s gibt es nicht." % want}
+		if Planning.assess(p0, probe).ok:
+			cands = [p0]
 	if cands.is_empty():
-		var town: int = sim.towns.home_of(cid)
+		var utils: Array = ["voll", "teilweise", "keine"] if sim.wildnis else ["voll", "teilweise"]   # Wildnis: Gelaende-LKW braucht keine Strasse
 		for z in ["wohnen", "mischgebiet"]:
-			for u in ["voll", "teilweise"]:   # nur an einer Strasse (sonst kann das fertige Haus nicht uebergeben werden)
-				cands += sim.parcels.search({"zone": z, "utilities": u, "town": town, "min_area": 12, "limit": 30})
-	var why := "kein freies, bebaubares Wohngrundstück an einer Straße deiner Stadt – erst eine Straße bauen (strasse_bauen)"
+			for u in utils:
+				cands += sim.parcels.search({"zone": z, "utilities": u, "town": k, "min_area": 12, "limit": 30})
+	var why := "kein freies Baugrundstück – mit strasse_bauen entstehen neue an der Straße"
 	for p in cands:
 		var chk := Planning.assess(p, probe)
 		if not chk.ok:
@@ -71,34 +102,52 @@ func plan(cid: int, a: Dictionary) -> Dictionary:
 			continue
 		if not sim.parcels.reserve(p.id, who).ok:
 			continue
-		var dr: Dictionary = sim.permits.draft(who, p.id, probe)
-		if not dr.ok:
-			sim.parcels.release(p.id, who)
-			why = str(dr.msg)
-			continue
-		# Grundstueckskauf von der Stadt (wie Haushalte, Parcels.buy_for_household)
-		var k: int = Towns.town_of_owner(str(p.owner)) if sim.towns.is_region() else 0
-		sim.company(cid).ledger.invest(float(p.price), Towns.account_of(maxi(0, k)))   # Grund ist Vermoegen, kein Aufwand
-		p.owner = who
+		var app := ""
+		var status := "material"
+		if sim.town_ready(k) and not is_hall:   # mit Buergeramt: Bauantrag, der Buergermeister entscheidet
+			var dr: Dictionary = sim.permits.draft(who, p.id, probe)
+			if not dr.ok:
+				sim.parcels.release(p.id, who)
+				why = str(dr.msg)
+				continue
+			sim.permits.submit(dr.id)
+			app = str(dr.id)
+			status = "genehmigung"
+		sim.company(cid).ledger.invest(float(p.price), Towns.account_of(maxi(0, k)))   # Grund ist Vermoegen
+		p.owner = Towns.owner_of(k) if is_hall else who
 		p.state = "privat_gehalten"
 		p.reservation = {}
-		sim.permits.submit(dr.id)
-		var s := {"id": "BS%d" % _next, "cid": cid, "typ": typ, "floors": floors, "parcel": p.id, "app": dr.id, "status": "genehmigung",
-			"need": BOM[typ].duplicate(), "progress": 0.0, "crew": [], "building": -1, "day": sim.game_min}
+		sim.parcels._touch(p)
+		var s := {"id": "BS%d" % _next, "cid": cid, "typ": typ, "floors": floors, "parcel": p.id, "app": app, "status": status,
+			"need": BOM[typ].duplicate(), "progress": 0.0, "work": float(WORK_HOURS[typ]), "crew": [], "building": -1, "day": sim.game_min, "placed": 0}
 		_next += 1
 		sites[s.id] = s
-		sim.log_event("%s plant ein %s auf %s (Antrag %s)." % [sim.company(cid).company_name, Planning.DEFS[typ].label, p.id, dr.id], "info", cid)
-		return {"ok": true, "msg": "Baustelle %s: %s auf %s gekauft (%s), Bauantrag %s gestellt. Material: %s – im Großlager kaufen (hub_buy) und mit dem LKW holen." % [
-			s.id, Planning.DEFS[typ].label, p.id, Catalog.money(float(p.price)), dr.id, _need_text(s)], "baustelle": s.id}
+		var label: String = "Bürgeramt" if is_hall else str(Planning.DEFS[typ].label)
+		sim.log_event("%s plant %s auf %s." % [sim.company(cid).company_name, label, p.id], "info", cid)
+		return {"ok": true, "msg": "Baustelle %s: %s auf %s (%s)%s. Material: %s – kaufen (hub_buy), mit dem LKW holen (LKW {ziel: \"grosslager\"}), dann selbst bauen (Bauen {baustelle: \"%s\"})." % [
+			s.id, label, p.id, Catalog.money(float(p.price)), (", Bauantrag %s" % app) if app != "" else "", _need_text(s), s.id], "baustelle": s.id}
 	return {"ok": false, "msg": "Kein Bauplatz gefunden: %s." % why}
 
 
-## Firma {aktion: {action: "bauleute", baustelle, worker_ids}} – Mitarbeiter der Baustelle zuteilen (ersetzt die bisherige Truppe).
+## Strassenbaustelle (EkoSettle.plan_road): cells in Bau-Reihenfolge.
+func add_road_site(cid: int, cells: Array, need: Dictionary) -> Dictionary:
+	if open_sites(cid).size() >= MAX_SITES:
+		return {"ok": false, "msg": "Höchstens %d Baustellen gleichzeitig – erst eine fertigstellen." % MAX_SITES}
+	var s := {"id": "BS%d" % _next, "cid": cid, "typ": "strasse", "cells": cells.map(func(q): return [q.x, q.y]), "status": "material", "need": need,
+		"progress": 0.0, "work": float(cells.size()) * ROAD_HOURS_PER_CELL, "crew": [], "building": -1, "day": _sim().game_min, "placed": 0}
+	_next += 1
+	sites[s.id] = s
+	return {"ok": true, "msg": "Straßenbaustelle %s: %d Felder. Material: %s – vom Hof; dann Bauen {baustelle: \"%s\"} (Feld für Feld)." % [
+		s.id, cells.size(), _need_text(s), s.id], "baustelle": s.id}
+
+
+## Firma {aktion: {action: "bauleute", baustelle, worker_ids}}
 func assign_crew(cid: int, a: Dictionary) -> Dictionary:
 	var s: Dictionary = sites.get(str(a.get("baustelle", "")), {})
 	if s.is_empty() or int(s.cid) != cid:
-		return {"ok": false, "msg": "Baustelle %s gehört dir nicht. Deine: %s." % [a.get("baustelle", ""), ", ".join(sites.values().filter(func(x): return int(x.cid) == cid).map(func(x): return x.id))]}
-	var ids: Array = a.get("worker_ids", a.get("mitarbeiter", [])) if (a.get("worker_ids", a.get("mitarbeiter", [])) is Array) else [str(a.get("worker_ids", a.get("mitarbeiter", "")))]
+		return {"ok": false, "msg": "Baustelle %s gehört dir nicht. Deine: %s." % [a.get("baustelle", ""), ", ".join(open_sites(cid).map(func(x): return x.id))]}
+	var raw = a.get("worker_ids", a.get("mitarbeiter", []))
+	var ids: Array = raw if raw is Array else [str(raw)]
 	var crew: Array = []
 	for id in ids:
 		var wk = _sim().personnel.workers.get(str(id))
@@ -106,7 +155,7 @@ func assign_crew(cid: int, a: Dictionary) -> Dictionary:
 			return {"ok": false, "msg": "%s ist nicht bei dir angestellt." % id}
 		crew.append(str(id))
 	s.crew = crew.slice(0, MAX_CREW)
-	return {"ok": true, "msg": "Baustelle %s: Bautruppe %s (dazu du selbst, wenn dein LKW steht)." % [s.id, ", ".join(s.crew) if not s.crew.is_empty() else "keine"]}
+	return {"ok": true, "msg": "Baustelle %s: Bautruppe %s." % [s.id, ", ".join(s.crew) if not s.crew.is_empty() else "keine"]}
 
 
 func _need_text(s: Dictionary) -> String:
@@ -127,31 +176,48 @@ func missing(s: Dictionary) -> Dictionary:
 	return out
 
 
-## Arbeitende Bautruppe: zugeteilte Mitarbeiter ohne andere Aufgabe und nicht am Steuer, der Inhaber wenn sein LKW steht.
+# ------------------------------------------------------------------ Arbeitsstelle und Bautruppe
+## Wo wird gerade gearbeitet? Haus: Mitte des Grundstuecks; Strasse: das naechste Feld.
+func work_cell(s: Dictionary) -> Vector2i:
+	if s.typ == "strasse":
+		var cs: Array = s.cells
+		var i := mini(int(s.placed), cs.size() - 1)
+		return Vector2i(int(cs[i][0]), int(cs[i][1]))
+	var p: Dictionary = _sim().parcels.parcel(str(s.parcel))
+	return Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2) if not p.is_empty() else Vector2i.ZERO
+
+
+## Arbeitet das Wesen der Firma gerade selbst hier? (Handlung Bauen, nah genug, nicht im LKW, Akku nicht leer)
+func owner_working(s: Dictionary) -> bool:
+	var name: String = w.firm_being(int(s.cid))
+	if name == "" or not w.beings.has(name):
+		return false
+	var b: Dictionary = w.beings[name]
+	if str(b.get("baut", "")) != str(s.id) or b.has("im_lkw") or float(b.get("akku", 100.0)) < 5.0:
+		return false
+	var t: Vector2i = w.tile_of(b)
+	var c := work_cell(s)
+	return maxi(absi(t.x - c.x), absi(t.y - c.y)) <= NEAR
+
+
 func crew_now(s: Dictionary) -> int:
 	var sim = _sim()
-	var n := 0
+	var n := 1 if owner_working(s) else 0
 	for id in s.crew:
 		var wk = sim.personnel.workers.get(str(id))
 		if wk != null and wk.employer == int(s.cid) and not wk.lost and str(wk.task_id) == "" and int(wk.vehicle_id) < 0:
 			n += 1
-	for wk in sim.personnel.employed(int(s.cid)):
-		if wk.role == "owner":
-			var v = sim.vehicles.get(int(wk.vehicle_id))
-			if v == null or (v.state == "idle" and v.queue.is_empty() and str(v.contract_id) == ""):
-				n += 1
 	return n
 
 
+# ------------------------------------------------------------------ Takt
 func tick(dt_min: float) -> void:
 	var sim = _sim()
 	for s in sites.values():
 		match str(s.status):
 			"genehmigung":
 				var app: Dictionary = sim.permits.apps.get(str(s.app), {})
-				if app.is_empty():
-					continue
-				if str(app.status) == "entschieden":
+				if not app.is_empty() and str(app.status) == "entschieden":
 					if str(app.result).begins_with("genehmigt"):
 						s.status = "material"
 						sim.notify(int(s.cid), "Baustelle %s genehmigt – Material holen: %s." % [s.id, _need_text(s)])
@@ -163,28 +229,110 @@ func tick(dt_min: float) -> void:
 					for item in s.need:
 						sim.stock.consume(item, int(s.need[item]), "C%d" % int(s.cid), _depot(int(s.cid)), "Baustelle %s" % s.id, sim.game_min)
 					s.status = "bau"
-					sim.parcels.mark(str(s.parcel), "im_bau", str(s.app))
-					sim.log_event("%s: Baustelle %s – Material da, der Bau beginnt." % [sim.company(int(s.cid)).company_name, s.id], "info", int(s.cid))
+					if s.typ != "strasse":
+						sim.parcels.mark(str(s.parcel), "im_bau", str(s.app))
+					sim.log_event("%s: Baustelle %s – Material da, es kann gebaut werden." % [sim.company(int(s.cid)).company_name, s.id], "info", int(s.cid))
 			"bau":
-				s.progress = float(s.progress) + float(crew_now(s)) * dt_min / 60.0
-				if float(s.progress) >= float(WORK_HOURS[s.typ]):
+				var crew := crew_now(s)
+				if crew <= 0:
+					continue
+				if owner_working(s):
+					var b: Dictionary = w.beings[w.firm_being(int(s.cid))]
+					b.akku = maxf(0.0, float(b.get("akku", 100.0)) - AKKU_PER_MIN * dt_min)
+				s.progress = minf(float(s.work), float(s.progress) + float(crew) * dt_min / 60.0)
+				if s.typ == "strasse":
+					_road_progress(s)
+				else:
+					_block_progress(s)
+				if float(s.progress) >= float(s.work):
 					_finish(s)
+
+
+func _road_progress(s: Dictionary) -> void:
+	var cs: Array = s.cells
+	var done := mini(cs.size(), int(float(s.progress) / ROAD_HOURS_PER_CELL))
+	if done <= int(s.placed):
+		return
+	var k: int = _sim().companies[int(s.cid)].home_town
+	var new_cells: Array = []
+	for i in range(int(s.placed), done):
+		new_cells.append(Vector2i(int(cs[i][0]), int(cs[i][1])))
+	w.settle.lay_road_cells(k, new_cells)
+	s.placed = done
+
+
+## Sichtbarer Rohbau: Waende (Ziegel) und Dach (Holz) aus Bloecken, je nach Fortschritt.
+func _shell(s: Dictionary) -> Array:
+	var p: Dictionary = _sim().parcels.parcel(str(s.parcel))
+	if p.is_empty():
+		return []
+	var d: Dictionary = Planning.DEFS["einfamilienhaus" if s.typ == "buergeramt" else s.typ]
+	var fw := mini(int(d.w) if s.typ != "buergeramt" else 8, int(p.rect[2]) - 1)
+	var fh := mini(int(d.h) if s.typ != "buergeramt" else 3, int(p.rect[3]) - 1)
+	var P := EkoWorld.PER_TILE
+	var x0 := (int(p.rect[0]) + 1) * P
+	var y0 := (int(p.rect[1]) + 1) * P
+	var x1 := x0 + fw * P - 1
+	var y1 := y0 + fh * P - 1
+	var out: Array = []
+	for z in WALL_H:
+		for x in range(x0, x1 + 1):
+			out.append([x, y0, z, "ziegel"])
+			out.append([x, y1, z, "ziegel"])
+		for y in range(y0 + 1, y1):
+			out.append([x0, y, z, "ziegel"])
+			out.append([x1, y, z, "ziegel"])
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			out.append([x, y, WALL_H, "holz"])
+	return out
+
+
+func _block_progress(s: Dictionary) -> void:
+	var shell := _shell(s)
+	var target := int(float(shell.size()) * float(s.progress) / float(s.work))
+	for i in range(int(s.placed), mini(target, shell.size())):
+		var bl: Array = shell[i]
+		var q := Vector3i(int(bl[0]), int(bl[1]), int(bl[2]))
+		if not w.blocks.has(q):
+			w.blocks[q] = str(bl[3])
+	if target > int(s.placed):
+		s.placed = target
+		w.changed.emit()
+
+
+func _clear_shell(s: Dictionary) -> void:
+	for bl in _shell(s):
+		w.blocks.erase(Vector3i(int(bl[0]), int(bl[1]), int(bl[2])))
+	w.changed.emit()
 
 
 func _finish(s: Dictionary) -> void:
 	var sim = _sim()
+	var cid := int(s.cid)
+	var c = sim.company(cid)
+	var k: int = sim.companies[cid].home_town
+	if s.typ == "strasse":
+		s.status = "fertig"
+		var cells: Array = (s.cells as Array).map(func(a): return Vector2i(int(a[0]), int(a[1])))
+		var plots: Array = w.settle.carve_plots(k, cells, 6)
+		sim.log_event("%s hat %d Felder Straße gebaut (%d neue Baugrundstücke)." % [c.company_name, cells.size(), plots.size()], "good", cid)
+		_release_builder(s)
+		return
 	var parcel: Dictionary = sim.parcels.parcel(str(s.parcel))
-	var d: Dictionary = Planning.DEFS[s.typ]
-	var pw := int(d.w)
-	var ph := int(d.h)
-	if pw > int(parcel.rect[2]) or ph > int(parcel.rect[3]):
-		var t := pw
-		pw = ph
-		ph = t
 	var r := Rect2i(int(parcel.rect[0]), int(parcel.rect[1]), int(parcel.rect[2]), int(parcel.rect[3]))
-	var b: Dictionary = sim.events._add_building(str(d.sprite), r, "%s (%s)" % [d.label, sim.company(int(s.cid)).company_name])
+	_clear_shell(s)
+	if s.typ == "buergeramt":
+		if not w.settle.open_town(k, r):
+			s["blockiert"] = "Bürgeramt passt nicht aufs Grundstück."
+			return
+		s.status = "fertig"
+		_release_builder(s)
+		return
+	var d: Dictionary = Planning.DEFS[s.typ]
+	var b: Dictionary = sim.events._add_building(str(d.sprite), r, "%s (%s)" % [d.label, c.company_name])
 	if b.is_empty():
-		s["blockiert"] = "Gebäude passt nicht oder hat keinen Straßenzugang."
+		s["blockiert"] = "Gebäude passt nicht aufs Grundstück."
 		return
 	s.status = "fertig"
 	s.building = int(b.id)
@@ -192,54 +340,74 @@ func _finish(s: Dictionary) -> void:
 	sim.residents.add_for_buildings([b.id])
 	sim.events.buildings_added.emit([b.id])
 	var n := Planning.units_of(str(s.typ), int(s.floors))
-	var k: int = sim.towns.of_building(int(b.id))
 	sim.towns.mayor(maxi(0, k)).stock_units += n
 	for i in n:
-		sim.housing.register_unit(int(b.id), 60.0 + 10.0 * float(i % 3), "C%d" % int(s.cid))
-	sim.log_event("%s hat ein %s fertig gebaut (%d Wohnungen) – Zuzug möglich." % [sim.company(int(s.cid)).company_name, d.label, n], "good", int(s.cid))
-	sim.activity.add("stadt", int(s.cid), "bau", "Neues %s" % d.label, sim.company(int(s.cid)).company_name, b.walk)
+		sim.housing.register_unit(int(b.id), 60.0 + 10.0 * float(i % 3), "C%d" % cid)
+	sim.log_event("%s hat ein %s fertig gebaut (%d Wohnungen)." % [c.company_name, d.label, n], "good", cid)
+	sim.activity.add("stadt", cid, "bau", "Neues %s" % d.label, c.company_name, b.walk)
+	_release_builder(s)
 
 
-## Fuer Beobachtung und naechste_schritte.
+func _release_builder(s: Dictionary) -> void:
+	var name: String = w.firm_being(int(s.cid))
+	if name != "" and w.beings.has(name) and str(w.beings[name].get("baut", "")) == str(s.id):
+		w.beings[name].erase("baut")
+		w._event(w.beings[name], "Baustelle %s ist fertig." % s.id)
+
+
+# ------------------------------------------------------------------ Beobachtung und naechste Schritte
 func summary(cid: int) -> Array:
 	var out: Array = []
 	for s in sites.values():
 		if int(s.cid) != cid or s.status == "abgelehnt":
 			continue
-		var e := {"id": s.id, "typ": s.typ, "grundstueck": s.parcel, "status": s.status, "antrag": s.app}
+		var wc := work_cell(s)
+		var e := {"id": s.id, "typ": s.typ, "status": s.status, "arbeitsstelle": [wc.x, wc.y]}
+		if s.typ != "strasse":
+			e["grundstueck"] = s.parcel
 		if s.status == "material":
 			e["fehlt_auf_dem_betriebshof"] = missing(s)
 		if s.status == "bau":
-			e["fortschritt"] = "%d %%" % int(100.0 * float(s.progress) / float(WORK_HOURS[s.typ]))
-			e["bautruppe_jetzt"] = crew_now(s)
+			e["fortschritt"] = "%d %%" % int(100.0 * float(s.progress) / float(s.work))
+			e["du_arbeitest_hier"] = owner_working(s)
 			e["bautruppe"] = s.crew
-		if s.status == "fertig":
+		if s.status == "fertig" and int(s.building) >= 0:
 			e["gebaeude"] = s.building
 		out.append(e)
+	return out.slice(-6)
+
+
+## Gekaufte Ware, die noch im Grosslager liegt.
+func waiting_goods(cid: int) -> Dictionary:
+	var out := {}
+	for d in _sim().hub.deals.values():
+		if str(d.kind) == "kauf" and str(d.party) == "C%d" % cid and str(d.status) == "abholbereit":
+			out[str(d.item)] = int(out.get(str(d.item), 0)) + int(d.qty)
 	return out
 
 
 ## Naechster sinnvoller Schritt fuer die Firma ("" = keiner).
 func next_step(cid: int) -> String:
 	var sim = _sim()
-	var open: Array = sites.values().filter(func(s): return int(s.cid) == cid and s.status in ["genehmigung", "material", "bau"])
+	var k: int = sim.companies[cid].home_town
+	var wait := waiting_goods(cid)
+	if not wait.is_empty():
+		return "Im Großlager liegt deine gekaufte Ware (%s) – selbst abholen: LKW {ziel: \"grosslager\"} (du fährst mit und lädst auf dem Hof ab)." % ", ".join(wait.keys().map(func(x): return "%d %s" % [wait[x], x]))
+	var open := open_sites(cid)
+	for s in open:
+		if s.status == "bau" and not owner_working(s):
+			return "Baustelle %s (%s, %d %%) wartet auf dich – Bauen {baustelle: \"%s\"} (du gehst hin und arbeitest, bis du etwas anderes tust)." % [
+				s.id, s.typ, int(100.0 * float(s.progress) / float(s.work)), s.id]
 	for s in open:
 		if s.status == "material":
 			var m := missing(s)
 			var item: String = m.keys()[0]
-			var pend: int = sim.hub.pending("C%d" % cid, item)
-			if pend >= int(m[item]):
-				return "Baustelle %s: %d %s sind gekauft – mit dem LKW im Großlager abholen (Auftrag annehmen bzw. Fahrer einsetzen)." % [s.id, pend, item]
-			return "Baustelle %s braucht Material: Firma {aktion: {action: \"hub_buy\", item: \"%s\", qty: %d}} – dann mit dem LKW abholen. Fehlt insgesamt: %s." % [
-				s.id, item, int(m[item]) - pend, ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x]))]
-		if s.status == "bau" and crew_now(s) <= 1:
-			var free: Array = sim.personnel.employed(cid).filter(func(x): return x.role != "owner" and not s.crew.has(x.id) and int(x.vehicle_id) < 0)
-			if not free.is_empty():
-				return "Baustelle %s: mehr Leute bauen schneller – Firma {aktion: {action: \"bauleute\", baustelle: \"%s\", worker_ids: [\"%s\"]}}." % [s.id, s.id, free[0].id]
-			if not sim.personnel.available().is_empty():
-				return "Baustelle %s geht langsam (nur du baust) – Mitarbeiter anwerben: Firma {aktion: {action: \"recruit_worker\", worker_id: \"%s\"}}." % [s.id, sim.personnel.available()[0].id]
-	if open.is_empty():
-		return "Wohnraum bauen – erst mit Wohnungen ziehen Menschen per Schiff zu: Firma {aktion: {action: \"haus_bauen\", typ: \"einfamilienhaus\"}} (oder doppelhaus, mehrfamilienhaus)."
+			return "Baustelle %s braucht Material: Firma {aktion: {action: \"hub_buy\", item: \"%s\", qty: %d}} – dann mit dem LKW holen. Fehlt insgesamt: %s." % [
+				s.id, item, int(m[item]), ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x]))]
+	if sim.wildnis and w.settle.founded(k) and not sim.town_ready(k) and not sites.values().any(func(s): return s.typ == "buergeramt" and int(s.cid) == cid and s.status != "abgelehnt"):
+		return "Bürgeramt bauen – erst damit gibt es deine Stadt, einen Bürgermeister und Siedler: Firma {aktion: {action: \"buergeramt_bauen\"}}."
+	if not open.any(func(s): return s.typ != "strasse"):
+		return "Wohnraum bauen – mit Wohnungen kommen Siedler: Firma {aktion: {action: \"haus_bauen\", typ: \"einfamilienhaus\"}}."
 	return ""
 
 
@@ -253,3 +421,6 @@ func from_dict(d: Dictionary) -> void:
 	for s in sites.values():
 		for item in s.need:
 			s.need[item] = int(s.need[item])
+		s["placed"] = int(s.get("placed", 0))
+		if not s.has("work"):
+			s["work"] = float(WORK_HOURS.get(str(s.typ), 24.0))
