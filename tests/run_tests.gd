@@ -8519,7 +8519,10 @@ func test_wildnis_found() -> void:
 	var B: Dictionary = E.beings[p0]
 	var cid := E.active_firm(B)
 	var k: int = s.companies[cid].home_town
-	ok(not s.town_ready(k) and not E.estates.estates.has(p0), "vor der Gründung: keine Stadt, kein Stammsitz")
+	ok(not s.town_ready(k) and not E.estates.estates.has(p0) and float(B.geld) == 0.0, "vor der Gründung: keine Stadt, kein Stammsitz, kein Privatgeld (%s)" % Catalog.money(float(B.geld)))
+	E.auto_estates = true   # wie im Spiel (GameSession)
+	E.join("Neuling")
+	ok(not E.estates.estates.has("Neuling"), "auch spätere Wesen bekommen vor einer Gründung keinen Stammsitz")
 	var fo: Dictionary = E.observe(p0).meine_firma
 	ok(fo.has("siedlung") and not bool(fo.siedlung.gegruendet), "Beobachtung zeigt die Siedlungssuche")
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}}).ok, "Hausbau erst nach der Gründung")

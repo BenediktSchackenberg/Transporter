@@ -260,7 +260,7 @@ func join(name: String, art: String = "mensch") -> Dictionary:
 			"amt": -1, "seele": "", "gesundheit": 100.0, "waffen": [],
 			"color": COLORS[beings.size() % COLORS.size()]}
 		_event(beings[name], "ist in der Welt erwacht")
-		if auto_estates and not _no_estate and estates.assign(name):   # erwacht auf dem eigenen Stammsitz
+		if auto_estates and not _no_estate and not sim.wildnis and estates.assign(name):   # erwacht auf dem eigenen Stammsitz (Wildnis: erst mit der Gruendung)
 			m.pos = sim.city.tile_center(estates.center_of(name))
 			_event(beings[name], "erwacht auf seinem Stammsitz")
 		if auto_estates and not _no_estate:
@@ -358,7 +358,7 @@ func update(dt: float) -> void:
 
 
 func _restore_savings(b: Dictionary) -> void:
-	if persist_path == "" or _restored.has(b.name):
+	if persist_path == "" or _restored.has(b.name) or sim.neubeginn:   # Neubeginn: alle starten gleich, ohne Erspartes aus alten Partien
 		return
 	_restored[b.name] = true
 	if not FileAccess.file_exists(persist_path):
@@ -2153,7 +2153,7 @@ func adopt_players(n: int) -> Array:
 		b.firma = cid
 		b.seele = str(c.personality)
 		b.mover.pos = sim.avatars[cid].pos
-		if auto_estates and estates.assign(name):   # Startposition: eigener Stammsitz
+		if auto_estates and not sim.wildnis and estates.assign(name):   # Startposition: eigener Stammsitz (Wildnis: Ankunftsplatz)
 			b.mover.pos = sim.city.tile_center(estates.center_of(name))
 		_event(b, "führt jetzt selbst %s" % c.company_name)
 		if auto_estates:
