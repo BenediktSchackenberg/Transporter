@@ -8536,6 +8536,7 @@ func test_wildnis_found() -> void:
 	ok(v != null and v.model == "gelaende_lkw" and s.companies[cid].fuel >= 1000.0, "Start mit vollem Gelände-LKW, den der Inhaber fährt")
 	ok(not E.settle.founded(k) and not E.estates.estates.has(p0) and float(B.geld) == 0.0, "vor der Gründung: kein Hof, keine Basis, kein Privatgeld")
 	ok(not E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister schlafen, solange es ihre Stadt nicht gibt")
+	ok(s.market.spawn(s.game_min) == null and str(E.observe(p0).grundziel).begins_with("Wildnis"), "ohne Stadt keine Transportaufträge; Grundziel Wildnis")
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}}).ok, "Hausbau erst nach der Gründung")
 	ok(str(E.next_steps(B)[0]).contains("LKW {ziel") or str(E.next_steps(B)[0]).contains("Siedlung {feld"), "vor der Gründung zuerst Platz suchen (%s)" % str(E.next_steps(B)[0]).left(60))
 	ok(not E.next_steps(B).any(func(x): return str(x).contains("collect_contracts")), "kein Auftragssammeln vor der Gründung")

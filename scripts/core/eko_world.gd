@@ -60,6 +60,7 @@ var _homes_min := -1.0
 var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
 const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.000 EUR Privatgeld (Einlage von aussen X0 -> Y0)
 const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
+const GRUNDZIEL_WILDNIS := "Wildnis: Es gibt noch keine Städte und keine Kunden. Such dir einen sicheren Platz, eröffne Betriebshof und Basis, hol Material selbst mit deinem LKW und bau alles selbst – Bürgeramt, Häuser, Straßen. Transportaufträge gibt es erst, wenn Städte entstehen."
 const GRUNDZIEL_AMT := "Bringe deine Stadt voran: Versorgung, Wohnraum, Arbeit, Sicherheit und Zufriedenheit der Bürger (Amt). Dein Zuhause ist dein Rathaus."
 const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
 var towns_funded := {}              # "k" -> true
@@ -774,7 +775,7 @@ func next_steps(b: Dictionary) -> Array:
 					sug.art, int(sug.feld), Catalog.money(float(sug.kosten)), Catalog.money(firm_cash)])
 	var g: Dictionary = b.get("ziel", {})
 	if g.is_empty() or str(g.get("status", "")) != "aktiv":
-		out.append("Setze dir ein Ziel: Ziel {ziel, warum, teilziele}. Grundziel: %s" % (GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else GRUNDZIEL))
+		out.append("Setze dir ein Ziel: Ziel {ziel, warum, teilziele}. Grundziel: %s" % (GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else (GRUNDZIEL_WILDNIS if sim.wildnis and cid >= 0 else GRUNDZIEL)))
 	else:
 		if not g.has("stand_min"):
 			g["stand_min"] = sim.game_min   # aeltere Ziele: ab jetzt messen
@@ -1479,7 +1480,7 @@ func observe(name: String) -> Dictionary:
 		"jobangebote": _job_obs(b) if active_firm(b) < 0 and int(b.get("amt", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
 		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "mein_amt": office_obs(b), "gefuehle": feelings(b),
 		"ablauf": {"offen": (b.get("ablauf", []) as Array).size(), "letzte_ergebnisse": (b.get("ablauf_log", []) as Array).slice(-5)},
-		"grundziel": GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else (GRUNDZIEL if estates.estates.has(name) else ""), "mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
+		"grundziel": GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else (GRUNDZIEL_WILDNIS if sim.wildnis and int(b.get("firma", -1)) >= 0 else (GRUNDZIEL if estates.estates.has(name) else "")), "mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
 		"koerper": arms.body_obs(b), "gefahren": arms.dangers(b),
 		"mein_stammsitz": estates.obs(b), "stammsitze_in_sicht": estates.visible(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}

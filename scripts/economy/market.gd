@@ -89,6 +89,8 @@ func on_accepted(k: Contract) -> void:
 
 
 func spawn(now: float) -> Contract:
+	if sim.wildnis and not range(sim.towns.count()).any(func(k): return sim.town_ready(k)):
+		return null   # Wildnis: ohne Stadt keine Kunden – Transportauftraege erst mit dem ersten Buergeramt (17.11.: KIs fuhren Auftraege statt zu bauen)
 	var rng: RandomNumberGenerator = sim.rng
 	var src_id := -1
 	var dst_id := -1
