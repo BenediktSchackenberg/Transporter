@@ -2221,13 +2221,14 @@ func _feel_tick(b: Dictionary, dt: float) -> void:
 	var wx: Weather = sim.wx
 	var hour := Catalog.hour_of_day(sim.game_min)
 	var night := hour < 6.0 or hour >= 21.0
-	if resting:
+	var cab := b.has("im_lkw")   # 17.11.: Amira fuhr mit leerem Akku stundenlang mit – in der Kabine laedt und trocknet man langsam
+	if resting or cab:
 		akku += (CHARGE_HOME_S if home else CHARGE_OUT_S) * dt
 	else:
 		akku -= (DRAIN_S + (DRAIN_CARRY_S if not b.held.is_empty() else 0.0)) * (1.5 if nass > 90.0 else 1.0) * (0.3 if bool(b.get("faehrt", false)) else 1.0) * dt   # nur durchnaesst zehrt es staerker; im Taxi kaum
-	if home:
-		nass -= 2.0 * dt
-		kalt -= 2.0 * dt
+	if home or cab:
+		nass -= (2.0 if home else 0.5) * dt
+		kalt -= (2.0 if home else 0.5) * dt
 	else:
 		if wx.is_rain() or wx.is_snow():
 			nass += (0.7 if wx.is_heavy_rain() else 0.35) * dt   # milder (15.11.: alle Wesen standen bei 96 %)
