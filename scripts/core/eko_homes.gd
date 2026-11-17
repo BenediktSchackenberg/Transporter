@@ -86,6 +86,18 @@ func _plan_building(cid: int, typ: String, want: String) -> Dictionary:
 			return {"ok": false, "msg": "Grundstück %s gibt es nicht." % want}
 		if Planning.assess(p0, probe).ok:
 			cands = [p0]
+	if cands.is_empty() and sim.wildnis:
+		# Wildnis: zuerst die Baugrundstuecke der Siedlung (17.11.: die Suche lieferte nur die 30 billigsten Reststreifen);
+		# sind alle belegt, neue um den Hof anlegen
+		for attempt in 2:
+			for pl in sim.settlements.get(str(k), {}).get("plots", []):
+				var pp: Dictionary = sim.parcels.at_cell(Vector2i(int(pl[0]) + 1, int(pl[1]) + 1))
+				if not pp.is_empty() and str(pp.state) == "frei":
+					cands.append(pp)
+			if not cands.is_empty():
+				break
+			var t: Dictionary = sim.city.towns[k]
+			w.settle.carve_area(k, Vector2i(int(t.center[0]), int(t.center[1])), 6)
 	if cands.is_empty():
 		var utils: Array = ["voll", "teilweise", "keine"] if sim.wildnis else ["voll", "teilweise"]   # Wildnis: Gelaende-LKW braucht keine Strasse
 		for z in ["wohnen", "mischgebiet"]:
