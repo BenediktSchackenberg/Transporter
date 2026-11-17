@@ -496,7 +496,7 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			if not sim.wildnis or fc < 0:
 				r = {"ok": false, "msg": "Siedlungen gründen nur Unternehmer in der Wildnis-Partie."}
 			elif not (f is Array) or (f as Array).size() < 2:
-				r = {"ok": false, "msg": "Siedlung braucht feld: [x, y] (Kachel). Ohne Angabe: dein aktueller Platz.", "bewertung": settle.score_at(tile_of(b))} if data.get("hier", false) == false else settle.found(b, fc, tile_of(b))
+				r = settle.found(b, fc, tile_of(b))   # ohne Feld: hier, wo das Wesen steht (17.11.: Meldung versprach das, tat es aber nicht)
 			else:
 				r = settle.found(b, fc, Vector2i(int(f[0]), int(f[1])))
 		"Firma":
