@@ -8548,6 +8548,7 @@ func test_wildnis_found() -> void:
 	if best.is_empty():
 		return
 	var site := Vector2i(int(best[0].feld[0]), int(best[0].feld[1]))
+	ok(not E.input(p0, "Siedlung", {"feld": [site.x, site.y]}).ok, "gründen nur vor Ort (erst hinfahren)")
 	# querfeldein hinfahren, das Wesen sitzt im LKW
 	B.mover.pos = v.pos
 	var rt: Dictionary = E.input(p0, "LKW", {"ziel": [site.x, site.y]})

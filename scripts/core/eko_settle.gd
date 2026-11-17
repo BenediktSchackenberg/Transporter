@@ -17,6 +17,7 @@ const FOUND_COST := 10000.0     # Vermessung und Platz (Firma -> Kasse der kuenf
 const ROAD_COST := 60.0         # EUR je Strassenfeld (Vermessung, Kleinmaterial) – Kies kommt vom eigenen Hof
 const ROAD_KIES := 2
 const ROAD_MAX := 40
+const ON_SITE := 15             # so nah muss das Wesen am Platz sein, um zu gruenden (selbst hinfahren)
 const PLOT := Vector2i(9, 8)    # Baugrundstueck: Einfamilien-, Doppel- und Mehrfamilienhaus passen
 
 var w                           # EkoWorld
@@ -157,6 +158,10 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 	var k: int = sim.companies[cid].home_town
 	if founded(k):
 		return {"ok": false, "msg": "Dein Betriebshof steht schon (%s)." % sim.towns.name_of(k)}
+	var here: Vector2i = w.tile_of(b)
+	if maxi(absi(here.x - cell.x), absi(here.y - cell.y)) > ON_SITE:   # 17.11.: Sonnenklippe wurde vom Grosslager aus "eroeffnet"
+		return {"ok": false, "msg": "Du bist nicht dort (%d Felder entfernt). Fahr erst selbst hin: LKW {ziel: [%d, %d]} – dann Siedlung {feld: [%d, %d]}." % [
+			maxi(absi(here.x - cell.x), absi(here.y - cell.y)), cell.x, cell.y, cell.x, cell.y]}
 	var sc := score_at(cell)
 	if not sc.ok:
 		return {"ok": false, "msg": "Hier geht es nicht: %s." % str(sc.get("grund", "")), "bewertung": sc}
@@ -460,5 +465,9 @@ func next_step(b: Dictionary, cid: int) -> String:
 	var best := best_near(w.tile_of(b), 70, 1)
 	if best.is_empty():
 		return "Platz suchen – hier in der Nähe passt nichts. Fahr mit dem LKW weiter (LKW {ziel: [x, y]}) und prüfe siedlung.hier."
-	return "Betriebshof und Basis eröffnen – bester Platz in deiner Nähe: Siedlung {feld: %s} (%d Punkte: %s). Oder weiter erkunden (LKW {ziel: [x, y]})." % [
-		str(best[0].feld), int(best[0].punkte), "; ".join(best[0].gruende)]
+	var f: Array = best[0].feld
+	var here: Vector2i = w.tile_of(b)
+	if maxi(absi(here.x - int(f[0])), absi(here.y - int(f[1]))) > ON_SITE:
+		return "Bester Platz in deiner Nähe: %s (%d Punkte: %s) – hinfahren mit LKW {ziel: %s}, dort Siedlung {feld: %s}." % [
+			str(f), int(best[0].punkte), "; ".join(best[0].gruende), str(f), str(f)]
+	return "Du bist am Platz %s (%d Punkte: %s) – Betriebshof und Basis eröffnen: Siedlung {feld: %s}." % [str(f), int(best[0].punkte), "; ".join(best[0].gruende), str(f)]
