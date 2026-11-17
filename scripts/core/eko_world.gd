@@ -2382,6 +2382,8 @@ func ranking() -> Array:
 func beings_info() -> Array:
 	var out: Array = []
 	for b in beings.values():
+		if int(b.get("amt", -1)) >= 0 and not sim.town_ready(int(b.amt)):
+			continue   # Wildnis: Buergermeister wachen erst mit der Gruendung ihrer Stadt auf (spart Modellzeit fuer die Unternehmer)
 		var rolle := "buergermeister" if int(b.get("amt", -1)) >= 0 else ("unternehmer" if int(b.get("firma", -1)) >= 0 else "wesen")
 		var seele := str(b.get("seele", ""))
 		if seele == "" and str(b.name) == "Lumo":

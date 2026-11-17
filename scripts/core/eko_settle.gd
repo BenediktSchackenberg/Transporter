@@ -313,11 +313,18 @@ func carve_plots(k: int, cells: Array, limit: int = 8) -> Array:
 	var st: Dictionary = sim.settlements.get(str(k), {})
 	var have: Array = (st.get("plots", []) as Array).map(func(a): return Rect2i(int(a[0]), int(a[1]), int(a[2]), int(a[3])))
 	var made: Array = []
-	for i in range(0, cells.size(), 5):
+	for i in cells.size():
 		if made.size() >= limit:
 			break
 		var c: Vector2i = cells[i]
-		for o in [Vector2i(1, -4), Vector2i(-PLOT.x, -4), Vector2i(-4, 1), Vector2i(-4, -PLOT.y)]:
+		var offs: Array = []   # Grundstueck beruehrt die Strassenzelle; entlang der Strasse verschoben (17.11.: vier feste Lagen fanden in Moewenstrand nichts)
+		for t in range(0, PLOT.y, 2):
+			offs.append(Vector2i(1, -t))
+			offs.append(Vector2i(-PLOT.x, -t))
+		for t in range(0, PLOT.x, 2):
+			offs.append(Vector2i(-t, 1))
+			offs.append(Vector2i(-t, -PLOT.y))
+		for o in offs:
 			var r := Rect2i(c + o, PLOT)
 			if have.any(func(h): return h.intersects(r)) or not _plot_free(r):
 				continue

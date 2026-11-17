@@ -1666,7 +1666,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.parcels.sync_buildings()
 	s.parcels.from_dict(d.get("parcels", {}))
 	for key in s.settlements:   # Siedlung von vor den Baugrundstuecken (17.11.): Grundstuecke an ihren Strassen nachholen (nach den Gebaeuden)
-		if not s.settlements[key].has("plots"):
+		if (s.settlements[key].get("plots", []) as Array).is_empty():
 			s.eko.settle.carve_plots(int(key), (s.settlements[key].get("roads", []) as Array).map(func(a): return Vector2i(int(a[0]), int(a[1]))), 10)
 	s.world_events.from_dict(d.get("world_events", {}))
 	s.game_master.from_dict(d.get("game_master", {}))

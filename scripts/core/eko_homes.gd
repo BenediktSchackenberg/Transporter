@@ -53,7 +53,9 @@ func plan(cid: int, a: Dictionary) -> Dictionary:
 		if p0.is_empty():
 			return {"ok": false, "msg": "Grundstück %s gibt es nicht." % a.grundstueck}
 		cands = [p0]
-	else:
+		if not Planning.assess(p0, probe).ok:   # 17.11.: Bodo nannte einen 2x6-Streifen - dann selbst ein passendes suchen
+			cands = []
+	if cands.is_empty():
 		var town: int = sim.towns.home_of(cid)
 		for z in ["wohnen", "mischgebiet"]:
 			for u in ["voll", "teilweise"]:   # nur an einer Strasse (sonst kann das fertige Haus nicht uebergeben werden)
