@@ -52,8 +52,12 @@ var _dragging := false
 var _sim_acc := 0.0                  # Rest-Simulationszeit (fester Schritt fuer reproduzierbare Ablaeufe)
 
 
+var _new_game := false
+
+
 func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	cfg = config.duplicate(true)
+	_new_game = loaded.is_empty()
 	var keys := {}
 	for p in cfg.players:
 		keys[int(p.slot)] = p.get("api_key", "")
@@ -478,6 +482,8 @@ func _start_eko_server() -> void:
 	ws.on_save = save_game
 	ws.operator_token = Crypto.new().generate_random_bytes(16).hex_encode()
 	ws.keys_path = "user://eko_schluessel.json"   # Schluessel der Wesen (nur SHA-256), ueberdauert Neustarts
+	if _new_game and FileAccess.file_exists(ws.keys_path):   # neue Partie: Namen der alten Partie freigeben (17.11.: "Name gehoert bereits einem Wesen")
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(ws.keys_path))
 	var tf := FileAccess.open("user://eko_betreiber.txt", FileAccess.WRITE)
 	if tf != null:
 		tf.store_string(ws.operator_token)
