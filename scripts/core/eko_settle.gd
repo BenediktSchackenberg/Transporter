@@ -367,12 +367,64 @@ func plan_road(cid: int, a: Dictionary) -> Dictionary:
 	return w.homes.add_road_site(cid, path, {"kies": path.size() * ROAD_KIES})
 
 
+## Strassenanschluss einer gegruendeten Stadt ans Grosslager (Benedikt 18.11.: "ohne Strassen keine Warenlieferung"):
+## {verbunden, von: naechstes angebundenes Strassenfeld, bis: Rathaus-Zufahrt, felder}. Je Stadt einmal je Spieltag gerechnet.
+var _link_cache := {}
+
+
+func road_link(k: int) -> Dictionary:
+	var sim = _sim()
+	var C: CityData = sim.city
+	var day := GameCalendar.day_of(sim.game_min)
+	var hit: Dictionary = _link_cache.get(k, {})
+	if not hit.is_empty() and int(hit.day) == day:
+		return hit
+	var out := {"day": day, "verbunden": true}
+	var hall: Dictionary = C.building(int(C.towns[k].get("town_hall", -1))) if k >= 0 and k < C.towns.size() else {}
+	var hub_b: Dictionary = C.building(int(C.hub.get("buildings", {}).get("hauptlager", -1))) if not C.hub.is_empty() else {}
+	if hall.is_empty() or hub_b.is_empty():
+		_link_cache[k] = out
+		return out
+	var tr: Vector2i = hall.road
+	var hr: Vector2i = hub_b.road
+	if C.is_road(tr) and not sim.nav.road_path(tr, hr).is_empty():
+		_link_cache[k] = out
+		return out
+	out.verbunden = false
+	# naechstes Strassenfeld, das ans Grosslager angebunden ist (ringweise, hoechstens 8 Pruefungen)
+	var checks := 0
+	for r in range(1, 160):
+		var found := Vector2i(-1, -1)
+		for dy in range(-r, r + 1):
+			for dx in [-r, r] if absi(dy) != r else range(-r, r + 1):
+				var q := tr + Vector2i(dx, dy)
+				if C.inside(q) and C.is_road(q) and C.town_of(q) != k:
+					checks += 1
+					if not sim.nav.road_path(q, hr).is_empty():
+						found = q
+						break
+					if checks >= 8:
+						break
+			if found.x >= 0 or checks >= 8:
+				break
+		if found.x >= 0:
+			out["von"] = [found.x, found.y]
+			out["felder"] = absi(found.x - tr.x) + absi(found.y - tr.y)
+			break
+		if checks >= 8:
+			break
+	out["bis"] = [tr.x, tr.y]
+	_link_cache[k] = out
+	return out
+
+
 ## Strassenfeld fertig (EkoHomes): Zelle anlegen, speichern; bei Abschluss Baugrundstuecke daran.
 func lay_road_cells(k: int, cells: Array) -> void:
 	var sim = _sim()
 	sim.access._apply_cells(cells)
 	sim.access._fields.clear()
 	sim.access._cache.clear()
+	_link_cache.clear()
 	var st: Dictionary = sim.settlements.get(str(k), {})
 	st["roads"] = (st.get("roads", []) as Array) + cells.map(func(q): return [q.x, q.y])
 	sim.settlements[str(k)] = st

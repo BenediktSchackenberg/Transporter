@@ -327,6 +327,7 @@ func _restock(item: String, want: int) -> void:
 		return
 	var ap := _airport_cargo()
 	if ap < 0:
+		_supply_by_road(item, want)   # Wildnis (18.11.): kein Flughafen – sonst blieb ausverkaufte Ware (Kies) fuer immer aus
 		return
 	var cost := snappedf(base_price(item) * CityGoods.IMPORT_FACTOR * float(want), 0.01)
 	if float(sim.economy.accounts.get(ACCT, 0.0)) < cost:
@@ -355,6 +356,42 @@ func _from_producers(item: String) -> int:
 
 
 ## Flughafen-Frachtterminal, das dem Lager am naechsten liegt (Auftrag 19: Flughafenimport speist das Lager).
+## Zulieferung von ausserhalb ueber die Landstrasse: ein Liefer-Lkw faehrt vom Kartenrand ins Grosslager, die Ware kommt bei
+## Ankunft ins Lager (supplier_arrived). Hoechstens eine Fahrt je Ware gleichzeitig.
+func _supply_by_road(item: String, want: int) -> void:
+	for d in deals.values():
+		if str(d.kind) == "zulieferung" and str(d.item) == item and str(d.status) == "unterwegs":
+			return
+	var cost := snappedf(base_price(item) * CityGoods.IMPORT_FACTOR * float(want), 0.01)
+	if float(sim.economy.accounts.get(ACCT, 0.0)) < cost or sim.fleet == null:
+		return
+	var hb: Dictionary = sim.city.building(loc)
+	if hb.is_empty():
+		return
+	var id := "H%d" % _next
+	if not sim.fleet.send_supplier(hb.road, id, "Zulieferung: %d × %s" % [want, item_name(item)]):
+		return
+	_next += 1
+	sim.economy.transfer(ACCT, "X0", cost)
+	deals[id] = {"id": id, "kind": "zulieferung", "item": item, "qty": want, "party": ACCT, "dest": loc, "contract": "", "status": "unterwegs",
+		"price": cost, "day": _today()}
+	incoming[item] = int(incoming.get(item, 0)) + want
+	stats.import = float(stats.import) + cost
+	stats.importe = int(stats.importe) + 1
+
+
+## Liefer-Lkw ist im Grosslager angekommen: Ware einlagern.
+func supplier_arrived(id: String) -> void:
+	var d: Dictionary = deals.get(id, {})
+	if d.is_empty() or str(d.status) != "unterwegs":
+		return
+	sim.stock.add(str(d.item), int(d.qty), ACCT, loc, "Zulieferung über die Landstraße %s" % id, sim.game_min)
+	incoming[d.item] = maxi(0, int(incoming.get(d.item, 0)) - int(d.qty))
+	d.status = "geliefert"
+	d["done"] = _today()
+	sim.log_event("Großlager: Zulieferung %d × %s eingetroffen." % [int(d.qty), item_name(str(d.item))], "info")
+
+
 func _airport_cargo() -> int:
 	var best := -1
 	var best_d := 1 << 30

@@ -55,15 +55,17 @@ func _free_neighbor(site: Vector2i) -> Vector2i:
 	return site
 
 
-func _spawn(kind: String, start: Vector2i, site: Vector2i, until: float, back: Vector2i, label: String) -> Dictionary:
+func _spawn(kind: String, start: Vector2i, site: Vector2i, until: float, back: Vector2i, label: String, strict := false) -> Dictionary:
 	var m := Mover.new()
 	m.speed = SPEED
 	m.pos = sim.city.tile_center(start)
-	var v := {"id": _next, "kind": kind, "mover": m, "phase": "anfahrt", "site": site, "until": until, "back": back, "label": label}
-	_next += 1
 	var target := _free_neighbor(site)
 	if not sim.route(m, target):
+		if strict:   # Wildnis (18.11.): ohne Strasse kein Lieferfahrzeug – nicht ans Ziel setzen
+			return {}
 		m.pos = sim.city.tile_center(target)   # kein Weg: Fahrzeug steht gleich am Ziel
+	var v := {"id": _next, "kind": kind, "mover": m, "phase": "anfahrt", "site": site, "until": until, "back": back, "label": label}
+	_next += 1
 	vehicles.append(v)
 	return v
 
@@ -88,9 +90,23 @@ func send_crew(site: Vector2i, until: float, label: String) -> void:
 
 ## Kommunaler Lkw (Auftrag 19): bringt Ware eines Stadtlager-Auftrags vom Lieferort zum Stadtlager; meldet die Ankunft dem Stadtlager.
 func send_city_truck(from: Vector2i, to: Vector2i, town: int, order_id: String, label: String) -> bool:
-	var v := _spawn("stadtlkw", from, to, 0.0, from, label)
+	var v := _spawn("stadtlkw", from, to, 0.0, from, label, sim.wildnis)
+	if v.is_empty():
+		return false
 	v["town"] = town
 	v["order"] = order_id
+	return true
+
+
+## Liefer-Lkw von ausserhalb: vom Kartenrand (Landstrasse) zum Grosslager, meldet dort die Ankunft (CentralHub.supplier_arrived).
+func send_supplier(to: Vector2i, deal_id: String, label: String) -> bool:
+	if _edges.is_empty():
+		return false
+	var edge: Vector2i = _edges[(_next * 5) % _edges.size()]
+	var v := _spawn("zulieferer", edge, to, 0.0, edge, label, true)
+	if v.is_empty():
+		return false
+	v["deal"] = deal_id
 	return true
 
 
@@ -157,6 +173,12 @@ func update(dt: float) -> void:
 				if not sim.route(m, v.back):
 					vehicles.erase(v)
 			elif str(v.phase) == "rueckfahrt":
+				vehicles.erase(v)
+			continue
+		if v.kind == "zulieferer" and str(v.phase) == "anfahrt":
+			sim.hub.supplier_arrived(str(v.deal))
+			v.phase = "rueckfahrt"
+			if not sim.route(m, v.back):
 				vehicles.erase(v)
 			continue
 		if v.kind == "stadtlkw" and str(v.phase) == "anfahrt":

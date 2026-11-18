@@ -191,6 +191,8 @@ func _update_fleet() -> void:
 				n.add_child(lb)
 			elif v.kind == "stadtlkw":   # kommunaler Lkw (Lieferung ans Stadtlager)
 				n = _make_vehicle_node("truck", "", Color.WHITE, false)
+			elif v.kind == "zulieferer":   # Liefer-Lkw von ausserhalb zum Grosslager (Wildnis)
+				n = _make_vehicle_node("semi", "", Color.WHITE, false)
 			else:
 				n = _make_vehicle_node("roadcrew" if v.kind in ["bautrupp", "kolonne", "netztrupp", "bahntrupp", "wassertrupp"] else "moving", "", Color.WHITE, false)
 			if v.kind in ["bautrupp", "kolonne", "netztrupp", "bahntrupp", "wassertrupp"]:

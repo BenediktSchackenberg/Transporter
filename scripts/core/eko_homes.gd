@@ -418,6 +418,12 @@ func next_step(cid: int) -> String:
 				s.id, item, int(m[item]), ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x]))]
 	if sim.wildnis and w.settle.founded(k) and not sim.town_ready(k) and not sites.values().any(func(s): return s.typ == "buergeramt" and int(s.cid) == cid and s.status != "abgelehnt"):
 		return "Bürgeramt bauen – erst damit gibt es deine Stadt, einen Bürgermeister und Siedler: Firma {aktion: {action: \"buergeramt_bauen\"}}."
+	if sim.wildnis and sim.town_ready(k) and not open.any(func(s): return s.typ == "strasse"):
+		var link: Dictionary = w.settle.road_link(k)
+		if not bool(link.get("verbunden", true)) and link.has("von"):
+			return ("Deine Stadt hat keine Straße zum Großlager – ohne Straße liefert niemand Waren (Stadtlager, Kunden, Siedler). Straße bauen, Stück für Stück " +
+				"(je Baustelle bis %d Felder, noch ~%d): Firma {aktion: {action: \"strasse_bauen\", von: %s, bis: %s}} – dann Kies holen und Bauen.") % [
+				EkoSettle.ROAD_MAX, int(link.felder), str(link.von), str(link.bis)]
 	if not open.any(func(s): return s.typ != "strasse"):
 		return "Wohnraum bauen – mit Wohnungen kommen Siedler: Firma {aktion: {action: \"haus_bauen\", typ: \"einfamilienhaus\"}}."
 	return ""

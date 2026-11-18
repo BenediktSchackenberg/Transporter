@@ -41,6 +41,7 @@ func _initialize() -> void:
 	test_names.append("test_wildnis_start")
 	test_names.append("test_wildnis_found")
 	test_names.append("test_wildnis_log_fixes")
+	test_names.append("test_wildnis_hub_supply")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
@@ -8597,6 +8598,22 @@ func test_wildnis_log_fixes() -> void:
 		var again: Array = mo.quarter_candidates(10)
 		ok(not again.any(func(c): return (c.grundstuecke as Array).any(func(id): return id in ids)), "beschlossene Grundstücke werden nicht erneut vorgeschlagen")
 		mo.plans.erase("QX")
+
+
+## Partie 18.11.: in der Wildnis bekam das Grosslager nie Nachschub (kein Flughafen, keine Produzenten) – Kies blieb aus, keine Strasse.
+func test_wildnis_hub_supply() -> void:
+	var s := wildnis_sim(2)
+	var H: CentralHub = s.hub
+	var have := s.stock.qty("kies", CentralHub.ACCT, H.loc)
+	s.stock.consume("kies", have, CentralHub.ACCT, H.loc, "Test: ausverkauft")
+	H.on_day(GameCalendar.day_of(s.game_min) + 1)
+	var trucks: Array = s.fleet.vehicles.filter(func(v): return v.kind == "zulieferer")
+	ok(not trucks.is_empty(), "Liefer-Lkw von außerhalb fährt los (%d)" % trucks.size())
+	ok(s.stock.qty("kies", CentralHub.ACCT, H.loc) == 0, "Ware kommt erst mit dem Lkw an")
+	var arrived := _run_until(s, func(): return s.stock.qty("kies", CentralHub.ACCT, H.loc) > 0, 20000)
+	ok(arrived, "Kies im Großlager angekommen (%d)" % s.stock.qty("kies", CentralHub.ACCT, H.loc))
+	RegionGenerator.neubeginn = false
+	RegionGenerator.wildnis = false
 
 
 func test_wildnis_found() -> void:

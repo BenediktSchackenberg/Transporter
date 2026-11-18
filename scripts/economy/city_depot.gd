@@ -528,6 +528,8 @@ func _advance_orders(day: int) -> void:
 			_receive(o, "order:" + str(o.id))   # Fahrzeug nach dem Laden nicht mehr vorhanden
 			continue
 		match o.status:
+			"wartet_strasse":   # taeglich neu versuchen (Strasse inzwischen gebaut?)
+				_fallback_trip(o)
 			"bestellt":
 				if o.supplier == "X0":
 					if bool(o.get("via_air", false)) and airport().enabled:
@@ -700,6 +702,14 @@ func _fallback_trip(o: Dictionary) -> void:
 		o.status = "stadt_lkw"
 		o["truck_until"] = sim.game_min + GameCalendar.days_to_min(1.5)   # Sicherung, falls das Fahrzeug (nicht gespeichert) fehlt
 		_log(o, "Stadtfuhrpark liefert mit eigenem Lkw (Kosten %s)" % Catalog.money(pay))
+		return
+	if sim.wildnis:   # Benedikt 18.11.: ohne Strasse keine Warenlieferung – warten, bis die Stadt angebunden ist
+		sim.economy.transfer("S0", owner(), pay)
+		stats.freight -= pay
+		o.freight_paid = 0.0
+		if str(o.status) != "wartet_strasse":
+			_log(o, "Kein Straßenweg vom Lieferort zum Stadtlager – Lieferung wartet auf eine Straße")
+		o.status = "wartet_strasse"
 		return
 	_log(o, "Stadtfuhrpark liefert (Kosten %s)" % Catalog.money(pay))
 	_receive(o, "order:" + str(o.id))
