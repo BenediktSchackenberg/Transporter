@@ -52,6 +52,10 @@ while ($true) {
     if ($crash) {
         Write-Host "[$ende] Absturz erkannt - Neustart aus dem letzten Spielstand in 5 s (Protokoll: $out)" -ForegroundColor Yellow
         Add-Content (Join-Path $logs "abstuerze.txt") "$stamp bis $ende : $out"
+        # 18.11.: Brotkrume (letzte Markierungen des Hauptthreads, auch welche Zeichenebene) vor dem Neustart sichern
+        if (Test-Path $beat) { Copy-Item $beat (Join-Path $logs "absturz_${stamp}_zuletzt.txt") -Force }
+        $hang = Join-Path (Split-Path $beat) "haenger.txt"
+        if (Test-Path $hang) { Get-Content $hang -Tail 8 | Add-Content (Join-Path $logs "absturz_${stamp}_zuletzt.txt") }
     } else {
         Write-Host "[$ende] Welt beendet (Code $($p.ExitCode)). Neustart in 5 s, Strg+C zum Beenden." -ForegroundColor Gray
     }
