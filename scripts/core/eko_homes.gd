@@ -108,6 +108,9 @@ func _plan_building(cid: int, typ: String, want: String) -> Dictionary:
 		for z in ["wohnen", "mischgebiet"]:
 			for u in utils:
 				cands += sim.parcels.search({"zone": z, "utilities": u, "town": k, "min_area": 12, "limit": 30})
+	if want == "" and cands.size() > 1 and sim.town_plan.has(k):   # Auftrag 8: bewertete Reihenfolge (Viertel, Kern, Nachbarschaft)
+		var dd: Dictionary = Planning.DEFS[def_id]
+		cands = sim.sites.order_parcels(k, cands, {"w": int(dd.w), "h": int(dd.h), "art": "wohnen", "floors": floors, "label": str(dd.label)})
 	var why := "kein freies Baugrundstück – mit strasse_bauen entstehen neue an der Straße"
 	for p in cands:
 		var chk := Planning.assess(p, probe)

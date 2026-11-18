@@ -259,3 +259,28 @@ Reservierung). Danach (Etappe 4) laufen alle Pfade der Tabelle über `SiteSelect
   kommunale Bauten den Stil des Profils (`Municipal.style_of`); der Bürgermeister sieht `stadtplan` (Leitbild, Viertel) in seiner Beobachtung.
 - Live-Partie: Birkenklippe = Hangstadt (31 % Hang), Liorufer = Gartenstadt.
 - Test `test_town_plan` (17 Prüfungen), Probe `tests/probe_town_plan.gd <Spielstand>`.
+
+### Etappe 3 und Beginn Etappe 4 (18.11.2026): gemeinsame Standortprüfung, Baupfade, Viertel erschließen
+
+- Neue Klasse `SiteSelector` (`scripts/core/site_selector.gd`, `sim.sites`): harte Prüfung (frei, städtisch bzw. eigenes Grundstück,
+  Zone passt, Grundfläche ohne Überlappung, Straße am Rand, nicht im Grünzug) → höchstens 60 Kandidaten (nächste zum Kern) →
+  sieben normierte Kriterien (Bedarf, Nachbarschaft, Stadtstruktur, Erreichbarkeit, Kosten, Gestaltungsprofil, Landschaft) mit
+  Gewichten je Nutzungsart (wohnen, versorgung, gewerbe, laerm, oeffentlich, tourismus), je Grundform angepasst → Wahl mit
+  Begründung und zurückgestellten Alternativen, festgehalten im Stadtplan (`entscheidungen`, für KI und Zuschauer). Atomare
+  Reservierung (`reserve`) und erneute Prüfung beim Auftrag (`still_valid`). Ohne gültigen Platz: konkreter nächster Schritt
+  (zu erschließende Grundstücke oder das passende Viertel mit `viertel_erschliessen`).
+- Baupfade: kommunale Bauten (Bürgermeister-Vorlagen, Dienste, Municipal) über `CivicWorks._find_site` → `SiteSelector`; laute
+  Betriebe (Abfall, Klärwerk, Bauhof, Werkstatt …) in Gewerbe/Industrie abseits der Wohnhäuser. Bauträger und Wildnis-Häuser
+  ordnen ihre Kandidaten nach der Standortbewertung (vorher: billigstes Grundstück = Ortsrand). Quartiersvorschläge des
+  Bürgermeisters messen zum eigenen Stadtkern (vorher: Kartenmitte). Das Ereignis „Neueröffnung“ (kostenloser Laden auf
+  Zufallskoordinaten) entfällt, sobald es einen Stadtplan gibt.
+- Neue Bürgermeister-Aktion `viertel_erschliessen {viertel}`: freie städtische Grundstücke des Viertels werden zur Zone des
+  Viertels umgewidmet und abschnittsweise (höchstens 5) über das bestehende Erschließungsprojekt erschlossen (Kosten, Material,
+  Baufirma, Bauzeit; keine doppelte Erschließung).
+- Landzuteilung: eine gegründete Stadt übernimmt freies öffentliches Land, das näher an ihrem Kern liegt als an dem einer anderen
+  (Partie: Liorufer 27 Felder neben Birkenklippe hatte kein eigenes Grundstück).
+- Fehler behoben: Laufzeit-Grundstücke (Wildnis-Bauland, neue Gebäude) entstanden beim Laden in anderer Reihenfolge – Nummern,
+  Eigentum und Zustand wurden vertauscht (Bebautes galt als frei, Liorufers Bauland gehörte Birkenklippe). Die Fläche wird jetzt
+  mitgespeichert, beim Laden folgt die Nummer der Fläche (`Parcels._claim_id`); alte Spielstände werden aus der Wirklichkeit
+  repariert (`repair_runtime`: bebaut, wo ein Gebäude steht, Eigentum nach Siedlung).
+- Tests `test_site_selector` (13), `test_parcel_ids_and_districts` (8); Proben `probe_sites.gd`, `probe_viertel.gd`, `probe_plots.gd`.

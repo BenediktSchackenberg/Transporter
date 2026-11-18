@@ -176,9 +176,15 @@ func build(k: int, code: String, reason: String, by: String) -> Dictionary:
 		return {"ok": false, "budget": true, "msg": "Verfügbare Mittel %s reichen nicht für %s (%s) plus Rücklage für %d Tage Dienstbetrieb (%s)." % [
 			Catalog.money(M.available_budget()), Municipal.TYPES[code].label, Catalog.money(cost), RESERVE_DAYS, Catalog.money(reserve)]}
 	var info: Array = CityGenerator.TYPES[Municipal.TYPES[code].building]
-	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]))
+	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]), "", str(Municipal.TYPES[code].label))
 	if site.is_empty():
 		var bare: Array = sim.civic.sites_without_road(k, int(info[1]), int(info[2]), 4)
+		if sim.town_plan.has(k):   # Auftrag 8: Grundstuecke ohne Strasse in passender Zone/Viertel aus der Standortpruefung
+			var ch: Dictionary = sim.sites.choose(k, {"w": int(info[1]), "h": int(info[2]), "art": SiteSelector.art_of(str(Municipal.TYPES[code].label)), "label": str(Municipal.TYPES[code].label)})
+			if not (ch.get("ohne_strasse", []) as Array).is_empty():
+				bare = ch.ohne_strasse
+			elif bare.is_empty():
+				return {"ok": false, "msg": str(ch.msg)}
 		if not bare.is_empty():   # Partie 18.11. (Wildnis): Petra wollte seit Stunden eine Polizeiwache – es fehlten nur Strassen
 			return {"ok": false, "msg": ("Kein freies städtisches Grundstück MIT Straßenanschluss für %s (%d×%d Felder) – in %s fehlen Straßen. " +
 				"Erst erschließen: Amt {aktion: {action: \"plan_infrastructure\", parcel_ids: %s}} (dort passt der Bau), dann kommunal_bauen erneut.") % [

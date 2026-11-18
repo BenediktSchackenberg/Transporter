@@ -304,9 +304,9 @@ func validate(k: int, tid: String, district: String = "") -> Dictionary:
 			int(M.waiting), Catalog.money(keep), Catalog.money(M.available_budget())], "grund": "geld"}
 	if sim.construction.make_offers(cost, int(t.days), "civic%d" % k).is_empty():
 		return {"ok": false, "msg": "Keine Baufirma kann %s bauen." % t.label, "grund": "baufirma"}
-	var site := _find_site(k, int(t.w), int(t.h), district)
+	var site := _find_site(k, int(t.w), int(t.h), district, str(t.label))
 	if site.is_empty():
-		return {"ok": false, "msg": "Kein freier städtischer Bauplatz %d×%d mit Straßenanschluss in %s." % [int(t.w), int(t.h), sim.towns.name_of(k)], "grund": "platz"}
+		return {"ok": false, "msg": "Kein freier städtischer Bauplatz %d×%d mit Straßenanschluss in %s.%s" % [int(t.w), int(t.h), sim.towns.name_of(k), _next_hint(k, int(t.w), int(t.h), str(t.label))], "grund": "platz"}
 	var mats := materials_of(tid)
 	var mangel := {}
 	var D: CityDepot = sim.towns.depot(k)
@@ -314,8 +314,8 @@ func validate(k: int, tid: String, district: String = "") -> Dictionary:
 		var avail: int = D.stock_of(it) + (sim.hub.stock_of(it) if sim.hub.enabled else 0)
 		if avail < int(mats[it]):
 			mangel[it] = int(mats[it]) - avail
-	return {"ok": true, "msg": "%s auf %s geprüft: Platz, Straße, Kosten %s, Baufirma vorhanden%s." % [t.label, site.parcel, Catalog.money(cost),
-		"" if mangel.is_empty() else ", Material knapp: " + ", ".join(mangel.keys())], "rect": site.rect, "parcel": site.parcel, "cost": cost,
+	return {"ok": true, "msg": "%s auf %s geprüft: Platz, Straße, Kosten %s, Baufirma vorhanden%s.%s" % [t.label, site.parcel, Catalog.money(cost),
+		"" if mangel.is_empty() else ", Material knapp: " + ", ".join(mangel.keys()), (" Standort: " + str(site.begruendung)) if site.has("begruendung") else ""], "rect": site.rect, "parcel": site.parcel, "cost": cost,
 		"materials": mats, "material_ok": mangel.is_empty(), "mangel": mangel}
 
 
@@ -338,10 +338,24 @@ func housing_reserve(k: int) -> float:
 	return 0.0
 
 
-func _find_site(k: int, w: int, h: int, district: String = "") -> Dictionary:
+func _find_site(k: int, w: int, h: int, district: String = "", label: String = "") -> Dictionary:
 	var C: CityData = sim.city
 	if int(sim.towns.get_t(k).get("town_hall", -1)) < 0:
 		return {}   # Wildnis: Ort noch nicht gegruendet
+	if sim.town_plan.has(k):   # Auftrag 8: bewertete Standortwahl mit Begruendung statt "naechstes Grundstueck zum Rathaus"
+		var art := SiteSelector.art_of(label)
+		var d := district.to_lower()
+		if d.contains("rand") or d.contains("außen") or d.contains("aussen"):
+			art = "laerm" if art == "oeffentlich" else art
+		var ch: Dictionary = sim.sites.choose(k, {"w": w, "h": h, "art": art, "label": label if label != "" else "Bau %d×%d" % [w, h],
+			"zones": ["mischgebiet", "oeffentlich", "wohnen", "gewerbe"] if art != "laerm" else ["gewerbe", "industrie", "mischgebiet"]})
+		if ch.ok:
+			return {"rect": ch.rect, "parcel": ch.parcel, "begruendung": ch.begruendung}
+		if art == "laerm":   # kein Gewerbeplatz: notfalls wie bisher (Mischgebiet/Wohnen am Rand), aber bewertet
+			ch = sim.sites.choose(k, {"w": w, "h": h, "art": art, "label": label, "zones": ["mischgebiet", "oeffentlich", "wohnen", "gewerbe"]})
+			if ch.ok:
+				return {"rect": ch.rect, "parcel": ch.parcel, "begruendung": ch.begruendung}
+		return {}
 	var th: Dictionary = C.building(int(sim.towns.get_t(k).town_hall))
 	var anchor := Vector2i(int(th.x), int(th.y))
 	var d := district.to_lower()
@@ -373,6 +387,14 @@ func _find_site(k: int, w: int, h: int, district: String = "") -> Dictionary:
 		best_s = s
 		best = {"rect": [r.position.x, r.position.y, w, h], "parcel": str(p.id)}
 	return best
+
+
+## Naechster Schritt, wenn kein Standort gueltig ist (SiteSelector): zu erschliessende Grundstuecke oder das passende Viertel.
+func _next_hint(k: int, w: int, h: int, label: String) -> String:
+	if not sim.town_plan.has(k):
+		return ""
+	var ch: Dictionary = sim.sites.choose(k, {"w": w, "h": h, "art": SiteSelector.art_of(label), "label": label})
+	return "" if ch.ok else " " + str(ch.msg)
 
 
 ## Grundstuecke nahe dem Rathaus, auf die der Bau passen wuerde, wenn es eine Strasse gaebe (fuer den Erschliessungsvorschlag).

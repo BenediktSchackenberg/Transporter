@@ -452,7 +452,7 @@ func _share_regional(f: Dictionary) -> void:
 func _place(k: int, code: String, district: String = "") -> Dictionary:
 	var bt: String = TYPES[code].building
 	var info: Array = CityGenerator.TYPES[bt]
-	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]), district)
+	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]), district, str(TYPES[code].label))
 	if site.is_empty():
 		sim.log_event("%s: kein Bauplatz für %s gefunden." % [sim.towns.name_of(k), TYPES[code].label], "warn")
 		return {}

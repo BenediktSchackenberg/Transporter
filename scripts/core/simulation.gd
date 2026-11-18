@@ -91,6 +91,7 @@ var activity := ActivityFeed.new()   # KI-Aktivitaet mit Ort (nur Anzeige)
 var population := Population.new()   # Bevoelkerungsmodell: Alter, Bildung, Konten R0, Eigentum, Grundsteuer (Auftrag 10)
 var town_hall := TownHall.new()   # Rathaus mit Personal (Auftrag 9)
 var town_plan := TownPlan.new()   # Gestaltungsprofil und Viertelplan je Stadt (Auftrag 8 Stadtplanung, docs/CITY_PLANNING.md)
+var sites := SiteSelector.new()   # gemeinsame Standortpruefung aller Bauvorhaben (Auftrag 8 Stadtplanung, Etappe 3)
 var inspections := Inspections.new()   # Pruefungen des Pruefdienstes (Auftrag 9, Etappe 2)
 var access := AccessRoads.new()   # Zufahrten zu abgelegenen Lagerstaetten (Auftrag 15, Etappe B)
 var stages := BusinessStages.new()   # Gebaeudestufen der Betriebe (Auftrag 15, Etappe E)
@@ -188,6 +189,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	game_master.setup(self)
 	town_hall.setup(self)
 	town_plan.setup(self)
+	sites.setup(self)
 	inspections.setup(self)
 	population.setup(self)
 	activity.setup(self)
@@ -1773,6 +1775,23 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.parcels.sync_buildings()
 	s.parcels.from_dict(d.get("parcels", {}))
 	s.eko.settle.reapply_loaded()   # Wildnis: Buergeramt, Bauhof, Hafen der Siedlungen zurueck an die Staedte (nach den Laufzeit-Gebaeuden)
+	if s.wildnis and s.parcels.legacy_ids:   # 18.11.: vertauschte Laufzeit-Grundstuecke alter Spielstaende reparieren
+		var plot_town := {}
+		for key in s.settlements:
+			for pl in s.settlements[key].get("plots", []):
+				plot_town["%d,%d" % [int(pl[0]), int(pl[1])]] = int(key)
+		var keep := {}
+		for M in s.towns.mayors:
+			for prj in M.projects.values():
+				if str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+					for pid in prj.get("parcels", []):
+						keep[str(pid)] = true
+		for a in s.permits.apps.values():
+			if str(a.get("status", "")) != "entschieden":
+				keep[str(a.parcel)] = true
+		var n: int = s.parcels.repair_runtime(plot_town, keep)
+		if n > 0:
+			s.log_event("Grundstücke beim Laden korrigiert: %d (Eigentum/Zustand der Siedlungsgrundstücke)." % n, "system")
 	s.town_plan.from_dict(d.get("town_plans", {}))
 	s.town_plan.ensure_all("bestand")   # aeltere Spielstaende: Profil aus der tatsaechlichen Bebauung (aendert keine Gebaeude)
 	for key in s.settlements:   # Siedlung von vor den Baugrundstuecken (17.11.): Grundstuecke an ihren Strassen nachholen (nach den Gebaeuden)

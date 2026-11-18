@@ -351,6 +351,8 @@ func _freight(now: float) -> void:
 
 ## Neues Geschaeft: eroeffnet an einem freien Platz, Kunde stellt sofort einen Eroeffnungsbedarf.
 func _openings(now: float) -> void:
+	if sim.town_plan.has(0):
+		return   # Auftrag 8 Stadtplanung: kein kostenloser Laden auf Zufallskoordinaten; Laeden kommen ueber Bautraeger/Bauantrag
 	if now < 480.0 or _active("eroeffnung") or not _can("eroeffnung", 1, now) or sim.rng.randf() > 0.4:
 		return
 	var c: CityData = sim.city

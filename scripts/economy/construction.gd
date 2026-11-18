@@ -912,6 +912,12 @@ func _demand_town() -> int:
 ## Bautraeger: erstes passendes Grundstueck fuer `def_id` reservieren und den Bauantrag stellen.
 func _developer_try(cands: Array, def_id: String) -> bool:
 	var floors := 3 if def_id == "mehrfamilienhaus" else int(Planning.DEFS[def_id].floors[0])
+	if not cands.is_empty():   # Auftrag 8: bewertete Reihenfolge (Kern, Viertel, Nachbarschaft) statt billigstes Grundstueck zuerst
+		var k: int = sim.towns.of_parcel(str(cands[0].id))
+		var dd: Dictionary = Planning.DEFS[def_id]
+		var art := "versorgung" if str(dd.use) == "versorgung" else ("gewerbe" if str(dd.use) == "gewerbe" else "wohnen")
+		if k >= 0 and sim.town_plan.has(k):
+			cands = sim.sites.order_parcels(k, cands, {"w": int(dd.w), "h": int(dd.h), "art": art, "floors": floors, "label": str(dd.label)})
 	var probe := {"def": def_id, "floors": floors, "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": 1.0e9}}
 	for p in cands:
 		var chk := Planning.assess(p, probe)

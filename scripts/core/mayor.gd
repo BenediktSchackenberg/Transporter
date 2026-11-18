@@ -28,6 +28,8 @@ const SCHEMA := {
 		"desc": "Neues Quartier vorschlagen: städtische, freie Grundstücke (siehe entwicklungsvorschlaege) werden einer Zone zugewiesen. Braucht Ratsbeschluss; danach zur Entwicklung vorgesehen."},
 	"offer_parcels": {"params": {"parcel_ids": "array", "price_factor": "number?", "reason": "string"},
 		"desc": "Städtische Grundstücke aus beschlossenen Quartieren zur Vergabe freigeben (Preisfaktor 0,7–1,3)."},
+	"viertel_erschliessen": {"params": {"viertel": "string", "reason": "string"},
+		"desc": "Ein Viertel des Stadtplans (V1, V2, … siehe stadtplan.viertel) in einem Abschnitt erschließen: die freien städtischen Grundstücke dort bekommen die Zone des Viertels, Straße und Anschlüsse werden als Projekt beauftragt (Kosten aus dem Haushalt, Material, Baufirma). Danach entstehen dort Häuser, Läden oder städtische Bauten."},
 	"plan_infrastructure": {"params": {"parcel_ids": "array", "parts": "array?", "reason": "string"},
 		"desc": "Erschließung (strasse, strom, wasser, abwasser; Standard: alle fehlenden) für städtische Grundstücke planen. Kosten werden aus dem Haushalt reserviert; über 30 000 EUR Ratsbeschluss."},
 	"prioritize_road": {"params": {"corridor_id": "string", "priority": "int", "reason": "string"},
@@ -414,6 +416,19 @@ func stadtlager_indicators() -> Dictionary:
 
 
 ## Gruppen staedtischer, freier Grundstuecke (je 32x32 Felder) als Vorschlaege fuer neue Quartiere.
+## Bezugspunkt "Zentrum": Kern des Stadtplans, sonst Rathaus, sonst (alte Einzelstadt) die Kartenmitte.
+func _center_ref() -> Vector2:
+	if sim.town_plan != null and sim.town_plan.has(town):
+		var kp: Array = sim.town_plan.of(town).kern
+		return Vector2(int(kp[0]), int(kp[1]))
+	var hall := int(sim.towns.get_t(town).get("town_hall", -1)) if sim.towns != null else -1
+	if hall >= 0:
+		var b: Dictionary = sim.city.building(hall)
+		if not b.is_empty():
+			return Vector2(int(b.x), int(b.y))
+	return Vector2(sim.city.size * 0.45, sim.city.size * 0.5)
+
+
 func quarter_candidates(limit: int) -> Array:
 	var groups := {}
 	var planned := _planned_ids()
@@ -450,7 +465,7 @@ func quarter_candidates(limit: int) -> Array:
 		if open_quarters(zone).size() >= QUARTER_OPEN_MAX:   # Zone hat schon genug unverkaufte Quartiere
 			continue
 		out.append({"lage_feld": [key.x * 32, key.y * 32], "zone": zone, "flaeche": area, "grundstuecke": chosen.map(func(p): return p.id),
-			"davon_voll_erschlossen": full, "entfernung_zentrum": int(Vector2(key.x * 32, key.y * 32).distance_to(Vector2(sim.city.size * 0.45, sim.city.size * 0.5)))})
+			"davon_voll_erschlossen": full, "entfernung_zentrum": int(Vector2(key.x * 32 + 16, key.y * 32 + 16).distance_to(_center_ref()))})
 	out.sort_custom(func(a, b): return a.davon_voll_erschlossen > b.davon_voll_erschlossen or (a.davon_voll_erschlossen == b.davon_voll_erschlossen and a.entfernung_zentrum < b.entfernung_zentrum))
 	return out.slice(0, limit)
 
@@ -703,6 +718,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = _designate_quarter(a)
 			"offer_parcels":
 				res = _offer_parcels(a)
+			"viertel_erschliessen":
+				res = _develop_district(a)
 			"plan_infrastructure":
 				res = _plan_infrastructure(a)
 			"prioritize_road":
@@ -1016,6 +1033,57 @@ func _in_decided_plan(pid: String) -> bool:
 		if pl.status == "beschlossen" and pid in pl.parcels:
 			return true
 	return false
+
+
+## Auftrag 8 Stadtplanung: Viertel des Stadtplans abschnittsweise erschliessen (hoechstens DISTRICT_STEP Grundstuecke, naechste zur
+## Viertelmitte zuerst). Die Grundstuecke werden zur Zone des Viertels umgewidmet; Bau und Kosten laufen ueber _plan_infrastructure.
+const DISTRICT_STEP := 5
+
+
+func _develop_district(a: Dictionary) -> Dictionary:
+	if sim.town_plan == null or not sim.town_plan.has(town):
+		return {"ok": false, "msg": "Für %s gibt es noch keinen Stadtplan." % town_label()}
+	var vid := str(a.get("viertel", "")).to_upper()
+	var v: Dictionary = {}
+	for x in sim.town_plan.of(town).viertel:
+		if str(x.id) == vid:
+			v = x
+	if v.is_empty():
+		return {"ok": false, "msg": "Viertel %s gibt es nicht (%s)." % [vid, ", ".join((sim.town_plan.of(town).viertel as Array).map(func(x): return "%s %s" % [x.id, x.rolle]))]}
+	if str(v.zone) == "gruen":
+		return {"ok": false, "msg": "%s ist Grünfläche (%s) – dort wird nicht gebaut." % [vid, v.text]}
+	var ctr := Vector2(int(v.mitte[0]), int(v.mitte[1]))
+	var cands: Array = []
+	for p in sim.parcels.items.values():
+		if p.owner != land_owner() or str(p.state) != "frei" or not sim.parcels.is_buildable(p) or int(p.area) < 12:
+			continue
+		var c := Vector2(int(p.rect[0]) + int(p.rect[2]) / 2.0, int(p.rect[1]) + int(p.rect[3]) / 2.0)
+		var d := c.distance_to(ctr)
+		if d <= float(v.radius) + 4.0:
+			cands.append([d, p])
+	if cands.is_empty():
+		return {"ok": false, "msg": "Im Viertel %s (%s) gibt es kein freies städtisches Grundstück mehr." % [vid, v.text]}
+	cands.sort_custom(func(x, y): return float(x[0]) < float(y[0]))
+	var ids: Array = []
+	var todo: Array = []
+	for e in cands:
+		var p: Dictionary = e[1]
+		if not bool(p.erschliessung.get("strasse", false)):
+			todo.append(p)
+		ids.append(str(p.id))
+	for p in cands.map(func(e): return e[1]).slice(0, DISTRICT_STEP * 2):
+		if str(p.zone) != str(v.zone) and str(p.zone) in ["wohnen", "mischgebiet", "gewerbe", "industrie", "oeffentlich"]:
+			p.zone = str(v.zone)   # Umwidmung nach dem Viertelplan (nur freie staedtische Flaechen)
+			sim.parcels.touch(str(p.id))
+	if todo.is_empty():
+		return {"ok": false, "msg": "Viertel %s ist schon erschlossen (%d freie Grundstücke mit Straße) – dort kann gebaut werden." % [vid, ids.size()]}
+	var step: Array = todo.slice(0, DISTRICT_STEP).map(func(p): return str(p.id))
+	var res := _plan_infrastructure({"parcel_ids": step, "reason": "Viertel %s (%s): %s" % [vid, v.text, str(a.get("reason", ""))]})
+	if bool(res.get("ok", false)):
+		v.status = "in_erschliessung"
+		sim.town_plan.revise(town, "Viertel %s (%s) wird erschlossen: %s." % [vid, v.text, ", ".join(step)])
+		res.msg = "Viertel %s (%s): erster Abschnitt mit %d Grundstücken. %s" % [vid, v.text, step.size(), str(res.msg)]
+	return res
 
 
 func _plan_infrastructure(a: Dictionary) -> Dictionary:

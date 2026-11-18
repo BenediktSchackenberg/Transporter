@@ -45,6 +45,8 @@ func _initialize() -> void:
 	test_names.append("test_collisions")
 	test_names.append("test_wildnis_helpers")
 	test_names.append("test_town_plan")
+	test_names.append("test_site_selector")
+	test_names.append("test_parcel_ids_and_districts")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
@@ -15036,3 +15038,80 @@ func test_town_plan() -> void:
 	ok(pool.size() > 0 and pool.size() < (CityGenerator.TYPES["house"][0] as Array).size(), "Wohnhäuser nur aus der Gestaltungsfamilie der Stadt (%d Varianten)" % pool.size())
 	ok(pool.all(func(v): return TownPlan._suffix(str(v)) in p0.palette), "alle Varianten aus der Palette")
 	ok(not P.brief(0).is_empty() and str(P.brief(0).leitbild) != "", "Kurzfassung für die KI")
+
+
+## Auftrag 8 Stadtplanung, Etappe 3: gemeinsame Standortpruefung – gueltig, begruendet, Alternativen, Laerm abseits, atomar reserviert.
+func test_site_selector() -> void:
+	var s := region_sim(4)
+	var S: SiteSelector = s.sites
+	var pol: Dictionary = S.choose(0, {"w": 3, "h": 2, "art": "oeffentlich", "label": "Polizeiwache"})
+	ok(pol.ok, "Standort für eine Polizeiwache gefunden: %s" % str(pol.get("begruendung", pol.get("msg", ""))).left(160))
+	if not pol.ok:
+		return
+	var r := Rect2i(int(pol.rect[0]), int(pol.rect[1]), int(pol.rect[2]), int(pol.rect[3]))
+	var P: Dictionary = s.parcels.parcel(str(pol.parcel))
+	ok(s.civic._cells_free(r) and s.civic._touches_road(r), "Grundfläche frei, Straße am Rand")
+	ok(Rect2i(int(P.rect[0]), int(P.rect[1]), int(P.rect[2]), int(P.rect[3])).encloses(r) and s.towns.of_parcel(str(pol.parcel)) == 0, "liegt im gewählten Grundstück der richtigen Stadt")
+	ok(str(pol.begruendung).contains(str(pol.parcel)) and (pol.alternativen as Array).size() >= 1, "Begründung nennt Grundstück und Alternativen")
+	ok((s.town_plan.of(0).get("entscheidungen", []) as Array).size() >= 1, "Entscheidung im Stadtplan festgehalten")
+	# Laerm: abseits der Wohnhaeuser
+	var noisy: Dictionary = S.choose(0, {"w": 4, "h": 3, "art": "laerm", "label": "Betriebshof Abfallwirtschaft", "zones": ["gewerbe", "industrie", "mischgebiet", "wohnen", "oeffentlich"]})
+	var calm: Dictionary = S.choose(0, {"w": 4, "h": 3, "art": "wohnen", "label": "Wohnhaus", "zones": ["gewerbe", "industrie", "mischgebiet", "wohnen", "oeffentlich"]})
+	if noisy.ok and calm.ok:
+		var ctx: Dictionary = S._context(0, S._kern(0))
+		var hn := SiteSelector._near(ctx.homes, Rect2i(int(noisy.rect[0]), int(noisy.rect[1]), 4, 3).get_center(), 12.0)
+		var hc := SiteSelector._near(ctx.homes, Rect2i(int(calm.rect[0]), int(calm.rect[1]), 4, 3).get_center(), 12.0)
+		ok(hn <= hc, "lauter Betrieb hat höchstens so viele Wohnhäuser nebenan wie ein Wohnhaus (%d vs %d)" % [hn, hc])
+		ok(float(noisy.kriterien.nachbarschaft) >= 0.5, "Nachbarschaft des lauten Betriebs bewertet (%.2f)" % float(noisy.kriterien.nachbarschaft))
+	# atomar reservieren, danach nicht erneut vergeben
+	ok(S.reserve(pol, "stadt-test"), "Standort reserviert")
+	ok(not S.still_valid(str(pol.parcel), pol.rect, "jemand-anders"), "für andere nicht mehr gültig")
+	ok(S.still_valid(str(pol.parcel), pol.rect, "stadt-test"), "für den Reservierer weiter gültig")
+	var again: Dictionary = S.choose(0, {"w": 3, "h": 2, "art": "oeffentlich", "label": "Polizeiwache"})
+	ok(not again.ok or str(again.parcel) != str(pol.parcel), "vergebener Bauplatz wird nicht erneut gewählt")
+	# unmoeglich: naechster Schritt statt irgendwo bauen
+	var big: Dictionary = S.choose(0, {"w": 30, "h": 30, "art": "oeffentlich", "label": "Riesenbau"})
+	ok(not big.ok and str(big.get("naechster_schritt", "")) != "" and str(big.msg) != "", "kein Platz: Ablehnung mit nächstem Schritt (%s)" % str(big.get("msg", "")).left(120))
+	# kommunale Bauten nutzen die Standortpruefung (Begruendung in der Pruefung)
+	var v: Dictionary = s.civic.validate(1, "SP-01" if CivicWorks.TEMPLATES.has("SP-01") else CivicWorks.TEMPLATES.keys()[0])
+	ok(not v.ok or str(v.msg).contains("Standort:"), "Bürgermeister-Vorlage nennt die Standortbegründung: %s" % str(v.msg).left(140))
+
+
+## Auftrag 8 / Partie 18.11.: Laufzeit-Grundstuecke behalten Nummer, Flaeche und Zustand ueber Speichern/Laden, auch wenn sie beim Laden
+## in anderer Reihenfolge entstehen; Viertel des Stadtplans werden ueber ein echtes Erschliessungsprojekt erschlossen.
+func test_parcel_ids_and_districts() -> void:
+	var s := region_sim(2)
+	var P: Parcels = s.parcels
+	var free: Array = P.items.values().filter(func(p): return p.state == "frei" and P.is_buildable(p) and int(p.rect[2]) >= 12 and int(p.rect[3]) >= 10)
+	ok(free.size() >= 2, "zwei große freie Flächen für den Test")
+	var r1 := Rect2i(int(free[0].rect[0]), int(free[0].rect[1]), 6, 5)
+	var r2 := Rect2i(int(free[1].rect[0]), int(free[1].rect[1]), 6, 5)
+	var a := P.carve(r1, "wohnen", Towns.owner_of(1))
+	var b: String = P._add_built({"id": 9999, "x": r2.position.x, "y": r2.position.y, "w": 2, "h": 2, "district": 1, "type": "house"}).id
+	P.touch(b)
+	var c := P.carve(Rect2i(r2.position + Vector2i(0, 3), Vector2i(6, 5)), "gewerbe", Towns.owner_of(0))
+	P.parcel(a).state = "im_bau"
+	P.touch(a)
+	var saved := JSON.parse_string(JSON.stringify(P.to_dict())) as Dictionary
+	# Laden: dieselben Flaechen entstehen in anderer Reihenfolge (erst beide Siedlungsgrundstuecke, dann das Gebaeude)
+	var Q := Parcels.new()
+	Q.sim = s
+	Q.build(s.city)
+	Q.carve(r1, "wohnen", Towns.owner_of(1))
+	Q.carve(Rect2i(r2.position + Vector2i(0, 3), Vector2i(6, 5)), "gewerbe", Towns.owner_of(0))
+	Q._add_built({"id": 9999, "x": r2.position.x, "y": r2.position.y, "w": 2, "h": 2, "district": 1, "type": "house"})
+	Q.from_dict(saved)
+	for id in [a, b, c]:
+		ok(Q.items.has(id) and str(Q.items[id].rect) == str(P.items[id].rect), "%s: gleiche Fläche nach dem Laden" % id)
+	ok(str(Q.parcel(a).owner) == Towns.owner_of(1) and str(Q.parcel(a).state) == "im_bau", "Zustand und Eigentum bleiben beim richtigen Grundstück")
+	ok(str(Q.parcel(c).zone) == "gewerbe" and str(Q.at_cell(r1.position).id) == a, "Zellen zeigen auf die richtige Nummer")
+	# Viertel erschliessen: echtes Projekt mit Kosten, Umwidmung nach Plan
+	var M: Mayor = s.towns.mayor(0)
+	var vs: Array = (s.town_plan.of(0).viertel as Array).filter(func(v): return str(v.zone) != "gruen")
+	var res := {}
+	for v in vs:
+		res = M.execute({"action": "viertel_erschliessen", "viertel": v.id, "reason": "Test"})
+		if res.ok:
+			break
+	ok(res.ok and M.projects.values().any(func(prj): return str(prj.kind) == "erschliessung"), "Viertel erschließen legt ein Erschließungsprojekt an: %s" % str(res.msg).left(120))
+	ok(not M.execute({"action": "viertel_erschliessen", "viertel": "V99", "reason": "x"}).ok, "unbekanntes Viertel wird abgelehnt")

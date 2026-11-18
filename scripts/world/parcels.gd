@@ -34,6 +34,8 @@ var by_building := {}             # Gebaeude-ID -> Grundstueck-ID
 var touched := {}                 # geaenderte Grundstuecke (werden gespeichert)
 var _next := 1
 var _cell := PackedInt32Array()   # Grundstueck-Nummer je Zelle (0 = keines)
+var base_next := 1                # erste Nummer nach dem Aufbau aus der Karte (danach: zur Laufzeit entstandene Grundstuecke)
+var legacy_ids := false           # geladener Spielstand ohne Flaechen in den Aenderungen (vor 18.11.): Nummern evtl. vertauscht
 
 
 func setup(simulation) -> void:
@@ -56,6 +58,7 @@ func build(c: CityData) -> void:
 	for p in items.values():
 		if not p.has("erschliessung"):
 			p.erschliessung = utilities_of(p)
+	base_next = _next
 
 
 func _new(r: Rect2i, zone: String, state: String, owner: String, use: String) -> Dictionary:
@@ -422,6 +425,80 @@ func sync_buildings() -> void:
 			_touch(q)
 
 
+## Das Grundstueck mit der Flaeche `rect` bekommt die Nummer `id`; ein anderes Grundstueck, das die Nummer gerade traegt, tauscht.
+func _claim_id(id: String, rect: Array) -> void:
+	var r := Rect2i(int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]))
+	if items.has(id) and Rect2i(int(items[id].rect[0]), int(items[id].rect[1]), int(items[id].rect[2]), int(items[id].rect[3])) == r:
+		return
+	var other := ""
+	for p in items.values():
+		if int(p.rect[0]) == r.position.x and int(p.rect[1]) == r.position.y and int(p.rect[2]) == r.size.x and int(p.rect[3]) == r.size.y and int(str(p.id).substr(1)) >= base_next:
+			other = str(p.id)
+			break
+	if other == "":
+		return
+	var a: Dictionary = items[other]
+	var b: Dictionary = items.get(id, {})
+	a.id = id
+	items[id] = a
+	if b.is_empty():
+		items.erase(other)
+	else:
+		b.id = other
+		items[other] = b
+	for q in [a, b]:
+		if q.is_empty():
+			continue
+		var n := int(str(q.id).substr(1))
+		for y in range(int(q.rect[1]), int(q.rect[1]) + int(q.rect[3])):
+			for x in range(int(q.rect[0]), int(q.rect[0]) + int(q.rect[2])):
+				if city.inside(Vector2i(x, y)) and _cell[city.idx(Vector2i(x, y))] in [int(other.substr(1)), int(id.substr(1))]:
+					_cell[city.idx(Vector2i(x, y))] = n
+		if int(q.building) >= 0:
+			by_building[int(q.building)] = str(q.id)
+	_next = maxi(_next, int(id.substr(1)) + 1)
+
+
+## Alter Spielstand mit vertauschten Laufzeit-Grundstuecken (vor 18.11.): Zustand aus der Wirklichkeit wiederherstellen.
+## Bebaut ist, worauf ein Gebaeude steht; sonst frei. Oeffentliches Bauland gehoert der Stadt, zu deren Siedlung es gehoert (plot_town:
+## "x,y" -> Stadt). Grundstuecke, auf die ein laufendes Vorhaben verweist (keep), bleiben unveraendert. Gebaeude/Eigentum Privater bleiben.
+func repair_runtime(plot_town: Dictionary, keep: Dictionary) -> int:
+	var fixed := 0
+	for p in items.values():
+		if int(str(p.id).substr(1)) < base_next or keep.has(str(p.id)):
+			continue
+		var r := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
+		var bld := -1
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				var q := Vector2i(x, y)
+				if bld < 0 and city.inside(q) and city.building_at[city.idx(q)] >= 0:
+					var b: Dictionary = city.buildings[city.building_at[city.idx(q)]]
+					if r.has_point(Vector2i(int(b.x), int(b.y))):
+						bld = int(b.id)
+		var before := [p.state, p.owner, p.building]
+		var key := "%d,%d" % [r.position.x, r.position.y]
+		if plot_town.has(key) and Towns.is_public(str(p.owner)):
+			p.owner = Towns.owner_of(int(plot_town[key]))
+		if bld >= 0:
+			p.state = "bebaut"
+			p.building = bld
+			p.use = str(city.buildings[bld].type)
+			by_building[bld] = str(p.id)
+		elif str(p.state) in ["bebaut", "im_bau", "in_erschliessung", "reserviert", "genehmigt"]:
+			p.state = "frei"
+			p.building = -1
+			p.use = ""
+			p.application = ""
+			p.project = ""
+			p.reservation = {}
+		if [p.state, p.owner, p.building] != before:
+			fixed += 1
+			_touch(p)
+	legacy_ids = false
+	return fixed
+
+
 # ------------------------------------------------------------------ Speichern
 func to_dict() -> Dictionary:
 	var out := {}
@@ -430,17 +507,24 @@ func to_dict() -> Dictionary:
 		var d := {}
 		for k in DYNAMIC:
 			d[k] = p[k]
+		d["rect"] = p.rect   # 18.11.: Flaeche mitspeichern – Laufzeit-Grundstuecke entstehen beim Laden in anderer Reihenfolge
 		out[id] = d
 	return {"touched": out}
 
 
 func from_dict(d: Dictionary) -> void:
 	var t: Dictionary = d.get("touched", {})
+	legacy_ids = not t.is_empty() and not t.values().any(func(e): return e.has("rect"))
+	for id in t:   # Nummer folgt der gespeicherten Flaeche (Partie 18.11.: Grundstuecke der Wildnis und neuer Gebaeude vertauscht)
+		if t[id].has("rect"):
+			_claim_id(str(id), t[id].rect)
 	for id in t:
 		if not items.has(id):
 			continue
 		var p: Dictionary = items[id]
 		for k in t[id]:
+			if k == "rect":
+				continue
 			p[k] = t[id][k]
 		p.building = int(p.building)
 		if p.reservation.has("until_day"):

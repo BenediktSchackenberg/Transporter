@@ -63,9 +63,42 @@ func ensure(k: int, reason: String = "bestand") -> Dictionary:
 	p["geschichte"] = [{"tag": _day(), "text": {"gruendung": "Bei der Gründung festgelegt", "start": "Beim Kartenstart festgelegt",
 		"bestand": "Aus der bestehenden Bebauung abgeleitet"}.get(reason, reason) + ": %s – %s." % [p.label, FORMS[p.form].text]}]
 	towns[str(k)] = p
+	claim_land(k)
+	p["land"] = true
 	if sim.has_method("log_event"):
 		sim.log_event("Stadtplan %s: %s (%s)." % [_name(k), p.label, FORMS[p.form].text], "info")
 	return p
+
+
+## Freies oeffentliches Land, das naeher am Kern von k liegt als am Kern jeder anderen gegruendeten Stadt (und hoechstens CLAIM_R
+## entfernt), geht an die Stadt k (Partie 18.11.: Liorufer wurde 27 Felder neben Birkenklippe gegruendet – alles Land ringsum gehoerte
+## Birkenklippe, der Buergermeister fand kein einziges eigenes Grundstueck). Nur freie Flaechen; Bebautes, Reserviertes, Privates bleibt.
+const CLAIM_R := 45.0
+
+
+func claim_land(k: int) -> int:
+	var kern := _kern_of(k)
+	if kern.x < 0 or sim.towns == null or sim.towns.count() < 2:
+		return 0
+	var others: Array = []
+	for j in sim.towns.count():
+		if j != k and _founded(j):
+			var o := _kern_of(j)
+			if o.x >= 0:
+				others.append(Vector2(o))
+	var mine := Towns.owner_of(k)
+	var n := 0
+	for p in sim.parcels.items.values():
+		if str(p.state) != "frei" or not Towns.is_public(str(p.owner)) or str(p.owner) == mine:
+			continue
+		var c := Vector2(int(p.rect[0]) + int(p.rect[2]) / 2.0, int(p.rect[1]) + int(p.rect[3]) / 2.0)
+		var d := c.distance_to(Vector2(kern))
+		if d > CLAIM_R or others.any(func(o): return c.distance_to(o) <= d):
+			continue
+		p.owner = mine
+		sim.parcels.touch(str(p.id))
+		n += 1
+	return n
 
 
 ## Alle gegruendeten Staedte ohne Profil nachziehen (Kartenstart und Laden alter Spielstaende).
@@ -75,6 +108,11 @@ func ensure_all(reason: String = "bestand") -> void:
 	for k in sim.towns.count():
 		if _founded(k):
 			ensure(k, reason)
+			if not bool(of(k).get("land", false)):   # Profile von vor der Landzuteilung (18.11.): einmal nachholen
+				var n := claim_land(k)
+				of(k)["land"] = true
+				if n > 0 and sim.has_method("log_event"):
+					sim.log_event("%s übernimmt %d freie städtische Grundstücke an ihrem Kern." % [_name(k), n], "info")
 
 
 ## Profil aus Landschaft und Nachbarstaedten ableiten (deterministisch aus Seed, Stadtnummer und Kern).
@@ -349,7 +387,24 @@ func brief(k: int) -> Dictionary:
 	return {"grundform": p.label, "leitbild": FORMS[p.form].text, "freiraum": p.freiraum, "wirtschaft": p.wirtschaft,
 		"grundstuecke": "%dx%d" % [int(p.block[0]), int(p.block[1])], "hoehen_kern_mitte_rand": p.hoehen,
 		"viertel": (p.viertel as Array).map(func(v): return {"id": v.id, "rolle": v.rolle, "zone": v.zone, "mitte": v.mitte,
-			"geschosse_max": v.geschosse, "zweck": v.text, "status": v.status})}
+			"geschosse_max": v.geschosse, "zweck": v.text, "status": v.status}),
+		"letzte_standortwahl": (p.get("entscheidungen", []) as Array).slice(-3).map(func(e): return str(e.begruendung).left(220))}
+
+
+## Standortentscheidung festhalten (SiteSelector): die letzten 12 je Stadt, fuer Zuschauer und KI nachvollziehbar.
+const DECISIONS_MAX := 12
+
+
+func note_decision(k: int, d: Dictionary) -> void:
+	var p := of(k)
+	if p.is_empty():
+		return
+	if not p.has("entscheidungen"):
+		p["entscheidungen"] = []
+	d["tag"] = _day() + 1
+	(p.entscheidungen as Array).append(d)
+	if (p.entscheidungen as Array).size() > DECISIONS_MAX:
+		p.entscheidungen = (p.entscheidungen as Array).slice(-DECISIONS_MAX)
 
 
 ## Planrevision mit Begruendung (Entwicklungsgeschichte); aendert nie bestehende Gebaeude.
