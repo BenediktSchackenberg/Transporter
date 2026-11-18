@@ -2586,8 +2586,15 @@ func _office_overview(k: int) -> Dictionary:
 		if app.status == "zur_entscheidung" and M._mine(str(app.parcel)):
 			apps.append(str(app.id))
 	var fin: Dictionary = M._assess_financing({})
-	return {"ok": true, "uebersicht": true, "msg": "Lage %s: %s Anträge zur Entscheidung: %s. Handeln mit Amt {aktion: {action: ...}} – neue Einrichtungen mit kommunal_bauen {typ}." % [
-		sim.towns.name_of(k), str(fin.msg), ", ".join(apps) if not apps.is_empty() else "keine"]}
+	# Auftrag 8 / Partie 18.11.: beide Buergermeister fragten minutenlang nur die Lage ab – der naechste Schritt des Stadtplans gehoert dazu
+	var nd: Dictionary = sim.town_plan.next_district(k, int(M.waiting) > 0) if sim.town_plan != null else {}
+	var plan_txt := ""
+	if nd.has("aktion"):
+		plan_txt = " STADTPLAN: %s Dafür: Amt {aktion: %s}." % [str(nd.text), JSON.stringify(nd.aktion)]
+	elif nd.has("warten"):
+		plan_txt = " STADTPLAN: %s" % str(nd.text)
+	return {"ok": true, "uebersicht": true, "msg": "Lage %s: %s Anträge zur Entscheidung: %s.%s Handeln mit Amt {aktion: {action: ...}} – neue Einrichtungen mit kommunal_bauen {typ}." % [
+		sim.towns.name_of(k), str(fin.msg), ", ".join(apps) if not apps.is_empty() else "keine", plan_txt]}
 
 
 func _firm_overview(cid: int) -> Dictionary:
