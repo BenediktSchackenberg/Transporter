@@ -340,6 +340,7 @@ func indicators() -> Dictionary:
 		"projekte": projects.values().map(func(p): return {"id": p.id, "art": p.kind, "status": p.status, "kosten": p.cost, "prioritaet": p.get("priority", 0), "grundstuecke": p.parcels.slice(0, MAX_CLUSTER)}),
 		"stadtlager": stadtlager_indicators(),
 		"entwicklungsvorschlaege": quarter_candidates(3),
+		"stadtplan_naechster_abschnitt": sim.town_plan.next_district(town, waiting > 0) if sim.town_plan != null else {},
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),
 		"rathaus": sim.town_hall.summary(),
 		"pruefungen": sim.inspections.summary(),

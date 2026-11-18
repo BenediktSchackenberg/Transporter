@@ -301,6 +301,10 @@ static func decide(ind: Dictionary) -> Dictionary:
 			if pl.status == "beschlossen" and not ids.is_empty() and ind.projekte.filter(func(p): return ids.any(func(id): return id in p.grundstuecke)).is_empty():
 				actions.insert(0, {"action": "plan_infrastructure", "parcel_ids": ids, "reason": "Quartier %s ist beschlossen, aber nicht erschlossen: Straße und Anschlüsse bauen (verfügbar %s)." % [pl.name, Catalog.money(budget)]})
 				break
+	# Auftrag 8 Stadtplanung: naechsten Abschnitt des Stadtplans erschliessen (Wohnungsnot oder kein freies Bauland mit Strasse)
+	var nd: Dictionary = ind.get("stadtplan_naechster_abschnitt", {})
+	if nd.has("aktion") and budget > 15000.0 and not actions.any(func(x): return x.action in ["plan_infrastructure", "viertel_erschliessen"]):
+		actions.insert(mini(1, actions.size()), nd.aktion)   # Wachstum vor Routine (Partie 18.11.: Beschaffung fuellte sonst alle Plaetze)
 	# Auftrag 22 Phase 8: Versorgung vorausschauend ausbauen (Wasser knapp oder Werk fast ausgelastet; Gleis mit Langsamfahrstelle)
 	var w: Dictionary = ind.get("wasser", {})
 	if not w.is_empty() and int(w.get("ausbau_laeuft", 0)) == 0:

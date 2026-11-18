@@ -560,6 +560,36 @@ static func _cardinal(a: Vector2i) -> Vector2i:
 	return Vector2i(signi(a.x), 0) if absi(a.x) >= absi(a.y) else Vector2i(0, signi(a.y))
 
 
+## Naechster Entwicklungsabschnitt (Auftrag 8, Abschnitt 6): laeuft schon ein Strassennetz, erst dieses; sonst das naechste Entwurfs-
+## Viertel mit freiem Land – bei Wohnungsnot zuerst Wohnen, dann nach Naehe zum Kern. {} = nichts zu tun.
+func next_district(k: int, housing_need: bool) -> Dictionary:
+	var p := of(k)
+	if p.is_empty():
+		return {}
+	var M = sim.towns.mayor(k) if sim.towns != null else null
+	if M != null:
+		for prj in M.projects.values():
+			if prj.has("road_plan") and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+				return {"warten": prj.id, "text": "Straßennetz %s für Viertel %s läuft – erst fertigstellen." % [prj.id, prj.viertel]}
+	var kern := Vector2(int(p.kern[0]), int(p.kern[1]))
+	var best := {}
+	var best_s := INF
+	for v in p.viertel:
+		if str(v.status) != "entwurf" or str(v.zone) == "gruen" or str(v.rolle) == "kern":
+			continue
+		var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
+		if free_share(c, 5) < 0.3:
+			continue
+		var sc := Vector2(c).distance_to(kern) - (40.0 if housing_need and str(v.zone) == "wohnen" else 0.0)
+		if sc < best_s:
+			best_s = sc
+			best = v
+	if best.is_empty():
+		return {}
+	return {"viertel": best.id, "text": "Als Nächstes Viertel %s (%s, %s) erschließen%s." % [best.id, best.text, best.zone, " – es fehlt Wohnraum" if housing_need and str(best.zone) == "wohnen" else ""],
+		"aktion": {"action": "viertel_erschliessen", "viertel": best.id, "reason": "Stadtplan: nächster Abschnitt"}}
+
+
 ## Standortentscheidung festhalten (SiteSelector): die letzten 12 je Stadt, fuer Zuschauer und KI nachvollziehbar.
 const DECISIONS_MAX := 12
 
