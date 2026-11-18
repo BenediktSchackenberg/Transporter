@@ -6,7 +6,7 @@ extends Node2D
 ## Gefuettert von EntityView je Bild: feed(id, pos, heading, moving, offroad, dt). Alles in Weltkoordinaten, gezeichnet ueber Iso.
 
 const TRACK_LIFE := 120.0      # Sekunden, bis eine Spur verblasst ist
-const TRACK_MAX := 2400
+const TRACK_MAX := 1200
 const PUFF_MAX := 260
 const REAR := -24.0            # Hinterachse relativ zur Fahrzeugmitte entlang der Fahrtrichtung (offroad.py: Achsen x0+14/x0+56, Mitte 45)
 const FRONT := 18.0            # Vorderachse
@@ -19,6 +19,7 @@ var dust := DustLayer.new()
 var exh := DustLayer.new()     # Auspuffwoelkchen ueber dem Fahrzeug
 var _last := {}                # Fahrzeug-ID -> {pos, acc, puff, exh, moving_t}
 var _time := 0.0
+var _track_t := 0.0
 
 
 func _ready() -> void:
@@ -153,7 +154,10 @@ func step(dt: float) -> void:
 	puffs = puffs.filter(func(p): return p.t < p.life and not (p.kind == "mud" and p.h <= 0.0 and p.t > 0.1))
 	if not tracks.is_empty() and _time - float(tracks[0][2]) > TRACK_LIFE:
 		tracks = tracks.filter(func(tr): return _time - float(tr[2]) <= TRACK_LIFE)
-	queue_redraw()
+	_track_t += dt
+	if _track_t >= 0.5:   # Spuren verblassen langsam: zwei Mal je Sekunde neu zeichnen reicht (18.11.: 2.400 Linien je Bild kosteten Bildrate)
+		_track_t = 0.0
+		queue_redraw()
 	dust.queue_redraw()
 	exh.queue_redraw()
 

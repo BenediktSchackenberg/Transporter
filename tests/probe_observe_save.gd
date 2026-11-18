@@ -18,8 +18,19 @@ func _init() -> void:
 			parts[k].call()
 			pl += "%s %.0f · " % [k, (Time.get_ticks_usec() - ta) / 1000.0]
 		print("%s: observe ms %s | %s" % [name, line, pl])
-	var t1 := Time.get_ticks_usec()
-	for i in 50:
+	var step_max := 0.0
+	var tot := 0.0
+	for i in 600:
+		var t1 := Time.get_ticks_usec()
 		s.step(0.1)
-	print("50 Sim-Schritte: %.0f ms" % ((Time.get_ticks_usec() - t1) / 1000.0))
+		var dt := (Time.get_ticks_usec() - t1) / 1000.0
+		tot += dt
+		step_max = maxf(step_max, dt)
+	print("600 Sim-Schritte: %.0f ms gesamt, Mittel %.1f ms, max %.0f ms" % [tot, tot / 600.0, step_max])
+	var td := Time.get_ticks_usec()
+	s._on_day_probe() if s.has_method("_on_day_probe") else null
+	var day := GameCalendar.day_of(s.game_min)
+	var tday := Time.get_ticks_usec()
+	s.day_changed.emit(day + 1)
+	print("Tageswechsel: %.0f ms" % ((Time.get_ticks_usec() - tday) / 1000.0))
 	quit()
