@@ -630,7 +630,7 @@ func inspect(b: Dictionary, target: String) -> Dictionary:
 			if _dist(t, at) > VIEW_RADIUS:
 				return {"ok": false, "msg": "%s ist nicht in Sichtweite." % target}
 			return {"ok": true, "msg": "Du siehst dir %s an." % target, "ziel": {"art": "unternehmer", "name": c.player_name, "firma": c.company_name,
-				"aktiv": c.is_active(), "fahrzeuge": c.vehicles.size(), "gerade": LiveText.figure_text(sim, c.id).left(100),
+				"aktiv": c.is_active(), "fahrzeuge": sim.vehicles.values().filter(func(v): return v.owner == c.id).size(), "gerade": LiveText.figure_text(sim, c.id).left(100),
 				"interaktionen": ["Talk {to: \"%s\", text}" % c.player_name] + (["AcceptJob (siehe jobangebote)"] if jobs.values().any(func(j): return int(j.cid) == c.id and str(j.get("by", "")) == "") else [])}}
 	if target.begins_with("G") and target.substr(1).is_valid_int():
 		var p: Dictionary = sim.parcels.parcel(target)
