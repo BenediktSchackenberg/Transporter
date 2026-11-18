@@ -352,7 +352,7 @@ func _find_site(k: int, w: int, h: int, district: String = "", label: String = "
 		if ch.ok:
 			return {"rect": ch.rect, "parcel": ch.parcel, "begruendung": ch.begruendung}
 		if art == "laerm":   # kein Gewerbeplatz: notfalls wie bisher (Mischgebiet/Wohnen am Rand), aber bewertet
-			ch = sim.sites.choose(k, {"w": w, "h": h, "art": art, "label": label, "zones": ["mischgebiet", "oeffentlich", "wohnen", "gewerbe"]})
+			ch = sim.sites.choose(k, {"w": w, "h": h, "art": art, "label": label, "zones": ["mischgebiet", "oeffentlich", "gewerbe"]})   # nie ins Wohngebiet (18.11.: Fahrzeugwerk im Wohnviertel)
 			if ch.ok:
 				return {"rect": ch.rect, "parcel": ch.parcel, "begruendung": ch.begruendung}
 		return {}

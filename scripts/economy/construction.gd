@@ -789,8 +789,8 @@ const SHOP_PER_RESIDENTS := 15        # Region: ein Laden je 15 Einwohner
 const WORKSHOP_PER_RESIDENTS := 25    # Region: eine Werkstatt/Lagerhalle im Gewerbegebiet je 25 Einwohner
 const SHOP_DEFS := ["baeckerei_laden", "getraenkemarkt", "drogerie_laden", "supermarkt"]
 func _developer_town(town: int) -> void:
-	if sim.neubeginn:
-		return   # Neubeginn: Wohnhaeuser bauen die KI-Unternehmer (Etappe B), kein Bautraeger
+	if sim.neubeginn and not (sim.wildnis and sim.town_ready(town) and sim.town_plan.has(town)):
+		return   # Neubeginn: Wohnhaeuser bauen die KI-Unternehmer (Etappe B); Wildnis (Benedikt 18.11.): nach der Gruendung baut auch der Bautraeger
 	for i in (DEV_STEPS if sim.towns.is_region() else 1):
 		if not _developer_once(town):
 			return
@@ -834,7 +834,7 @@ func _developer_once(town: int) -> bool:
 		def_id = "stadtvilla"   # gehobener Wohnungsbau, sobald die Wohnstufen der Stadt ihn tragen
 	# Zuerst wie bisher Mehrfamilienhaus/Stadtvilla auf grossen Grundstuecken; passt dort nichts (Kuestenort: kleine Grundstuecke im Ort),
 	# das groesste Wohnhaus, das auf ein erschlossenes Grundstueck passt (Doppelhaus, Einfamilienhaus).
-	var crit := {"zone": "wohnen", "min_area": 12, "utilities": "voll", "limit": 160}
+	var crit := {"zone": "wohnen", "min_area": 12, "utilities": "voll", "limit": 2000 if sim.wildnis else 160}   # Wildnis: erst bewerten, dann begrenzen (Bauland am Kern ist teurer)
 	if region:
 		crit["town"] = town   # in der Stadt, deren Wohnungssuchende warten
 	# Alle Kandidaten in Reihenfolge der Eignung: erschlossenes Wohngebiet, erschlossenes Mischgebiet (Wohnhaeuser zulaessig), in der
@@ -913,11 +913,11 @@ func _demand_town() -> int:
 func _developer_try(cands: Array, def_id: String) -> bool:
 	var floors := 3 if def_id == "mehrfamilienhaus" else int(Planning.DEFS[def_id].floors[0])
 	if not cands.is_empty():   # Auftrag 8: bewertete Reihenfolge (Kern, Viertel, Nachbarschaft) statt billigstes Grundstueck zuerst
-		var k: int = sim.towns.of_parcel(str(cands[0].id))
+		var k: int = Towns.town_of_owner(str(cands[0].owner)) if Towns.is_public(str(cands[0].owner)) else sim.towns.of_parcel(str(cands[0].id))   # Stadt des Eigentuemers (wie die Suche)
 		var dd: Dictionary = Planning.DEFS[def_id]
 		var art := "versorgung" if str(dd.use) == "versorgung" else ("gewerbe" if str(dd.use) == "gewerbe" else "wohnen")
 		if k >= 0 and sim.town_plan.has(k):
-			cands = sim.sites.order_parcels(k, cands, {"w": int(dd.w), "h": int(dd.h), "art": art, "floors": floors, "label": str(dd.label)})
+			cands = sim.sites.order_parcels(k, cands, {"w": int(dd.w), "h": int(dd.h), "art": art, "floors": floors, "label": str(dd.label)}, sim.wildnis)
 	var probe := {"def": def_id, "floors": floors, "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": 1.0e9}}
 	for p in cands:
 		var chk := Planning.assess(p, probe)
@@ -933,6 +933,11 @@ func _developer_try(cands: Array, def_id: String) -> bool:
 			continue
 		sim.permits.apps[dr.id].financing = {"eigenmittel": float(chk.costs.gesamt)}
 		sim.permits.submit(dr.id)
+		var kt: int = sim.towns.of_parcel(str(p.id))
+		if sim.town_plan.has(kt):   # Auftrag 8: Standortentscheidung des Bautraegers nachvollziehbar festhalten
+			var v: Dictionary = sim.town_plan.district_at(kt, Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2))
+			sim.town_plan.note_decision(kt, {"was": str(Planning.DEFS[def_id].label) + " (Bauträger)", "grundstueck": str(p.id), "viertel": str(v.get("text", "außerhalb der Viertel")),
+				"begruendung": "%s auf %s (%s): bestbewerteter gültiger Platz der Standortprüfung, Bauantrag gestellt." % [Planning.DEFS[def_id].label, p.id, str(v.get("text", "außerhalb der Viertel"))], "alternativen": []})
 		return true
 	return false
 
@@ -1180,6 +1185,15 @@ func _finish_district(M: Mayor, prj: Dictionary) -> void:
 				rezoned += 1
 	sim.town_plan.revise(k, "Viertel %s erschlossen: %d Straßenfelder, %d neue Grundstücke, %d Flächen umgewidmet." % [prj.viertel, cells.size(), plots.size(), rezoned])
 	sim.log_event("%s: Viertel %s erschlossen – %d Felder Straße, %d neue Grundstücke." % [sim.towns.name_of(k), prj.viertel, cells.size(), plots.size()], "good")
+	# Bauamt (regelbasiert, ohne KI): gibt es danach noch kein gueltiges Wohngrundstueck, gleich den naechsten Abschnitt beschliessen
+	if sim.wildnis and (sim.sites.rank(k, {"w": 5, "h": 4, "art": "wohnen", "label": "Einfamilienhaus"}).list as Array).is_empty():
+		var nd: Dictionary = sim.town_plan.next_district(k, true)
+		if nd.has("viertel"):
+			for v in sim.town_plan.of(k).viertel:
+				if str(v.id) == str(nd.viertel):
+					var r: Dictionary = M._district_streets(v, "Bauamt: noch kein Bauland für Wohnhäuser")
+					if bool(r.get("ok", false)):
+						sim.log_event("%s: Bauamt beschließt den nächsten Abschnitt – %s" % [sim.towns.name_of(k), str(r.msg).left(160)], "info")
 
 
 func _finish_public(e: Dictionary) -> void:

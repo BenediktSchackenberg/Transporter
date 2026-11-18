@@ -8,24 +8,24 @@ extends RefCounted
 ## Der Viertelplan ist eine unverbindliche Entwicklungsabsicht (Status "entwurf"): er sperrt keine Flaeche, sondern bestimmt Zone,
 ## Grundstuecksgroesse, Hoehen und Bevorzugung bei der Standortwahl. Harte Reservierungen laufen weiter ueber Parcels.reserve.
 
-const VERSION := 1
+const VERSION := 2   # 2: Grundstuecke gross genug fuer die Bebauungsgrenzen (Wohnen 45 %)
 const RADIUS := 30   # Landschaftsanalyse um den Kern
 
 ## Grundformen. block = Grundstuecksgroesse (Felder) fuer neues Bauland; hoehen = hoechste Geschosszahl je Ring (Kern, Mitte, Rand);
 ## freiraum = Art der Freiflaechen; wirtschaft = raeumliche Schwerpunkte (verbieten nichts).
 const FORMS := {
 	"hafenort": {"label": "Hafenort", "text": "kompakter Kern am Hafen, kurze Geschäftsstraße, Gewerbehöfe an eigener Güterzufahrt",
-		"block": [6, 5], "hoehen": [3, 2, 1], "freiraum": "kai", "wirtschaft": ["hafen", "handel", "logistik"]},
+		"block": [8, 6], "hoehen": [3, 2, 1], "freiraum": "kai", "wirtschaft": ["hafen", "handel", "logistik"]},
 	"buchtenstadt": {"label": "Buchtenstadt", "text": "Bebauung folgt der Bucht, Promenade und kleine Plätze am Ufer, Hotels mit Wasserblick",
-		"block": [6, 6], "hoehen": [3, 2, 1], "freiraum": "promenade", "wirtschaft": ["tourismus", "gastronomie", "handel"]},
+		"block": [8, 7], "hoehen": [3, 2, 1], "freiraum": "promenade", "wirtschaft": ["tourismus", "gastronomie", "handel"]},
 	"gartenstadt": {"label": "Gartenstadt", "text": "kleine Nachbarschaften mit Grünzügen dazwischen, Gärten, örtliche Versorgung",
-		"block": [7, 6], "hoehen": [2, 2, 1], "freiraum": "gruenzug", "wirtschaft": ["handwerk", "versorgung", "landwirtschaft"]},
+		"block": [9, 8], "hoehen": [2, 2, 1], "freiraum": "gruenzug", "wirtschaft": ["handwerk", "versorgung", "landwirtschaft"]},
 	"hangstadt": {"label": "Hangstadt", "text": "Baugruppen auf den flachen Lagen am Hang, Aussichtspunkte, Gewerbe im Tal",
-		"block": [6, 5], "hoehen": [3, 2, 2], "freiraum": "aussicht", "wirtschaft": ["rohstoffe", "handwerk", "tourismus"]},
+		"block": [8, 6], "hoehen": [3, 2, 2], "freiraum": "aussicht", "wirtschaft": ["rohstoffe", "handwerk", "tourismus"]},
 	"flussstadt": {"label": "Flussstadt", "text": "Uferquartiere beiderseits des Wassers, Brückenstandorte, Zugänge zum Ufer",
-		"block": [6, 5], "hoehen": [3, 2, 1], "freiraum": "uferweg", "wirtschaft": ["handel", "handwerk", "logistik"]},
+		"block": [8, 6], "hoehen": [3, 2, 1], "freiraum": "uferweg", "wirtschaft": ["handel", "handwerk", "logistik"]},
 	"marktort": {"label": "Marktort", "text": "Ortskern um den Marktplatz, Hauptstraße mit Läden, Wohnstraßen ringsum",
-		"block": [6, 5], "hoehen": [4, 2, 1], "freiraum": "platz", "wirtschaft": ["handel", "versorgung", "handwerk"]},
+		"block": [8, 6], "hoehen": [4, 2, 1], "freiraum": "platz", "wirtschaft": ["handel", "versorgung", "handwerk"]},
 }
 ## Ortscharakter vom Kartenstart -> bevorzugte Grundform (Bonus bei der Wahl)
 const FORM_OF_CHARACTER := {"Fischerdorf": "hafenort", "Hafenstadt": "hafenort", "Kurort": "buchtenstadt", "Bauerndorf": "gartenstadt",
@@ -549,6 +549,10 @@ func _road_ok(w: Vector2i) -> bool:
 	var C: CityData = sim.city
 	if not C.inside(w) or C.building_at[C.idx(w)] >= 0 or C.g(w) in [CityData.G.WATER, CityData.G.RAIL, CityData.G.RUNWAY, CityData.G.QUAY]:
 		return false
+	if sim.eko != null:   # nicht durch einen Stammsitz (Mauern, Basis der Wesen)
+		for e in sim.eko.estates.estates.values():
+			if Rect2i(int(e.rect[0]), int(e.rect[1]), EkoEstates.SIDE, EkoEstates.SIDE).grow(1).has_point(w):
+				return false
 	if not C.height.is_empty() and C.height[C.idx(w)] > 0:
 		return false
 	return sim.access == null or not sim.access.reserved(w) or C.is_road(w)
@@ -642,6 +646,11 @@ func to_dict() -> Dictionary:
 
 func from_dict(d: Dictionary) -> void:
 	towns = d.get("towns", {})
+	for key in towns:   # Version 1 (18.11.): 6x5-Grundstuecke – ein Einfamilienhaus (5x4) ueberschritt die zulaessige Bebauung
+		var p: Dictionary = towns[key]
+		if int(p.get("v", 1)) < 2 and FORMS.has(str(p.form)):
+			p.block = FORMS[str(p.form)].block.duplicate()
+			p.v = VERSION
 	for key in towns:   # JSON liefert Zahlen als float
 		var p: Dictionary = towns[key]
 		p.town = int(p.town)

@@ -43,7 +43,7 @@ func setup(simulation) -> void:
 ## Nutzungsart aus einer Bezeichnung (kommunale Dienste, Vorlagen): laute Betriebe abseits der Wohnhaeuser.
 static func art_of(label: String) -> String:
 	var l := label.to_lower()
-	for w in ["abfall", "klär", "klaer", "bauhof", "werkstatt", "recycling", "deponie", "müll", "muell", "wasserwerk", "kraftwerk", "lager", "betriebshof", "strassenmeisterei", "straßenmeisterei"]:
+	for w in ["abfall", "klär", "klaer", "bauhof", "werkstatt", "fahrzeugwerk", "werk ", "fabrik", "kfz", "recycling", "deponie", "müll", "muell", "wasserwerk", "kraftwerk", "lager", "betriebshof", "strassenmeisterei", "straßenmeisterei"]:
 		if l.contains(w):
 			return "laerm"
 	for w in ["hotel", "pension", "kurhaus", "strandbad"]:
@@ -171,7 +171,7 @@ func offers(k: int, def_id: String, n: int = 3) -> Array:
 
 ## Bereits geordnete Grundstuecksliste (z. B. Kandidaten eines Bautraegers) nach der Standortbewertung sortieren; nicht bewertbare
 ## (ungueltige) bleiben hinten in alter Reihenfolge.
-func order_parcels(k: int, parcels: Array, req: Dictionary) -> Array:
+func order_parcels(k: int, parcels: Array, req: Dictionary, strict: bool = false) -> Array:
 	if parcels.is_empty() or _kern(k).x < 0:
 		return parcels
 	var r := rank(k, req.merged({"zones": ART_ZONES.get(str(req.get("art", "wohnen")), ["wohnen"]) + ["mischgebiet", "gewerbe", "wohnen", "industrie"]}))
@@ -181,7 +181,7 @@ func order_parcels(k: int, parcels: Array, req: Dictionary) -> Array:
 	var known: Array = parcels.filter(func(p): return score.has(str(p.id)))
 	var rest: Array = parcels.filter(func(p): return not score.has(str(p.id)))
 	known.sort_custom(func(a, b): return float(score[str(a.id)]) > float(score[str(b.id)]))
-	return known + rest
+	return known if strict else known + rest   # strict: nur gueltige, bewertete Plaetze (keine verstreuten Haeuser)
 
 
 ## Erneute Pruefung beim tatsaechlichen Auftrag: Grundstueck noch frei (oder vom Halter reserviert), Flaeche noch frei.
