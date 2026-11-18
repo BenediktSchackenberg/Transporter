@@ -148,6 +148,8 @@ var _last_day := 0
 var minute_index := 0       # fortlaufende Spielminute der Minuten-Ticks (fuer periodische Pruefungen)
 var _fuel := {}                # Firmen-ID -> aufgelaufene Treibstoffkosten
 var _hash := {}                # Vector2i -> [Mover] (Stauerkennung)
+var _desc := {}                # Mover -> Bezeichnung fuer Unfallmeldungen
+var collisions := Collisions.new()   # kein Durchfahren, Unfaelle, Rammen (Benedikt 18.11.2026)
 
 const FIRST_NAMES := ["Jonas", "Lena", "Mehmet", "Sophie", "Lukas", "Mia", "Paul", "Elif", "Finn", "Hannah",
 	"Ben", "Emma", "Can", "Laura", "Tim", "Nina", "Max", "Zoe", "Jan", "Lea", "Ole", "Ida", "Erik", "Marie"]
@@ -189,6 +191,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	activity.setup(self)
 	safety.setup(self)
 	fleet.setup(self)
+	collisions.setup(self)
 	grid.setup(self)
 	banking.setup(self)
 	player_loans.setup(self)
@@ -770,12 +773,16 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 			return   # vorerst kein Weg: warten
 	if _is_blocked(v):
 		_trip_why = "blockiert"
+		if v.lane == 0.0 and v.wait_time > 3.0 and collisions.last_blocker != null:   # Gelaende-Lkw faehrt aussen herum
+			_evade(v, collisions.last_blocker)
 		return
 	var before := v.tiles_moved
 	var offroad: bool = bool(Catalog.model(v.model).get("offroad", false))   # Gelaende-LKW: im Gelaende 60 % statt 35 % (Partie 18.11.: Fahrten dauerten ewig)
 	var spf := _speed_factor(v) * _flow_step(v, dt) * ((0.6 if offroad else 0.35) if not city.is_road(v.tile()) else 1.0)
 	_trip_speed = spf
 	v.advance(dt, spf)
+	if not v.ram.is_empty():
+		_ram_step(v)
 	var moved := v.tiles_moved - before
 	if moved > 0 and v.state == "to_workshop":
 		# Fahrt zur Werkstatt (abgeschleppt bzw. auf dem Weg zur Reparatur): kein weiterer Verschleiss, keine neue Panne und kein
@@ -1167,6 +1174,10 @@ func _spawn_traffic_car() -> void:
 	var m := Mover.new()
 	m.speed = rng.randf_range(2.4, 3.2)
 	var start := _random_road()
+	for i in 12:   # nicht auf ein schon besetztes Feld setzen (18.11.: zwei Autos am selben Punkt = Unfall beim Start)
+		if not traffic.any(func(o): return o.tile() == start):
+			break
+		start = _random_road()
 	m.pos = city.tile_center(start)
 	traffic.append(m)
 	route(m, _random_road())
@@ -1181,6 +1192,8 @@ func _random_road() -> Vector2i:
 
 
 func _update_traffic_car(m: Mover, dt: float) -> void:
+	if m.wreck_until > sim_time:
+		return   # Unfallwagen steht
 	if m.arrived():
 		route(m, _random_road())
 		return
@@ -1207,13 +1220,59 @@ func light_green(cell: Vector2i, horizontal: bool) -> bool:
 	return (phase == 0) == horizontal
 
 
+## Gelaende-Lkw weicht einem Fahrzeug aus: dessen Felder kurz sperren und neu planen.
+func _evade(v: FleetVehicle, o: Mover) -> void:
+	v.wait_time = 0.0
+	var cells: Array[Vector2i] = [o.tile(), o.next_tile()]
+	var was: Array = []
+	for c in cells:
+		if nav.walk.is_in_boundsv(c) and c != v.goal:
+			was.append([c, nav.walk.is_point_solid(c)])
+			nav.walk.set_point_solid(c, true)
+	var p := offroad_path(v.tile(), v.goal)
+	for e in was:
+		nav.walk.set_point_solid(e[0], e[1])
+	if not p.is_empty():
+		v.set_path(p)
+
+
+## Rammen: dem Ziel folgen, bei Beruehrung (Collisions) bzw. am Gebaeude den Stoss ausfuehren.
+func _ram_step(v: FleetVehicle) -> void:
+	var r: Dictionary = v.ram
+	if r.has("vehicle"):
+		var t: FleetVehicle = vehicles.get(int(r.vehicle))
+		if t == null:
+			v.ram = {}
+			return
+		if v.pos.distance_to(t.pos) < Collisions.RAM_REACH:
+			collisions.ram_hit(v)
+		elif v.goal.distance_to(t.tile()) > 2.0:
+			var p := offroad_path(v.tile(), t.tile())
+			if not p.is_empty():
+				v.set_path(p)
+	elif r.has("building"):
+		var bd: Dictionary = city.building(int(r.building))
+		if bd.is_empty():
+			v.ram = {}
+		elif v.arrived() or v.pos.distance_to(city.tile_center(Vector2i(int(bd.walk.x), int(bd.walk.y)))) < Collisions.RAM_REACH + 10.0:
+			collisions.ram_hit(v)
+
+
 func _rebuild_hash() -> void:
 	_hash.clear()
+	_desc.clear()
 	for m in traffic:
 		_hash_add(m)
+		_desc[m] = "ein Auto"
 	for v in vehicles.values():
-		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "loading", "unloading", "broken", "to_dispatch"]:
+		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "loading", "unloading", "broken", "to_dispatch", "erkunden"] or not v.arrived():
 			_hash_add(v)
+			_desc[v] = "%s (%s)" % [v.display_name(), companies[v.owner].company_name] if v.owner >= 0 and v.owner < companies.size() else v.display_name()
+	if fleet != null:
+		for fv in fleet.vehicles:
+			if fv.mover is Mover and not (fv.mover as Mover).arrived():
+				_hash_add(fv.mover)
+				_desc[fv.mover] = str(fv.get("label", "ein städtisches Fahrzeug"))
 
 
 func _hash_add(m: Mover) -> void:
@@ -1234,18 +1293,10 @@ func _is_blocked(m: Mover) -> bool:
 		var dir := Vector2(nt - cur)
 		if dist > 14.0 and dist < 30.0 and (city.signals.is_empty() or city.signals.has(nt)) and not light_green(nt, absf(dir.x) > absf(dir.y)):
 			return true
-	if m.wait_time > 6.0:
-		m.wait_time = 0.0
-		return false
-	for t in [cur, nt]:
-		for o in _hash.get(t, []):
-			if o == m or m.heading.dot(o.heading) < 0.5:
-				continue
-			var rel: Vector2 = o.pos - m.pos
-			var along := rel.dot(m.heading)
-			if along > 0.0 and along < 22.0 and absf(rel.cross(m.heading)) < 7.0:
-				m.wait_time += 0.1
-				return true
+	# Benedikt 18.11.: kein Durchfahren mehr (frueher nach 6 s Blockade) – Collisions.blocked: Vordermann, Kreuzung, Gegenverkehr
+	if collisions.blocked(m, _hash):
+		m.wait_time += 0.1
+		return true
 	m.wait_time = 0.0
 	return false
 
@@ -1355,6 +1406,8 @@ func step(dt: float) -> void:
 	fleet.update(dt)
 	for v in vehicles.values():
 		_update_vehicle(v, dt)
+	_rebuild_hash()
+	collisions.check_accidents(_hash, _desc)
 	for a in avatars.values():
 		_update_avatar(a, dt)
 	personnel.update(dt)

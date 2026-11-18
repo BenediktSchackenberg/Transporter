@@ -10,6 +10,7 @@ var speed := 2.5            # Tiles pro Sim-Sekunde
 var lane := 7.0             # Spurversatz in Pixel (0 fuer Fussgaenger)
 var goal := Vector2i(-1, -1)
 var wait_time := 0.0        # wie lange schon blockiert
+var wreck_until := -1.0     # nach einem Unfall steht das Fahrzeug bis zu dieser Sim-Zeit (Collisions)
 var tiles_moved := 0        # Zaehler fuer Treibstoff/Verschleiss (vom Besitzer abgeholt)
 
 

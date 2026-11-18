@@ -126,11 +126,15 @@ func update(dt: float) -> void:
 	var now: float = sim.game_min
 	for v in vehicles.duplicate():
 		var m: Mover = v.mover
+		if m.wreck_until > sim.sim_time:
+			continue   # Unfall: steht
 		if not m.arrived():
 			if sim.nav.barriers.has(m.next_tile()):
 				continue   # Bahnuebergang geschlossen: warten
 			if sim.nav.is_blocked_road(m.next_tile()) and m.next_tile() != m.goal:
 				sim.route(m, m.goal)
+			elif sim._is_blocked(m):
+				pass   # Vordermann, Kreuzung: warten (18.11.: staedtische Fahrzeuge fuhren durch andere hindurch)
 			else:
 				m.advance(dt, 1.0)
 			continue

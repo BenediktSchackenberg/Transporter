@@ -10,6 +10,7 @@ const STATE_TEXT := {"idle": "bereit", "to_pickup": "fährt zur Abholung", "load
 	"washing": "wird gewaschen", "to_dispatch": "faehrt zur Disposition", "dispatching": "Hofkontrolle und Tourfreigabe", "yard_parking": "parkt auf dem Betriebshof"}
 
 var id: int
+var ram := {}               # Rammen (Entscheidung eines Wesens): {vehicle: id} oder {building: id}; nicht gespeichert
 var owner: int
 var model: String
 var purchase_price: float

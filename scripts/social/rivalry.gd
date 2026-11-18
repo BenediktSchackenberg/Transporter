@@ -23,6 +23,7 @@ const TENSION := {
 	"anzeige_unbegruendet": 12.0,
 	"sabotage_entdeckt": 35.0,
 	"blockade": 25.0,               # Strassenblockade, Taeter ermittelt
+	"rammen": 40.0,                 # Fahrzeug oder Gebaeude absichtlich gerammt (Collisions, 18.11.2026)
 	"stichelei": 4.0,               # oeffentliche Stichelei (Gespraechsregie)
 	"beschwichtigt": -5.0,
 	"schlichtung": -25.0,           # Schlichtung durch den Buergermeister
@@ -43,8 +44,8 @@ const TRUCE_BREACH_REP := 10.0
 const WARN_DAYS := 10
 const WARN_REP := 2.0
 const WARNED_EXTRA_REP := 3.0
-const HOSTILE := ["stammkunde_bedient", "abwerbeversuch", "fahrer_abgeworben", "kunde_abgeworben", "ueberboten", "anzeige", "anzeige_unbegruendet", "sabotage_entdeckt", "blockade", "stichelei"]
-const BREACH := ["fahrer_abgeworben", "kunde_abgeworben", "anzeige", "anzeige_unbegruendet", "sabotage_entdeckt", "blockade"]
+const HOSTILE := ["stammkunde_bedient", "abwerbeversuch", "fahrer_abgeworben", "kunde_abgeworben", "ueberboten", "anzeige", "anzeige_unbegruendet", "sabotage_entdeckt", "blockade", "stichelei", "rammen"]
+const BREACH := ["fahrer_abgeworben", "kunde_abgeworben", "anzeige", "anzeige_unbegruendet", "sabotage_entdeckt", "blockade", "rammen"]
 ## Strassenblockade (Stufe 4): Paletten auf eine Strasse nahe am Hof des Rivalen. Verboten: die Polizei raeumt, ermittelt meist den Taeter.
 const BLOCK_COST := 600.0               # Paletten, Ware, Helfer
 const BLOCK_CLEAR_DAYS := Vector2(0.15, 0.4)    # Polizei raeumt nach so vielen Spieltagen (ein Spieltag = 24 Stadtstunden)

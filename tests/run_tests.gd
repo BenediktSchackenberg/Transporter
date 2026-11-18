@@ -42,6 +42,7 @@ func _initialize() -> void:
 	test_names.append("test_wildnis_found")
 	test_names.append("test_wildnis_log_fixes")
 	test_names.append("test_wildnis_hub_supply")
+	test_names.append("test_collisions")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
@@ -8631,6 +8632,54 @@ func test_wildnis_hub_supply() -> void:
 		ok(not bool(s.eko.settle.score_at(lake + Vector2i(0, 8)).get("hafen", false)) or s.eko.settle._sea_near(lake + Vector2i(0, 8), EkoSettle.HARBOR_R), "am See kein Anleger")
 	RegionGenerator.neubeginn = false
 	RegionGenerator.wildnis = false
+
+
+## Benedikt 18.11.: kein Fahrzeug faehrt durch ein anderes; Zusammenstoss = Unfall; Beschaedigen nur per Rammen (Entscheidung der KI).
+func test_collisions() -> void:
+	var s := new_sim(2)
+	# 1) normaler Stadtverkehr: kein Fahrzeug faehrt durch ein anderes, keine Unfaelle
+	var min_d := INF
+	for i in 1500:
+		s.step(0.1)
+		if i % 10 == 0:
+			for a in s.traffic:
+				for b in s.traffic:
+					if a != b and a.tile() == b.tile() and not a.arrived() and not b.arrived():
+						min_d = minf(min_d, a.pos.distance_to(b.pos))
+	ok(int(s.collisions.stats.unfaelle) == 0, "150 s Stadtverkehr ohne Unfall (%d)" % int(s.collisions.stats.unfaelle))
+	ok(min_d >= Collisions.CRASH, "Autos überlappen nicht (kleinster Abstand %.1f)" % min_d)
+	# 2) Beruehrung zweier fahrender Firmenfahrzeuge = Unfall, beide kaputt
+	var c0: Company = s.companies[0]
+	var c1: Company = s.companies[1]
+	var va: FleetVehicle = s.vehicles[c0.vehicle_ids[0]]
+	var vb: FleetVehicle = s.vehicles[c1.vehicle_ids[0]]
+	var road: Vector2i = s.city.intersections[0]
+	for v in [va, vb]:
+		v.pos = s.city.tile_center(road)
+		v.set_path([road, road + Vector2i(1, 0), road + Vector2i(2, 0)] as Array[Vector2i])
+		v.state = "to_pickup"
+	vb.pos += Vector2(3, 0)
+	s._rebuild_hash()
+	s.collisions.check_accidents(s._hash, s._desc)
+	ok(va.state == "broken" and vb.state == "broken" and va.condition < 100.0 and vb.condition < 100.0, "Zusammenstoß: beide Fahrzeuge beschädigt und ausgefallen")
+	# 3) Rammen ist eine Entscheidung (Wildnis-Wesen mit Lkw)
+	var w := wildnis_sim(2)
+	var E: EkoWorld = w.eko
+	E.auto_estates = true
+	var ps: Array = E.adopt_players(2)
+	var B0: Dictionary = E.beings[ps[0]]
+	var cid0 := E.active_firm(B0)
+	var cid1 := E.active_firm(E.beings[ps[1]])
+	var t0 := E.own_truck(cid0)
+	var t1 := E.own_truck(cid1)
+	B0.mover.pos = t0.pos
+	t1.pos = t0.pos + Vector2(32.0 * 5, 0)
+	t1.set_path([t1.tile()] as Array[Vector2i])
+	var r: Dictionary = E.input(ps[0], "Rammen", {"fahrzeug": t1.id})
+	ok(r.ok, "Rammen gestartet: %s" % str(r.msg).left(80))
+	var hit := _run_until(w, func(): return int(w.collisions.stats.rammstoesse) > 0, 3000)
+	ok(hit and t1.condition < 100.0 and t0.condition < 100.0, "Rammstoß: Ziel %d %%, eigener Lkw %d %%" % [int(t1.condition), int(t0.condition)])
+	ok(w.rivalry.get_tension(cid0, cid1) > 0.0, "Spannung zur gerammten Firma steigt")
 
 
 func test_wildnis_found() -> void:

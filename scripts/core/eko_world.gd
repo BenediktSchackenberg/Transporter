@@ -378,12 +378,12 @@ func _restore_savings(b: Dictionary) -> void:
 
 # ------------------------------------------------------------------ Handlungen
 const ACTIONS := ["MoveTo", "Stop", "Pickup", "Place", "Say", "Talk", "Inspect", "Attack", "Give", "Bauwerk", "Tor", "Bauplan", "Fahrt",
-	"AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ziel", "ZielStand", "Merke", "Ablauf", "Siedlung", "Bauen", "LKW"]
+	"AcceptJob", "Deliver", "BuyPlot", "OrderHouse", "Rest", "FoundCompany", "Firma", "MoveIn", "Amt", "Ziel", "ZielStand", "Merke", "Ablauf", "Siedlung", "Bauen", "LKW", "Rammen"]
 ## Namen, unter denen Modelle eine Handlung aufrufen (Partie 16.11.: Buergermeisterin rief "mein_amt" statt "Amt" auf – so heisst ihre Lage).
 const ACTION_ALIASES := {"mein_amt": "Amt", "office": "Amt", "amt_aktion": "Amt", "meine_firma": "Firma", "company": "Firma", "firm": "Firma",
 	"bauen": "Bauen", "arbeiten": "Bauen", "build": "Bauen", "work": "Bauen", "lkw": "LKW", "truck": "LKW", "lastwagen": "LKW",
 	"gruenden": "Siedlung", "gründen": "Siedlung", "siedlung_gruenden": "Siedlung", "found_town": "Siedlung", "settle": "Siedlung",
-	"move": "MoveTo", "goto": "MoveTo", "gehe": "MoveTo", "sprich": "Talk", "sage": "Say", "anrufen": "Talk", "call": "Talk"}
+	"rammen": "Rammen", "ram": "Rammen", "ramm": "Rammen", "move": "MoveTo", "goto": "MoveTo", "gehe": "MoveTo", "sprich": "Talk", "sage": "Say", "anrufen": "Talk", "call": "Talk"}
 
 
 ## Handlungsname tolerant lesen: Gross-/Kleinschreibung egal, bekannte Ersatznamen; Unbekanntes bleibt unveraendert (Fehlermeldung).
@@ -435,7 +435,7 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 				type = "Siedlung" if sim.wildnis and not settle.founded(sim.companies[active_firm(b)].home_town if active_firm(b) >= 0 else -1) else "MoveTo"
 	if arms.is_out(b) and type not in ["Inspect"]:
 		return {"ok": false, "status": "gescheitert", "msg": arms.out_msg(b)}
-	if b.has("im_lkw") and type in ["MoveTo", "Pickup", "Place", "Bauwerk", "Bauen", "Attack", "Fahrt", "Siedlung", "LKW", "MoveIn"]:
+	if b.has("im_lkw") and type in ["MoveTo", "Pickup", "Place", "Bauwerk", "Bauen", "Attack", "Fahrt", "Siedlung", "LKW", "MoveIn", "Rammen"]:
 		return {"ok": false, "msg": "Du sitzt im LKW und fährst noch – warte, bis du ankommst (wait bis: \"ankunft\"). Denken, Reden und Firma gehen auch unterwegs."}
 	if type in ["MoveTo", "Fahrt", "LKW", "Pickup", "Stop", "Siedlung"] and b.has("baut"):
 		b.erase("baut")   # wer weggeht, baut nicht mehr
@@ -504,6 +504,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			r = _work(b, data)
 		"LKW":     # mit dem eigenen LKW fahren: Grosslager (Ware abholen, tanken), Hof oder ein Feld
 			r = _truck(b, data)
+		"Rammen":   # Angriff mit dem eigenen LKW (Benedikt 18.11.: Beschaedigen nur, wenn die KI das entscheidet)
+			r = _ram(b, data)
 		"Siedlung":   # Wildnis: Siedlung am gewaehlten Platz gruenden (EkoSettle)
 			var fc := active_firm(b)
 			var f = []
@@ -880,6 +882,47 @@ func _truck(b: Dictionary, data: Dictionary) -> Dictionary:
 	b["im_lkw"] = v.id
 	return {"ok": true, "status": "laeuft", "msg": "Du fährst mit deinem LKW zum Großlager, lädst %d Abholungen (%s) und bringst sie auf deinen Hof.%s" % [
 		taken.size(), ", ".join(taken), fuel_note]}
+
+
+## Rammen {fahrzeug: id} oder {gebaeude: id} bzw. {feld: [x, y]}: mit dem eigenen Lkw gezielt auffahren. Ziel und eigener Lkw
+## werden beschaedigt, die Spannung zur betroffenen Firma steigt (Collisions.ram_hit). Normale Fahrten weichen immer aus.
+func _ram(b: Dictionary, data: Dictionary) -> Dictionary:
+	var cid := active_firm(b)
+	var v := own_truck(cid) if cid >= 0 else null
+	if v == null:
+		return {"ok": false, "msg": "Du hast keinen eigenen Lkw zum Rammen."}
+	if _truck_busy(v):
+		return {"ok": false, "msg": "Dein Lkw ist gerade unterwegs (%s)." % v.state}
+	if maxi(absi(tile_of(b).x - v.tile().x), absi(tile_of(b).y - v.tile().y)) > 3:
+		return {"ok": false, "msg": "Steig erst in deinen Lkw (geh zu ihm: %s)." % str([v.tile().x, v.tile().y])}
+	var target := Vector2i(-1, -1)
+	var what := ""
+	if data.has("fahrzeug") or data.has("vehicle_id"):
+		var t: FleetVehicle = sim.vehicles.get(int(data.get("fahrzeug", data.get("vehicle_id", -1))))
+		if t == null or t.owner == cid:
+			return {"ok": false, "msg": "Kein fremdes Fahrzeug mit dieser Nummer."}
+		v.ram = {"vehicle": t.id}
+		target = t.tile()
+		what = "%s von %s" % [t.display_name(), sim.company(t.owner).company_name]
+	else:
+		var bid := int(data.get("gebaeude", -1))
+		var f = parse_tile(data.get("feld"))
+		if bid < 0 and f != null:
+			bid = int(sim.city.building_at[sim.city.idx(Vector2i(int(f[0]), int(f[1])))])
+		var bd: Dictionary = sim.city.building(bid)
+		if bd.is_empty():
+			return {"ok": false, "msg": "Rammen braucht fahrzeug: id oder gebaeude: id bzw. feld: [x, y] eines Gebäudes."}
+		if int(sim.depot_owner.get(bid, -1)) == cid:
+			return {"ok": false, "msg": "Das ist dein eigenes Gebäude."}
+		v.ram = {"building": bid}
+		target = Vector2i(int(bd.walk.x), int(bd.walk.y))
+		what = str(bd.name)
+	if not sim.route(v, target, "erkunden"):
+		v.ram = {}
+		return {"ok": false, "msg": "Dorthin kommt dein Lkw nicht."}
+	b["im_lkw"] = v.id
+	_event(b, "fährt los, um %s zu rammen" % what)
+	return {"ok": true, "status": "laeuft", "msg": "Du fährst los, um %s zu rammen. Dein Lkw wird dabei selbst beschädigt, und die betroffene Firma wird dir das übelnehmen." % what}
 
 
 ## Bauen {baustelle?} – das Wesen geht zur Baustelle und arbeitet dort, bis es etwas anderes tut ("stammsitz" = Bauwerke der Basis).

@@ -93,9 +93,14 @@ wenn Menschen zugezogen sind. Bis dahin baust du **alles selbst**.
 5. **Häuser:** `Firma {aktion: {action: "haus_bauen", typ: "einfamilienhaus" | "doppelhaus" | "mehrfamilienhaus"}}`.
    Nach dem Bürgeramt entscheidet der Bürgermeister über den Bauantrag. Fertige Wohnungen gehören deiner Firma.
 6. **Straßen:** `Firma {aktion: {action: "strasse_bauen", bis: [x, y], von?: [x, y]}}` – Kies vom Hof; Baugrundstücke entstehen daran.
+   Ohne Straße zum Großlager liefert niemand Waren in deine Stadt (Stadtlager, Kunden) – nur dein Gelände-LKW fährt querfeldein.
+   Bau sie Stück für Stück (je Baustelle bis 40 Felder); `naechste_schritte` nennt dir von/bis.
 7. **Bauen:** `Bauen {baustelle: "BS3"}` – du gehst hin und arbeitest, bis du etwas anderes tust. Häuser wachsen Block für Block,
    Straßen Feld für Feld. Bauen kostet Akku. Mitarbeiter teilst du mit `bauleute {baustelle, worker_ids}` zu.
-8. **Menschen:** Mit Bürgeramt und freien Wohnungen kommt ein Siedlerschiff (Küste) oder ein Siedlertreck (Inland).
+8. **Menschen:** Mit Bürgeramt und freien Wohnungen kommt ein Siedlerschiff (nur am Meer, nicht an Seen) oder ein Siedlertreck (Inland).
+9. **Verkehr:** Fahrzeuge fahren nicht durcheinander hindurch – sie warten, weichen aus oder fahren außen herum. Ein Zusammenstoß ist
+   ein Unfall (beide Fahrzeuge beschädigt, Werkstatt). Absichtlich beschädigen geht nur mit `Rammen {fahrzeug: id}` oder
+   `Rammen {gebaeude: id | feld: [x, y]}` – dein eigener LKW wird dabei auch beschädigt, und die betroffene Firma wird dir feindlich.
 
 ## Endpunkte
 
