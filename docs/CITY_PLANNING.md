@@ -301,3 +301,12 @@ Reservierung). Danach (Etappe 4) laufen alle Pfade der Tabelle über `SiteSelect
   Plätze in den passenden Vierteln (V2/V3 bzw. V5/V6).
 - Lieferkette (Material für Stadtprojekte): Straßen nach dem Laden wieder befahrbar (`NavGrid.sync_roads`), Importe ohne Hafen über
   das Großlager, Stadt-Lkw bündeln Bestellungen (8 je Lkw, 4 je Stadt).
+
+### Etappe 4, Teil 3 (18.11.2026): Planungsbild
+
+- Kartenebene „Stadtplan“ (Taste L schaltet weiter, letzte Stufe): Viertel als Kreis in Zonenfarbe mit Beschriftung (Nummer, Zweck,
+  Status); Entwurf gestrichelt und blass, beschlossen/in Erschließung voll umrandet, erschlossen gefüllt; geplante Straßen laufender
+  Viertel-Projekte orange; reservierte Grundstücke gelb umrandet; Ortskern als Stern mit Stadtname und Grundform. Liegt im
+  Planungsmodus über Gebäuden; Schrift und Linien wachsen beim Herauszoomen mit.
+- Autotest-Schalter für die Abnahmebilder (nur das Spielfenster): `--autotest --load --shot-plan=<Stadt>` bzw. `--shot-city=<Stadt>`
+  mit `--shot-zoom` und `--screenshot` – Kamera auf den Stadtkern, Zentrale eingeklappt.

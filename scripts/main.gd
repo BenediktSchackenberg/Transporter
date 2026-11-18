@@ -641,6 +641,20 @@ func _process_timed(_delta: float) -> void:
 						first = Vector2(float(wk.rect[0]), float(wk.rect[1]))
 			if first.x >= 0:
 				args["shot-tile"] = "%d,%d" % [int(first.x) + 2, int(first.y) - 2]
+		for key in ["shot-plan", "shot-city"]:   # Auftrag 8 Abnahme: Kamera auf den Stadtkern, Zentrale eingeklappt, (Planungsbild)
+			if args.has(key) and session.sim.town_plan.has(int(args[key])):
+				var kp: Array = session.sim.town_plan.of(int(args[key])).kern
+				session.set_follow(false)
+				session.city_view.eko_view.follow = false   # Wildnis: Kamera folgt sonst dem zuletzt handelnden Wesen
+				session.city_view.set_camera_world(Vector2(float(kp[0]) * 32.0 + 16.0, float(kp[1]) * 32.0 + 16.0))
+				session.city_view.camera.zoom = Vector2.ONE * float(args.get("shot-zoom", "0.75"))
+				if session.hud and session.hud.control_center:
+					session.hud.control_center.set_expanded(false)
+				var pl: ParcelLayer = session.city_view.parcel_layer
+				if key == "shot-plan":
+					while pl.mode != ParcelLayer.MODES.find("Stadtplan"):
+						pl.cycle()
+				args["shot-tile"] = "%d,%d" % [int(kp[0]), int(kp[1])]
 		if args.has("shot-town"):   # Kamera auf das Rathaus eines Orts (Ortskern)
 			var th: Dictionary = session.sim.city.building(int(session.sim.towns.get_t(int(args["shot-town"])).town_hall))
 			session.set_follow(false)
