@@ -18,6 +18,7 @@ const CRASH := 9.0          # Beruehrung = Unfall
 const WRECK_S := 90.0       # so lange steht ein verunglueckter Wagen (Sim-Sekunden)
 const RAM_REACH := 22.0
 const STEP_LOOK := 12.0
+const STUCK_S := 50.0       # einseitig blockiert (Hindernis zaehlt keine Wartezeit): danach vorbeifahren
 const JAM_S := 20.0         # gegenseitige Blockade: nach so vielen Sekunden wird aufgeloest
 const OVERTAKE_S := 5.0     # so lange hinter einem stehenden Fahrzeug, dann wird ueberholt     # so weit (Weltpixel) wird der naechste Schritt vorausberechnet
 
@@ -40,6 +41,9 @@ func blocked(m: Mover, hash: Dictionary) -> bool:
 	var hit := _blocked(m, hash)
 	if hit and m.wait_time > JAM_S and last_blocker != null and last_blocker.wait_time > JAM_S and m.get_instance_id() < last_blocker.get_instance_id():
 		m.pass_until = sim.sim_time + 3.0   # gegenseitige Blockade: der mit der kleineren Kennung loest sie kurz auf (kein Unfall)
+		return false
+	if hit and m.wait_time > STUCK_S:
+		m.pass_until = sim.sim_time + 4.0   # Notaufloesung: Hindernis bewegt sich nie (Partie 18.11.: Gretas Lkw stand 720 Spielminuten am Grosslager)
 		return false
 	return hit
 
