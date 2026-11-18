@@ -39,6 +39,18 @@ func _today() -> int:
 	return GameCalendar.day_of(sim.game_min)
 
 
+## Auftrag 8: passendes Viertel des Stadtplans fuer einen Dienst (laute Betriebe ins Gewerbe, sonst Kern/Mischgebiet) samt Aktion.
+func _district_hint(k: int, code: String) -> String:
+	if not sim.town_plan.has(k):
+		return ""
+	var art := SiteSelector.art_of(str(Municipal.TYPES[code].label))
+	var want: Array = SiteSelector.ART_DISTRICT.get(art, ["mischgebiet"])
+	for v in sim.town_plan.of(k).viertel:
+		if str(v.zone) in want:
+			return " Laut Stadtplan passt das ins Viertel %s (%s): Amt {aktion: {action: \"viertel_erschliessen\", viertel: \"%s\"}} erschließt es als Ganzes." % [v.id, v.text, v.id]
+	return ""
+
+
 func _note(k: int, text: String, by: String) -> void:
 	log.append({"day": _today(), "town": k, "text": text, "by": by})
 	if log.size() > 200:
@@ -187,8 +199,8 @@ func build(k: int, code: String, reason: String, by: String) -> Dictionary:
 				return {"ok": false, "msg": str(ch.msg)}
 		if not bare.is_empty():   # Partie 18.11. (Wildnis): Petra wollte seit Stunden eine Polizeiwache – es fehlten nur Strassen
 			return {"ok": false, "msg": ("Kein freies städtisches Grundstück MIT Straßenanschluss für %s (%d×%d Felder) – in %s fehlen Straßen. " +
-				"Erst erschließen: Amt {aktion: {action: \"plan_infrastructure\", parcel_ids: %s}} (dort passt der Bau), dann kommunal_bauen erneut.") % [
-				Municipal.TYPES[code].label, int(info[1]), int(info[2]), sim.towns.name_of(k), JSON.stringify(bare)]}
+				"Erst erschließen: Amt {aktion: {action: \"plan_infrastructure\", parcel_ids: %s}} (dort passt der Bau), dann kommunal_bauen erneut.%s") % [
+				Municipal.TYPES[code].label, int(info[1]), int(info[2]), sim.towns.name_of(k), JSON.stringify(bare), _district_hint(k, code)]}
 		return {"ok": false, "msg": "Kein freies städtisches Grundstück für %s (%d×%d Felder)." % [Municipal.TYPES[code].label, int(info[1]), int(info[2])]}
 	var vote: Dictionary = M.civic_vote("oeffentlich_bau", cost)
 	if not vote.passed:
