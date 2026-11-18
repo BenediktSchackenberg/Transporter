@@ -984,8 +984,8 @@ func _body_tick() -> void:
 		var v := own_truck(cid)
 		if b.has("im_lkw"):
 			var tv: FleetVehicle = sim.vehicles.get(int(b.im_lkw))
-			if tv == null or not _truck_busy(tv):
-				b.erase("im_lkw")
+			if tv == null or not _truck_busy(tv) or tv.state in ["broken", "to_workshop", "repairing"]:
+				b.erase("im_lkw")   # 18.11.: kaputter/abgeschleppter Lkw – aussteigen (Viktor sass 40 min im liegengebliebenen Wagen fest)
 				if tv != null:   # neben der Kabine aussteigen, auf der dem Betrachter zugewandten Seite (sonst stuende die Figur sichtbar "auf" dem Wagen)
 					var hd: Vector2 = tv.heading.normalized() if tv.heading.length() > 0.01 else Vector2.RIGHT
 					var sd := Vector2(-hd.y, hd.x)
@@ -2266,7 +2266,7 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	var r: Dictionary = sim.executor.execute(cid, a, "", "api")
 	sim.executor.eko_call = false
 	if sim.wildnis and str(a.action) == "hub_buy" and bool(r.get("ok", false)):
-		r["msg"] = str(r.get("msg", "")) + homes.purchase_note(cid, str(a.get("item", "")))
+		r["msg"] = str(r.get("msg", "")) + homes.purchase_note(cid, str(a.get("item", "")), int(a.get("qty", 0)))
 	_event(b, "Firma: %s → %s" % [a.action, str(r.get("msg", "")).left(80)])
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", "")), "pending": bool(r.get("pending", false))}
 

@@ -143,7 +143,7 @@ func check_accidents(hash: Dictionary, describe: Dictionary) -> void:
 					continue
 				if a.heading.dot(b.heading) <= -0.5 and absf((b.pos - a.pos).cross(a.heading)) >= 4.0:
 					continue   # Gegenverkehr nebeneinander (Spurwechsel beim Abbiegen) – kein Zusammenstoss
-				if a.arrived() or b.arrived() or a.tile() == a.goal or b.tile() == b.goal or _is_wreck(a) or _is_wreck(b) 						or a.pass_until > sim.sim_time or b.pass_until > sim.sim_time:
+				if a.arrived() or b.arrived() or a.tile() == a.goal or b.tile() == b.goal or _is_wreck(a) or _is_wreck(b) 						or a.pass_until > sim.sim_time or b.pass_until > sim.sim_time or _towed(a) or _towed(b):
 					continue   # Stellplatz, Rampe, Ziel: dort stehen Fahrzeuge dicht beieinander
 				var key := "%d|%d" % [mini(a.get_instance_id(), b.get_instance_id()), maxi(a.get_instance_id(), b.get_instance_id())]
 				if sim.sim_time - float(_cool.get(key, -999.0)) < WRECK_S * 2.0:
@@ -155,6 +155,12 @@ func check_accidents(hash: Dictionary, describe: Dictionary) -> void:
 					ram_hit(b)
 				else:
 					_accident(a, b, describe)
+
+
+## Abgeschleppt oder liegengeblieben (Partie 18.11.: Viktors Lkw wurde auf dem Weg zur Werkstatt immer wieder "verunfallt",
+## erneut abgeschleppt und kam nie an).
+func _towed(m) -> bool:
+	return m is FleetVehicle and (m as FleetVehicle).state in ["to_workshop", "broken", "repairing"]
 
 
 func _vid(m) -> int:
