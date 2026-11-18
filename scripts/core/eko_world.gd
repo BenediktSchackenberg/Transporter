@@ -2633,9 +2633,31 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 	var fix := normalize_office(a)
 	if fix != "":
 		return {"ok": false, "msg": fix}
+	# Wiederholungsbremse (Partie 18.11.: Polizeiwache dreimal in zwei Minuten, jedes Mal "kein Grundstueck mit Strasse")
+	var key := "%s|%s" % [a.action, str(a.get("typ", a.get("viertel", a.get("parcel_ids", ""))))]
+	var day := GameCalendar.day_of(sim.game_min)
+	var fails: Dictionary = b.get("amt_fehl", {})
+	var fe: Array = fails.get(key, [-1, 0])
+	if int(fe[0]) == day and int(fe[1]) >= 2:
+		return {"ok": false, "msg": "Heute schon %d-mal gescheitert (gleiche Lage wie eben) – ein weiterer Versuch ändert nichts.%s Nutze die Zeit anders (Bauanträge entscheiden, Personal, Stadtplan) und versuche es an einem späteren Tag." % [int(fe[1]), _plan_wait_text(k)]}
 	var r: Dictionary = sim.towns.mayors[k].execute(a)
+	if not bool(r.get("ok", false)):
+		fails[key] = [day, (int(fe[1]) + 1) if int(fe[0]) == day else 1]
+		b["amt_fehl"] = fails
 	_event(b, "Amt: %s → %s" % [a.action, str(r.get("msg", "")).left(80)])
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", ""))}
+
+
+## Was die Stadt gerade baut und wann Bauland mit Strasse entsteht (Hinweis fuer die Wiederholungsbremse).
+func _plan_wait_text(k: int) -> String:
+	var M: Mayor = sim.towns.mayors[k]
+	for prj in M.projects.values():
+		if prj.has("road_plan") and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			var e: Dictionary = sim.construction.public.get(prj.id, {})
+			return " Das Straßennetz %s (Viertel %s) ist %s – danach gibt es dort Grundstücke mit Straße." % [prj.id, prj.viertel,
+				("in %d Tagen fertig%s" % [int(e.days_left), (" (" + str(e.waiting) + ")") if str(e.get("waiting", "")) != "" else ""]) if not e.is_empty() else str(prj.status)]
+	var nd: Dictionary = sim.town_plan.next_district(k, int(M.waiting) > 0) if sim.town_plan != null else {}
+	return (" Bauland entsteht mit: Amt {aktion: %s}." % JSON.stringify(nd.aktion)) if nd.has("aktion") else ""
 
 
 ## Amtshandlungen tolerant lesen (Partie 16.11.: priority als Wort, anlage "klaeanlage" oder "polizeiwache" bei infra_ausbau).
