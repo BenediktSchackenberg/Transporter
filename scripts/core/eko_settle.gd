@@ -11,7 +11,7 @@ extends RefCounted
 
 const MIN_TOWN_DIST := 60       # Abstand zu anderen Siedlungen (Mitte zu Mitte)
 const HUB_DIST := 40            # Abstand zum Grosslager-Gelaende (Benedikt 18.11.: keine Stadt am zentralen Marktplatz)
-const HALL_R := 22              # Buergeramt hoechstens so weit vom eigenen Betriebshof (dort entsteht die Stadt)
+const HALL_R := 30              # Buergeramt hoechstens so weit vom eigenen Betriebshof (Mitte des 24x24-Stammsitzes; dort entsteht die Stadt)
 const HARBOR_R := 6
 const DEPOSIT_R := 30
 const AREA := 12                # halbe Kantenlaenge der Flaeche, die frei und eben sein muss

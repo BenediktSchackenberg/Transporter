@@ -121,6 +121,18 @@ func _plan_building(cid: int, typ: String, want: String) -> Dictionary:
 				kept.append(p)
 			else:
 				bad = "Grundstück %s: %s" % [p.id, prob]
+		if kept.is_empty():   # 18.11.: Bauland lag nur an der Strasse zum Grosslager – Platz fuer den Stadtkern direkt am Hof anlegen
+			var st: Dictionary = sim.settlements.get(str(k), {})
+			if st.has("center"):
+				var ctr := Vector2i(int(st.center[0]), int(st.center[1]))
+				var ring: Array = []
+				for rad in [16, 19, 22]:
+					for ang in range(0, 360, 30):
+						ring.append(ctr + Vector2i(int(round(cos(deg_to_rad(ang)) * rad)), int(round(sin(deg_to_rad(ang)) * rad))))
+				for pl in w.settle.carve_plots(k, ring, 3, true):
+					var pp: Dictionary = sim.parcels.at_cell(Vector2i(int(pl[0]) + 1, int(pl[1]) + 1))
+					if not pp.is_empty() and str(pp.state) == "frei" and w.settle.hall_site_problem(k, Vector2i(int(pl[0]) + int(pl[2]) / 2, int(pl[1]) + int(pl[3]) / 2)) == "":
+						kept.append(pp)
 		if kept.is_empty():
 			return {"ok": false, "msg": "Kein Platz für das Bürgeramt bei deinem Betriebshof%s. Baue eine Straße am Betriebshof (strasse_bauen) – daran entsteht Bauland." % ((" – " + bad) if bad != "" else "")}
 		cands = kept

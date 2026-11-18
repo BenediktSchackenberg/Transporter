@@ -2820,6 +2820,8 @@ func _start_plan(b: Dictionary, data: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Ablauf braucht schritte: [{\"type\": \"...\", \"data\": {...}}, ...] (höchstens %d)." % ABLAUF_MAX}
 	var clean: Array = []
 	for s in steps.slice(0, ABLAUF_MAX):
+		if s is Dictionary and s.has("type") and str(s.type).to_lower() in ["wait", "warten"]:
+			continue   # 18.11.: der Ablauf wartet von selbst auf die Ankunft – "wait" brach ihn ab
 		if s is Dictionary and s.has("type") and str(s.type) != "Ablauf":
 			clean.append({"type": str(s.type), "data": s.get("data", {}) if s.get("data", {}) is Dictionary else {}})
 	if clean.is_empty():
