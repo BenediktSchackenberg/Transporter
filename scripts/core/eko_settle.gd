@@ -215,6 +215,14 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 		return {"ok": false, "msg": "Der Betriebshof passt hier nicht – etwas versetzt versuchen."}
 	c.depots.push_front(yard)
 	sim.depot_owner[yard] = cid
+	# Partie 18.11.: Amira kaufte Kies vor der Gruendung – er ging an den Startplatz und fehlte am neuen Hof. Noch nicht geladene
+	# Grosslager-Kaeufe der Firma werden deshalb auf den neuen Hof umgeleitet.
+	for d in sim.hub.deals.values():
+		if str(d.kind) == "kauf" and str(d.party) == "C%d" % cid and str(d.status) not in ["geliefert", "storniert"]:
+			d.dest = yard
+			var hk = sim.contracts.get(str(d.get("contract", "")))
+			if hk != null and hk.status in ["open", "accepted", "assigned"] and int(hk.picked) == 0:
+				hk.dropoff = yard
 	var t: Dictionary = C.towns[k]
 	t["center"] = [ctr.x, ctr.y]
 	t["rect"] = [ctr.x - 23, ctr.y - 24, 46, 48]

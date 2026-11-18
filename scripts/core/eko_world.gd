@@ -2153,7 +2153,8 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		return arms.firm_action(b, cid, a)
 	if str(a.action) in ["fortify_building", "rebuild_building"]:   # eigene Gebaeude befestigen / wieder aufbauen
 		return arms.firm_object_action(b, cid, a)
-	if str(a.action) in ["collect_contracts", "accept_contract"] and sim.wildnis and not range(sim.towns.count()).any(func(k): return sim.town_ready(k)):
+	var own_hub := str(a.action) == "accept_contract" and _own_hub_pickup(cid, str(a.get("contract_id", "")))   # eigene Abholung im Grosslager (Bodo, 18.11.)
+	if str(a.action) in ["collect_contracts", "accept_contract"] and not own_hub and sim.wildnis and not range(sim.towns.count()).any(func(k): return sim.town_ready(k)):
 		var hint := homes.next_step(cid) if settle.founded(sim.companies[cid].home_town) else settle.next_step(b, cid)
 		return {"ok": false, "msg": "In der Wildnis gibt es noch keine Kunden und keine Transportaufträge – erst wenn eine Stadt ein Bürgeramt hat. Jetzt: %s" % hint}
 	if str(a.action) == "buergeramt_bauen":   # Wildnis: Buergeramt selbst bauen – danach gibt es die Stadt
@@ -2225,12 +2226,8 @@ func _firm_redirect(b: Dictionary, cid: int, a: Dictionary) -> Dictionary:
 		return r
 	if act in FIRM_SETTLE_INFO:
 		return {"ok": true, "msg": "Siedlungslage (steht auch in beobachtung.siedlung): %s" % JSON.stringify(settle.obs(b, cid)).left(900)}
-	if act in FIRM_HUB_INFO:
-		var open_n := 0
-		for k in sim.contracts.values():
-			if k.status == "open" and str(k.order_ref).begins_with("hub:") and int(k.exclusive_for) == cid:
-				open_n += 1
-		return {"ok": true, "msg": "Großlager: %d gekaufte Abholungen warten auf dich – LKW {ziel: \"grosslager\"} lädt alle und bringt sie auf deinen Hof. Kaufen mit Firma {aktion: {action: \"hub_buy\", item, qty}}." % open_n}
+	if act in FIRM_HUB_INFO or (act == "hub_sell" and int(a.get("qty", a.get("menge", 0))) <= 0):   # 18.11.: Amira zaehlte ihren Bestand mit hub_sell qty 0
+		return {"ok": true, "msg": _stock_report(cid)}
 	if act == "buy_material" and sim.wildnis:   # in der Wildnis gibt es keinen Bauhof-Haendler: alles kommt vom Grosslager
 		var hb := {"action": "hub_buy", "item": str(a.get("item", a.get("material", ""))), "qty": a.get("qty", a.get("menge", a.get("anzahl", 0)))}
 		var r2 := _firm_action_inner(b, {"aktion": hb})
@@ -2239,6 +2236,33 @@ func _firm_redirect(b: Dictionary, cid: int, a: Dictionary) -> Dictionary:
 	if act in ["bergbau", "mining", "mine", "abbau"]:
 		return {"ok": false, "msg": "Bergbau geht in zwei Schritten: explore_deposit {grundstueck} (Probebohrung), danach request_mining {grundstueck}."}
 	return {}
+
+
+func _own_hub_pickup(cid: int, kid: String) -> bool:
+	var k = sim.contracts.get(kid)
+	return k != null and str(k.order_ref).begins_with("hub:") and int(k.exclusive_for) == cid
+
+
+## Bestand der Firma je eigenem Hof und wartende Abholungen im Grosslager.
+func _stock_report(cid: int) -> String:
+	var c = sim.company(cid)
+	var parts: Array = []
+	for dep in c.depots:
+		var rows := {}
+		for l in sim.stock.of_owner("C%d" % cid):
+			if int(l.loc) == int(dep):
+				rows[str(l.item)] = int(rows.get(str(l.item), 0)) + int(l.qty)
+		var items: Array = []
+		for it in rows:
+			items.append("%d × %s" % [rows[it], it])
+		var nm := str(sim.city.building(int(dep)).get("name", "Hof %d" % int(dep)))
+		parts.append("%s%s: %s" % [nm, " (Haupthof)" if dep == c.depots[0] else "", ", ".join(items) if not items.is_empty() else "leer"])
+	var open_ids: Array = []
+	for k in sim.contracts.values():
+		if str(k.order_ref).begins_with("hub:") and int(k.exclusive_for) == cid and k.status in ["open", "accepted", "assigned"]:
+			open_ids.append("%s %s" % [k.id, k.label.trim_prefix("Großlager: ")])
+	return "Bestand: %s. Wartende Abholungen im Großlager: %s – LKW {ziel: \"grosslager\"} lädt bis zu %d je Fahrt." % [
+		" | ".join(parts), ", ".join(open_ids) if not open_ids.is_empty() else "keine", c.contract_capacity()]
 
 
 ## "Meintest du …?" – aehnlichste erlaubte Firmen-Aktion

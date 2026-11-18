@@ -8561,10 +8561,18 @@ func test_wildnis_log_fixes() -> void:
 	ok(si.ok and str(si.msg).contains("Siedlungslage"), "siedlung_info liefert die Siedlungslage")
 	var hs: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_status"}})
 	ok(hs.ok and str(hs.msg).contains("Abholungen"), "hub_status liefert die Abholungen")
+	var hz: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_sell", "item": "kies", "qty": 0}})
+	ok(hz.ok and str(hz.msg).begins_with("Bestand"), "hub_sell mit Menge 0 = Bestandsabfrage: %s" % str(hz.msg).left(90))
 	var sg: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "siedlung_gruenden", "feld": [hub.x + 3, hub.y + 3]}})
 	ok(str(sg.msg).contains("eigene Handlung") and not sg.ok, "siedlung_gruenden wird zur Handlung Siedlung")
 	var bm: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "buy_material", "item": "holz", "menge": 5}})
 	ok(bm.ok and str(bm.msg).contains("hub_buy"), "buy_material in der Wildnis = hub_buy: %s" % str(bm.msg).left(90))
+	var own_k := ""
+	for kk in s.contracts.values():
+		if str(kk.order_ref).begins_with("hub:") and int(kk.exclusive_for) == cid and kk.status == "open":
+			own_k = kk.id
+	var ac: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "accept_contract", "contract_id": own_k, "vehicle_id": v.id}})
+	ok(own_k != "" and not str(ac.msg).contains("noch keine Kunden"), "eigene Großlager-Abholung annehmbar: %s" % str(ac.msg).left(90))
 	var un: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "collect_contract"}})
 	ok(not un.ok and str(un.msg).contains("Meintest du collect_contracts"), "unbekannte Aktion mit Vorschlag")
 	var sy: Dictionary = E.input(p0, "act", {"text": "Hallo zusammen"})
