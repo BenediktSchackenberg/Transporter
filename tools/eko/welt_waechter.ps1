@@ -32,8 +32,21 @@ while ($true) {
     $out = Join-Path $logs "welt_$stamp.log"
     Write-Host "[$stamp] Welt startet (Lauf $runs) ..." -ForegroundColor Cyan
     $p = Start-Process -FilePath $Godot -ArgumentList $args0 -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError "$out.err"
-    $p.WaitForExit()
-    $crash = (Select-String -Path $out, "$out.err" -Pattern "FATAL|CrashHandler" -Quiet)
+    # 18.11.2026: Grafiktreiber-Absturz (NVIDIA TDR) beendete nur das Spielfenster, der Konsolen-Starter lief weiter und der
+    # Waechter wartete ewig. Daher das Lebenszeichen des Spiels (user://logs/zuletzt.txt, alle 25 ms) pruefen.
+    $beat = Join-Path $env:APPDATA "Godot\app_userdata\Pixel Transport Rivals\logs\zuletzt.txt"
+    $started = Get-Date
+    $stale = $false
+    while (-not $p.WaitForExit(10000)) {
+        if (((Get-Date) - $started).TotalSeconds -lt 180 -or -not (Test-Path $beat)) { continue }
+        if (((Get-Date) - (Get-Item $beat).LastWriteTime).TotalSeconds -gt 120) {
+            $stale = $true
+            Write-Host "[$(Get-Date -Format HH:mm:ss)] Kein Lebenszeichen seit 2 min - Spiel haengt oder ist abgestuerzt, beende Reste." -ForegroundColor Yellow
+            Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'Godot*' -or ($_.Name -like 'python*' -and $_.CommandLine -match 'eko_') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            break
+        }
+    }
+    $crash = $stale -or (Select-String -Path $out, "$out.err" -Pattern "FATAL|CrashHandler" -Quiet)
     $ende = Get-Date -Format "HH:mm:ss"
     if ($crash) {
         Write-Host "[$ende] Absturz erkannt - Neustart aus dem letzten Spielstand in 5 s (Protokoll: $out)" -ForegroundColor Yellow
