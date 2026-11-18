@@ -359,12 +359,20 @@ func _from_producers(item: String) -> int:
 
 
 ## Flughafen-Frachtterminal, das dem Lager am naechsten liegt (Auftrag 19: Flughafenimport speist das Lager).
+const SUPPLY_TRUCKS_MAX := 3
+const SUPPLY_LOAD := 500
+
+
 ## Zulieferung von ausserhalb ueber die Landstrasse: ein Liefer-Lkw faehrt vom Kartenrand ins Grosslager, die Ware kommt bei
 ## Ankunft ins Lager (supplier_arrived). Hoechstens eine Fahrt je Ware gleichzeitig.
 func _supply_by_road(item: String, want: int) -> void:
+	var on_way := 0
 	for d in deals.values():
 		if str(d.kind) == "zulieferung" and str(d.item) == item and str(d.status) == "unterwegs":
-			return
+			on_way += 1
+	if on_way >= SUPPLY_TRUCKS_MAX:
+		return
+	want = mini(want, SUPPLY_LOAD)   # ein Lkw fasst hoechstens SUPPLY_LOAD; bei grossem Bedarf fahren mehrere (18.11.: Kies)
 	var cost := snappedf(base_price(item) * CityGoods.IMPORT_FACTOR * float(want), 0.01)
 	if float(sim.economy.accounts.get(ACCT, 0.0)) < cost or sim.fleet == null:
 		return

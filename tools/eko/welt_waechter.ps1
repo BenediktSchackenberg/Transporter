@@ -9,6 +9,7 @@ param(
     [string]$Projekt = (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\..")).Path,
     [switch]$NeuePartie,           # ohne Spielstand starten (neue Partie mit Wesen, neuer Zufalls-Seed)
     [switch]$Wildnis,              # neue Partie ohne Staedte: jede KI sucht ihren Platz und gruendet ihre Siedlung (Benedikt 17.11.)
+    [int]$Spieler = 4,             # neue Partie: Zahl der KI-Unternehmer (Benedikt 18.11.: erst mit 2 starten)
     [int]$StartHaeuser = -1,       # neue Partie: hoechstens so viele Wohnhaeuser je Startort (die Orte wachsen dann selbst)
     [int]$TagSekunden = -1,        # neue Partie: Laenge eines Spieltags in Sim-Sekunden (Standard 60; Eko empfohlen 600)
     [int]$Tempo = 2,               # neue Partie: Spielgeschwindigkeit 1/2/4/8/16 (Autotest-Standard waere 16 – zu schnell fuer denkende Wesen)
@@ -20,7 +21,7 @@ $logs = Join-Path $env:USERPROFILE "PixelTransportRivals-Eko\welt"
 New-Item -ItemType Directory -Force $logs | Out-Null
 $eko = @("--eko-spieler", "--eko-endlos", "--eko-folgen", "--eko-modell=$Modell")
 if ($Ctx -gt 0) { $eko += "--eko-ctx=$Ctx" }
-$args0 = @("--path", $Projekt, "--", "--autotest", "--speed=$Tempo") + $eko
+$args0 = @("--path", $Projekt, "--", "--autotest", "--speed=$Tempo", "--players=$Spieler") + $eko
 if ($StartHaeuser -ge 0) { $args0 += "--start-haeuser=$StartHaeuser" }
 if ($TagSekunden -gt 0) { $args0 += "--tag-sekunden=$TagSekunden" }
 if ($Wildnis) { $args0 += "--wildnis" }

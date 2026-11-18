@@ -60,7 +60,10 @@ var _homes_min := -1.0
 var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
 const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.000 EUR Privatgeld (Einlage von aussen X0 -> Y0)
 const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
-const GRUNDZIEL_WILDNIS := "Wildnis: Es gibt noch keine Städte und keine Kunden. Such dir einen sicheren Platz, eröffne Betriebshof und Basis, hol Material selbst mit deinem LKW und bau alles selbst – Bürgeramt, Häuser, Straßen. Transportaufträge gibt es erst, wenn Städte entstehen."
+# Benedikt 18.11.: "Ziel pro KI ist, dass die Stadt waechst, mehr Einwohner kommen, die Wirtschaft in Schwung kommt"
+const GRUNDZIEL_WILDNIS := ("Wildnis – dein Ziel: deine Stadt wächst, immer mehr Einwohner ziehen zu, die Wirtschaft kommt in Schwung. Weg dorthin: sicheren Platz suchen, " +
+	"Betriebshof und Basis eröffnen, Bürgeramt bauen (dann gibt es die Stadt), Straße zum Großlager (ohne Straße liefert niemand), Häuser für Siedler, " +
+	"erste Betriebe (Arbeitsplätze, Umsatz). Material holst du selbst mit deinem LKW; Tagelöhner helfen beim Bauen. Transportaufträge gibt es erst, wenn Städte entstehen.")
 const GRUNDZIEL_AMT := "Bringe deine Stadt voran: Versorgung, Wohnraum, Arbeit, Sicherheit und Zufriedenheit der Bürger (Amt). Dein Zuhause ist dein Rathaus."
 const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
 var towns_funded := {}              # "k" -> true
@@ -865,6 +868,9 @@ func _truck(b: Dictionary, data: Dictionary) -> Dictionary:
 			var r: Dictionary = sim.executor._accept_contract(cid, k.id, v.id)
 			if bool(r.get("ok", false)):
 				taken.append(k.id)
+		elif k.status == "accepted" and int(k.owner) == cid and str(k.order_ref).begins_with("hub:") and int(k.vehicle_id) < 0:
+			sim.executor._assign(cid, v.id, k.id)   # 18.11.: per accept_contract angenommene eigene Abholung (Viktor: "Nichts abzuholen")
+			taken.append(k.id)
 	var fuel_note := ""
 	if c.fuel < 1500.0:
 		var liters: float = 1500.0 - float(c.fuel)
@@ -2587,6 +2593,10 @@ func _firm_overview(cid: int) -> Dictionary:
 		sim.personnel.employed(cid).size(), ", ".join(vs) if not vs.is_empty() else "keine", (" Nächster Schritt: " + step) if step != "" else ""]}
 
 
+const OFFICE_PARAM_ALIASES := {"projekt": "project", "projekt_id": "project_id", "grundstuecke": "parcel_ids", "grundstücke": "parcel_ids",
+	"begruendung": "reason", "begründung": "reason", "grund": "reason", "typ_code": "typ", "bestellung": "order_id", "bestell_id": "order_id"}
+
+
 func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 	var k := int(b.get("amt", -1))
 	if k < 0:
@@ -2600,6 +2610,9 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 		return _office_overview(k)
 	if not Mayor.SCHEMA.has(str(a.get("action", ""))):
 		return {"ok": false, "msg": "Amt braucht aktion: {\"action\": eine von %s, ...}. Parameter siehe mein_amt.aktionen." % ", ".join(Mayor.SCHEMA.keys())}
+	for de in OFFICE_PARAM_ALIASES:   # 18.11.: Thomas Lindner schrieb projekt statt project
+		if a.has(de) and not a.has(OFFICE_PARAM_ALIASES[de]):
+			a[OFFICE_PARAM_ALIASES[de]] = a[de]
 	if not a.has("reason"):
 		a["reason"] = "Entscheidung von %s" % b.name
 	var fix := normalize_office(a)

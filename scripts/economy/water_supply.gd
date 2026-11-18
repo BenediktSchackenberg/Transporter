@@ -608,7 +608,8 @@ func mayor_expand(k: int, anlage: String) -> Dictionary:
 		"klaeranlage":
 			f = plant()
 	if f.is_empty():
-		return {"ok": false, "msg": "Keine Anlage %s in dieser Stadt." % anlage}
+		var code: String = str({"wasserwerk": "WW-01", "hochbehaelter": "WT-01", "klaeranlage": "KA-01"}.get(anlage, ""))
+		return {"ok": false, "msg": "Keine Anlage %s in dieser Stadt – ausbauen geht erst, wenn es eine gibt. Neu bauen: Amt {aktion: {action: \"kommunal_bauen\", typ: \"%s\"}}." % [anlage, code] if code != "" else "Keine Anlage %s in dieser Stadt." % anlage}
 	return expand(f, k if anlage != "klaeranlage" else int(f.town))
 
 

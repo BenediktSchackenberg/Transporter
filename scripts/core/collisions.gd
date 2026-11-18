@@ -17,7 +17,9 @@ const LANE := 7.0           # seitlicher Abstand, ab dem ein Fahrzeug auf einer 
 const CRASH := 9.0          # Beruehrung = Unfall
 const WRECK_S := 90.0       # so lange steht ein verunglueckter Wagen (Sim-Sekunden)
 const RAM_REACH := 22.0
-const STEP_LOOK := 12.0     # so weit (Weltpixel) wird der naechste Schritt vorausberechnet
+const STEP_LOOK := 12.0
+const JAM_S := 20.0         # gegenseitige Blockade: nach so vielen Sekunden wird aufgeloest
+const OVERTAKE_S := 5.0     # so lange hinter einem stehenden Fahrzeug, dann wird ueberholt     # so weit (Weltpixel) wird der naechste Schritt vorausberechnet
 
 var sim
 var last_blocker: Mover = null
@@ -33,8 +35,16 @@ func setup(simulation) -> void:
 ## Muss m warten? hash: Feld -> [Mover] (Simulation._hash).
 func blocked(m: Mover, hash: Dictionary) -> bool:
 	last_blocker = null
-	if m.arrived():
+	if m.arrived() or m.pass_until > sim.sim_time:
 		return false
+	var hit := _blocked(m, hash)
+	if hit and m.wait_time > JAM_S and last_blocker != null and last_blocker.wait_time > JAM_S and m.get_instance_id() < last_blocker.get_instance_id():
+		m.pass_until = sim.sim_time + 3.0   # gegenseitige Blockade: der mit der kleineren Kennung loest sie kurz auf (kein Unfall)
+		return false
+	return hit
+
+
+func _blocked(m: Mover, hash: Dictionary) -> bool:
 	var nt := m.next_tile()
 	var cur := m.tile()
 	var right := Vector2(-m.heading.y, m.heading.x)
@@ -47,7 +57,7 @@ func blocked(m: Mover, hash: Dictionary) -> bool:
 			seen[o] = true
 			var rel: Vector2 = o.pos - m.pos
 			var along := rel.dot(m.heading)
-			if rel.length() < CRASH and m.heading.dot(o.heading) >= 0.5 and m.get_instance_id() > o.get_instance_id():
+			if rel.length() < CRASH and m.heading.dot(o.heading) >= 0.5 and absf(rel.dot(m.heading)) < 1.5 and m.get_instance_id() > o.get_instance_id():
 				last_blocker = o   # dicht auf gleicher Hoehe in gleicher Richtung: einer wartet, bis Abstand da ist
 				return true
 			if along <= 0.0 or rel.length() > NEAR:
@@ -57,6 +67,8 @@ func blocked(m: Mover, hash: Dictionary) -> bool:
 			var standing: bool = o.arrived() or _is_wreck(o)
 			if standing and not _is_wreck(o) and (o.tile() == m.goal or nt == m.goal):
 				continue   # Stellplatz/Rampe am eigenen Ziel: dort duerfen mehrere stehen
+			if standing and m.wait_time > OVERTAKE_S:
+				continue   # an stehendem Fahrzeug/Unfallwagen vorbeifahren (18.11.: Liefer-Lkw wartete ewig hinter einem ladenden Lkw)
 			if standing or d >= 0.5:   # Vordermann oder stehendes Hindernis in der eigenen Spur
 				if along < FOLLOW and side < LANE:
 					last_blocker = o
@@ -95,8 +107,10 @@ func _step_hits(m: Mover, hash: Dictionary) -> bool:
 			seen[o] = true
 			if o.arrived() and not _is_wreck(o) and (o.tile() == m.goal or npt == m.goal):
 				continue
+			if (o.arrived() or _is_wreck(o)) and m.wait_time > OVERTAKE_S:
+				continue   # Ueberholen eines stehenden Fahrzeugs
 			var dn := np.distance_to(o.pos)
-			if dn < CRASH + 1.0 and dn < m.pos.distance_to(o.pos) and (o.arrived() or _is_wreck(o) or o.wait_time > 0.0 or m.get_instance_id() > o.get_instance_id()):
+			if dn < CRASH + 1.0 and dn < m.pos.distance_to(o.pos) and (o.arrived() or _is_wreck(o) or m.get_instance_id() > o.get_instance_id()):
 				last_blocker = o
 				return true
 	return false
@@ -129,7 +143,7 @@ func check_accidents(hash: Dictionary, describe: Dictionary) -> void:
 					continue
 				if a.heading.dot(b.heading) <= -0.5 and absf((b.pos - a.pos).cross(a.heading)) >= 4.0:
 					continue   # Gegenverkehr nebeneinander (Spurwechsel beim Abbiegen) – kein Zusammenstoss
-				if a.arrived() or b.arrived() or a.tile() == a.goal or b.tile() == b.goal or (_is_wreck(a) and _is_wreck(b)):
+				if a.arrived() or b.arrived() or a.tile() == a.goal or b.tile() == b.goal or _is_wreck(a) or _is_wreck(b) 						or a.pass_until > sim.sim_time or b.pass_until > sim.sim_time:
 					continue   # Stellplatz, Rampe, Ziel: dort stehen Fahrzeuge dicht beieinander
 				var key := "%d|%d" % [mini(a.get_instance_id(), b.get_instance_id()), maxi(a.get_instance_id(), b.get_instance_id())]
 				if sim.sim_time - float(_cool.get(key, -999.0)) < WRECK_S * 2.0:

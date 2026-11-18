@@ -178,6 +178,11 @@ func build(k: int, code: String, reason: String, by: String) -> Dictionary:
 	var info: Array = CityGenerator.TYPES[Municipal.TYPES[code].building]
 	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]))
 	if site.is_empty():
+		var bare: Array = sim.civic.sites_without_road(k, int(info[1]), int(info[2]), 4)
+		if not bare.is_empty():   # Partie 18.11. (Wildnis): Petra wollte seit Stunden eine Polizeiwache – es fehlten nur Strassen
+			return {"ok": false, "msg": ("Kein freies städtisches Grundstück MIT Straßenanschluss für %s (%d×%d Felder) – in %s fehlen Straßen. " +
+				"Erst erschließen: Amt {aktion: {action: \"plan_infrastructure\", parcel_ids: %s}} (dort passt der Bau), dann kommunal_bauen erneut.") % [
+				Municipal.TYPES[code].label, int(info[1]), int(info[2]), sim.towns.name_of(k), JSON.stringify(bare)]}
 		return {"ok": false, "msg": "Kein freies städtisches Grundstück für %s (%d×%d Felder)." % [Municipal.TYPES[code].label, int(info[1]), int(info[2])]}
 	var vote: Dictionary = M.civic_vote("oeffentlich_bau", cost)
 	if not vote.passed:

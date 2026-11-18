@@ -375,6 +375,37 @@ func _find_site(k: int, w: int, h: int, district: String = "") -> Dictionary:
 	return best
 
 
+## Grundstuecke nahe dem Rathaus, auf die der Bau passen wuerde, wenn es eine Strasse gaebe (fuer den Erschliessungsvorschlag).
+func sites_without_road(k: int, w: int, h: int, limit: int) -> Array:
+	var th: Dictionary = sim.city.building(int(sim.towns.get_t(k).get("town_hall", -1)))
+	if th.is_empty():
+		return []
+	var cands: Array = []
+	for p in sim.parcels.items.values():
+		if p.state != "frei" or not Towns.is_public(str(p.owner)) or Towns.town_of_owner(str(p.owner)) != k or not sim.parcels.is_buildable(p):
+			continue
+		if str(p.zone) in ["korridor", "industrie"]:
+			continue
+		var pr := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
+		if pr.size.x < w or pr.size.y < h:
+			continue
+		var dist := absi(pr.position.x - int(th.x)) + absi(pr.position.y - int(th.y))
+		if dist > 70:
+			continue
+		var ok := false
+		for y in range(pr.position.y, pr.end.y - h + 1):
+			for x in range(pr.position.x, pr.end.x - w + 1):
+				if _cells_free(Rect2i(x, y, w, h)):
+					ok = true
+					break
+			if ok:
+				break
+		if ok:
+			cands.append([dist, str(p.id)])
+	cands.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
+	return cands.slice(0, limit).map(func(c): return c[1])
+
+
 func _fit(pr: Rect2i, w: int, h: int) -> Rect2i:
 	var C: CityData = sim.city
 	for y in range(pr.position.y, pr.end.y - h + 1):
