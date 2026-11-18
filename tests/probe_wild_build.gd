@@ -17,6 +17,9 @@ func _init() -> void:
 			var miss: Dictionary = E.homes.missing(x) if x.status == "material" else {}
 			line += "\n    %s %s %s %d%%%s%s" % [x.id, x.typ, x.status, int(100.0 * float(x.progress) / maxf(1.0, float(x.work))), (" fehlt " + str(miss)) if not miss.is_empty() else "", (" " + str(x.get("blockiert", ""))) if x.has("blockiert") else ""]
 		print("%s (Kasse %d, Stamm %s): %d Baustellen%s" % [c.company_name, int(c.ledger.cash), E.estates.estates.has(E.firm_being(c.id)), sites.size(), line])
+	for k in s.towns.count():
+		print("Ort %d: Einwohner %d, Wohneinheiten %d, Stadtlager-Bestellungen %s" % [k, s.citizens.population_of(k), s.towns.mayor(k).stock_units if "stock_units" in s.towns.mayor(k) else -1,
+			str(s.towns.depot(k).orders.values().map(func(o): return o.status))])
 	var biz := s.biz.items.values()
 	print("Betriebe: ", biz.map(func(b): return "%s %s %s" % [b.get("owner"), b.get("branche", b.get("kind", "")), b.get("status", "")]))
 	quit()

@@ -486,17 +486,36 @@ func waiting_goods(cid: int) -> Dictionary:
 
 ## Naechster sinnvoller Schritt fuer die Firma ("" = keiner).
 func next_step(cid: int) -> String:
+	# Reihenfolge nach dem Ziel Wachstum (Benedikt 18.11.; Partie 14:13: Greta baute 84 Strassenfelder, aber kein Buergeramt, und beiden
+	# Unternehmern stand "gekaufte Ware abholen" ganz oben, auch wenn keine Baustelle sie brauchte – Viktors Buergeramt stand bei 0 %).
 	var sim = _sim()
 	var k: int = sim.companies[cid].home_town
-	var wait := waiting_goods(cid)
-	if not wait.is_empty():
-		return "Im Großlager liegt deine gekaufte Ware (%s) – selbst abholen: LKW {ziel: \"grosslager\"} (du fährst mit und lädst auf dem Hof ab)." % ", ".join(wait.keys().map(func(x): return "%d %s" % [wait[x], x]))
 	var open := open_sites(cid)
+	var wait := waiting_goods(cid)
+	var fetch := "Im Großlager liegt deine gekaufte Ware (%s) – selbst abholen: LKW {ziel: \"grosslager\"} (du fährst mit und lädst auf dem Hof ab)."
+	# 1) Buergeramt: erst damit gibt es Stadt, Buergermeister, Siedler und Stadtlager
+	if sim.wildnis and w.settle.founded(k) and not sim.town_ready(k) and not sites.values().any(func(s): return s.typ == "buergeramt" and int(s.cid) == cid and s.status != "abgelehnt"):
+		return "Zuerst das Bürgeramt – erst damit gibt es deine Stadt, einen Bürgermeister, Siedler und Lieferungen: Firma {aktion: {action: \"buergeramt_bauen\"}}."
+	# 2) stillstehende Baustelle (Buergeramt zuerst)
+	var idle: Array = open.filter(func(s): return s.status == "bau" and not owner_working(s) and (s.get("helfer", {}) as Dictionary).is_empty())
+	idle.sort_custom(func(a, b): return a.typ == "buergeramt" and b.typ != "buergeramt")
+	if not idle.is_empty():
+		var s: Dictionary = idle[0]
+		return ("Baustelle %s (%s, %d %%) wartet: selbst arbeiten – Bauen {baustelle: \"%s\"} – oder Tagelöhner vom Großlager holen, die auch ohne dich bauen: " +
+			"Firma {aktion: {action: \"tageloehner\", baustelle: \"%s\", anzahl: 2}} (%s je Kopf, dann %s je Kopf und Spieltag).") % [
+			s.id, s.typ, int(100.0 * float(s.progress) / float(s.work)), s.id, s.id, Catalog.money(HELPER_HIRE), Catalog.money(HELPER_WAGE)]
+	# 3) gekaufte Ware abholen, die eine Baustelle braucht; 4) fehlendes Material kaufen
+	var needed := {}
 	for s in open:
-		if s.status == "bau" and not owner_working(s) and (s.get("helfer", {}) as Dictionary).is_empty():
-			return ("Baustelle %s (%s, %d %%) wartet: selbst arbeiten – Bauen {baustelle: \"%s\"} – oder Tagelöhner vom Großlager holen, die auch ohne dich bauen: " +
-				"Firma {aktion: {action: \"tageloehner\", baustelle: \"%s\", anzahl: 2}} (%s je Kopf, dann %s je Kopf und Spieltag).") % [
-				s.id, s.typ, int(100.0 * float(s.progress) / float(s.work)), s.id, s.id, Catalog.money(HELPER_HIRE), Catalog.money(HELPER_WAGE)]
+		if s.status == "material":
+			for item in missing(s):
+				needed[item] = true
+	var wanted := {}
+	for item in wait:
+		if needed.has(item):
+			wanted[item] = wait[item]
+	if not wanted.is_empty():
+		return fetch % ", ".join(wanted.keys().map(func(x): return "%d %s" % [wanted[x], x]))
 	for s in open:
 		if s.status == "material":
 			var m := missing(s)
@@ -505,8 +524,7 @@ func next_step(cid: int) -> String:
 			var item: String = m.keys()[0]
 			return "Baustelle %s braucht Material: Firma {aktion: {action: \"hub_buy\", item: \"%s\", qty: %d}} – dann mit dem LKW holen. Fehlt insgesamt: %s." % [
 				s.id, item, int(m[item]), ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x]))]
-	if sim.wildnis and w.settle.founded(k) and not sim.town_ready(k) and not sites.values().any(func(s): return s.typ == "buergeramt" and int(s.cid) == cid and s.status != "abgelehnt"):
-		return "Bürgeramt bauen – erst damit gibt es deine Stadt, einen Bürgermeister und Siedler: Firma {aktion: {action: \"buergeramt_bauen\"}}."
+	# 5) Strasse zum Grosslager, Gewerbe, Wohnraum
 	if sim.wildnis and sim.town_ready(k) and not open.any(func(s): return s.typ == "strasse"):
 		var link: Dictionary = w.settle.road_link(k)
 		if not bool(link.get("verbunden", true)) and link.has("von"):
@@ -516,8 +534,11 @@ func next_step(cid: int) -> String:
 	var biz_hint := business_hint(cid)
 	if biz_hint != "":
 		return biz_hint
-	if not open.any(func(s): return s.typ != "strasse"):
+	if sim.town_ready(k) and not open.any(func(s): return s.typ != "strasse"):
 		return "Wohnraum bauen – mit Wohnungen kommen Siedler: Firma {aktion: {action: \"haus_bauen\", typ: \"einfamilienhaus\"}}."
+	# 6) uebrige gekaufte Ware
+	if not wait.is_empty():
+		return fetch % ", ".join(wait.keys().map(func(x): return "%d %s" % [wait[x], x]))
 	return ""
 
 
