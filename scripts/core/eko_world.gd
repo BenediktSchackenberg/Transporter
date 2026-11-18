@@ -2698,8 +2698,22 @@ static func normalize_office(a: Dictionary) -> String:
 			var t := str(a.get("typ", ""))
 			if not Municipal.TYPES.has(t):
 				var code := _municipal_code(t)
+				if code == "":   # 18.11.: "PW-01" statt PO-01 – Einrichtung aus der Begruendung erkennen ("Keine Polizeiwache vorhanden")
+					var why := _plain(str(a.get("reason", "")))
+					for c in Municipal.TYPES:
+						if why.contains(_plain(str(Municipal.TYPES[c].label))):
+							code = c
+							break
 				if code != "":
 					a["typ"] = code
+		"hire_staff":
+			var dep := _plain(str(a.get("abteilung", "")))
+			if dep != "" and dep not in ["verwaltung", "bauamt", "strassen", "pruefdienst"]:
+				for c in Municipal.TYPES:
+					var dienst := _plain(str(Municipal.TYPES[c].get("dienst", "")))
+					if dienst != "" and (dep.contains(dienst) or dienst.contains(dep)):
+						return "Personal für %s stellt der Dienst selbst ein, sobald die Einrichtung (%s) steht – hire_staff gilt nur für verwaltung, bauamt, strassen, pruefdienst. Stand der Dienste: Amt {aktion: {action: \"kommunale_dienste\"}}." % [
+							str(Municipal.TYPES[c].get("dienst", "")), str(Municipal.TYPES[c].label)]
 	return ""
 
 
