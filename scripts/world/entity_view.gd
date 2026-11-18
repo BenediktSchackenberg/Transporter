@@ -193,6 +193,9 @@ func _update_fleet() -> void:
 				n = _make_vehicle_node("truck", "", Color.WHITE, false)
 			elif v.kind == "zulieferer":   # Liefer-Lkw von ausserhalb zum Grosslager (Wildnis)
 				n = _make_vehicle_node("semi", "", Color.WHITE, false)
+			elif v.kind == "helfer":   # Tageloehner-Transporter (Wildnis)
+				n = _make_vehicle_node("roadcrew", "", Color.WHITE, false)
+				_add_beacon(n, -50.0)
 			else:
 				n = _make_vehicle_node("roadcrew" if v.kind in ["bautrupp", "kolonne", "netztrupp", "bahntrupp", "wassertrupp"] else "moving", "", Color.WHITE, false)
 			if v.kind in ["bautrupp", "kolonne", "netztrupp", "bahntrupp", "wassertrupp"]:

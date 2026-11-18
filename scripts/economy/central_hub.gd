@@ -18,7 +18,7 @@ const FREIGHT_BASE := 60.0
 const GOODS := {
 	"holz": {"g": "baumaterial", "t": 400}, "stahl": {"g": "baumaterial", "t": 240}, "beton": {"g": "baumaterial", "t": 360},
 	"ziegel": {"g": "baumaterial", "t": 600}, "glas": {"g": "baumaterial", "t": 160}, "sand": {"g": "baumaterial", "t": 500},
-	"kies": {"g": "baumaterial", "t": 500}, "asphalt": {"g": "baumaterial", "t": 240}, "pflaster": {"g": "baumaterial", "t": 300},
+	"kies": {"g": "baumaterial", "t": 1500}, "asphalt": {"g": "baumaterial", "t": 240}, "pflaster": {"g": "baumaterial", "t": 300},
 	"betonfertigteil": {"g": "baumaterial", "t": 160}, "rohr": {"g": "baumaterial", "t": 800}, "kabel": {"g": "baumaterial", "t": 1500},
 	"installation": {"g": "baumaterial", "t": 120}, "naturstein": {"g": "baumaterial", "t": 120}, "bronze": {"g": "baumaterial", "t": 40},
 	"naturstein_aufbereitet": {"g": "anlagen", "t": 80},
@@ -127,6 +127,8 @@ func buy(buyer: String, item: String, qty: int, dest: int, note: String = "", ra
 	if qty <= 0:
 		return {"ok": false, "msg": "Menge muss positiv sein."}
 	var have := stock_of(item)
+	if buyer.begins_with("C") and have >= 40 and qty > have / 2:   # Benedikt 18.11.: einer kaufte allen Kies, die anderen standen still
+		return {"ok": false, "msg": "Höchstens die Hälfte des Bestands je Kauf: %d × %s (auf Lager %d) – der Rest bleibt für andere." % [have / 2, item_name(item), have], "verfuegbar": have / 2}
 	if have < qty:
 		_shortage(item, qty - have)
 		return {"ok": false, "msg": "Nur %d × %s auf Lager (Nachschub ist bestellt)." % [have, item_name(item)], "verfuegbar": have}

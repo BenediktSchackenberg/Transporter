@@ -130,10 +130,15 @@ func found(cid: int, branch: String, params: Dictionary, reason: String) -> Dict
 			var chk: Dictionary = sim.mining.check_found(cid, str(dep.grundstueck))
 			if not chk.ok:
 				return chk
+		if dep.is_empty() and where.begins_with("G") and deposit_of(where).has("art") and int(deposit_of(where).get("menge", 0)) > 0:
+			var pl: Dictionary = sim.access.plan(where)   # Partie 18.11.: Viktor nannte die vorgeschlagene Lagerstaette und bekam jedes Mal eine andere
+			if bool(pl.get("ok", false)):
+				return {"ok": false, "msg": "%s hat noch keine Zufahrt. Erst bauen lassen: Firma {aktion: {action: \"build_access\", grundstueck: \"%s\"}} (%s, %d Tage), dann found_business erneut." % [
+					where, where, Catalog.money(float(pl.kosten)), int(pl.tage)]}
 		if dep.is_empty():
 			var far := remote_deposit(str(params.get("rohstoff", "")))
 			if not far.is_empty():
-				return {"ok": false, "msg": "Keine Lagerstätte mit Straßenanschluss%s. Zufahrt zu %s bauen (build_access, %s, %d Tage)." % [(" für " + str(params.get("rohstoff", ""))) if str(params.get("rohstoff", "")) != "" else "", far.grundstueck, Catalog.money(float(far.kosten)), int(far.tage)]}
+				return {"ok": false, "msg": "Keine Lagerstätte mit Straßenanschluss%s. Zufahrt zu %s bauen: Firma {aktion: {action: \"build_access\", grundstueck: \"%s\"}} (%s, %d Tage), dann found_business mit grundstueck: \"%s\"." % [(" für " + str(params.get("rohstoff", ""))) if str(params.get("rohstoff", "")) != "" else "", far.grundstueck, far.grundstueck, Catalog.money(float(far.kosten)), int(far.tage), far.grundstueck]}
 			return {"ok": false, "msg": "Keine freie Lagerstätte%s gefunden (deposits: %s)." % [(" für " + str(params.get("rohstoff", ""))) if str(params.get("rohstoff", "")) != "" else "", ", ".join(ALL_DEPOSIT_KINDS)]}
 		mode = "kaufen"   # Abbaurecht nur auf eigenem Grund
 		cands = [sim.parcels.parcel(str(dep.grundstueck))]

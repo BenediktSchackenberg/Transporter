@@ -2110,7 +2110,7 @@ const FIRM_ACTIONS := [
 	# Unternehmensplan (PlanBook): Ziel, Schritte, Nutzen, Risiken, Abbruchbedingungen
 	"set_plan", "update_plan_step", "cancel_plan",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
-	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "bauleute", "strasse_bauen", "buergeramt_bauen",
+	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "bauleute", "tageloehner", "strasse_bauen", "buergeramt_bauen",
 	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage",
 	# Waffenschmiede (nur mit eigener, laufender Waffenschmiede)
 	"design_weapon", "forge_weapon", "fortify_building", "rebuild_building"]
@@ -2208,6 +2208,8 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		var rh := homes.plan(cid, a)
 		_event(b, "Firma: haus_bauen → %s" % str(rh.msg).left(80))
 		return rh
+	if str(a.action) == "tageloehner":   # Wildnis (18.11.): Hilfskraefte vom Grosslager, bauen auch ohne den Inhaber
+		return homes.hire_helpers(cid, a)
 	if str(a.action) == "bauleute":
 		return homes.assign_crew(cid, a)
 	if str(a.action) == "strasse_bauen":   # Wildnis: Strassenbaustelle (EkoSettle -> EkoHomes), gebaut wird mit Bauen

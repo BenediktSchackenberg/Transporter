@@ -15,8 +15,13 @@ const BOM := {   # Material je Bau (Grosslager-Waren)
 	"mehrfamilienhaus": {"holz": 30, "ziegel": 120, "beton": 50, "glas": 14, "stahl": 10, "installation": 6},
 	"buergeramt": {"holz": 20, "ziegel": 60, "beton": 30, "glas": 8, "installation": 4},
 }
-const WORK_HOURS := {"einfamilienhaus": 24.0, "doppelhaus": 36.0, "mehrfamilienhaus": 80.0, "buergeramt": 30.0}
-const ROAD_HOURS_PER_CELL := 0.5
+# Benedikt 18.11.: Bauzeiten an die Spieluhr angepasst (1 Spieltag = 2 Spielstunden): Einfamilienhaus ~2 Spieltage Arbeit statt 12
+const WORK_HOURS := {"einfamilienhaus": 4.0, "doppelhaus": 6.0, "mehrfamilienhaus": 13.0, "buergeramt": 5.0}
+const ROAD_HOURS_PER_CELL := 0.1
+# Tageloehner vom Grosslager (Benedikt 18.11.): bauen auch ohne den Inhaber, aber nur mit Material; Lohn je Spieltag
+const HELPER_MAX := 4
+const HELPER_HIRE := 300.0      # Anwerbung und Anfahrt je Kopf
+const HELPER_WAGE := 150.0      # Lohn je Kopf und Spieltag
 const MAX_SITES := 3
 const MAX_CREW := 6
 const NEAR := 6                 # so nah muss das Wesen an der Arbeitsstelle sein (Felder)
@@ -215,6 +220,9 @@ func owner_working(s: Dictionary) -> bool:
 func crew_now(s: Dictionary) -> int:
 	var sim = _sim()
 	var n := 1 if owner_working(s) else 0
+	var hf: Dictionary = s.get("helfer", {})
+	if str(hf.get("status", "")) == "vor_ort":
+		n += int(hf.n)
 	for id in s.crew:
 		var wk = sim.personnel.workers.get(str(id))
 		if wk != null and wk.employer == int(s.cid) and not wk.lost and str(wk.task_id) == "" and int(wk.vehicle_id) < 0:
@@ -226,6 +234,7 @@ func crew_now(s: Dictionary) -> int:
 func tick(dt_min: float) -> void:
 	var sim = _sim()
 	for s in sites.values():
+		_pay_helpers(s, dt_min)
 		match str(s.status):
 			"genehmigung":
 				var app: Dictionary = sim.permits.apps.get(str(s.app), {})
@@ -361,10 +370,87 @@ func _finish(s: Dictionary) -> void:
 
 
 func _release_builder(s: Dictionary) -> void:
+	_helpers_home(s)
+	_release_builder_only(s)
+
+
+func _release_builder_only(s: Dictionary) -> void:
 	var name: String = w.firm_being(int(s.cid))
 	if name != "" and w.beings.has(name) and str(w.beings[name].get("baut", "")) == str(s.id):
 		w.beings[name].erase("baut")
 		w._event(w.beings[name], "Baustelle %s ist fertig." % s.id)
+
+
+# ------------------------------------------------------------------ Tageloehner
+## Firma {aktion: {action: "tageloehner", baustelle, anzahl}}: Hilfskraefte kommen vom Grosslager (sichtbarer Transporter, querfeldein)
+## und bauen, sobald sie vor Ort sind und das Material da ist – auch wenn der Inhaber woanders ist. Nach Bauende fahren sie zurueck.
+func hire_helpers(cid: int, a: Dictionary) -> Dictionary:
+	var sim = _sim()
+	var s: Dictionary = sites.get(str(a.get("baustelle", "")), {})
+	if s.is_empty() or int(s.cid) != cid or str(s.status) in ["fertig", "abgelehnt"]:
+		return {"ok": false, "msg": "Keine offene Baustelle %s von dir. Deine: %s." % [a.get("baustelle", ""), ", ".join(open_sites(cid).map(func(x): return x.id))]}
+	var n := clampi(int(a.get("anzahl", a.get("n", 2))), 1, HELPER_MAX)
+	var hf: Dictionary = s.get("helfer", {})
+	if not hf.is_empty():
+		return {"ok": false, "msg": "Auf Baustelle %s sind schon %d Tagelöhner (%s)." % [s.id, int(hf.n), hf.status]}
+	var c = sim.company(cid)
+	var cost := HELPER_HIRE * float(n)
+	if c.ledger.cash < cost:
+		return {"ok": false, "msg": "Anwerbung kostet %s, Kasse %s." % [Catalog.money(cost), Catalog.money(c.ledger.cash)]}
+	var hub_b: Dictionary = sim.city.building(int(sim.city.hub.get("buildings", {}).get("hauptlager", -1)))
+	var start: Vector2i = hub_b.road if not hub_b.is_empty() else work_cell(s)
+	if not sim.fleet.send_helpers(start, work_cell(s), str(s.id), "%d Tagelöhner → %s" % [n, s.id]):
+		return {"ok": false, "msg": "Vom Großlager führt kein Weg zur Baustelle %s." % s.id}
+	c.ledger.book("wages", -cost, true, "Tagelöhner anwerben (%d) für %s" % [n, s.id], sim.game_min, "Y0")
+	s["helfer"] = {"n": n, "status": "anreise", "acc": 0.0}
+	return {"ok": true, "msg": "%d Tagelöhner kommen vom Großlager zur Baustelle %s (%s; danach %s je Kopf und Spieltag). Sie bauen, sobald das Material da ist – auch ohne dich." % [
+		n, s.id, Catalog.money(cost), Catalog.money(HELPER_WAGE)]}
+
+
+func helpers_arrived(site_id: String) -> void:
+	var s: Dictionary = sites.get(site_id, {})
+	if s.has("helfer"):
+		s.helfer.status = "vor_ort"
+		_sim().log_event("Tagelöhner sind an Baustelle %s angekommen." % site_id, "info", int(s.cid))
+
+
+func _pay_helpers(s: Dictionary, dt_min: float) -> void:
+	var hf: Dictionary = s.get("helfer", {})
+	if hf.is_empty():
+		return
+	hf.acc = float(hf.get("acc", 0.0)) + dt_min
+	var day_min := GameCalendar.days_to_min(1.0)
+	if float(hf.acc) < day_min:
+		return
+	hf.acc = float(hf.acc) - day_min
+	var sim = _sim()
+	var c = sim.company(int(s.cid))
+	var wage := HELPER_WAGE * float(hf.n)
+	if c.ledger.cash < wage:
+		sim.notify(int(s.cid), "Tagelöhner an %s gehen – kein Geld für den Lohn." % s.id)
+		_helpers_home(s)
+		return
+	c.ledger.book("wages", -wage, true, "Tagelöhner %s (%d)" % [s.id, int(hf.n)], sim.game_min, "Y0")
+
+
+func _helpers_home(s: Dictionary) -> void:
+	if not s.has("helfer"):
+		return
+	s.erase("helfer")
+	_sim().fleet.helpers_leave(str(s.id))
+
+
+## Gewerbe (Benedikt 18.11.): sobald Menschen in der Stadt wohnen und die Firma noch keinen Betrieb hat, einen ersten vorschlagen.
+func business_hint(cid: int) -> String:
+	var sim = _sim()
+	var k: int = sim.companies[cid].home_town
+	if not sim.wildnis or not sim.town_ready(k) or sim.citizens.population_of(k) <= 0:
+		return ""
+	if sim.biz.items.values().any(func(b): return int(b.get("owner", -1)) == cid and str(b.get("status", "")) != "geschlossen"):
+		return ""
+	return ("In %s wohnen jetzt Menschen (%d) – Zeit für Gewerbe: ein erster Betrieb bringt Umsatz und Arbeitsplätze, z. B. " +
+		"Firma {aktion: {action: \"found_business\", branche: \"baeckerei\"}} (Laden mit Theke) oder eine Kiesgrube für deinen eigenen Straßenbau " +
+		"(found_business branche: \"bergwerk\", rohstoff: \"kies\").") % [sim.towns.name_of(k), sim.citizens.population_of(k)]
 
 
 # ------------------------------------------------------------------ Beobachtung und naechste Schritte
@@ -407,9 +493,10 @@ func next_step(cid: int) -> String:
 		return "Im Großlager liegt deine gekaufte Ware (%s) – selbst abholen: LKW {ziel: \"grosslager\"} (du fährst mit und lädst auf dem Hof ab)." % ", ".join(wait.keys().map(func(x): return "%d %s" % [wait[x], x]))
 	var open := open_sites(cid)
 	for s in open:
-		if s.status == "bau" and not owner_working(s):
-			return "Baustelle %s (%s, %d %%) wartet auf dich – Bauen {baustelle: \"%s\"} (du gehst hin und arbeitest, bis du etwas anderes tust)." % [
-				s.id, s.typ, int(100.0 * float(s.progress) / float(s.work)), s.id]
+		if s.status == "bau" and not owner_working(s) and (s.get("helfer", {}) as Dictionary).is_empty():
+			return ("Baustelle %s (%s, %d %%) wartet: selbst arbeiten – Bauen {baustelle: \"%s\"} – oder Tagelöhner vom Großlager holen, die auch ohne dich bauen: " +
+				"Firma {aktion: {action: \"tageloehner\", baustelle: \"%s\", anzahl: 2}} (%s je Kopf, dann %s je Kopf und Spieltag).") % [
+				s.id, s.typ, int(100.0 * float(s.progress) / float(s.work)), s.id, s.id, Catalog.money(HELPER_HIRE), Catalog.money(HELPER_WAGE)]
 	for s in open:
 		if s.status == "material":
 			var m := missing(s)
@@ -424,6 +511,9 @@ func next_step(cid: int) -> String:
 			return ("Deine Stadt hat keine Straße zum Großlager – ohne Straße liefert niemand Waren (Stadtlager, Kunden, Siedler). Straße bauen, Stück für Stück " +
 				"(je Baustelle bis %d Felder, noch ~%d): Firma {aktion: {action: \"strasse_bauen\", von: %s, bis: %s}} – dann Kies holen und Bauen.") % [
 				EkoSettle.ROAD_MAX, int(link.felder), str(link.von), str(link.bis)]
+	var biz_hint := business_hint(cid)
+	if biz_hint != "":
+		return biz_hint
 	if not open.any(func(s): return s.typ != "strasse"):
 		return "Wohnraum bauen – mit Wohnungen kommen Siedler: Firma {aktion: {action: \"haus_bauen\", typ: \"einfamilienhaus\"}}."
 	return ""
@@ -442,3 +532,10 @@ func from_dict(d: Dictionary) -> void:
 		s["placed"] = int(s.get("placed", 0))
 		if not s.has("work"):
 			s["work"] = float(WORK_HOURS.get(str(s.typ), 24.0))
+		var target: float = float((s.get("cells", []) as Array).size()) * ROAD_HOURS_PER_CELL if str(s.typ) == "strasse" else float(WORK_HOURS.get(str(s.typ), float(s.work)))
+		if float(s.work) > target * 1.01:   # alte Spielstaende: lange Bauzeiten anteilig umrechnen (18.11.)
+			s["progress"] = float(s.progress) * target / float(s.work)
+			s["work"] = target
+		var hf: Dictionary = s.get("helfer", {})
+		if str(hf.get("status", "")) == "anreise":
+			hf["status"] = "vor_ort"   # der Fuhrpark wird nicht gespeichert: Tageloehner gelten als angekommen

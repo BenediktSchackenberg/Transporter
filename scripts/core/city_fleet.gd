@@ -110,6 +110,33 @@ func send_supplier(to: Vector2i, deal_id: String, label: String) -> bool:
 	return true
 
 
+## Tageloehner (Wildnis, 18.11.): Transporter vom Grosslager querfeldein zur Baustelle; bleibt dort, bis die Baustelle fertig ist.
+func send_helpers(from: Vector2i, to: Vector2i, site_id: String, label: String) -> bool:
+	var p: Array[Vector2i] = sim.offroad_path(from, to)
+	if p.is_empty():
+		return false
+	var m := Mover.new()
+	m.speed = SPEED * 0.6
+	m.lane = 0.0
+	m.pos = sim.city.tile_center(from)
+	m.set_path(p)
+	vehicles.append({"id": _next, "kind": "helfer", "mover": m, "phase": "anfahrt", "site": to, "until": INF, "back": from, "label": label, "baustelle": site_id})
+	_next += 1
+	return true
+
+
+func helpers_leave(site_id: String) -> void:
+	for v in vehicles:
+		if str(v.kind) == "helfer" and str(v.get("baustelle", "")) == site_id:
+			v.phase = "rueckfahrt"
+			var p: Array[Vector2i] = sim.offroad_path((v.mover as Mover).tile(), v.back)
+			if p.is_empty():
+				vehicles.erase(v)
+			else:
+				(v.mover as Mover).set_path(p)
+			return
+
+
 ## Umzugswagen fuer einen zugezogenen Haushalt: vom Stadtrand zur Wohnung (Gebaeude-ID), dann wieder hinaus.
 func send_moving(building_id: int, label: String) -> void:
 	if _edges.is_empty() or vehicles.filter(func(v): return v.kind == "umzug").size() >= MAX_MOVING:
@@ -176,6 +203,13 @@ func update(dt: float) -> void:
 				v.phase = "rueckfahrt"
 				if not sim.route(m, v.back):
 					vehicles.erase(v)
+			elif str(v.phase) == "rueckfahrt":
+				vehicles.erase(v)
+			continue
+		if v.kind == "helfer":
+			if str(v.phase) == "anfahrt":
+				sim.eko.homes.helpers_arrived(str(v.baustelle))
+				v.phase = "arbeit"
 			elif str(v.phase) == "rueckfahrt":
 				vehicles.erase(v)
 			continue

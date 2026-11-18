@@ -43,6 +43,7 @@ func _initialize() -> void:
 	test_names.append("test_wildnis_log_fixes")
 	test_names.append("test_wildnis_hub_supply")
 	test_names.append("test_collisions")
+	test_names.append("test_wildnis_helpers")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
@@ -8688,6 +8689,42 @@ func test_collisions() -> void:
 	ok(w.rivalry.get_tension(cid0, cid1) > 0.0, "Spannung zur gerammten Firma steigt")
 
 
+## Benedikt 18.11.: Tageloehner bauen auch ohne den Inhaber; Kauflimit im Grosslager; kuerzere Bauzeiten.
+func test_wildnis_helpers() -> void:
+	var s := wildnis_sim(2)
+	var E: EkoWorld = s.eko
+	E.auto_estates = true
+	var ps: Array = E.adopt_players(2)
+	var B: Dictionary = E.beings[ps[0]]
+	var cid := E.active_firm(B)
+	var v := E.own_truck(cid)
+	ok(EkoHomes.WORK_HOURS.einfamilienhaus <= 4.0, "Einfamilienhaus braucht höchstens 4 Spielstunden Arbeit (2 Spieltage)")
+	# kleine Strassenbaustelle neben dem Lkw, Material schon da (need leer)
+	var cells: Array = []
+	for i in 6:
+		var q := v.tile() + Vector2i(3 + i, 2)
+		if s.city.walkable(q) and not s.city.is_road(q):
+			cells.append(q)
+	var r: Dictionary = E.homes.add_road_site(cid, cells, {})
+	ok(r.ok, "Baustelle angelegt: %s" % str(r.msg).left(60))
+	var site: Dictionary = E.homes.sites[r.baustelle]
+	E.homes.tick(1.0)
+	ok(site.status == "bau", "Material da – Bau kann beginnen")
+	var cash0: float = s.company(cid).ledger.cash
+	var h: Dictionary = E.input(ps[0], "Firma", {"aktion": {"action": "tageloehner", "baustelle": site.id, "anzahl": 2}})
+	ok(h.ok and s.company(cid).ledger.cash < cash0, "Tagelöhner angeworben: %s" % str(h.msg).left(80))
+	ok(s.fleet.vehicles.any(func(x): return x.kind == "helfer"), "Transporter der Tagelöhner fährt los")
+	var done := _run_until(s, func(): return site.status == "fertig", 20000)
+	ok(done, "Baustelle fertig, ohne dass der Inhaber gearbeitet hat (%s, %d %%)" % [site.status, int(100.0 * float(site.progress) / maxf(1.0, float(site.work)))])
+	ok(not site.has("helfer"), "Tagelöhner nach Bauende abgezogen")
+	# Kauflimit: hoechstens die Haelfte des Bestands je Kauf
+	var have: int = s.hub.stock_of("ziegel")
+	var big: Dictionary = E.input(ps[0], "Firma", {"aktion": {"action": "hub_buy", "item": "ziegel", "qty": have}})
+	ok(have < 40 or (not big.ok and str(big.msg).contains("Hälfte")), "nicht den ganzen Bestand auf einmal: %s" % str(big.msg).left(80))
+	RegionGenerator.neubeginn = false
+	RegionGenerator.wildnis = false
+
+
 func test_wildnis_found() -> void:
 	var s := wildnis_sim(2)
 	var E: EkoWorld = s.eko
@@ -8766,7 +8803,7 @@ func test_wildnis_found() -> void:
 	ok(wb.ok and str(B.get("baut", "")) == hs.id, "Bauen: %s" % str(wb.msg).left(80))
 	B.mover.pos = s.city.tile_center(E.homes.work_cell(hs))
 	var nb0 := E.blocks.size()
-	E.homes.tick(600.0)
+	E.homes.tick(60.0)   # 18.11.: Buergeramt braucht nur noch 5 Spielstunden – 600 min waeren schon fertig
 	ok(float(hs.progress) > 0.0 and E.blocks.size() > nb0, "das Wesen baut, Rohbau wächst Block für Block (%d Blöcke)" % (E.blocks.size() - nb0))
 	ok(float(B.akku) < 100.0, "Bauen kostet Akku (%d %%)" % int(B.akku))
 	B.akku = 100.0
