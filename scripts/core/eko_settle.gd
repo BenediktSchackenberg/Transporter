@@ -256,7 +256,11 @@ func open_town(k: int, rect: Rect2i) -> bool:
 	var t: Dictionary = C.towns[k]
 	var nm: String = str(t.name)
 	var hall := _place("townhall", rect.position, rect.position + Vector2i(3, 3), "Bürgeramt %s" % nm)
+	if hall < 0:   # Partie 18.11.: Viktors Buergeramt hing bei 100 % ("passt nicht aufs Grundstueck") – freien Platz daneben suchen
+		hall = _place_near("townhall", rect.get_center(), 14, "Bürgeramt %s" % nm)
 	var bauhof := _place("freight_shed", rect.position + Vector2i(4, 0), rect.end - Vector2i(1, 1), "Städtischer Bauhof")
+	if bauhof < 0:
+		bauhof = _place_near("freight_shed", rect.get_center(), 18, "Städtischer Bauhof")
 	if hall < 0 or bauhof < 0:
 		return false
 	t["town_hall"] = hall
@@ -595,6 +599,22 @@ func _road_path(cell: Vector2i, limit: int) -> Array:
 
 
 ## Gebaeude im Rechteck zwischen a und b (beliebige Ecken); -1 wenn nichts passt.
+## Gebaeude des Typs auf dem naechsten freien Platz um center (ringweise bis radius) setzen; -1 = nichts frei.
+func _place_near(type: String, center: Vector2i, radius: int, name: String) -> int:
+	var info: Array = CityGenerator.TYPES.get(type, [type, 3, 3])
+	var sz := Vector2i(int(info[1]), int(info[2]))
+	for r in range(0, radius + 1, 2):
+		for dy in range(-r, r + 1, 2):
+			for dx in range(-r, r + 1, 2):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var pos := center + Vector2i(dx, dy) - sz / 2
+				var bd: Dictionary = _sim().events._add_building(type, Rect2i(pos, sz), name)
+				if not bd.is_empty():
+					return int(bd.id)
+	return -1
+
+
 func _place(type: String, a: Vector2i, b: Vector2i, name: String) -> int:
 	var r := Rect2i(Vector2i(mini(a.x, b.x), mini(a.y, b.y)), Vector2i(absi(a.x - b.x) + 1, absi(a.y - b.y) + 1))
 	var bd: Dictionary = _sim().events._add_building(type, r, name)

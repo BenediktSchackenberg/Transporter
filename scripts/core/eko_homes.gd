@@ -254,6 +254,9 @@ func tick(dt_min: float) -> void:
 						sim.parcels.mark(str(s.parcel), "im_bau", str(s.app))
 					sim.log_event("%s: Baustelle %s – Material da, es kann gebaut werden." % [sim.company(int(s.cid)).company_name, s.id], "info", int(s.cid))
 			"bau":
+				if float(s.progress) >= float(s.work):
+					_finish(s)   # 18.11.: Abschluss scheiterte einmal (Platz) – ohne Arbeiter wurde er nie wieder versucht
+					continue
 				var crew := crew_now(s)
 				if crew <= 0:
 					continue
