@@ -8544,11 +8544,11 @@ func test_wildnis_log_fixes() -> void:
 	# 1) zu nah am Grosslager: Zahlen und ein erreichbarer Vorschlag
 	var hub := Vector2i(int(s.city.hub.center[0]), int(s.city.hub.center[1]))
 	var sc: Dictionary = E.settle.score_at(hub + Vector2i(5, 5))
-	ok(not sc.ok and str(sc.grund).contains("mindestens 20 Felder"), "zu nah am Großlager mit Abstand: %s" % str(sc.get("grund", "")).left(90))
+	ok(not sc.ok and str(sc.grund).contains("mindestens 40 Felder"), "zu nah am Großlager mit Abstand: %s" % str(sc.get("grund", "")).left(90))
 	var near: Array = E.settle.best_near(v.tile(), 70, 3)
 	ok(near.all(func(x): return not s.offroad_path(v.tile(), Vector2i(int(x.feld[0]), int(x.feld[1]))).is_empty()), "empfohlene Plätze sind mit dem LKW erreichbar (%d)" % near.size())
 	var far: Dictionary = E.input(p0, "Siedlung", {"feld": [hub.x + 3, hub.y + 3]})
-	ok(not far.ok and str(far.msg).contains("mindestens 20 Felder") and (near.is_empty() or str(far.msg).contains("Nächster passender Platz")), "Ablehnung nennt Grund und Vorschlag: %s" % str(far.msg).left(140))
+	ok(not far.ok and str(far.msg).contains("mindestens 40 Felder") and (near.is_empty() or str(far.msg).contains("Nächster passender Platz")), "Ablehnung nennt Grund und Vorschlag: %s" % str(far.msg).left(140))
 	# 2) LKW-Ziel auf einem gesperrten Feld (Gebaeude): naechstes freies Feld statt Ablehnung
 	var blocked := Vector2i(-1, -1)
 	for bb in s.city.buildings:

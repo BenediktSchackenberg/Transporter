@@ -10,6 +10,8 @@ extends RefCounted
 ## Alles Weitere baut die KI selbst (EkoHomes): Buergeramt (danach gibt es die Stadt und den Buergermeister), Haeuser, Strassen.
 
 const MIN_TOWN_DIST := 60       # Abstand zu anderen Siedlungen (Mitte zu Mitte)
+const HUB_DIST := 40            # Abstand zum Grosslager-Gelaende (Benedikt 18.11.: keine Stadt am zentralen Marktplatz)
+const HALL_R := 22              # Buergeramt hoechstens so weit vom eigenen Betriebshof (dort entsteht die Stadt)
 const HARBOR_R := 6
 const DEPOSIT_R := 30
 const AREA := 12                # halbe Kantenlaenge der Flaeche, die frei und eben sein muss
@@ -68,9 +70,9 @@ func score_at(cell: Vector2i) -> Dictionary:
 	var hub := Vector2i(-1, -1)
 	if not C.hub.is_empty():
 		var hr: Array = C.hub.rect
-		if Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3])).grow(20).has_point(cell):
-			out["grund"] = "zu nah am Großlager (Lagergelände x %d–%d, y %d–%d; nötig sind mindestens 20 Felder Abstand zum Gelände)" % [
-				int(hr[0]), int(hr[0]) + int(hr[2]) - 1, int(hr[1]), int(hr[1]) + int(hr[3]) - 1]
+		if Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3])).grow(HUB_DIST).has_point(cell):
+			out["grund"] = "zu nah am Großlager (Lagergelände x %d–%d, y %d–%d; nötig sind mindestens %d Felder Abstand zum Gelände – der zentrale Marktplatz bleibt frei)" % [
+				int(hr[0]), int(hr[0]) + int(hr[2]) - 1, int(hr[1]), int(hr[1]) + int(hr[3]) - 1, HUB_DIST]
 			return out
 		hub = Vector2i(int(C.hub.center[0]), int(C.hub.center[1]))
 	var free := 0
@@ -604,6 +606,29 @@ func _road_path(cell: Vector2i, limit: int) -> Array:
 
 
 ## Gebaeude im Rechteck zwischen a und b (beliebige Ecken); -1 wenn nichts passt.
+## Darf hier der Stadtkern (Buergeramt) der Stadt k entstehen? Nah am eigenen Betriebshof, weit weg von anderen Staedten und vom
+## Grosslager (Benedikt 18.11.: Liorufers Buergeramt stand mitten in Birkenklippe). "" = ja, sonst der Grund.
+func hall_site_problem(k: int, cell: Vector2i) -> String:
+	var C: CityData = _sim().city
+	var st: Dictionary = _sim().settlements.get(str(k), {})
+	if st.has("center"):
+		var own := Vector2i(int(st.center[0]), int(st.center[1]))
+		if absi(own.x - cell.x) + absi(own.y - cell.y) > HALL_R:
+			return "zu weit vom eigenen Betriebshof (%d Felder, höchstens %d)" % [absi(own.x - cell.x) + absi(own.y - cell.y), HALL_R]
+	for j in C.towns.size():
+		var t: Dictionary = C.towns[j]
+		if j == k or not bool(t.get("siedlung", false)):
+			continue
+		var tc := Vector2i(int(t.center[0]), int(t.center[1]))
+		if absi(tc.x - cell.x) + absi(tc.y - cell.y) < MIN_TOWN_DIST:
+			return "zu nah an %s (%d Felder, mindestens %d)" % [t.name, absi(tc.x - cell.x) + absi(tc.y - cell.y), MIN_TOWN_DIST]
+	if not C.hub.is_empty():
+		var hr: Array = C.hub.rect
+		if Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3])).grow(HUB_DIST).has_point(cell):
+			return "zu nah am Großlager (mindestens %d Felder Abstand zum Gelände)" % HUB_DIST
+	return ""
+
+
 ## Gebaeude des Typs auf dem naechsten freien Platz um center (ringweise bis radius) setzen; -1 = nichts frei.
 func _place_near(type: String, center: Vector2i, radius: int, name: String) -> int:
 	var info: Array = CityGenerator.TYPES.get(type, [type, 3, 3])

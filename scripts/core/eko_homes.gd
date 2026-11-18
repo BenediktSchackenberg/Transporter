@@ -111,6 +111,19 @@ func _plan_building(cid: int, typ: String, want: String) -> Dictionary:
 	if want == "" and cands.size() > 1 and sim.town_plan.has(k):   # Auftrag 8: bewertete Reihenfolge (Viertel, Kern, Nachbarschaft)
 		var dd: Dictionary = Planning.DEFS[def_id]
 		cands = sim.sites.order_parcels(k, cands, {"w": int(dd.w), "h": int(dd.h), "art": "wohnen", "floors": floors, "label": str(dd.label)})
+	if is_hall and sim.wildnis:   # Stadtkern beim eigenen Betriebshof, nicht in einer anderen Stadt oder am Grosslager
+		var bad := ""
+		var kept: Array = []
+		for p in cands:
+			var pc := Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)
+			var prob: String = w.settle.hall_site_problem(k, pc)
+			if prob == "":
+				kept.append(p)
+			else:
+				bad = "Grundstück %s: %s" % [p.id, prob]
+		if kept.is_empty():
+			return {"ok": false, "msg": "Kein Platz für das Bürgeramt bei deinem Betriebshof%s. Baue eine Straße am Betriebshof (strasse_bauen) – daran entsteht Bauland." % ((" – " + bad) if bad != "" else "")}
+		cands = kept
 	var why := "kein freies Baugrundstück – mit strasse_bauen entstehen neue an der Straße"
 	for p in cands:
 		var chk := Planning.assess(p, probe)
