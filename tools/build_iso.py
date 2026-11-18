@@ -15,6 +15,7 @@ import engine
 import lib
 import ground as G
 import vehicles as V
+import offroad as OR
 import figures as F
 import props as PR
 import facilities as FA
@@ -236,6 +237,7 @@ def build_vehicles():
             info = save_result("v_%s_%d" % (name, k), r, keep_mask=not plain, top=False)
             info["pivot"] = [r["anchor"][0], r["anchor"][1] + n]   # (cx, cy, z=0) mit cx = cy = n / 2 -> y-Versatz = n
             out["%s_%d" % (name, k)] = info
+    build_offroad()
     for cname in V.CAR_COLORS:
         base = V.car(cname)
         n = base.size[0]
@@ -245,6 +247,18 @@ def build_vehicles():
             info["pivot"] = [r["anchor"][0], r["anchor"][1] + n]
             out["car_%s_%d" % (cname.split("_")[1], k)] = info
     print("Fahrzeuge:", len(out))
+
+
+def build_offroad():
+    """Gelaende-LKW (offroad.py) mit Firmenmaske, 4 Richtungen."""
+    out = manifest.setdefault("vehicles", {})
+    base = OR.gelaende_lkw()
+    n = base.size[0]
+    for k in range(4):
+        r = engine.render(base.rotated(k), shadow_len=0, ground_shadow=False)
+        info = save_result("v_gelaende_lkw_%d" % k, r, keep_mask=True, top=False)
+        info["pivot"] = [r["anchor"][0], r["anchor"][1] + n]
+        out["gelaende_lkw_%d" % k] = info
 
 
 # ------------------------------------------------------------------ Figuren

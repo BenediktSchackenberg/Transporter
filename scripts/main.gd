@@ -331,6 +331,50 @@ func _process_timed(_delta: float) -> void:
 			var staff: Array = session.sim.personnel.employed(0)
 			for i in mini(3, staff.size()):
 				session.sim.biz.assign(0, staff[staff.size() - 1 - i].id, str(r.ref))
+	if session and args.has("demo-offroad") and not session.sim.eko.beings.is_empty():   # Sichtpruefung Gelaende-LKW (18.11.2026): erstes Unternehmer-Wesen faehrt querfeldein, Kamera folgt, Bildfolge
+		var sim: Simulation = session.sim
+		if not args.has("_offroad") and session.active_seconds >= 2.0:
+			for nm in sim.eko.beings:
+				var bb: Dictionary = sim.eko.beings[nm]
+				var tr: FleetVehicle = sim.eko.own_truck(int(bb.get("firma", -1)))
+				if tr == null:
+					continue
+				var t0 := tr.tile()
+				var best := Vector2i(-1, -1)
+				for r in range(14, 60, 2):   # freies Gelaende: im Umkreis von 3 Feldern keine Strasse und kein Gebaeude
+					for dxy in [Vector2i(r, r / 2), Vector2i(-r, r / 2), Vector2i(r / 2, -r), Vector2i(-r / 2, r), Vector2i(r, 0), Vector2i(0, r)]:
+						var c: Vector2i = t0 + dxy
+						var free: bool = (c - t0).length() > 20.0
+						for oy in range(-3, 4):
+							for ox in range(-3, 4):
+								var q: Vector2i = c + Vector2i(ox, oy)
+								if not sim.city.walkable(q) or sim.city.g(q) != CityData.G.GRASS:
+									free = false
+						if free:
+							best = c
+							break
+					if best.x >= 0:
+						break
+				var res: Dictionary = sim.eko.input(nm, "LKW", {"ziel": [best.x, best.y], "warum": "Probefahrt"})
+				print("AUTOTEST: Gelaendefahrt ", nm, " -> ", best, ": ", str(res.get("msg", "")).left(120))
+				args["_offroad"] = tr.id
+				args["_offroad_t"] = session.active_seconds
+				if session.hud and session.hud.control_center:
+					session.hud.control_center.set_expanded(false)
+				break
+		if args.has("_offroad"):
+			var veh: FleetVehicle = sim.vehicles.get(int(args["_offroad"]))
+			if veh != null:
+				session.set_follow(false)
+				session.city_view.set_camera_world(veh.pos + Vector2(0, -20))
+				session.city_view.camera.zoom = Vector2.ONE * float(args.get("shot-zoom", "2.5"))
+				var k := int((session.active_seconds - float(args["_offroad_t"])) / 0.6)
+				if args.has("screenshot") and k >= 1 and k <= int(args.get("frames", "8")) and not args.has("_of%d" % k):
+					args["_of%d" % k] = true
+					var path := str(args["screenshot"]).get_basename() + "_%02d.png" % k
+					get_viewport().get_texture().get_image().save_png(path)
+					var ofx: OffroadFx = session.entity_view.offroad_fx
+					print("AUTOTEST: Bild ", path, " Zustand ", veh.state, " Feld ", veh.tile(), " Boden ", session.sim.city.g(veh.tile()), " Spuren ", ofx.tracks.size() if ofx else -1, " Wolken ", ofx.puffs.size() if ofx else -1)
 	if session and args.has("demo-access") and not args.has("_access"):   # Sichtpruefung Zufahrt: Firma 0 laesst eine Zufahrt bauen, 3 Bautage sofort
 		args["_access"] = true
 		var sim: Simulation = session.sim

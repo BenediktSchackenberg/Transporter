@@ -15899,6 +15899,74 @@
     98,
     98
    ]
+  },
+  "gelaende_lkw_0": {
+   "anchor": [
+    100,
+    18
+   ],
+   "size": [
+    200,
+    143
+   ],
+   "lit": true,
+   "mask": true,
+   "amask": false,
+   "pivot": [
+    100,
+    108
+   ]
+  },
+  "gelaende_lkw_1": {
+   "anchor": [
+    100,
+    18
+   ],
+   "size": [
+    200,
+    143
+   ],
+   "lit": true,
+   "mask": true,
+   "amask": false,
+   "pivot": [
+    100,
+    108
+   ]
+  },
+  "gelaende_lkw_2": {
+   "anchor": [
+    100,
+    21
+   ],
+   "size": [
+    200,
+    151
+   ],
+   "lit": true,
+   "mask": true,
+   "amask": false,
+   "pivot": [
+    100,
+    111
+   ]
+  },
+  "gelaende_lkw_3": {
+   "anchor": [
+    100,
+    31
+   ],
+   "size": [
+    200,
+    161
+   ],
+   "lit": true,
+   "mask": true,
+   "amask": false,
+   "pivot": [
+    100,
+    121
+   ]
   }
  },
  "figures": {

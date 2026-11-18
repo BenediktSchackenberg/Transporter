@@ -175,6 +175,93 @@ static func draw(n: CanvasItem, b: Dictionary, ctx: Dictionary) -> void:
 		n.draw_string(ThemeDB.fallback_font, Vector2(-3, -34), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("#4aa3ff"))
 
 
+## Fahrer hinter der Scheibe (Benedikt 18.11.2026: "wie sie mit dem Fahrzeug faehrt ... muss wesentlich besser und detaillierter
+## werden"). Ursprung = Kopfmitte auf dem Fahrersitz (EkoView.DRIVER_SEAT). dir wie die Fahrzeugbilder: 0 rechts unten, 1 links unten
+## (Gesicht sichtbar), 2 links oben, 3 rechts oben (Hinterkopf durch die Rueckscheibe). Lenkrad mit beiden Haenden, lenkt bei
+## Richtungswechseln (steer -1..1) sichtbar ein, der Kopf wippt mit der Federung, schaut ab und zu zur Seite, blinzelt, spricht.
+static func draw_driver(n: CanvasItem, b: Dictionary, dir: int, ms: int, steer: float, boss: bool) -> void:
+	var L := look(str(b.name))
+	var col: Color = b.color
+	var front := dir <= 1
+	var f := 1 if dir == 0 or dir == 3 else -1
+	var bob := roundf(sin(ms / 95.0 + absi(hash(str(b.name))) % 7) * 0.6)
+	var talking := float(b.get("say_left", 0.0)) > 0.0 and str(b.get("say", "")) != ""
+	var look_t := (ms / 100) % 60
+	var glance := 0 if look_t < 46 else (f * -1 if look_t < 53 else f)   # schaut kurz in den Spiegel und zur Seite
+	var robot := str(b.get("art", "mensch")) == "roboter"
+	# Oberkoerper und Schultern (Sitzlehne dahinter)
+	_px(n, -6, 2 + bob, 12, 6, Color("#2b2d33"))
+	_px(n, -5, 3 + bob, 10, 5, col)
+	_px(n, -5, 3 + bob, 10, 1, col.lightened(0.2))
+	if boss and front:   # Hemdkragen und Krawatte
+		_px(n, -1, 3 + bob, 2, 1, Color.WHITE)
+		_px(n, (0 if f > 0 else -1), 4 + bob, 1, 3, Color("#a31d1d"))
+	if int(b.get("amt", -1)) >= 0 and front:
+		_px(n, -2, 4 + bob, 4, 1, Color("#f2c94c"))
+	# Kopf
+	if robot:
+		_px(n, -5, -5 + bob, 10, 8, Color("#a8e6cf"))
+		_px(n, -4, -4 + bob, 8, 5, Color("#10202a") if front else Color("#7fb8a4"))
+		if front:
+			_px(n, -3 + glance, -3 + bob, 2, 2, Color("#6ff3ff"))
+			_px(n, 1 + glance, -3 + bob, 2, 2, Color("#6ff3ff"))
+		var pulse := 0.5 + 0.5 * sin(ms / 250.0)
+		_px(n, 0, -8 + bob, 1, 3, Color("#2f5d50"))
+		n.draw_circle(Vector2(0.5, -8.5 + bob), 1.3, Color("#7dff8a").lerp(Color("#d4ffda"), pulse))
+	else:
+		_px(n, -4, -5 + bob, 8, 8, L.skin)
+		if front:
+			_px(n, (3 if f > 0 else -4), -5 + bob, 1, 8, (L.skin as Color).darkened(0.15))
+			var ex := (1 if f > 0 else -2) + glance
+			if (ms / 120) % 31 == 0:
+				_px(n, ex - 1, -1 + bob, 4, 1, OUTLINE)
+			else:
+				_px(n, ex - 1, -2 + bob, 1, 2, OUTLINE)
+				_px(n, ex + 2, -2 + bob, 1, 2, OUTLINE)
+			if bool(L.glasses):
+				_px(n, ex - 2, -2 + bob, 6, 1, Color(0.2, 0.2, 0.25, 0.8))
+			_px(n, ex, 1 + bob, 2, 2 if talking and (ms / 140) % 2 == 0 else 1, Color("#7a2e2e"))
+			if bool(L.beard):
+				_px(n, -3, 1 + bob, 6, 2, L.hair)
+		# Haare: von vorn nur oben, von hinten der ganze Hinterkopf
+		if int(b.get("amt", -1)) >= 0:
+			_px(n, -4, -6 + bob, 8, 1, Color("#111"))
+			_px(n, -3, -10 + bob, 6, 4, Color("#111"))
+		elif front:
+			match int(L.style):
+				2:
+					_px(n, -4, -3 + bob, 1, 3, L.hair)
+					_px(n, 3, -3 + bob, 1, 3, L.hair)
+				4:
+					for i in 5:
+						_px(n, -5 + i * 2, -7 + bob + (i % 2), 2, 2, L.hair)
+				_:
+					_px(n, -4, -6 + bob, 8, 2, L.hair)
+		else:
+			_px(n, -4, -6 + bob, 8, 7 if int(L.style) != 2 else 3, L.hair)
+			if int(L.style) == 3:
+				_px(n, -1, 1 + bob, 2, 3, L.hair)
+	# Lenkrad und Haende (von vorn sichtbar; lenkt bei Richtungswechseln ein, kleine Korrekturen im Gelaende)
+	var turn := steer + sin(ms / 260.0) * 0.15
+	if front:
+		var wc := Vector2(f * 2.0, 7.0 + bob)
+		n.draw_arc(wc, 4.5, PI + 0.3, TAU - 0.3, 10, Color("#1b1b1f"), 1.6)
+		var hl := wc + Vector2(-4, -1).rotated(turn * 0.6)
+		var hr := wc + Vector2(4, -1).rotated(turn * 0.6)
+		_px(n, hl.x - 1, hl.y - 1, 2, 2, L.skin)
+		_px(n, hr.x - 1, hr.y - 1, 2, 2, L.skin)
+		_px(n, -6, 4 + bob, 2, 3, col.darkened(0.1))
+		_px(n, 4, 4 + bob, 2, 3, col.darkened(0.1))
+	else:   # von hinten: Ellbogen wandern mit dem Lenken
+		var el := int(round(turn * 2.0))
+		_px(n, -7, 4 + bob - el, 2, 3, col.darkened(0.15))
+		_px(n, 5, 4 + bob + el, 2, 3, col.darkened(0.15))
+	# Scheibe davor: leichte Toenung und ein wandernder Lichtreflex
+	n.draw_rect(Rect2(-7, -9, 14, 18), Color(0.55, 0.75, 0.95, 0.12))
+	var gl := fmod(ms / 2600.0, 1.0) * 22.0 - 11.0
+	n.draw_line(Vector2(gl - 3, 8), Vector2(gl + 3, -8), Color(1, 1, 1, 0.18), 1.5)
+
+
 ## Ausser Gefecht: liegend, blass, Sterne kreisen.
 static func _lying(n: CanvasItem, L: Dictionary, col: Color, ms: int) -> void:
 	var grey := col.lerp(Color("#777777"), 0.5)

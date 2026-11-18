@@ -913,9 +913,15 @@ func _body_tick() -> void:
 			var tv: FleetVehicle = sim.vehicles.get(int(b.im_lkw))
 			if tv == null or not _truck_busy(tv):
 				b.erase("im_lkw")
-				if tv != null:
-					(b.mover as Mover).pos = tv.pos
-					(b.mover as Mover).set_path([tv.tile()] as Array[Vector2i])
+				if tv != null:   # neben der Kabine aussteigen, auf der dem Betrachter zugewandten Seite (sonst stuende die Figur sichtbar "auf" dem Wagen)
+					var hd: Vector2 = tv.heading.normalized() if tv.heading.length() > 0.01 else Vector2.RIGHT
+					var sd := Vector2(-hd.y, hd.x)
+					if sd.x + sd.y < 0.0:
+						sd = -sd
+					var door: Vector2 = tv.pos + sd * 24.0 + hd * 12.0
+					var dtile := CityData.to_tile(door)
+					(b.mover as Mover).pos = door if dtile == tv.tile() or sim.city.walkable(dtile) else tv.pos
+					(b.mover as Mover).set_path([] as Array[Vector2i])
 				_event(b, "Du bist angekommen und steigst aus dem LKW.")
 			else:
 				(b.mover as Mover).pos = tv.pos

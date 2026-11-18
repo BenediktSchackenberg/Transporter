@@ -50,13 +50,38 @@ func _process(_delta: float) -> void:
 		var n: BeingNode = _beings[name]
 		var b: Dictionary = sim.eko.beings.get(name, {})
 		if not b.is_empty():
-			n.position = Iso.to_screen(b.mover.pos) - Vector2(0, sim.eko.height_at(sim.eko.tile_of(b)) * MountainView.STEP)   # am Hang hoeher
+			var ground := Iso.to_screen(b.mover.pos) - Vector2(0, sim.eko.height_at(sim.eko.tile_of(b)) * MountainView.STEP)   # am Hang hoeher
+			n.place(ground, _cab_of(b), _delta)
 			n.queue_redraw()
 	for name in _houses:
 		_houses[name].queue_redraw()   # Lampe und Ladestation leuchten, Baufortschritt
 	var A: EkoArms = sim.eko.arms
 	if not (A.ruins.is_empty() and A.towers.is_empty() and A.blasts.is_empty() and A.zones.is_empty() and A.bombs.is_empty() and sim.eko.estates.estates.is_empty()):
 		queue_redraw()
+
+
+## Fahrersitz im Gelaende-LKW je Bildrichtung (Pixel relativ zum Fahrzeugpunkt; aus tools/vox/offroad.py SEAT berechnet und
+## so verschoben, dass der Kopf hinter einer Scheibe sitzt): 0 rechts unten, 1 links unten, 2 links oben, 3 rechts oben.
+const DRIVER_SEAT := [Vector2(18, -31), Vector2(-40, -33), Vector2(-56, -56), Vector2(54, -57)]   # 2/3: durch die nahe Seitenscheibe (Rueckfenster verdeckt das Reserverad)
+var _ent: EntityView = null
+
+
+## Fahrerplatz eines Wesens, das gerade im eigenen LKW sitzt: {pos (Bildschirm), dir} – sonst leer.
+func _cab_of(b: Dictionary) -> Dictionary:
+	if not b.has("im_lkw"):
+		return {}
+	if _ent == null:
+		for c in cv.get_children():
+			if c is EntityView:
+				_ent = c
+	if _ent == null:
+		return {}
+	var vn: Node2D = _ent.vehicle_nodes.get(int(b.im_lkw))
+	if vn == null or int(vn.get_meta("dir", -1)) < 0:
+		return {}
+	var d := int(vn.get_meta("dir"))
+	var seat: Vector2 = DRIVER_SEAT[d] if str(vn.get_meta("model", "")) == "gelaende_lkw" else Vector2(DRIVER_SEAT[d]) * Vector2(1.0, 0.9)
+	return {"pos": vn.position + Vector2(vn.get_meta("spring", Vector2.ZERO)) + seat, "dir": d, "door": vn.position + Vector2(vn.get_meta("spring", Vector2.ZERO)) + seat * Vector2(1.0, 0.0) + Vector2(0, -4)}
 
 
 ## Krieg sichtbar: Rauch ueber Ruinen, Wachtuerme, Explosionen (Atompilz), Strahlungszonen, tickende Bomben.
@@ -291,6 +316,36 @@ class BeingNode:
 	var being := ""
 	var _last_x := 0.0
 	var _facing := 1
+	var _cab := {}              # Fahrerplatz (EkoView._cab_of), leer = zu Fuss
+	var _trans := 1.0           # 0..1: Ein-/Aussteigen laeuft (0,45 s)
+	var _trans_in := false      # true = steigt ein, false = steigt aus
+	var _from := Vector2.ZERO
+	var _steer := 0.0           # Lenkradausschlag (folgt den Richtungswechseln)
+	var _last_dir := -1
+
+	## Position je Bild: zu Fuss am Boden, im LKW auf dem Fahrersitz; beim Wechsel kurzer Uebergang zur bzw. von der Tuer.
+	func place(ground: Vector2, cab: Dictionary, dt: float) -> void:
+		var was_in := not _cab.is_empty()
+		var now_in := not cab.is_empty()
+		if was_in != now_in:
+			_trans = 0.0
+			_trans_in = now_in
+			_from = position
+		if now_in and _last_dir >= 0 and int(cab.dir) != _last_dir:
+			_steer = 1.0 if (int(cab.dir) - _last_dir + 4) % 4 == 1 else -1.0
+		_last_dir = int(cab.dir) if now_in else -1
+		_steer = move_toward(_steer, 0.0, dt * 1.5)
+		_cab = cab
+		var target: Vector2 = cab.pos if now_in else ground
+		if _trans < 1.0:
+			_trans = minf(1.0, _trans + dt / 0.45)
+			var e := _trans * _trans * (3.0 - 2.0 * _trans)
+			position = _from.lerp(target, e) + Vector2(0, -sin(_trans * PI) * 6.0)   # kleiner Huepfer in die Kabine / heraus
+		else:
+			position = target
+
+	func driving() -> bool:
+		return not _cab.is_empty() and _trans >= 1.0
 
 	## Zustand fuer die Figur: Blickrichtung aus der Bewegung, Taetigkeit aus der letzten Handlung (frisch, ca. 2,5 s).
 	func _ctx(b: Dictionary, ms: int) -> Dictionary:
@@ -320,6 +375,17 @@ class BeingNode:
 			return
 		var col: Color = b.color
 		var ms := Time.get_ticks_msec()
+		if driving():
+			modulate.a = 1.0
+			EkoFigure.draw_driver(self, b, int(_cab.dir), ms, _steer, sim.eko.active_firm(b) >= 0)
+			_draw_labels(b, -14.0, 0, true)
+			return
+		if _trans < 1.0:   # Ein-/Aussteigen: Figur wird kleiner bzw. groesser, als ginge sie durch die Tuer
+			var k := _trans if _trans_in else 1.0 - _trans
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * lerpf(1.0, 0.55, k))
+			modulate.a = lerpf(1.0, 0.35, k)
+		else:
+			modulate.a = 1.0
 		var kalt := float(b.get("kalt", 0.0))
 		var nass := float(b.get("nass", 0.0))
 		var akku := float(b.get("akku", 100.0))
@@ -360,23 +426,30 @@ class BeingNode:
 			draw_rect(r, c.darkened(0.4), false, 0.6)
 			if str(held[i]) == "kiste":
 				draw_line(r.position + Vector2(0, 2.5), r.position + Vector2(8, 2.5), c.darkened(0.4), 0.5)
+		_draw_labels(b, head_top, held.size(), false)
+
+	## Name, Geld, Ziel, letzte Entscheidung, Erkenntnis und Sprechblase (zu Fuss unter der Figur, am Steuer ueber der Kabine).
+	func _draw_labels(b: Dictionary, head_top: float, held_n: int, above := false) -> void:
+		var col: Color = b.color
 		var font := ThemeDB.fallback_font
 		var money := float(b.get("geld", 0.0))
 		var tag := str(b.name) + ("  %s" % Catalog.money(money) if money > 0.0 else "")
-		draw_string(font, Vector2(-40, 12), tag, HORIZONTAL_ALIGNMENT_CENTER, 80, 7, Color.WHITE)
+		var tag_y := head_top - 3.0 if above else 12.0   # am Steuer: Schild ueber dem Kopf statt quer ueber der Kabine
+		draw_string(font, Vector2(-40, tag_y), tag, HORIZONTAL_ALIGNMENT_CENTER, 80, 7, Color.WHITE)
 		# Autonomie sichtbar: Ziel, letzte Entscheidung (warum, Ergebnis), frische Erkenntnis
 		var now := Time.get_ticks_msec()
-		var info_y := 19.0
+		var info_y := tag_y - 8.0 if above else 19.0
+		var info_step := -7.0 if above else 7.0
 		var g: Dictionary = b.get("ziel", {})
 		if str(g.get("status", "")) == "aktiv":
 			draw_string(font, Vector2(-60, info_y), "Ziel: %s (%d %%)" % [str(g.ziel).left(34), int(g.fortschritt)], HORIZONTAL_ALIGNMENT_CENTER, 120, 6, Color("#ffe27a"))
-			info_y += 7.0
+			info_y += info_step
 		var dec: Dictionary = b.get("entscheidung", {})
 		if not dec.is_empty() and now - int(dec.get("ms", 0)) < 12000:
 			var dc: Color = {"gescheitert": Color("#ff8a80"), "laeuft": Color("#9be7ff"), "doppelt": Color("#ffcc80")}.get(str(dec.status), Color("#b9f6ca"))
 			var why := str(dec.warum) if str(dec.warum) != "" else str(dec.ergebnis)
 			draw_string(font, Vector2(-70, info_y), "%s → %s: %s" % [dec.aktion, dec.status, why.left(40)], HORIZONTAL_ALIGNMENT_CENTER, 140, 6, dc)
-			info_y += 7.0
+			info_y += info_step
 		var les: Dictionary = b.get("erkenntnis", {})
 		if not les.is_empty() and now - int(les.get("ms", 0)) < 15000:
 			draw_string(font, Vector2(-70, info_y), "Gelernt (%s): %s" % [les.art, str(les.text).left(40)], HORIZONTAL_ALIGNMENT_CENTER, 140, 6, Color("#e1bee7"))
@@ -384,7 +457,7 @@ class BeingNode:
 			var text := str(b.say)
 			var w := minf(160.0, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 7).x + 10.0)
 			var lines := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, w - 8.0, 7)
-			var box := Rect2(-w * 0.5, head_top - 12 - held.size() * 5 - lines.y, w, lines.y + 6)
+			var box := Rect2(-w * 0.5, (info_y - 4.0 if above else head_top - 12 - held_n * 5) - lines.y, w, lines.y + 6)
 			draw_rect(box, Color(1, 1, 1, 0.92))
 			draw_rect(box, col.darkened(0.3), false, 1.0)
 			draw_multiline_string(font, box.position + Vector2(4, 9), text, HORIZONTAL_ALIGNMENT_LEFT, w - 8.0, 7, -1, Color("#222"))

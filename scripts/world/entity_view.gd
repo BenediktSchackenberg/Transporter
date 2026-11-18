@@ -9,7 +9,9 @@ const PED_COUNT_PER_TILE := 1.0 / 450.0
 const SHIRTS := [Color("#d04a4a"), Color("#4a7ad0"), Color("#e0c050"), Color("#5ab060"), Color("#c070c0"),
 	Color("#e08a40"), Color("#f0f0f0"), Color("#404858")]
 const CAR_NAMES := ["silver", "black", "red", "blue", "gold", "white", "green", "violet"]
-const MODEL_HEIGHT := {"cargobike": 14, "van": 24, "transporter": 31, "reefer": 35, "truck": 38, "semi": 44}
+const MODEL_HEIGHT := {"cargobike": 14, "van": 24, "transporter": 31, "reefer": 35, "truck": 38, "semi": 44, "gelaende_lkw": 38}
+const SOIL := {CityData.G.GRASS: "gras", CityData.G.PARK: "gras", CityData.G.GRAVEL: "kies", CityData.G.SAND: "sand",   # Untergrund fuer OffroadFx
+	CityData.G.FIELD: "acker", CityData.G.CROP: "acker"}
 const FRAMES := 7                       # Bilder je Richtung in den Figurenblaettern
 const FREE_SHIRT := Color("#8a8f99")
 ## Kleidungsfarbe der Kundenfiguren nach Gebaeudetyp (erkennbarer Beruf)
@@ -30,6 +32,7 @@ var train_nodes := {}                 # Regionalbahn: "Zug-ID|Wagen" -> Node2D (
 var muni_nodes := {}                  # Einsatzfahrzeuge der Feuerwehr (Municipal-Fahrzeug-ID -> Node2D, Auftrag 20)
 var fire_fx := {}                     # Brand-ID -> FireFx (Flammen, Rauch, Loeschwasser)
 var avatar_nodes := {}
+var offroad_fx: OffroadFx = null      # Gelaende-LKW: Federung, Reifenspuren, Staub/Schlamm/Schnee, Auspuff (18.11.2026)
 var _people_timer := 0.0
 var _people_cache: Array = []
 var _ped_cursor := 0                     # Fortschritt durch die Bevoelkerung beim Erzeugen der Fussgaenger
@@ -315,6 +318,31 @@ static func _dir_of(h: Vector2) -> int:
 	return 1 if h.y >= 0.0 else 3
 
 
+## Gelaende-LKW je Bild: Richtung mit Verzoegerung (querfeldein wechselt die Fahrtrichtung Feld fuer Feld, das Bild soll nicht
+## flackern), Federweg aus OffroadFx, dazu Reifenspuren und Staub. Rueckgabe: Versatz des Fahrzeugbilds in Pixeln.
+func _offroad_step(v: FleetVehicle, n: Node2D, delta: float) -> Vector2:
+	if offroad_fx == null:
+		offroad_fx = OffroadFx.new()
+		offroad_fx.sim = sim
+		get_parent().add_child(offroad_fx)
+	var d := _dir_of(v.heading)
+	if int(n.get_meta("dir")) < 0:
+		_set_vehicle_dir(n, v.heading)
+	elif d != int(n.get_meta("dir")):
+		var cand_t := float(n.get_meta("dir_t", 0.0)) + delta if int(n.get_meta("dir_c", -1)) == d else 0.0
+		n.set_meta("dir_c", d)
+		n.set_meta("dir_t", cand_t)
+		if cand_t > 0.18:
+			_set_vehicle_dir(n, v.heading)
+	else:
+		n.set_meta("dir_c", -1)
+	var sm: Vector2 = n.get_meta("smooth_h", v.heading)
+	sm = sm.lerp(v.heading, minf(1.0, delta * 6.0))
+	n.set_meta("smooth_h", sm)
+	var soil: String = SOIL.get(sim.city.g(v.tile()), "")
+	return offroad_fx.feed(v.id, v.pos, sm, soil, delta)
+
+
 func _set_vehicle_dir(n: Node2D, h: Vector2) -> void:
 	var d := _dir_of(h)
 	if n.get_meta("dir") == d:
@@ -539,13 +567,23 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			add_child(n)
 			vehicle_nodes[v.id] = n
 		n.position = Iso.to_screen(v.pos)
-		_set_vehicle_dir(n, v.heading)
+		var spring := Vector2.ZERO
+		if bool(Catalog.model(v.model).get("offroad", false)):
+			spring = _offroad_step(v, n, delta)
+		else:
+			_set_vehicle_dir(n, v.heading)
+		for part in ["body", "mask"]:
+			var sp: Sprite2D = n.get_node_or_null(part)
+			if sp:
+				sp.position = spring
+		n.set_meta("spring", spring)
 		var cs: Sprite2D = n.get_node("cargo")
 		cs.visible = v.cargo != ""
 		if v.cargo != "":
 			var cname: String = "c_" + v.cargo
 			cs.texture = cv.tex(cname)
 			cs.offset = -cv.pivot_of(cname) + Vector2(0, -2.0 * float(MODEL_HEIGHT.get(Catalog.base_model(v.model), 30)) - 6.0 + (1.0 if int(anim_time * 4) % 2 == 0 else 0.0))
+			cs.position = spring
 		n.get_node("warn").visible = v.state == "broken" and int(anim_time * 3) % 2 == 0
 	for i in mini(service_nodes.size(), sim.safety.vehicles.size()):
 		var sv: Dictionary = sim.safety.vehicles[i]
@@ -566,6 +604,8 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		var fsiren: Sprite2D = fire_node.get_node("siren")
 		fsiren.visible = in_action
 		fsiren.modulate = Color(1.0, 0.3, 0.3, 0.95) if fblink else Color(0.3, 0.5, 1.0, 0.95)
+	if offroad_fx != null:
+		offroad_fx.step(delta)
 	_update_fleet()
 	_update_trains()
 	_update_fires()

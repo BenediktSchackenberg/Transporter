@@ -157,7 +157,7 @@ static func model(id: String) -> Dictionary:
 ## Grundmodell fuer Bild und Regel-Einkauf: eigene Entwuerfe zeigen sich als ihr Grundtyp (transporter, truck, semi).
 static func base_model(id: String) -> String:
 	if id == "gelaende_lkw":
-		return "truck"   # Darstellung wie der LKW (eigenes Bild folgt)
+		return id   # eigenes Bild seit 18.11.2026 (tools/vox/offroad.py)
 	return str(custom_models[id].base) if custom_models.has(id) else id
 
 
