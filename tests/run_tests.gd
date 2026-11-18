@@ -8611,6 +8611,12 @@ func test_wildnis_hub_supply() -> void:
 	var trucks: Array = s.fleet.vehicles.filter(func(v): return v.kind == "zulieferer")
 	ok(not trucks.is_empty(), "Liefer-Lkw von außerhalb fährt los (%d)" % trucks.size())
 	ok(s.stock.qty("kies", CentralHub.ACCT, H.loc) == 0, "Ware kommt erst mit dem Lkw an")
+	# Speichern und Laden waehrend der Fahrt: der Fuhrpark wird nicht gespeichert – das Lager schickt einen neuen Lkw
+	s = Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	H = s.hub
+	ok(s.fleet.vehicles.filter(func(v): return v.kind == "zulieferer").is_empty(), "nach dem Laden zunächst kein Liefer-Lkw")
+	H.on_day(GameCalendar.day_of(s.game_min) + 1)
+	ok(not s.fleet.vehicles.filter(func(v): return v.kind == "zulieferer").is_empty(), "Großlager schickt die verlorene Zulieferung neu los")
 	var arrived := _run_until(s, func(): return s.stock.qty("kies", CentralHub.ACCT, H.loc) > 0, 20000)
 	ok(arrived, "Kies im Großlager angekommen (%d)" % s.stock.qty("kies", CentralHub.ACCT, H.loc))
 	# Kein Schiff im See: Meer erreicht den Kartenrand, Seen nicht

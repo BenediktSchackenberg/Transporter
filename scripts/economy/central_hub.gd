@@ -303,6 +303,7 @@ func on_day(day: int) -> void:
 		if have < int(float(t) * RESTOCK_AT):
 			_restock(item, t - have)
 	_watch(day)
+	_resend_suppliers()
 	for id in deals.keys():   # Gueterzug kommt nicht (Strecke gesperrt, kein Zug): doch Abholung im Grosslager
 		var dd: Dictionary = deals[id]
 		if str(dd.status) == "bahn_wartet" and day - int(dd.get("bahn_day", day)) > CityDepot.RAIL_WAIT_DAYS:
@@ -378,6 +379,22 @@ func _supply_by_road(item: String, want: int) -> void:
 	incoming[item] = int(incoming.get(item, 0)) + want
 	stats.import = float(stats.import) + cost
 	stats.importe = int(stats.importe) + 1
+
+
+## Zulieferungen ohne Lkw (der Fuhrpark wird nicht gespeichert – nach dem Laden hingen sie fuer immer auf "unterwegs" und
+## blockierten jeden Nachschub, Partie 18.11.): neuen Lkw losschicken, ohne Weg direkt einlagern.
+func _resend_suppliers() -> void:
+	var on_road := {}
+	if sim.fleet != null:
+		for v in sim.fleet.vehicles:
+			if str(v.kind) == "zulieferer":
+				on_road[str(v.get("deal", ""))] = true
+	for d in deals.values():
+		if str(d.kind) != "zulieferung" or str(d.status) != "unterwegs" or on_road.has(str(d.id)):
+			continue
+		var hb: Dictionary = sim.city.building(loc)
+		if hb.is_empty() or sim.fleet == null or not sim.fleet.send_supplier(hb.road, str(d.id), "Zulieferung: %d × %s" % [int(d.qty), item_name(str(d.item))]):
+			supplier_arrived(str(d.id))
 
 
 ## Liefer-Lkw ist im Grosslager angekommen: Ware einlagern.
