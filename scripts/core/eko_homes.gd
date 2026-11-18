@@ -475,6 +475,42 @@ func summary(cid: int) -> Array:
 	return out.slice(-6)
 
 
+## Klartext zu einer Baustelle (Inspect BS…): Stand, was fehlt, was zu tun ist.
+func site_text(cid: int, id: String) -> String:
+	var s: Dictionary = sites.get(id, {})
+	if s.is_empty():
+		return ""
+	var wc := work_cell(s)
+	var head := "Baustelle %s (%s) bei %s: " % [s.id, s.typ, str([wc.x, wc.y])]
+	match str(s.status):
+		"genehmigung":
+			return head + "wartet auf die Genehmigung des Bürgermeisters."
+		"material":
+			var m := missing(s)
+			return head + "es fehlt noch auf deinem Hof: %s – kaufen (hub_buy) und mit dem LKW holen." % ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x]))
+		"bau":
+			var who := "du arbeitest gerade hier" if owner_working(s) else ("Tagelöhner arbeiten hier" if not (s.get("helfer", {}) as Dictionary).is_empty() else "NIEMAND arbeitet")
+			return head + "Material vollständig, %d %% gebaut, %s. %s" % [int(100.0 * float(s.progress) / float(s.work)), who,
+				"" if who != "NIEMAND arbeitet" else "Bauen {baustelle: \"%s\"} oder Firma {aktion: {action: \"tageloehner\", baustelle: \"%s\", anzahl: 2}}." % [s.id, s.id]]
+		"fertig":
+			return head + "fertig."
+	return head + str(s.status)
+
+
+## Kauf ohne Bedarf (Partie 18.11.: Viktor kaufte drei Mal Kies fuer eine Strasse, die es nicht gab, waehrend sein Buergeramt mit vollem
+## Material auf Arbeit wartete): Hinweis, welche Baustelle stattdessen wartet. "" = Ware wird gebraucht oder es gibt keine Baustelle.
+func purchase_note(cid: int, item: String) -> String:
+	var open := open_sites(cid)
+	if open.is_empty():
+		return ""
+	for s in open:
+		if s.status == "material" and missing(s).has(item):
+			return ""
+	var idle: Array = open.filter(func(s): return s.status == "bau" and not owner_working(s) and (s.get("helfer", {}) as Dictionary).is_empty())
+	var tip := (" Stattdessen wartet %s (%s) mit vollständigem Material auf Arbeit: Bauen {baustelle: \"%s\"} oder Tagelöhner." % [idle[0].id, idle[0].typ, idle[0].id]) if not idle.is_empty() else ""
+	return " Hinweis: keine deiner Baustellen braucht %s (offen: %s).%s" % [item, ", ".join(open.map(func(s): return "%s %s %s" % [s.id, s.typ, s.status])), tip]
+
+
 ## Gekaufte Ware, die noch im Grosslager liegt.
 func waiting_goods(cid: int) -> Dictionary:
 	var out := {}

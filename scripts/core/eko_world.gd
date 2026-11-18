@@ -613,6 +613,9 @@ func inspect(b: Dictionary, target: String) -> Dictionary:
 	if target == "":
 		return {"ok": false, "msg": "Inspect braucht target_id: Gebäudename (gebaeude_in_der_naehe), Wesen, Unternehmer oder Grundstück (G…)."}
 	b["blick"] = target
+	var cid0 := active_firm(b)
+	if cid0 >= 0 and target.to_upper().begins_with("BS") and homes.sites.has(target.to_upper()):   # 18.11.: Viktor wollte seine Baustelle ansehen
+		return {"ok": true, "msg": homes.site_text(cid0, target.to_upper())}
 	if beings.has(target) and target != b.name:
 		var o: Dictionary = beings[target]
 		if _dist(t, tile_of(o)) > VIEW_RADIUS:
@@ -2262,6 +2265,8 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	sim.executor.eko_call = true
 	var r: Dictionary = sim.executor.execute(cid, a, "", "api")
 	sim.executor.eko_call = false
+	if sim.wildnis and str(a.action) == "hub_buy" and bool(r.get("ok", false)):
+		r["msg"] = str(r.get("msg", "")) + homes.purchase_note(cid, str(a.get("item", "")))
 	_event(b, "Firma: %s → %s" % [a.action, str(r.get("msg", "")).left(80)])
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", "")), "pending": bool(r.get("pending", false))}
 
