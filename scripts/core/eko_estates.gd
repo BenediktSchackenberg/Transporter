@@ -430,6 +430,7 @@ func tick(dt: float) -> void:
 			if s.status != "im_bau":
 				continue
 			s.acc = float(s.acc) + dt * BUILD_RATE * hands
+			var placed0 := int(s.placed)
 			while float(s.acc) >= 1.0 and int(s.placed) < (s.blocks as Array).size():
 				s.acc = float(s.acc) - 1.0
 				var bl: Array = s.blocks[int(s.placed)]
@@ -439,7 +440,8 @@ func tick(dt: float) -> void:
 				s.placed = int(s.placed) + 1
 			if int(s.placed) >= (s.blocks as Array).size():
 				_finish(name, s)
-			w.changed.emit()
+			if int(s.placed) != placed0:   # Partie 18.11.: meldete jeden Takt eine Aenderung -> EkoView baute alle Bloecke neu (8 fps)
+				w.changed.emit()
 
 
 func _finish(name: String, s: Dictionary) -> void:
@@ -681,6 +683,7 @@ func _plans_tick(dt: float) -> void:
 		if pl.status != "im_bau":
 			continue
 		pl.acc = float(pl.acc) + dt * BUILD_RATE
+		var placed0 := int(pl.placed)
 		while float(pl.acc) >= 1.0 and int(pl.placed) < (pl.blocks as Array).size():
 			pl.acc = float(pl.acc) - 1.0
 			var bl: Array = pl.blocks[int(pl.placed)]
@@ -693,4 +696,5 @@ func _plans_tick(dt: float) -> void:
 			if w.beings.has(pl.name):
 				w._event(w.beings[pl.name], "Bau „%s“ ist fertig" % pl.titel)
 			_sim().log_event("„%s“ von %s ist fertig gebaut." % [pl.titel, pl.name], "good")
-		w.changed.emit()
+		if int(pl.placed) != placed0:
+			w.changed.emit()

@@ -38,11 +38,22 @@ func _stop_follow() -> void:
 func setup(simulation: Simulation, city_view) -> void:
 	sim = simulation
 	cv = city_view
-	sim.eko.changed.connect(_refresh)
+	sim.eko.changed.connect(func(): _dirty = true)   # zusammenfassen: hoechstens alle REFRESH_S neu ordnen (Partie 18.11.: 8 fps)
 	_refresh()
 
 
+const REFRESH_S := 0.2
+var _dirty := false
+var _since := 0.0
+var _house_t := 0.0
+
+
 func _process(_delta: float) -> void:
+	_since += _delta
+	if _dirty and _since >= REFRESH_S:
+		_dirty = false
+		_since = 0.0
+		_refresh()
 	if follow and not sim.eko.beings.is_empty():   # dem zuletzt handelnden Wesen folgen (nicht einem stillstehenden)
 		var tb: Dictionary = sim.eko.beings.get(sim.eko.last_active, sim.eko.beings.values()[0])
 		cv.set_camera_world(tb.mover.pos)
@@ -53,8 +64,11 @@ func _process(_delta: float) -> void:
 			var ground := Iso.to_screen(b.mover.pos) - Vector2(0, sim.eko.height_at(sim.eko.tile_of(b)) * MountainView.STEP)   # am Hang hoeher
 			n.place(ground, _cab_of(b), _delta)
 			n.queue_redraw()
-	for name in _houses:
-		_houses[name].queue_redraw()   # Lampe und Ladestation leuchten, Baufortschritt
+	_house_t += _delta
+	if _house_t >= 0.5:   # Lampe, Ladestation und Baufortschritt: zwei Mal je Sekunde reicht (vorher jedes Bild alle Hausbloecke)
+		_house_t = 0.0
+		for name in _houses:
+			_houses[name].queue_redraw()
 	var A: EkoArms = sim.eko.arms
 	if not (A.ruins.is_empty() and A.towers.is_empty() and A.blasts.is_empty() and A.zones.is_empty() and A.bombs.is_empty() and sim.eko.estates.estates.is_empty()):
 		queue_redraw()
@@ -224,9 +238,14 @@ func _refresh() -> void:
 				n.z_index = 1   # am Berg ueber dem Gelaende zeichnen
 			cv.buildings_node.add_child(n)
 			_tiles[t] = n
-		n.cells = by_tile[t]
-		n.cut = cuts.get(t, {})
-		n.queue_redraw()
+		var cells: Array = by_tile[t]
+		var cut: Dictionary = cuts.get(t, {})
+		var sig := hash(cells)
+		if sig != n.sig or cut != n.cut:   # nur geaenderte Felder neu zeichnen
+			n.sig = sig
+			n.cells = cells
+			n.cut = cut
+			n.queue_redraw()
 	for name in sim.eko.houses:
 		if not _houses.has(name):
 			var hn := HouseNode.new()
@@ -252,6 +271,7 @@ class TileNode:
 	var sim: Simulation
 	var cells: Array = []
 	var cut := {}               # Schnitt eines selbst gebauten Hauses: {mx, my, mz} oder leer
+	var sig := 0                # Kennung der Bloecke (nur bei Aenderung neu zeichnen)
 
 	func _draw() -> void:
 		var bl: Dictionary = sim.eko.blocks
