@@ -428,6 +428,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 				if data.has("nachricht") and not data.has("text"):
 					data["text"] = data.nachricht
 				type = "Talk" if data.has("to") else "Say"
+			elif data.has("fortschritt") or data.has("notiz"):
+				type = "ZielStand"   # 18.11.: Greta meldete ihren Zielstand als act {fortschritt, notiz}
 			elif data.has("baustelle"):
 				type = "Bauen"
 			elif data.has("ziel"):

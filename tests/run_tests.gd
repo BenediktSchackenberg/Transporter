@@ -8580,6 +8580,8 @@ func test_wildnis_log_fixes() -> void:
 	ok(not un.ok and str(un.msg).contains("Meintest du collect_contracts"), "unbekannte Aktion mit Vorschlag")
 	var sy: Dictionary = E.input(p0, "act", {"text": "Hallo zusammen"})
 	ok(sy.ok, "act mit Text wird zu Say: %s" % str(sy.msg).left(60))
+	var zs: Dictionary = E.input(p0, "act", {"fortschritt": 30, "notiz": "Straße fertig"})
+	ok(not str(zs.msg).contains("Unbekannte Handlung"), "act mit fortschritt/notiz wird ZielStand: %s" % str(zs.msg).left(60))
 	var nest: Dictionary = E.input(p0, "act", {"data": {"warum": "kurz ausruhen"}, "type": "Rest"})
 	ok(not str(nest.msg).contains("Unbekannte Handlung"), "verschachtelt {data: {...}, type: Rest} wird Rest: %s" % str(nest.msg).left(60))
 	# 4) Entnahme-Bremse
