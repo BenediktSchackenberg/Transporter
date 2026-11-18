@@ -8612,6 +8612,23 @@ func test_wildnis_hub_supply() -> void:
 	ok(s.stock.qty("kies", CentralHub.ACCT, H.loc) == 0, "Ware kommt erst mit dem Lkw an")
 	var arrived := _run_until(s, func(): return s.stock.qty("kies", CentralHub.ACCT, H.loc) > 0, 20000)
 	ok(arrived, "Kies im Großlager angekommen (%d)" % s.stock.qty("kies", CentralHub.ACCT, H.loc))
+	# Kein Schiff im See: Meer erreicht den Kartenrand, Seen nicht
+	var C: CityData = s.city
+	var edge_w := Vector2i(-1, -1)
+	var lake := Vector2i(-1, -1)
+	for y in range(0, C.size, 3):
+		for x in range(0, C.size, 3):
+			var q := Vector2i(x, y)
+			if C.ground[C.idx(q)] != CityData.G.WATER:
+				continue
+			if edge_w.x < 0 and (x == 0 or y == 0):
+				edge_w = q
+			elif lake.x < 0 and not s.eko.settle.is_sea(q):
+				lake = q
+	ok(edge_w.x < 0 or s.eko.settle.is_sea(edge_w), "Wasser am Kartenrand ist Meer")
+	ok(lake.x >= 0, "die Karte hat einen See (%s)" % str(lake))
+	if lake.x >= 0:
+		ok(not bool(s.eko.settle.score_at(lake + Vector2i(0, 8)).get("hafen", false)) or s.eko.settle._sea_near(lake + Vector2i(0, 8), EkoSettle.HARBOR_R), "am See kein Anleger")
 	RegionGenerator.neubeginn = false
 	RegionGenerator.wildnis = false
 

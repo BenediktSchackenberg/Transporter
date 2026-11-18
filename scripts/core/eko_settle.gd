@@ -110,9 +110,10 @@ func score_at(cell: Vector2i) -> Dictionary:
 	if schutz >= 0.1:
 		pts += minf(25.0, schutz * 60.0)
 		out.gruende.append("natürlicher Schutz: %d %% Wasser/Hügel ringsum" % int(schutz * 100.0))
+	var sea := harbor_water >= 12 and _sea_near(cell, HARBOR_R)
 	if water >= 25:
 		pts += 20.0
-		out.gruende.append("Wasser in der Nähe" + (" – Anleger möglich (Siedlerschiff)" if harbor_water >= 12 else ""))
+		out.gruende.append("Wasser in der Nähe" + (" – Anleger möglich (Siedlerschiff)" if sea else (" (See, kein Meer: kein Schiff)" if harbor_water >= 12 else "")))
 	var dep_art := ""
 	var dep_d := 9999
 	for d2 in _deposits():
@@ -129,7 +130,7 @@ func score_at(cell: Vector2i) -> Dictionary:
 		out.gruende.append("%d Felder bis zum Großlager" % hd)
 	out.ok = true
 	out.punkte = int(round(pts))
-	out["hafen"] = harbor_water >= 12
+	out["hafen"] = sea
 	out["schutz"] = int(schutz * 100.0)
 	return out
 
@@ -286,6 +287,48 @@ func open_town(k: int, rect: Rect2i) -> bool:
 	return true
 
 
+## Meer oder See? Ein Gewaesser zaehlt als Meer, wenn es den Kartenrand erreicht (oder sehr gross ist). Ergebnis je Wasserfeld gemerkt
+## (eine Flutfuellung je Gewaesser).
+var _sea_memo := {}
+const SEA_FILL_MAX := 60000
+
+
+func is_sea(cell: Vector2i) -> bool:
+	var C: CityData = _sim().city
+	if not C.inside(cell) or C.ground[C.idx(cell)] != CityData.G.WATER:
+		return false
+	if _sea_memo.has(cell):
+		return bool(_sea_memo[cell])
+	var seen := {cell: true}
+	var todo: Array[Vector2i] = [cell]
+	var sea := false
+	var i := 0
+	while i < todo.size():
+		var c: Vector2i = todo[i]
+		i += 1
+		if c.x == 0 or c.y == 0 or c.x == C.size - 1 or c.y == C.size - 1 or todo.size() > SEA_FILL_MAX:
+			sea = true
+			break
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var q: Vector2i = c + d
+			if not seen.has(q) and C.inside(q) and C.ground[C.idx(q)] == CityData.G.WATER:
+				seen[q] = true
+				todo.append(q)
+	for c in seen:
+		_sea_memo[c] = sea
+	return sea
+
+
+func _sea_near(cell: Vector2i, r: int) -> bool:
+	var C: CityData = _sim().city
+	for dy in range(-r, r + 1, 2):
+		for dx in range(-r, r + 1, 2):
+			var q := cell + Vector2i(dx, dy)
+			if C.inside(q) and C.ground[C.idx(q)] == CityData.G.WATER and is_sea(q):
+				return true
+	return false
+
+
 func _water_near(ctr: Vector2i, r: int) -> int:
 	var C: CityData = _sim().city
 	var n := 0
@@ -320,6 +363,11 @@ func reapply_loaded() -> void:
 		for f in ["town_hall", "bauhof", "harbor"]:
 			if st.has(f):
 				t[f] = int(st[f])
+		if int(t.get("harbor", -1)) >= 0:
+			var hb: Dictionary = sim.city.building(int(t.harbor))
+			if hb.is_empty() or not _sea_near(Vector2i(int(hb.x), int(hb.y)), 12):   # alter Anleger an einem See: kein Hafen
+				t["harbor"] = -1
+				st.erase("harbor")
 		if st.has("center"):
 			t["center"] = st.center
 			t["rect"] = st.rect
@@ -537,11 +585,11 @@ func _harbor_at(cell: Vector2i, nm: String) -> int:
 	for dy in range(-12, 13):
 		for dx in range(-12, 13):
 			var q := cell + Vector2i(dx, dy)
-			if C.inside(q) and C.ground[C.idx(q)] == CityData.G.WATER and absi(dx) + absi(dy) < best_d:
+			if C.inside(q) and C.ground[C.idx(q)] == CityData.G.WATER and absi(dx) + absi(dy) < best_d and is_sea(q):
 				best_d = absi(dx) + absi(dy)
 				best = q
 	if best.x < 0:
-		return -1
+		return -1   # nur Seen in der Naehe: kein Anleger (Benedikt 18.11.: "ein Schiff im See macht keinen Sinn")
 	var land := best + (cell - best).sign() * 3
 	var off := _place("port_office", land + Vector2i(-2, -3), land + Vector2i(2, 3), "Anleger %s" % nm)
 	var wh := _place("warehouse", land + Vector2i(-4, -4), land + Vector2i(4, 4), "Hafenlager")
