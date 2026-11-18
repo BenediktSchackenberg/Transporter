@@ -236,6 +236,8 @@ func _id(prefix: String) -> String:
 
 # ------------------------------------------------------------------ Stil, Name, Seed
 func style_of(k: int) -> String:
+	if sim.town_plan.has(k):
+		return str(sim.town_plan.of(k).stil)   # Auftrag 8: Stil aus dem Gestaltungsprofil
 	return str(STYLE_OF_CHARACTER.get(str(sim.towns.get_t(k).get("charakter", "")), "modern"))
 
 

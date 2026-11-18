@@ -279,6 +279,7 @@ func open_town(k: int, rect: Rect2i) -> bool:
 		t["harbor"] = harbor
 		st["harbor"] = harbor
 	sim.towns.sync_from_city(k)
+	sim.town_plan.ensure(k, "gruendung")   # Auftrag 8: Profil vor den ersten regulaeren Bauplatzentscheidungen
 	_activate(k)
 	sim.towns.depot(k).activate(bauhof)
 	sim.events.buildings_added.emit([hall, bauhof] + ([harbor] if harbor >= 0 else []))
@@ -514,27 +515,31 @@ func carve_plots(k: int, cells: Array, limit: int = 8, centered := false) -> Arr
 	var st: Dictionary = sim.settlements.get(str(k), {})
 	var have: Array = (st.get("plots", []) as Array).map(func(a): return Rect2i(int(a[0]), int(a[1]), int(a[2]), int(a[3])))
 	var made: Array = []
+	var size: Vector2i = sim.town_plan.plot_size(k) if sim.town_plan.has(k) else PLOT   # Auftrag 8: Grundstuecksgroesse der Grundform
 	for i in cells.size():
 		if made.size() >= limit:
 			break
 		var c: Vector2i = cells[i]
 		var offs: Array = []
 		if centered:   # Bauland im Gelaende: Grundstueck um das Feld
-			offs = [-PLOT / 2]
+			offs = [-size / 2]
 		else:          # Grundstueck beruehrt die Strassenzelle, entlang der Strasse verschoben
-			for t in range(0, PLOT.y, 2):
+			for t in range(0, size.y, 2):
 				offs.append(Vector2i(1, -t))
-				offs.append(Vector2i(-PLOT.x, -t))
-			for t in range(0, PLOT.x, 2):
+				offs.append(Vector2i(-size.x, -t))
+			for t in range(0, size.x, 2):
 				offs.append(Vector2i(-t, 1))
-				offs.append(Vector2i(-t, -PLOT.y))
+				offs.append(Vector2i(-t, -size.y))
 		for o in offs:
-			var r := Rect2i(c + o, PLOT)
+			var r := Rect2i(c + o, size)
 			if have.any(func(h): return h.intersects(r)) or not _plot_free(r):
 				continue
-			sim.parcels.carve(r, "wohnen", Towns.owner_of(k))
+			var zone: String = sim.town_plan.zone_at(k, r.get_center())
+			if zone == "gruen":
+				continue   # Gruenzug/Aussicht/Uferweg des Stadtplans bleibt frei
+			sim.parcels.carve(r, zone, Towns.owner_of(k))
 			have.append(r)
-			made.append([r.position.x, r.position.y, r.size.x, r.size.y])
+			made.append([r.position.x, r.position.y, r.size.x, r.size.y, zone])
 	st["plots"] = (st.get("plots", []) as Array) + made
 	sim.settlements[str(k)] = st
 	return made

@@ -674,6 +674,10 @@ func save_game() -> void:
 	DirAccess.make_dir_recursive_absolute("user://saves")
 	var data := {"version": 1, "cfg": cfg, "active_seconds": active_seconds, "sim": sim.to_dict(),
 		"controllers": controllers.map(func(c): return c.to_dict()), "mayor_agent": mayor_agent.to_dict(), "mayor_agents": mayor_agents.map(func(ag): return ag.to_dict()), "executed": sim.executor.executed}
+	# Auftrag 8: vor dem ersten Speichern mit Stadtplan die alte Fassung aufbewahren (Migration)
+	var bak := SAVE_PATH.replace(".json", "_vor_stadtplan.json")
+	if FileAccess.file_exists(SAVE_PATH) and not FileAccess.file_exists(bak) and not FileAccess.get_file_as_string(SAVE_PATH).contains("\"town_plans\""):
+		DirAccess.copy_absolute(SAVE_PATH, bak)
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
 		hud.show_toast("Speichern fehlgeschlagen")

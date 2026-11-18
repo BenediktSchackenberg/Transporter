@@ -1,0 +1,399 @@
+class_name TownPlan
+extends RefCounted
+## Auftrag 8, Etappe 2 (docs/CITY_PLANNING.md): dauerhaftes Gestaltungsprofil und Viertelplan je Stadt.
+##
+## Das Profil entsteht einmal je Stadt – bei der Gruendung (Wildnis: Buergeramt fertig) bzw. beim Laden eines Spielstands ohne Profil
+## aus der tatsaechlichen Bebauung – und wird gespeichert; es wird beim Laden nicht neu ausgewuerfelt. Es leitet sich aus der Landschaft
+## um den Ortskern ab (Meer, Fluss/See, Hang, Ackerland) und vermeidet Grundformen, die eine andere Stadt der Partie schon hat.
+## Der Viertelplan ist eine unverbindliche Entwicklungsabsicht (Status "entwurf"): er sperrt keine Flaeche, sondern bestimmt Zone,
+## Grundstuecksgroesse, Hoehen und Bevorzugung bei der Standortwahl. Harte Reservierungen laufen weiter ueber Parcels.reserve.
+
+const VERSION := 1
+const RADIUS := 30   # Landschaftsanalyse um den Kern
+
+## Grundformen. block = Grundstuecksgroesse (Felder) fuer neues Bauland; hoehen = hoechste Geschosszahl je Ring (Kern, Mitte, Rand);
+## freiraum = Art der Freiflaechen; wirtschaft = raeumliche Schwerpunkte (verbieten nichts).
+const FORMS := {
+	"hafenort": {"label": "Hafenort", "text": "kompakter Kern am Hafen, kurze Geschäftsstraße, Gewerbehöfe an eigener Güterzufahrt",
+		"block": [6, 5], "hoehen": [3, 2, 1], "freiraum": "kai", "wirtschaft": ["hafen", "handel", "logistik"]},
+	"buchtenstadt": {"label": "Buchtenstadt", "text": "Bebauung folgt der Bucht, Promenade und kleine Plätze am Ufer, Hotels mit Wasserblick",
+		"block": [6, 6], "hoehen": [3, 2, 1], "freiraum": "promenade", "wirtschaft": ["tourismus", "gastronomie", "handel"]},
+	"gartenstadt": {"label": "Gartenstadt", "text": "kleine Nachbarschaften mit Grünzügen dazwischen, Gärten, örtliche Versorgung",
+		"block": [7, 6], "hoehen": [2, 2, 1], "freiraum": "gruenzug", "wirtschaft": ["handwerk", "versorgung", "landwirtschaft"]},
+	"hangstadt": {"label": "Hangstadt", "text": "Baugruppen auf den flachen Lagen am Hang, Aussichtspunkte, Gewerbe im Tal",
+		"block": [6, 5], "hoehen": [3, 2, 2], "freiraum": "aussicht", "wirtschaft": ["rohstoffe", "handwerk", "tourismus"]},
+	"flussstadt": {"label": "Flussstadt", "text": "Uferquartiere beiderseits des Wassers, Brückenstandorte, Zugänge zum Ufer",
+		"block": [6, 5], "hoehen": [3, 2, 1], "freiraum": "uferweg", "wirtschaft": ["handel", "handwerk", "logistik"]},
+	"marktort": {"label": "Marktort", "text": "Ortskern um den Marktplatz, Hauptstraße mit Läden, Wohnstraßen ringsum",
+		"block": [6, 5], "hoehen": [4, 2, 1], "freiraum": "platz", "wirtschaft": ["handel", "versorgung", "handwerk"]},
+}
+## Ortscharakter vom Kartenstart -> bevorzugte Grundform (Bonus bei der Wahl)
+const FORM_OF_CHARACTER := {"Fischerdorf": "hafenort", "Hafenstadt": "hafenort", "Kurort": "buchtenstadt", "Bauerndorf": "gartenstadt",
+	"Marktflecken": "marktort", "Handwerkerort": "marktort"}
+## Stil kommunaler Bauten je Grundform (Municipal: pub_<typ>_<variante>_<stil>)
+const STYLE_OF_FORM := {"hafenort": "backstein", "buchtenstadt": "modern", "gartenstadt": "gruen", "hangstadt": "industrie",
+	"flussstadt": "backstein", "marktort": "backstein"}
+const SUFFIXES := ["", "s1", "s2", "s3", "s4", "s5"]   # Material-/Farbvarianten der Wohnhaeuser
+const HOUSE_FORMS := 8                                  # house0..house7: Bauformen (Silhouette)
+
+var sim
+var towns := {}   # str(k) -> Profil (siehe derive)
+
+
+func setup(simulation) -> void:
+	sim = simulation
+
+
+func of(k: int) -> Dictionary:
+	return towns.get(str(k), {})
+
+
+func has(k: int) -> bool:
+	return towns.has(str(k))
+
+
+## Profil anlegen, falls die Stadt gegruendet ist und noch keins hat. reason: "gruendung" | "bestand" | "start".
+func ensure(k: int, reason: String = "bestand") -> Dictionary:
+	if has(k):
+		return of(k)
+	var kern := _kern_of(k)
+	if kern.x < 0:
+		return {}
+	var p := derive(k, kern)
+	p["geschichte"] = [{"tag": _day(), "text": {"gruendung": "Bei der Gründung festgelegt", "start": "Beim Kartenstart festgelegt",
+		"bestand": "Aus der bestehenden Bebauung abgeleitet"}.get(reason, reason) + ": %s – %s." % [p.label, FORMS[p.form].text]}]
+	towns[str(k)] = p
+	if sim.has_method("log_event"):
+		sim.log_event("Stadtplan %s: %s (%s)." % [_name(k), p.label, FORMS[p.form].text], "info")
+	return p
+
+
+## Alle gegruendeten Staedte ohne Profil nachziehen (Kartenstart und Laden alter Spielstaende).
+func ensure_all(reason: String = "bestand") -> void:
+	if sim.towns == null:
+		return
+	for k in sim.towns.count():
+		if _founded(k):
+			ensure(k, reason)
+
+
+## Profil aus Landschaft und Nachbarstaedten ableiten (deterministisch aus Seed, Stadtnummer und Kern).
+func derive(k: int, kern: Vector2i) -> Dictionary:
+	var L := landscape(kern)
+	var taken := {}
+	for key in towns:
+		if int(key) != k:
+			taken[str(towns[key].form)] = int(taken.get(str(towns[key].form), 0)) + 1
+	var ch := str(sim.towns.get_t(k).get("charakter", "")) if sim.towns != null else ""
+	var score := {
+		"hafenort": 2.2 * float(L.meer) + (0.6 if L.meer > 0.15 else 0.0),
+		"buchtenstadt": 2.5 * float(L.bucht) + 0.8 * float(L.meer),
+		"gartenstadt": 1.0 + 0.8 * float(L.acker) - 1.2 * float(L.meer),
+		"hangstadt": 6.0 * float(L.hang),
+		"flussstadt": 4.0 * float(L.fluss),
+		"marktort": 1.1 - 0.5 * float(L.hang),
+	}
+	if FORM_OF_CHARACTER.has(ch):
+		score[FORM_OF_CHARACTER[ch]] = float(score[FORM_OF_CHARACTER[ch]]) + 0.7
+	var best := ""
+	var best_s := -INF
+	for f in score:
+		var s: float = float(score[f]) - 3.0 * float(taken.get(f, 0)) + float(absi(hash([sim.city.seed_value, k, f])) % 100) / 200.0
+		if s > best_s:
+			best_s = s
+			best = f
+	var F: Dictionary = FORMS[best]
+	var d := {"v": VERSION, "town": k, "form": best, "label": F.label, "kern": [kern.x, kern.y], "landschaft": L,
+		"wasser_richtung": L.richtung, "block": F.block, "hoehen": F.hoehen, "freiraum": F.freiraum, "wirtschaft": F.wirtschaft,
+		"stil": STYLE_OF_FORM[best], "palette": _palette(k), "hausformen": _house_forms(k, best)}
+	d["achse"] = _axis(kern, L)
+	d["viertel"] = _districts(d)
+	return d
+
+
+## Landschaft um den Kern: Anteile Meer/Fluss-See/Hang/Acker (0..1), Richtung zum Meer, Buchtform (Wasser auf mehreren Seiten).
+func landscape(kern: Vector2i) -> Dictionary:
+	var C: CityData = sim.city
+	var n := 0
+	var meer := 0
+	var fluss := 0
+	var hang := 0
+	var acker := 0
+	var dir := Vector2.ZERO
+	var sides := [0, 0, 0, 0]   # Wasser je Himmelsrichtung (O, S, W, N)
+	for dy in range(-RADIUS, RADIUS + 1, 2):
+		for dx in range(-RADIUS, RADIUS + 1, 2):
+			var q := kern + Vector2i(dx, dy)
+			if not C.inside(q):
+				continue
+			n += 1
+			var g := C.g(q)
+			if g == CityData.G.WATER:
+				if _wide_water(q):
+					meer += 1
+					dir += Vector2(dx, dy)
+				else:
+					fluss += 1
+				var ang := fposmod(atan2(float(dy), float(dx)), TAU)
+				sides[int(round(ang / (PI / 2.0))) % 4] += 1
+			elif not C.height.is_empty() and C.height[C.idx(q)] > 0:
+				hang += 1
+			elif g in [CityData.G.FIELD, CityData.G.CROP]:
+				acker += 1
+	n = maxi(1, n)
+	var wet_sides := sides.filter(func(v): return v > n / 40).size()
+	var r := Vector2i.ZERO
+	if dir.length() > 0.0:
+		var u := dir.normalized()
+		r = Vector2i(int(round(u.x)), int(round(u.y)))
+	return {"meer": snappedf(float(meer) / n, 0.01), "fluss": snappedf(float(fluss) / n, 0.01), "hang": snappedf(float(hang) / n, 0.01),
+		"acker": snappedf(float(acker) / n, 0.01), "bucht": 1.0 if wet_sides >= 2 and meer > n / 12 else 0.0, "richtung": [r.x, r.y]}
+
+
+## Breites Wasser (Meer, grosser See) gegenueber Fluss: Anteil Wasser im 7x7-Fenster.
+func _wide_water(q: Vector2i) -> bool:
+	var C: CityData = sim.city
+	var w := 0
+	for dy in range(-3, 4):
+		for dx in range(-3, 4):
+			var p := q + Vector2i(dx, dy)
+			if C.inside(p) and C.g(p) == CityData.G.WATER:
+				w += 1
+	return w >= 30
+
+
+## Hauptachse: entlang der Kueste (quer zur Wasserrichtung), sonst Richtung Grosslager/Kartenmitte.
+func _axis(kern: Vector2i, L: Dictionary) -> Array:
+	var r := Vector2i(int(L.richtung[0]), int(L.richtung[1]))
+	if r != Vector2i.ZERO:
+		return [-r.y, r.x] if absi(r.x) + absi(r.y) > 0 else [1, 0]
+	var to := Vector2(sim.city.size / 2, sim.city.size / 2)
+	if sim.hub != null and sim.hub.enabled:
+		var hb: Dictionary = sim.city.building(int(sim.hub.loc))
+		if not hb.is_empty():
+			to = Vector2(int(hb.x), int(hb.y))
+	var u := (to - Vector2(kern)).normalized()
+	return [int(round(u.x)), int(round(u.y))] if u.length() > 0.0 else [1, 0]
+
+
+## Viertelplan je Grundform: Rolle, Zone, Mitte, Radius, hoechste Geschosszahl. Lage relativ zu Kern, Wasser (w) und Achse (a).
+func _districts(d: Dictionary) -> Array:
+	var kern := Vector2i(int(d.kern[0]), int(d.kern[1]))
+	var w := Vector2i(int(d.wasser_richtung[0]), int(d.wasser_richtung[1]))
+	var a := Vector2i(int(d.achse[0]), int(d.achse[1]))
+	if w == Vector2i.ZERO:
+		w = Vector2i(-a.y, a.x)   # ohne Wasser: "vorne" quer zur Achse
+	var h: Array = d.hoehen
+	var spec: Array = []   # [rolle, zone, versatz, radius, geschosse, text]
+	match str(d.form):
+		"hafenort":
+			spec = [["kern", "mischgebiet", Vector2i.ZERO, 8, h[0], "Geschäftsstraße am alten Hafen"],
+				["hafen_gewerbe", "gewerbe", w * 6 + a * 13, 7, h[1], "Lager- und Gewerbehöfe an der Güterzufahrt"],
+				["wohnen_hang", "wohnen", -w * 13, 9, h[1], "Wohnstraßen hinter dem Kern"],
+				["wohnen_kueste", "wohnen", -a * 15, 8, h[2], "Wohnen an der Küste, abseits vom Hafen"]]
+		"buchtenstadt":
+			spec = [["kern", "mischgebiet", Vector2i.ZERO, 7, h[0], "Platz an der Promenade"],
+				["ufer_ost", "mischgebiet", w * 3 + a * 13, 6, h[1], "Hotels und Gastronomie mit Wasserblick"],
+				["ufer_west", "mischgebiet", w * 3 - a * 13, 6, h[1], "Promenade mit kleinen Plätzen"],
+				["wohnen", "wohnen", -w * 14, 10, h[2], "Wohnen hinter der Uferzeile"],
+				["gewerbe", "gewerbe", -w * 24 + a * 10, 6, h[2], "Gewerbe abseits des Ufers, eigene Zufahrt"]]
+		"gartenstadt":
+			spec = [["kern", "mischgebiet", Vector2i.ZERO, 6, h[0], "kleiner Versorgungsplatz"],
+				["nachbarschaft_1", "wohnen", a * 16 + w * 6, 7, h[1], "Nachbarschaft mit Gärten"],
+				["nachbarschaft_2", "wohnen", -a * 16 + w * 6, 7, h[1], "Nachbarschaft mit Gärten"],
+				["nachbarschaft_3", "wohnen", -w * 17, 7, h[2], "Nachbarschaft am Ortsrand"],
+				["gruenzug", "gruen", -w * 8 + a * 8, 4, 0, "Grünverbindung zwischen den Nachbarschaften"],
+				["handwerk", "gewerbe", a * 26, 6, h[2], "Handwerkerhöfe am Ortsrand"]]
+		"hangstadt":
+			spec = [["kern", "mischgebiet", Vector2i.ZERO, 7, h[0], "Ortskern auf der flachen Stufe"],
+				["terrasse_1", "wohnen", a * 12, 6, h[1], "Baugruppe am Hang"],
+				["terrasse_2", "wohnen", -a * 12, 6, h[1], "Baugruppe am Hang"],
+				["aussicht", "gruen", -w * 10, 3, 0, "Aussichtspunkt"],
+				["tal_gewerbe", "gewerbe", w * 14, 7, h[2], "Gewerbe im Tal an der Zufahrt"]]
+		"flussstadt":
+			spec = [["kern", "mischgebiet", Vector2i.ZERO, 7, h[0], "Marktplatz am Ufer"],
+				["ufer_1", "wohnen", a * 14, 8, h[1], "Uferquartier"],
+				["ufer_2", "wohnen", -a * 14, 8, h[1], "Uferquartier am anderen Ende"],
+				["uferweg", "gruen", w * 4, 3, 0, "Zugang zum Wasser"],
+				["gewerbe", "gewerbe", -w * 18, 7, h[2], "Gewerbe an der Landstraße"]]
+		_:
+			spec = [["kern", "mischgebiet", Vector2i.ZERO, 7, h[0], "Marktplatz und Hauptstraße"],
+				["wohnen_nord", "wohnen", w * 13, 8, h[1], "Wohnstraßen am Kern"],
+				["wohnen_sued", "wohnen", -w * 13, 9, h[1], "Wohnstraßen am Kern"],
+				["wohnen_rand", "wohnen", -a * 17, 8, h[2], "Wohnen am Ortsrand"],
+				["gewerbe", "gewerbe", a * 20, 7, h[2], "Gewerbe an der Ausfallstraße"]]
+	var out: Array = []
+	var i := 1
+	for s in spec:
+		var c := _on_land(kern + s[2], kern, int(d.town))
+		out.append({"id": "V%d" % i, "rolle": s[0], "zone": s[1], "mitte": [c.x, c.y], "radius": s[3], "geschosse": s[4],
+			"text": s[5], "status": "entwurf"})
+		i += 1
+	return out
+
+
+## Viertelmitte auf freies Land legen: zuerst denselben Abstand in gedrehter Richtung (bis 90 Grad), dann naeher am Kern.
+## Nicht im Wasser oder Berg und nicht naeher an einer anderen Stadt als am eigenen Kern (Partie 18.11.: Nachbarorte 27 Felder entfernt).
+func _on_land(c: Vector2i, kern: Vector2i, k: int = -1) -> Vector2i:
+	var off := Vector2(c - kern)
+	if off == Vector2.ZERO:
+		return kern
+	for f in [1.0, 0.8, 0.6, 0.45]:
+		for deg in [0, 30, -30, 60, -60, 90, -90]:
+			var p := kern + Vector2i((off * f).rotated(deg_to_rad(deg)).round())
+			if _good_spot(p, kern, k):
+				return p
+	return kern
+
+
+func _good_spot(p: Vector2i, kern: Vector2i, k: int) -> bool:
+	var C: CityData = sim.city
+	for q in [p, p + Vector2i(2, 0), p + Vector2i(-2, 0), p + Vector2i(0, 2), p + Vector2i(0, -2)]:
+		if not C.inside(q) or C.g(q) == CityData.G.WATER or (not C.height.is_empty() and C.height[C.idx(q)] > 0):
+			return false
+	var own := Vector2(p).distance_to(Vector2(kern))
+	if sim.towns != null:
+		for j in sim.towns.count():
+			if j == k:
+				continue
+			var o := _kern_of(j)
+			if o.x >= 0 and Vector2(p).distance_to(Vector2(o)) < own:
+				return false
+	return true
+
+
+## Material-/Farbpalette: 3 von 6 Varianten, je Stadt anders als die bisherigen Staedte (soweit moeglich).
+func _palette(k: int) -> Array:
+	var used := {}
+	for key in towns:
+		if int(key) != k:
+			used[str(towns[key].palette)] = true
+	var order := SUFFIXES.duplicate()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = absi(hash([sim.city.seed_value, k, "palette"]))
+	for tries in 12:
+		for i in range(order.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var t = order[i]
+			order[i] = order[j]
+			order[j] = t
+		var pick: Array = order.slice(0, 3)
+		pick.sort()
+		if not used.has(str(pick)):
+			return pick
+	return order.slice(0, 3)
+
+
+## Bauformen der Wohnhaeuser (Silhouette): 5 von 8, je Grundform verschoben, damit Staedte unterschiedliche Familien haben.
+func _house_forms(k: int, form: String) -> Array:
+	var start := (FORMS.keys().find(form) * 3 + absi(hash([sim.city.seed_value, k])) % 2) % HOUSE_FORMS
+	var out: Array = []
+	for i in 5:
+		out.append((start + i) % HOUSE_FORMS)
+	return out
+
+
+## Viertel an einer Zelle (naechstes Viertel, dessen Radius die Zelle einschliesst), {} = ausserhalb des Plans.
+func district_at(k: int, cell: Vector2i) -> Dictionary:
+	var best := {}
+	var best_d := INF
+	for v in of(k).get("viertel", []):
+		var d := Vector2(cell).distance_to(Vector2(int(v.mitte[0]), int(v.mitte[1])))
+		if d <= float(v.radius) + 2.0 and d / float(v.radius) < best_d:
+			best_d = d / float(v.radius)
+			best = v
+	return best
+
+
+## Zone fuer neues Bauland an einer Zelle: Zone des Viertels; ausserhalb des Plans Wohnen. "gruen" = nicht bebauen.
+func zone_at(k: int, cell: Vector2i) -> String:
+	var v := district_at(k, cell)
+	return str(v.zone) if not v.is_empty() else "wohnen"
+
+
+## Grundstuecksgroesse fuer neues Bauland.
+func plot_size(k: int) -> Vector2i:
+	var p := of(k)
+	return Vector2i(int(p.block[0]), int(p.block[1])) if not p.is_empty() else Vector2i(6, 6)
+
+
+## Hausvariante aus Palette und Bauformen der Stadt: Teilmenge von variants ({} = keine Einschraenkung moeglich).
+func variant_pool(k: int, type: String, variants: Array) -> Array:
+	var p := of(k)
+	if p.is_empty():
+		return variants
+	var pal: Array = p.palette
+	var forms: Array = p.hausformen
+	var pool: Array = variants.filter(func(v):
+		var s := str(v)
+		var suf := _suffix(s)
+		if suf not in pal:
+			return false
+		if type == "house":
+			var digit := s.substr(5, 1)
+			return digit.is_valid_int() and int(digit) in forms
+		return true)
+	return pool if not pool.is_empty() else variants
+
+
+static func _suffix(sp: String) -> String:
+	var i := sp.rfind("s")
+	return sp.substr(i) if i > 0 and sp.substr(i + 1).is_valid_int() else ""
+
+
+## Kurzfassung fuer Beobachtungen der KI und die Oberflaeche.
+func brief(k: int) -> Dictionary:
+	var p := of(k)
+	if p.is_empty():
+		return {}
+	return {"grundform": p.label, "leitbild": FORMS[p.form].text, "freiraum": p.freiraum, "wirtschaft": p.wirtschaft,
+		"grundstuecke": "%dx%d" % [int(p.block[0]), int(p.block[1])], "hoehen_kern_mitte_rand": p.hoehen,
+		"viertel": (p.viertel as Array).map(func(v): return {"id": v.id, "rolle": v.rolle, "zone": v.zone, "mitte": v.mitte,
+			"geschosse_max": v.geschosse, "zweck": v.text, "status": v.status})}
+
+
+## Planrevision mit Begruendung (Entwicklungsgeschichte); aendert nie bestehende Gebaeude.
+func revise(k: int, text: String) -> void:
+	var p := of(k)
+	if p.is_empty():
+		return
+	(p.geschichte as Array).append({"tag": _day(), "text": text})
+
+
+func _kern_of(k: int) -> Vector2i:
+	var t: Dictionary = sim.towns.get_t(k) if sim.towns != null else {}
+	var hall := int(t.get("town_hall", -1))
+	if hall >= 0:
+		var b: Dictionary = sim.city.building(hall)
+		if not b.is_empty():
+			return Vector2i(int(b.x) + int(b.w) / 2, int(b.y) + int(b.h) / 2)
+	return Vector2i(-1, -1)
+
+
+func _founded(k: int) -> bool:
+	return sim.town_ready(k) and int(sim.towns.get_t(k).get("town_hall", -1)) >= 0
+
+
+func _name(k: int) -> String:
+	return sim.towns.name_of(k) if sim.towns != null else str(k)
+
+
+func _day() -> int:
+	return GameCalendar.day_of(sim.game_min)
+
+
+func to_dict() -> Dictionary:
+	return {"v": VERSION, "towns": towns}
+
+
+func from_dict(d: Dictionary) -> void:
+	towns = d.get("towns", {})
+	for key in towns:   # JSON liefert Zahlen als float
+		var p: Dictionary = towns[key]
+		p.town = int(p.town)
+		p.hausformen = (p.hausformen as Array).map(func(x): return int(x))
+		p.hoehen = (p.hoehen as Array).map(func(x): return int(x))
+		p.block = (p.block as Array).map(func(x): return int(x))
+		for v in p.viertel:
+			v.radius = int(v.radius)
+			v.geschosse = int(v.geschosse)

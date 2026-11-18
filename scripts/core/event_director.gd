@@ -303,6 +303,9 @@ func _pick_variant(type: String, fp: Rect2i) -> String:
 	var variants: Array = CityGenerator.TYPES[type][0]
 	if variants.size() <= 1:
 		return str(variants[0])
+	var k: int = sim.city.town_of(fp.position)
+	if k >= 0 and type in ["house", "semi", "villa", "apartment", "shop"]:
+		variants = sim.town_plan.variant_pool(k, type, variants)   # Auftrag 8: Palette und Bauformen der Stadt
 	var near := {}
 	var c: CityData = sim.city
 	for y in range(fp.position.y - 6, fp.end.y + 6, 2):

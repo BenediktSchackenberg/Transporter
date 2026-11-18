@@ -2725,7 +2725,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	var ind: Dictionary = sim.towns.mayors[k].indicators()
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
-	var out := {"stadt": sim.towns.name_of(k), "verteidigung": arms.defense_obs(k),
+	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "verteidigung": arms.defense_obs(k),
 		"firmen": sim.companies.filter(func(c): return c.is_active()).map(func(c): return {"firma": c.id, "name": c.company_name, "inhaber": c.player_name})}
 	var size := 0
 	var skipped: Array = []

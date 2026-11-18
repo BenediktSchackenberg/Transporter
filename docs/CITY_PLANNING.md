@@ -240,3 +240,22 @@ Stil kommunaler Bauten je Charakter (`municipal.STYLE_OF_CHARACTER`), Siedlungsd
 Plan für Etappe 2–3: neue Klasse `TownPlan` (Profil, Kern, Achsen, Viertel, Reservierungen, Revisionen; gespeichert, beim Laden aus
 der Bebauung abgeleitet) und `SiteSelector` (harte Prüfungen → bewertete Kandidaten → Begründung mit Alternativen → atomare
 Reservierung). Danach (Etappe 4) laufen alle Pfade der Tabelle über `SiteSelector`; `world_events._openings` entfällt.
+
+### Etappe 2 (18.11.2026): Gestaltungsprofil und Viertelplan je Stadt
+
+- Neue Klasse `TownPlan` (`scripts/core/town_plan.gd`, `sim.town_plan`, gespeichert als `town_plans`). Profil je Stadt: Grundform
+  (Hafenort, Buchtenstadt, Gartenstadt, Hangstadt, Flussstadt, Marktort) mit Leitbild, Kern, Wasserrichtung, Hauptachse,
+  Landschaftsanteile (Meer, Fluss/See, Hang, Acker, Bucht), Grundstücksgröße, Höhen je Ring, Freiraumart, Wirtschaftsschwerpunkte,
+  Stil kommunaler Bauten, Material-/Farbpalette (3 von 6), Hausbauformen (5 von 8), Viertel und Entwicklungsgeschichte.
+- Grundform aus der Landschaft um den Kern; eine schon vergebene Grundform kostet 3 Punkte (Region mit 4 Küstenorten, Seed 4242:
+  Buchtenstadt, Marktort, Hafenort, Gartenstadt). Palette je Stadt verschieden. Gleicher Seed → gleiche Profile.
+- Viertel je Grundform mit Rolle, Zone, Mitte, Radius, Geschosszahl, Zweck; Status `entwurf` (unverbindlich, sperrt nichts). Mitten
+  liegen auf freiem Land (gedreht statt in Wasser/Berg) und nie näher an einer anderen Stadt als am eigenen Kern.
+- Entstehung: Kartenstart (`ensure_all("start")`), Wildnis-Gründung (`open_town`, vor dem ersten Bauland), Laden alter Spielstände
+  (`ensure_all("bestand")`, aus Rathauslage und Landschaft; Gebäude bleiben unverändert). Vor dem ersten Speichern mit Stadtplan wird
+  die alte Datei als `quicksave_vor_stadtplan.json` aufbewahrt.
+- Wirkung im Spiel: neues Bauland der Wildnis (`carve_plots`) bekommt Grundstücksgröße und Zone des Viertels, im Grünzug/Aussicht/
+  Uferweg entsteht keins; neue Gebäude wählen ihre Variante aus Palette und Bauformen der Stadt (`EventDirector._pick_variant`);
+  kommunale Bauten den Stil des Profils (`Municipal.style_of`); der Bürgermeister sieht `stadtplan` (Leitbild, Viertel) in seiner Beobachtung.
+- Live-Partie: Birkenklippe = Hangstadt (31 % Hang), Liorufer = Gartenstadt.
+- Test `test_town_plan` (17 Prüfungen), Probe `tests/probe_town_plan.gd <Spielstand>`.

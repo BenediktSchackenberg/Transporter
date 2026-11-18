@@ -44,6 +44,7 @@ func _initialize() -> void:
 	test_names.append("test_wildnis_hub_supply")
 	test_names.append("test_collisions")
 	test_names.append("test_wildnis_helpers")
+	test_names.append("test_town_plan")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
@@ -14997,3 +14998,41 @@ func test_eko_taxi() -> void:
 	ok(E.tile_of(M) == far and not bool(M.faehrt), "angekommen in %.1f s (zu Fuss waeren es mehr als %.0f s)" % [steps * 0.1, EkoWorld._dist(t, far) / EkoWorld.WALK_SPEED])
 	ok(steps * 0.1 < EkoWorld._dist(t, far) / EkoWorld.WALK_SPEED / 2.0, "deutlich schneller als zu Fuss")
 	ok(absf(s.economy.conservation_error()) < 0.01 and identity_ok(s), "Geldbilanz")
+
+
+## Auftrag 8 Stadtplanung, Etappe 2: Gestaltungsprofil je Stadt – verschieden, auf Land, gespeichert, wirkt auf Varianten.
+func test_town_plan() -> void:
+	var s := region_sim(4)
+	var P: TownPlan = s.town_plan
+	ok(P.towns.size() == 4, "vier Städte mit Profil (%d)" % P.towns.size())
+	var forms := {}
+	var pals := {}
+	for key in P.towns:
+		var p: Dictionary = P.towns[key]
+		forms[p.form] = true
+		pals[str(p.palette)] = true
+		var wet := 0
+		for v in p.viertel:
+			var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
+			if s.city.g(c) == CityData.G.WATER:
+				wet += 1
+		ok(wet == 0, "%s (%s): kein Viertel im Wasser" % [s.towns.name_of(int(key)), p.label])
+		ok((p.viertel as Array).size() >= 4 and (p.viertel as Array).any(func(v): return v.rolle == "kern"), "%s: Kern und mindestens vier Viertel" % p.label)
+	ok(forms.size() == 4, "vier verschiedene Grundformen bei vier Städten (%s)" % str(forms.keys()))
+	ok(pals.size() == 4, "vier verschiedene Material-/Farbpaletten")
+	# deterministisch und gespeichert
+	var p0: Dictionary = P.of(0)
+	var again := region_sim(4)
+	ok(P.towns.keys().all(func(key): return again.town_plan.towns[key].form == P.towns[key].form and str(again.town_plan.towns[key].palette) == str(P.towns[key].palette)),
+		"gleicher Seed -> gleiche Profile (reproduzierbar)")
+	for key in P.towns:
+		print("  Stadt %s: %s, Palette %s, Hausformen %s, Landschaft %s" % [s.towns.name_of(int(key)), P.towns[key].label, P.towns[key].palette, P.towns[key].hausformen, P.towns[key].landschaft])
+	var d: Dictionary = JSON.parse_string(JSON.stringify(s.to_dict()))
+	var s2 := Simulation.from_dict(d)
+	ok(s2.town_plan.towns.size() == 4 and s2.town_plan.of(0).form == p0.form and str(s2.town_plan.of(0).palette) == str(p0.palette),
+		"Speichern/Laden erhält das Profil (nicht neu ausgewürfelt)")
+	# Varianten: nur aus Palette und Bauformen der Stadt
+	var pool: Array = P.variant_pool(0, "house", CityGenerator.TYPES["house"][0])
+	ok(pool.size() > 0 and pool.size() < (CityGenerator.TYPES["house"][0] as Array).size(), "Wohnhäuser nur aus der Gestaltungsfamilie der Stadt (%d Varianten)" % pool.size())
+	ok(pool.all(func(v): return TownPlan._suffix(str(v)) in p0.palette), "alle Varianten aus der Palette")
+	ok(not P.brief(0).is_empty() and str(P.brief(0).leitbild) != "", "Kurzfassung für die KI")
