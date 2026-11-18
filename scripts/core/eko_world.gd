@@ -409,6 +409,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 		b["takt_min"] = gap if not b.has("takt_min") else lerpf(float(b.takt_min), gap, 0.3)
 	b["last_game_min"] = float(sim.game_min)
 	if data.get("data") is Dictionary and not data.has("aktion"):   # {"data": {"data": {"aktion": ...}}} (Partie 16.11.)
+		if data.get("type") is String and canonical_type(type) not in ACTIONS:   # 18.11.: {type: act, data: {data: {...}, type: "Rest"}}
+			type = str(data.type)
 		data = data.data
 	type = canonical_type(type)
 	if type not in ACTIONS:   # Partie 16.11.: 11x type "act" (Werkzeugname), echte Art in data.type oder aus data.aktion ableitbar
