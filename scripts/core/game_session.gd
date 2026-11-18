@@ -12,6 +12,8 @@ const SPEEDS := [1, 2, 4, 8, 16]
 const SAVE_PATH := "user://saves/quicksave.json"
 const SUBSTEP := 0.1
 const MAX_FRAME_DT := 0.25
+const EKO_MIN_ZOOM := 0.75
+const DECOR_MIN_ZOOM := 0.5
 var eko_autosave_s := 0.0          # Wesen-Modus: Spielstand automatisch alle so viele Sekunden sichern (0 = aus)
 var _eko_save_left := 0.0
 var sim_budget_ms := 60.0         # max. Rechenzeit der Simulation je Bild (0 = unbegrenzt); darüber läuft das Spiel langsamer statt zu ruckeln
@@ -780,12 +782,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and event.pressed:
 			var levels := [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]
+			# Wesen-Modus (18.11.): weit herausgezoomt (20.000-35.000 Draw Calls) stuerzte Godot zweimal beim Rendern ab
+			# ("FATAL: Index p_index out of bounds") – dort hoechstens bis EKO_MIN_ZOOM
+			if eko_autosave_s > 0.0:
+				levels = levels.filter(func(z): return z >= EKO_MIN_ZOOM)
 			var i := levels.find(cam.zoom.x)
 			if i < 0:
-				i = 3
+				i = levels.find(1.0)
 			i = clampi(i + (1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1), 0, levels.size() - 1)
 			var before := cam.get_global_mouse_position()
 			cam.zoom = Vector2(levels[i], levels[i])
+			city_view.decor_node.visible = cam.zoom.x > DECOR_MIN_ZOOM   # Baeume/Deko: bei kleinem Zoom nur Bildpunkte, aber tausende Draw Calls
 			if not following:
 				cam.position += before - cam.get_global_mouse_position()
 		elif event.button_index in [MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
