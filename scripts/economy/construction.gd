@@ -1151,6 +1151,37 @@ func _tender_public(M: Mayor, day: int) -> void:
 			prj["builder"] = o.builder
 
 
+## Viertel-Strassennetz fertig: Strassen anlegen (beim Laden ueber road_cells wiederhergestellt), Platz mit Brunnen, Bauland entlang
+## der neuen Strassen in der Zone des Viertels (Wildnis: Siedlungsgrundstuecke), Viertel gilt als erschlossen.
+func _finish_district(M: Mayor, prj: Dictionary) -> void:
+	var cells: Array = (prj.road_plan as Array).map(func(a): return Vector2i(int(a[0]), int(a[1])))
+	sim.access._apply_cells(cells)
+	prj["road_cells"] = prj.road_plan
+	var k: int = M.town
+	var pl := Vector2i(int(prj.platz[0]), int(prj.platz[1])) if prj.has("platz") else Vector2i(-1, -1)
+	if pl.x >= 0:
+		sim.events._add_building("fountain", Rect2i(pl, Vector2i(2, 2)), "Platz %s" % sim.towns.name_of(k))
+	var plots: Array = []
+	if sim.wildnis:
+		plots = sim.eko.settle.carve_plots(k, cells, 16)
+	var rezoned := 0
+	for v in sim.town_plan.of(k).get("viertel", []):
+		if str(v.id) != str(prj.viertel):
+			continue
+		v.status = "erschlossen"
+		var vc := Vector2(int(v.mitte[0]), int(v.mitte[1]))
+		for p in sim.parcels.items.values():   # freie staedtische Flaechen im Viertel: Zone des Viertels (Umwidmung nach Plan)
+			if str(p.owner) != M.land_owner() or str(p.state) != "frei" or str(p.zone) == str(v.zone) or str(p.zone) not in ["wohnen", "mischgebiet", "gewerbe", "industrie", "oeffentlich"]:
+				continue
+			if Vector2(int(p.rect[0]) + int(p.rect[2]) / 2.0, int(p.rect[1]) + int(p.rect[3]) / 2.0).distance_to(vc) <= float(v.radius) + 3.0:
+				p.zone = str(v.zone)
+				p.erschliessung = sim.parcels.utilities_of(p)
+				sim.parcels.touch(str(p.id))
+				rezoned += 1
+	sim.town_plan.revise(k, "Viertel %s erschlossen: %d Straßenfelder, %d neue Grundstücke, %d Flächen umgewidmet." % [prj.viertel, cells.size(), plots.size(), rezoned])
+	sim.log_event("%s: Viertel %s erschlossen – %d Felder Straße, %d neue Grundstücke." % [sim.towns.name_of(k), prj.viertel, cells.size(), plots.size()], "good")
+
+
 func _finish_public(e: Dictionary) -> void:
 	var M: Mayor = sim.towns.mayor_of_project(str(e.project))   # die beauftragende Stadt bezahlt aus ihrer Kasse
 	var prj: Dictionary = M.projects[e.project]
@@ -1183,7 +1214,9 @@ func _finish_public(e: Dictionary) -> void:
 		sim.parcels.touch(pid)
 	if prj.kind in ["verbindung", "autobahn"]:
 		sim.regional.finish(str(prj.ref))
-	if prj.kind == "erschliessung" and "strasse" in prj.parts:
+	if prj.has("road_plan"):   # Auftrag 8: Strassennetz eines Viertels nach Grundform
+		_finish_district(M, prj)
+	elif prj.kind == "erschliessung" and "strasse" in prj.parts:
 		prj["road_cells"] = sim.access.lay_roads(prj.parcels)   # neue Strassen bis an die Grundstuecke (sichtbar, befahrbar)
 		if not prj.road_cells.is_empty():
 			sim.log_event("%s: neue Straße (%d Felder) zu %d Grundstücken fertig." % [sim.towns.name_of(M.town), prj.road_cells.size(), prj.parcels.size()], "good")

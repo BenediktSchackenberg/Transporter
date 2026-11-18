@@ -284,3 +284,20 @@ Reservierung). Danach (Etappe 4) laufen alle Pfade der Tabelle über `SiteSelect
   mitgespeichert, beim Laden folgt die Nummer der Fläche (`Parcels._claim_id`); alte Spielstände werden aus der Wirklichkeit
   repariert (`repair_runtime`: bebaut, wo ein Gebäude steht, Eigentum nach Siedlung).
 - Tests `test_site_selector` (13), `test_parcel_ids_and_districts` (8); Proben `probe_sites.gd`, `probe_viertel.gd`, `probe_plots.gd`.
+
+### Etappe 4, Teil 2 (18.11.2026): Straßennetz je Viertel, Planrevision, Lieferkette
+
+- `TownPlan.street_plan`: Straßennetz eines Viertels nach Grundform – Marktort/Hafenort/Flussstadt: Hauptstraße entlang der Achse
+  mit Querstraßen im Abstand zweier Grundstückstiefen; Gartenstadt (Wohnen): Ringstraße um einen Grünplatz; Buchtenstadt: Uferstraße
+  mit Stichstraße ins Land; Hangstadt: Straße auf der flachen Stufe; Gewerbeviertel immer als Raster mit Zufahrten. Nur freie Felder,
+  Anbindung an die nächste Straße. Am Kern von Marktort/Hafenort/Buchtenstadt ein Platz mit Brunnen.
+- `viertel_erschliessen` beauftragt für ein Viertel ohne Straßen dieses Netz als Erschließungsprojekt (320 EUR je Feld, Platz
+  6.000 EUR, Material aus dem Stadtlager, Ratsbeschluss nach Kosten, Ausschreibung sofort). Abnahme (`Construction._finish_district`):
+  Straßen liegen (beim Laden über `road_cells` wiederhergestellt), Brunnenplatz, Bauland entlang der neuen Straßen in der Zone des
+  Viertels (Wildnis), freie städtische Flächen im Viertel werden zur Viertel-Zone umgewidmet, Viertel `erschlossen`.
+- Planrevision: Entwurfs-Viertel ohne freies bebaubares Land werden beim Laden verlegt (Ring um den Kern, möglichst alte Richtung),
+  mit Eintrag in der Entwicklungsgeschichte. Viertel brauchen mindestens 55 % freie bebaubare Grundstücksfläche.
+- Live-Probe (Spielstand 18:10): Liorufer V2 Ringstraße 108 Felder → 16 Grundstücke; danach wählen Einfamilienhaus und Abfallhof
+  Plätze in den passenden Vierteln (V2/V3 bzw. V5/V6).
+- Lieferkette (Material für Stadtprojekte): Straßen nach dem Laden wieder befahrbar (`NavGrid.sync_roads`), Importe ohne Hafen über
+  das Großlager, Stadt-Lkw bündeln Bestellungen (8 je Lkw, 4 je Stadt).

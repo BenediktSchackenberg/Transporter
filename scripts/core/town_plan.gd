@@ -108,6 +108,7 @@ func ensure_all(reason: String = "bestand") -> void:
 	for k in sim.towns.count():
 		if _founded(k):
 			ensure(k, reason)
+			revise_districts(k)
 			if not bool(of(k).get("land", false)):   # Profile von vor der Landzuteilung (18.11.): einmal nachholen
 				var n := claim_land(k)
 				of(k)["land"] = true
@@ -289,6 +290,8 @@ func _good_spot(p: Vector2i, kern: Vector2i, k: int) -> bool:
 	for q in [p, p + Vector2i(2, 0), p + Vector2i(-2, 0), p + Vector2i(0, 2), p + Vector2i(0, -2)]:
 		if not C.inside(q) or C.g(q) == CityData.G.WATER or (not C.height.is_empty() and C.height[C.idx(q)] > 0):
 			return false
+	if free_share(p, 5) < 0.55:
+		return false   # Viertel braucht freies Land (18.11.: Gewerbeviertel lag mitten in der Bebauung)
 	var own := Vector2(p).distance_to(Vector2(kern))
 	if sim.towns != null:
 		for j in sim.towns.count():
@@ -298,6 +301,56 @@ func _good_spot(p: Vector2i, kern: Vector2i, k: int) -> bool:
 			if o.x >= 0 and Vector2(p).distance_to(Vector2(o)) < own:
 				return false
 	return true
+
+
+## Anteil freier, bebaubarer Felder (kein Gebaeude, keine Strasse, Land, flach) im Umkreis r.
+func free_share(c: Vector2i, r: int) -> float:
+	var C: CityData = sim.city
+	var n := 0
+	var free := 0
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var q := c + Vector2i(dx, dy)
+			n += 1
+			if C.inside(q) and C.building_at[C.idx(q)] < 0 and C.g(q) not in [CityData.G.ROAD, CityData.G.WATER, CityData.G.RAIL, CityData.G.QUAY] and (C.height.is_empty() or C.height[C.idx(q)] == 0):
+				var pc: Dictionary = sim.parcels.at_cell(q)   # bebaubares freies Grundstueck (nicht Korridor/Gruen/vergeben)
+				if not pc.is_empty() and str(pc.state) == "frei" and sim.parcels.is_buildable(pc):
+					free += 1
+	return float(free) / float(maxi(1, n))
+
+
+## Planrevision: Entwurfs-Viertel ohne freies Land werden verlegt (begruendet in der Entwicklungsgeschichte). Beschlossene, in
+## Erschliessung befindliche oder erschlossene Viertel bleiben.
+func revise_districts(k: int) -> int:
+	var p := of(k)
+	if p.is_empty():
+		return 0
+	var kern := Vector2i(int(p.kern[0]), int(p.kern[1]))
+	var n := 0
+	for v in p.viertel:
+		var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
+		if str(v.status) != "entwurf" or str(v.rolle) == "kern" or free_share(c, 5) >= 0.4:
+			continue
+		var nc := _on_land(c + (c - kern) / 2, kern, k)
+		if nc == kern or nc == c:   # in der Naehe nichts frei: Ring um den Kern absuchen, moeglichst in alter Richtung
+			var best := -INF
+			var dir := Vector2(c - kern).normalized() if c != kern else Vector2.RIGHT
+			for rad in range(12, 40, 4):
+				for deg in range(0, 360, 20):
+					var u := Vector2.RIGHT.rotated(deg_to_rad(deg))
+					var q := kern + Vector2i((u * rad).round())
+					if not _good_spot(q, kern, k):
+						continue
+					var sc := free_share(q, 5) + 0.5 * u.dot(dir) - 0.01 * rad
+					if sc > best:
+						best = sc
+						nc = q
+		if nc == kern or nc == c:
+			continue
+		v.mitte = [nc.x, nc.y]
+		revise(k, "Viertel %s (%s) verlegt von %s nach %s: am alten Ort kaum noch freies Land." % [v.id, v.text, str([c.x, c.y]), str([nc.x, nc.y])])
+		n += 1
+	return n
 
 
 ## Material-/Farbpalette: 3 von 6 Varianten, je Stadt anders als die bisherigen Staedte (soweit moeglich).
@@ -389,6 +442,118 @@ func brief(k: int) -> Dictionary:
 		"viertel": (p.viertel as Array).map(func(v): return {"id": v.id, "rolle": v.rolle, "zone": v.zone, "mitte": v.mitte,
 			"geschosse_max": v.geschosse, "zweck": v.text, "status": v.status}),
 		"letzte_standortwahl": (p.get("entscheidungen", []) as Array).slice(-3).map(func(e): return str(e.begruendung).left(220))}
+
+
+## Strassennetz eines Viertels nach Grundform (Auftrag 8, Abschnitt 10): Hauptstrasse entlang der Achse, Querstrassen im Abstand
+## der Bloecke; Gartenstadt als Ring um einen Gruenplatz, Buchtenstadt als Uferstrasse mit Stichstrasse zum Land, Hangstadt nur auf
+## den flachen Lagen. Dazu die Anbindung an die naechste bestehende Strasse. Nur freie Felder (kein Gebaeude, Wasser, Berg, Gleis).
+## Ergebnis {cells: Array[Vector2i] (neue Strassenfelder), platz: Vector2i (-1 = keiner), text}.
+const STREET_CONNECT_MAX := 70
+
+
+func street_plan(k: int, vid: String) -> Dictionary:
+	var p := of(k)
+	var v := {}
+	for x in p.get("viertel", []):
+		if str(x.id) == vid:
+			v = x
+	if v.is_empty() or str(v.zone) == "gruen":
+		return {"cells": [], "platz": Vector2i(-1, -1), "text": ""}
+	var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
+	var r := int(v.radius)
+	var a := _cardinal(Vector2i(int(p.achse[0]), int(p.achse[1])))
+	var q := Vector2i(-a.y, a.x)   # quer zur Achse
+	var block := int(p.block[1]) * 2 + 1   # Grundstueck beidseits der Strasse
+	var want: Array = []
+	var platz := Vector2i(-1, -1)
+	var text := ""
+	var form := str(p.form)
+	if form in ["gartenstadt", "buchtenstadt", "hangstadt"] and str(v.zone) == "gewerbe":
+		form = "marktort"   # Gewerbe: Raster mit Zufahrten statt Ring/Uferstrasse/Hangstrasse
+	match form:
+		"gartenstadt":
+			var h := maxi(3, r - 1)
+			for i in range(-h, h + 1):
+				want += [c + a * i + q * h, c + a * i - q * h, c + q * i + a * h, c + q * i - a * h]
+			text = "Ringstraße um einen Grünplatz"
+		"buchtenstadt":
+			for i in range(-r, r + 1):
+				want.append(c + a * i)
+			for i in range(1, r + 1):
+				want.append(c - q * i)
+			text = "Uferstraße mit Stichstraße ins Land"
+		"hangstadt":
+			for i in range(-r, r + 1):
+				want.append(c + a * i)
+			for i in range(1, mini(r, block) + 1):
+				want.append(c + q * i)
+			text = "Straße auf der flachen Stufe am Hang"
+		_:
+			for i in range(-r, r + 1):
+				want.append(c + a * i)
+			var off := -r + (r % block)
+			while off <= r:
+				if off != 0:
+					for i in range(-r / 2, r / 2 + 1):
+						want.append(c + a * off + q * i)
+				off += block
+			text = "Hauptstraße mit Querstraßen im Abstand von %d Feldern" % block
+	if str(v.rolle) == "kern" and str(p.freiraum) in ["platz", "kai", "promenade"]:
+		platz = c + q * 2
+		text += ", Platz mit Brunnen am Kern"
+	var C: CityData = sim.city
+	var cells: Array = []
+	var seen := {}
+	for w in want:
+		if seen.has(w) or not _road_ok(w) or (platz.x >= 0 and Rect2i(platz, Vector2i(2, 2)).has_point(w)):
+			continue
+		seen[w] = true
+		if not C.is_road(w):
+			cells.append(w)
+	if cells.is_empty():
+		return {"cells": [], "platz": platz, "text": text}
+	# Anbindung: kuerzester begehbarer Weg vom Viertel zur naechsten bestehenden Strasse
+	var start: Vector2i = cells[0]
+	var road := Vector2i(-1, -1)
+	var best := STREET_CONNECT_MAX + 1
+	for rad in range(1, STREET_CONNECT_MAX + 1, 2):
+		for dy in range(-rad, rad + 1):
+			for dx in range(-rad, rad + 1):
+				if maxi(absi(dx), absi(dy)) != rad:
+					continue
+				var t := c + Vector2i(dx, dy)
+				if C.inside(t) and C.is_road(t) and rad < best:
+					best = rad
+					road = t
+		if road.x >= 0:
+			break
+	if road.x >= 0:
+		var near_cell: Vector2i = cells[0]
+		for x in cells:
+			if absi(x.x - road.x) + absi(x.y - road.y) < absi(near_cell.x - road.x) + absi(near_cell.y - road.y):
+				near_cell = x
+		var path: Array[Vector2i] = sim.nav.walk_path(near_cell, road)
+		for w in path:
+			if not seen.has(w) and _road_ok(w) and not C.is_road(w):
+				seen[w] = true
+				cells.append(w)
+		text += ", Anbindung an die Straße bei %s" % str([road.x, road.y])
+	return {"cells": cells, "platz": platz, "text": text}
+
+
+func _road_ok(w: Vector2i) -> bool:
+	var C: CityData = sim.city
+	if not C.inside(w) or C.building_at[C.idx(w)] >= 0 or C.g(w) in [CityData.G.WATER, CityData.G.RAIL, CityData.G.RUNWAY, CityData.G.QUAY]:
+		return false
+	if not C.height.is_empty() and C.height[C.idx(w)] > 0:
+		return false
+	return sim.access == null or not sim.access.reserved(w) or C.is_road(w)
+
+
+static func _cardinal(a: Vector2i) -> Vector2i:
+	if a == Vector2i.ZERO:
+		return Vector2i(1, 0)
+	return Vector2i(signi(a.x), 0) if absi(a.x) >= absi(a.y) else Vector2i(0, signi(a.y))
 
 
 ## Standortentscheidung festhalten (SiteSelector): die letzten 12 je Stadt, fuer Zuschauer und KI nachvollziehbar.

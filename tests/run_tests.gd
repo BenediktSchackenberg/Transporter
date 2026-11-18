@@ -15115,3 +15115,32 @@ func test_parcel_ids_and_districts() -> void:
 			break
 	ok(res.ok and M.projects.values().any(func(prj): return str(prj.kind) == "erschliessung"), "Viertel erschließen legt ein Erschließungsprojekt an: %s" % str(res.msg).left(120))
 	ok(not M.execute({"action": "viertel_erschliessen", "viertel": "V99", "reason": "x"}).ok, "unbekanntes Viertel wird abgelehnt")
+	# Strassennetz nach Grundform: Projekt mit Kosten und Material; fertig -> Strassen liegen, Viertel erschlossen
+	var sp_prj: Array = M.projects.values().filter(func(prj): return prj.has("road_plan"))
+	if sp_prj.is_empty():   # Viertel ohne Strassen suchen (Viertel mit Strassen werden ueber ihre Grundstuecke erschlossen)
+		for k2 in s.towns.count():
+			var Mk: Mayor = s.towns.mayor(k2)
+			for v in s.town_plan.of(k2).get("viertel", []):
+				if str(v.zone) == "gruen":
+					continue
+				var rr: Dictionary = Mk._district_streets(v, "Test")
+				if rr.has("project"):
+					M = Mk
+					sp_prj = [Mk.projects[rr.project]]
+					break
+			if not sp_prj.is_empty():
+				break
+	ok(not sp_prj.is_empty(), "ein Viertel ohne Straßen bekommt ein Straßennetz nach Grundform")
+	if not sp_prj.is_empty():
+		var prj: Dictionary = sp_prj[0]
+		ok(float(prj.cost) > 0.0 and not (prj.material as Dictionary).is_empty(), "Straßennetz kostet Geld und Material (%s)" % Catalog.money(float(prj.cost)))
+		var cells: Array = (prj.road_plan as Array).map(func(q): return Vector2i(int(q[0]), int(q[1])))
+		ok(cells.all(func(q): return s.city.building_at[s.city.idx(q)] < 0 and s.city.g(q) != CityData.G.WATER), "geplante Straßen überdecken kein Gebäude und kein Wasser")
+		s.construction._finish_district(M, prj)
+		ok(cells.all(func(q): return s.city.is_road(q)), "nach der Abnahme liegen alle %d Straßenfelder" % cells.size())
+		ok((s.town_plan.of(M.town).viertel as Array).any(func(v): return str(v.id) == str(prj.viertel) and str(v.status) == "erschlossen"), "Viertel gilt als erschlossen")
+		var d2: Dictionary = JSON.parse_string(JSON.stringify(s.to_dict()))
+		prj.status = "fertig"
+		d2 = JSON.parse_string(JSON.stringify(s.to_dict()))
+		var s3 := Simulation.from_dict(d2)
+		ok(cells.all(func(q): return s3.city.is_road(q) and not s3.nav.road.is_point_solid(q)), "Straßen nach dem Laden vorhanden und befahrbar")

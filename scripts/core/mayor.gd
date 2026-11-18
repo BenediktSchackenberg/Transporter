@@ -1053,6 +1053,9 @@ func _develop_district(a: Dictionary) -> Dictionary:
 	if str(v.zone) == "gruen":
 		return {"ok": false, "msg": "%s ist Grünfläche (%s) – dort wird nicht gebaut." % [vid, v.text]}
 	var ctr := Vector2(int(v.mitte[0]), int(v.mitte[1]))
+	var res0 := _district_streets(v, str(a.get("reason", "")))
+	if not res0.is_empty():
+		return res0
 	var cands: Array = []
 	for p in sim.parcels.items.values():
 		if p.owner != land_owner() or str(p.state) != "frei" or not sim.parcels.is_buildable(p) or int(p.area) < 12:
@@ -1084,6 +1087,49 @@ func _develop_district(a: Dictionary) -> Dictionary:
 		sim.town_plan.revise(town, "Viertel %s (%s) wird erschlossen: %s." % [vid, v.text, ", ".join(step)])
 		res.msg = "Viertel %s (%s): erster Abschnitt mit %d Grundstücken. %s" % [vid, v.text, step.size(), str(res.msg)]
 	return res
+
+
+## Viertel ohne Strassen: Strassennetz nach Grundform als Erschliessungsprojekt (Kosten je Strassenfeld, Material aus dem Stadtlager,
+## Baufirma). Leeres Ergebnis = Viertel hat schon Strassen oder kein Netz moeglich (dann Grundstuecks-Erschliessung wie bisher).
+const STREET_CELL_COST := 320.0
+
+
+func _district_streets(v: Dictionary, reason: String) -> Dictionary:
+	var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
+	var have := 0
+	for dy in range(-int(v.radius), int(v.radius) + 1):
+		for dx in range(-int(v.radius), int(v.radius) + 1):
+			if sim.city.inside(c + Vector2i(dx, dy)) and sim.city.is_road(c + Vector2i(dx, dy)):
+				have += 1
+	if have >= int(v.radius) * 2:
+		return {}   # Viertel hat schon ein Strassennetz
+	for prj in projects.values():
+		if str(prj.get("viertel", "")) == str(v.id) and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			var e: Dictionary = sim.construction.public.get(prj.id, {})
+			return {"ok": false, "already": true, "msg": "Für Viertel %s läuft schon %s (%s)." % [v.id, prj.id, ("noch %d Tage, %s" % [int(e.days_left), str(e.get("waiting", "")) if str(e.get("waiting", "")) != "" else "es wird gebaut"]) if not e.is_empty() else str(prj.status)]}
+	var sp: Dictionary = sim.town_plan.street_plan(town, str(v.id))
+	var cells: Array = sp.cells
+	if cells.size() < 4:
+		return {}
+	var cost := snappedf(float(cells.size()) * STREET_CELL_COST + (6000.0 if sp.platz.x >= 0 else 0.0), 10.0)
+	if cost > available_budget():
+		return {"ok": false, "msg": "Straßennetz für Viertel %s (%d Felder) kostet %s, verfügbar %s." % [v.id, cells.size(), Catalog.money(cost), Catalog.money(available_budget())]}
+	var vote := _proposal_vote("erschliessung", cost, 0, cells.size(), str(v.zone))
+	if not vote.passed:
+		return {"ok": false, "msg": "Rat lehnt das Straßennetz für %s ab: %s" % [v.id, vote.text]}
+	commitments += cost
+	var prj := {"id": Towns.prefixed(town, "P", _next_project), "kind": "erschliessung", "ref": "viertel", "parcels": [], "parts": ["strasse"],
+		"cost": cost, "days": maxi(3, int(ceil(cells.size() / 8.0))), "status": "ausgeschrieben", "day": _today(), "tender": {"opened_day": _today(), "bids": [], "by": "Bauamt"},
+		"material": CityDepot.material_need(["strasse"], maxi(1, int(ceil(cells.size() / 6.0)))),
+		"viertel": str(v.id), "road_plan": cells.map(func(q): return [q.x, q.y]), "platz": [sp.platz.x, sp.platz.y],
+		"reason": ("Viertel %s (%s): %s. %s" % [v.id, v.text, sp.text, reason]).left(240)}
+	_next_project += 1
+	projects[prj.id] = prj
+	v.status = "in_erschliessung"
+	sim.town_plan.revise(town, "Viertel %s (%s): %s beschlossen (%s, %d Felder)." % [v.id, v.text, sp.text, prj.id, cells.size()])
+	sim.log_event("%s: Straßennetz für Viertel %s (%s) beschlossen – %s, %d Felder, %s." % [town_label(), v.id, v.text, sp.text, cells.size(), Catalog.money(cost)], "info")
+	return {"ok": true, "msg": "Projekt %s: Straßennetz für Viertel %s (%s) – %s, %d Straßenfelder, Kosten %s. %s Danach entstehen an den neuen Straßen Grundstücke der Zone %s." % [
+		prj.id, v.id, v.text, sp.text, cells.size(), Catalog.money(cost), vote.text, v.zone], "project": prj.id}
 
 
 func _plan_infrastructure(a: Dictionary) -> Dictionary:
