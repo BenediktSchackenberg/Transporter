@@ -206,3 +206,37 @@ Setze den Auftrag bis zur integrierten Funktion fort. Ein gut aussehender Startg
 - Geld, Waren, Personal, Bauzeiten und Zuständigkeiten bleiben nach den vorhandenen Wirtschaftsregeln konsistent. Geplante Schönheit erzeugt keine kostenlosen Leistungen.
 
 Automatische Kennzahlen können Wiederholungen, Belegung, Wege und Planregelverletzungen prüfen. Die gestalterische Qualität benötigt zusätzlich eine Sichtprüfung aus dem laufenden Spiel. Zeige pro Stadt mindestens eine Übersicht und eine Nahansicht sowie bei einer Stadt die Entwicklung über mehrere Zeitpunkte bei vergleichbarem Zoom.
+
+---
+
+## Stand
+
+### Etappe 1 (18.11.2026): Bestand – wo heute Standorte entschieden werden
+
+Alle Gebäude entstehen über `EventDirector._add_building` (prüft nur: Felder frei, keine Straße/Wasser/Gleis, keine reservierte
+Zufahrt; Straßenanschluss in der Wildnis nicht nötig). Die Standortwahl davor ist je Baupfad verschieden und kennt keinen Stadtplan:
+
+| Baupfad | Datei | Standortwahl heute | Problem gegenüber Auftrag 8 |
+|---|---|---|---|
+| Startstädte (Region) | `region_generator.gd` `_town_core`, `_streets(t, ch)` | feste Versätze um Hafen/Rathaus/Marktplatz; Ortscharakter (Fischerdorf, Marktflecken, Bauerndorf, Handwerkerort, Kurort, Hafenstadt) ändert nur Straßen und Hausmix | Grundriss weitgehend gleich; Charakter wirkt nach dem Start nicht mehr |
+| Wildnis-Gründung | `eko_settle.gd` `best_near`/`found`, `open_town` | Wesen wählt das Feld; Rathaus+Bauhof am Grundstück, Hafen am nächsten Meer | kein Profil, kein Kern/Achsenplan |
+| Wildnis-Bauland | `eko_settle.gd` `carve_plots`, `carve_area` | feste 6er-Grundstücke entlang jeder neuen Straße, alle Zone `wohnen`; `carve_area`: Ring 18–32 Felder um den Betriebshof | keine Viertel/Nutzungen; Ring erzeugt verstreute Grundstücke ohne Straße |
+| Wildnis-Häuser/Betriebe | `eko_homes.gd` `_finish` | Grundstück, das das Wesen nennt | keine Bewertung/Begründung |
+| Bauträger Wohnen/Läden | `construction.gd` `_developer_try` | **billigstes** freies Grundstück (`parcels.search` sortiert nach Preis; Rand ist billiger) | baut bevorzugt am Ortsrand, verstreut; keine Begründung |
+| Versorgung/Gewerbe | `construction.gd` `_supply_project`, `_commerce_project` | `parcels.search` je Zone, erstes passendes | wie oben |
+| Kommunale Bauten (Bürgermeister, Dienste) | `civic_works.gd` `_find_site` (auch `municipal._place`, `service_planner`) | nächstes freies städtisches Grundstück zum Rathaus (≤ 70 Felder), „Rand“ = am weitesten weg | nur Entfernung; keine Nachbarschaft/Lärm/Profil |
+| Quartiere (Bürgermeister) | `mayor.gd` `quarter_candidates`, `zoning` | 32er-Raster, Entfernung zur **Kartenmitte** (`size*0.45`) | in Region/Wildnis falscher Bezug (nicht die eigene Stadt) |
+| Produktion/Felder | `production.gd` `_parcel_candidates`, `_market_candidates` | nächstes Grundstück mit Straße zum Abnehmer, nicht in Wohn-/Mischgebiet | standortgebunden sinnvoll; nur Begründung fehlt |
+| Ladeneröffnung (Ereignis) | `world_events.gd` `_openings` | **zufällige Koordinate** (400 Versuche), ohne Grundstück, Genehmigung und Kosten | umgeht alle Regeln – entfernen bzw. über die Planung |
+| Müllverbrennung | `waste.gd` `_iv_find_site` | städtisches Grundstück ≤ 16 Felder von der Deponie | standortgebunden; ok |
+| Regionalrat | `regional_council.gd` | erstes freies 3×3 mit Straße nahe Mitte | einmalig; ok |
+| Bahnhöfe | `rail_net.gd` | Gleislage | standortgebunden; ok |
+| Gebäudevariante | `event_director.gd` `_pick_variant` | Hash der Position, keine direkte Wiederholung in 6 Feldern | Ortspalette (`coast_generator._pick_palette`) gilt nur beim Kartenbau |
+
+Vorhandene Bausteine, auf denen Auftrag 8 aufsetzt: Grundstücke mit Zone/Eigentum/Reservierung (`parcels.gd`), Bauvorprüfung
+(`Planning.assess`), Bauanträge (`permits.gd`), Stadtprojekte (`mayor.gd`/`construction.gd`), Ortscharakter (`towns.list[k].charakter`),
+Stil kommunaler Bauten je Charakter (`municipal.STYLE_OF_CHARACTER`), Siedlungsdaten der Wildnis (`sim.settlements`).
+
+Plan für Etappe 2–3: neue Klasse `TownPlan` (Profil, Kern, Achsen, Viertel, Reservierungen, Revisionen; gespeichert, beim Laden aus
+der Bebauung abgeleitet) und `SiteSelector` (harte Prüfungen → bewertete Kandidaten → Begründung mit Alternativen → atomare
+Reservierung). Danach (Etappe 4) laufen alle Pfade der Tabelle über `SiteSelector`; `world_events._openings` entfällt.
