@@ -1120,6 +1120,8 @@ func _tender_public(M: Mayor, day: int) -> void:
 			for part in prj.parts:
 				days = maxi(days, int(Planning.UTILITY_DAYS.get(part, 6)))
 			days *= maxi(1, int(ceil(float(prj.parcels.size()) / 3.0)))
+			if sim.wildnis:
+				days = maxi(2, int(ceil(float(days) / 3.0)))   # Benedikt 18.11.: Wachstum – Stadtprojekte wie die Bauten der Unternehmer schneller
 			if prj.kind == "netzausbau":
 				days = PowerGrid.EXPAND_DAYS
 			if prj.has("days"):
@@ -1138,7 +1140,7 @@ func _tender_public(M: Mayor, day: int) -> void:
 			D.reserve_for_project(str(prj.id), mats, "ueberlassen")
 			var mval := minf(D.value_of(mats), float(o.price) * 0.6)
 			public[prj.id] = {"project": prj.id, "builder": o.builder, "price": float(o.price) - mval, "days_left": int(o.days), "days": int(o.days), "status": "laufend", "start": int(o.start), "paid": 0.0,
-				"material_value": mval, "material_mode": "ueberlassen"}
+				"material_value": mval, "material_mode": "ueberlassen", "kurz": sim.wildnis}
 			prj.status = "beauftragt"
 			prj["builder"] = o.builder
 
@@ -1633,3 +1635,7 @@ func from_dict(d: Dictionary) -> void:
 		e.days_left = int(e.days_left)
 		e.days = int(e.days)
 		e.start = int(e.start)
+		if sim != null and sim.wildnis and not bool(e.get("kurz", false)):   # 18.11.: alte lange Bauzeiten einmalig auf ein Drittel
+			e["kurz"] = true
+			e.days_left = maxi(1, int(ceil(float(e.days_left) / 3.0)))
+			e.days = maxi(2, int(ceil(float(e.days) / 3.0)))

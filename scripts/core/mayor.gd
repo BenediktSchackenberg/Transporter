@@ -1022,6 +1022,13 @@ func _plan_infrastructure(a: Dictionary) -> Dictionary:
 	var chk := _city_parcels(a.parcel_ids, ["frei", "zur_entwicklung"])
 	if chk.has("error"):
 		return {"ok": false, "msg": chk.error}
+	# Partie 18.11.: dieselbe Erschliessung wurde viermal beauftragt, weil die laufende nicht in der Liste stand
+	var ids: Array = chk.parcels.map(func(p): return str(p.id))
+	for prj in projects.values():
+		if str(prj.kind) == "erschliessung" and str(prj.status) in ["beschlossen", "ausgeschrieben", "beauftragt", "laufend"] and (prj.parcels as Array).any(func(id): return str(id) in ids):
+			var e: Dictionary = sim.construction.public.get(prj.id, {})
+			var info := ("noch %d Tage, %s" % [int(e.days_left), str(e.get("waiting", "")) if str(e.get("waiting", "")) != "" else "es wird gebaut"]) if not e.is_empty() else str(prj.status)
+			return {"ok": false, "already": true, "msg": "Für diese Grundstücke läuft schon die Erschließung %s (%s). Abwarten – danach kommunal_bauen erneut." % [prj.id, info]}
 	var parts: Array = []
 	var wanted: Array = a.get("parts", []) if a.get("parts") is Array else []
 	var cost := 0.0
