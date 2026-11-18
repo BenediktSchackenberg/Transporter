@@ -500,6 +500,8 @@ func next_step(cid: int) -> String:
 	for s in open:
 		if s.status == "material":
 			var m := missing(s)
+			if m.is_empty():
+				continue   # Material eben angekommen – der Bau beginnt im naechsten Takt (18.11.: Index-Fehler)
 			var item: String = m.keys()[0]
 			return "Baustelle %s braucht Material: Firma {aktion: {action: \"hub_buy\", item: \"%s\", qty: %d}} – dann mit dem LKW holen. Fehlt insgesamt: %s." % [
 				s.id, item, int(m[item]), ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x]))]

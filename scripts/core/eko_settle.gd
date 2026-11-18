@@ -393,12 +393,24 @@ func plan_road(cid: int, a: Dictionary) -> Dictionary:
 	if not (f is Array) or (f as Array).size() < 2:
 		return {"ok": false, "msg": "strasse_bauen braucht bis: [x, y] (und wahlweise von: [x, y])."}
 	var to := Vector2i(int(f[0]), int(f[1]))
-	if C.town_of(to) != k:
-		return {"ok": false, "msg": "Feld %s liegt nicht im Gebiet deiner Siedlung %s." % [str(f), sim.towns.name_of(k)]}
-	var path: Array = []
 	var fv = a.get("von", [])
-	if fv is Array and (fv as Array).size() >= 2:
-		var from := Vector2i(int(fv[0]), int(fv[1]))
+	var from_given: bool = fv is Array and (fv as Array).size() >= 2
+	var from := Vector2i(int(fv[0]), int(fv[1])) if from_given else Vector2i(-1, -1)
+	# Partie 18.11.: Greta plante die Strasse vom Grosslager aus (von am Netz, bis ausserhalb ihres Gebiets) und wurde 5x abgewiesen.
+	# Erlaubt: ein Endpunkt in der eigenen Siedlung (bei Bedarf getauscht) oder Ansatz am bestehenden Strassennetz in Richtung der eigenen Stadt.
+	if C.town_of(to) != k and from_given and C.town_of(from) == k:
+		var tmp := to
+		to = from
+		from = tmp
+	if C.town_of(to) != k:
+		var ctr := Vector2i(int(C.towns[k].center[0]), int(C.towns[k].center[1]))
+		var toward: bool = from_given and _near_road(from, 3) and absi(to.x - ctr.x) + absi(to.y - ctr.y) < absi(from.x - ctr.x) + absi(from.y - ctr.y)
+		if not toward:
+			var link: Dictionary = road_link(k)
+			var tip := (" Vorschlag: strasse_bauen {von: %s, bis: %s}." % [str(link.von), str(link.bis)]) if link.has("von") else ""
+			return {"ok": false, "msg": "Feld %s liegt nicht im Gebiet deiner Siedlung %s, und von setzt nicht an einer Straße an, die zu deiner Stadt führt.%s" % [str(f), sim.towns.name_of(k), tip]}
+	var path: Array = []
+	if from_given:
 		for q in sim.nav.walk_path(from, to):
 			if not C.is_road(q):
 				path.append(q)
@@ -418,6 +430,7 @@ func plan_road(cid: int, a: Dictionary) -> Dictionary:
 ## Strassenanschluss einer gegruendeten Stadt ans Grosslager (Benedikt 18.11.: "ohne Strassen keine Warenlieferung"):
 ## {verbunden, von: naechstes angebundenes Strassenfeld, bis: Rathaus-Zufahrt, felder}. Je Stadt einmal je Spieltag gerechnet.
 var _link_cache := {}
+var _access_reset_at := -1.0e9
 
 
 func road_link(k: int) -> Dictionary:
@@ -466,12 +479,25 @@ func road_link(k: int) -> Dictionary:
 	return out
 
 
+func _near_road(c: Vector2i, r: int) -> bool:
+	var C: CityData = _sim().city
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if C.is_road(c + Vector2i(dx, dy)):
+				return true
+	return false
+
+
 ## Strassenfeld fertig (EkoHomes): Zelle anlegen, speichern; bei Abschluss Baugrundstuecke daran.
 func lay_road_cells(k: int, cells: Array) -> void:
 	var sim = _sim()
 	sim.access._apply_cells(cells)
-	sim.access._fields.clear()
-	sim.access._cache.clear()
+	# Entfernungsfeld der Erschliessung (ganze Karte, ~1 s) hoechstens einmal je Spieltag verwerfen – vorher bei JEDEM Strassenfeld
+	# (18.11.: Buergermeister-Beobachtung kostete dadurch staendig 1 s, Bildrate 9-13)
+	if float(sim.game_min) - _access_reset_at >= GameCalendar.days_to_min(1.0):
+		_access_reset_at = float(sim.game_min)
+		sim.access._fields.clear()
+		sim.access._cache.clear()
 	_link_cache.clear()
 	var st: Dictionary = sim.settlements.get(str(k), {})
 	st["roads"] = (st.get("roads", []) as Array) + cells.map(func(q): return [q.x, q.y])
