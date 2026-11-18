@@ -807,7 +807,8 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 		var kc: Contract = contracts.get(v.contract_id)
 		if kc:
 			kc.fuel_cost += own * ResourceMarket.FUEL_BASE_PRICE   # Vorrat zum Grundpreis bewertet
-		v.condition = maxf(0.0, v.condition - moved * float(spec.wear) * VehicleWorks.wear_factor(v))   # Wartung ueberfaellig: mehr Verschleiss
+		if not wildnis:   # Benedikt 18.11.: in der Wildnis vorerst kein Fahrverschleiss (Unfaelle und Rammen beschaedigen weiter)
+			v.condition = maxf(0.0, v.condition - moved * float(spec.wear) * VehicleWorks.wear_factor(v))   # Wartung ueberfaellig: mehr Verschleiss
 		var tired := 2.0 if driver_of(v) != null and driver_of(v).fatigue >= 95.0 else 1.0
 		if v.condition < Catalog.BREAKDOWN_THRESHOLD and rng.randf() < 0.004 * moved * tired * wx.breakdown_factor(v.condition >= 60.0) * road_care.breakdown_factor(v.tile()):
 			break_vehicle(v, "Panne")
@@ -1873,4 +1874,6 @@ static func from_dict(d: Dictionary) -> Simulation:
 				v.lane = 0.0
 			elif not s.route(v, v.goal):
 				v.state = "idle"
+		if s.wildnis and v.condition <= 0.0 and v.state != "broken":
+			v.condition = 100.0   # 18.11.: Verschleiss in der Wildnis aus – nur durch Fahren verschlissene Fahrzeuge wieder heil
 	return s
