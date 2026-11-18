@@ -164,6 +164,8 @@ func shop_for(v) -> Dictionary:
 
 ## Faellige Fahrzeuge (frei, mit Fahrer, ohne Ladung und Stopps) fahren zur Wartung.
 func _send_due() -> void:
+	if sim.wildnis:
+		return   # Benedikt 18.11.: in der Wildnis vorerst kein Verschleiss – also auch keine Wartungsfahrten quer ueber die Karte
 	for v in sim.vehicles.values():
 		if v.service_km < SERVICE_KM or v.service_fid != "" or v.state != "idle" or not v.stops.is_empty() or not v.load.is_empty():
 			continue

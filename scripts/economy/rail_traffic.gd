@@ -279,6 +279,8 @@ func _freight_branch(t: Dictionary, dmin: float, now: float) -> void:
 
 # ------------------------------------------------------------------ Ladung (Phase 7 Schritt 2)
 func accepts_freight(town: int) -> bool:
+	if sim.wildnis:
+		return false   # 18.11.: Bahnhoefe liegen an den Orten vom Kartenstart, nicht an den gegruendeten Siedlungen – Ware per Lkw
 	return not fpath.is_empty() and stop_of_town(town) >= 0 and trains.any(func(t): return is_freight(t))
 
 
