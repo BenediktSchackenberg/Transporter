@@ -1191,6 +1191,7 @@ class LineChart extends Control:
 	var money := true
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: control_center.LineChart")   # Haenger-Suche 18.11.
 		var f: Font = ThemeDB.fallback_font
 		var r := Rect2(Vector2(70, 46), size - Vector2(84, 68))
 		draw_rect(Rect2(Vector2.ZERO, size), Color("#1a1b26"))
@@ -1242,6 +1243,7 @@ class BarChart extends Control:
 	var items: Array = []
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: control_center.BarChart")   # Haenger-Suche 18.11.
 		var f: Font = ThemeDB.fallback_font
 		var hi := 1.0
 		for it in items:

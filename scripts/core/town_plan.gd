@@ -285,12 +285,12 @@ func _on_land(c: Vector2i, kern: Vector2i, k: int = -1) -> Vector2i:
 	return kern
 
 
-func _good_spot(p: Vector2i, kern: Vector2i, k: int) -> bool:
+func _good_spot(p: Vector2i, kern: Vector2i, k: int, min_free: float = 0.55) -> bool:
 	var C: CityData = sim.city
 	for q in [p, p + Vector2i(2, 0), p + Vector2i(-2, 0), p + Vector2i(0, 2), p + Vector2i(0, -2)]:
 		if not C.inside(q) or C.g(q) == CityData.G.WATER or (not C.height.is_empty() and C.height[C.idx(q)] > 0):
 			return false
-	if free_share(p, 5) < 0.55:
+	if free_share(p, 5) < min_free:
 		return false   # Viertel braucht freies Land (18.11.: Gewerbeviertel lag mitten in der Bebauung)
 	var own := Vector2(p).distance_to(Vector2(kern))
 	if sim.towns != null:
@@ -329,9 +329,13 @@ func revise_districts(k: int) -> int:
 	var n := 0
 	for v in p.viertel:
 		var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
-		if str(v.status) != "entwurf" or str(v.rolle) == "kern" or free_share(c, 5) >= 0.4:
+		var idx: int = (p.viertel as Array).find(v)
+		var overlap: bool = (p.viertel as Array).slice(0, idx).any(func(o): return Vector2(c).distance_to(Vector2(int(o.mitte[0]), int(o.mitte[1]))) < 0.7 * float(int(o.radius) + int(v.radius)))
+		if str(v.status) != "entwurf" or str(v.rolle) == "kern" or (free_share(c, 5) >= 0.4 and not overlap):
 			continue
 		var nc := _on_land(c + (c - kern) / 2, kern, k)
+		if nc != kern and (p.viertel as Array).any(func(o): return o != v and Vector2(nc).distance_to(Vector2(int(o.mitte[0]), int(o.mitte[1]))) < float(int(o.radius) + int(v.radius))):
+			nc = kern
 		if nc == kern or nc == c:   # in der Naehe nichts frei: Ring um den Kern absuchen, moeglichst in alter Richtung
 			var best := -INF
 			var dir := Vector2(c - kern).normalized() if c != kern else Vector2.RIGHT
@@ -339,8 +343,8 @@ func revise_districts(k: int) -> int:
 				for deg in range(0, 360, 20):
 					var u := Vector2.RIGHT.rotated(deg_to_rad(deg))
 					var q := kern + Vector2i((u * rad).round())
-					if not _good_spot(q, kern, k):
-						continue
+					if not _good_spot(q, kern, k, 0.35) or (p.viertel as Array).any(func(o): return o != v and Vector2(q).distance_to(Vector2(int(o.mitte[0]), int(o.mitte[1]))) < float(int(o.radius) + int(v.radius))):
+						continue   # nicht auf ein anderes Viertel (18.11.: V3 und V4 landeten auf demselben Platz)
 					var sc := free_share(q, 5) + 0.5 * u.dot(dir) - 0.01 * rad
 					if sc > best:
 						best = sc
@@ -348,7 +352,7 @@ func revise_districts(k: int) -> int:
 		if nc == kern or nc == c:
 			continue
 		v.mitte = [nc.x, nc.y]
-		revise(k, "Viertel %s (%s) verlegt von %s nach %s: am alten Ort kaum noch freies Land." % [v.id, v.text, str([c.x, c.y]), str([nc.x, nc.y])])
+		revise(k, "Viertel %s (%s) verlegt von %s nach %s: %s." % [v.id, v.text, str([c.x, c.y]), str([nc.x, nc.y]), "lag auf einem anderen Viertel" if overlap else "am alten Ort kaum noch freies Land"])
 		n += 1
 	return n
 

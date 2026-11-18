@@ -12,5 +12,5 @@ func _init() -> void:
 				continue
 			var r: Dictionary = M.execute({"action": "viertel_erschliessen", "viertel": v.id, "reason": "Probe"})
 			print("%s %s %s: %s" % [s.towns.name_of(k), v.id, v.rolle, str(r.msg).left(230)])
-			if k == 0: break
+			pass
 	quit()

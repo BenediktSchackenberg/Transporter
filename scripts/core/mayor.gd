@@ -1065,7 +1065,7 @@ func _develop_district(a: Dictionary) -> Dictionary:
 		if d <= float(v.radius) + 4.0:
 			cands.append([d, p])
 	if cands.is_empty():
-		return {"ok": false, "msg": "Im Viertel %s (%s) gibt es kein freies städtisches Grundstück mehr." % [vid, v.text]}
+		return {"ok": false, "msg": "Im Viertel %s (%s) gibt es kein freies städtisches Grundstück mehr.%s" % [vid, v.text, _district_options(vid)]}
 	cands.sort_custom(func(x, y): return float(x[0]) < float(y[0]))
 	var ids: Array = []
 	var todo: Array = []
@@ -1079,7 +1079,7 @@ func _develop_district(a: Dictionary) -> Dictionary:
 			p.zone = str(v.zone)   # Umwidmung nach dem Viertelplan (nur freie staedtische Flaechen)
 			sim.parcels.touch(str(p.id))
 	if todo.is_empty():
-		return {"ok": false, "msg": "Viertel %s ist schon erschlossen (%d freie Grundstücke mit Straße) – dort kann gebaut werden." % [vid, ids.size()]}
+		return {"ok": false, "msg": "Viertel %s ist schon erschlossen (%d freie Grundstücke mit Straße) – dort kann gebaut werden.%s" % [vid, ids.size(), _district_options(vid)]}
 	var step: Array = todo.slice(0, DISTRICT_STEP).map(func(p): return str(p.id))
 	var res := _plan_infrastructure({"parcel_ids": step, "reason": "Viertel %s (%s): %s" % [vid, v.text, str(a.get("reason", ""))]})
 	if bool(res.get("ok", false)):
@@ -1087,6 +1087,16 @@ func _develop_district(a: Dictionary) -> Dictionary:
 		sim.town_plan.revise(town, "Viertel %s (%s) wird erschlossen: %s." % [vid, v.text, ", ".join(step)])
 		res.msg = "Viertel %s (%s): erster Abschnitt mit %d Grundstücken. %s" % [vid, v.text, step.size(), str(res.msg)]
 	return res
+
+
+## Andere Viertel, die sich noch erschliessen lassen (Hinweis bei einer Absage).
+func _district_options(except: String) -> String:
+	var opts: Array = []
+	for v in sim.town_plan.of(town).get("viertel", []):
+		if str(v.id) == except or str(v.zone) == "gruen" or str(v.status) == "erschlossen":
+			continue
+		opts.append("%s %s (%s, %s)" % [v.id, v.rolle, v.zone, v.status])
+	return (" Noch zu erschließen: %s – Amt {aktion: {action: \"viertel_erschliessen\", viertel: \"…\"}}." % "; ".join(opts)) if not opts.is_empty() else ""
 
 
 ## Viertel ohne Strassen: Strassennetz nach Grundform als Erschliessungsprojekt (Kosten je Strassenfeld, Material aus dem Stadtlager,
@@ -1107,6 +1117,9 @@ func _district_streets(v: Dictionary, reason: String) -> Dictionary:
 		if str(prj.get("viertel", "")) == str(v.id) and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
 			var e: Dictionary = sim.construction.public.get(prj.id, {})
 			return {"ok": false, "already": true, "msg": "Für Viertel %s läuft schon %s (%s)." % [v.id, prj.id, ("noch %d Tage, %s" % [int(e.days_left), str(e.get("waiting", "")) if str(e.get("waiting", "")) != "" else "es wird gebaut"]) if not e.is_empty() else str(prj.status)]}
+	for prj in projects.values():   # Auftrag 8, Abschnitt 6: in Abschnitten wachsen – ein Strassennetz nach dem anderen
+		if prj.has("road_plan") and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			return {"ok": false, "msg": "Erst das laufende Straßennetz %s (Viertel %s) fertigstellen – die Stadt erschließt ein Viertel nach dem anderen." % [prj.id, prj.viertel]}
 	var sp: Dictionary = sim.town_plan.street_plan(town, str(v.id))
 	var cells: Array = sp.cells
 	if cells.size() < 4:

@@ -78,6 +78,7 @@ func _px(x: float, y: float, w: float, h: float, c: Color) -> void:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: portrait_art")   # Haenger-Suche 18.11.
 	if _base == null:
 		return
 	var side := minf(size.x, size.y)

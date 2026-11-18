@@ -40,6 +40,7 @@ func build(simulation: Simulation, cam: Camera2D) -> void:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: minimap")   # Haenger-Suche 18.11.
 	if sim == null:
 		return
 	var s := size.x / sim.city.size

@@ -7,6 +7,7 @@ var series := 1          # 1 = Gewinn, 2 = Bargeld
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: profit_chart")   # Haenger-Suche 18.11.
 	if sim == null:
 		return
 	var font := UITheme.font
