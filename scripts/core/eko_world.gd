@@ -2364,6 +2364,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var models: Dictionary = o.fahrzeugmodelle
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
 		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),
+		"standortangebote": sim.sites.offers(sim.companies[cid].home_town, "einfamilienhaus") if sim.wildnis and sim.town_plan.has(sim.companies[cid].home_town) else [],
 		"unternehmensplan": sim.plans.summary(cid) if sim.get("plans") != null else {},
 		"hinweis_fahrzeug": _no_vehicle_hint(cid),
 		"waffenschmiede": arms.firm_obs(cid),

@@ -310,3 +310,8 @@ Reservierung). Danach (Etappe 4) laufen alle Pfade der Tabelle über `SiteSelect
   Planungsmodus über Gebäuden; Schrift und Linien wachsen beim Herauszoomen mit.
 - Autotest-Schalter für die Abnahmebilder (nur das Spielfenster): `--autotest --load --shot-plan=<Stadt>` bzw. `--shot-city=<Stadt>`
   mit `--shot-zoom` und `--screenshot` – Kamera auf den Stadtkern, Zentrale eingeklappt.
+- Standortangebote (Abschnitt 9): Unternehmer der Wildnis sehen in ihrer Firmen-Beobachtung `standortangebote` – die drei besten
+  gültigen Grundstücke für ein Wohnhaus mit Preis, Viertel, Vorteilen, Auflagen (Zone, Geschosse), Erschließung und fertiger
+  Bauaktion; ohne gültigen Platz den Hinweis auf fehlende Straßen. Die Firma entscheidet selbst.
+- Bürgermeister-Kennzahl `stadtplan_naechster_abschnitt` mit fertiger Aktion; die Regel-KI erschließt den nächsten Abschnitt vor
+  Routineaufgaben (ein Straßennetz nach dem anderen).

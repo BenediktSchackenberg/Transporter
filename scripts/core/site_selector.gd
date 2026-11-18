@@ -135,6 +135,40 @@ func rank(k: int, req: Dictionary) -> Dictionary:
 	return out
 
 
+## Standortangebote fuer Unternehmer (Auftrag 8, Abschnitt 9): die besten gueltigen Plaetze der Stadt fuer einen Gebaeudetyp mit Preis,
+## Vorteilen, Auflagen (Zone, Geschosse) und Erschliessung – die Firma entscheidet selbst. Gecacht je Stadt/Typ fuer 2 Spielstunden.
+var _offer_cache := {}
+
+
+func offers(k: int, def_id: String, n: int = 3) -> Array:
+	var key := "%d|%s" % [k, def_id]
+	var now := float(sim.game_min)
+	if _offer_cache.has(key) and now - float(_offer_cache[key][0]) < 120.0:
+		return _offer_cache[key][1]
+	var d: Dictionary = Planning.DEFS.get(def_id, {})
+	if d.is_empty():
+		return []
+	var art := "versorgung" if str(d.use) == "versorgung" else ("gewerbe" if str(d.use) == "gewerbe" else "wohnen")
+	var r := rank(k, {"w": int(d.w), "h": int(d.h), "art": art, "floors": int(d.floors[0]), "label": str(d.label)})
+	var out: Array = []
+	for c in (r.list as Array).slice(0, n):
+		var p: Dictionary = sim.parcels.parcel(str(c.parcel))
+		var pros: Array = []
+		for crit in ["struktur", "nachbarschaft", "bedarf", "landschaft", "kosten"]:
+			if float(c.parts.get(crit, 0.0)) >= 0.7:
+				pros.append({"struktur": "im passenden Viertel", "nachbarschaft": "ruhige, passende Nachbarschaft", "bedarf": "nah am Ortskern",
+					"landschaft": "Wasser in der Nähe", "kosten": "günstig"}[crit])
+		var v: Dictionary = sim.town_plan.district_at(k, Vector2i(int(c.rect[0]), int(c.rect[1]))) if sim.town_plan != null else {}
+		out.append({"grundstueck": c.parcel, "feld": [int(c.rect[0]), int(c.rect[1])], "preis": int(p.get("price", 0)), "bewertung": c.score,
+			"viertel": c.viertel_text, "vorteile": pros, "auflagen": "Zone %s%s" % [p.zone, (", höchstens %d Geschosse" % int(v.geschosse)) if not v.is_empty() and int(v.geschosse) > 0 else ""],
+			"erschliessung": "Straße liegt am Grundstück" if float(c.parts.erreichbar) >= 1.0 else "ohne Straße",
+			"bauen": "Firma {aktion: {action: \"haus_bauen\", typ: \"%s\", grundstueck: \"%s\"}}" % [def_id, c.parcel]})
+	if out.is_empty() and not (r.ohne_strasse as Array).is_empty():
+		out.append({"hinweis": "Nur Grundstücke ohne Straße (%s) – erst eine Straße bauen (strasse_bauen) oder auf die Erschließung der Stadt warten." % ", ".join((r.ohne_strasse as Array).slice(0, 3))})
+	_offer_cache[key] = [now, out]
+	return out
+
+
 ## Bereits geordnete Grundstuecksliste (z. B. Kandidaten eines Bautraegers) nach der Standortbewertung sortieren; nicht bewertbare
 ## (ungueltige) bleiben hinten in alter Reihenfolge.
 func order_parcels(k: int, parcels: Array, req: Dictionary) -> Array:
