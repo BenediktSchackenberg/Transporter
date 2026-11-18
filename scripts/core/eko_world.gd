@@ -419,8 +419,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 	if type not in ACTIONS:   # Partie 16.11.: 11x type "act" (Werkzeugname), echte Art in data.type oder aus data.aktion ableitbar
 		if data.get("type") is String and canonical_type(str(data.type)) in ACTIONS:
 			type = canonical_type(str(data.type))
-		elif data.has("aktion") and type.to_lower() in ["act", "aktion", "handlung", ""]:
-			type = "Amt" if int(b.get("amt", -1)) >= 0 else "Firma"
+		elif (data.has("aktion") or data.get("action") is String) and type.to_lower() in ["act", "aktion", "handlung", ""]:
+			type = "Amt" if int(b.get("amt", -1)) >= 0 else "Firma"   # 18.11.: Viktor schickte {data: {action: hub_buy, ...}}
 		elif type.to_lower() in ["act", "aktion", "handlung", ""]:   # Partie 18.11.: Greta 10x {type: act, data: {text}} – Art aus den Daten ableiten
 			if data.has("text") or data.has("nachricht"):
 				if data.has("an") and not data.has("to"):
