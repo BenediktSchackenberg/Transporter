@@ -227,6 +227,7 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 	t["center"] = [ctr.x, ctr.y]
 	t["rect"] = [ctr.x - 23, ctr.y - 24, 46, 48]
 	t["siedlung"] = true
+	sim.towns.sync_from_city(k)
 	_best_cache.clear()
 	c.ledger.book("property_costs", -FOUND_COST, true, "Vermessung und Betriebshof %s" % t.name, sim.game_min, Towns.account_of(k))
 	for p in sim.parcels.items.values():   # Land ringsum gehoert der kuenftigen Stadt und wird Bauland
@@ -272,6 +273,7 @@ func open_town(k: int, rect: Rect2i) -> bool:
 	if harbor >= 0:
 		t["harbor"] = harbor
 		st["harbor"] = harbor
+	sim.towns.sync_from_city(k)
 	_activate(k)
 	sim.towns.depot(k).activate(bauhof)
 	sim.events.buildings_added.emit([hall, bauhof] + ([harbor] if harbor >= 0 else []))
@@ -318,6 +320,10 @@ func reapply_loaded() -> void:
 		for f in ["town_hall", "bauhof", "harbor"]:
 			if st.has(f):
 				t[f] = int(st[f])
+		if st.has("center"):
+			t["center"] = st.center
+			t["rect"] = st.rect
+		sim.towns.sync_from_city(k)
 		if bool(st.get("gegruendet", false)) and int(t.get("bauhof", -1)) >= 0:
 			t["gegruendet"] = true
 			_activate(k)

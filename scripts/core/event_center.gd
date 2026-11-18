@@ -262,11 +262,17 @@ func _locate(e: Dictionary) -> Vector2i:
 	if refs.has("contract_id"):
 		var k: Contract = sim.contracts.get(str(refs.contract_id))
 		if k != null:
-			return sim.city.building(k.pickup).road
+			var pb: Dictionary = sim.city.building(k.pickup)
+			if not pb.is_empty():
+				return pb.road
 	if int(e.company) >= 0 and sim.company(int(e.company)) != null and not sim.company(int(e.company)).depots.is_empty():
-		return sim.city.building(int(sim.company(int(e.company)).depots[0])).road
+		var db: Dictionary = sim.city.building(int(sim.company(int(e.company)).depots[0]))
+		if not db.is_empty():
+			return db.road
 	if int(e.town) >= 0 and sim.towns != null and int(e.town) < sim.towns.count():
-		return sim.city.building(int(sim.towns.get_t(int(e.town)).town_hall)).road
+		var hb: Dictionary = sim.city.building(int(sim.towns.get_t(int(e.town)).get("town_hall", -1)))
+		if not hb.is_empty():
+			return hb.road
 	return Vector2i(-9999, -9999)
 
 

@@ -102,6 +102,19 @@ func name_of(k: int) -> String:
 	return str(list[k].name) if k >= 0 and k < list.size() else "Region"
 
 
+## Wildnis (18.11.): Gruendung und Buergeramt aendern sim.city.towns[k] – diese Kopie mitziehen (sonst town_hall -1,
+## CivicWorks/EventCenter griffen auf ein leeres Gebaeude zu: tausende Skriptfehler je Minute).
+func sync_from_city(k: int) -> void:
+	if k < 0 or k >= list.size() or k >= sim.city.towns.size():
+		return
+	var t: Dictionary = sim.city.towns[k]
+	var e: Dictionary = list[k]
+	e["center"] = Vector2i(int(t.center[0]), int(t.center[1]))
+	e["rect"] = Rect2i(int(t.rect[0]), int(t.rect[1]), int(t.rect[2]), int(t.rect[3]))
+	for f in ["town_hall", "bauhof", "harbor"]:
+		e[f] = int(t.get(f, -1))
+
+
 func get_t(k: int) -> Dictionary:
 	return list[k] if k >= 0 and k < list.size() else {}
 

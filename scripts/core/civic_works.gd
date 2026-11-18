@@ -651,12 +651,16 @@ func tick() -> void:
 
 
 func _depart(k: int, tr: Dictionary) -> void:
+	var hall_b: Dictionary = sim.city.building(int(sim.towns.get_t(k).get("town_hall", -1)))
+	if hall_b.is_empty():   # ohne Rathaus keine Dienstfahrt (Wildnis vor dem Buergeramt)
+		trips.erase(k)
+		return
 	stats.besuche = int(stats.besuche) + 1
 	profiles[k].last_visit = _today()
 	profiles[k].next_visit = _today() + VISIT_EVERY
 	tr.plan = decide(k)
 	var M: Mayor = sim.towns.mayor(k)
-	var hall: Vector2i = sim.city.building(int(sim.towns.get_t(k).town_hall)).road
+	var hall: Vector2i = hall_b.road
 	tr["vehicle"] = _spawn_car(k, hall, _hub_road(), "%s fährt zum Großlager" % M.name)
 	tr.phase = "hinfahrt"
 	if not tr.plan.is_empty():

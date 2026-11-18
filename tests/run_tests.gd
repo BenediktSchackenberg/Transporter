@@ -8650,6 +8650,7 @@ func test_wildnis_found() -> void:
 	ok(str(dep.name).contains("Betriebshof") and E.estates.estates.has(p0) and E.estates.covers(Vector2i(int(dep.x), int(dep.y))), "Betriebshof steht in der Basis")
 	ok(Vector2(E.estates.center_of(p0)).distance_to(Vector2(site)) <= EkoEstates.NEAR_MAX + 1.0, "Basis am gewählten Platz (%d Felder daneben)" % int(Vector2(E.estates.center_of(p0)).distance_to(Vector2(site))))
 	ok(not s.town_ready(k) and int(s.city.towns[k].get("town_hall", -1)) < 0, "noch keine Stadt (kein Bürgeramt)")
+	ok(s.towns.get_t(k).center == Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1])), "Towns-Register kennt die neue Mitte")
 	ok((s.settlements[str(k)].plots as Array).size() >= 2, "Bauland um den Hof (%d Grundstücke)" % (s.settlements[str(k)].plots as Array).size())
 	# Buergeramt: Material kaufen, selbst abholen, selbst bauen
 	var ba: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "buergeramt_bauen"}})
@@ -8682,6 +8683,7 @@ func test_wildnis_found() -> void:
 	B.akku = 100.0
 	E.homes.tick(60.0 * 30.0)
 	ok(hs.status == "fertig" and s.town_ready(k) and int(s.city.towns[k].town_hall) >= 0, "Bürgeramt fertig – die Stadt ist gegründet (%s)" % str(hs.get("blockiert", hs.status)))
+	ok(int(s.towns.get_t(k).town_hall) == int(s.city.towns[k].get("town_hall", -2)), "Towns-Register kennt das Rathaus")
 	ok(E.blocks.size() == nb0, "Rohbau-Blöcke durch das Gebäude ersetzt")
 	ok(E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister wacht auf")
 	# Strasse selbst bauen
@@ -8702,6 +8704,7 @@ func test_wildnis_found() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.town_ready(k) and s2.city.buildings.size() == nb and int(s2.city.towns[k].town_hall) == int(s.city.towns[k].town_hall) and s2.eko.settle.founded(k),
 		"Siedlung mit Bürgeramt gespeichert und geladen")
+	ok(int(s2.towns.get_t(k).town_hall) == int(s.city.towns[k].town_hall) and s2.towns.get_t(k).center == s.towns.get_t(k).center, "nach dem Laden kennt das Towns-Register Rathaus und Mitte")
 	ok(absf(s.economy.conservation_error()) < 1.0, "Geldbuch stimmt")
 	RegionGenerator.neubeginn = false
 	RegionGenerator.wildnis = false
