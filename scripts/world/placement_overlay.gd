@@ -41,6 +41,7 @@ func _rect_line(r: Rect2, col: Color, width: float) -> void:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: placement_overlay")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	if sim == null:
 		return
 	var C := sim.city

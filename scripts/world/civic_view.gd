@@ -133,6 +133,7 @@ class LineLayer extends Node2D:
 		return Iso.to_screen(Vector2(x * 32.0, y * 32.0))
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: civic_view.LineLayer")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		if view == null or view.sim.civic == null:
 			return
 		for a in view.sim.civic.anlagen.values():

@@ -34,6 +34,7 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: map_markers")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	if sim == null:
 		return
 	var f: Font = ThemeDB.fallback_font

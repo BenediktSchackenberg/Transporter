@@ -57,6 +57,7 @@ func _cell(q: Vector2i, inset: float) -> PackedVector2Array:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: highway_view")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	if sim == null:
 		return
 	var view := _view_cells()

@@ -268,6 +268,7 @@ class JettyNode extends Node2D:
 		return Iso.to_screen(Vector2(wx, wy) * 32.0) - position + Vector2(0, -z * ShipView.STEP)
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: ship_view.JettyNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var z := 0.6
 		for i in int(to_x - from_x) + 1:   # Pfaehle
 			var px := from_x + float(i)
@@ -374,6 +375,7 @@ class ShipNode extends Node2D:
 		return pts
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: ship_view.ShipNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var sp: Dictionary = SPEC.get(kind, SPEC.container)
 		var l := float(sp.len) * 0.5
 		var b := float(sp.beam) * 0.5

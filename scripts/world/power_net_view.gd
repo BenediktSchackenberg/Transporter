@@ -54,6 +54,7 @@ static func _foot(q: Vector2i) -> Vector2:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: power_net_view")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	var N := _net()
 	if N == null or not N.built():
 		return

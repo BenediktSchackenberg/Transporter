@@ -91,6 +91,7 @@ class LandfillNode extends Node2D:
 		return (1.2 + 7.0 * view.sim.waste.fill_share()) * pow(f, 0.7)   # Kuppel, waechst mit dem Fuellstand
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: waste_view.LandfillNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var order: Array = cells.keys()
 		order.sort_custom(func(a, b): return a.x + a.y < b.x + b.y)
 		var dozer_c: Vector2i = order[int(order.size() * (0.5 + 0.3 * sin(t * 0.2)))] if not order.is_empty() else Vector2i.ZERO
@@ -158,6 +159,7 @@ class CrewNode extends Node2D:
 	var stream := "rest"               # "rest" (Orange, Resttonne) oder "wert" (Gruen, Bio- und Wertstofftonnen)
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: waste_view.CrewNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var body := ORANGE if stream == "rest" else Color("3f8a4a")
 		var bin := truck.lerp(house, 0.35)          # Tonnenplatz am Gehweg
 		var b := Iso.to_screen(bin) - position

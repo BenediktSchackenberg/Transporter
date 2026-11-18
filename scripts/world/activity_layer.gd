@@ -49,6 +49,7 @@ func color_of(e: Dictionary) -> Color:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: activity_layer")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	if sim == null or sim.activity == null:
 		return
 	var items: Array = []

@@ -419,6 +419,7 @@ class Spot extends Node2D:
 		return Iso.to_screen(world + Vector2(dx, dy) * 32.0) - Iso.to_screen(world) + Vector2(0, -z * AmbientView.STEP)
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: ambient_view.Spot")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		match kind:
 			"strand":
 				_strand()
@@ -1016,6 +1017,7 @@ class GroundOverlay extends Node2D:
 		return PackedVector2Array([Iso.to_screen(a * 32.0), Iso.to_screen(Vector2(b.x, a.y) * 32.0), Iso.to_screen(b * 32.0), Iso.to_screen(Vector2(a.x, b.y) * 32.0)])
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: ambient_view.GroundOverlay")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		if view == null or view.sim == null or view_rect.size.x <= 0.0:
 			return
 		var C: CityData = view.sim.city
@@ -1074,6 +1076,7 @@ class FoamOverlay extends Node2D:
 	var view_rect := Rect2()
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: ambient_view.FoamOverlay")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		if view == null or view.sim == null or view_rect.size.x <= 0.0:
 			return
 		var t: float = view.t
@@ -1099,6 +1102,7 @@ class EveningLights extends Node2D:
 	var view: AmbientView
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: ambient_view.EveningLights")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		if view == null or view.cv == null:
 			return
 		var nf: float = view.cv.night_factor

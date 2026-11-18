@@ -48,6 +48,7 @@ class BuildNode:
 	var sim: Simulation
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: free_build_view.BuildNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var fb: Dictionary = sim.freebuild.builds.get(fb_id, {})
 		if fb.is_empty():
 			return

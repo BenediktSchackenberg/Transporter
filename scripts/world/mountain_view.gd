@@ -241,6 +241,7 @@ class MountainNode extends Node2D:
 		rig_cell = free[1] if free.size() > 1 else halde_cell
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: mountain_view.MountainNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var items: Array = []
 		for c in cells:
 			items.append([float(c.x + c.y) + 1.0, 0, c])

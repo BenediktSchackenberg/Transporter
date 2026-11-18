@@ -10,7 +10,8 @@ const PHASES := ["-", "main", "spielsitzung", "firmen_ki", "buergermeister_ki", 
 	"platzierung", "Simulation", "Simulation: Tageswechsel", "Stadtansicht", "Fahrzeuge/Figuren", "Aktivitaeten", "Betriebshof", "Oberflaeche",
 	"Leistungslog", "KI: Beobachtung", "KI: Anfrage senden", "KI: Antwort verarbeiten", "KI: Aktionen ausfuehren", "KI: Hofrunde",
 	"KI: Ersatzmodus", "KI: Nachkauf", "Partie wird aufgebaut (Karte, Ansicht)",
-	"nach _process (Layout, _draw)", "Rendern", "nach Rendern"]
+	"nach _process (Layout, _draw)", "Rendern", "nach Rendern",
+	"zeichnen: activity_layer", "zeichnen: ambient_view.Spot", "zeichnen: ambient_view.GroundOverlay", "zeichnen: ambient_view.FoamOverlay", "zeichnen: ambient_view.EveningLights", "zeichnen: bridge_view.BridgeNode", "zeichnen: bridge_view.RoadWorksNode", "zeichnen: civic_view.LineLayer", "zeichnen: depot_view.DepotNode", "zeichnen: eko_view", "zeichnen: eko_view.TileNode", "zeichnen: eko_view.HouseNode", "zeichnen: eko_view.BeingNode", "zeichnen: fire_fx", "zeichnen: free_build_view.BuildNode", "zeichnen: highway_view", "zeichnen: map_markers", "zeichnen: mountain_view.MountainNode", "zeichnen: offroad_fx", "zeichnen: offroad_fx.DustLayer", "zeichnen: parcel_layer", "zeichnen: placement_overlay", "zeichnen: power_net_view", "zeichnen: rail_view", "zeichnen: road_state_view", "zeichnen: ship_view.JettyNode", "zeichnen: ship_view.ShipNode", "zeichnen: site_view.SiteNode", "zeichnen: waste_view.LandfillNode", "zeichnen: waste_view.CrewNode", "zeichnen: works_view.PlantNode", "zeichnen: works_view.ShopNode"]
 static var phase := 0
 static var detail := 0
 static var who := -1

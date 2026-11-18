@@ -101,6 +101,7 @@ func _cab_of(b: Dictionary) -> Dictionary:
 ## Krieg sichtbar: Rauch ueber Ruinen, Wachtuerme, Explosionen (Atompilz), Strahlungszonen, tickende Bomben.
 ## Dazu die Stammsitze: Grenzlinie in der Farbe des Wesens und ein Schild mit dem Namen.
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: eko_view")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	var A: EkoArms = sim.eko.arms
 	var ms := Time.get_ticks_msec()
 	for name in sim.eko.estates.estates:
@@ -274,6 +275,7 @@ class TileNode:
 	var sig := 0                # Kennung der Bloecke (nur bei Aenderung neu zeichnen)
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: eko_view.TileNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var bl: Dictionary = sim.eko.blocks
 		var order := cells.duplicate()
 		order.sort_custom(func(a, b): return a.x + a.y < b.x + b.y or (a.x + a.y == b.x + b.y and a.z < b.z))
@@ -299,6 +301,7 @@ class HouseNode:
 	var owner_name := ""
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: eko_view.HouseNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var h: Dictionary = sim.eko.houses.get(owner_name, {})
 		if h.is_empty():
 			return
@@ -390,6 +393,7 @@ class BeingNode:
 			"armor": A.armor_of(b), "weapon": weapon, "role": role, "carrying": not (b.held as Array).is_empty()}
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: eko_view.BeingNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var b: Dictionary = sim.eko.beings.get(being, {})
 		if b.is_empty():
 			return

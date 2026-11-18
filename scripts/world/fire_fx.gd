@@ -18,6 +18,7 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: fire_fx")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	var k := clampf(intensity, 0.15, 1.0) if burning else 0.0
 	# Rauch: Wolken steigen zyklisch auf, wachsen und verblassen; dunkel bei Brand, hell als Restrauch
 	var puffs := 6 + int(10.0 * k)

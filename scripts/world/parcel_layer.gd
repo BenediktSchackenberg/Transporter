@@ -131,6 +131,7 @@ func _tile_rect(r: Rect2, col: Color) -> void:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: parcel_layer")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	if mode == 0 or sim == null:
 		return
 	if mode == 6:

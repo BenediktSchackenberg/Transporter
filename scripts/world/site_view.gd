@@ -286,6 +286,7 @@ class SiteNode extends Node2D:
 		return bool(crew.get("working", false)) and not blocked
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: site_view.SiteNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var S := Callable(self, "_f")
 		if _job() == "strasse":
 			_draw_roadworks(S)

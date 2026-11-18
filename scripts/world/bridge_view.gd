@@ -144,6 +144,7 @@ class BridgeNode extends Node2D:
 		draw_colored_polygon(PackedVector2Array([_s(a - n, z0), _s(b - n, z0), _s(b + n, z1), _s(a + n, z1)]), col)
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: bridge_view.BridgeNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var L: Dictionary = LOOK.get(variant, LOOK.holz)
 		var z := BridgeView.DECK_Z
 		var ends := [points[0], points[points.size() - 1]]
@@ -305,6 +306,7 @@ class RoadWorksNode extends Node2D:
 		draw_colored_polygon(PackedVector2Array([_s(c + Vector2(-0.5, -0.5), 0.02), _s(c + Vector2(0.5, -0.5), 0.02), _s(c + Vector2(0.5, 0.5), 0.02), _s(c + Vector2(-0.5, 0.5), 0.02)]), col)
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: bridge_view.RoadWorksNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		if cells.is_empty():
 			return
 		var s := Callable(self, "_s")

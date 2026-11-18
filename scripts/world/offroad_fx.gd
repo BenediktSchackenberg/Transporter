@@ -163,6 +163,7 @@ func step(dt: float) -> void:
 
 
 func _draw() -> void:
+	ProcTimer.sub("zeichnen: offroad_fx")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	for tr in tracks:
 		var age := (_time - float(tr[2])) / TRACK_LIFE
 		var wet: bool = tr[3]
@@ -181,6 +182,7 @@ class DustLayer:
 	var fx: OffroadFx
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: offroad_fx.DustLayer")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var want_exh := self == fx.exh
 		for p in fx.puffs:
 			if (p.kind == "exh") != want_exh:

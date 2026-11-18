@@ -184,6 +184,7 @@ class DepotNode extends Node2D:
 		draw_rect(Rect2(p + Vector2(-w * 0.5, -h), Vector2(w, 2.0)), col.lightened(0.25))
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: depot_view.DepotNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var D: CityDepot = view.sim.city_depot
 		if interior:
 			_draw_interior(D)

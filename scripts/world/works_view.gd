@@ -167,6 +167,7 @@ class PlantNode extends WorksNode:
 	const STATIONS := [0.3, 1.37, 2.15, 3.7, 4.4]   # Grenzen Karosserie | Lack | Montage | Endkontrolle
 
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: works_view.PlantNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var vw = sim.vworks
 		var f: Dictionary = sim.municipal.facilities.get(fid, {})
 		if vw == null or f.is_empty():
@@ -398,6 +399,7 @@ class PlantNode extends WorksNode:
 ## Stadtwerkstatt: das Gebaeude zeichnet CityView; hier nur Mechaniker an der Hebebuehne, solange gewartet wird.
 class ShopNode extends WorksNode:
 	func _draw() -> void:
+		ProcTimer.sub("zeichnen: works_view.ShopNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 		var busy: Array = sim.vworks.in_service(fid)
 		if busy.is_empty():
 			return
