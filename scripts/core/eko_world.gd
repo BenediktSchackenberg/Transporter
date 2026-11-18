@@ -416,6 +416,21 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 			type = canonical_type(str(data.type))
 		elif data.has("aktion") and type.to_lower() in ["act", "aktion", "handlung", ""]:
 			type = "Amt" if int(b.get("amt", -1)) >= 0 else "Firma"
+		elif type.to_lower() in ["act", "aktion", "handlung", ""]:   # Partie 18.11.: Greta 10x {type: act, data: {text}} – Art aus den Daten ableiten
+			if data.has("text") or data.has("nachricht"):
+				if data.has("an") and not data.has("to"):
+					data["to"] = data.an
+				if data.has("nachricht") and not data.has("text"):
+					data["text"] = data.nachricht
+				type = "Talk" if data.has("to") else "Say"
+			elif data.has("baustelle"):
+				type = "Bauen"
+			elif data.has("ziel"):
+				type = "LKW"
+			elif data.has("tile"):
+				type = "MoveTo"
+			elif data.has("feld"):
+				type = "Siedlung" if sim.wildnis and not settle.founded(sim.companies[active_firm(b)].home_town if active_firm(b) >= 0 else -1) else "MoveTo"
 	if arms.is_out(b) and type not in ["Inspect"]:
 		return {"ok": false, "status": "gescheitert", "msg": arms.out_msg(b)}
 	if b.has("im_lkw") and type in ["MoveTo", "Pickup", "Place", "Bauwerk", "Bauen", "Attack", "Fahrt", "Siedlung", "LKW", "MoveIn"]:
@@ -826,9 +841,11 @@ func _truck(b: Dictionary, data: Dictionary) -> Dictionary:
 	if ziel is Array and (ziel as Array).size() >= 2:
 		var cell := Vector2i(int(ziel[0]), int(ziel[1]))
 		if not sim.route(v, cell, "erkunden"):
-			return {"ok": false, "msg": "Dorthin kommt der LKW nicht (Wasser, Berg oder kein Weg)."}
+			return {"ok": false, "msg": "Dorthin kommt der LKW nicht (Wasser, Berg oder kein Weg, auch nicht bis auf %d Felder heran). Wähle ein Ziel auf derselben Landseite – siedlung.beste_plaetze_in_der_naehe nennt nur erreichbare Plätze." % Simulation.SNAP_R}
 		b["im_lkw"] = v.id
-		return {"ok": true, "status": "laeuft", "msg": "Du fährst mit deinem LKW nach %s (querfeldein langsamer als auf Straßen)." % str(ziel)}
+		var end: Vector2i = v.path[-1] if not v.path.is_empty() else cell
+		var note := "" if end == cell else " Das Feld selbst ist nicht befahrbar (Baum, Gebäude, Wasser oder Hang) – du hältst am nächsten freien Feld %s." % str([end.x, end.y])
+		return {"ok": true, "status": "laeuft", "msg": "Du fährst mit deinem LKW nach %s (querfeldein langsamer als auf Straßen).%s" % [str(ziel), note]}
 	var z := str(ziel).to_lower()
 	if z in ["hof", "betriebshof", "heim", "basis"]:
 		var dep: Dictionary = sim.city.building(int(c.depots[0]))
@@ -2032,6 +2049,9 @@ const FIRM_ACTIONS := [
 	# Waffenschmiede (nur mit eigener, laufender Waffenschmiede)
 	"design_weapon", "forge_weapon", "fortify_building", "rebuild_building"]
 const FIRM_RESERVE := 5000.0
+const PRIVATE_ENOUGH := 25000.0     # darueber keine Privatentnahme (Bremse, 18.11.)
+const WITHDRAW_PER_DAY := 3
+const PRIVATE_USES := "Privatgeld brauchst du für Bauwerke deiner Basis (Bauwerk, Bauplan), Material zum Tragen (Pickup), Fahrten, Grundstücke (BuyPlot) und Häuser (OrderHouse). Siedlung, Bürgeramt, Straßen und Großlager-Einkäufe (hub_buy) zahlt die Firma."
 const MAYOR_SALARY := 50.0          # Amtsgehalt je Echtzeitminute aus der Stadtkasse
 var _salary_timer := 60.0        # Privatentnahme laesst mindestens so viel in der Firmenkasse
 
@@ -2103,8 +2123,11 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 			a.erase("warum")
 	if not (a is Dictionary) or str(a.get("action", "")).to_lower() in OVERVIEW_WORDS:   # 16./17.11.: "Firmenlage prüfen", action "status"
 		return _firm_overview(cid)
+	var redirect := _firm_redirect(b, cid, a)
+	if not redirect.is_empty():
+		return redirect
 	if str(a.get("action", "")) not in FIRM_ACTIONS:
-		return {"ok": false, "msg": "Firma braucht aktion: {\"action\": eine von %s, ...Parameter}." % ", ".join(FIRM_ACTIONS)}
+		return {"ok": false, "msg": "Unbekannte Firmen-Aktion '%s'.%s Erlaubt: %s." % [str(a.get("action", "")), _closest_firm_action(str(a.get("action", ""))), ", ".join(FIRM_ACTIONS)]}
 	if str(a.action) in ["design_weapon", "forge_weapon"]:   # Waffenschmiede: Entwurf und Fertigung (EkoArms)
 		return arms.firm_action(b, cid, a)
 	if str(a.action) in ["fortify_building", "rebuild_building"]:   # eigene Gebaeude befestigen / wieder aufbauen
@@ -2143,6 +2166,16 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 			return {"ok": false, "msg": "entnahme braucht betrag (EUR)."}
 		if want > room:
 			return {"ok": false, "msg": "Höchstens %s entnehmbar (in der Firmenkasse bleiben mindestens %s)." % [Catalog.money(room), Catalog.money(FIRM_RESERVE)]}
+		# Bremse (Partie 18.11.: Bodo entnahm 24x, zusammen 80.500 EUR, ohne etwas davon auszugeben)
+		var day := GameCalendar.day_of(sim.game_min)
+		var log_d: Array = (b.get("entnahmen", []) as Array).filter(func(e): return int(e) == day)
+		if float(b.get("geld", 0.0)) >= PRIVATE_ENOUGH:
+			return {"ok": false, "msg": "Du hast schon %s privat – das reicht. %s" % [Catalog.money(float(b.geld)), PRIVATE_USES]}
+		if log_d.size() >= WITHDRAW_PER_DAY:
+			return {"ok": false, "msg": "Heute hast du schon %d-mal entnommen. Gib erst etwas aus, morgen geht es wieder. %s" % [log_d.size(), PRIVATE_USES]}
+		want = minf(want, PRIVATE_ENOUGH - float(b.get("geld", 0.0)))
+		log_d.append(day)
+		b["entnahmen"] = log_d
 		c.ledger.withdraw(want, "Y0")
 		b.geld = float(b.get("geld", 0.0)) + want
 		_event(b, "entnimmt %s aus %s" % [Catalog.money(want), c.company_name])
@@ -2154,6 +2187,49 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	sim.executor.eko_call = false
 	_event(b, "Firma: %s → %s" % [a.action, str(r.get("msg", "")).left(80)])
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", "")), "pending": bool(r.get("pending", false))}
+
+
+## Erfundene Firmen-Aktionen der Wesen auf die richtige Handlung lenken (Partie 18.11.: ~20 Fehlschlaege mit siedlung_info, hub_status,
+## siedlung_bauen, buy_material in der Wildnis, bergbau; Greta gab "siedlung_gruenden" sogar per Telefon an Bodo weiter).
+const FIRM_SETTLE := ["siedlung", "siedlung_gruenden", "siedlung_bauen", "siedlung_eroeffnen", "gruenden", "found_town", "settle", "betriebshof_eroeffnen"]
+const FIRM_SETTLE_INFO := ["siedlung_info", "siedlungsplaetze", "siedlung_status", "plaetze", "platz_suchen", "standort", "standorte"]
+const FIRM_HUB_INFO := ["hub_status", "grosslager", "großlager", "lager_status", "bestellungen", "abholungen", "hub_orders"]
+
+
+func _firm_redirect(b: Dictionary, cid: int, a: Dictionary) -> Dictionary:
+	var act := str(a.get("action", "")).to_lower().strip_edges()
+	if act in FIRM_SETTLE:
+		var r := input(str(b.name), "Siedlung", a)
+		r["msg"] = "(Siedlung ist eine eigene Handlung: Siedlung {feld: [x, y]}, keine Firmen-Aktion.) " + str(r.get("msg", ""))
+		return r
+	if act in FIRM_SETTLE_INFO:
+		return {"ok": true, "msg": "Siedlungslage (steht auch in beobachtung.siedlung): %s" % JSON.stringify(settle.obs(b, cid)).left(900)}
+	if act in FIRM_HUB_INFO:
+		var open_n := 0
+		for k in sim.contracts.values():
+			if k.status == "open" and str(k.order_ref).begins_with("hub:") and int(k.exclusive_for) == cid:
+				open_n += 1
+		return {"ok": true, "msg": "Großlager: %d gekaufte Abholungen warten auf dich – LKW {ziel: \"grosslager\"} lädt alle und bringt sie auf deinen Hof. Kaufen mit Firma {aktion: {action: \"hub_buy\", item, qty}}." % open_n}
+	if act == "buy_material" and sim.wildnis:   # in der Wildnis gibt es keinen Bauhof-Haendler: alles kommt vom Grosslager
+		var hb := {"action": "hub_buy", "item": str(a.get("item", a.get("material", ""))), "qty": a.get("qty", a.get("menge", a.get("anzahl", 0)))}
+		var r2 := _firm_action_inner(b, {"aktion": hb})
+		r2["msg"] = "(In der Wildnis kaufst du beim Großlager: hub_buy.) " + str(r2.get("msg", ""))
+		return r2
+	if act in ["bergbau", "mining", "mine", "abbau"]:
+		return {"ok": false, "msg": "Bergbau geht in zwei Schritten: explore_deposit {grundstueck} (Probebohrung), danach request_mining {grundstueck}."}
+	return {}
+
+
+## "Meintest du …?" – aehnlichste erlaubte Firmen-Aktion
+func _closest_firm_action(act: String) -> String:
+	var best := ""
+	var best_s := 0.0
+	for f in FIRM_ACTIONS:
+		var sc := act.to_lower().similarity(str(f))
+		if sc > best_s:
+			best_s = sc
+			best = str(f)
+	return " Meintest du %s?" % best if best_s >= 0.45 else ""
 
 
 ## Ohne Fahrzeug verdient eine Transportfirma nichts (15.11.: drei von vier Firmen hatten nach 35 Minuten keines).

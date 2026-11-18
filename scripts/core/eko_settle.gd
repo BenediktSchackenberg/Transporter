@@ -60,14 +60,17 @@ func score_at(cell: Vector2i) -> Dictionary:
 		out["grund"] = "am Kartenrand"
 		return out
 	for t in C.towns:
-		if bool(t.get("siedlung", false)) and absi(int(t.center[0]) - cell.x) + absi(int(t.center[1]) - cell.y) < MIN_TOWN_DIST:
-			out["grund"] = "zu nah an %s" % t.name
+		var td := absi(int(t.center[0]) - cell.x) + absi(int(t.center[1]) - cell.y)
+		if bool(t.get("siedlung", false)) and td < MIN_TOWN_DIST:   # Partie 18.11.: ohne Zahlen rieten die Wesen eine Stunde lang Plaetze
+			out["grund"] = "zu nah an %s (Mitte bei %s, %d Felder entfernt; nötig sind mindestens %d Felder: waagerecht + senkrecht gezählt)" % [
+				t.name, str(t.center), td, MIN_TOWN_DIST]
 			return out
 	var hub := Vector2i(-1, -1)
 	if not C.hub.is_empty():
 		var hr: Array = C.hub.rect
 		if Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3])).grow(20).has_point(cell):
-			out["grund"] = "zu nah am Großlager"
+			out["grund"] = "zu nah am Großlager (Lagergelände x %d–%d, y %d–%d; nötig sind mindestens 20 Felder Abstand zum Gelände)" % [
+				int(hr[0]), int(hr[0]) + int(hr[2]) - 1, int(hr[1]), int(hr[1]) + int(hr[3]) - 1]
 			return out
 		hub = Vector2i(int(C.hub.center[0]), int(C.hub.center[1]))
 	var free := 0
@@ -132,6 +135,7 @@ func score_at(cell: Vector2i) -> Dictionary:
 
 
 ## Beste Plaetze im Umkreis (fuer die Beobachtung), hoechstens n. Zwischengespeichert je Feld (~225 Bewertungen je Aufruf).
+## Nur Plaetze, die der Gelaende-LKW von cell aus erreicht (Partie 18.11.: Amira bekam zweimal einen unerreichbaren Platz empfohlen).
 func best_near(cell: Vector2i, radius: int = 70, n: int = 3) -> Array:
 	var key := "%d,%d,%d" % [cell.x / 4, cell.y / 4, radius]
 	var hit: Dictionary = _best_cache.get(key, {})
@@ -146,8 +150,17 @@ func best_near(cell: Vector2i, radius: int = 70, n: int = 3) -> Array:
 			if sc.ok:
 				cands.append(sc)
 	cands.sort_custom(func(a, b): return int(a.punkte) > int(b.punkte))
-	_best_cache[key] = {"t": float(_sim().game_min), "r": cands.slice(0, 5)}
-	return cands.slice(0, n)
+	var reach: Array = []
+	for i in mini(cands.size(), 10):   # erreichbar? (ein Teilweg je Kandidat, hoechstens 10 Pruefungen)
+		var sc: Dictionary = cands[i]
+		var f := Vector2i(int(sc.feld[0]), int(sc.feld[1]))
+		if not _sim().offroad_path(cell, f).is_empty():
+			sc["entfernung"] = maxi(absi(f.x - cell.x), absi(f.y - cell.y))
+			reach.append(sc)
+			if reach.size() >= 5:
+				break
+	_best_cache[key] = {"t": float(_sim().game_min), "r": reach}
+	return reach.slice(0, n)
 
 
 ## Gruendung durch das Wesen b mit Firma cid am Feld cell: Betriebshof und Basis (Stammsitz) entstehen hier; das Land ringsum wird
@@ -160,11 +173,14 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 		return {"ok": false, "msg": "Dein Betriebshof steht schon (%s)." % sim.towns.name_of(k)}
 	var here: Vector2i = w.tile_of(b)
 	if maxi(absi(here.x - cell.x), absi(here.y - cell.y)) > ON_SITE:   # 17.11.: Sonnenklippe wurde vom Grosslager aus "eroeffnet"
+		var pre := score_at(cell)   # erst pruefen, ob der Platz ueberhaupt geht – sonst faehrt das Wesen umsonst hin
+		if not pre.ok:
+			return {"ok": false, "msg": "Dieser Platz geht nicht: %s. %s" % [str(pre.get("grund", "")), _suggest(here)], "bewertung": pre}
 		return {"ok": false, "msg": "Du bist nicht dort (%d Felder entfernt). Fahr erst selbst hin: LKW {ziel: [%d, %d]} – dann Siedlung {feld: [%d, %d]}." % [
 			maxi(absi(here.x - cell.x), absi(here.y - cell.y)), cell.x, cell.y, cell.x, cell.y]}
 	var sc := score_at(cell)
 	if not sc.ok:
-		return {"ok": false, "msg": "Hier geht es nicht: %s." % str(sc.get("grund", "")), "bewertung": sc}
+		return {"ok": false, "msg": "Hier geht es nicht: %s. %s" % [str(sc.get("grund", "")), _suggest(here)], "bewertung": sc}
 	var c = sim.company(cid)
 	if c.ledger.cash < FOUND_COST:
 		return {"ok": false, "msg": "Vermessung und Platz kosten %s, die Firma hat %s." % [Catalog.money(FOUND_COST), Catalog.money(c.ledger.cash)]}
@@ -446,6 +462,18 @@ func _harbor_at(cell: Vector2i, nm: String) -> int:
 	var off := _place("port_office", land + Vector2i(-2, -3), land + Vector2i(2, 3), "Anleger %s" % nm)
 	var wh := _place("warehouse", land + Vector2i(-4, -4), land + Vector2i(4, 4), "Hafenlager")
 	return wh if off >= 0 and wh >= 0 else -1
+
+
+## Vorschlag nach einer Ablehnung: der beste erreichbare Platz in der Naehe (mit Weg dorthin), sonst die Richtung zum Weitersuchen.
+func _suggest(here: Vector2i) -> String:
+	var best := best_near(here, 70, 1)
+	if best.is_empty():
+		best = best_near(here, 130, 1)
+	if best.is_empty():
+		return "In der Nähe passt nichts, was dein LKW erreicht – fahr weiter weg von Großlager und Orten und prüfe dort siedlung.hier."
+	var f: Array = best[0].feld
+	return "Nächster passender Platz, den dein LKW erreicht: %s (%d Punkte, %d Felder von hier) – LKW {ziel: %s}, dort Siedlung {feld: %s}." % [
+		str(f), int(best[0].punkte), int(best[0].get("entfernung", 0)), str(f), str(f)]
 
 
 # ------------------------------------------------------------------ Beobachtung

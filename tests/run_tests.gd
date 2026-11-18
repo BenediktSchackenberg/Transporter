@@ -40,6 +40,7 @@ func _initialize() -> void:
 	test_names.append("test_neubeginn_homes")
 	test_names.append("test_wildnis_start")
 	test_names.append("test_wildnis_found")
+	test_names.append("test_wildnis_log_fixes")
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
@@ -8520,6 +8521,72 @@ func _run_until(s: Simulation, cond: Callable, max_steps: int) -> bool:
 		s.step(1.0)
 		s.eko.update(1.0)   # Wesenwelt laeuft im Spiel in Echtzeit (GameSession)
 	return cond.call()
+
+
+## Partie 18.11. (Log-Analyse): "zu nah" mit Zahlen und Vorschlag, nur erreichbare Plaetze, LKW-Ziele auf Baum/Gebaeude, erfundene
+## Firmen-Aktionen umgelenkt, "act" mit Text, Entnahme-Bremse, Buergermeister schlagen keine beschlossenen Quartiere erneut vor.
+func test_wildnis_log_fixes() -> void:
+	var s := wildnis_sim(2)
+	var E: EkoWorld = s.eko
+	E.auto_estates = true
+	var ps: Array = E.adopt_players(2)
+	var p0: String = ps[0]
+	var B: Dictionary = E.beings[p0]
+	var cid := E.active_firm(B)
+	var v := E.own_truck(cid)
+	B.mover.pos = v.pos
+	# 1) zu nah am Grosslager: Zahlen und ein erreichbarer Vorschlag
+	var hub := Vector2i(int(s.city.hub.center[0]), int(s.city.hub.center[1]))
+	var sc: Dictionary = E.settle.score_at(hub + Vector2i(5, 5))
+	ok(not sc.ok and str(sc.grund).contains("mindestens 20 Felder"), "zu nah am Großlager mit Abstand: %s" % str(sc.get("grund", "")).left(90))
+	var near: Array = E.settle.best_near(v.tile(), 70, 3)
+	ok(near.all(func(x): return not s.offroad_path(v.tile(), Vector2i(int(x.feld[0]), int(x.feld[1]))).is_empty()), "empfohlene Plätze sind mit dem LKW erreichbar (%d)" % near.size())
+	var far: Dictionary = E.input(p0, "Siedlung", {"feld": [hub.x + 3, hub.y + 3]})
+	ok(not far.ok and str(far.msg).contains("mindestens 20 Felder") and (near.is_empty() or str(far.msg).contains("Nächster passender Platz")), "Ablehnung nennt Grund und Vorschlag: %s" % str(far.msg).left(140))
+	# 2) LKW-Ziel auf einem gesperrten Feld (Gebaeude): naechstes freies Feld statt Ablehnung
+	var blocked := Vector2i(-1, -1)
+	for bb in s.city.buildings:
+		var c := Vector2i(int(bb.x), int(bb.y))
+		if not s._walk_free(c) and c.distance_to(v.tile()) < 40.0:
+			blocked = c
+			break
+	if blocked.x >= 0:
+		var rt: Dictionary = E.input(p0, "LKW", {"ziel": [blocked.x, blocked.y]})
+		ok(rt.ok and str(rt.msg).contains("nächsten freien Feld"), "LKW zu einem Gebäudefeld hält daneben: %s" % str(rt.msg).left(120))
+		_run_until(s, func(): return not B.has("im_lkw"), 3000)
+		B.mover.pos = v.pos
+	ok(not s.offroad_path(v.tile(), v.tile() + Vector2i(1, 0)).is_empty() or not s._walk_free(v.tile() + Vector2i(1, 0)), "Start auf gesperrtem Feld bricht den Weg nicht ab")
+	# 3) erfundene Firmen-Aktionen
+	var si: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "siedlung_info"}})
+	ok(si.ok and str(si.msg).contains("Siedlungslage"), "siedlung_info liefert die Siedlungslage")
+	var hs: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_status"}})
+	ok(hs.ok and str(hs.msg).contains("Abholungen"), "hub_status liefert die Abholungen")
+	var sg: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "siedlung_gruenden", "feld": [hub.x + 3, hub.y + 3]}})
+	ok(str(sg.msg).contains("eigene Handlung") and not sg.ok, "siedlung_gruenden wird zur Handlung Siedlung")
+	var bm: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "buy_material", "item": "holz", "menge": 5}})
+	ok(bm.ok and str(bm.msg).contains("hub_buy"), "buy_material in der Wildnis = hub_buy: %s" % str(bm.msg).left(90))
+	var un: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "collect_contract"}})
+	ok(not un.ok and str(un.msg).contains("Meintest du collect_contracts"), "unbekannte Aktion mit Vorschlag")
+	var sy: Dictionary = E.input(p0, "act", {"text": "Hallo zusammen"})
+	ok(sy.ok, "act mit Text wird zu Say: %s" % str(sy.msg).left(60))
+	# 4) Entnahme-Bremse
+	var okn := 0
+	for i in 6:
+		if E.input(p0, "Firma", {"aktion": {"action": "entnahme", "betrag": 1000}}).ok:
+			okn += 1
+	ok(okn == EkoWorld.WITHDRAW_PER_DAY, "höchstens %d Entnahmen am Tag (%d)" % [EkoWorld.WITHDRAW_PER_DAY, okn])
+	B.geld = EkoWorld.PRIVATE_ENOUGH
+	B.erase("entnahmen")
+	ok(not E.input(p0, "Firma", {"aktion": {"action": "entnahme", "betrag": 1000}}).ok, "bei genug Privatgeld keine Entnahme")
+	# 5) Buergermeister: Vorschlaege ohne Grundstuecke beschlossener Quartiere
+	var mo: Mayor = s.mayor
+	var cands: Array = mo.quarter_candidates(3)
+	if not cands.is_empty():
+		var ids: Array = cands[0].grundstuecke
+		mo.plans["QX"] = {"id": "QX", "status": "beschlossen", "zone": str(cands[0].zone), "parcels": ids, "name": "Test"}
+		var again: Array = mo.quarter_candidates(10)
+		ok(not again.any(func(c): return (c.grundstuecke as Array).any(func(id): return id in ids)), "beschlossene Grundstücke werden nicht erneut vorgeschlagen")
+		mo.plans.erase("QX")
 
 
 func test_wildnis_found() -> void:

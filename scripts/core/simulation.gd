@@ -533,11 +533,44 @@ func remove_vehicle(v: FleetVehicle) -> void:
 	vehicles.erase(v.id)
 
 
+## Gelaendeweg (Fusswegenetz ohne Wasser, Berge, Gebaeude). Partie 18.11.: "Dorthin kommt der LKW nicht" schon neben dem eigenen
+## Betriebshof – der LKW stand auf einem Gebaeudefeld (Start gesperrt) oder das Ziel war ein Baum/Gebaeude. Start und Ziel werden
+## daher auf das naechste freie Feld gelegt (Ziel hoechstens SNAP_R Felder daneben); leer = wirklich unerreichbar.
+const SNAP_R := 6
+
+
+func offroad_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var start := _free_near(from, 3)
+	if start.x < 0:
+		return []
+	var p := nav.walk_path(start, to)   # Teilweg bis zum naechsten erreichbaren Punkt, wenn das Ziel selbst gesperrt ist
+	if p.is_empty() or maxi(absi(p[-1].x - to.x), absi(p[-1].y - to.y)) > SNAP_R:
+		return []
+	if start != from:
+		p.push_front(from)
+	return p
+
+
+func _walk_free(c: Vector2i) -> bool:
+	return nav.walk.is_in_boundsv(c) and not nav.walk.is_point_solid(c)
+
+
+func _free_near(c: Vector2i, r: int) -> Vector2i:
+	if _walk_free(c):
+		return c
+	for rr in range(1, r + 1):
+		for dy in range(-rr, rr + 1):
+			for dx in range(-rr, rr + 1):
+				if maxi(absi(dx), absi(dy)) == rr and _walk_free(c + Vector2i(dx, dy)):
+					return c + Vector2i(dx, dy)
+	return Vector2i(-1, -1)
+
+
 func route(v: Mover, to: Vector2i, new_state: String = "") -> bool:
 	if v is FleetVehicle and bool(Catalog.model(v.model).get("offroad", false)):
 		# Gelaendefahrzeug (Wildnis): querfeldein ueber Gras und Wege (Fusswegenetz ohne Wasser, Berge, Gebaeude)
-		var lp := nav.walk_path(v.tile(), to)
-		if lp.is_empty() or lp[-1] != to:
+		var lp := offroad_path(v.tile(), to)
+		if lp.is_empty():
 			return false
 		v.lane = 0.0
 		v.set_path(lp)

@@ -416,8 +416,11 @@ func stadtlager_indicators() -> Dictionary:
 ## Gruppen staedtischer, freier Grundstuecke (je 32x32 Felder) als Vorschlaege fuer neue Quartiere.
 func quarter_candidates(limit: int) -> Array:
 	var groups := {}
+	var planned := _planned_ids()
 	for p in sim.parcels.items.values():
 		if p.owner != land_owner() or p.state not in ["frei", "zur_entwicklung"] or not sim.parcels.is_buildable(p) or p.zone not in ["wohnen", "mischgebiet", "gewerbe", "industrie"]:
+			continue
+		if planned.has(p.id):   # Partie 18.11.: Vorschlaege enthielten Grundstuecke beschlossener Quartiere – Regel-Buergermeister schlug sie jede Runde neu vor
 			continue
 		if sim.parcels.utility_level(p) == "keine":
 			continue
@@ -444,6 +447,8 @@ func quarter_candidates(limit: int) -> Array:
 		for z in zone_count:
 			if zone_count[z] > int(zone_count.get(zone, 0)):
 				zone = z
+		if open_quarters(zone).size() >= QUARTER_OPEN_MAX:   # Zone hat schon genug unverkaufte Quartiere
+			continue
 		out.append({"lage_feld": [key.x * 32, key.y * 32], "zone": zone, "flaeche": area, "grundstuecke": chosen.map(func(p): return p.id),
 			"davon_voll_erschlossen": full, "entfernung_zentrum": int(Vector2(key.x * 32, key.y * 32).distance_to(Vector2(sim.city.size * 0.45, sim.city.size * 0.5)))})
 	out.sort_custom(func(a, b): return a.davon_voll_erschlossen > b.davon_voll_erschlossen or (a.davon_voll_erschlossen == b.davon_voll_erschlossen and a.entfernung_zentrum < b.entfernung_zentrum))
@@ -504,8 +509,10 @@ func zoning() -> Dictionary:
 			short.append(z)
 	short.sort_custom(func(a, b): return float(zones[a].abweichung) < float(zones[b].abweichung))
 	var props: Array = []
-	var used := {}
+	var used := _planned_ids()
 	for z in short:
+		if open_quarters(z).size() >= QUARTER_OPEN_MAX:   # erst die offenen Quartiere dieser Zone vergeben (sonst lehnt _designate_quarter ab)
+			continue
 		var c := _rezone_cluster(z, used)
 		if not c.is_empty():
 			props.append(c)
@@ -913,6 +920,32 @@ static func _zone_of(text: String) -> String:
 	return first
 
 
+## Grundstuecke, die schon zu einem beschlossenen Quartier gehoeren (ID -> true).
+func _planned_ids() -> Dictionary:
+	var out := {}
+	for pl in plans.values():
+		if pl.status == "beschlossen":
+			for pid in pl.parcels:
+				out[str(pid)] = true
+	return out
+
+
+## Beschlossene Quartiere der Zone, deren Grundstuecke noch ueberwiegend unverkauft sind: [[id, unverkauft], ...].
+func open_quarters(zone: String) -> Array:
+	var out: Array = []
+	for pl in plans.values():
+		if pl.status != "beschlossen" or str(pl.zone) != zone:
+			continue
+		var free_n := 0
+		for pid in pl.parcels:
+			var pp: Dictionary = sim.parcels.parcel(str(pid))
+			if not pp.is_empty() and Towns.is_public(str(pp.owner)):
+				free_n += 1
+		if free_n * 2 >= int(pl.parcels.size()):
+			out.append([str(pl.id), free_n])
+	return out
+
+
 func _designate_quarter(a: Dictionary) -> Dictionary:
 	# Modelle liessen name/zone weg oder verschrieben die Zone ("gewerne"; Partie 11.11.: 90 abgelehnte Antraege) - Zone aus Text erkennen
 	var zone := _zone_of(str(a.get("zone", "")) + " " + str(a.get("reason", "")))
@@ -938,19 +971,11 @@ func _designate_quarter(a: Dictionary) -> Dictionary:
 				int(pl.day), pl.name, str(pl.vote).left(160), int(pl.day) + QUARTER_RETRY_DAYS]}
 	# Partie 14.11.: ein Modell-Buergermeister wies 38 Industrie- und 35 Gewerbegebiete aus, die alten blieben leer. Solange beschlossene
 	# Quartiere der Zone noch ueberwiegend unverkauft sind, erst diese vergeben.
-	var open_q: Array = []
+	var oq := open_quarters(zone)
+	var open_q: Array = oq.map(func(e): return e[0])
 	var unsold := 0
-	for pl in plans.values():
-		if pl.status != "beschlossen" or str(pl.zone) != zone:
-			continue
-		var free_n := 0
-		for pid in pl.parcels:
-			var pp: Dictionary = sim.parcels.parcel(str(pid))
-			if not pp.is_empty() and Towns.is_public(str(pp.owner)):
-				free_n += 1
-		if free_n * 2 >= int(pl.parcels.size()):
-			open_q.append(str(pl.id))
-			unsold += free_n
+	for e in oq:
+		unsold += int(e[1])
 	if open_q.size() >= QUARTER_OPEN_MAX:
 		return {"ok": false, "already": true, "msg": "Es gibt schon %d Quartiere der Zone %s mit %d unverkauften Grundstücken (%s): erst diese vergeben (offer_parcels) oder erschließen (plan_infrastructure), dann neue ausweisen." % [
 			open_q.size(), zone, unsold, ", ".join(open_q.slice(0, 4))]}
