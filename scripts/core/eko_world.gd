@@ -1745,21 +1745,42 @@ func _plot_reachable(r: Rect2i, from: Vector2i) -> bool:
 	return false
 
 
+## Zwischengespeichert je Wesen (Grobfeld, 120 Spielminuten): je Grundstueck eine Wegsuche – 18.11. kostete das ~315 ms je Beobachtung.
 func _plot_obs(b: Dictionary) -> Array:
 	var t := tile_of(b)
+	var pk := "%d,%d" % [t.x / 8, t.y / 8]
+	var pc: Dictionary = b.get("_plot_cache", {})
+	if str(pc.get("k", "")) == pk and float(sim.game_min) - float(pc.get("t", -1e9)) < 120.0:
+		return pc.r
+	var res := _plot_obs_raw(b, t)
+	b["_plot_cache"] = {"k": pk, "t": float(sim.game_min), "r": res}
+	return res
+
+
+func _plot_obs_raw(b: Dictionary, t: Vector2i) -> Array:
+	if sim.wildnis and active_firm(b) >= 0:
+		return []   # Unternehmer in der Wildnis bauen ihre Basis selbst (Siedlung), sie kaufen keine Wohngrundstuecke
 	var town: int = sim.city.town_of(t)
-	var out: Array = []
+	var cands: Array = []
 	for p in sim.parcels.search({"town": town, "zone": "wohnen", "max_area": 40, "limit": 40}):
 		var r: Array = p.rect
 		if int(r[2]) < 2 or int(r[3]) < 2:
 			continue
 		var c := Vector2i(int(r[0]) + int(r[2]) / 2, int(r[1]) + int(r[3]) / 2)
+		cands.append([_dist(t, c), p, c])
+	cands.sort_custom(func(a, c): return int(a[0]) < int(c[0]))
+	var out: Array = []
+	for i in mini(cands.size(), 8):   # naechste zuerst, hoechstens 8 Wegsuchen
+		var p: Dictionary = cands[i][1]
+		var r: Array = p.rect
+		var c: Vector2i = cands[i][2]
 		if not _plot_reachable(Rect2i(int(r[0]), int(r[1]), int(r[2]), int(r[3])), t):
 			continue   # Insel zwischen gesperrten Feldern: nicht anbieten
 		out.append({"id": p.id, "feld": [c.x, c.y], "groesse": "%dx%d Felder" % [r[2], r[3]], "preis": float(p.price),
-			"entfernung": _dist(t, c)})
-	out.sort_custom(func(a, c): return int(a.entfernung) < int(c.entfernung))
-	return out.slice(0, 5)
+			"entfernung": int(cands[i][0])})
+		if out.size() >= 5:
+			break
+	return out
 
 
 func _buy_plot(b: Dictionary, id: String) -> Dictionary:
