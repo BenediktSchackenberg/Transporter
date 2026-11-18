@@ -346,7 +346,7 @@ func quote(item: String, qty: int, crit: int = 1) -> Array:
 	var it: Dictionary = CityGoods.get_item(item)
 	var out: Array = []
 	var cat_price := float(it.price)
-	if Trader.MATERIALS.has(item) and sim.trader.stock_of(item) >= qty:
+	if Trader.MATERIALS.has(item) and sim.trader.stock_of(item) >= qty and not sim.city.building(int(sim.trader.bauhof)).is_empty():   # Wildnis: kein privater Bauhof
 		out.append({"supplier": "T0", "unit_price": sim.trader.price(item, qty), "lead": 0, "loc": sim.trader.bauhof, "name": "Bauhof (privater Großhandel)"})
 	out.append({"supplier": "X0", "unit_price": snappedf(cat_price * CityGoods.IMPORT_FACTOR, 0.01), "lead": int(it.lead) + CityGoods.IMPORT_LEAD, "loc": port, "name": "Import (Ausland)"})
 	if sim.hub != null and sim.hub.enabled and sim.hub.stock_of(item) >= qty:   # Auftrag 19: zentrales Grosslager, sofort ab Lager
@@ -470,6 +470,17 @@ func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 	_log(o, "%s genehmigt: %d × %s bei %s für %s + Transport %s" % [by, qty, CityGoods.get_item(o.item).name, best.name, Catalog.money(o.price), Catalog.money(freight)])
 	sim.log_event("Stadtlager bestellt %d × %s bei %s (%s)." % [qty, CityGoods.get_item(o.item).name, best.name, Catalog.money(cost)], "info")
 	return {"ok": true, "msg": "Bestellung %s: %d × %s bei %s, %s." % [o.id, qty, CityGoods.get_item(o.item).name, best.name, Catalog.money(cost)]}
+
+
+## Bestellung ohne Abhol-/Lieferort aufgeben: Reservierung frei, zugesagte Mittel zurueck, Vorschlag gilt als abgelehnt.
+func _cancel_order(o: Dictionary) -> void:
+	sim.stock.release("order:" + str(o.id))
+	if not bool(o.get("from_project_budget", false)):
+		var M: Mayor = mayor()
+		M.commitments = maxf(0.0, float(M.commitments) - float(o.get("committed", 0.0)))
+	o.committed = 0.0
+	o.status = "abgelehnt"
+	o.decision = "kein Abhol- oder Lieferort"
 
 
 func reject(order_id: String, by: String, reason: String) -> Dictionary:
@@ -613,6 +624,12 @@ func on_aircraft(order_id: String) -> void:
 func _issue_contract(o: Dictionary) -> void:
 	var src: Dictionary = sim.city.building(int(o.loc))
 	var dst: Dictionary = sim.city.building(building)
+	if src.is_empty() or dst.is_empty():   # Partie 18.11. (Wildnis): Lieferant T0 ohne Bauhof-Gebaeude -> Skriptfehler je Takt
+		if not bool(o.get("_kein_ort", false)):
+			o["_kein_ort"] = true
+			_log(o, "Kein Abhol- oder Lieferort (Gebäude %d → %d) – Bestellung storniert" % [int(o.loc), building])
+		_cancel_order(o)
+		return
 	var k := Contract.new()
 	k.id = "A%d" % sim.market.next_id
 	sim.market.next_id += 1
