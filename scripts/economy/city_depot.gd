@@ -476,7 +476,7 @@ func approve(order_id: String, by: String, reason: String = "") -> Dictionary:
 ## Anlieferort fuer Importe: Hafen, sonst (Wildnis ohne Hafen) das Grosslager, von dort per Lkw ins Stadtlager.
 ## Partie 18.11.: Importe hatten in den Wildnis-Staedten den Ort -1 und wurden storniert – Stadtprojekte bekamen nie Material.
 func _import_loc() -> int:
-	if port >= 0:
+	if port >= 0 and port != building:   # 18.11.: ohne Hafen ist port das Stadtlager selbst – Abhol- = Lieferort, niemand fuhr
 		return port
 	if sim.hub != null and sim.hub.enabled and not sim.city.building(int(sim.hub.loc)).is_empty():
 		return int(sim.hub.loc)
@@ -651,6 +651,9 @@ func on_aircraft(order_id: String) -> void:
 
 
 func _issue_contract(o: Dictionary) -> void:
+	if str(o.supplier) == "X0" and not bool(o.get("via_air", false)) and int(o.loc) == building and _import_loc() != building:
+		o.loc = _import_loc()   # Partie 18.11.: 41 Importe in Liorufer mit Abholort = Stadtlager hingen fest
+		_log(o, "Abholort korrigiert: Großlager")
 	var src: Dictionary = sim.city.building(int(o.loc))
 	var dst: Dictionary = sim.city.building(building)
 	if src.is_empty() or dst.is_empty():   # Partie 18.11. (Wildnis): Lieferant T0 ohne Bauhof-Gebaeude -> Skriptfehler je Takt
@@ -672,7 +675,7 @@ func _issue_contract(o: Dictionary) -> void:
 	k.payer = owner()
 	k.order_ref = str(o.id)
 	k.created = sim.game_min
-	k.offer_until = sim.game_min + GameCalendar.days_to_min(float(FALLBACK_DAYS))
+	k.offer_until = sim.game_min + GameCalendar.days_to_min(float(1 if sim.wildnis else FALLBACK_DAYS))
 	k.deadline = sim.game_min + GameCalendar.days_to_min(float(FALLBACK_DAYS + (1 if bool(pool.urgent) else 3)))
 	k.distance = absi(src.road.x - dst.road.x) + absi(src.road.y - dst.road.y)
 	var partner := pool_partner()
@@ -700,14 +703,14 @@ func _watch_contract(o: Dictionary, day: int) -> void:
 			_pool_miss(o, k.owner)
 		return
 	if k != null and k.status == "open":
-		if sim.game_min <= k.offer_until:
+		if sim.game_min <= k.offer_until and not (sim.wildnis and int(o.loc) == building):
 			return
 		k.status = "expired"       # nicht uebernommen (der Markt markiert dies sonst erst zur naechsten Spielminute)
 		_pool_miss(o, -1)
 	if k != null and k.status == "delivered":
 		return              # Anlieferung wird ueber contract_delivered() gebucht
 	# abgelaufen, gescheitert, storniert oder aus dem Speicher entfernt
-	if int(o.reissued) < MAX_REISSUE and o.status == "transport":
+	if int(o.reissued) < (0 if sim.wildnis else MAX_REISSUE) and o.status == "transport":   # Wildnis (18.11.): zwei Spieler – nach einem Angebot liefert die Stadt selbst
 		o.reissued = int(o.reissued) + 1
 		_log(o, "Transportauftrag nicht ausgeführt, neu ausgeschrieben")
 		_issue_contract(o)
@@ -717,6 +720,8 @@ func _watch_contract(o: Dictionary, day: int) -> void:
 
 ## Stadtfuhrpark fuehrt den Transport aus, wenn kein Unternehmen ihn uebernommen hat. Lohn an S0.
 func _fallback_trip(o: Dictionary) -> void:
+	if str(o.supplier) == "X0" and not bool(o.get("via_air", false)) and int(o.loc) == building and _import_loc() != building:
+		o.loc = _import_loc()   # 18.11.: Abholort Stadtlager -> Grosslager (sonst faehrt der Stadt-Lkw vom Lager ins selbe Lager)
 	var pay := minf(float(o.freight) * 0.7, maxf(0.0, float(sim.economy.accounts.get(owner(), 0.0))))
 	sim.economy.transfer(owner(), "S0", pay)
 	stats.freight += pay
@@ -729,6 +734,12 @@ func _fallback_trip(o: Dictionary) -> void:
 		o.status = "stadt_lkw"
 		o["truck_until"] = sim.game_min + GameCalendar.days_to_min(1.5)   # Sicherung, falls das Fahrzeug (nicht gespeichert) fehlt
 		_log(o, "Stadtfuhrpark liefert mit eigenem Lkw (Kosten %s)" % Catalog.money(pay))
+		return
+	if sim.wildnis and not src.is_empty() and sim.fleet != null and sim.fleet.vehicles.filter(func(x): return x.kind == "stadtlkw" and int(x.get("town", -1)) == town).size() >= CityFleet.CITY_TRUCKS:
+		sim.economy.transfer("S0", owner(), pay)   # alle Stadt-Lkw unterwegs: morgen erneut (kein Strassenproblem)
+		stats.freight -= pay
+		o.freight_paid = 0.0
+		o.status = "wartet_strasse"
 		return
 	if sim.wildnis:   # Benedikt 18.11.: ohne Strasse keine Warenlieferung – warten, bis die Stadt angebunden ist
 		sim.economy.transfer("S0", owner(), pay)

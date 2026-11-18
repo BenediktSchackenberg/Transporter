@@ -36,6 +36,19 @@ func build(c: CityData) -> void:
 		road.set_point_weight_scale(p, float(base_weight[p]))
 
 
+## Strassenfelder mit dem Navigationsgitter abgleichen (nach dem Laden): Strasse ohne Baustelle/Sperre ist befahrbar.
+## Partie 18.11.: 16 Strassenfelder (auch beide Stadtlager-Zufahrten) blieben nach dem Laden gesperrt – kein Stadt-Lkw fand einen Weg.
+func sync_roads() -> int:
+	var n := 0
+	for y in city.size:
+		for x in city.size:
+			var p := Vector2i(x, y)
+			if city.is_road(p) and road.is_point_solid(p) and not is_blocked_road(p):
+				road.set_point_solid(p, false)
+				n += 1
+	return n
+
+
 func road_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	if from == to:
 		return [from]

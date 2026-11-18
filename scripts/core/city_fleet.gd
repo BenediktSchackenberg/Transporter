@@ -89,12 +89,26 @@ func send_crew(site: Vector2i, until: float, label: String) -> void:
 
 
 ## Kommunaler Lkw (Auftrag 19): bringt Ware eines Stadtlager-Auftrags vom Lieferort zum Stadtlager; meldet die Ankunft dem Stadtlager.
+## Partie 18.11.: 41 Bestellungen auf einmal haetten 41 Lkw auf eine Strasse geschickt. Gleicher Abholort: Ladung zusteigen
+## (hoechstens TRUCK_ORDERS je Lkw), hoechstens CITY_TRUCKS je Stadt unterwegs; sonst false (Bestellung wartet und versucht es taeglich).
+const TRUCK_ORDERS := 8
+const CITY_TRUCKS := 4
+
+
 func send_city_truck(from: Vector2i, to: Vector2i, town: int, order_id: String, label: String) -> bool:
+	var mine: Array = vehicles.filter(func(x): return x.kind == "stadtlkw" and int(x.get("town", -1)) == town)
+	for x in mine:
+		if str(x.phase) == "anfahrt" and x.back == from and (x.get("orders", []) as Array).size() < TRUCK_ORDERS and int(x.mover.path_i) <= 2:   # noch am Abholort
+			x.orders.append(order_id)
+			return true
+	if mine.size() >= CITY_TRUCKS:
+		return false
 	var v := _spawn("stadtlkw", from, to, 0.0, from, label, sim.wildnis)
 	if v.is_empty():
 		return false
 	v["town"] = town
 	v["order"] = order_id
+	v["orders"] = [order_id]
 	return true
 
 
@@ -221,7 +235,8 @@ func update(dt: float) -> void:
 			continue
 		if v.kind == "stadtlkw" and str(v.phase) == "anfahrt":
 			var D = sim.towns.depot(int(v.town)) if sim.towns != null else sim.city_depot
-			D.city_truck_arrived(str(v.order))
+			for oid in v.get("orders", [v.order]):
+				D.city_truck_arrived(str(oid))
 			v.phase = "rueckfahrt"
 			if not sim.route(m, v.back):
 				vehicles.erase(v)

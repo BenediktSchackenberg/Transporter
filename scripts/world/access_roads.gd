@@ -517,7 +517,11 @@ func _apply_cells(cells: Array) -> void:
 	for q in cells:
 		var i := city.idx(q)
 		if city.ground[i] == CityData.G.ROAD:
-			continue   # Bruecke (bei der Abnahme schon freigegeben)
+			# schon Strasse (Bruecke, oder beim Laden wiederhergestellt): fuer die Navigation freigeben – Partie 18.11.: 16 Strassenfelder
+			# (auch die Zufahrten beider Stadtlager) blieben nach dem Laden gesperrt, kein Stadt-Lkw fand einen Weg
+			if not sim.nav.is_blocked_road(q):
+				sim.nav.road.set_point_solid(q, false)
+			continue
 		if city.building_at[i] >= 0:
 			# nie eine Strasse unter ein Haus malen (Auftrag 18): Zelle bleibt, die Blockade wird gemeldet
 			sim.log_event("Straßenbau: Feld %d,%d ist bebaut (%s) – dort wird keine Straße angelegt." % [q.x, q.y, str(city.building(city.building_at[i]).get("name", "Gebäude"))], "warn")

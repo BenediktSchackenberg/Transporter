@@ -1900,4 +1900,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 				v.state = "idle"
 		if s.wildnis and v.condition <= 0.0 and v.state != "broken":
 			v.condition = 100.0   # 18.11.: Verschleiss in der Wildnis aus – nur durch Fahren verschlissene Fahrzeuge wieder heil
+	var fixed_roads := s.nav.sync_roads()
+	if fixed_roads > 0:
+		s.log_event("Navigation: %d Straßenfelder nach dem Laden wieder befahrbar." % fixed_roads, "system")
 	return s
