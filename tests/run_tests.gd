@@ -14808,6 +14808,7 @@ func test_eko_office_and_goals() -> void:
 			{"aktion": {"action": "stadt_status"}}, {"aktion": {"action": "finanzlage"}}]:   # 19.11.: Petra Engel "stadt_status"
 		var ov: Dictionary = E.input(m, "Amt", d)
 		ok(ov.ok and bool(ov.get("uebersicht", false)) and str(ov.msg).contains("Anträge zur Entscheidung"), "Amt-Lage für %s" % JSON.stringify(d).left(50))
+	ok(str(E.input(m, "Amt", {"aktion": {"action": "kommunale_dienste", "einrichtung": "polizei"}}).msg).contains("typ: \"PO-01\""), "Lage mit Einrichtung nennt die Bauaktion")
 	ok(not E.input(m, "Amt", {"aktion": {"action": "sabotage"}}).ok, "unbekannte Amtshandlung bleibt ein Fehler")
 	ok(not E.input(m, "Amt", {"aktion": {"action": "klaeranlage"}}).ok, "Anlage ist kein Lage-Wort")
 	E.join("Fritz")

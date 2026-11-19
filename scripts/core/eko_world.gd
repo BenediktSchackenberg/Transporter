@@ -2777,7 +2777,12 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 	if a is Dictionary and str(a.get("action", "")) in ["build_defense", "rebuild_building"]:   # Verteidigung und Wiederaufbau (EkoArms)
 		return arms.office_action(b, k, a)
 	if not (a is Dictionary) or str(a.get("action", "")).to_lower() in OVERVIEW_WORDS:   # 17.11.: "Tageslage prüfen" ohne aktion, "projekte", "kommunale_dienste"
-		return _office_overview(k)
+		var ov := _office_overview(k)
+		var want := str(a.get("einrichtung", a.get("typ", ""))) if a is Dictionary else ""
+		var code := _municipal_code(want) if want != "" else ""
+		if code != "" and ov.has("msg"):   # 19.11.: Juergen Kessler fragte 6x kommunale_dienste {einrichtung: polizei} – er wollte bauen
+			ov.msg = str(ov.msg) + " Bauen: Amt {aktion: {action: \"kommunal_bauen\", typ: \"%s\", reason: ...}} (%s)." % [code, Municipal.TYPES[code].label]
+		return ov
 	if not Mayor.SCHEMA.has(str(a.get("action", ""))) and _looks_like_overview(str(a.get("action", ""))):   # 19.11.: "stadt_status"
 		return _office_overview(k)
 	if not Mayor.SCHEMA.has(str(a.get("action", ""))):
