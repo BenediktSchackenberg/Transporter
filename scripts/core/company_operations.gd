@@ -99,10 +99,10 @@ func dispatch_opportunities(cid: int, limit: int = 5, obey_policy: bool = false)
 			var pick: Vector2i = sim.city.building(k.pickup).road
 			var approach := absi(pick.x - v.tile().x) + absi(pick.y - v.tile().y)
 			var tiles := float(approach) + float(k.distance) * Logistics.ETA_DETOUR
-			var eta := sim.logistics.eta_minutes(v, k)
+			var eta: float = sim.logistics.eta_minutes(v, k)
 			var driver: Worker = sim.driver_of(v)
-			var cost := tiles * float(v.spec().cost_per_tile) + float(driver.wage) * eta / 60.0
-			var margin := float(k.reward + k.bonus) - cost
+			var cost: float = tiles * float(v.spec().cost_per_tile) + float(driver.wage) * eta / 60.0
+			var margin: float = float(k.reward + k.bonus) - cost
 			if obey_policy and (margin < float(policy.min_margin) or int(policy.max_distance) > 0 and k.distance > int(policy.max_distance) \
 					or not (policy.cargo as Array).is_empty() and k.cargo not in policy.cargo or c.ledger.cash - cost < float(policy.reserve)):
 				continue
