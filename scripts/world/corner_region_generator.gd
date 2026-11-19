@@ -120,7 +120,8 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 	_connect_hub()
 	if wildnis:
 		_hub_camps()
-		_wild_power_plant()
+		if version >= 7:   # 19.11.: erst ab Generator 7 – sonst verschiebt das Kraftwerk alle spaeteren Gebaeude-IDs alter Spielstaende
+			_wild_power_plant()
 	_land_cover_region()
 	c.height = heights
 	_finish()
