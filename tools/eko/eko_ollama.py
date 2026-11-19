@@ -815,8 +815,10 @@ class Agent:
                     urgent = situation.get("dringlichkeit") or {}
                     reason = str(urgent.get("grund", "")) if isinstance(urgent, dict) else ""
                     self.observation_status(situation)
-                    if self.urgency >= 2 and reason != getattr(self, "_last_urgent_reason", ""):
+                    # 19.11.: einmaliger Hinweis ging unter (Viktor baute Strassen statt seines Buergeramts) – alle 5 Minuten wiederholen
+                    if self.urgency >= 2 and (reason != getattr(self, "_last_urgent_reason", "") or time.monotonic() - getattr(self, "_urgent_said_at", 0.0) >= 300):
                         messages.append({"role": "user", "content": "Dringendes Ereignis in der Welt: %s. Prüfe und handle jetzt." % reason})
+                        self._urgent_said_at = time.monotonic()
                     self._last_urgent_reason = reason
             started = time.monotonic()
             self.status("denkt", waiting_on="Modellantwort")
