@@ -8768,6 +8768,8 @@ func test_wildnis_found() -> void:
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}}).ok, "Hausbau erst nach der Gründung")
 	ok(str(E.next_steps(B)[0]).contains("LKW {ziel") or str(E.next_steps(B)[0]).contains("Siedlung {feld"), "vor der Gründung zuerst Platz suchen (%s)" % str(E.next_steps(B)[0]).left(60))
 	ok(not E.next_steps(B).any(func(x): return str(x).contains("collect_contracts")), "kein Auftragssammeln vor der Gründung")
+	B.mover.pos = v.pos + Vector2(32.0 * 6, 0)
+	ok(E.home_hint(B).contains("LKW"), "Heimweg-Hinweis nennt den nahen LKW als Ladeplatz (%s)" % E.home_hint(B).left(60))
 	B.mover.pos = v.pos
 	B.akku = 20.0
 	ok(str(E.input(p0, "Rest", {}).msg).contains("LKW aus"), "Ausruhen im LKW lädt schnell")

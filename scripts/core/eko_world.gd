@@ -2131,8 +2131,7 @@ func _rest(b: Dictionary) -> Dictionary:
 			return {"ok": true, "msg": "Du ruhst dich %d Sekunden in deinem LKW aus: Akku lädt schnell, du wirst trocken und warm." % int(REST_SECONDS)}
 		b.say = "Zzz … (draußen)"
 		b.say_left = REST_SECONDS
-		return {"ok": true, "msg": "Du döst %d Sekunden draußen (Akku lädt langsam). In deinem LKW bei %s lädst du schnell – hingehen (MoveTo) und dort Rest." % [
-			int(REST_SECONDS), str([tv.tile().x, tv.tile().y])]}
+		return {"ok": true, "msg": "Du döst %d Sekunden draußen (Akku lädt langsam).%s" % [int(REST_SECONDS), home_hint(b)]}
 	b.say = "Zzz … (draußen)"
 	b.say_left = REST_SECONDS
 	_event(b, "döst draußen")
@@ -2160,6 +2159,11 @@ func home_hint(b: Dictionary) -> String:
 	elif str(b.get("zuhause", "")) != "":
 		goal = plot_rect(str(b.zuhause)).get_center()
 		what = "Dein Zuhause"
+	# 19.11.: Viktor pendelte mit 0 % Akku zwischen Huette und LKW (je ~200 Felder) – immer den naeheren Ladeplatz nennen
+	var tv = own_truck(int(b.get("firma", -1))) if sim.wildnis and int(b.get("firma", -1)) >= 0 else null
+	if tv != null and not _truck_busy(tv) and (goal.x < 0 or _dist(t, tv.tile()) < _dist(t, goal)):
+		goal = tv.tile()
+		what = "Dein LKW (Kabine mit Ladekabel)"
 	if goal.x < 0:
 		return ""
 	return " %s steht bei Feld %d,%d (%d Felder entfernt): MoveTo dorthin, dann Rest – dort lädt der Akku schnell, du wirst trocken und warm." % [what, goal.x, goal.y, _dist(t, goal)]
