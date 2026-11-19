@@ -404,29 +404,23 @@ func plan_road(cid: int, a: Dictionary) -> Dictionary:
 	var fv = a.get("von", [])
 	var from_given: bool = fv is Array and (fv as Array).size() >= 2
 	var from := Vector2i(int(fv[0]), int(fv[1])) if from_given else Vector2i(-1, -1)
-	# Partie 18.11.: Greta plante die Strasse vom Grosslager aus (von am Netz, bis ausserhalb ihres Gebiets) und wurde 5x abgewiesen.
-	# Erlaubt: ein Endpunkt in der eigenen Siedlung (bei Bedarf getauscht) oder Ansatz am bestehenden Strassennetz in Richtung der eigenen Stadt.
-	if C.town_of(to) != k and from_given and C.town_of(from) == k:
-		var tmp := to
-		to = from
-		from = tmp
-	if C.town_of(to) != k:
-		var ctr := Vector2i(int(C.towns[k].center[0]), int(C.towns[k].center[1]))
-		var toward: bool = from_given and _near_road(from, 3) and absi(to.x - ctr.x) + absi(to.y - ctr.y) < absi(from.x - ctr.x) + absi(from.y - ctr.y)
-		if not toward:
-			var link: Dictionary = road_link(k)
-			var tip := (" Vorschlag: strasse_bauen {von: %s, bis: %s}." % [str(link.von), str(link.bis)]) if link.has("von") else ""
-			return {"ok": false, "msg": "Feld %s liegt nicht im Gebiet deiner Siedlung %s, und von setzt nicht an einer Straße an, die zu deiner Stadt führt.%s" % [str(f), sim.towns.name_of(k), tip]}
+	if C.town_of(to) != k and (not from_given or C.town_of(from) != k):
+		var link: Dictionary = road_link(k)
+		var tip := (" Vorschlag: strasse_bauen {von: %s, bis: %s}." % [str(link.von), str(link.bis)]) if link.has("von") else ""
+		return {"ok": false, "msg": "Mindestens ein Endpunkt muss in deiner Siedlung %s liegen.%s" % [sim.towns.name_of(k), tip]}
 	var path: Array = []
 	if from_given:
-		for q in sim.nav.walk_path(from, to):
-			if not C.is_road(q):
-				path.append(q)
+		if not C.is_road(from):
+			return {"ok": false, "msg": "von: %s muss ein bestehendes Straßenfeld sein – nur dort kann die Baustelle beginnen." % str([from.x, from.y])}
+		path = _road_between(from, to)
 	else:
 		path = _road_path(to, ROAD_MAX)
-	path = path.filter(func(q): return C.building_at[C.idx(q)] < 0 and C.ground[C.idx(q)] != CityData.G.WATER).slice(0, ROAD_MAX)
 	if path.is_empty():
-		return {"ok": false, "msg": "Keine Strecke gefunden (schon Straße, Wasser, Berg oder weiter als %d Felder). Mit von: [x, y] quer übers Land planen." % ROAD_MAX}
+		return {"ok": false, "msg": "Keine durchgehende Strecke gefunden. Wähle einen freien Zielpunkt oder einen anderen Straßenanschluss."}
+	# Erst ab dem bestehenden Netz bauen. Hindernisse duerfen die Trasse nicht nachtraeglich zerreissen.
+	path = path.filter(func(q): return not C.is_road(q)).slice(0, ROAD_MAX)
+	if path.is_empty():
+		return {"ok": false, "msg": "Die Strecke besteht bereits aus Straße."}
 	var cost := float(path.size()) * ROAD_COST
 	var c = sim.company(cid)
 	if c.ledger.cash < cost:
@@ -576,7 +570,7 @@ func _plot_free(r: Rect2i) -> bool:
 ## Breitensuche ueber Land bis zur naechsten Strasse; Weg ohne die Strassenzelle.
 func _road_path(cell: Vector2i, limit: int) -> Array:
 	var C: CityData = _sim().city
-	if C.is_road(cell):
+	if C.is_road(cell) or not _road_cell_ok(cell):
 		return []
 	var prev := {cell: cell}
 	var frontier: Array = [cell]
@@ -596,14 +590,69 @@ func _road_path(cell: Vector2i, limit: int) -> Array:
 						out.push_front(c)
 						c = prev[c]
 					out.push_front(cell)
+					out.reverse()   # Bau beginnt am bestehenden Netz, nicht am freien Ende
 					return out
-				if C.ground[i] == CityData.G.WATER or C.building_at[i] >= 0 or (not C.height.is_empty() and C.height[i] > 0):
+				if not _road_cell_ok(q):
 					continue
 				prev[q] = p
 				nxt.append(q)
 		frontier = nxt
 		dist += 1
 	return []
+
+
+## Ein Weg fuer LKW-Strassen benutzt nur Kanten-Nachbarn. Fusswege koennen diagonal verlaufen
+## und erzeugten beim Uebernehmen die isolierten Straßenrauten auf der Karte.
+func _road_between(from: Vector2i, to: Vector2i) -> Array:
+	if not _road_cell_ok(to):
+		return []
+	var prev := {from: from}
+	var todo: Array = [from]
+	var cursor := 0
+	var sx := 1 if to.x >= from.x else -1
+	var sy := 1 if to.y >= from.y else -1
+	var dirs := [Vector2i(sx, 0), Vector2i(0, sy), Vector2i(-sx, 0), Vector2i(0, -sy)]
+	var bounds := Rect2i(Vector2i(mini(from.x, to.x) - 40, mini(from.y, to.y) - 40),
+		Vector2i(absi(from.x - to.x) + 81, absi(from.y - to.y) + 81))
+	while cursor < todo.size() and cursor < 50000:
+		var here: Vector2i = todo[cursor]
+		cursor += 1
+		if here == to:
+			var path: Array = []
+			while here != from:
+				path.push_front(here)
+				here = prev[here]
+			return path
+		for d in dirs:
+			var next: Vector2i = here + d
+			if prev.has(next) or not bounds.has_point(next) or not _road_cell_ok(next):
+				continue
+			prev[next] = here
+			todo.append(next)
+	return []
+
+
+func _road_cell_ok(q: Vector2i) -> bool:
+	var sim = _sim()
+	var C: CityData = sim.city
+	if not C.inside(q):
+		return false
+	if C.is_road(q):
+		return true
+	var i := C.idx(q)
+	if C.building_at[i] >= 0 or C.ground[i] in [CityData.G.WATER, CityData.G.RAIL, CityData.G.RUNWAY, CityData.G.QUAY]:
+		return false
+	if not C.height.is_empty() and C.height[i] > 0:
+		return false
+	if sim.access != null and sim.access.reserved(q):
+		return false
+	var parcel: Dictionary = sim.parcels.at_cell(q)
+	if not parcel.is_empty() and not Towns.is_public(str(parcel.owner)):
+		return false
+	for e in w.estates.estates.values():
+		if Rect2i(int(e.rect[0]), int(e.rect[1]), EkoEstates.SIDE, EkoEstates.SIDE).grow(1).has_point(q):
+			return false
+	return true
 
 
 ## Gebaeude im Rechteck zwischen a und b (beliebige Ecken); -1 wenn nichts passt.

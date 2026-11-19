@@ -38,6 +38,8 @@ const HOUSE_FORMS := 8                                  # house0..house7: Baufor
 
 var sim
 var towns := {}   # str(k) -> Profil (siehe derive)
+var _expansion_cache := {}
+var _repair_cache := {}
 
 
 func setup(simulation) -> void:
@@ -324,6 +326,101 @@ func free_share(c: Vector2i, r: int) -> float:
 	return float(free) / float(maxi(1, n))
 
 
+## Auch jenseits der zuerst vermessenen Grundstuecke soll eine Stadt wachsen koennen.
+## Die KI bekommt echte, gepruefte Standorte und waehlt Lage, Nutzung und Charakter selbst.
+func expansion_sites(k: int) -> Array:
+	var p := of(k)
+	if p.is_empty() or (p.viertel as Array).size() >= 24 or int(p.get("last_expansion_day", -1)) == _day():
+		return []
+	var M = sim.towns.mayor(k)
+	if M != null and M.projects.values().any(func(prj): return prj.has("road_plan") and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]):
+		return []
+	var key := "%d:%d:%d:%d" % [k, _day(), sim.city.road_count, (p.viertel as Array).size()]
+	if _expansion_cache.has(key):
+		return _expansion_cache[key]
+	if _expansion_cache.size() > 32:
+		_expansion_cache.clear()
+	var kern := Vector2i(int(p.kern[0]), int(p.kern[1]))
+	var sites: Array = []
+	for rad in [28, 40, 52, 64]:
+		for deg in range(0, 360, 45):
+			var at := kern + Vector2i((Vector2.RIGHT.rotated(deg_to_rad(deg)) * rad).round())
+			if not _expansion_spot_ok(k, at, kern, p):
+				continue
+			var free := _raw_free_share(at, 5, k)
+			var roads := 0
+			for dy in range(-10, 11, 5):
+				for dx in range(-10, 11, 5):
+					if sim.city.is_road(at + Vector2i(dx, dy)):
+						roads += 1
+			sites.append({"feld": [at.x, at.y], "punkte": int(free * 100.0) + roads * 3 - rad / 4,
+				"grund": "%d %% freie Fläche, %d Straßenpunkte in der Nähe" % [int(free * 100.0), roads]})
+	sites.sort_custom(func(a, b): return int(a.punkte) > int(b.punkte))
+	_expansion_cache[key] = sites.slice(0, 6)
+	return _expansion_cache[key]
+
+
+func plan_district(k: int, a: Dictionary) -> Dictionary:
+	var p := of(k)
+	var raw = a.get("mitte", [])
+	if not (raw is Array) or (raw as Array).size() < 2:
+		return {"ok": false, "msg": "Wähle mitte: [x, y] aus stadtplan_erweiterung."}
+	var center := Vector2i(int(raw[0]), int(raw[1]))
+	var zone := str(a.get("zone", "wohnen"))
+	if zone not in ["wohnen", "mischgebiet", "gewerbe", "gruen"]:
+		return {"ok": false, "msg": "zone: wohnen | mischgebiet | gewerbe | gruen."}
+	if not expansion_sites(k).any(func(s): return int(s.feld[0]) == center.x and int(s.feld[1]) == center.y):
+		return {"ok": false, "msg": "Dieser Standort ist nicht mehr frei. Wähle einen der aktuellen Vorschläge aus stadtplan_erweiterung."}
+	var n: int = (p.viertel as Array).size() + 1
+	var text := str(a.get("name", "Neues Viertel")).strip_edges().left(60)
+	var v := {"id": "V%d" % n, "rolle": "erweiterung", "zone": zone, "mitte": [center.x, center.y], "radius": 7 if zone != "gruen" else 5,
+		"geschosse": 0 if zone == "gruen" else int(p.hoehen[2]), "text": text if text != "" else "Neues Viertel", "status": "erschlossen" if zone == "gruen" else "entwurf"}
+	p.viertel.append(v)
+	if zone != "gruen" and (street_plan(k, str(v.id)).cells as Array).is_empty():
+		p.viertel.pop_back()
+		var key := "%d:%d:%d:%d" % [k, _day(), sim.city.road_count, (p.viertel as Array).size()]
+		if _expansion_cache.has(key):
+			_expansion_cache[key] = (_expansion_cache[key] as Array).filter(func(site): return int(site.feld[0]) != center.x or int(site.feld[1]) != center.y)
+		return {"ok": false, "msg": "Von diesem Standort ist derzeit kein zusammenhängender Straßenanschluss möglich. Wähle einen anderen freien Standort."}
+	p["last_expansion_day"] = _day()
+	_expansion_cache.clear()
+	revise(k, "Bürgermeister plant %s (%s) bei %s: %s." % [v.id, zone, str(v.mitte), str(a.get("reason", ""))])
+	return {"ok": true, "msg": "%s bei %s im Stadtplan: %s. %s" % [v.id, str(v.mitte), v.text,
+		"Als Nächstes viertel_erschliessen beauftragen." if zone != "gruen" else "Grünzug bleibt frei; Parks können auf angrenzenden öffentlichen Grundstücken entstehen."], "viertel": v.id}
+
+
+func _expansion_spot_ok(k: int, at: Vector2i, kern: Vector2i, p: Dictionary) -> bool:
+	if not sim.city.inside(at) or _raw_free_share(at, 5, k) < 0.65:
+		return false
+	if (p.viertel as Array).any(func(v): return Vector2(at).distance_to(Vector2(int(v.mitte[0]), int(v.mitte[1]))) < float(int(v.radius) + 9)):
+		return false
+	var mine := Vector2(at).distance_to(Vector2(kern))
+	for j in sim.towns.count():
+		if j != k:
+			var other := _kern_of(j)
+			if other.x >= 0 and Vector2(at).distance_to(Vector2(other)) <= mine:
+				return false
+	return true
+
+
+func _raw_free_share(at: Vector2i, r: int, k: int = -1) -> float:
+	var C: CityData = sim.city
+	var free := 0
+	var total := 0
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var q := at + Vector2i(dx, dy)
+			total += 1
+			if not C.inside(q):
+				continue
+			var parcel: Dictionary = sim.parcels.at_cell(q)
+			if (C.building_at[C.idx(q)] < 0 and C.g(q) not in [CityData.G.ROAD, CityData.G.WATER, CityData.G.RAIL, CityData.G.QUAY, CityData.G.RUNWAY]
+					and (C.height.is_empty() or C.height[C.idx(q)] == 0)
+					and (parcel.is_empty() or (Towns.is_public(str(parcel.owner)) and (k < 0 or Towns.town_of_owner(str(parcel.owner)) == k)))):
+				free += 1
+	return float(free) / float(maxi(1, total))
+
+
 ## Planrevision: Entwurfs-Viertel ohne freies Land werden verlegt (begruendet in der Entwicklungsgeschichte). Beschlossene, in
 ## Erschliessung befindliche oder erschlossene Viertel bleiben.
 func revise_districts(k: int) -> int:
@@ -511,46 +608,114 @@ func street_plan(k: int, vid: String) -> Dictionary:
 		platz = c + q * 2
 		text += ", Platz mit Brunnen am Kern"
 	var C: CityData = sim.city
-	var cells: Array = []
+	if platz.x >= 0:
+		for py in 2:
+			for px in 2:
+				var at := platz + Vector2i(px, py)
+				if not C.inside(at) or C.building_at[C.idx(at)] >= 0 or C.is_road(at):
+					platz = Vector2i(-1, -1)
+					break
 	var seen := {}
 	for w in want:
-		if seen.has(w) or not _road_ok(w) or (platz.x >= 0 and Rect2i(platz, Vector2i(2, 2)).has_point(w)):
+		if seen.has(w) or not _road_ok(w, k) or (platz.x >= 0 and Rect2i(platz, Vector2i(2, 2)).has_point(w)):
 			continue
 		seen[w] = true
-		if not C.is_road(w):
-			cells.append(w)
-	if cells.is_empty():
-		return {"cells": [], "platz": platz, "text": text}
-	# Anbindung: kuerzester begehbarer Weg vom Viertel zur naechsten bestehenden Strasse
-	var start: Vector2i = cells[0]
-	var road := Vector2i(-1, -1)
-	var best := STREET_CONNECT_MAX + 1
-	for rad in range(1, STREET_CONNECT_MAX + 1, 2):
-		for dy in range(-rad, rad + 1):
-			for dx in range(-rad, rad + 1):
-				if maxi(absi(dx), absi(dy)) != rad:
-					continue
-				var t := c + Vector2i(dx, dy)
-				if C.inside(t) and C.is_road(t) and rad < best:
-					best = rad
-					road = t
-		if road.x >= 0:
-			break
-	if road.x >= 0:
-		var near_cell: Vector2i = cells[0]
-		for x in cells:
-			if absi(x.x - road.x) + absi(x.y - road.y) < absi(near_cell.x - road.x) + absi(near_cell.y - road.y):
-				near_cell = x
-		var path: Array[Vector2i] = sim.nav.walk_path(near_cell, road)
-		for w in path:
-			if not seen.has(w) and _road_ok(w) and not C.is_road(w):
-				seen[w] = true
+	if seen.is_empty():
+		return {"cells": [], "platz": Vector2i(-1, -1), "text": text}
+	# Ein vorhandenes Straßenfeld am Rathaus ist die Wurzel. Nur mit ihm verbundene Straßen
+	# zählen als Netz; alte einzelne Rauten werden bei der nächsten Erschließung angeschlossen.
+	var hall: Dictionary = C.building(int(C.towns[k].get("town_hall", -1)))
+	var root := Vector2i(-1, -1)
+	if not hall.is_empty() and C.is_road(hall.road):
+		root = hall.road
+	else:
+		var best := INF
+		for dy in range(-STREET_CONNECT_MAX, STREET_CONNECT_MAX + 1):
+			for dx in range(-STREET_CONNECT_MAX, STREET_CONNECT_MAX + 1):
+				var w := c + Vector2i(dx, dy)
+				var dist := absi(dx) + absi(dy)
+				if dist < best and C.is_road(w):
+					best = dist
+					root = w
+	if root.x < 0:
+		return {"cells": [], "platz": Vector2i(-1, -1), "text": "Noch keine bestehende Straße als Anschluss vorhanden"}
+	var network := _connected_roads(root, c)
+	var pending := seen.duplicate()
+	var cells: Array = []
+	var accepted := {}
+	var skipped := 0
+	while not pending.is_empty():
+		var component: Array = [pending.keys()[0]]
+		pending.erase(component[0])
+		var cursor := 0
+		while cursor < component.size():
+			var here: Vector2i = component[cursor]
+			cursor += 1
+			for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+				var next: Vector2i = here + d
+				if pending.has(next):
+					pending.erase(next)
+					component.append(next)
+		var connected := component.any(func(w): return network.has(w))
+		var link: Array = [] if connected else _road_connector(component, network, c, platz, k)
+		if not connected and link.is_empty():
+			skipped += component.size()
+			continue
+		for w in component + link:
+			network[w] = true
+			if not C.is_road(w) and not accepted.has(w):
+				accepted[w] = true
 				cells.append(w)
-		text += ", Anbindung an die Straße bei %s" % str([road.x, road.y])
+	if skipped > 0:
+		text += ", %d unanschließbare Felder ausgelassen" % skipped
+	text += ", durchgehend an das Rathausnetz angeschlossen"
 	return {"cells": cells, "platz": platz, "text": text}
 
 
-func _road_ok(w: Vector2i) -> bool:
+func _connected_roads(root: Vector2i, center: Vector2i) -> Dictionary:
+	var C: CityData = sim.city
+	var found := {root: true}
+	var todo: Array = [root]
+	var i := 0
+	while i < todo.size() and i < 10000:
+		var w: Vector2i = todo[i]
+		i += 1
+		for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+			var next: Vector2i = w + d
+			if not found.has(next) and maxi(absi(next.x - center.x), absi(next.y - center.y)) <= STREET_CONNECT_MAX + 12 and C.is_road(next):
+				found[next] = true
+				todo.append(next)
+	return found
+
+
+func _road_connector(component: Array, network: Dictionary, center: Vector2i, platz: Vector2i, k: int) -> Array:
+	var previous := {}
+	var todo: Array = []
+	for w in component:
+		previous[w] = w
+		todo.append(w)
+	var i := 0
+	while i < todo.size() and i < 12000:
+		var w: Vector2i = todo[i]
+		i += 1
+		for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+			var next: Vector2i = w + d
+			if network.has(next):
+				var path: Array = [w]
+				while previous[w] != w:
+					w = previous[w]
+					path.push_front(w)
+				return path
+			if previous.has(next) or maxi(absi(next.x - center.x), absi(next.y - center.y)) > STREET_CONNECT_MAX + 12:
+				continue
+			if (platz.x >= 0 and Rect2i(platz, Vector2i(2, 2)).has_point(next)) or not _road_ok(next, k):
+				continue
+			previous[next] = w
+			todo.append(next)
+	return []
+
+
+func _road_ok(w: Vector2i, k: int) -> bool:
 	var C: CityData = sim.city
 	if not C.inside(w) or C.building_at[C.idx(w)] >= 0 or C.g(w) in [CityData.G.WATER, CityData.G.RAIL, CityData.G.RUNWAY, CityData.G.QUAY]:
 		return false
@@ -559,6 +724,9 @@ func _road_ok(w: Vector2i) -> bool:
 			if Rect2i(int(e.rect[0]), int(e.rect[1]), EkoEstates.SIDE, EkoEstates.SIDE).grow(1).has_point(w):
 				return false
 	if not C.height.is_empty() and C.height[C.idx(w)] > 0:
+		return false
+	var parcel: Dictionary = sim.parcels.at_cell(w)
+	if not C.is_road(w) and not parcel.is_empty() and (not Towns.is_public(str(parcel.owner)) or Towns.town_of_owner(str(parcel.owner)) != k):
 		return false
 	return sim.access == null or not sim.access.reserved(w) or C.is_road(w)
 
@@ -580,6 +748,9 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 		for prj in M.projects.values():
 			if prj.has("road_plan") and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
 				return {"warten": prj.id, "text": "Straßennetz %s für Viertel %s läuft – erst fertigstellen." % [prj.id, prj.viertel]}
+	var repair := _repair_step(k, p)
+	if not repair.is_empty():
+		return repair
 	var kern := Vector2(int(p.kern[0]), int(p.kern[1]))
 	var best := {}
 	var best_s := INF
@@ -587,16 +758,44 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 		if str(v.status) != "entwurf" or str(v.zone) == "gruen" or str(v.rolle) == "kern":
 			continue
 		var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
-		if free_share(c, 5) < 0.3:
+		if maxf(free_share(c, 5), _raw_free_share(c, 5, k)) < 0.3:
 			continue
 		var sc := Vector2(c).distance_to(kern) - (40.0 if housing_need and str(v.zone) == "wohnen" else 0.0)
 		if sc < best_s:
 			best_s = sc
 			best = v
 	if best.is_empty():
-		return {}
+		var sites := expansion_sites(k)
+		if sites.is_empty():
+			return {}
+		var zone := "wohnen" if housing_need else ("gruen" if (p.viertel as Array).size() % 4 == 0 else "mischgebiet")
+		return {"text": "Neue Stadterweiterung planen: Standort und Nutzung anhand der freien Flächen wählen.",
+			"kandidaten": sites, "aktion": {"action": "stadtteil_planen", "mitte": sites[0].feld, "zone": zone,
+				"name": "Neues %sviertel" % ("Grün" if zone == "gruen" else "Wohn" if zone == "wohnen" else "Misch"),
+				"reason": "Freie Fläche mit Anschluss an den bestehenden Stadtkern"}}
 	return {"viertel": best.id, "text": "Als Nächstes Viertel %s (%s, %s) erschließen%s." % [best.id, best.text, best.zone, " – es fehlt Wohnraum" if housing_need and str(best.zone) == "wohnen" else ""],
 		"aktion": {"action": "viertel_erschliessen", "viertel": best.id, "reason": "Stadtplan: nächster Abschnitt"}}
+
+
+## Alte Spielstaende koennen bereits einzelne Straßenrauten enthalten. Der Buergermeister
+## erkennt fehlende Anschluesse einmal pro Tag und kann sie als normales Projekt schliessen.
+func _repair_step(k: int, p: Dictionary) -> Dictionary:
+	var key := "%d:%d:%d:%d" % [k, _day(), sim.city.road_count, sim.city.buildings.size()]
+	if _repair_cache.has(key):
+		return _repair_cache[key]
+	if _repair_cache.size() > 32:
+		_repair_cache.clear()
+	var out := {}
+	for v in p.viertel:
+		if str(v.status) != "erschlossen" or str(v.zone) == "gruen":
+			continue
+		var sp: Dictionary = street_plan(k, str(v.id))
+		if not (sp.cells as Array).is_empty():
+			out = {"viertel": v.id, "text": "Straßennetz in Viertel %s ergänzen: %d fehlende, zusammenhängende Felder." % [v.id, sp.cells.size()],
+				"aktion": {"action": "viertel_erschliessen", "viertel": v.id, "reason": "Lücken und isolierte Straßen im bestehenden Viertel verbinden"}}
+			break
+	_repair_cache[key] = out
+	return out
 
 
 ## Standortentscheidung festhalten (SiteSelector): die letzten 12 je Stadt, fuer Zuschauer und KI nachvollziehbar.
@@ -651,6 +850,8 @@ func to_dict() -> Dictionary:
 
 func from_dict(d: Dictionary) -> void:
 	towns = d.get("towns", {})
+	_expansion_cache.clear()
+	_repair_cache.clear()
 	for key in towns:   # Version 1 (18.11.): 6x5-Grundstuecke – ein Einfamilienhaus (5x4) ueberschritt die zulaessige Bebauung
 		var p: Dictionary = towns[key]
 		if int(p.get("v", 1)) < 2 and FORMS.has(str(p.form)):

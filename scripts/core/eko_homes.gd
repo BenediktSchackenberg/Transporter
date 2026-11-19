@@ -182,6 +182,7 @@ func add_road_site(cid: int, cells: Array, need: Dictionary) -> Dictionary:
 		"progress": 0.0, "work": float(cells.size()) * ROAD_HOURS_PER_CELL, "crew": [], "building": -1, "day": _sim().game_min, "placed": 0}
 	_next += 1
 	sites[s.id] = s
+	_sim().access.invalidate_city_reservations()
 	return {"ok": true, "msg": "Straßenbaustelle %s: %d Felder. Material: %s – vom Hof; dann Bauen {baustelle: \"%s\"} (Feld für Feld)." % [
 		s.id, cells.size(), _need_text(s), s.id], "baustelle": s.id}
 

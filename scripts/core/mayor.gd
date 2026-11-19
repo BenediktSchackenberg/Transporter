@@ -30,6 +30,8 @@ const SCHEMA := {
 		"desc": "Städtische Grundstücke aus beschlossenen Quartieren zur Vergabe freigeben (Preisfaktor 0,7–1,3)."},
 	"viertel_erschliessen": {"params": {"viertel": "string", "reason": "string"},
 		"desc": "Ein Viertel des Stadtplans (V1, V2, … siehe stadtplan.viertel) in einem Abschnitt erschließen: die freien städtischen Grundstücke dort bekommen die Zone des Viertels, Straße und Anschlüsse werden als Projekt beauftragt (Kosten aus dem Haushalt, Material, Baufirma). Danach entstehen dort Häuser, Läden oder städtische Bauten."},
+	"stadtteil_planen": {"params": {"mitte": "array", "zone": "string", "name": "string", "reason": "string"},
+		"desc": "Nach den bisherigen Vierteln einen neuen Stadtteil selbst entwerfen: mitte [x,y] aus obs.stadtplan_erweiterung, zone wohnen|mischgebiet|gewerbe|gruen, eigener Name und Grund. Für bebaute Viertel danach viertel_erschliessen; Grünflächen für Parkprojekte freihalten."},
 	"plan_infrastructure": {"params": {"parcel_ids": "array", "parts": "array?", "reason": "string"},
 		"desc": "Erschließung (strasse, strom, wasser, abwasser; Standard: alle fehlenden) für städtische Grundstücke planen. Kosten werden aus dem Haushalt reserviert; über 30 000 EUR Ratsbeschluss."},
 	"prioritize_road": {"params": {"corridor_id": "string", "priority": "int", "reason": "string"},
@@ -345,6 +347,7 @@ func indicators() -> Dictionary:
 		"stadtlager": stadtlager_indicators(),
 		"entwicklungsvorschlaege": quarter_candidates(3),
 		"stadtplan_naechster_abschnitt": sim.town_plan.next_district(town, waiting > 0) if sim.town_plan != null else {},
+		"stadtplan_erweiterung": sim.town_plan.expansion_sites(town) if sim.town_plan != null else [],
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),
 		"rathaus": sim.town_hall.summary(),
 		"pruefungen": sim.inspections.summary(),
@@ -726,6 +729,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = _offer_parcels(a)
 			"viertel_erschliessen":
 				res = _develop_district(a)
+			"stadtteil_planen":
+				res = sim.town_plan.plan_district(town, a) if sim.town_plan != null else {"ok": false, "msg": "Kein Stadtplan."}
 			"plan_infrastructure":
 				res = _plan_infrastructure(a)
 			"prioritize_road":
@@ -1125,14 +1130,6 @@ const STREET_CELL_COST := 320.0
 
 
 func _district_streets(v: Dictionary, reason: String) -> Dictionary:
-	var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
-	var have := 0
-	for dy in range(-int(v.radius), int(v.radius) + 1):
-		for dx in range(-int(v.radius), int(v.radius) + 1):
-			if sim.city.inside(c + Vector2i(dx, dy)) and sim.city.is_road(c + Vector2i(dx, dy)):
-				have += 1
-	if have >= int(v.radius) * 2:
-		return {}   # Viertel hat schon ein Strassennetz
 	for prj in projects.values():
 		if str(prj.get("viertel", "")) == str(v.id) and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
 			var e: Dictionary = sim.construction.public.get(prj.id, {})
@@ -1142,7 +1139,7 @@ func _district_streets(v: Dictionary, reason: String) -> Dictionary:
 			return {"ok": false, "msg": "Erst das laufende Straßennetz %s (Viertel %s) fertigstellen – die Stadt erschließt ein Viertel nach dem anderen." % [prj.id, prj.viertel]}
 	var sp: Dictionary = sim.town_plan.street_plan(town, str(v.id))
 	var cells: Array = sp.cells
-	if cells.size() < 4:
+	if cells.is_empty():
 		return {}
 	var cost := snappedf(float(cells.size()) * STREET_CELL_COST + (6000.0 if sp.platz.x >= 0 else 0.0), 10.0)
 	if cost > available_budget():
@@ -1158,6 +1155,7 @@ func _district_streets(v: Dictionary, reason: String) -> Dictionary:
 		"reason": ("Viertel %s (%s): %s. %s" % [v.id, v.text, sp.text, reason]).left(240)}
 	_next_project += 1
 	projects[prj.id] = prj
+	sim.access.invalidate_city_reservations()
 	v.status = "in_erschliessung"
 	sim.town_plan.revise(town, "Viertel %s (%s): %s beschlossen (%s, %d Felder)." % [v.id, v.text, sp.text, prj.id, cells.size()])
 	sim.log_event("%s: Straßennetz für Viertel %s (%s) beschlossen – %s, %d Felder, %s." % [town_label(), v.id, v.text, sp.text, cells.size(), Catalog.money(cost)], "info")

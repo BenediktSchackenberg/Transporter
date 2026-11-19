@@ -305,6 +305,24 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var nd: Dictionary = ind.get("stadtplan_naechster_abschnitt", {})
 	if nd.has("aktion") and budget > 15000.0 and not actions.any(func(x): return x.action in ["plan_infrastructure", "viertel_erschliessen"]):
 		actions.insert(mini(1, actions.size()), nd.aktion)   # Wachstum vor Routine (Partie 18.11.: Beschaffung fuellte sonst alle Plaetze)
+	# Auch die regelbasierte Vertretung setzt eigene gestalterische Schwerpunkte.
+	# Eine Idee je Großlagerzyklus reicht; danach übernimmt der vorhandene Bauprozess.
+	var dev: Dictionary = ind.get("stadtentwicklung", {})
+	if not dev.is_empty() and budget > 50000.0 and (dev.get("vorgemerkte_ideen", []) as Array).is_empty() \
+			and today >= int(dev.get("naechster_besuch_grosslager_tag", today + 10)) - 5:
+		var need_map: Dictionary = dev.get("bedarf", {})
+		var choices := {"gruen": "Stadtpark", "familie": "Spielplatz", "markt": "Marktplatz", "sport": "Bolzplatz", "bildung": "Kindergarten", "prestige": "Büste des Bürgermeisters"}
+		var best_cat := "gruen"
+		var best_need := -1.0
+		for cat in choices:
+			if cat == "bildung" and budget < 250000.0:
+				continue
+			var value := float(need_map.get(cat, 0.0))
+			if value > best_need:
+				best_need = value
+				best_cat = cat
+		actions.insert(mini(2, actions.size()), {"action": "propose_project", "project": choices[best_cat], "category": best_cat,
+			"reason": "Stadtentwicklung: Bedarf %s %.0f Punkte, Vision: %s" % [best_cat, best_need, str(dev.get("vision", ""))], "priority": 60})
 	# Auftrag 22 Phase 8: Versorgung vorausschauend ausbauen (Wasser knapp oder Werk fast ausgelastet; Gleis mit Langsamfahrstelle)
 	var w: Dictionary = ind.get("wasser", {})
 	if not w.is_empty() and int(w.get("ausbau_laeuft", 0)) == 0:

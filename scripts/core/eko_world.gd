@@ -66,7 +66,7 @@ const GRUNDZIEL_FIRMA := "Baue ein dauerhaft erfolgreiches Transportunternehmen 
 const GRUNDZIEL_WILDNIS := ("Wildnis – dein Ziel: deine Stadt wächst, immer mehr Einwohner ziehen zu, die Wirtschaft kommt in Schwung. Weg dorthin: sicheren Platz suchen, " +
 	"Betriebshof und Basis eröffnen, Bürgeramt bauen (dann gibt es die Stadt), Straße zum Großlager (ohne Straße liefert niemand), Häuser für Siedler, " +
 	"erste Betriebe (Arbeitsplätze, Umsatz), danach Fahrer und Fuhrpark erweitern und mehrere Städte bedienen. Material holst du selbst mit deinem LKW; Tagelöhner helfen beim Bauen. Transportaufträge gibt es erst, wenn Städte entstehen.")
-const GRUNDZIEL_AMT := "Bringe deine Stadt voran: Versorgung, Wohnraum, Arbeit, Sicherheit und Zufriedenheit der Bürger (Amt). Dein Zuhause ist dein Rathaus."
+const GRUNDZIEL_AMT := "Entwickle deine Stadt dauerhaft nach eigener Idee: zusammenhängende Straßen, Wohnraum, Arbeit, Versorgung und schöne öffentliche Orte. Wähle neue Stadtteile selbst, erschließe sie, prüfe das Ergebnis und verbessere weiter. Dein Zuhause ist dein Rathaus."
 const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
 var towns_funded := {}              # "k" -> true
 var _no_estate := false             # beim Laden und fuer Buergermeister keinen Stammsitz vergeben
@@ -2879,15 +2879,22 @@ func office_obs(b: Dictionary) -> Dictionary:
 	if k < 0:
 		return {}
 	var ind: Dictionary = sim.towns.mayors[k].indicators()
+	var civic: Dictionary = ind.get("stadtentwicklung", {})
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
-	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "verteidigung": arms.defense_obs(k),
+	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k),
+		"naechster_ausbauschritt": ind.get("stadtplan_naechster_abschnitt", {}), "stadtplan_erweiterung": ind.get("stadtplan_erweiterung", []),
+		"stadtentwicklung": {"vision": civic.get("vision", ""), "bedarf": civic.get("bedarf", {}), "eigene_anlagen": civic.get("eigene_anlagen", []),
+			"vorgemerkte_ideen": civic.get("vorgemerkte_ideen", []), "bauvorlagen": civic.get("bauvorlagen", {}).keys()},
+		"verteidigung": arms.defense_obs(k),
 		"gruenderstrategie": conflict.strategy_for_town(k),
 		"bedrohung": conflict.assaults.values().filter(func(a): return int(a.stadt) == k),
 		"firmen": sim.companies.filter(func(c): return c.is_active()).map(func(c): return {"firma": c.id, "name": c.company_name, "inhaber": c.player_name})}
 	var size := 0
 	var skipped: Array = []
 	for key in keys:
+		if out.has(key):
+			continue
 		var t := JSON.stringify(ind[key]).length()
 		if size + t > 6000:
 			skipped.append(key)
@@ -2902,7 +2909,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	out["aktionen"] = "Amt {aktion: {action, ...}}: " + "; ".join(acts)
 	out["vorfaelle"] = sim.rivalry.incidents.slice(-8).map(func(i): return {"tag": GameCalendar.day_of(float(i.t)) + 1, "was": str(i.get("text", i.get("art", ""))).left(120)})
 	out["schiedsrichter"] = "Bei Sabotage, Blockaden oder unfairem Wettbewerb kannst du einschreiten: warn_company, order_inspection, mediate_rivalry."
-	out["hinweis"] = "Routinefälle erledigt deine Verwaltung nach Regeln; du setzt die Schwerpunkte für deine Stadt. Du bekommst ein Amtsgehalt von %s je Minute (Privatgeld, lebensziel.geld) – du musst nicht für Firmen arbeiten." % Catalog.money(MAYOR_SALARY)
+	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle selbst das nächste Viertel und seine Nutzung (stadtteil_planen aus stadtplan_erweiterung), erschließe es mit viertel_erschliessen und gestalte die Stadt mit propose_project für Parks, Plätze und Spielorte. Laufende Projekte erst abschließen lassen; danach den Stadtplan weiterentwickeln. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)
 	return out
 
 

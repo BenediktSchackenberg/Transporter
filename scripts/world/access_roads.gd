@@ -24,6 +24,8 @@ var jobs := {}                     # "Z<n>" -> {id, parcel, company, cells: [[x,
 var _next := 1
 var _cache := {}                   # Grundstueck -> Plan (gueltig bis eine Zufahrt fertig wird)
 var _fields := {}                  # "land"/"wasser" -> Entfernungsfeld zur Strasse
+var _reserved_city := {}           # laufende Stadt- und KI-Strassenprojekte, je Bild einmal indiziert
+var _reserved_frame := -1
 
 
 func setup(simulation) -> void:
@@ -504,12 +506,36 @@ func reserved(q: Vector2i) -> bool:
 		return true
 	if sim.regional != null and sim.regional.reserved(q):
 		return true   # Trasse einer beschlossenen oder geplanten Verbindungsstrasse/Autobahn
+	if _reserved_frame != Engine.get_process_frames():
+		_rebuild_city_reservations()
+	if _reserved_city.has(q):
+		return true
 	for j in jobs.values():
 		if str(j.get("status", "")) in ["antrag", "im_bau"]:
 			for a in j.cells:
 				if int(a[0]) == q.x and int(a[1]) == q.y:
 					return true
 	return false
+
+
+func invalidate_city_reservations() -> void:
+	_reserved_frame = -1
+
+
+func _rebuild_city_reservations() -> void:
+	_reserved_frame = Engine.get_process_frames()
+	_reserved_city.clear()
+	if sim.towns != null:
+		for M in sim.towns.mayors:
+			for prj in M.projects.values():
+				if prj.has("road_plan") and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+					for a in prj.road_plan:
+						_reserved_city[Vector2i(int(a[0]), int(a[1]))] = true
+	if sim.eko != null:
+		for site in sim.eko.homes.sites.values():
+			if str(site.typ) == "strasse" and str(site.status) not in ["fertig", "abgelehnt"]:
+				for a in site.cells:
+					_reserved_city[Vector2i(int(a[0]), int(a[1]))] = true
 
 
 ## Zellen zu Strasse machen (Rodung, Wegfindung, Darstellung).
