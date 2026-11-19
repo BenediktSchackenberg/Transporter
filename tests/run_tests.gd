@@ -4572,6 +4572,11 @@ func test_mayor() -> void:
 	var pre: Dictionary = PM.preview(d.id)
 	PM.apps[d.id].financing = {"eigenmittel": float(pre.costs.gesamt) + 10.0}
 	PM.submit(d.id)
+	# 19.11.: Antrag noch beim Bauamt bzw. unbekannte ID – Meldung nennt den Stand statt nur „liegt nicht vor“
+	var at_office := M.execute({"action": "decide_application", "application_id": d.id, "decision": "genehmigen", "reason": "x"})
+	ok(not at_office.ok and "Bauamt" in at_office.msg, "Antrag beim Bauamt: Stand genannt: " + at_office.msg.left(90))
+	var nope := M.execute({"action": "decide_application", "application_id": "BS999", "decision": "genehmigen", "reason": "x"})
+	ok(not nope.ok and "gibt es nicht" in nope.msg, "unbekannter Antrag: Hinweis auf zur_entscheidung")
 	var guard := 0
 	while PM.apps[d.id].status in ["beantragt", "in_pruefung"] and guard < 30:
 		_permit_days(s, 1)

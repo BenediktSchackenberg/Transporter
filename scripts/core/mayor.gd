@@ -1429,11 +1429,20 @@ func foreign_target(a: Dictionary) -> String:
 
 
 func _decide_application(a: Dictionary) -> Dictionary:
-	var app: Dictionary = sim.permits.apps.get(str(a.application_id), {})
-	if app.is_empty() or app.status != "zur_entscheidung":
-		return {"ok": false, "msg": "Antrag %s liegt der Bürgermeisterebene nicht zur Entscheidung vor." % a.application_id}
+	var aid := str(a.application_id)
+	var site: Dictionary = sim.eko.homes.sites.get(aid, {}) if sim.eko != null else {}
+	if not site.is_empty() and str(site.get("app", "")) != "":   # 19.11.: Petra Engel nannte die Baustelle (BS14) statt des Antrags
+		aid = str(site.app)
+	var app: Dictionary = sim.permits.apps.get(aid, {})
+	if app.is_empty():
+		return {"ok": false, "msg": "Antrag %s gibt es nicht. Entscheidbare Anträge stehen in bauantraege.zur_entscheidung (IDs wie A12)." % a.application_id}
+	if app.status != "zur_entscheidung":
+		var stage := {"beantragt": "ist eingereicht und wartet auf das Bauamt", "in_pruefung": "wird vom Bauamt geprüft",
+			"rueckfrage": "wartet auf eine Rückfrage beim Antragsteller", "entschieden": "ist bereits entschieden (%s)" % str(app.get("decision", ""))}
+		return {"ok": false, "msg": "Antrag %s%s %s – erst wenn das Bauamt ihn vorlegt, steht er in bauantraege.zur_entscheidung." % [
+			aid, (" (Baustelle %s)" % a.application_id) if aid != str(a.application_id) else "", stage.get(str(app.status), "hat Status " + str(app.status))]}
 	var extra: Array = a.get("conditions", []) if a.get("conditions") is Array else []
-	return sim.permits.mayor_decide(app.id, str(a.decision), str(a.reason), extra, "Bürgermeister %s" % name)
+	return sim.permits.mayor_decide(aid, str(a.decision), str(a.reason), extra, "Bürgermeister %s" % name)
 
 
 func _today() -> int:

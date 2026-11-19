@@ -1016,6 +1016,8 @@ func _work(b: Dictionary, data: Dictionary) -> Dictionary:
 	if cid < 0:
 		return {"ok": false, "msg": "Bauen geht auf Baustellen deiner Firma."}
 	var s: Dictionary = homes.sites.get(id, {})
+	if s.is_empty() and id != "" and not homes.open_sites(cid).is_empty():   # 19.11.: Greta "BS20" bekam stumm die Meldung zu BS16
+		return {"ok": false, "msg": "Baustelle %s gibt es nicht. Deine Baustellen: %s." % [id, ", ".join(homes.open_sites(cid).map(func(x): return "%s (%s)" % [x.id, x.status]))]}
 	if s.is_empty():
 		var open: Array = homes.open_sites(cid).filter(func(x): return x.status == "bau")
 		if open.is_empty():
