@@ -685,6 +685,8 @@ class Agent:
                 self.log.flush()
                 if fixed:   # Aufruf war bis auf Klammern/Kommas vollstaendig: ausfuehren statt neu rechnen (16.11.: 381 Fehler)
                     return fixed
+                if "No user query found" in full:   # 19.11.: Qwen-27B-Vorlage verlangt eine user-Nachricht – gleicher Verlauf scheitert immer wieder
+                    messages = messages + [{"role": "user", "content": "Weiter: wähle den nächsten Schritt."}]
         raise ModelGlitch("Ollama 500 nach 3 Versuchen: %s" % last)
 
     def chat_openai(self, messages):
