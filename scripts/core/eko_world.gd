@@ -2385,7 +2385,7 @@ func _decision_outcomes(b: Dictionary, cid: int) -> Array:
 ## Erfundene Firmen-Aktionen der Wesen auf die richtige Handlung lenken (Partie 18.11.: ~20 Fehlschlaege mit siedlung_info, hub_status,
 ## siedlung_bauen, buy_material in der Wildnis, bergbau; Greta gab "siedlung_gruenden" sogar per Telefon an Bodo weiter).
 const FIRM_SETTLE := ["siedlung", "siedlung_gruenden", "siedlung_bauen", "siedlung_eroeffnen", "gruenden", "found_town", "settle", "betriebshof_eroeffnen"]
-const FIRM_SETTLE_INFO := ["siedlung_info", "siedlungsplaetze", "siedlung_status", "plaetze", "platz_suchen", "standort", "standorte"]
+const FIRM_SETTLE_INFO := ["siedlung_info", "siedlungsplaetze", "siedlung_status", "plaetze", "platz_suchen", "standort", "standorte", "siedlungsstandorte", "siedlungsplatz", "standortsuche", "freie_plaetze"]   # 19.11.: Greta "siedlungsstandorte"
 const FIRM_HUB_INFO := ["hub_status", "grosslager", "großlager", "lager_status", "bestellungen", "abholungen", "hub_orders"]
 
 

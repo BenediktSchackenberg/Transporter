@@ -8577,6 +8577,7 @@ func test_wildnis_log_fixes() -> void:
 	# 3) erfundene Firmen-Aktionen
 	var si: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "siedlung_info"}})
 	ok(si.ok and str(si.msg).contains("Siedlungslage"), "siedlung_info liefert die Siedlungslage")
+	ok(str(E.input(p0, "Firma", {"aktion": {"action": "siedlungsstandorte"}}).msg).contains("Siedlungslage"), "siedlungsstandorte liefert die Siedlungslage")
 	var hs: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_status"}})
 	ok(hs.ok and str(hs.msg).contains("Abholungen"), "hub_status liefert die Abholungen")
 	var hz: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_sell", "item": "kies", "qty": 0}})
