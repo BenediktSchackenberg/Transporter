@@ -64,6 +64,8 @@ func post(counter: String, delta: float) -> void:
 
 ## Zahlung zwischen zwei Konten ausserhalb der Firmen.
 func transfer(from_acct: String, to_acct: String, amount: float) -> void:
+	if amount >= 100000.0 and from_acct.begins_with("P") and from_acct.substr(1).is_valid_int():   # 19.11.: Diagnose – Auenklippe verlor 5,6 Mio. ohne sichtbaren Grund
+		print("%s GROSSE ZAHLUNG %s>%s %.0f EUR" % [Time.get_time_string_from_system(), from_acct, to_acct, amount])
 	accounts[from_acct] -= amount
 	accounts[to_acct] += amount
 	var fk := from_acct + ">" + to_acct
