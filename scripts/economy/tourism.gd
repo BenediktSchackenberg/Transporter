@@ -529,7 +529,7 @@ func from_dict(d: Dictionary) -> void:
 		var venue: Dictionary = sim.biz.get_b(str(t.get("venue", "")))
 		if venue.is_empty():
 			continue
-		var legacy_schedule := not t.has("venue_route")
+		var legacy_schedule: bool = not t.has("venue_route")
 		if t.get("venue_route", []).is_empty():
 			t["venue_route"] = _walk_route(hotel_walk, sim.city.building(int(venue.site)).walk)
 		var visit_day := int(t.get("last_visit_day", -1))

@@ -3671,6 +3671,7 @@ func test_provider_choice() -> void:
 	SetupMenu.setup_path = saved_path
 	menu.mayor_opt.select(1)
 	ok(menu.collect().mayor.provider == "global", "Bürgermeister-Zugang im Startmenü wählbar")
+	cfg.eko_spieler = false   # 19.11.: im Wesen-Modus nutzen die Spieler ihre Anbieter nicht – Pruefung nur klassisch
 	cfg.players[1].base_url = "http://api.example.com/v1"
 	ok(SetupMenu.validate(cfg).contains("HTTPS"), "externer Key nicht über unverschlüsseltes HTTP")
 	cfg.players[1].base_url = "http://localhost:11435@api.example.com/v1"
