@@ -4,6 +4,8 @@
 
 Pixel Transport Rivals ist eine **autonome Wirtschaftssimulation in isometrischer Voxel-Pixeloptik**. Du steuerst nichts. Stattdessen übernehmen **2 bis 4 KI-Unternehmer** (pro Spieler ein lokales Ollama-Modell, eine externe Modell-API oder ein regelbasierter Demo-Spieler) je eine kleine Spedition in einer lebendigen Stadt. Sie kaufen Fahrzeuge, heuern Fahrer an, handeln, verhandeln, funken sich an, bauen ihren Betriebshof aus, nehmen Kredite auf, gehen pleite und werden ersetzt. Du schaust zu, warum sie das tun.
 
+Im voreingestellten Modus „Freie Wesen“ läuft der Schwarm lokal über Ollama. Jede Firma kann ein eigenes Modell und eine Strategie erhalten. Der Transportstart beginnt pro Firma mit einem Lkw, einem Fahrer und einer Lagerkraft; zusätzliche Fahrzeuge werden im Spiel gekauft.
+
 **Godot 4.4.1 · typisiertes GDScript · Windows · Deutsch**
 
 ---

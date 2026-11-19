@@ -13,10 +13,17 @@ Stand 15.11.2026. Idee nach „Is this machine playing?“ (MIT, machineplaying.
 **Standard seit 16.11.2026:** Das Startmenü hat oben „KI-Steuerung“ mit der Voreinstellung **Freie Wesen (Eko-Modus)**. Eine neue Partie
 oder ein geladener Spielstand läuft dann komplett über die Wesen: Jeder Unternehmer und jeder Bürgermeister ist ein Wesen, das Spiel
 öffnet die Weltschnittstelle und startet den Wesen-Schwarm (`tools/eko/eko_schwarm.py`) in einer eigenen Konsole selbst; beim Verlassen
-der Partie wird er beendet. „Wesen denken mit“ wählt Ollama lokal (gpt-oss:20b) oder IONOS (Qwen 27B, Schlüssel aus `IONOS_API_TOKEN`).
+der Partie wird er beendet. „Wesen denken mit“ nutzt lokal Ollama (Qwen 27B oder gpt-oss:20b). Im Spielerprofil kann jeder
+Unternehmer ein eigenes Ollama-Modell und einen Strategie-Zusatz bekommen; ein leeres Modellfeld übernimmt die globale Auswahl.
 Claude-Disponent und Regel-Rivalendialoge sind in diesem Modus aus; die Spieler-Anbieter unten im Menü gelten nur für „Klassisch“.
 Es läuft immer nur ein Schwarm je Welt (Sperre über Port 9790): ein zweiter Start – von Hand, über den Welt-Wächter oder nach einem
 Neustart der Welt – beendet sich selbst. `--ohne-schwarm` verhindert den automatischen Start (z. B. für Claude Code je Wesen).
+
+Der neue **Transportstart** gibt jeder Firma genau einen Lkw, einen Fahrer und eine Lagerkraft. Unternehmer können Aufträge,
+Personal, Fuhrpark, Büro, Betriebe und Grundstücke weiter selbst entwickeln. Lieferungen zeigen Ware, Menge und Ziel am fahrenden
+Lkw. Reisegruppen nutzen auf der Straße oder nach der Landung sichtbare Busse; ihr Hotel-Check-in erfolgt erst nach Ankunft.
+Bürgermeister können Tunnel durch Berge ausschreiben, Firmen können sie beantragen. Portale, Zufahrt und Baufortschritt sind auf
+der Karte sichtbar; erst nach Materiallieferung und Bauabnahme wird die Unterquerung befahrbar.
 
 Dauerbetrieb mit Neustart nach Absturz: `powershell -ExecutionPolicy Bypass -File tools\eko\welt_waechter.ps1` (lädt den letzten
 Spielstand, Schwarm startet automatisch mit). Neue Partie: `-NeuePartie -TagSekunden 600` (Tempo Standard 2x; der Autotest-Standard

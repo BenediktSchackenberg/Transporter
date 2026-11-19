@@ -99,6 +99,8 @@ const SCHEMA := {
 		"desc": "Abbaurecht für eine erkundete Lagerstätte beantragen (schritt = abbauantrag). Der Bürgermeister entscheidet und legt eine Förderabgabe von 3–15 % des Rohstoffwerts fest; danach Zufahrt (build_access) oder gleich found_business bergwerk."},
 	"build_access": {"params": {"grundstueck": "string", "reason": "string?"},
 		"desc": "Zufahrt (Schotterweg) zu einer abgelegenen Lagerstätte bauen lassen (produktion_markt.zufahrt_noetig: Grundstück, Kosten, Tage). Das ist ein Erschließungsantrag: der Bürgermeister entscheidet; genehmigt zahlst du den Beitrag für den Weg, die Stadt trägt eine nötige Brücke, Baufirmen bauen (eigene Baufirma kann den Auftrag bekommen). Danach ist ein Bergwerk dort möglich."},
+	"request_tunnel": {"params": {"von": "array", "nach": "array", "reason": "string?"},
+		"desc": "Strassentunnel zwischen zwei Portalen [x,y] beantragen (obs.tunnel.vorschlaege). Durchgehender Fels, beide Portale an vorhandenen Strassen. Nach Genehmigung zahlt die Firma 25 %, die Stadt 75 %; erst nach Materiallieferung, Bau und Abnahme befahrbar."},
 	"buy_property": {"params": {"gebaeude": "int", "reason": "string?"},
 		"desc": "Wohngebäude kaufen (immobilien_angebote: Preis = 12 Jahresmieten). Mieter zahlen monatlich an dich; Instandhaltung und Grundsteuer (30 % der Sollmiete) laufen auch bei Leerstand. Finanzierung über take_loan möglich."},
 	"sell_property": {"params": {"gebaeude": "int"}, "desc": "Eigenes Wohngebäude an den privaten Vermietermarkt verkaufen (95 % des Werts)."},
@@ -824,6 +826,12 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return sim.freebuild.create(cid, a)
 		"build_access":
 			return sim.access.request(cid, _s(a.grundstueck), str(a.get("reason", "")))
+		"request_tunnel":
+			var start = a.get("von", [])
+			var finish = a.get("nach", [])
+			if start is Array and finish is Array and start.size() >= 2 and finish.size() >= 2:
+				return sim.tunnels.request(cid, Vector2i(int(start[0]), int(start[1])), Vector2i(int(finish[0]), int(finish[1])), str(a.get("reason", "")))
+			return {"ok": false, "msg": "von und nach brauchen jeweils [x,y]."}
 		"book_air_cargo":
 			var tgt := -1
 			for t in sim.towns.list:

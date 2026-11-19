@@ -1140,7 +1140,7 @@ func _tender_public(M: Mayor, day: int) -> void:
 			var offers := make_offers(float(prj.cost), days, str(prj.id))
 			prj.tender["bids"] = offers
 			var o := best_offer(offers, float(prj.cost))
-			if prj.kind in ["zufahrt", "bruecke"]:
+			if prj.kind in ["zufahrt", "bruecke", "tunnel"]:
 				o = _works_offer(prj, offers, o)
 			if o.is_empty() or float(o.price) > float(prj.cost) * 1.2:
 				prj.status = "beschlossen"      # kein tragfaehiges Angebot: neu planen oder ausschreiben
@@ -1256,6 +1256,8 @@ func _finish_public(e: Dictionary) -> void:
 		sim.grid.finish_expansion(float(prj.get("kw", PowerGrid.EXPAND_KW)))
 	if prj.kind == "bruecke":
 		sim.bridges.finish(str(prj.bridge))
+	if prj.kind == "tunnel":
+		sim.tunnels.finish(str(prj.ref))
 	if prj.kind == "zufahrt":
 		sim.access.road_done(str(prj.ref))
 	e.status = "fertig"

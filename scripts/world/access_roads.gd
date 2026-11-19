@@ -500,6 +500,8 @@ func _maybe_finish(j: Dictionary) -> void:
 
 ## Freizuhaltender Verkehrskorridor: Zelle einer beantragten oder im Bau befindlichen Zufahrt (Neubauten duerfen sie nicht belegen).
 func reserved(q: Vector2i) -> bool:
+	if sim.tunnels != null and sim.tunnels.reserved(q):
+		return true
 	if sim.regional != null and sim.regional.reserved(q):
 		return true   # Trasse einer beschlossenen oder geplanten Verbindungsstrasse/Autobahn
 	for j in jobs.values():
@@ -516,6 +518,9 @@ func _apply_cells(cells: Array) -> void:
 	var made: Array = []
 	for q in cells:
 		var i := city.idx(q)
+		if not city.height.is_empty() and city.height[i] > 0 and not sim.tunnels.underground(q):
+			sim.log_event("Straßenbau: %d,%d liegt im Berg. Dafür ist ein abgenommener Tunnel nötig." % [q.x, q.y], "warn")
+			continue
 		if city.ground[i] == CityData.G.ROAD:
 			# schon Strasse (Bruecke, oder beim Laden wiederhergestellt): fuer die Navigation freigeben – Partie 18.11.: 16 Strassenfelder
 			# (auch die Zufahrten beider Stadtlager) blieben nach dem Laden gesperrt, kein Stadt-Lkw fand einen Weg

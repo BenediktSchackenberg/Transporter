@@ -75,6 +75,10 @@ const SCHEMA := {
 		"desc": "Firma öffentlich verwarnen (nur wenn sie in den letzten 7 Tagen eskaliert hat, siehe obs.rivalitaet.verursacher): Ruf −2, für 10 Tage kostet jede weitere Eskalation zusätzlich Ruf."},
 	"build_bridge": {"params": {"grundstueck": "string", "bruecke": "string?", "vergabe": "string?", "firma": "int?", "reason": "string"},
 		"desc": "Die Stadt ausbauen: städtisches Grundstück jenseits von Fluss oder See erschließen (obs.erschliessung.vorschlaege), Weg und Brücke ganz aus der Stadtkasse. bruecke holz | stein | stahlbeton (muss Spannweite und Last schaffen, siehe brueckenarten; Standard die günstigste passende). vergabe ausschreibung (Standard; ortsansässige Unternehmer-Baufirmen bevorzugt) | direkt mit firma = Firmen-ID einer Unternehmer-Baufirma (obs.erschliessung.baufirmen), damit die Firma den Auftrag bekommt. Bis zur Abnahme gesperrt."},
+	"build_tunnel": {"params": {"von": "array", "nach": "array", "reason": "string"},
+		"desc": "Strassentunnel durch einen Berg bauen: von und nach sind [x,y] der beiden Strassenportale (obs.tunnel.vorschlaege). Die Stadt finanziert Material und Baufirma; der Fels bleibt bis zur Abnahme unpassierbar."},
+	"decide_tunnel": {"params": {"antrag": "string", "decision": "string", "reason": "string"},
+		"desc": "Tunnelantrag einer Firma (obs.tunnel.antraege) genehmigen oder ablehnen. Die Firma zahlt 25 %, die Stadt den Rest; ohne Entscheidung entscheidet das Bauamt nach 3 Tagen."},
 	"propose_regional_project": {"params": {"partner": "int", "anteil_prozent": "number?", "reason": "string"},
 		"desc": "Gemeinschaftsprojekt mit einer Nachbarstadt vorschlagen (obs.region.nachbarn): neue Schotterstraße zwischen beiden Orten; eine Ausschreibung, Kosten nach Anteilen (anteil_prozent = dein Anteil, Standard 50). Die Partnerstadt muss zustimmen (Frist 5 Tage), sonst scheitert es."},
 	"decide_regional_project": {"params": {"projekt": "string", "decision": "string", "reason": "string"},
@@ -357,6 +361,7 @@ func indicators() -> Dictionary:
 		"polizei": sim.police.summary(town) if sim.police != null and sim.police.enabled() else {},
 		"infrastruktur_lage": InfraStatus.compact(sim, town) if sim.towns.is_region() else {},
 		"erschliessung": access_indicators(),
+		"tunnel": sim.tunnels.summary(town),
 		"bergbau": _own_mining(),
 		"region": _region_obs(),
 		"hafen": harbor().summary() if harbor().enabled else {},
@@ -771,6 +776,17 @@ func execute(action: Dictionary) -> Dictionary:
 				res = airport().expand("Bürgermeister %s" % name)
 			"build_bridge":
 				res = sim.access.order_city(str(a.grundstueck), "Bürgermeister %s" % name, _build_choice(a))
+			"build_tunnel":
+				if a.von is Array and a.nach is Array and a.von.size() >= 2 and a.nach.size() >= 2:
+					res = sim.tunnels.build_city(town, Vector2i(int(a.von[0]), int(a.von[1])), Vector2i(int(a.nach[0]), int(a.nach[1])), str(a.get("reason", "")), "Bürgermeister %s" % name)
+				else:
+					res = {"ok": false, "msg": "von und nach brauchen jeweils [x,y]."}
+			"decide_tunnel":
+				var td := str(a.get("decision", "")).to_lower()
+				if td in ["genehmigen", "ablehnen"]:
+					res = sim.tunnels.decide(town, str(a.antrag), td == "genehmigen", str(a.get("reason", "")), "Bürgermeister %s" % name)
+				else:
+					res = {"ok": false, "msg": "decision muss genehmigen oder ablehnen sein."}
 			"propose_regional_project":
 				var mine := clampf(float(a.get("anteil_prozent", 50.0)) / 100.0, 0.0, 1.0)
 				var partner := int(a.partner)
@@ -809,6 +825,9 @@ func execute(action: Dictionary) -> Dictionary:
 
 ## Ort einer Massnahme fuer die Kartenanzeige: erstes betroffenes Grundstueck, Verkehrszelle oder das Rathaus.
 func _action_cell(a: Dictionary) -> Vector2i:
+	var portal = a.get("von", [])
+	if portal is Array and portal.size() >= 2:
+		return Vector2i(int(portal[0]), int(portal[1]))
 	if a.get("x") != null and a.get("y") != null:
 		return Vector2i(int(a.x), int(a.y))
 	var ids = a.get("parcel_ids", [])
@@ -1398,6 +1417,12 @@ func foreign_target(a: Dictionary) -> String:
 			t = sim.towns.of_parcel(str(a.get("grundstueck", "")))
 		"decide_access":
 			t = sim.towns.of_parcel(str(sim.access.jobs.get(str(a.get("antrag", "")), {}).get("parcel", "")))
+		"build_tunnel":
+			var portal = a.get("von", [])
+			if portal is Array and portal.size() >= 2:
+				t = sim.towns.of_cell(Vector2i(int(portal[0]), int(portal[1])))
+		"decide_tunnel":
+			t = int(sim.tunnels.items.get(str(a.get("antrag", "")), {}).get("town", -1))
 		"improve_traffic":
 			t = sim.towns.of_cell(Vector2i(int(a.get("x", 0)), int(a.get("y", 0))))
 	if t < 0 or t == town:

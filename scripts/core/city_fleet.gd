@@ -8,6 +8,8 @@ extends RefCounted
 
 const MAX_CREWS := 6
 const MAX_MOVING := 6
+const TOURIST_SEATS := 8
+const MAX_TOURIST_BUSES := 32
 const EMPTY_MIN := 1.0            # Spielminuten je Halt (Tonnen leeren; ein Spieltag hat 120 Spielminuten)
 const DUMP_MIN := 4.0             # Waage und Abladen auf der Deponie
 const UNLOAD_DAYS := 0.1          # Umzugswagen steht so lange vor dem Haus
@@ -57,7 +59,7 @@ func _free_neighbor(site: Vector2i) -> Vector2i:
 
 func _spawn(kind: String, start: Vector2i, site: Vector2i, until: float, back: Vector2i, label: String, strict := false) -> Dictionary:
 	var m := Mover.new()
-	m.speed = SPEED
+	m.speed = 1.3 if kind == "stadtlkw" else (1.1 if kind == "zulieferer" else SPEED)
 	m.pos = sim.city.tile_center(start)
 	var target := _free_neighbor(site)
 	if not sim.route(m, target):
@@ -68,6 +70,44 @@ func _spawn(kind: String, start: Vector2i, site: Vector2i, until: float, back: V
 	_next += 1
 	vehicles.append(v)
 	return v
+
+
+## Reisebusse sind echte Fahrzeuge im Strassennetz. Die Gruppe belegt alle Plaetze bis zur Ankunft.
+func can_send_tourist(persons: int) -> bool:
+	return persons > 0 and persons <= TOURIST_SEATS and vehicles.filter(func(v): return v.kind == "tourist").size() < MAX_TOURIST_BUSES
+
+
+func send_tourist(id: String, route: Array, persons: int, arrival_min: float) -> bool:
+	if not can_send_tourist(persons) or route.is_empty():
+		return false
+	var cells: Array[Vector2i] = []
+	for a in route:
+		cells.append(Vector2i(int(a[0]), int(a[1])))
+	var start: Vector2i = cells[0]
+	var destination: Vector2i = cells[-1]
+	if not sim.city.is_road(start) or not sim.city.is_road(destination):
+		return false
+	var m := Mover.new()
+	m.pos = sim.city.tile_center(start)
+	m.set_path(cells)
+	m.speed = clampf(float(cells.size()) / maxf(1.0, (arrival_min - sim.game_min) / Catalog.GAME_MIN_PER_SIM_SEC), 0.02, 2.2)
+	vehicles.append({"id": _next, "kind": "tourist", "mover": m, "phase": "anfahrt", "site": destination, "until": arrival_min,
+		"back": start, "label": "Reisebus · %d Gäste" % persons, "trip": id, "persons": persons})
+	_next += 1
+	return true
+
+
+func tourist_vehicle(id: String) -> Dictionary:
+	for v in vehicles:
+		if v.kind == "tourist" and str(v.trip) == id:
+			return v
+	return {}
+
+
+func cancel_tourist(id: String) -> void:
+	for v in vehicles.duplicate():
+		if v.kind == "tourist" and str(v.trip) == id:
+			vehicles.erase(v)
 
 
 ## Neues Ziel fuer ein Fahrzeug (Bautrupps).
@@ -181,6 +221,11 @@ func update(dt: float) -> void:
 			continue
 		if v.kind in ["kolonne", "dienstwagen"]:
 			continue   # Bautrupps (BuildCrews) und Dienstwagen der Buergermeister (CivicWorks) steuern Ziel und Zustand selbst
+		if v.kind == "tourist":
+			if now >= float(v.until):
+				sim.tourism.transfer_arrived(str(v.trip))
+				vehicles.erase(v)
+			continue
 		if v.kind in ["muell", "wertstoff"]:
 			_garbage(v, now)
 			continue

@@ -191,6 +191,15 @@ func _update_fleet() -> void:
 				n.add_child(lb)
 			elif v.kind == "stadtlkw":   # kommunaler Lkw (Lieferung ans Stadtlager)
 				n = _make_vehicle_node("truck", "", Color.WHITE, false)
+			elif v.kind == "tourist":
+				n = _make_vehicle_node("bus", "", Color.WHITE, false)
+				var guests := Label.new()
+				guests.name = "task"
+				guests.position = Vector2(-48, -80)
+				guests.add_theme_font_size_override("font_size", 13)
+				guests.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+				guests.add_theme_constant_override("outline_size", 4)
+				n.add_child(guests)
 			elif v.kind == "zulieferer":   # Liefer-Lkw von ausserhalb zum Grosslager (Wildnis)
 				n = _make_vehicle_node("semi", "", Color.WHITE, false)
 			elif v.kind == "helfer":   # Tageloehner-Transporter (Wildnis)
@@ -204,6 +213,7 @@ func _update_fleet() -> void:
 			fleet_nodes[id] = n
 		var m: Mover = v.mover
 		n.position = Iso.to_screen(m.pos)
+		n.visible = not sim.tunnels.underground(m.tile())
 		_set_vehicle_dir(n, m.heading)
 		var tl: Label = n.get_node_or_null("task")
 		if tl != null and tl.text != str(v.label):
@@ -574,9 +584,17 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			warn.position = Vector2(0, -2.0 * float(MODEL_HEIGHT.get(Catalog.base_model(v.model), 30)) - 22.0)
 			warn.z_index = 40
 			n.add_child(warn)
+			var freight := Label.new()
+			freight.name = "freight"
+			freight.position = Vector2(-66, -94)
+			freight.add_theme_font_size_override("font_size", 12)
+			freight.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+			freight.add_theme_constant_override("outline_size", 4)
+			n.add_child(freight)
 			add_child(n)
 			vehicle_nodes[v.id] = n
 		n.position = Iso.to_screen(v.pos)
+		n.visible = not sim.tunnels.underground(v.tile())
 		var spring := Vector2.ZERO
 		if bool(Catalog.model(v.model).get("offroad", false)):
 			spring = _offroad_step(v, n, delta)
@@ -602,6 +620,18 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			var truck := Vector2(0, -2.0 * float(MODEL_HEIGHT.get(Catalog.base_model(v.model), 30)) - 12.0)
 			transfer.position = (ground.lerp(truck, progress) if v.state == "loading" else truck.lerp(ground, progress)) + spring
 			transfer.modulate.a = 0.7 + 0.3 * sin(progress * PI)
+		var freight: Label = n.get_node("freight")
+		var show_freight: bool = v.state in ["to_pickup", "loading", "to_dropoff", "unloading"] and (cv.camera.zoom.x >= 1.1 or selected.get("kind", "") == "vehicle" and int(selected.get("id", -1)) == v.id)
+		freight.visible = show_freight
+		if show_freight:
+			var kid := str(v.stops[0].get("contract_id", "")) if not v.stops.is_empty() else str(v.contract_id)
+			var contract: Contract = sim.contracts.get(kid)
+			if contract != null:
+				var destination: Dictionary = sim.city.building(contract.pickup if v.state in ["to_pickup", "loading"] else contract.dropoff)
+				var phase := "Abholung" if v.state in ["to_pickup", "loading"] else "Lieferung"
+				freight.text = "%s · %s × %d · %s" % [phase, contract.cargo_name(), maxi(0, contract.qty - contract.delivered_qty), str(destination.name).left(22)]
+			else:
+				freight.visible = false
 		n.get_node("warn").visible = v.state == "broken" and int(anim_time * 3) % 2 == 0
 	for i in mini(service_nodes.size(), sim.safety.vehicles.size()):
 		var sv: Dictionary = sim.safety.vehicles[i]
@@ -631,6 +661,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		var m: Mover = sim.traffic[i]
 		var n: Node2D = traffic_nodes[i]
 		n.position = Iso.to_screen(m.pos)
+		n.visible = not sim.tunnels.underground(m.tile())
 		_set_vehicle_dir(n, m.heading)
 	for hl in headlights:
 		if not is_instance_valid(hl[1]):
@@ -640,7 +671,7 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 		var d := int(veh.get_meta("dir"))
 		var hv := Vector2([1, 0, -1, 0][maxi(d, 0)], [0, 1, 0, -1][maxi(d, 0)])
 		hl[0].position = veh.position + Iso.to_screen(hv * 18.0) + Vector2(0, -8)
-		hl[0].modulate.a = cv.night_factor * 0.8
+		hl[0].modulate.a = cv.night_factor * 0.8 if veh.visible else 0.0
 	headlights = headlights.filter(func(hl): return is_instance_valid(hl[1]))
 	_update_routes()
 	_update_workers(inv, rainy)
@@ -944,6 +975,8 @@ func selected_position() -> Vector2:
 			return cv.waste_view.landfill_center()
 		"bruecke":
 			return cv.bridge_view.center_of(str(selected.id))
+		"tunnel":
+			return cv.tunnel_view.center_of(str(selected.id))
 		"mountain":
 			var mn = cv.mountain_view._nodes.get(str(selected.id))
 			if mn != null and mn.active:   # laufendes Bergwerk: zwischen Abbaufront und Halde
@@ -1009,6 +1042,9 @@ func pick(click: Vector2) -> Dictionary:
 	if site_id != "":
 		return {"kind": "site", "id": site_id}
 	var mountain: String = cv.mountain_view.pick(Iso.to_world(click))
+	var tunnel_id: String = cv.tunnel_view.pick(Iso.to_world(click))
+	if tunnel_id != "":
+		return {"kind": "tunnel", "id": tunnel_id}
 	if mountain != "":
 		return {"kind": "mountain", "id": mountain}
 	var bridge_id: String = cv.bridge_view.pick(Iso.to_world(click))

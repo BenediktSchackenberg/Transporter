@@ -41,7 +41,12 @@ def run_agent(info, args, publish):
     a.firma = info.get("firma", "")
     a.stadt = info.get("stadt", "")
     a.rolle = info.get("rolle", "")   # Gewicht in der Warteschlange am Modell (Buergermeister seltener)
+    profile = args.profiles.get(a.name, {})
+    if profile.get("model"):
+        a.model = profile["model"]
+    a.strategy = profile.get("strategy", "")
     a.status_callback = publish
+    publish(a.name, "konfiguriert", model=a.model)
     agent = None
     while True:   # wie eko_ollama.main: nichts beendet ein Wesen dauerhaft
         try:
@@ -63,6 +68,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--model", default=eko_ollama.DEFAULT_MODEL)
+    ap.add_argument("--profiles-file", default="", help="Lokale Ollama-Modelle und Strategien je Unternehmer (JSON nach Name)")
     ap.add_argument("--ollama", default="http://127.0.0.1:11435")
     ap.add_argument("--root", default=os.path.join(os.path.expanduser("~"), "PixelTransportRivals-Eko"))
     ap.add_argument("--ctx", type=int, default=32768)
@@ -76,6 +82,14 @@ def main():
                     help="Antwortbudget je IONOS-Aufruf (mindestens 8000 fuer Qwen)")
     ap.add_argument("--ohne", default="", help="Komma-Liste von Wesen, die hier nicht gestartet werden (z. B. schon laufende)")
     args = ap.parse_args()
+    args.profiles = {}
+    if args.profiles_file:
+        try:
+            loaded = json.loads(Path(args.profiles_file).read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                args.profiles = loaded
+        except (OSError, ValueError) as e:
+            print("⚠ Lokale Modellprofile nicht lesbar: %s" % e, flush=True)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     # Nur ein Schwarm je Welt: das Spiel startet ihn selbst (Startmenue "Freie Wesen"), der Welt-Waechter oder man von Hand.

@@ -9,6 +9,8 @@ const MARKET_NIGHTLY_BUDGETS := [65.0, 90.0, 120.0, 155.0, 205.0, 285.0, 360.0]
 const LOCAL_TRANSFER_HOURS := 1.0
 const BREAKFAST_PRICE := 8.0
 const NIGHT_TAX := 2.0
+const TRANSFER_FARE_LOCAL := 12.0
+const TRANSFER_FARE_INTERCITY := 22.0
 const VENUES := {"strandbar": {"price": 14.0, "capacity": 24, "from": 12, "to": 17},
 	"kneipe": {"price": 12.0, "capacity": 20, "from": 18, "to": 22},
 	"disco": {"price": 25.0, "capacity": 50, "from": 21, "to": 24}}
@@ -101,7 +103,7 @@ func book(bid: String, persons: int, nights: int, budget: float, person_id: int 
 		var origin := sim.citizens.home_town(guest)
 		if origin < 0 or origin >= sim.towns.count():
 			return {"ok": false, "msg": "Herkunftsstadt unbekannt"}
-		path = sim.nav.road_path(sim.towns.get_t(origin).center, sim.city.building(int(b.site)).road)
+		path = sim.nav.road_path(sim._nearest_road(sim.towns.get_t(origin).center), sim.city.building(int(b.site)).road)
 		if path.is_empty():
 			return {"ok": false, "msg": "Keine befahrbare Strassenroute zum Hotel"}
 		travel_days = maxi(1, ceili(float(path.size()) / ROAD_TILES_PER_DAY))
@@ -117,12 +119,22 @@ func book(bid: String, persons: int, nights: int, budget: float, person_id: int 
 				reserved += int(t.persons)
 		if reserved + persons > airport.seats():
 			return {"ok": false, "msg": "Keine freien Flugplaetze fuer diesen Ankunftstag"}
+		var air: Dictionary = sim.city.towns[town].airport if sim.city.towns.size() > town else sim.city.airport
+		var terminal := int(air.get("terminal", -1))
+		if terminal < 0 or sim.city.building(terminal).is_empty():
+			return {"ok": false, "msg": "Ankunftsterminal fehlt"}
+		path = sim.nav.road_path(sim.city.building(terminal).road, sim.city.building(int(b.site)).road)
+		if path.is_empty():
+			return {"ok": false, "msg": "Kein befahrbarer Transfer vom Flughafen zum Hotel"}
 	var arrival := GameCalendar.day_of(sim.game_min) + travel_days
 	var departure := arrival + nights
 	var need := ceili(float(persons) / BEDS_PER_ROOM)
 	var price := float(b.get("room_price", 65.0))
-	if budget < price * float(need * nights):
-		return {"ok": false, "msg": "Reisekasse reicht nicht fuer die Zimmer"}
+	var fare := float(persons) * (TRANSFER_FARE_LOCAL if mode == "flug" else TRANSFER_FARE_INTERCITY)
+	if budget < price * float(need * nights) + fare:
+		return {"ok": false, "msg": "Reisekasse reicht nicht fuer Zimmer und Transfer"}
+	if not sim.fleet.can_send_tourist(persons):
+		return {"ok": false, "msg": "Kein Reisebus mit freien Plaetzen verfuegbar"}
 	for day in range(arrival, departure):
 		if occupied(bid, day) + need > rooms(b):
 			return {"ok": false, "msg": "Fuer den Zeitraum sind nicht genug Zimmer frei"}
@@ -138,9 +150,11 @@ func book(bid: String, persons: int, nights: int, budget: float, person_id: int 
 		"budget_start": budget, "hotel": bid, "town": town, "mode": mode, "route": route, "arrival_day": arrival,
 		"departure_day": departure, "rooms": need, "price": price, "paid_nights": 0, "breakfasts": 0, "venue_count": 0,
 		"kind": "Familie" if persons >= 3 else ("Paar" if persons == 2 else "Einzelgast"),
-		"status": "unterwegs", "position": 0, "booked_min": sim.game_min}
-	var transfer_from: Vector2i = _terminal_walk(town) if mode == "flug" else sim.city.building(int(b.site)).road
-	trips[id]["arrival_route"] = _walk_route(transfer_from, sim.city.building(int(b.site)).walk)
+		"status": "unterwegs", "position": 0, "booked_min": sim.game_min, "transfer_fare": fare, "transfer_paid": false}
+	trips[id]["arrival_route"] = _walk_route(sim.city.building(int(b.site)).road, sim.city.building(int(b.site)).walk)
+	if mode == "strasse" and not _ensure_transfer(trips[id]):
+		cancel(id)
+		return {"ok": false, "msg": "Reisebus kann die Strassenroute nicht befahren"}
 	return {"ok": true, "ref": id, "arrival_day": arrival, "departure_day": departure, "mode": mode}
 
 
@@ -149,8 +163,58 @@ func cancel(id: String) -> bool:
 	if t.is_empty() or t.status != "unterwegs":
 		return false
 	t.status = "storniert"
+	sim.fleet.cancel_tourist(id)
 	_refund(t)
 	return true
+
+
+## Transfer belegt ein konkretes Fahrzeug auf einer gueltigen Strassenroute. Bei Laden eines Spielstands wird
+## ein unterwegs befindlicher Bus von seiner zuletzt gespeicherten Position aus wiederhergestellt.
+func _ensure_transfer(t: Dictionary) -> bool:
+	if t.status != "unterwegs" or t.mode == "flug" and sim.game_min < GameCalendar.day_start(int(t.arrival_day)):
+		return false
+	if not sim.fleet.tourist_vehicle(str(t.id)).is_empty():
+		return true
+	var route: Array = t.get("route", [])
+	if route.is_empty() and t.mode == "flug":
+		var air: Dictionary = sim.city.towns[int(t.town)].airport if sim.city.towns.size() > int(t.town) else sim.city.airport
+		var terminal := int(air.get("terminal", -1))
+		var hotel: Dictionary = sim.biz.get_b(str(t.hotel))
+		if terminal >= 0 and not hotel.is_empty():
+			var path: Array[Vector2i] = sim.nav.road_path(sim.city.building(terminal).road, sim.city.building(int(hotel.site)).road)
+			route = path.map(func(p): return [p.x, p.y])
+			t["route"] = route
+	if route.is_empty():
+		return false
+	if bool(t.get("transfer_paid", false)):
+		route = route.slice(clampi(int(t.get("position", 0)), 0, route.size() - 1))
+	var deadline := maxf(sim.game_min + 1.0, GameCalendar.day_start(int(t.arrival_day))) if t.mode == "strasse" else sim.game_min + local_transfer_minutes()
+	if not sim.fleet.send_tourist(str(t.id), route, int(t.persons), deadline):
+		return false
+	if not bool(t.get("transfer_paid", false)):
+		var fare := minf(float(t.get("transfer_fare", 0.0)), float(sim.economy.accounts.get(str(t.id), 0.0)))
+		if fare > 0.0:
+			sim.economy.transfer(str(t.id), Towns.account_of(int(t.town)), fare)
+			var operating := minf(fare * 0.65, maxf(0.0, sim.towns.mayor(int(t.town)).cash()))
+			if operating > 0.0:
+				sim.economy.transfer(Towns.account_of(int(t.town)), "X0", operating)
+			stats[int(t.town)].ausgaben += fare
+		t["transfer_paid"] = true
+		sim.log_event("%s: Reisebus mit %d Gästen fährt zu %s (%s Fahrpreis)." % [sim.towns.name_of(int(t.town)), int(t.persons), str(t.hotel), Catalog.money(fare)], "info")
+	return true
+
+
+func transfer_arrived(id: String) -> void:
+	var t: Dictionary = trips.get(id, {})
+	if t.is_empty() or t.status != "unterwegs":
+		return
+	var b: Dictionary = sim.biz.get_b(str(t.hotel))
+	if b.is_empty() or b.status not in Businesses.RUNNING or sim.biz.staff_of(str(t.hotel)).is_empty():
+		cancel(id)
+		return
+	t.status = "im_hotel"
+	stats[int(t.town)].ankuenfte += int(t.persons)
+	sim.log_event("%s: Reisebus bringt %s (%d Gäste) zu %s; Check-in abgeschlossen." % [sim.towns.name_of(int(t.town)), t.kind, int(t.persons), b.name], "info", int(b.owner))
 
 
 func on_day(day: int) -> void:
@@ -163,6 +227,9 @@ func on_day(day: int) -> void:
 	for t in trips.values():
 		if t.status in ["storniert", "abgereist"]:
 			continue
+		if t.status == "unterwegs" and day >= int(t.departure_day):
+			cancel(str(t.id))
+			continue
 		var b: Dictionary = sim.biz.get_b(str(t.hotel))
 		if t.status == "im_hotel" and (b.is_empty() or b.status not in Businesses.RUNNING or sim.biz.staff_of(str(t.hotel)).is_empty()):
 			t.status = "abgereist"
@@ -173,9 +240,7 @@ func on_day(day: int) -> void:
 			if b.is_empty() or b.status not in Businesses.RUNNING or sim.biz.staff_of(str(t.hotel)).is_empty():
 				cancel(str(t.id))
 				continue
-			t.status = "im_hotel"
-			stats[int(t.town)].ankuenfte += int(t.persons)
-			sim.log_event("%s: %s (%d Gäste) checkt in %s ein." % [sim.towns.name_of(int(t.town)), t.kind, int(t.persons), b.name], "info", int(b.owner))
+			_ensure_transfer(t)
 		if t.status != "im_hotel":
 			continue
 		if day > int(t.arrival_day) and int(t.paid_nights) < int(t.departure_day) - int(t.arrival_day):
@@ -200,7 +265,16 @@ func on_day(day: int) -> void:
 
 func tick() -> void:
 	for t in trips.values():
-		if t.status != "unterwegs" or t.mode != "strasse" or t.route.is_empty():
+		if t.status != "unterwegs":
+			continue
+		if t.mode == "flug" and sim.game_min >= GameCalendar.day_start(int(t.arrival_day)):
+			_ensure_transfer(t)
+		var coach: Dictionary = sim.fleet.tourist_vehicle(str(t.id))
+		if not coach.is_empty():
+			var pos: Vector2i = coach.mover.tile()
+			t.position = maxi(0, t.route.find([pos.x, pos.y]))
+			continue
+		if t.mode != "strasse" or t.route.is_empty():
 			continue
 		var end_min := GameCalendar.day_start(int(t.arrival_day))
 		var fraction := clampf((sim.game_min - float(t.get("booked_min", sim.game_min))) / maxf(1.0, end_min - float(t.get("booked_min", sim.game_min))), 0.0, 1.0)
@@ -208,6 +282,10 @@ func tick() -> void:
 
 
 func position_of(t: Dictionary) -> Vector2i:
+	if t.status == "unterwegs":
+		var coach: Dictionary = sim.fleet.tourist_vehicle(str(t.id))
+		if not coach.is_empty():
+			return coach.mover.tile()
 	if t.mode == "strasse" and t.status == "unterwegs" and not t.route.is_empty():
 		var p: Array = t.route[clampi(int(t.position), 0, t.route.size() - 1)]
 		return Vector2i(int(p[0]), int(p[1]))
@@ -229,6 +307,10 @@ func position_of(t: Dictionary) -> Vector2i:
 
 ## Die Kartenansicht nutzt die laufende Position zwischen zwei Wegpunkten; position_of bleibt fuer Zellen/Inspektion erhalten.
 func visual_position_of(t: Dictionary) -> Vector2:
+	if t.status == "unterwegs":
+		var coach: Dictionary = sim.fleet.tourist_vehicle(str(t.id))
+		if not coach.is_empty():
+			return coach.mover.pos
 	if t.mode == "strasse" and t.status == "unterwegs" and not t.route.is_empty():
 		var end_min := GameCalendar.day_start(int(t.arrival_day))
 		var fraction := clampf((sim.game_min - float(t.get("booked_min", sim.game_min))) / maxf(1.0, end_min - float(t.get("booked_min", sim.game_min))), 0.0, 1.0)
@@ -538,3 +620,6 @@ func from_dict(d: Dictionary) -> void:
 			if not spec.is_empty():
 				t["venue_from"] = clock_min(visit_day, float(spec.from))
 				t["venue_until"] = clock_min(visit_day, float(spec.to))
+	for t in trips.values():
+		if t.status == "unterwegs" and (t.mode == "strasse" or sim.game_min >= GameCalendar.day_start(int(t.arrival_day))):
+			_ensure_transfer(t)

@@ -21,7 +21,6 @@ var sim_budget_ms := 60.0         # max. Rechenzeit der Simulation je Bild (0 = 
 
 var cfg := {}                     # Spielkonfiguration OHNE API-Keys
 var _keys := {}                   # API-Schluessel je Profil-Slot (nur im Speicher, fuer die KI der spaeteren Gruender)
-var _eko_api_key := ""             # IONOS-Schluessel der freien Wesen, nur im Arbeitsspeicher
 var _eko_ready := false
 var _eko_port := 8790
 var _eko_status_cache := {}
@@ -67,7 +66,6 @@ var _new_game := false
 
 func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	cfg = config.duplicate(true)
-	_eko_api_key = str(cfg.get("eko_api_key", ""))
 	cfg.erase("eko_api_key")
 	_new_game = loaded.is_empty()
 	if _new_game and cfg.has("day_seconds"):
@@ -84,7 +82,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 				"color": Catalog.COMPANY_COLORS[int(p.color_idx)], "avatar_style": int(p.avatar_style),
 				"personality": p.personality, "form": p.get("form", "einzel")})
 		sim = Simulation.new()
-		sim.start_profile = str(cfg.get("start_profil", "unternehmer"))   # Auftrag 14: branchenneutraler Start; "spedition" = bisheriger Start
+		sim.start_profile = str(cfg.get("start_profil", "transportstart"))
 		sim.neubeginn = bool(cfg.get("neubeginn", false))
 		RegionGenerator.neubeginn = sim.neubeginn
 		sim.wildnis = bool(cfg.get("wildnis", false))
@@ -525,24 +523,22 @@ func _launch_swarm(port: int) -> bool:
 	if not FileAccess.file_exists(script):
 		sim.log_event("Eko-Schwarm nicht gefunden (%s) – Wesen bitte von Hand starten." % script, "bad")
 		return false
-	var args := [script, "--port", str(port), "--anbieter", str(cfg.get("eko_anbieter", "ollama"))]
+	var args := [script, "--port", str(port), "--anbieter", "ollama"]
 	if str(cfg.get("eko_modell", "")) != "":
 		args += ["--model", str(cfg.eko_modell)]
+	# Nur lokale Modellnamen und Spielstrategien, keine Schluessel. Jedes Startwesen kann ein eigenes Ollama-Modell nutzen.
+	var profiles := {}
+	for p in cfg.get("players", []):
+		profiles[str(p.get("player_name", "")).left(24)] = {"model": str(p.get("eko_model", "")), "strategy": str(p.get("strategy", ""))}
+	var profiles_path := ProjectSettings.globalize_path("user://eko_local_profiles.json")
+	var profiles_file := FileAccess.open(profiles_path, FileAccess.WRITE)
+	if profiles_file != null:
+		profiles_file.store_string(JSON.stringify(profiles))
+		profiles_file.close()
+		args += ["--profiles-file", profiles_path]
 	if int(cfg.get("eko_ctx", 0)) > 0:
 		args += ["--ctx", str(int(cfg.eko_ctx))]
-	var ionos := str(cfg.get("eko_anbieter", "ollama")) == "ionos"
-	var previous_key := OS.get_environment("IONOS_API_TOKEN")
-	if ionos and _eko_api_key == "" and previous_key == "":
-		sim.log_event("Eko-IONOS hat keinen Token. Im Startmenü einen neuen Token eingeben oder IONOS_API_TOKEN setzen.", "bad")
-		return false
-	if ionos and _eko_api_key != "":
-		OS.set_environment("IONOS_API_TOKEN", _eko_api_key)
 	_swarm_pid = OS.create_process("python", args, true)   # eigene Konsole: dort sieht man, was die Wesen denken
-	if ionos and _eko_api_key != "":
-		if previous_key == "":
-			OS.unset_environment("IONOS_API_TOKEN")
-		else:
-			OS.set_environment("IONOS_API_TOKEN", previous_key)
 	if _swarm_pid < 0:
 		sim.log_event("Eko-Schwarm ließ sich nicht starten (python nicht gefunden?) – python tools/eko/eko_schwarm.py von Hand starten.", "bad")
 		return false

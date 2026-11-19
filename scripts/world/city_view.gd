@@ -47,6 +47,7 @@ var highway_view := HighwayView.new()              # Autobahn: Trasse, Baufortsc
 var ambient_view := AmbientView.new()     # Leben auf der Karte: Strand, Boote, Moewen, Industrie, Passanten
 var ship_view := ShipView.new()           # Linienschiff im Hafen (Kuestenort)
 var bridge_view := BridgeView.new()       # Bruecken im Bau und freigegeben (Kuestenort)
+var tunnel_view := TunnelView.new()       # Tunnelportale, Bauzustand und freigegebene Unterquerungen
 var air_view := AirView.new()            # Fluganimation ueber der Karte (Kuestenort, Flughafen)
 var waste_view := WasteView.new()         # Deponie und Muellabfuhr
 var tourist_view := TouristView.new()     # sichtbare Reisende am Hotel und Strand
@@ -154,6 +155,8 @@ func build(simulation: Simulation) -> void:
 	ship_view.setup(sim)
 	buildings_node.add_child(bridge_view)
 	bridge_view.setup(sim)
+	buildings_node.add_child(tunnel_view)
+	tunnel_view.setup(sim)
 	buildings_node.add_child(ambient_view)
 	ambient_view.setup(sim, self)
 	fx_node.add_child(placement_overlay)
@@ -652,6 +655,7 @@ func update_view(delta: float) -> void:
 	tourist_view.update_view(delta)
 	ship_view.update_view(delta)
 	bridge_view.update_view(delta)
+	tunnel_view.update_view(delta)
 	ambient_view.update_view(delta)
 	air_view.set_night(night_factor)
 	air_view.update_view(delta)

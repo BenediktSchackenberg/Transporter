@@ -273,6 +273,10 @@ func apply_stop(v: FleetVehicle) -> String:
 		if q > 0:
 			k.status = "in_transit"
 		msg = "#%d hat %d × %s (%s) geladen." % [v.id, q, k.cargo_name(), k.id]
+		if q > 0:
+			var driver: Worker = sim.driver_of(v)
+			var speaker := driver.name if driver != null else "Fahrer"
+			sim.operations.say(v.owner, speaker, "%d × %s sind geladen. Nächster Halt: %s." % [q, k.cargo_name(), sim.city.building(k.dropoff).name], k.id, str(driver.id) if driver != null else "")
 	else:
 		q = mini(q, int(v.load.get(k.id, 0)))
 		v.load[k.id] = int(v.load.get(k.id, 0)) - q
@@ -286,6 +290,10 @@ func apply_stop(v: FleetVehicle) -> String:
 				if not g.is_empty():
 					g.geliefert = int(g.geliefert) + q
 			msg = "#%d hat %d × %s am Ziel abgeladen (%d/%d)." % [v.id, q, k.cargo_name(), k.delivered_qty, k.qty]
+			if q > 0:
+				var driver: Worker = sim.driver_of(v)
+				var speaker := driver.name if driver != null else "Fahrer"
+				sim.operations.say(v.owner, speaker, "%d × %s bei %s abgeladen (%d von %d)." % [q, k.cargo_name(), sim.city.building(k.dropoff).name, k.delivered_qty, k.qty], k.id, str(driver.id) if driver != null else "")
 			if k.delivered_qty >= k.qty:
 				sim.deliver_contract(v, k)
 		else:

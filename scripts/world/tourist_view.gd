@@ -29,6 +29,11 @@ func update_view(_delta: float) -> void:
 		var t: Dictionary = sim.tourism.trips[id]
 		if t.status in ["storniert", "abgereist"]:
 			continue
+		if t.status == "unterwegs" and (not sim.fleet.tourist_vehicle(str(id)).is_empty() or t.mode == "flug" and sim.game_min < GameCalendar.day_start(int(t.arrival_day))):
+			if figures.has(id):
+				for n in figures[id]:
+					n.visible = false
+			continue
 		if not figures.has(id):
 			figures[id] = []
 			for i in mini(4, int(t.persons)):
@@ -56,6 +61,7 @@ func update_view(_delta: float) -> void:
 				direction = 2 if movement.y > 0.0 else 0
 		for i in figures[id].size():
 			var n: Node2D = figures[id][i]
+			n.visible = true
 			var phase := float(sim.game_min) * 0.045 + float(i) * 1.4
 			var offset := Vector2(cos(phase), sin(phase * 0.7)) * (8.0 if at_beach else 3.0)
 			n.position = Iso.to_screen(world_pos + offset + Vector2(i * 5, -i * 3))

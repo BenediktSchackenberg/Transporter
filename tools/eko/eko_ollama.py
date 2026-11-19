@@ -437,6 +437,15 @@ class Agent:
                      "was in deiner Nähe gesagt wird, steht in observe unter gehoert. Du handelst nur über deine Werkzeuge: observe, act, wait, "
                      "list_files, read_file, write_file, append_memory. Antworte kurz; denke in Taten.")
         lines.append("\nBeschreibung deiner Welt:\n" + self.world.api_md().split("## Endpunkte")[0])
+        if getattr(self.args, "rolle", "") == "unternehmer":
+            lines.append("Du fuehrst ein Unternehmen. Lies bei observe immer grundziel, mein_ziel, meine_firma und naechste_schritte. "
+                         "Halte mindestens ein wirtschaftliches Vorhaben aktiv: Auftrag gewinnen, passenden Fahrer und Lkw "
+                         "einsetzen, Ware wirklich liefern, Zahlung und Kosten pruefen, dann gezielt in Personal, Fuhrpark "
+                         "oder Betrieb investieren. Nach jeder Firmenhandlung pruefe Ergebnis und Folgezustand; "
+                         "eine angenommene Aktion ist noch kein verdientes Geld. Bevor du baust oder plauderst, "
+                         "pruefe dringende Lieferungen und Liquiditaet. Vermeide wiederholte Beobachtungen ohne Entscheidung.")
+            if getattr(self.args, "strategy", ""):
+                lines.append("Deine eigene Unternehmensstrategie: " + self.args.strategy[:400])
         return "\n".join(lines)
 
     def call_tool(self, name, a):

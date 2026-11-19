@@ -28,14 +28,10 @@ var profile_opt: OptionButton
 var world_opt: OptionButton
 var ki_opt: OptionButton          # 0 = freie Wesen (Eko-Modus, Standard), 1 = klassisch (Anbieter je Spieler)
 var eko_brain_opt: OptionButton   # womit die Wesen denken
-var eko_key_edit: LineEdit
-var eko_save_key: CheckBox
-var eko_key_row: HBoxContainer
 var eko_mode_hint: Label
 var day_seconds_spin: SpinBox
 ## Benedikt 16.11.2026: Qwen 27B lokal ist Standard (sorgfaeltiger als gpt-oss:20b, das Angebote erfand und oft kaputte Werkzeugaufrufe schrieb).
-const EKO_BRAINS := [["ollama", "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M", "Ollama lokal · Qwen 27B (sorgfältig)"], ["ollama", "gpt-oss:20b", "Ollama lokal · gpt-oss:20b (schnell)"],
-	["ionos", "", "IONOS · Qwen 27B (Tokenfeld oder IONOS_API_TOKEN)"]]
+const EKO_BRAINS := [["ollama", "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M", "Ollama lokal · Qwen 27B (sorgfältig)"], ["ollama", "gpt-oss:20b", "Ollama lokal · gpt-oss:20b (schnell)"]]
 const WORLDS := ["region", "kueste", "stadt"]   # Auftrag 17: neue Partien standardmaessig als Region mehrerer Staedte
 const WORLDS_LABEL := ["Region (je Spieler eine Stadt)", "Küstenort", "Rasterstadt"]
 var town_label: Label
@@ -82,23 +78,9 @@ func _ready() -> void:
 	ki.add_child(eko_brain_opt)
 	ki_opt.item_selected.connect(_on_ki_mode_selected)
 	eko_brain_opt.item_selected.connect(func(_i): _update_eko_controls())
-	eko_mode_hint = UITheme.label("Freie Wesen nutzen ausschließlich den oben gewählten Anbieter; die Spieler-Anbieter unten gelten nur für Klassisch.", 12, UITheme.MUTED)
+	eko_mode_hint = UITheme.label("Freie Wesen nutzen lokales Ollama. Unten kann jeder Unternehmer ein eigenes Ollama-Modell wählen; ein leeres Feld übernimmt die Auswahl oben.", 12, UITheme.MUTED)
 	eko_mode_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(eko_mode_hint)
-	eko_key_row = HBoxContainer.new()
-	eko_key_row.add_theme_constant_override("separation", 8)
-	root.add_child(eko_key_row)
-	eko_key_row.add_child(UITheme.label("IONOS-Token für alle Wesen:"))
-	eko_key_edit = LineEdit.new()
-	eko_key_edit.secret = true
-	eko_key_edit.placeholder_text = "Neuen Token eingeben oder IONOS_API_TOKEN verwenden"
-	eko_key_edit.custom_minimum_size.x = 350
-	eko_key_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	eko_key_row.add_child(eko_key_edit)
-	eko_save_key = CheckBox.new()
-	eko_save_key.text = "Im Windows-Tresor speichern"
-	eko_save_key.disabled = not CredentialStore.available()
-	eko_key_row.add_child(eko_save_key)
 	_update_eko_controls()
 	# Globale Einstellungen
 	var g := HBoxContainer.new()
@@ -183,9 +165,9 @@ func _ready() -> void:
 	g.add_child(talk_opt)
 	g.add_child(UITheme.label("Start:"))
 	profile_opt = OptionButton.new()
-	for t in ["Unternehmer (Hauptsitz, 2 Mitarbeiter, frei wählbare Branchen)", "Spedition (Transporter und 10 Mitarbeiter, wie bisher)"]:
+	for t in ["Transportstart (1 Lkw, Fahrer und Lagerkraft)", "Unternehmer (Hauptsitz, 2 Mitarbeiter, frei wählbare Branchen)", "Spedition (Transporter und 10 Mitarbeiter, wie bisher)"]:
 		profile_opt.add_item(t)
-	profile_opt.tooltip_text = "Unternehmer starten branchenneutral mit Hauptsitz und kleinem Team; ein Transportbetrieb entsteht mit dem ersten Fahrzeug. Spedition ist der bisherige Start mit Kleintransporter und Stammbelegschaft."
+	profile_opt.tooltip_text = "Transportstart ist die kleine sichtbare Spedition mit genau einem Lkw. Unternehmer beginnt branchenneutral ohne Fahrzeug; Spedition ist der bisherige Start mit Kleintransporter und Stammbelegschaft."
 	g.add_child(profile_opt)
 	carry_check = CheckBox.new()
 	carry_check.text = "Erfahrungen der vorigen Partie übernehmen (alle Spieler)"
@@ -290,6 +272,8 @@ func _player_panel(i: int) -> Control:
 	form.add_child(r.fallback)
 	r.strategy = _field(form, "Strategie-Zusatz", "")
 	r.strategy.placeholder_text = "optional, z. B. „Fokus auf Kühltransporte“"
+	r.eko_model = _field(form, "Eko-Modell (Ollama)", "")
+	r.eko_model.placeholder_text = "leer = Modell oben"
 	rows.append(r)
 	return panel
 
@@ -370,11 +354,11 @@ func collect() -> Dictionary:
 			"save_key": r.save_key.button_pressed if provider in ["openai", "ionos", "anthropic"] else false,
 			"interval": r.interval.value, "max_requests": int(r.max_requests.value),
 			"max_tokens": int(r.max_tokens.value), "max_tokens_per_request": int(r.tokens_per_request.value),
-			"fallback": r.fallback.button_pressed, "strategy": r.strategy.text.strip_edges(),
+			"fallback": r.fallback.button_pressed, "strategy": r.strategy.text.strip_edges(), "eko_model": r.eko_model.text.strip_edges(),
 			"timeout": 300.0 if provider == "ollama" else 45.0, "num_ctx": OLLAMA_CTX})
 	var cfg := {"seed": seed_edit.text.to_int(), "duration_min": DURATIONS[duration_opt.selected], "day_seconds": day_seconds_spin.value,
 		"speed_idx": speed_opt.selected, "demo_fault_rate": fault_spin.value, "carry_memory": carry_check.button_pressed,
-		"mayor": _mayor_config(), "dispatcher": {"provider": "anthropic" if dispatch_opt.selected == 1 else "demo"}, "talk": {"provider": "anthropic" if talk_opt.selected == 1 else "demo"}, "rivalry_talk": talk_opt.selected != 2, "start_profil": "spedition" if profile_opt.selected == 1 else "unternehmer", "welt": WORLDS[world_opt.selected], "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
+		"mayor": _mayor_config(), "dispatcher": {"provider": "anthropic" if dispatch_opt.selected == 1 else "demo"}, "talk": {"provider": "anthropic" if talk_opt.selected == 1 else "demo"}, "rivalry_talk": talk_opt.selected != 2, "start_profil": ["transportstart", "unternehmer", "spedition"][profile_opt.selected], "welt": WORLDS[world_opt.selected], "weather": WEATHER_MODES[weather_opt.selected], "weather_replay": "user://last_weather.json" if weather_opt.selected == 2 else "",
 		"players": players}
 	return with_eko(cfg, ki_opt.selected == 0, eko_brain_opt.selected)
 
@@ -408,8 +392,6 @@ func _update_eko_controls() -> void:
 		return
 	var eko := ki_opt.selected == 0
 	eko_brain_opt.disabled = not eko
-	if eko_key_row != null:
-		eko_key_row.visible = eko and EKO_BRAINS[clampi(eko_brain_opt.selected, 0, EKO_BRAINS.size() - 1)][0] == "ionos"
 	if eko_mode_hint != null:
 		eko_mode_hint.visible = eko
 
@@ -462,7 +444,7 @@ func _apply_config(cfg: Dictionary, keep_seed: bool = false) -> void:
 	weather_opt.select(maxi(0, WEATHER_MODES.find(str(cfg.get("weather", "live")))))
 	_mayor_extra = cfg.get("mayor", {}).duplicate()
 	dispatch_opt.select(1 if str(cfg.get("dispatcher", {}).get("provider", "demo")) == "anthropic" else 0)
-	profile_opt.select(1 if str(cfg.get("start_profil", "unternehmer")) == "spedition" else 0)
+	profile_opt.select({"transportstart": 0, "unternehmer": 1, "spedition": 2}.get(str(cfg.get("start_profil", "transportstart")), 0))
 	world_opt.select(maxi(0, WORLDS.find(str(cfg.get("welt", "region")))))
 	_update_town_name()
 	talk_opt.select(2 if not bool(cfg.get("rivalry_talk", true)) else (1 if str(cfg.get("talk", {}).get("provider", "demo")) == "anthropic" else 0))
@@ -470,12 +452,10 @@ func _apply_config(cfg: Dictionary, keep_seed: bool = false) -> void:
 	ki_opt.select(0 if bool(cfg.get("eko_spieler", true)) else 1)   # ohne Angabe (alte Einstellungen): freie Wesen
 	var bi := 0
 	for i in EKO_BRAINS.size():
-		if EKO_BRAINS[i][0] == str(cfg.get("eko_anbieter", "ollama")) and (EKO_BRAINS[i][1] == str(cfg.get("eko_modell", EKO_BRAINS[0][1])) or EKO_BRAINS[i][0] == "ionos"):
+		if EKO_BRAINS[i][0] == str(cfg.get("eko_anbieter", "ollama")) and EKO_BRAINS[i][1] == str(cfg.get("eko_modell", EKO_BRAINS[0][1])):
 			bi = i
 			break
 	eko_brain_opt.select(bi)
-	eko_save_key.button_pressed = bool(cfg.get("eko_save_key", false))
-	eko_key_edit.text = ""
 	_update_eko_controls()
 	for r in rows:
 		r.enabled.button_pressed = false
@@ -499,6 +479,7 @@ func _apply_config(cfg: Dictionary, keep_seed: bool = false) -> void:
 		r.tokens_per_request.value = float(p.get("max_tokens_per_request", 900))
 		r.fallback.button_pressed = p.get("fallback", true)
 		r.strategy.text = p.get("strategy", "")
+		r.eko_model.text = p.get("eko_model", "")
 		_configure_provider(r, str(p.get("provider", "demo")), false)
 	status_label.text = "Konfiguration geladen."
 
@@ -509,20 +490,6 @@ func _on_start() -> void:
 	if err != "":
 		status_label.text = err
 		return
-	if bool(cfg.get("eko_spieler", false)) and str(cfg.get("eko_anbieter", "")) == "ionos":
-		var eko_key := eko_key_edit.text.strip_edges()
-		if eko_key == "" and eko_save_key.button_pressed:
-			eko_key = CredentialStore.read_key("eko_ionos")
-		if eko_key == "":
-			eko_key = OS.get_environment("IONOS_API_TOKEN")
-		if eko_key == "":
-			status_label.text = "IONOS für freie Wesen benötigt einen gültigen Token im Feld, im Windows-Tresor oder in IONOS_API_TOKEN."
-			return
-		if jwt_expired(eko_key):
-			status_label.text = "Der IONOS-Token ist laut Ablaufdatum ungültig. Bitte einen neuen Token eingeben."
-			return
-		cfg["eko_api_key"] = eko_key
-		cfg["eko_save_key"] = eko_save_key.button_pressed
 	# Erst alle externen Zugänge prüfen; bei einem Fehler keine Tresoreinträge ändern.
 	for p in cfg.players:
 		if p.provider in ["demo", "ollama"] or bool(cfg.get("eko_spieler", false)):   # freie Wesen brauchen keine Spieler-Schluessel
@@ -547,12 +514,6 @@ func _on_start() -> void:
 				status_label.text = "Hinweis: Key für %s konnte nicht im Windows-Tresor gespeichert werden." % p.player_name
 		elif not p.save_key:
 			CredentialStore.delete_key(slot)
-	if bool(cfg.get("eko_spieler", false)) and str(cfg.get("eko_anbieter", "")) == "ionos":
-		if eko_save_key.button_pressed:
-			if not CredentialStore.save_key("eko_ionos", str(cfg.eko_api_key)):
-				status_label.text = "Hinweis: IONOS-Token konnte nicht im Windows-Tresor gespeichert werden. Diese Partie startet dennoch."
-		else:
-			CredentialStore.delete_key("eko_ionos")
 	_save_setup(cfg)
 	start_requested.emit(cfg)
 

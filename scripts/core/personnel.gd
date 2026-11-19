@@ -159,6 +159,15 @@ func start_staff(cid: int, vehicle_id: int) -> void:
 		x.pos = a.pos
 
 
+## Kleine Spedition zum Spielstart: genau ein bezahlter Fahrer und eine Lagerkraft am Betriebshof.
+func start_staff_transport(cid: int, vehicle_id: int) -> void:
+	var driver := _new_employee(cid, {"fahren": 2, "verladen": 1}, 14.0)
+	driver.vehicle_id = vehicle_id
+	driver.pos = sim.vehicles[vehicle_id].pos
+	var loader := _new_employee(cid, {"verladen": 2, "reparieren": 1}, 12.0)
+	loader.pos = sim.city.tile_center(sim.city.building(sim.companies[cid].depots[0]).walk)
+
+
 ## Neubeginn: einziger "Mitarbeiter" ist der Inhaber selbst (Name des Unternehmers, kein Lohn) – er faehrt den Start-LKW,
 ## laedt und baut. Weitere Leute gibt es erst, wenn Einwohner zugezogen sind.
 func start_owner(cid: int, vehicle_id: int) -> void:

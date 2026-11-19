@@ -659,8 +659,9 @@ func refound(cid: int, site: int) -> Company:
 		if sim.contracts[k].status == "open":
 			n.known[k] = true
 	var v: FleetVehicle = null
-	if sim.start_profile == "spedition":
-		v = sim._create_vehicle(cid, "van", Catalog.model("van").price, sim.depot_road(cid))
+	if sim.start_profile in ["spedition", "transportstart"]:
+		var model := "truck" if sim.start_profile == "transportstart" else "van"
+		v = sim._create_vehicle(cid, model, Catalog.model(model).price, sim.depot_road(cid))
 		n.ledger.invest(v.purchase_price)
 	var av: Avatar = sim.avatars[cid]
 	av.pos = sim.city.tile_center(sim.city.building(site).walk)
@@ -668,7 +669,10 @@ func refound(cid: int, site: int) -> Company:
 	av.state = "idle"
 	av.pending = {}
 	if v != null:
-		sim.personnel.start_staff(cid, v.id)
+		if sim.start_profile == "transportstart":
+			sim.personnel.start_staff_transport(cid, v.id)
+		else:
+			sim.personnel.start_staff(cid, v.id)
 	else:
 		sim.personnel.start_staff_small(cid)   # Startprofil Unternehmer: Hauptsitz mit zwei Allroundern
 	sim.personnel.seen[cid] = {}
@@ -680,7 +684,7 @@ func refound(cid: int, site: int) -> Company:
 	sim.log_event("Neugründung: %s (%s) übernimmt den Platz von %s und startet am Standort %s." % [n.company_name, CompanyForms.name_of(n.form),
 		old.company_name, sim.city.building(site).name], "info", cid)
 	n.add_key_event("Gegründet als " + CompanyForms.name_of(n.form), sim.game_min)
-	if sim.start_profile == "spedition":
+	if sim.start_profile in ["spedition", "transportstart"]:
 		sim.biz.migrate()   # Neugruendung im Speditionsprofil startet mit eigenem Transportbetrieb
 	company_refounded.emit(cid)
 	return n

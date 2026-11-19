@@ -1179,6 +1179,22 @@ static func bridge(sim: Simulation, b: Dictionary) -> String:
 	return txt
 
 
+static func tunnel(sim: Simulation, j: Dictionary) -> String:
+	var status := {"antrag": "Antrag beim Bauamt", "im_bau": "im Bau", "freigegeben": "freigegeben", "abgelehnt": "abgelehnt"}.get(str(j.status), str(j.status))
+	var txt := "[b]%s[/b] · %d Felsfelder · %s\n" % [status, j.cells.size(), Catalog.money(float(j.cost))]
+	txt += "Portal %d,%d → %d,%d · Bauzeit %d Tage\n" % [int(j.from[0]), int(j.from[1]), int(j.to[0]), int(j.to[1]), int(j.days)]
+	if j.status == "im_bau":
+		txt += "Fortschritt %d %% · Projekt %s\n" % [int(sim.tunnels.progress(j) * 100.0), str(j.project)]
+		var work: Dictionary = sim.construction.public.get(str(j.project), {})
+		if not work.is_empty() and str(work.get("waiting", "")) != "":
+			txt += "[color=#e0a040]Wartet: %s[/color]\n" % str(work.waiting)
+	if j.status != "freigegeben":
+		txt += "[color=#e07060]Der Fels bleibt bis zur Bauabnahme gesperrt.[/color]"
+	else:
+		txt += "Fahrzeuge nutzen die Unterquerung im Strassennetz."
+	return txt
+
+
 ## Eisenbahn (Auftrag 22 Phase 6): Linie, Zuege mit Ort, Status, Verspaetung und Grund, Strecken.
 static func rail(sim: Simulation) -> String:
 	if sim.rail == null or not sim.rail.is_built():

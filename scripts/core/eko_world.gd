@@ -2142,7 +2142,7 @@ const FIRM_ACTIONS := [
 	# Betriebe: gruenden, ausbauen, Personal zuordnen, Preise, Bergbau, Grundstuecke, Handel mit Grosslager und Bauhof
 	"found_business", "upgrade_business", "close_business", "set_business_price", "set_hotel_price", "set_venue_price", "buy_it_service",
 	"assign_staff", "explore_deposit", "request_mining",
-	"build_access", "buy_property", "sell_property", "hub_sell", "buy_material", "sell_material",
+	"build_access", "request_tunnel", "buy_property", "sell_property", "hub_sell", "buy_material", "sell_material",
 	# Geld
 	"take_loan", "repay_loan", "entnahme",
 	# Unternehmensplan (PlanBook): Ziel, Schritte, Nutzen, Risiken, Abbruchbedingungen
@@ -2386,7 +2386,7 @@ func _firm_action_schema() -> Dictionary:
 	for name in ["accept_contract", "assign_transport", "collect_contracts", "buy_vehicle", "sell_vehicle", "repair_vehicle",
 		"recruit_worker", "assign_worker_task", "build_office", "upgrade_office", "install_internet", "place_building",
 		"set_operations_policy", "create_transport_line", "pause_transport_line", "book_air_cargo", "buy_it_service",
-		"found_business", "upgrade_business", "assign_staff", "set_business_price", "set_hotel_price", "set_venue_price"]:
+		"found_business", "upgrade_business", "assign_staff", "set_business_price", "set_hotel_price", "set_venue_price", "request_tunnel"]:
 		if name in FIRM_ACTIONS and schema.has(name):
 			out[name] = schema[name].get("params", {})
 	return out
@@ -2432,6 +2432,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"branchen_zum_gruenden": _branch_menu(o.get("verfuegbare_branchen", [])),
 		"chancen": (o.get("chancen", []) as Array).slice(0, 6),
 		"bergbau": o.get("bergbau", []),
+		"tunnel": sim.tunnels.summary(sim.companies[cid].home_town),
 		"aktionsschema": _firm_action_schema(),
 		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
 			"du musst nicht darauf warten. Fahrten zuweisen, Fahrer einsetzen und Aufträge annehmen ist deine Sache; die Disposition springt " +
@@ -2440,7 +2441,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
 			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +
 			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus, grundstueck?} (Wohnhaus selbst bauen: Material per hub_buy holen, vermieten oder sell_property) | bauleute {baustelle, worker_ids} | strasse_bauen {bis: [x, y], von?: [x, y]} (Straßenbaustelle, Kies vom Hof) | buergeramt_bauen {} (danach gibt es die Stadt) | hub_buy {item, qty} | sell_property {gebaeude} | " +
-			"recruit_foreman {worker_id} | assign_foreman {foreman_id, worker_ids} | guard_target {worker_id, site_id} | " +
+			"recruit_foreman {worker_id} | assign_foreman {foreman_id, worker_ids} | guard_target {worker_id, site_id} | request_tunnel {von: [x,y], nach: [x,y]} | " +
 			"place_building {plot_id, typ, x, y, rot} (Hofbau, Vorschläge in hofbau) | free_build {name, form, material} | " +
 			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +
 			"attempt_vehicle_sabotage {worker_id, vehicle_id} | buy_security {level} | set_insurance {active} | offer_trade/propose_cooperation (siehe Spielregeln) | " +
