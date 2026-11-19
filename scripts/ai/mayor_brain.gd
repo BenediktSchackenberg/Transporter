@@ -332,7 +332,7 @@ static func decide(ind: Dictionary) -> Dictionary:
 				break
 	# Auftrag 8 Stadtplanung: naechsten Abschnitt des Stadtplans erschliessen (Wohnungsnot oder kein freies Bauland mit Strasse)
 	var nd: Dictionary = ind.get("stadtplan_naechster_abschnitt", {})
-	if nd.has("aktion") and budget > 15000.0 and not actions.any(func(x): return x.action in ["plan_infrastructure", "viertel_erschliessen"]):
+	if nd.has("aktion") and (budget > 15000.0 or str(nd.aktion.action) == "quartier_entwurf_waehlen") and not actions.any(func(x): return x.action in ["plan_infrastructure", "viertel_erschliessen", "quartier_entwurf_waehlen"]):
 		actions.insert(mini(1, actions.size()), nd.aktion)   # Wachstum vor Routine (Partie 18.11.: Beschaffung fuellte sonst alle Plaetze)
 	# Auch die regelbasierte Vertretung setzt eigene gestalterische Schwerpunkte.
 	# Eine Idee je Großlagerzyklus reicht; danach übernimmt der vorhandene Bauprozess.

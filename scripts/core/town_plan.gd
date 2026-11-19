@@ -1,5 +1,7 @@
 class_name TownPlan
 extends RefCounted
+
+signal space_changed(cells: Array)
 ## Auftrag 8, Etappe 2 (docs/CITY_PLANNING.md): dauerhaftes Gestaltungsprofil und Viertelplan je Stadt.
 ##
 ## Das Profil entsteht einmal je Stadt – bei der Gruendung (Wildnis: Buergeramt fertig) bzw. beim Laden eines Spielstands ohne Profil
@@ -40,6 +42,8 @@ var sim
 var towns := {}   # str(k) -> Profil (siehe derive)
 var _expansion_cache := {}
 var _repair_cache := {}
+var _design_cache := {}
+var _space_cells := {}
 
 
 func setup(simulation) -> void:
@@ -522,7 +526,24 @@ func district_at(k: int, cell: Vector2i) -> Dictionary:
 ## Zone fuer neues Bauland an einer Zelle: Zone des Viertels; ausserhalb des Plans Wohnen. "gruen" = nicht bebauen.
 func zone_at(k: int, cell: Vector2i) -> String:
 	var v := district_at(k, cell)
-	return str(v.zone) if not v.is_empty() else "wohnen"
+	if v.is_empty():
+		return "wohnen"
+	var zone := str(v.zone)
+	var design := str(v.get("entwurf", ""))
+	var center := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
+	var delta := cell - center
+	var p := of(k)
+	var axis := _cardinal(Vector2i(int(p.achse[0]), int(p.achse[1])))
+	var cross := Vector2i(-axis.y, axis.x)
+	if design == "gartenring" and zone == "wohnen" and maxi(absi(delta.x), absi(delta.y)) <= 3:
+		return "gruen"
+	if design == "marktachse" and zone == "mischgebiet" and absi(delta.x * cross.x + delta.y * cross.y) > 3:
+		return "wohnen"
+	if design == "promenade" and zone == "mischgebiet":
+		var wet := Vector2i(int(p.wasser_richtung[0]), int(p.wasser_richtung[1]))
+		if wet != Vector2i.ZERO and delta.x * wet.x + delta.y * wet.y < 0:
+			return "wohnen"
+	return zone
 
 
 ## Grundstuecksgroesse fuer neues Bauland.
@@ -563,7 +584,7 @@ func brief(k: int) -> Dictionary:
 	return {"grundform": p.label, "stadtmarke": p.get("marke", {}), "leitbild": FORMS[p.form].text, "freiraum": p.freiraum, "wirtschaft": p.wirtschaft,
 		"grundstuecke": "%dx%d" % [int(p.block[0]), int(p.block[1])], "hoehen_kern_mitte_rand": p.hoehen,
 		"viertel": (p.viertel as Array).map(func(v): return {"id": v.id, "rolle": v.rolle, "zone": v.zone, "mitte": v.mitte,
-			"geschosse_max": v.geschosse, "zweck": v.text, "status": v.status}),
+			"geschosse_max": v.geschosse, "zweck": v.text, "status": v.status, "entwurf": str(v.get("entwurf", ""))}),
 		"letzte_standortwahl": (p.get("entscheidungen", []) as Array).slice(-3).map(func(e): return str(e.begruendung).left(220))}
 
 
@@ -572,6 +593,224 @@ func brief(k: int) -> Dictionary:
 ## den flachen Lagen. Dazu die Anbindung an die naechste bestehende Strasse. Nur freie Felder (kein Gebaeude, Wasser, Berg, Gleis).
 ## Ergebnis {cells: Array[Vector2i] (neue Strassenfelder), platz: Vector2i (-1 = keiner), text}.
 const STREET_CONNECT_MAX := 70
+
+## Gepruefte, kompakte Quartierskompositionen. Die KI waehlt je Stadt und Viertel;
+## ohne Wahl gilt der bisherige Stadtplan fuer alte Spielstaende weiter.
+const QUARTER_DESIGNS := {
+	"marktachse": {"label": "Marktallee", "text": "durchgehende Ladenallee, Platz am Zentrum und kurze Wohnseitenstraßen", "zones": ["mischgebiet", "wohnen"], "space": "platz"},
+	"gartenring": {"label": "Gartenhöfe", "text": "ruhiger Straßenring um eine grüne Mitte mit kleinen Nachbarschaften", "zones": ["wohnen", "mischgebiet"], "space": "garten"},
+	"hofgassen": {"label": "Handwerkerhöfe", "text": "kurze, verbundene Zufahrten mit einem begrünten Eingangsplatz", "zones": ["gewerbe", "mischgebiet"], "space": "hof"},
+	"promenade": {"label": "Uferpromenade", "text": "durchgehende Uferallee mit Zugängen zum Land und Blickachsen", "zones": ["wohnen", "mischgebiet"], "space": "ufer"},
+}
+
+
+func design_options(k: int, vid: String) -> Array:
+	var p := of(k)
+	if p.is_empty():
+		return []
+	var key := "%d:%s:%d:%d:%d" % [k, vid, _day(), sim.city.road_count, sim.city.buildings.size()]
+	if _design_cache.has(key):
+		return _design_cache[key]
+	if _design_cache.size() > 32:
+		_design_cache.clear()
+	var v := {}
+	for item in p.viertel:
+		if str(item.id) == vid:
+			v = item
+	if v.is_empty() or str(v.zone) == "gruen" or str(v.status) not in ["entwurf", "in_erschliessung"]:
+		return []
+	var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
+	var a := _cardinal(Vector2i(int(p.achse[0]), int(p.achse[1])))
+	var q := Vector2i(-a.y, a.x)
+	var out: Array = []
+	for id in QUARTER_DESIGNS:
+		var spec: Dictionary = QUARTER_DESIGNS[id]
+		if str(v.zone) not in spec.zones:
+			continue
+		if id == "promenade" and float(p.landschaft.get("meer", 0.0)) + float(p.landschaft.get("fluss", 0.0)) < 0.04:
+			continue
+		var layout: Dictionary = _design_layout(id, c, int(v.radius), a, q)
+		var seen := {}
+		var buildable := 0
+		for cell in layout.cells:
+			if seen.has(cell):
+				continue
+			seen[cell] = true
+			if _road_ok(cell, k):
+				buildable += 1
+		var share := float(buildable) / float(maxi(1, seen.size()))
+		if share < 0.55:
+			continue
+		var old_design := str(v.get("entwurf", ""))
+		v["entwurf"] = id
+		var connected: Dictionary = street_plan(k, vid)
+		if old_design == "":
+			v.erase("entwurf")
+		else:
+			v["entwurf"] = old_design
+		if (connected.cells as Array).is_empty():
+			continue
+		var open: bool = connected.platz.x >= 0
+		var fit := 0
+		if id == "gartenring" and str(p.form) == "gartenstadt":
+			fit = 16
+		elif id == "promenade" and str(p.form) in ["buchtenstadt", "flussstadt", "hafenort"]:
+			fit = 16
+		elif id == "hofgassen" and str(v.zone) == "gewerbe":
+			fit = 12
+		elif id == "marktachse" and str(v.rolle) == "kern":
+			fit = 12
+		var rivals := 0
+		for other_key in towns:
+			if int(other_key) == k:
+				continue
+			for other_v in towns[other_key].get("viertel", []):
+				if str(other_v.get("entwurf", "")) == id:
+					rivals += 1
+		var score := int(share * 60.0) + fit + (12 if open else 0) + int(_raw_free_share(c, 4, k) * 12.0) - maxi(0, connected.cells.size() - 35) / 4 - mini(16, rivals * 4)
+		out.append({"id": id, "titel": spec.label, "idee": spec.text, "freiraum": spec.space,
+			"punkte": score, "strassenfelder": connected.cells.size(), "platz_moeglich": open,
+			"grund": "%.0f %% baubare Straßenfelder, %d verbunden; Stadtprofil %s, Zone %s" % [share * 100.0, connected.cells.size(), str(p.label), str(v.zone)]})
+	out.sort_custom(func(x, y): return int(x.punkte) > int(y.punkte))
+	_design_cache[key] = out
+	return out
+
+
+func choose_design(k: int, a: Dictionary) -> Dictionary:
+	var vid := str(a.get("viertel", "")).to_upper()
+	var id := str(a.get("entwurf", ""))
+	var p := of(k)
+	if p.is_empty():
+		return {"ok": false, "msg": "Für diese Stadt gibt es noch keinen Stadtplan."}
+	var v := {}
+	for item in p.viertel:
+		if str(item.id) == vid:
+			v = item
+	if v.is_empty() or str(v.status) != "entwurf":
+		return {"ok": false, "msg": "Das Viertel ist nicht mehr im Entwurf."}
+	var options := design_options(k, vid)
+	var choice := {}
+	for option in options:
+		if str(option.id) == id:
+			choice = option
+	if choice.is_empty():
+		return {"ok": false, "msg": "Entwurf nicht verfügbar. Wähle eine ID aus stadtplan_naechster_abschnitt.entwuerfe."}
+	v["entwurf"] = id
+	v["entwurf_grund"] = str(a.get("reason", "")).left(180)
+	v["entwurf_punkte"] = int(choice.punkte)
+	_design_cache.clear()
+	revise(k, "Viertel %s: %s gewählt (%d Punkte). %s" % [vid, choice.titel, int(choice.punkte), str(v.entwurf_grund)])
+	return {"ok": true, "msg": "%s erhält den Entwurf %s: %s. Als Nächstes viertel_erschliessen." % [vid, choice.titel, choice.idee]}
+
+
+func _design_layout(id: String, c: Vector2i, r: int, a: Vector2i, q: Vector2i) -> Dictionary:
+	var want: Array = []
+	var place := c + q * 2
+	match id:
+		"gartenring":
+			var h := maxi(3, r - 2)
+			for i in range(-h, h + 1):
+				want += [c + a * i + q * h, c + a * i - q * h, c + q * i + a * h, c + q * i - a * h]
+			place = c - Vector2i.ONE
+		"hofgassen":
+			for i in range(-r, r + 1):
+				want.append(c + a * i)
+			for side in [-1, 1]:
+				for i in range(0, maxi(3, r - 1) + 1):
+					want.append(c + a * (side * maxi(2, r / 2)) + q * i)
+		"promenade":
+			for i in range(-r, r + 1):
+				want.append(c + a * i)
+			for off in [-maxi(2, r / 2), maxi(2, r / 2)]:
+				for i in range(0, r / 2 + 2):
+					want.append(c + a * off + q * i)
+		_:
+			for i in range(-r, r + 1):
+				want.append(c + a * i)
+			for off in [-maxi(2, r / 2), maxi(2, r / 2)]:
+				for i in range(-maxi(2, r / 2), maxi(2, r / 2) + 1):
+					want.append(c + a * off + q * i)
+	return {"cells": want, "platz": place}
+
+
+func _public_space_ok(k: int, place: Vector2i) -> bool:
+	for dy in 2:
+		for dx in 2:
+			var cell := place + Vector2i(dx, dy)
+			if not _road_ok(cell, k) or sim.city.is_road(cell):
+				return false
+	return true
+
+
+func _space_near(k: int, desired: Vector2i, a: Vector2i, q: Vector2i, roads: Array) -> Vector2i:
+	for offset in [Vector2i.ZERO, q * 2, -q * 2, a * 2, -a * 2, q * 2 + a * 2, q * 2 - a * 2, -q * 2 + a * 2, -q * 2 - a * 2]:
+		var place: Vector2i = desired + offset
+		if not _public_space_ok(k, place):
+			continue
+		var clear := true
+		for dy in 2:
+			for dx in 2:
+				if roads.has(place + Vector2i(dx, dy)):
+					clear = false
+		if clear:
+			return place
+	return Vector2i(-1, -1)
+
+
+## Nach dem Straßenbau einen kleinen, dauerhaften Freiraum anlegen. Gespeicherte
+## Zellen bleiben frei von späterem Bauland; die Ansicht zeichnet die Ausstattung.
+func finish_space(k: int, vid: String, place: Vector2i) -> void:
+	var p := of(k)
+	if p.is_empty() or place.x < 0:
+		return
+	var v := {}
+	for item in p.viertel:
+		if str(item.id) == vid:
+			v = item
+	if v.is_empty():
+		return
+	if not p.has("freiraeume"):
+		p["freiraeume"] = []
+	if (p.freiraeume as Array).any(func(s): return str(s.viertel) == vid):
+		return
+	var style := str(v.get("entwurf", "marktachse"))
+	var area := Rect2i(place - Vector2i.ONE, Vector2i(4, 4))
+	var cells: Array = []
+	var pieces: Array = []
+	var parcels := {}
+	var C: CityData = sim.city
+	for y in range(area.position.y, area.end.y):
+		for x in range(area.position.x, area.end.x):
+			var cell := Vector2i(x, y)
+			if not C.inside(cell) or C.is_road(cell) or C.building_at[C.idx(cell)] >= 0:
+				continue
+			var parcel: Dictionary = sim.parcels.at_cell(cell)
+			if not parcel.is_empty() and (not Towns.is_public(str(parcel.owner)) or Towns.town_of_owner(str(parcel.owner)) != k or str(parcel.state) != "frei"):
+				continue
+			if not parcel.is_empty():
+				parcels[str(parcel.id)] = true
+			C.ground[C.idx(cell)] = CityData.G.PARK if style == "gartenring" else CityData.G.PLAZA
+			cells.append([x, y])
+			if (x == area.position.x or x == area.end.x - 1) and (y == area.position.y or y == area.end.y - 1):
+				pieces.append({"sprite": "d_tree0" if style == "gartenring" else "d_lamp", "x": x, "y": y})
+			elif y == area.end.y - 1 and x == place.x:
+				pieces.append({"sprite": "d_bench", "x": x, "y": y})
+	if cells.is_empty():
+		return
+	for pid in parcels:
+		var lot: Dictionary = sim.parcels.parcel(pid)
+		lot.state = "bebaut"
+		lot.use = "quartierplatz"
+		sim.parcels.touch(pid)
+	p.freiraeume.append({"viertel": vid, "entwurf": style, "cells": cells, "pieces": pieces})
+	for pos in cells:
+		_space_cells[Vector2i(int(pos[0]), int(pos[1]))] = true
+	space_changed.emit(cells.map(func(c): return Vector2i(int(c[0]), int(c[1]))))
+	revise(k, "Viertel %s: %s sichtbar als %d Felder gestalteter Freiraum fertiggestellt." % [vid, style, cells.size()])
+
+
+func is_space_cell(cell: Vector2i) -> bool:
+	return _space_cells.has(cell)
 
 
 func street_plan(k: int, vid: String) -> Dictionary:
@@ -591,47 +830,49 @@ func street_plan(k: int, vid: String) -> Dictionary:
 	var platz := Vector2i(-1, -1)
 	var text := ""
 	var form := str(p.form)
-	if form in ["gartenstadt", "buchtenstadt", "hangstadt"] and str(v.zone) == "gewerbe":
+	var selected := str(v.get("entwurf", ""))
+	if QUARTER_DESIGNS.has(selected):
+		var layout: Dictionary = _design_layout(selected, c, r, a, q)
+		want = layout.cells
+		platz = layout.platz
+		text = "%s: %s" % [QUARTER_DESIGNS[selected].label, QUARTER_DESIGNS[selected].text]
+	elif form in ["gartenstadt", "buchtenstadt", "hangstadt"] and str(v.zone) == "gewerbe":
 		form = "marktort"   # Gewerbe: Raster mit Zufahrten statt Ring/Uferstrasse/Hangstrasse
-	match form:
-		"gartenstadt":
-			var h := maxi(3, r - 1)
-			for i in range(-h, h + 1):
-				want += [c + a * i + q * h, c + a * i - q * h, c + q * i + a * h, c + q * i - a * h]
-			text = "Ringstraße um einen Grünplatz"
-		"buchtenstadt":
-			for i in range(-r, r + 1):
-				want.append(c + a * i)
-			for i in range(1, r + 1):
-				want.append(c - q * i)
-			text = "Uferstraße mit Stichstraße ins Land"
-		"hangstadt":
-			for i in range(-r, r + 1):
-				want.append(c + a * i)
-			for i in range(1, mini(r, block) + 1):
-				want.append(c + q * i)
-			text = "Straße auf der flachen Stufe am Hang"
-		_:
-			for i in range(-r, r + 1):
-				want.append(c + a * i)
-			var off := -r + (r % block)
-			while off <= r:
-				if off != 0:
-					for i in range(-r / 2, r / 2 + 1):
-						want.append(c + a * off + q * i)
-				off += block
-			text = "Hauptstraße mit Querstraßen im Abstand von %d Feldern" % block
-	if str(v.rolle) == "kern" and str(p.freiraum) in ["platz", "kai", "promenade"]:
+	if selected == "":
+		match form:
+			"gartenstadt":
+				var h := maxi(3, r - 1)
+				for i in range(-h, h + 1):
+					want += [c + a * i + q * h, c + a * i - q * h, c + q * i + a * h, c + q * i - a * h]
+				text = "Ringstraße um einen Grünplatz"
+			"buchtenstadt":
+				for i in range(-r, r + 1):
+					want.append(c + a * i)
+				for i in range(1, r + 1):
+					want.append(c - q * i)
+				text = "Uferstraße mit Stichstraße ins Land"
+			"hangstadt":
+				for i in range(-r, r + 1):
+					want.append(c + a * i)
+				for i in range(1, mini(r, block) + 1):
+					want.append(c + q * i)
+				text = "Straße auf der flachen Stufe am Hang"
+			_:
+				for i in range(-r, r + 1):
+					want.append(c + a * i)
+				var off := -r + (r % block)
+				while off <= r:
+					if off != 0:
+						for i in range(-r / 2, r / 2 + 1):
+							want.append(c + a * off + q * i)
+					off += block
+				text = "Hauptstraße mit Querstraßen im Abstand von %d Feldern" % block
+	if selected == "" and str(v.rolle) == "kern" and str(p.freiraum) in ["platz", "kai", "promenade"]:
 		platz = c + q * 2
 		text += ", Platz mit Brunnen am Kern"
 	var C: CityData = sim.city
 	if platz.x >= 0:
-		for py in 2:
-			for px in 2:
-				var at := platz + Vector2i(px, py)
-				if not C.inside(at) or C.building_at[C.idx(at)] >= 0 or C.is_road(at):
-					platz = Vector2i(-1, -1)
-					break
+		platz = _space_near(k, platz, a, q, want)
 	var seen := {}
 	for w in want:
 		if seen.has(w) or not _road_ok(w, k) or (platz.x >= 0 and Rect2i(platz, Vector2i(2, 2)).has_point(w)):
@@ -790,6 +1031,12 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 			"kandidaten": sites, "aktion": {"action": "stadtteil_planen", "mitte": sites[0].feld, "zone": zone,
 				"name": "Neues %sviertel" % ("Grün" if zone == "gruen" else "Wohn" if zone == "wohnen" else "Misch"),
 				"reason": "Freie Fläche mit Anschluss an den bestehenden Stadtkern"}}
+	if str(best.get("entwurf", "")) == "":
+		var designs := design_options(k, str(best.id))
+		if not designs.is_empty():
+			return {"viertel": best.id, "text": "Für Viertel %s zuerst eine stimmige Komposition wählen; danach erschließen." % best.id,
+				"entwuerfe": designs, "aktion": {"action": "quartier_entwurf_waehlen", "viertel": best.id,
+					"entwurf": designs[0].id, "reason": "%s: %s" % [designs[0].titel, designs[0].grund]}}
 	return {"viertel": best.id, "text": "Als Nächstes Viertel %s (%s, %s) erschließen%s." % [best.id, best.text, best.zone, " – es fehlt Wohnraum" if housing_need and str(best.zone) == "wohnen" else ""],
 		"aktion": {"action": "viertel_erschliessen", "viertel": best.id, "reason": "Stadtplan: nächster Abschnitt"}}
 
@@ -869,6 +1116,12 @@ func from_dict(d: Dictionary) -> void:
 	towns = d.get("towns", {})
 	_expansion_cache.clear()
 	_repair_cache.clear()
+	_design_cache.clear()
+	_space_cells.clear()
+	for p in towns.values():
+		for space in p.get("freiraeume", []):
+			for pos in space.get("cells", []):
+				_space_cells[Vector2i(int(pos[0]), int(pos[1]))] = true
 	for key in towns:   # Version 1 (18.11.): 6x5-Grundstuecke – ein Einfamilienhaus (5x4) ueberschritt die zulaessige Bebauung
 		var p: Dictionary = towns[key]
 		if int(p.get("v", 1)) < 2 and FORMS.has(str(p.form)):

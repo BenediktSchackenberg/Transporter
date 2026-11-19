@@ -1189,7 +1189,11 @@ func _finish_district(M: Mayor, prj: Dictionary) -> void:
 		return
 	var pl := Vector2i(int(prj.platz[0]), int(prj.platz[1])) if prj.has("platz") else Vector2i(-1, -1)
 	if pl.x >= 0:
-		sim.events._add_building("fountain", Rect2i(pl, Vector2i(2, 2)), "Platz %s" % sim.towns.name_of(k))
+		sim.town_plan.finish_space(k, str(prj.viertel), pl)
+		var fountain: Dictionary = sim.events._add_building("fountain", Rect2i(pl, Vector2i(2, 2)), "Platz %s" % sim.towns.name_of(k))
+		if not fountain.is_empty():
+			fountain["town"] = k
+			sim.events.buildings_added.emit([fountain.id])
 	var plots: Array = []
 	if sim.wildnis:
 		plots = sim.eko.settle.carve_plots(k, cells, 16)
@@ -1200,10 +1204,12 @@ func _finish_district(M: Mayor, prj: Dictionary) -> void:
 		v.status = "erschlossen"
 		var vc := Vector2(int(v.mitte[0]), int(v.mitte[1]))
 		for p in sim.parcels.items.values():   # freie staedtische Flaechen im Viertel: Zone des Viertels (Umwidmung nach Plan)
-			if str(p.owner) != M.land_owner() or str(p.state) != "frei" or str(p.zone) == str(v.zone) or str(p.zone) not in ["wohnen", "mischgebiet", "gewerbe", "industrie", "oeffentlich"]:
+			if str(p.owner) != M.land_owner() or str(p.state) != "frei" or str(p.zone) not in ["wohnen", "mischgebiet", "gewerbe", "industrie", "oeffentlich"]:
 				continue
-			if Vector2(int(p.rect[0]) + int(p.rect[2]) / 2.0, int(p.rect[1]) + int(p.rect[3]) / 2.0).distance_to(vc) <= float(v.radius) + 3.0:
-				p.zone = str(v.zone)
+			var parcel_center := Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)
+			var planned_zone: String = sim.town_plan.zone_at(k, parcel_center)
+			if planned_zone != "gruen" and str(p.zone) != planned_zone and Vector2(parcel_center).distance_to(vc) <= float(v.radius) + 3.0:
+				p.zone = planned_zone
 				p.erschliessung = sim.parcels.utilities_of(p)
 				sim.parcels.touch(str(p.id))
 				rezoned += 1

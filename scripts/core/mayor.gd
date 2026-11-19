@@ -40,6 +40,8 @@ const SCHEMA := {
 		"desc": "Ein Viertel des Stadtplans (V1, V2, … siehe stadtplan.viertel) in einem Abschnitt erschließen: die freien städtischen Grundstücke dort bekommen die Zone des Viertels, Straße und Anschlüsse werden als Projekt beauftragt (Kosten aus dem Haushalt, Material, Baufirma). Danach entstehen dort Häuser, Läden oder städtische Bauten."},
 	"stadtteil_planen": {"params": {"mitte": "array", "zone": "string", "name": "string", "reason": "string"},
 		"desc": "Nach den bisherigen Vierteln einen neuen Stadtteil selbst entwerfen: mitte [x,y] aus obs.stadtplan_erweiterung, zone wohnen|mischgebiet|gewerbe|gruen, eigener Name und Grund. Für bebaute Viertel danach viertel_erschliessen; Grünflächen für Parkprojekte freihalten."},
+	"quartier_entwurf_waehlen": {"params": {"viertel": "string", "entwurf": "string", "reason": "string"},
+		"desc": "Für ein eigenes, noch ungeplantes Viertel eine geprüfte Komposition aus obs.stadtplan_naechster_abschnitt.entwuerfe wählen. Die Wahl bestimmt Straßen, Platz und Quartierscharakter; danach viertel_erschliessen. Andere Städte entscheiden unabhängig."},
 	"plan_infrastructure": {"params": {"parcel_ids": "array", "parts": "array?", "reason": "string"},
 		"desc": "Erschließung (strasse, strom, wasser, abwasser; Standard: alle fehlenden) für städtische Grundstücke planen. Kosten werden aus dem Haushalt reserviert; über 30 000 EUR Ratsbeschluss."},
 	"prioritize_road": {"params": {"corridor_id": "string", "priority": "int", "reason": "string"},
@@ -756,6 +758,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = _develop_district(a)
 			"stadtteil_planen":
 				res = sim.town_plan.plan_district(town, a) if sim.town_plan != null else {"ok": false, "msg": "Kein Stadtplan."}
+			"quartier_entwurf_waehlen":
+				res = sim.town_plan.choose_design(town, a) if sim.town_plan != null else {"ok": false, "msg": "Kein Stadtplan."}
 			"plan_infrastructure":
 				res = _plan_infrastructure(a)
 			"prioritize_road":
@@ -1125,8 +1129,10 @@ func _develop_district(a: Dictionary) -> Dictionary:
 			todo.append(p)
 		ids.append(str(p.id))
 	for p in cands.map(func(e): return e[1]).slice(0, DISTRICT_STEP * 2):
-		if str(p.zone) != str(v.zone) and str(p.zone) in ["wohnen", "mischgebiet", "gewerbe", "industrie", "oeffentlich"]:
-			p.zone = str(v.zone)   # Umwidmung nach dem Viertelplan (nur freie staedtische Flaechen)
+		var center := Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2)
+		var planned_zone: String = sim.town_plan.zone_at(town, center)
+		if str(p.zone) != planned_zone and planned_zone != "gruen" and str(p.zone) in ["wohnen", "mischgebiet", "gewerbe", "industrie", "oeffentlich"]:
+			p.zone = planned_zone   # Nutzung der gewaehlten Komposition statt einheitlicher Viertelzone
 			sim.parcels.touch(str(p.id))
 	if todo.is_empty():
 		return {"ok": false, "msg": "Viertel %s ist schon erschlossen (%d freie Grundstücke mit Straße) – dort kann gebaut werden.%s" % [vid, ids.size(), _district_options(vid)]}

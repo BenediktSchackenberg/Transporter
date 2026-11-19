@@ -114,7 +114,7 @@ func rank(k: int, req: Dictionary) -> Dictionary:
 		var p: Dictionary = e[1]
 		var pr: Rect2i = e[2]
 		var v: Dictionary = sim.town_plan.district_at(k, pr.get_center()) if sim.town_plan != null else {}
-		if not v.is_empty() and str(v.zone) == "gruen":
+		if not v.is_empty() and sim.town_plan.zone_at(k, pr.get_center()) == "gruen":
 			out.gruen += 1
 			continue   # Gruenzug, Aussicht, Uferweg des Stadtplans bleiben frei
 		var fit := _fit(pr, w, h)
@@ -258,7 +258,7 @@ func _score_parts(k: int, art: String, req: Dictionary, c: Dictionary, ctx: Dict
 			nachbar = 1.0 - 0.5 * minf(1.0, loud / 3.0)
 	var struktur := 0.2
 	if not v.is_empty():
-		struktur = 1.0 if str(v.zone) in ART_DISTRICT.get(art, []) else 0.4
+		struktur = 1.0 if sim.town_plan.zone_at(k, ctr) in ART_DISTRICT.get(art, []) else 0.4
 	if built >= 2:
 		struktur = minf(1.0, struktur + 0.3)   # Baulücke schließen statt verstreut bauen
 	var erreichbar := 1.0 if sim.civic._touches_road(fit) else 0.0
@@ -266,7 +266,7 @@ func _score_parts(k: int, art: String, req: Dictionary, c: Dictionary, ctx: Dict
 	var profil := 0.5
 	if not v.is_empty():
 		var floors := int(req.get("floors", 1))
-		profil = (1.0 if floors <= maxi(1, int(v.geschosse)) else 0.3) * (1.0 if str(c.p.zone) == str(v.zone) else 0.7)
+		profil = (1.0 if floors <= maxi(1, int(v.geschosse)) else 0.3) * (1.0 if str(c.p.zone) == sim.town_plan.zone_at(k, ctr) else 0.7)
 	var wasser := _water_within(ctr, 8)
 	var landschaft := 0.5
 	if art in ["tourismus", "wohnen"]:

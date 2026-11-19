@@ -139,6 +139,8 @@ func build(simulation: Simulation) -> void:
 	eko_view.setup(sim, self)
 	if sim.civic != null:
 		sim.civic.ground_changed.connect(repaint_cells)
+	if sim.town_plan != null:
+		sim.town_plan.space_changed.connect(repaint_cells)
 	buildings_node.add_child(site_view)
 	site_view.setup(sim)
 	buildings_node.add_child(works_view)

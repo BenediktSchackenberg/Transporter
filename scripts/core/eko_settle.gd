@@ -570,6 +570,8 @@ func _plot_free(r: Rect2i) -> bool:
 			var i := C.idx(q)
 			if C.ground[i] in [CityData.G.ROAD, CityData.G.WATER] or C.building_at[i] >= 0 or (not C.height.is_empty() and C.height[i] > 0):
 				return false
+			if _sim().town_plan != null and _sim().town_plan.is_space_cell(q):
+				return false
 	return true
 
 
@@ -671,6 +673,10 @@ func _start_package(k: int) -> void:
 		return
 	for v in sim.town_plan.of(k).get("viertel", []):
 		if str(v.rolle) == "kern":
+			var options: Array = sim.town_plan.design_options(k, str(v.id))
+			if not options.is_empty():
+				sim.town_plan.choose_design(k, {"viertel": str(v.id), "entwurf": str(options[0].id),
+					"reason": "Gründungsentwurf passend zu Gelände und Stadtmarke"})
 			var r: Dictionary = M._district_streets(v, "Startpaket der Gründung")
 			if bool(r.get("ok", false)):
 				sim.log_event("%s: Startpaket – %s" % [sim.towns.name_of(k), str(r.msg).left(200)], "good")

@@ -8,6 +8,7 @@ var sim: Simulation
 var cv
 var _nodes := {}         # Anlage-ID -> [Node2D]
 var _sig := {}           # Anlage-ID -> Darstellungsstand (Status + sichtbare Teile)
+var _quarter_nodes: Array = []
 var lines: LineLayer
 var _forks: Array = []   # Gabelstapler im Grosslager: [Sprite2D, Start, Ziel, Phase]
 var _t := 0.0
@@ -21,8 +22,26 @@ func setup(simulation: Simulation, city_view) -> void:
 	cv.decor_node.add_child(lines)
 	if sim.civic != null:
 		sim.civic.anlage_changed.connect(func(_id): _refresh())
+	if sim.town_plan != null:
+		sim.town_plan.space_changed.connect(func(_cells): _refresh_quarter_spaces())
 	_build_hub_life()
 	_refresh()
+	_refresh_quarter_spaces()
+
+
+func _refresh_quarter_spaces() -> void:
+	for node in _quarter_nodes:
+		node.queue_free()
+	_quarter_nodes.clear()
+	if sim.town_plan == null:
+		return
+	for profile in sim.town_plan.towns.values():
+		for space in profile.get("freiraeume", []):
+			for piece in space.get("pieces", []):
+				var cell := Vector2i(int(piece.x), int(piece.y))
+				if not sim.city.inside(cell) or sim.city.building_at[sim.city.idx(cell)] >= 0:
+					continue
+				_quarter_nodes.append(_sprite(str(piece.sprite), Vector2(cell.x * 32 + 16, cell.y * 32 + 16)))
 
 
 func _refresh() -> void:

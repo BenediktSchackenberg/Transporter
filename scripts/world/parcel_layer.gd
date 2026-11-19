@@ -168,7 +168,9 @@ func _draw_plan() -> void:
 					draw_colored_polygon(ring.slice(0, 32), Color(col, 0.1))
 					for i in range(0, 32, 2):
 						draw_line(ring[i], ring[i + 1], Color(col, 0.95), 3.0 * zs)
-			var label := "%s %s · %s" % [v.id, str(v.text), {"entwurf": "Entwurf", "in_erschliessung": "in Erschließung", "erschlossen": "erschlossen"}.get(str(v.status), str(v.status))]
+			var design := str(v.get("entwurf", ""))
+			var design_name := str(TownPlan.QUARTER_DESIGNS.get(design, {}).get("label", ""))
+			var label := "%s %s · %s%s" % [v.id, str(v.text), {"entwurf": "Entwurf", "in_erschliessung": "in Erschließung", "erschlossen": "erschlossen"}.get(str(v.status), str(v.status)), (" · " + design_name) if design_name != "" else ""]
 			var at := Iso.to_screen(c) + Vector2(-font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x / 2.0, 0)
 			draw_string_outline(font, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, int(4 * zs), Color(0, 0, 0, 0.75))
 			draw_string(font, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
