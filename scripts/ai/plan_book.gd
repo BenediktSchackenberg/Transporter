@@ -7,6 +7,7 @@ extends RefCounted
 ## "maximiere Gewinn"-Routine: Ohne Plan und Aktionen der KI passiert strategisch nichts.
 
 const MAX_STEPS := 10
+const METRICS := ["lieferungen", "gewinn", "umsatz", "fahrzeuge", "bargeld"]
 const CONDITIONS := ["bargeld_unter", "ruf_unter", "restzeit_unter_min", "auftrag_gescheitert", "arbeiter_verloren",
 	"fahrzeug_ausgefallen"]
 
@@ -25,6 +26,13 @@ func current(cid: int) -> Dictionary:
 
 
 func set_plan(cid: int, a: Dictionary) -> Dictionary:
+	var metric := str(a.get("kennzahl", ""))
+	if metric != "" and metric not in METRICS:
+		return {"ok": false, "msg": "kennzahl: lieferungen, gewinn, umsatz, fahrzeuge oder bargeld."}
+	if metric != "" and (not a.has("zielwert") or float(a.zielwert) <= 0.0):
+		return {"ok": false, "msg": "Zum messbaren Plan gehoert ein positiver zielwert."}
+	var horizon := clampi(int(a.get("horizont_tage", 7)), 1, 30)
+	var budget := maxf(0.0, float(a.get("budget", 0.0)))
 	var raw_steps = a.get("schritte", [])
 	if not raw_steps is Array or raw_steps.is_empty() or raw_steps.size() > MAX_STEPS:
 		return {"ok": false, "msg": "Ein Plan braucht 1–%d Schritte (schritte)." % MAX_STEPS}
@@ -68,8 +76,11 @@ func set_plan(cid: int, a: Dictionary) -> Dictionary:
 		_archive(cid, old, "ersetzt")
 	var p := {"id": "P%d" % next_id, "ziel": str(a.get("ziel", "")).left(200), "nutzen": str(a.get("nutzen", "")).left(200),
 		"risiken": str(a.get("risiken", "")).left(200), "abbruch": conds, "schritte": steps, "status": "aktiv",
-		"hinweis": "", "erstellt": sim.game_min, "ausgaben_bei_start": -sim.company(cid).ledger.costs(),
-		"gewinn_bei_start": sim.company(cid).ledger.profit(), "lost_at_start": _lost(cid), "failed_at_start": sim.company(cid).stats.failed}
+		"hinweis": "", "erstellt": sim.game_min, "ausgaben_bei_start": sim.company(cid).ledger.costs(),
+		"gewinn_bei_start": sim.company(cid).ledger.profit(), "umsatz_bei_start": sim.company(cid).ledger.revenue(),
+		"lieferungen_bei_start": sim.company(cid).stats.completed, "fahrzeuge_bei_start": sim.company_vehicles(cid).size(),
+		"horizont_tage": horizon, "kennzahl": metric, "zielwert": float(a.get("zielwert", 0.0)), "budget": budget,
+		"reviews": [], "letzte_pruefung": sim.game_min, "lost_at_start": _lost(cid), "failed_at_start": sim.company(cid).stats.failed}
 	next_id += 1
 	plans[cid] = p
 	sim.log_event("%s legt Plan %s fest: %s (%d Schritte)." % [sim.company(cid).player_name, p.id, p.ziel, steps.size()], "plan", cid)
@@ -106,6 +117,11 @@ func execute_step(cid: int, sid: String, key: String) -> Dictionary:
 		if dep.status not in ["erledigt", "uebersprungen"]:
 			return {"ok": false, "msg": "Schritt %s wartet auf %s (%s)." % [sid, d, dep.status]}
 	var money := float(st.braucht.get("geld", 0.0))
+	var spent := _spent(cid, p)
+	if float(p.get("budget", 0.0)) > 0.0 and spent + money > float(p.budget):
+		st.status = "blockiert"
+		st.ergebnis = "Planbudget ueberschritten"
+		return {"ok": false, "msg": "Schritt %s: Planbudget %s reicht nicht mehr." % [sid, Catalog.money(float(p.budget))]}
 	if money > sim.company(cid).ledger.cash:
 		st.status = "blockiert"
 		st.ergebnis = "zu wenig Bargeld (%s benötigt)" % Catalog.money(money)
@@ -159,6 +175,12 @@ func tick() -> void:
 	for cid in plans.keys():
 		var p: Dictionary = plans[cid]
 		if p.status != "aktiv":
+			continue
+		if str(p.get("kennzahl", "")) != "" and sim.game_min >= float(p.erstellt) + GameCalendar.days_to_min(int(p.get("horizont_tage", 7))) and _metric(cid, p) < float(p.get("zielwert", 0.0)):
+			_replan(cid, "Frist abgelaufen: %s %d von %d erreicht." % [p.kennzahl, int(_metric(cid, p)), int(p.zielwert)])
+			continue
+		if float(p.get("budget", 0.0)) > 0.0 and _spent(cid, p) > float(p.budget):
+			_replan(cid, "Planbudget ueberschritten.")
 			continue
 		var c: Company = sim.company(cid)
 		for cnd in p.abbruch:
@@ -262,9 +284,42 @@ func summary(cid: int) -> Dictionary:
 				and st.abhaengig_von.all(func(d): return _step(cid, d).get("status", "") in ["erledigt", "uebersprungen"]):
 			runnable.append(st.id)
 	return {"id": p.id, "ziel": p.ziel, "status": p.status, "hinweis": p.hinweis, "nutzen": p.nutzen, "risiken": p.risiken,
+		"kennzahl": p.get("kennzahl", ""), "zielwert": p.get("zielwert", 0), "istwert": int(_metric(cid, p)),
+		"tage_bis_frist": maxi(0, ceili((float(p.erstellt) + GameCalendar.days_to_min(int(p.get("horizont_tage", 7))) - sim.game_min) / GameCalendar.days_to_min(1))),
+		"budget": p.get("budget", 0), "ausgaben_seit_start": int(_spent(cid, p)),
+		"pruefung_faellig": sim.game_min - float(p.get("letzte_pruefung", p.erstellt)) >= GameCalendar.days_to_min(1),
+		"letzte_pruefungen": (p.get("reviews", []) as Array).slice(-2),
 		"abbruch": p.abbruch, "schritte": p.schritte.map(func(st): return {"id": st.id, "text": st.text, "status": st.status,
 			"ergebnis": st.ergebnis, "abhaengig_von": st.abhaengig_von, "aktion": st.get("aktion", {}).get("action", "")}),
 		"jetzt_ausfuehrbar": runnable, "gewinn_seit_start": int(sim.company(cid).ledger.profit() - float(p.gewinn_bei_start))}
+
+
+func _metric(cid: int, p: Dictionary) -> float:
+	var c: Company = sim.company(cid)
+	match str(p.get("kennzahl", "")):
+		"lieferungen": return float(c.stats.completed - int(p.get("lieferungen_bei_start", c.stats.completed)))
+		"gewinn": return c.ledger.profit() - float(p.gewinn_bei_start)
+		"umsatz": return c.ledger.revenue() - float(p.get("umsatz_bei_start", c.ledger.revenue()))
+		"fahrzeuge": return float(sim.company_vehicles(cid).size() - int(p.get("fahrzeuge_bei_start", sim.company_vehicles(cid).size())))
+		"bargeld": return c.ledger.cash
+	return 0.0
+
+
+func _spent(cid: int, p: Dictionary) -> float:
+	return sim.company(cid).ledger.costs() - absf(float(p.get("ausgaben_bei_start", 0.0)))
+
+
+func review(cid: int, note: String) -> Dictionary:
+	var p := current(cid)
+	if p.is_empty():
+		return {"ok": false, "msg": "Kein Firmenplan vorhanden."}
+	var snapshot := {"zeit": sim.game_min, "istwert": int(_metric(cid, p)), "gewinn_seit_start": int(sim.company(cid).ledger.profit() - float(p.gewinn_bei_start)),
+		"ausgaben_seit_start": int(_spent(cid, p)), "notiz": note.left(160)}
+	var reviews: Array = p.get("reviews", [])
+	reviews.append(snapshot)
+	p.reviews = reviews.slice(-6)
+	p.letzte_pruefung = sim.game_min
+	return {"ok": true, "msg": "Plan %s geprueft: %s %d/%d, Gewinn seit Start %s." % [p.id, str(p.get("kennzahl", "Kennzahl")), snapshot.istwert, int(p.get("zielwert", 0)), Catalog.money(float(snapshot.gewinn_seit_start))]}
 
 
 func to_dict() -> Dictionary:

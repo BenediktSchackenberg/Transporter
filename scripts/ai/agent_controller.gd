@@ -378,26 +378,34 @@ func _run_dispatch_help() -> void:
 	var allowed: Array = DISPATCH + (["recruit_worker"] if understaffed or sim.company_vehicles(cid).any(func(v): return sim.driver_of(v) == null) else [])
 	if str(config.get("provider", "")) == "eko":   # Firma eines Wesens: Investitionen (Hofausbau, Plaene) entscheidet nur das Wesen
 		allowed = allowed.filter(func(a): return a not in EKO_NO_INVEST)   # (15.11.: Regeln bauten Bodo fuer 50.000 EUR Buero/Internet/Werkstatt vor den Fahrzeugen)
+		allowed = allowed.filter(func(a): return a not in ["accept_contract", "assign_transport"])
 	d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) in allowed)
 	if sim.dispatcher != null and sim.dispatcher.covers(cid):   # Auftragszuweisung macht der Claude-Disponent; die Regeln bleiben fuer Fahrer, Reparatur, Tanken und Hofaufbau
 		d["actions"] = d.actions.filter(func(a): return str(a.get("action", "")) not in ["accept_contract", "assign_transport"] \
 			or (str(a.get("action", "")) == "assign_transport" and sim.contracts.has(str(a.get("contract_id", ""))) and sim.contracts[str(a.contract_id)].internal != ""))   # eigene Materialtransporte bleiben bei den Regeln
-	if d.actions.is_empty():
-		return
-	d["summary"] = ""
-	d["goal"] = ""
-	d["memory"] = ""
-	var parsed := parse_response(JSON.stringify(d))
-	# Rueckmeldungen und Zaehler gehoeren dem Modell: die Disposition soll sie weder beschoenigen noch verfaelschen
-	var keep_events := _events.duplicate()
-	var keep_retry := _rapid_retry_count
-	var keep_streak := passive_streak
-	_apply(parsed, "dp%d" % _next_req, "Disposition")
-	_events = keep_events
-	_rapid_retry_count = keep_retry
-	passive_streak = keep_streak
-	_next_req += 1
-	stats["dispatch_help"] = int(stats.get("dispatch_help", 0)) + 1
+	if not d.actions.is_empty():
+		d["summary"] = ""
+		d["goal"] = ""
+		d["memory"] = ""
+		var parsed := parse_response(JSON.stringify(d))
+		# Rueckmeldungen und Zaehler gehoeren dem Modell: die Disposition soll sie weder beschoenigen noch verfaelschen
+		var keep_events := _events.duplicate()
+		var keep_retry := _rapid_retry_count
+		var keep_streak := passive_streak
+		_apply(parsed, "dp%d" % _next_req, "Disposition")
+		_events = keep_events
+		_rapid_retry_count = keep_retry
+		passive_streak = keep_streak
+		_next_req += 1
+		stats["dispatch_help"] = int(stats.get("dispatch_help", 0)) + 1
+	if str(config.get("provider", "")) == "eko" and (sim.dispatcher == null or not sim.dispatcher.covers(cid)):
+		var choices: Array = sim.operations.dispatch_opportunities(cid, 1, true)
+		if not choices.is_empty():
+			var choice: Dictionary = choices[0]
+			var result: Dictionary = sim.executor.execute(cid, {"action": "accept_contract", "contract_id": choice.contract_id, "vehicle_id": choice.vehicle_id},
+				"eko-dispatch:%d:%d:%s" % [cid, sim.step_count, choice.contract_id], "disposition")
+			if result.ok:
+				sim.log_event("Disposition %s: %s angenommen (geschätzter Deckungsbeitrag %s)." % [sim.company(cid).company_name, choice.contract_id, Catalog.money(float(choice.deckungsbeitrag_geschaetzt))], "plan", cid)
 
 
 ## Bauleitung (Auftrag 23): Partien 14.11.: die lokalen Modelle bauten nie (kein create_stone_work, free_build oder hub_buy in

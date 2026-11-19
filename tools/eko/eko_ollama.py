@@ -102,23 +102,26 @@ class FairGate:
         self.vt = {}
         self.waiting = set()
 
-    def slot(self, name, weight=1.0):
+    def slot(self, name, weight=1.0, priority=0):
         gate = self
 
         class _Slot:
             def __enter__(self):
-                gate.enter(name)
+                gate.enter(name, priority)
 
             def __exit__(self, *exc):
                 gate.leave(name, weight)
         return _Slot()
 
-    def enter(self, name):
+    def enter(self, name, priority=0):
         with self.cv:
             if name not in self.vt:
                 self.vt[name] = min(self.vt.values(), default=0.0)
             self.waiting.add(name)
-            while self.busy or name != min(self.waiting, key=lambda n: (self.vt[n], n)):
+            if not hasattr(self, "priority"):
+                self.priority = {}
+            self.priority[name] = max(0, min(2, int(priority)))
+            while self.busy or name != min(self.waiting, key=lambda n: (self.vt[n] - 0.75 * self.priority.get(n, 0), n)):
                 self.cv.wait()
             self.waiting.discard(name)
             self.busy = True
@@ -126,6 +129,7 @@ class FairGate:
     def leave(self, name, weight=1.0):
         with self.cv:
             self.vt[name] += 1.0 / max(0.1, float(weight))
+            self.priority.pop(name, None)
             self.busy = False
             self.cv.notify_all()
 
@@ -199,6 +203,30 @@ TOOLS = [
     {"name": "append_memory", "description": "Ein Erlebnis an EPISODIC_MEMORY.jsonl anhängen (zeit, wo, was, warum?, gefuehl?).",
      "parameters": {"type": "object", "properties": {"entry": {"type": "object"}}, "required": ["entry"]}},
 ]
+
+# Kleine, typisierte Unternehmerwerkzeuge reduzieren verschachtelte JSON-Fehler lokaler Modelle.
+COMPANY_TOOLS = [
+    {"name": "company_plan", "description": "Messbaren Firmenplan mit Frist und Schritten setzen.", "parameters": {"type": "object", "properties": {
+        "ziel": {"type": "string"}, "schritte": {"type": "array", "items": {"type": "string"}}, "horizont_tage": {"type": "integer"},
+        "kennzahl": {"type": "string", "enum": ["lieferungen", "gewinn", "umsatz", "fahrzeuge", "bargeld"]},
+        "zielwert": {"type": "number"}, "budget": {"type": "number"}}, "required": ["ziel", "schritte", "horizont_tage", "kennzahl", "zielwert"]}},
+    {"name": "review_company_plan", "description": "Istwert und Zielwert des Firmenplans prüfen.", "parameters": {"type": "object", "properties": {"notiz": {"type": "string"}}}},
+    {"name": "dispatch_policy", "description": "Grenzen der automatischen Auftragsannahme festlegen; ohne Angabe bleiben bestehende Werte erhalten.", "parameters": {"type": "object", "properties": {
+        "auto_accept": {"type": "boolean"}, "min_margin": {"type": "number"}, "max_distance": {"type": "integer"},
+        "cargo": {"type": "array", "items": {"type": "string"}}, "reserve": {"type": "number"}}}},
+    {"name": "accept_contract", "description": "Bekannten Transportauftrag mit eigenem LKW annehmen.", "parameters": {"type": "object", "properties": {
+        "contract_id": {"type": "string"}, "vehicle_id": {"type": "integer"}}, "required": ["contract_id", "vehicle_id"]}},
+    {"name": "buy_vehicle", "description": "LKW aus meine_firma.fahrzeugangebote kaufen.", "parameters": {"type": "object", "properties": {
+        "offer_id": {"type": "string"}}, "required": ["offer_id"]}},
+    {"name": "hire_worker", "description": "Bewerber aus meine_firma.bewerber einstellen.", "parameters": {"type": "object", "properties": {
+        "worker_id": {"type": "string"}}, "required": ["worker_id"]}},
+    {"name": "repair_vehicle", "description": "Eigenen LKW reparieren.", "parameters": {"type": "object", "properties": {
+        "vehicle_id": {"type": "integer"}}, "required": ["vehicle_id"]}},
+]
+TOOLS.extend(COMPANY_TOOLS)
+COMPANY_TOOL_ACTIONS = {"review_company_plan": "review_plan", "dispatch_policy": "set_dispatch_policy",
+                        "hire_worker": "recruit_worker", "accept_contract": "accept_contract", "buy_vehicle": "buy_vehicle",
+                        "repair_vehicle": "repair_vehicle"}
 
 
 class ModelGlitch(RuntimeError):
@@ -402,6 +430,7 @@ class Agent:
         if getattr(args, "anbieter", "ollama") == "ionos" and (args.model.startswith("hf.co/") or args.model.startswith("gpt-oss")):
             args.model = IONOS_MODEL
         self.world = World("http://127.0.0.1:%d" % args.port, args.name, self.dir / "schluessel.txt")
+        self.urgency = 0
         self._arrival_failed = set()
         self.log = open(self.logs / "sitzung.log", "a", encoding="utf-8")
 
@@ -419,8 +448,11 @@ class Agent:
             return
         steps = observation.get("naechste_schritte") or []
         goal = observation.get("mein_ziel") or {}
+        urgent = observation.get("dringlichkeit") or {}
+        self.urgency = max(0, min(2, int(urgent.get("prioritaet", 0)))) if isinstance(urgent, dict) else 0
         self.status("beobachtet", next_step=str(steps[0])[:180] if steps else "",
-                    goal=str(goal.get("ziel", ""))[:120] if isinstance(goal, dict) else "")
+                    goal=str(goal.get("ziel", ""))[:120] if isinstance(goal, dict) else "",
+                    urgency=self.urgency, urgent_reason=str(urgent.get("grund", ""))[:120] if isinstance(urgent, dict) else "")
 
     def _path(self, name):
         p = (self.ws / str(name)).resolve()
@@ -444,12 +476,26 @@ class Agent:
                          "oder Betrieb investieren. Nach jeder Firmenhandlung pruefe Ergebnis und Folgezustand; "
                          "eine angenommene Aktion ist noch kein verdientes Geld. Bevor du baust oder plauderst, "
                          "pruefe dringende Lieferungen und Liquiditaet. Vermeide wiederholte Beobachtungen ohne Entscheidung.")
+            lines.append("Nutze die direkten Werkzeuge company_plan, review_company_plan, dispatch_policy, accept_contract, buy_vehicle, "
+                         "hire_worker und repair_vehicle. Die Firmenbeobachtung zeigt transportchancen mit geschaetztem Deckungsbeitrag, "
+                         "entscheidungsfolgen und dringlichkeit. Gib der Routine klare Grenzen und pruefe deinen Plan taeglich.")
             if getattr(self.args, "strategy", ""):
                 lines.append("Deine eigene Unternehmensstrategie: " + self.args.strategy[:400])
         return "\n".join(lines)
 
     def call_tool(self, name, a):
         try:
+            if name == "company_plan":
+                steps = a.get("schritte", [])
+                if not isinstance(steps, list) or not steps or not all(isinstance(s, str) for s in steps):
+                    return {"ok": False, "msg": "schritte muss eine Liste kurzer Texte sein."}
+                action = {"action": "set_plan", "ziel": a.get("ziel", ""),
+                          "schritte": [{"id": "S%d" % (i + 1), "text": s} for i, s in enumerate(steps)],
+                          "horizont_tage": a.get("horizont_tage", 7), "kennzahl": a.get("kennzahl", ""),
+                          "zielwert": a.get("zielwert", 0), "budget": a.get("budget", 0)}
+                return self.call_tool("act", {"type": "Firma", "data": {"aktion": action}})
+            if name in COMPANY_TOOL_ACTIONS:
+                return self.call_tool("act", {"type": "Firma", "data": {"aktion": {"action": COMPANY_TOOL_ACTIONS[name], **a}}})
             if name == "observe":
                 observation = compact_obs(self.world.observe(), full=bool(a.get("voll", False)))
                 self.observation_status(observation)
@@ -471,6 +517,7 @@ class Agent:
                     r["msg"] = str(r.get("msg", "")) + " Die Pause ist vorbei."
                 obs = r.pop("beobachtung", {}) if isinstance(r, dict) else {}
                 if isinstance(obs, dict) and obs.get("ok"):
+                    self.observation_status(obs)
                     r["du"] = obs.get("du")
                 return r
             if name == "wait":
@@ -583,6 +630,11 @@ class Agent:
             parts.append("## Dein aktuelles Ziel\n%s (%s, %s %%) – warum: %s" % (goal.get("ziel"), goal.get("status"), goal.get("fortschritt"), goal.get("warum")))
         return ("Erinnerung aus deinem Gedächtnis:\n" + "\n\n".join(parts)) if parts else ""
 
+    def model_tools(self):
+        if getattr(self.args, "rolle", "") == "unternehmer":
+            return TOOLS
+        return TOOLS[:-len(COMPANY_TOOLS)]
+
     def chat(self, messages):
         if getattr(self.args, "anbieter", "ollama") == "ionos":
             return self.chat_openai(messages)
@@ -595,13 +647,13 @@ class Agent:
         last = ""
         for attempt, temp in enumerate((0.8, 0.5, 0.3)):
             body = {"model": self.args.model, "messages": messages, "stream": False, "think": think,
-                    "tools": [{"type": "function", "function": t} for t in TOOLS],
+                    "tools": [{"type": "function", "function": t} for t in self.model_tools()],
                     "options": {"num_ctx": self.args.ctx, "temperature": temp}}
             req = urllib.request.Request(self.args.ollama + "/api/chat", data=json.dumps(body).encode("utf-8"),
                                          headers={"Content-Type": "application/json"})
             try:
                 weight = 1.0 if getattr(self.args, "rolle", "") == "buergermeister" else 2.0
-                with MODEL_GATE.slot(self.args.name, weight), urllib.request.urlopen(req, timeout=600) as r:   # gewichtet: Unternehmer 2, Buergermeister 1
+                with MODEL_GATE.slot(self.args.name, weight, self.urgency), urllib.request.urlopen(req, timeout=600) as r:
                     return json.loads(r.read().decode("utf-8"))["message"]
             except urllib.error.HTTPError as e:
                 full = e.read().decode("utf-8", "replace")
@@ -636,7 +688,7 @@ class Agent:
         while out and out[0]["role"] == "tool":   # Werkzeugantwort ohne Aufruf ist im OpenAI-Format ungueltig
             out.pop(0)
         base_budget = max(IONOS_MIN_OUTPUT_TOKENS, int(getattr(self.args, "max_output_tokens", IONOS_MIN_OUTPUT_TOKENS)))
-        body = {"model": self.args.model, "messages": out, "tools": [{"type": "function", "function": t} for t in TOOLS],
+        body = {"model": self.args.model, "messages": out, "tools": [{"type": "function", "function": t} for t in self.model_tools()],
                 "temperature": 1.0, "top_p": 0.95, "reasoning_effort": "medium", "presence_penalty": 1.5,
                 "frequency_penalty": 0, "max_tokens": base_budget}
         for attempt in range(2):   # genau ein erneuter Versuch mit mehr Budget bei leerer/abgeschnittener Antwort
@@ -732,6 +784,16 @@ class Agent:
                 self._reads = {}   # frische Sitzung: Dateien duerfen neu gelesen werden
                 self.say("☀ Neuer Tag – frische Sitzung, Gedächtnis aus den Dateien")
             messages = self.trim(messages)
+            if getattr(self.args, "rolle", "") == "unternehmer" and time.monotonic() - getattr(self, "_urgent_poll_at", 0.0) >= 20:
+                self._urgent_poll_at = time.monotonic()
+                situation = self.world.observe()
+                if isinstance(situation, dict) and situation.get("ok"):
+                    urgent = situation.get("dringlichkeit") or {}
+                    reason = str(urgent.get("grund", "")) if isinstance(urgent, dict) else ""
+                    self.observation_status(situation)
+                    if self.urgency >= 2 and reason != getattr(self, "_last_urgent_reason", ""):
+                        messages.append({"role": "user", "content": "Dringendes Ereignis in der Welt: %s. Prüfe und handle jetzt." % reason})
+                    self._last_urgent_reason = reason
             started = time.monotonic()
             self.status("denkt", waiting_on="Modellantwort")
             try:

@@ -737,6 +737,27 @@ func _estate_goal_sync(b: Dictionary) -> void:
 const HOME_AKKU := 30.0   # darunter (oder nass/kalt) steht der Heimweg an erster Stelle (Partie 16.11.: Viktor arbeitete mit 14 % Akku, nass und kalt weiter)
 
 
+func urgency(b: Dictionary) -> Dictionary:
+	var cid := active_firm(b)
+	if cid < 0:
+		return {"prioritaet": 0, "grund": ""}
+	var best := {"prioritaet": 0, "grund": ""}
+	for k in sim.contracts.values():
+		if k.owner != cid or k.status not in ["accepted", "assigned", "loading", "in_transit"]:
+			continue
+		var left := int(k.deadline - sim.game_min)
+		if left <= 90:
+			return {"prioritaet": 2, "grund": "Auftrag %s: Frist in %d Spielminuten" % [k.id, left], "frist_in_min": left}
+		if left <= 240:
+			best = {"prioritaet": 1, "grund": "Auftrag %s: Frist in %d Spielminuten" % [k.id, left], "frist_in_min": left}
+	for v in sim.company_vehicles(cid):
+		if v.state == "broken" and str(v.contract_id) != "":
+			return {"prioritaet": 2, "grund": "LKW #%d mit Auftrag ausgefallen" % v.id}
+	if sim.company(cid).ledger.cash < float(sim.operations.dispatch_policy(cid).reserve) and int(best.prioritaet) == 0:
+		best = {"prioritaet": 1, "grund": "Firmenkasse unter Dispositionsreserve"}
+	return best
+
+
 func next_steps(b: Dictionary) -> Array:
 	_estate_goal_sync(b)
 	var out: Array = []
@@ -744,6 +765,11 @@ func next_steps(b: Dictionary) -> Array:
 	var firm_step := ""
 	var pending_step := ""
 	var goal_step := ""
+	var plan_step := ""
+	var crisis := urgency(b)
+	if int(crisis.prioritaet) >= 2:
+		urgent_step = str(crisis.grund) + " – jetzt Lage und passende Firmenaktion prüfen."
+		out.append(urgent_step)
 	var akku := float(b.get("akku", 100.0))
 	if float(b.get("rest_left", 0.0)) <= 0.0 and (akku < HOME_AKKU or float(b.get("nass", 0.0)) > 60.0 or float(b.get("kalt", 0.0)) > 60.0):
 		var why := "Akku %d %%" % int(akku) if akku < HOME_AKKU else ("du bist nass" if float(b.get("nass", 0.0)) > 60.0 else "dir ist kalt")
@@ -781,6 +807,13 @@ func next_steps(b: Dictionary) -> Array:
 			out.append(st0)
 			firm_step = st0
 	if cid >= 0 and not wild_build:
+		var plan: Dictionary = sim.plans.summary(cid)
+		if str(plan.get("status", "")) in ["kein Plan", "neu_planen"]:
+			plan_step = "Firmenplan mit Ziel, Schritten, Horizont und Kennzahl festlegen oder neu planen (set_plan)."
+		elif bool(plan.get("pruefung_faellig", false)):
+			plan_step = "Firmenplan prüfen: Istwert und Ziel vergleichen, review_plan aufrufen und bei Bedarf ändern."
+		if plan_step != "":
+			out.append(plan_step)
 		var c = sim.company(cid)
 		if c.vehicle_ids.is_empty():
 			var best := {}
@@ -834,7 +867,7 @@ func next_steps(b: Dictionary) -> Array:
 	# Je ein akuter Bedarf, Firmenfortschritt und offene Antwort bleiben im knappen Kontext sichtbar.
 	# Weitere Hinweise behalten ihre alte Reihenfolge; aktive Ziele sind in der Beobachtung zusaetzlich separat enthalten.
 	var prioritized: Array = []
-	for s in [urgent_step, firm_step, pending_step, hint, goal_step]:
+	for s in [urgent_step, firm_step, pending_step, plan_step, hint, goal_step]:
 		if s != "" and s not in prioritized:
 			prioritized.append(s)
 	for s in out:
@@ -1576,6 +1609,7 @@ func observe(name: String) -> Dictionary:
 			"ziel": [m.goal.x, m.goal.y] if not m.arrived() else null,
 			"traegt": b.held, "tragkraft": CARRY, "am_bauhof": _at_source(b), "nachrichten": int(b.get("inbox", 0))},
 		"naechste_schritte": next_steps(b),
+		"dringlichkeit": urgency(b),
 		"zeit": Catalog.game_minutes_to_text(sim.game_min), "wetter": sim.wx.headline(),
 		"karte": {"mitte": [t.x, t.y], "radius": VIEW_RADIUS, "zeilen": rows,
 			"legende": "@ du, . freier Boden, = Strasse, # Gebaeude, ~ Wasser, h begehbarer Hang/Hochebene am Berg, ^ unbegehbar (Baum, Fels, Grat), 1-9/+ hoechste Blockschicht auf dem Feld"},
@@ -2135,7 +2169,7 @@ const FOUND_INVESTOR := 20000.0     # Einlage des Kapitalgeberpools I0
 const FIRM_ACTIONS := [
 	# Fahrzeuge und Auftraege
 	"accept_contract", "assign_transport", "plan_tour", "clear_tour", "collect_contracts", "buy_vehicle", "sell_vehicle", "repair_vehicle",
-	"set_operations_policy", "create_transport_line", "pause_transport_line", "request_transport_help", "quote_transport_help", "book_air_cargo",
+	"set_operations_policy", "set_dispatch_policy", "create_transport_line", "pause_transport_line", "request_transport_help", "quote_transport_help", "book_air_cargo",
 	# Personal: Fahrer, Bauarbeiter, Vorarbeiter, Wachen
 	"recruit_worker", "recruit_foreman", "dismiss_worker", "assign_worker_task", "assign_foreman", "set_foreman_orders", "guard_target",
 	"schedule_rest", "offer_training", "request_replacement_worker",
@@ -2148,7 +2182,7 @@ const FIRM_ACTIONS := [
 	# Geld
 	"take_loan", "repay_loan", "entnahme",
 	# Unternehmensplan (PlanBook): Ziel, Schritte, Nutzen, Risiken, Abbruchbedingungen
-	"set_plan", "update_plan_step", "cancel_plan",
+	"set_plan", "review_plan", "execute_plan_step", "update_plan_step", "cancel_plan",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
 	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "bauleute", "tageloehner", "strasse_bauen", "buergeramt_bauen",
 	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage",
@@ -2206,7 +2240,16 @@ func _found_company(b: Dictionary, data: Dictionary) -> Dictionary:
 
 
 func _firm_action(b: Dictionary, data: Dictionary) -> Dictionary:
+	var cid := active_firm(b)
+	var before := _firm_metrics(cid) if cid >= 0 else {}
 	var r := _firm_action_inner(b, data)
+	if cid >= 0:
+		var action_data = data.get("aktion", data.get("action", {}))
+		var action_name := str(action_data.get("action", "")) if action_data is Dictionary else str(action_data)
+		var decisions: Array = b.get("firm_decisions", [])
+		decisions.append({"zeit": sim.game_min, "aktion": action_name.left(50), "ok": bool(r.get("ok", false)),
+			"meldung": str(r.get("msg", "")).left(100), "vorher": before})
+		b.firm_decisions = decisions.slice(-10)
 	if bool(r.get("pending", false)):   # Figur geht erst hin: angenommen, aber noch nicht ausgefuehrt
 		r["status"] = "laeuft"
 		r["msg"] = str(r.get("msg", "")) + " Das Ergebnis kommt als Ereignis (deine_letzten_ereignisse), sobald die Figur dort ist."
@@ -2300,6 +2343,24 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", "")), "pending": bool(r.get("pending", false))}
 
 
+func _firm_metrics(cid: int) -> Dictionary:
+	var c: Company = sim.company(cid)
+	return {"bargeld": int(c.ledger.cash), "gewinn": int(c.ledger.profit()), "umsatz": int(c.ledger.revenue()),
+		"lieferungen": int(c.stats.completed), "fahrzeuge": sim.company_vehicles(cid).size()}
+
+
+func _decision_outcomes(b: Dictionary, cid: int) -> Array:
+	var now := _firm_metrics(cid)
+	var out: Array = []
+	for d in (b.get("firm_decisions", []) as Array).slice(-4):
+		var old: Dictionary = d.get("vorher", {})
+		out.append({"aktion": d.aktion, "ok": d.ok, "meldung": d.meldung, "tage_seitdem": int((sim.game_min - float(d.zeit)) / GameCalendar.days_to_min(1)),
+			"aenderung_seitdem": {"bargeld": now.bargeld - int(old.get("bargeld", now.bargeld)),
+				"gewinn": now.gewinn - int(old.get("gewinn", now.gewinn)), "lieferungen": now.lieferungen - int(old.get("lieferungen", now.lieferungen)),
+				"fahrzeuge": now.fahrzeuge - int(old.get("fahrzeuge", now.fahrzeuge))}})
+	return out
+
+
 ## Erfundene Firmen-Aktionen der Wesen auf die richtige Handlung lenken (Partie 18.11.: ~20 Fehlschlaege mit siedlung_info, hub_status,
 ## siedlung_bauen, buy_material in der Wildnis, bergbau; Greta gab "siedlung_gruenden" sogar per Telefon an Bodo weiter).
 const FIRM_SETTLE := ["siedlung", "siedlung_gruenden", "siedlung_bauen", "siedlung_eroeffnen", "gruenden", "found_town", "settle", "betriebshof_eroeffnen"]
@@ -2387,7 +2448,8 @@ func _firm_action_schema() -> Dictionary:
 	var out := {}
 	for name in ["accept_contract", "assign_transport", "collect_contracts", "buy_vehicle", "sell_vehicle", "repair_vehicle",
 		"recruit_worker", "assign_worker_task", "build_office", "upgrade_office", "install_internet", "place_building",
-		"set_operations_policy", "create_transport_line", "pause_transport_line", "book_air_cargo", "buy_it_service",
+		"set_plan", "review_plan", "execute_plan_step", "set_dispatch_policy", "set_operations_policy",
+		"create_transport_line", "pause_transport_line", "book_air_cargo", "buy_it_service",
 		"found_business", "upgrade_business", "assign_staff", "set_business_price", "set_hotel_price", "set_venue_price", "request_tunnel"]:
 		if name in FIRM_ACTIONS and schema.has(name):
 			out[name] = schema[name].get("params", {})
@@ -2407,6 +2469,9 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),
 		"standortangebote": sim.sites.offers(sim.companies[cid].home_town, "einfamilienhaus") if sim.wildnis and sim.town_plan.has(sim.companies[cid].home_town) else [],
 		"unternehmensplan": sim.plans.summary(cid) if sim.get("plans") != null else {},
+		"dispositionsvorgaben": sim.operations.dispatch_policy(cid),
+		"transportchancen": sim.operations.dispatch_opportunities(cid, 4),
+		"entscheidungsfolgen": _decision_outcomes(b, cid),
 		"hinweis_fahrzeug": _no_vehicle_hint(cid),
 		"waffenschmiede": arms.firm_obs(cid),
 		"laufende_auftraege": me.buero.laufende_auftraege, "stellplaetze": me.stellplaetze,
@@ -2437,8 +2502,8 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"tunnel": sim.tunnels.summary(sim.companies[cid].home_town),
 		"aktionsschema": _firm_action_schema(),
 		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
-			"du musst nicht darauf warten. Fahrten zuweisen, Fahrer einsetzen und Aufträge annehmen ist deine Sache; die Disposition springt " +
-			"nur alle drei Spielstunden für stehende Fahrzeuge ein (und normal, wenn du drei Minuten nichts tust). Aufträge sind schnell weg – nimm sie zügig an.",
+			"du musst nicht darauf warten. Die Disposition nimmt passende Aufträge nach deinen dispositionsvorgaben an; du kannst selbst eingreifen. " +
+			"Prüfe transportchancen, unternehmensplan und entscheidungsfolgen. Aufträge sind schnell weg – entscheide zügig.",
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
 			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +

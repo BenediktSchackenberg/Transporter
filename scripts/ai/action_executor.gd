@@ -27,9 +27,10 @@ const SCHEMA := {
 	"plan_tour": {"params": {"vehicle_id": "int", "stopps": "array"},
 		"desc": "Tour aus Stopps [{art:'laden'|'abladen', contract_id, menge, ort:'abholung'|'ziel'|'lager:<Depot-ID>'}] anhängen: Sammeltouren, Rückfahrten, Umladen. Kapazität wird über die ganze Tour geprüft."},
 	"clear_tour": {"params": {"vehicle_id": "int"}, "desc": "Noch nicht begonnene Stopps eines Fahrzeugs streichen (Ladung bleibt an Bord)."},
-	"set_plan": {"params": {"ziel": "string", "schritte": "array", "nutzen": "string?", "risiken": "string?", "abbruch": "array?"},
+	"set_plan": {"params": {"ziel": "string", "schritte": "array", "nutzen": "string?", "risiken": "string?", "abbruch": "array?", "horizont_tage": "int?", "kennzahl": "string?", "zielwert": "number?", "budget": "number?"},
 		"desc": "Eigenen Plan festlegen: schritte=[{id, text, aktion?:{action,...}, abhaengig_von?:[ids], braucht?:{geld,arbeiter,fahrzeuge}}], abbruch=[{typ: bargeld_unter|ruf_unter|restzeit_unter_min|auftrag_gescheitert|arbeiter_verloren|fahrzeug_ausgefallen, wert}]."},
 	"execute_plan_step": {"params": {"step_id": "string"}, "desc": "Hinterlegte Aktion eines Planschritts ausführen (Abhängigkeiten und Geld werden geprüft)."},
+	"review_plan": {"params": {"notiz": "string?"}, "desc": "Firmenplan mit aktuellem Istwert, Zielwert, Gewinn und Budget prüfen und einen Prüfpunkt speichern."},
 	"update_plan_step": {"params": {"step_id": "string", "status": "string", "ergebnis": "string?"},
 		"desc": "Planschritt als erledigt/uebersprungen/offen/blockiert markieren (z. B. Prüf- oder Bewertungsschritte)."},
 	"cancel_plan": {"params": {"grund": "string?"}, "desc": "Aktuellen Plan verwerfen."},
@@ -501,6 +502,8 @@ func _do(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			return {"ok": true, "msg": "abgewartet"}
 		"set_plan":
 			return sim.plans.set_plan(cid, a)
+		"review_plan":
+			return sim.plans.review(cid, _s(a.get("notiz", "")))
 		"start_experiment":
 			return sim.experiments.start(cid, a)
 		"end_experiment":

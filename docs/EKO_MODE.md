@@ -25,6 +25,15 @@ Lkw. Reisegruppen nutzen auf der Straße oder nach der Landung sichtbare Busse; 
 Bürgermeister können Tunnel durch Berge ausschreiben, Firmen können sie beantragen. Portale, Zufahrt und Baufortschritt sind auf
 der Karte sichtbar; erst nach Materiallieferung und Bauabnahme wird die Unterquerung befahrbar.
 
+## Selbstständige Firmenentscheidungen
+
+- `company_plan` setzt für einen Unternehmer einen Plan mit 1–10 Schritten, 1–30 Spieltagen Frist, Kennzahl und Zielwert. Mögliche Kennzahlen sind Lieferungen, Gewinn, Umsatz, zusätzliche Fahrzeuge und Bargeld. Ein optionales Budget begrenzt den Plan; bei Fristablauf oder Budgetüberschreitung fordert die Welt eine Neuplanung. `review_company_plan` speichert eine Istaufnahme. Die ausführliche Planaktion `set_plan` kann Schritte zusätzlich mit konkreten Aktionen und Abhängigkeiten versehen.
+- `dispatch_policy` setzt automatische Annahme, Mindestdeckungsbeitrag, maximale Strecke, erlaubte Waren und Kassenreserve. Die Disposition nimmt nur bekannte, rechtzeitig fahrbare Aufträge innerhalb dieser Grenzen an. Fahrerzuteilung, Reparaturen und Tanken laufen als Betriebsroutine weiter. Die Unternehmer können mit `accept_contract` jederzeit selbst entscheiden.
+- `meine_firma.transportchancen` zeigt passende Aufträge mit Fahrzeug, geschätzter Fahrzeit, Kosten, Deckungsbeitrag und Frist. Die Schätzwerte sind Entscheidungshilfen; tatsächliche Zahlung und Kosten können abweichen.
+- `meine_firma.entscheidungsfolgen` zeigt die letzten Firmenaktionen und Veränderungen bei Kasse, Gewinn, Lieferungen und Flotte seit dem Entscheidungszeitpunkt. Diese Veränderungen sind Beobachtungen, keine kausale Gewinnzuordnung. `unternehmensplan` zeigt Istwert, Zielwert, Budgetverbrauch und fällige Prüfung.
+- Ollama bietet direkte Werkzeuge für Plan, Planprüfung, Dispositionsvorgaben, Auftragsannahme, Lkw-Kauf, Einstellung und Reparatur. Für andere Aktionen bleibt `act Firma` verfügbar.
+- `/observe.dringlichkeit` markiert knappe Lieferfristen, ausgefallene Lkw mit Fracht und eine Kasse unter Reserve. Der lokale Ollama-Schwarm prüft diese Lage regelmäßig und lässt dringende Unternehmer in der gewichteten Modellwarteschlange früher an die Reihe.
+
 Dauerbetrieb mit Neustart nach Absturz: `powershell -ExecutionPolicy Bypass -File tools\eko\welt_waechter.ps1` (lädt den letzten
 Spielstand, Schwarm startet automatisch mit). Neue Partie: `-NeuePartie -TagSekunden 600` (Tempo Standard 2x; der Autotest-Standard
 16x war für denkende Wesen viel zu schnell: ein Spieltag in 37 s). `-Modell` (Standard Qwen 27B lokal, `hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M`),

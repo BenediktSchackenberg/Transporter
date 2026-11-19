@@ -5,6 +5,8 @@ extends RefCounted
 
 const SCHEMA := {
 	"set_operations_policy": {"params": {"auto_driver": "bool?", "return_home": "bool?", "yard_checks": "bool?"}, "desc": "Betriebsroutine steuern: vorhandene Fahrer automatisch einteilen, nach Zustellung zum Hof zurueckkehren, vor neuer Tour Hofkontrolle. Keine automatische Anwerbung/Investition. Standard jeweils true."},
+	"set_dispatch_policy": {"params": {"auto_accept": "bool?", "min_margin": "number?", "max_distance": "int?", "cargo": "array?", "reserve": "number?"},
+		"desc": "Unternehmer-Vorgaben fuer die Regel-Disposition: Auftraege nur mit geschaetztem Mindestdeckungsbeitrag (EUR), hoechster Strecke (0 = offen), erlaubten Warenarten (leere Liste = alle) und verbleibender Liquiditaetsreserve. Nur Auftraege, niemals Investitionen."},
 	"create_transport_line": {"params": {"name": "string", "cargo": "string", "vehicle_ids": "array", "pickup_id": "int?", "dropoff_id": "int?", "via_depot": "bool?"},
 		"desc": "Dauerauftrag an die Disposition: eigene Fahrzeuge bedienen bekannte, passende Auftraege dieser Warenart. Optional feste Abholung/Ziel, sonst wechselnde Kunden. via_depot=true: Abholung, echter Umschlag am eigenen Hof, Zustellung. Fahrzeuge sind fuer die Linie reserviert. Keine automatischen Kaeufe, Kredite oder Anwerbungen."},
 	"pause_transport_line": {"params": {"line_id": "string"}, "desc": "Keine neuen Auftraege fuer die eigene Linie; laufende Ware wird fertig zugestellt, danach Fahrzeuge freigeben."},
@@ -17,6 +19,7 @@ var lines := {}
 var jobs := {}                 # Auftrags-ID -> {line, vehicle, stage, qty, counted}
 var requests := {}
 var policies := {}
+var dispatch_policies := {}       # Unternehmerentscheidung; die Routine darf nur innerhalb dieser Grenzen Auftraege annehmen
 var dialogue: Array = []        # belegte Betriebsmeldungen, keine fingierten Modellantworten
 var _next_line := 1
 var _next_request := 1
@@ -42,6 +45,22 @@ func run(cid: int, name: String, a: Dictionary) -> Dictionary:
 					policy[key] = bool(a[key])
 			policies[cid] = policy
 			return {"ok": true, "msg": "Betriebsroutine aktualisiert."}
+		"set_dispatch_policy":
+			var policy := dispatch_policy(cid)
+			if a.has("auto_accept"):
+				policy.auto_accept = bool(a.auto_accept)
+			if a.has("min_margin"):
+				policy.min_margin = clampf(float(a.min_margin), 0.0, 100000.0)
+			if a.has("max_distance"):
+				policy.max_distance = clampi(int(a.max_distance), 0, sim.city.size * 2)
+			if a.has("reserve"):
+				policy.reserve = clampf(float(a.reserve), 0.0, 1000000.0)
+			if a.has("cargo"):
+				if not a.cargo is Array or (a.cargo as Array).any(func(item): return not Catalog.CARGO.has(str(item))):
+					return {"ok": false, "msg": "cargo muss eine Liste gueltiger Warenarten sein (oder [] fuer alle)."}
+				policy.cargo = (a.cargo as Array).map(func(item): return str(item))
+			dispatch_policies[cid] = policy
+			return {"ok": true, "msg": "Disposition folgt jetzt deinen Vorgaben: Mindestmarge %s, Reserve %s, automatische Annahme %s." % [Catalog.money(float(policy.min_margin)), Catalog.money(float(policy.reserve)), "an" if policy.auto_accept else "aus"]}
 		"create_transport_line": return create_line(cid, a)
 		"pause_transport_line":
 			var l: Dictionary = lines.get(str(a.line_id), {})
@@ -52,6 +71,53 @@ func run(cid: int, name: String, a: Dictionary) -> Dictionary:
 		"request_transport_help": return request_help(cid, str(a.contract_id), float(a.max_fee))
 		"quote_transport_help": return quote_help(cid, str(a.request_id), float(a.fee))
 	return {}
+
+
+func dispatch_policy(cid: int) -> Dictionary:
+	return dispatch_policies.get(cid, {"auto_accept": true, "min_margin": 0.0, "max_distance": 0, "cargo": [], "reserve": 5000.0}).duplicate(true)
+
+
+## Nur wirklich bekannte und rechtzeitig fahrbare Auftraege; Kosten und ETA sind Schaetzungen fuer eine Entscheidung.
+func dispatch_opportunities(cid: int, limit: int = 5, obey_policy: bool = false) -> Array:
+	var c: Company = sim.company(cid)
+	if c == null or not c.is_active():
+		return []
+	if sim.executor.active_contracts(cid) >= c.contract_capacity():
+		return []
+	var policy := dispatch_policy(cid)
+	if obey_policy and not bool(policy.auto_accept):
+		return []
+	var best := {}
+	for v in sim.company_vehicles(cid):
+		if v.state != "idle" or not v.stops.is_empty() or str(v.contract_id) != "" or sim.driver_of(v) == null:
+			continue
+		for k in sim.market.open_contracts():
+			if not c.known.has(k.id) or c.reputation < k.min_rep or k.held_by_other(cid, sim.game_min) or (k.exclusive_for >= 0 and k.exclusive_for != cid and k.exclusive_until > sim.game_min):
+				continue
+			if not k.vehicle_ok(v.model) or sim.executor._too_late(cid, k, v.id) != "":
+				continue
+			var pick: Vector2i = sim.city.building(k.pickup).road
+			var approach := absi(pick.x - v.tile().x) + absi(pick.y - v.tile().y)
+			var tiles := float(approach) + float(k.distance) * Logistics.ETA_DETOUR
+			var eta := sim.logistics.eta_minutes(v, k)
+			var driver: Worker = sim.driver_of(v)
+			var cost := tiles * float(v.spec().cost_per_tile) + float(driver.wage) * eta / 60.0
+			var margin := float(k.reward + k.bonus) - cost
+			if obey_policy and (margin < float(policy.min_margin) or int(policy.max_distance) > 0 and k.distance > int(policy.max_distance) \
+					or not (policy.cargo as Array).is_empty() and k.cargo not in policy.cargo or c.ledger.cash - cost < float(policy.reserve)):
+				continue
+			var item := {"contract_id": k.id, "vehicle_id": v.id, "ware": k.cargo_name(), "menge": k.qty, "erloes": int(k.reward + k.bonus),
+				"kosten_geschaetzt": int(cost), "deckungsbeitrag_geschaetzt": int(margin), "fahrzeit_min_geschaetzt": int(eta),
+				"frist_in_min": int(k.deadline - sim.game_min), "angebot_noch_min": int(k.offer_until - sim.game_min), "strecke": k.distance,
+				"_score": margin / maxf(1.0, eta)}
+			if not best.has(k.id) or float(item._score) > float(best[k.id].get("_score", 0.0)):
+				best[k.id] = item
+	var out: Array = best.values()
+	out.sort_custom(func(a, b): return float(a._score) > float(b._score))
+	out = out.slice(0, limit)
+	for item in out:
+		item.erase("_score")
+	return out
 
 
 func line_of(vid: int) -> String:
@@ -569,17 +635,20 @@ func summary(cid: int) -> Dictionary:
 		if k == null or not sim.company(int(r.owner)).is_active() or (int(r.owner) != cid and sim.logistics.available(k, Logistics.PICKUP) <= 0):   # verplante Fracht nicht fremd anbieten (190 vergebliche Angebote je Partie)
 			continue
 		inquiries.append({"id": r.id, "owner": r.owner, "contract_id": k.id, "cargo": k.cargo, "qty": k.qty, "needs_cold": k.needs_cold, "needs_heavy": k.needs_heavy, "max_fee": r.max_fee, "pickup": k.pickup, "dropoff": k.dropoff, "own": int(r.owner) == cid, "quote_pending": r.offers.any(func(oid): return sim.social.offers.get(oid, {}).get("status", "") == "open")})
-	return {"routine": policies.get(cid, {"auto_driver": true, "return_home": true, "yard_checks": true}), "linien": own, "hilfeanfragen": inquiries, "funk": dialogue.filter(func(d): return int(d.company) == cid).slice(-6)}
+	return {"routine": policies.get(cid, {"auto_driver": true, "return_home": true, "yard_checks": true}), "disposition": dispatch_policy(cid), "linien": own, "hilfeanfragen": inquiries, "funk": dialogue.filter(func(d): return int(d.company) == cid).slice(-6)}
 
 
 func to_dict() -> Dictionary:
-	return {"policies": policies, "lines": lines, "jobs": jobs, "requests": requests, "dialogue": dialogue, "next_line": _next_line, "next_request": _next_request}
+	return {"policies": policies, "dispatch_policies": dispatch_policies, "lines": lines, "jobs": jobs, "requests": requests, "dialogue": dialogue, "next_line": _next_line, "next_request": _next_request}
 
 
 func from_dict(d: Dictionary) -> void:
 	policies.clear()
 	for cid in d.get("policies", {}):
 		policies[int(cid)] = d.policies[cid]
+	dispatch_policies.clear()
+	for cid in d.get("dispatch_policies", {}):
+		dispatch_policies[int(cid)] = d.dispatch_policies[cid]
 	lines = d.get("lines", {})
 	jobs = d.get("jobs", {})
 	requests = d.get("requests", {})
