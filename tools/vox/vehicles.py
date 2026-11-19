@@ -32,6 +32,11 @@ def init():
     mat("bus_body", "#ece6d2", noise=0.03)
     mat("bus_stripe", "#c0392f", noise=0.03)
     mat("recycle_green", "#4c9a5a", noise=0.04)
+    mat("fleet_panel", "#e8e5dc", noise=0.02)
+    mat("fleet_roof", "#c7c9c4", noise=0.02)
+    mat("fleet_trim", "#66747d", noise=0.01)
+    mat("fleet_glint", "#a9d4e3", noise=0.0, top=False)
+    mat("fleet_safety", "#efbb62", noise=0.0)
 
 
 def _wheel(m, cx, cy, r=4, z0=1, side=0):
@@ -212,6 +217,51 @@ def _cab(m, x, y0, w, h, front, mat_body="cab_white"):
     m.box(x + 2, y0, h - 8, x + front - 1, y0 + 1, h - 2, M("glass_dark"))
     m.box(x + 2, y0 + w - 1, h - 8, x + front - 1, y0 + w, h - 2, M("glass_dark"))
     m.box(x + front - 1, y0, 3, x + front, y0 + w, 6, M("black"))
+    # Die Kabine hat eine geneigte Stirn, Dachkante, Spiegel, Tuer und Kuehlergrill.
+    # Das ergibt auch bei kleinem Zoom eine erkennbare Fahrzeug-Silhouette.
+    m.clear(x + front - 2, y0, h - 1, x + front, y0 + w, h)
+    m.clear(x + front - 1, y0, h - 3, x + front, y0 + w, h)
+    m.box(x + 2, y0 + 2, h - 1, x + front - 3, y0 + w - 2, h, M("fleet_roof"))
+    for yy in (y0 + 1, y0 + w - 2):
+        m.box(x + front - 2, yy, h - 8, x + front - 1, yy + 1, h - 3, M("fleet_glint"))
+        m.box(x + front - 6, yy - (2 if yy == y0 + 1 else 0), h - 10,
+              x + front - 3, yy + (1 if yy == y0 + 1 else 3), h - 7, M("fleet_trim"))
+    for yy in (y0, y0 + w - 1):
+        m.box(x + 1, yy, 6, x + front - 2, yy + 1, 7, M("fleet_trim"))
+        m.box(x + 3, yy, 8, x + 4, yy + 1, h - 7, M("fleet_trim"))  # Tuerfuge
+        m.box(x + 6, yy, 10, x + 9, yy + 1, 11, M("fleet_trim"))
+    m.box(x + front - 1, y0 + 4, 5, x + front, y0 + w - 4, 9, M("fleet_trim"))
+    for yy in range(y0 + 5, y0 + w - 4, 3):
+        m.box(x + front - 1, yy, 6, x + front, yy + 1, 7, M("steel"))
+
+
+def _fleet_box(m, x0, y0, length, width, height, kind):
+    """Gemeinsame Details fuer Firmenfahrzeuge; die Grundform und Firmenfarbe bleiben erhalten."""
+    for yy in (y0, y0 + width - 1):
+        m.box(x0 + 2, yy, 12, x0 + length - 2, yy + 1, height - 4, M("fleet_panel"))
+        m.box(x0 + 2, yy, 11, x0 + length - 2, yy + 1, 16, M("comp"))
+        m.box(x0 + 2, yy, height - 5, x0 + length - 2, yy + 1, height - 4, M("comp_dark"))
+        for xx in range(x0 + 9, x0 + length - 3, 11):
+            m.box(xx, yy, 12, xx + 1, yy + 1, height - 4, M("fleet_trim"))
+            m.box(xx + 1, yy, height - 9, xx + 3, yy + 1, height - 8, M("fleet_safety"))
+        # Zwei kleine Seitenmarkierungen unter der Ladeflaeche.
+        for xx in (x0 + 5, x0 + length - 8):
+            m.box(xx, yy, 6, xx + 3, yy + 1, 8, M("fleet_safety"))
+    m.box(x0 + 2, y0 + 2, height - 1, x0 + length - 2, y0 + width - 2, height, M("fleet_roof"))
+    for xx in range(x0 + 5, x0 + length - 3, 9):
+        m.box(xx, y0 + 2, height, xx + 1, y0 + width - 2, height + 1, M("steel"))
+    # Zweifluegelige Hecktuer mit Scharnieren und Griffen.
+    m.box(x0, y0 + 2, 8, x0 + 1, y0 + width - 2, height - 2, M("fleet_panel"))
+    m.box(x0, y0 + 2, 11, x0 + 1, y0 + width - 2, 15, M("comp"))
+    m.box(x0, y0 + width // 2, 9, x0 + 1, y0 + width // 2 + 1, height - 3, M("fleet_trim"))
+    for yy in (y0 + 3, y0 + width - 4):
+        for zz in (11, height - 8):
+            m.box(x0, yy, zz, x0 + 1, yy + 2, zz + 2, M("steel"))
+    # Die Kuehlung und die grossen Aufbauten bekommen ein eigenes Dachprofil.
+    if kind == "reefer":
+        m.box(x0 + length - 6, y0 + 4, height, x0 + length - 2, y0 + width - 4, height + 3, M("fleet_trim"))
+    elif kind in ("truck", "semi"):
+        m.box(x0 + 3, y0 + 3, height, x0 + length - 3, y0 + width - 3, height + 1, M("fleet_panel"))
 
 
 def _lights(m, xf, xr, y0, w, z=4):
@@ -232,6 +282,7 @@ def van(seed=0):
     m.box(x0, y0, 22, x0 + 32, y0 + W, 24, M("comp_dark"))
     _cab(m, x0 + 32, y0, W, 17, 16)
     m.box(x0 + 32, y0, 17, x0 + 44, y0 + W, 18, M("cab_white"))
+    _fleet_box(m, x0, y0, 32, W, 24, "van")
     for wx in (x0 + 8, x0 + 37):
         _wheel(m, wx, y0, 4, 1, 1)
         _wheel(m, wx, y0 + W - 1, 4, 1, 0)
@@ -250,6 +301,7 @@ def transporter(seed=0):
     m.box(x0 + 2, y0, 12, x0 + 40, y0 + 1, 15, M("white"))
     m.box(x0, y0, 29, x0 + 42, y0 + W, 31, M("comp_dark"))
     _cab(m, x0 + 42, y0, W, 22, 18)
+    _fleet_box(m, x0, y0, 42, W, 31, "transporter")
     for wx in (x0 + 9, x0 + 47):
         _wheel(m, wx, y0, 5, 1, 1)
         _wheel(m, wx, y0 + W - 1, 5, 1, 0)
@@ -272,6 +324,7 @@ def reefer(seed=0):
     for yy in range(y0 + 5, y0 + W - 4, 4):
         m.box(x0 + 37, yy, 32, x0 + 41, yy + 1, 35, M("steel_dark"))
     _cab(m, x0 + 42, y0, W, 22, 18)
+    _fleet_box(m, x0, y0, 42, W, 31, "reefer")
     for wx in (x0 + 9, x0 + 47):
         _wheel(m, wx, y0, 5, 1, 1)
         _wheel(m, wx, y0 + W - 1, 5, 1, 0)
@@ -291,6 +344,7 @@ def truck(seed=0):
     m.box(x0 + 2, y0, 14, x0 + 56, y0 + 1, 19, M("white"))
     _cab(m, x0 + 58, y0, W, 28, 22)
     m.box(x0 + 58, y0, 28, x0 + 76, y0 + W, 30, M("cab_white"))
+    _fleet_box(m, x0, y0, 58, W, 38, "truck")
     for wx in (x0 + 10, x0 + 24, x0 + 64):
         _wheel(m, wx, y0, 5, 1, 1)
         _wheel(m, wx, y0 + W - 1, 5, 1, 0)
@@ -313,6 +367,7 @@ def semi(seed=0):
     _cab(m, x0 + 92, y0, W, 32, 24, "comp")
     m.box(x0 + 92, y0, 32, x0 + 114, y0 + W, 34, M("comp_dark"))
     m.box(x0 + 90, y0 + 2, 34, x0 + 92, y0 + W - 2, 44, M("comp"))          # Spoiler
+    _fleet_box(m, x0, y0, 88, W, 40, "semi")
     for wx in (x0 + 6, x0 + 15, x0 + 24, x0 + 98):
         _wheel(m, wx, y0, 5, 1, 1)
         _wheel(m, wx, y0 + W - 1, 5, 1, 0)

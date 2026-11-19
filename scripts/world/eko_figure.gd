@@ -14,8 +14,9 @@ const OUTLINE := Color("#1b1b24")
 
 static func look(name: String) -> Dictionary:
 	var h := absi(hash(name))
-	return {"skin": Color(SKIN[h % SKIN.size()]), "hair": Color(HAIR[(h / 7) % HAIR.size()]), "style": (h / 61) % 5,
-		"pants": Color(PANTS[(h / 13) % PANTS.size()]), "beard": (h / 101) % 4 == 0, "glasses": (h / 211) % 5 == 0}
+	return {"skin": Color(SKIN[h % SKIN.size()]), "hair": Color(HAIR[(h / 7) % HAIR.size()]), "style": (h / 61) % 9,
+		"pants": Color(PANTS[(h / 13) % PANTS.size()]), "beard": (h / 101) % 4 == 0, "glasses": (h / 211) % 5 == 0,
+		"outfit": (h / 37) % 6, "accent": Color(["#f3cf78", "#a9d9e3", "#e9aaa6", "#b4d99c"][(h / 53) % 4])}
 
 
 ## ctx: {ms, walking, facing (1/-1), action (letzte Handlung, frisch), out, custody, resting, talking, armor, weapon (Typ oder ""),
@@ -52,6 +53,31 @@ static func draw(n: CanvasItem, b: Dictionary, ctx: Dictionary) -> void:
 	_px(n, -4, -16 + y0, 8, 9, col)
 	_px(n, -4, -16 + y0, 8, 1, col.lightened(0.2))
 	_px(n, 3 if f > 0 else -4, -16 + y0, 1, 9, col.darkened(0.25))
+	# Die Firmenfarbe bleibt erkennbar, Schnitte und Accessoires unterscheiden einzelne Wesen.
+	match int(L.outfit):
+		0:  # Jacke mit hellem Revers
+			_px(n, -3, -15 + y0, 2, 4, L.accent)
+			_px(n, 1, -15 + y0, 2, 4, L.accent)
+			_px(n, 0, -12 + y0, 1, 2, col.darkened(0.35))
+		1:  # Lange Weste
+			_px(n, -4, -13 + y0, 2, 8, col.darkened(0.2))
+			_px(n, 2, -13 + y0, 2, 8, col.darkened(0.2))
+			_px(n, -1, -15 + y0, 2, 6, L.accent)
+		2:  # Mantel mit breitem Saum
+			_px(n, -5, -15 + y0, 10, 11, col.darkened(0.12))
+			_px(n, -5, -6 + y0, 10, 2, col.darkened(0.32))
+			_px(n, -1, -14 + y0, 2, 8, L.accent)
+		3:  # Kapuzenpullover mit Tasche
+			_px(n, -5, -16 + y0, 10, 4, col.darkened(0.25))
+			_px(n, -3, -10 + y0, 6, 3, L.accent)
+		4:  # Arbeitsoverall und Schultergurte
+			_px(n, -3, -13 + y0, 6, 7, col.darkened(0.18))
+			_px(n, -3, -16 + y0, 2, 5, L.accent)
+			_px(n, 1, -16 + y0, 2, 5, L.accent)
+		5:  # Lockeres Oberteil und Umhaengetasche
+			_px(n, -5, -15 + y0, 10, 9, col.lightened(0.08))
+			_px(n, -4, -14 + y0, 1, 7, L.accent)
+			_px(n, 3, -9 + y0, 4, 5, Color("#8f6240"))
 	if armor > 0.0:   # Brustpanzer
 		_px(n, -3, -15 + y0, 6, 6, Color("#9aa3ad"))
 		_px(n, -3, -15 + y0, 6, 1, Color("#cfd6dd"))
@@ -168,6 +194,18 @@ static func draw(n: CanvasItem, b: Dictionary, ctx: Dictionary) -> void:
 			4:   # Locken
 				for i in 5:
 					_px(n, -5 + i * 2, -26 + y0 + (i % 2), 2, 2, L.hair)
+			5:   # Seitenscheitel
+				_px(n, -5, -26 + y0, 9, 2, L.hair)
+				_px(n, -5, -24 + y0, 2, 4, L.hair)
+			6:   # Geflochtener Zopf
+				_px(n, -4, -26 + y0, 8, 2, L.hair)
+				_px(n, -6 if f > 0 else 4, -23 + y0, 2, 8, L.hair)
+			7:   # Breiter Hut
+				_px(n, -7, -26 + y0, 14, 2, L.accent)
+				_px(n, -4, -30 + y0, 8, 5, L.accent.darkened(0.18))
+			8:   # Hoher Dutt
+				_px(n, -4, -25 + y0, 8, 2, L.hair)
+				_px(n, -2, -29 + y0, 4, 4, L.hair)
 	if resting:   # Zzz
 		var zp := fmod(ms / 1200.0, 1.0)
 		n.draw_string(ThemeDB.fallback_font, Vector2(4 + zp * 6, -26 - zp * 10), "z", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1, 1, 1, 1.0 - zp))
@@ -193,6 +231,9 @@ static func draw_driver(n: CanvasItem, b: Dictionary, dir: int, ms: int, steer: 
 	_px(n, -6, 2 + bob, 12, 6, Color("#2b2d33"))
 	_px(n, -5, 3 + bob, 10, 5, col)
 	_px(n, -5, 3 + bob, 10, 1, col.lightened(0.2))
+	if int(L.outfit) in [0, 1, 2]:
+		_px(n, -3, 4 + bob, 2, 3, L.accent)
+		_px(n, 1, 4 + bob, 2, 3, L.accent)
 	if boss and front:   # Hemdkragen und Krawatte
 		_px(n, -1, 3 + bob, 2, 1, Color.WHITE)
 		_px(n, (0 if f > 0 else -1), 4 + bob, 1, 3, Color("#a31d1d"))
@@ -235,6 +276,12 @@ static func draw_driver(n: CanvasItem, b: Dictionary, dir: int, ms: int, steer: 
 				4:
 					for i in 5:
 						_px(n, -5 + i * 2, -7 + bob + (i % 2), 2, 2, L.hair)
+				7:
+					_px(n, -6, -7 + bob, 12, 2, L.accent)
+					_px(n, -3, -10 + bob, 6, 4, L.accent.darkened(0.18))
+				8:
+					_px(n, -4, -6 + bob, 8, 2, L.hair)
+					_px(n, -2, -9 + bob, 4, 3, L.hair)
 				_:
 					_px(n, -4, -6 + bob, 8, 2, L.hair)
 		else:

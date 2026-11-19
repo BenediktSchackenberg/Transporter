@@ -44,7 +44,10 @@ var worker_nodes := {}                  # Arbeiter-ID -> Node2D
 var person_nodes := {}                  # Kunden-ID -> Node2D
 var marker_node := Node2D.new()         # Ressourcen-Markierungen (Haendlerbestand, Waren, Vorraete)
 var select_marker := Node2D.new()
+var hover_marker := Node2D.new()
+var hover_label := Label.new()
 var selected := {}                      # {kind: vehicle|avatar|worker|person|building, id}
+var hovered := {}
 var winter := false                  # kalt oder Schnee: Figuren tragen Jacken
 var _board := {}                     # Arbeiter-ID -> Dauer des laufenden Ein-/Aussteigens
 var _was_inside := {}
@@ -93,6 +96,23 @@ func build(simulation: Simulation, city_view: CityView) -> void:
 	select_marker.visible = false
 	select_marker.z_index = 50
 	add_child(select_marker)
+	var hover_ring := Line2D.new()
+	hover_ring.width = 2.0
+	hover_ring.default_color = Color("#8fe6d4")
+	hover_ring.points = pts
+	hover_marker.add_child(hover_ring)
+	hover_label.position = Vector2(-55, -48)
+	hover_label.custom_minimum_size = Vector2(110, 0)
+	hover_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hover_label.add_theme_font_size_override("font_size", 11)
+	hover_label.add_theme_color_override("font_color", Color.WHITE)
+	hover_label.add_theme_color_override("font_outline_color", Color("#20333b"))
+	hover_label.add_theme_constant_override("outline_size", 4)
+	hover_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_marker.add_child(hover_label)
+	hover_marker.visible = false
+	hover_marker.z_index = 49
+	add_child(hover_marker)
 
 
 # ------------------------------------------------------------------ Knoten
@@ -744,6 +764,13 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			select_marker.visible = true
 			select_marker.position = Iso.to_screen(pos)
 			select_marker.scale = Vector2.ONE * (1.0 + 0.08 * sin(anim_time * 6.0))
+	hover_marker.visible = false
+	if not hovered.is_empty() and hovered != selected:
+		var hover_pos := _position_of(hovered)
+		if hover_pos.x > -9000.0:
+			hover_marker.visible = true
+			hover_marker.position = Iso.to_screen(hover_pos)
+			hover_marker.scale = Vector2.ONE * (1.0 + 0.04 * sin(anim_time * 5.0))
 
 
 ## Restliche Fahrtroute je Firmenfahrzeug (Firmenfarbe) und Fussweg der Figuren.
@@ -935,55 +962,90 @@ func _update_markers() -> void:
 
 ## Weltposition (Simulationskoordinaten) der Auswahl; (-9999, -9999) wenn nichts gewaehlt.
 func selected_position() -> Vector2:
-	match selected.get("kind", ""):
+	return _position_of(selected)
+
+
+func _position_of(item: Dictionary) -> Vector2:
+	if item.is_empty():
+		return Vector2(-9999, -9999)
+	match item.get("kind", ""):
 		"vehicle":
-			if sim.vehicles.has(selected.id):
-				return sim.vehicles[selected.id].pos
+			if sim.vehicles.has(item.id):
+				return sim.vehicles[item.id].pos
 		"avatar":
-			return sim.avatars[selected.id].pos
+			if sim.avatars.has(item.id):
+				return sim.avatars[item.id].pos
 		"being":   # Eko: das Wesen, das die Firma fuehrt
-			var eb: Dictionary = sim.eko.beings.get(str(selected.id), {})
+			var eb: Dictionary = sim.eko.beings.get(str(item.id), {})
 			if not eb.is_empty():
 				return eb.mover.pos
 		"worker":
-			var w: Worker = sim.personnel.workers.get(selected.id)
+			var w: Worker = sim.personnel.workers.get(item.id)
 			if w and not w.lost:
 				return w.pos
 		"citizen":
 			for pedestrian in peds:
-				if int(pedestrian[1].get_meta("citizen").id) == int(selected.id):
+				if int(pedestrian[1].get_meta("citizen").id) == int(item.id):
 					return pedestrian[0].pos
 		"person":
-			var pn: Node2D = person_nodes.get(selected.id)
+			var pn: Node2D = person_nodes.get(item.id)
 			if pn:
 				return pn.get_meta("world")
 		"building":
-			var b: Dictionary = sim.city.building(selected.id)
+			var b: Dictionary = sim.city.building(item.id)
+			if b.is_empty():
+				return Vector2(-9999, -9999)
 			return Vector2(b.x * 32 + b.w * 16, b.y * 32 + b.h * 16)
 		"lot":
 			var bd: Dictionary = sim.city.building(sim.city_depot.building)
 			return Vector2(bd.x * 32 + bd.w * 16, bd.y * 32 + bd.h * 16)
 		"muell":
 			for fv in sim.fleet.vehicles:
-				if int(fv.id) == int(selected.id):
+				if int(fv.id) == int(item.id):
 					return fv.mover.pos
 		"wertstoff":
 			for fv in sim.fleet.vehicles:
-				if int(fv.id) == int(selected.id):
+				if int(fv.id) == int(item.id):
 					return fv.mover.pos
 		"deponie":
 			return cv.waste_view.landfill_center()
 		"bruecke":
-			return cv.bridge_view.center_of(str(selected.id))
+			return cv.bridge_view.center_of(str(item.id))
 		"tunnel":
-			return cv.tunnel_view.center_of(str(selected.id))
+			return cv.tunnel_view.center_of(str(item.id))
 		"mountain":
-			var mn = cv.mountain_view._nodes.get(str(selected.id))
+			var mn = cv.mountain_view._nodes.get(str(item.id))
 			if mn != null and mn.active:   # laufendes Bergwerk: zwischen Abbaufront und Halde
 				return (Vector2(mn.face) + Vector2(mn.halde_cell)) * 16.0 + Vector2(16, 16)
-			var mp: Dictionary = sim.parcels.parcel(str(selected.id))
+			var mp: Dictionary = sim.parcels.parcel(str(item.id))
 			return Vector2((float(mp.rect[0]) + float(mp.rect[2]) * 0.5) * 32.0, (float(mp.rect[1]) + float(mp.rect[3]) * 0.5) * 32.0)
 	return Vector2(-9999, -9999)
+
+
+func hover_at(point: Vector2) -> void:
+	hovered = pick(point)
+	hover_label.text = _hover_name(hovered)
+
+
+func _hover_name(item: Dictionary) -> String:
+	match item.get("kind", ""):
+		"being":
+			return str(item.id)
+		"vehicle":
+			var v: FleetVehicle = sim.vehicles.get(item.id)
+			return v.display_name() if v else "Fahrzeug"
+		"avatar":
+			return sim.company(item.id).player_name
+		"worker":
+			var w: Worker = sim.personnel.workers.get(item.id)
+			return w.name if w else "Mitarbeiter"
+		"citizen":
+			for person in sim.citizens.people:
+				if int(person.id) == int(item.id):
+					return str(person.name)
+		"building":
+			return str(sim.city.building(item.id).get("name", "Gebaeude"))
+	return "Anklicken fuer Details"
 
 
 func _sprite_hit(foot: Vector2, pivot: Vector2, size: Vector2, click: Vector2, scale_f := 1.0) -> bool:
@@ -994,6 +1056,14 @@ func _sprite_hit(foot: Vector2, pivot: Vector2, size: Vector2, click: Vector2, s
 func pick(click: Vector2) -> Dictionary:
 	var best := {}
 	var best_d := INF
+	for name in sim.eko.beings:
+		var bn: Node2D = cv.eko_view._beings.get(name)
+		if bn == null:
+			continue
+		var d := (bn.position + Vector2(0, -29)).distance_to(click)
+		if d < 27.0 and d < best_d:
+			best = {"kind": "being", "id": name}
+			best_d = d
 	for cid in sim.avatars:
 		var d := (Iso.to_screen(sim.avatars[cid].pos) + Vector2(0, -26)).distance_to(click)
 		if d < 30.0 and d < best_d:

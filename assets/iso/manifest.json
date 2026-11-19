@@ -13081,35 +13081,35 @@
   "van_2": {
    "anchor": [
     70,
-    14
+    12
    ],
    "size": [
     140,
-    100
+    98
    ],
    "lit": true,
    "mask": true,
    "amask": false,
    "pivot": [
     70,
-    70
+    68
    ]
   },
   "van_3": {
    "anchor": [
     70,
-    14
+    12
    ],
    "size": [
     140,
-    100
+    98
    ],
    "lit": true,
    "mask": true,
    "amask": false,
    "pivot": [
     70,
-    70
+    68
    ]
   },
   "transporter_0": {
@@ -14033,35 +14033,35 @@
   "ambulance_2": {
    "anchor": [
     72,
-    14
+    12
    ],
    "size": [
     146,
-    106
+    104
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     72,
-    74
+    72
    ]
   },
   "ambulance_3": {
    "anchor": [
     74,
-    14
+    12
    ],
    "size": [
     146,
-    106
+    104
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     74,
-    74
+    72
    ]
   },
   "roadcrew_0": {
@@ -14101,35 +14101,35 @@
   "roadcrew_2": {
    "anchor": [
     70,
-    13
+    11
    ],
    "size": [
     142,
-    104
+    102
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     70,
-    73
+    71
    ]
   },
   "roadcrew_3": {
    "anchor": [
     72,
-    13
+    11
    ],
    "size": [
     142,
-    104
+    102
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     72,
-    73
+    71
    ]
   },
   "moving_0": {
@@ -14305,35 +14305,35 @@
   "fw_hlf_2": {
    "anchor": [
     82,
-    24
+    22
    ],
    "size": [
     164,
-    124
+    122
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     82,
-    90
+    88
    ]
   },
   "fw_hlf_3": {
    "anchor": [
     82,
-    24
+    22
    ],
    "size": [
     164,
-    124
+    122
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     82,
-    90
+    88
    ]
   },
   "fw_dlk_0": {
@@ -14441,35 +14441,35 @@
   "rd_rtw_2": {
    "anchor": [
     72,
-    14
+    12
    ],
    "size": [
     146,
-    106
+    104
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     72,
-    74
+    72
    ]
   },
   "rd_rtw_3": {
    "anchor": [
     74,
-    14
+    12
    ],
    "size": [
     146,
-    106
+    104
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     74,
-    74
+    72
    ]
   },
   "rd_nef_0": {
@@ -14577,35 +14577,35 @@
   "bh_kipper_2": {
    "anchor": [
     82,
-    24
+    22
    ],
    "size": [
     164,
-    126
+    124
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     82,
-    90
+    88
    ]
   },
   "bh_kipper_3": {
    "anchor": [
     82,
-    24
+    22
    ],
    "size": [
     164,
-    126
+    124
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     82,
-    90
+    88
    ]
   },
   "bh_streu_0": {
@@ -14645,35 +14645,35 @@
   "bh_streu_2": {
    "anchor": [
     92,
-    17
+    15
    ],
    "size": [
     176,
-    124
+    122
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     92,
-    87
+    85
    ]
   },
   "bh_streu_3": {
    "anchor": [
     84,
-    17
+    15
    ],
    "size": [
     176,
-    124
+    122
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     84,
-    87
+    85
    ]
   },
   "bus_0": {
@@ -14781,35 +14781,35 @@
   "rc_wagen_2": {
    "anchor": [
     84,
-    21
+    19
    ],
    "size": [
     166,
-    124
+    122
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     84,
-    91
+    89
    ]
   },
   "rc_wagen_3": {
    "anchor": [
     82,
-    21
+    19
    ],
    "size": [
     166,
-    124
+    122
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     82,
-    91
+    89
    ]
   },
   "fw_kdow_0": {
@@ -14985,35 +14985,35 @@
   "fw_klf_2": {
    "anchor": [
     64,
-    13
+    11
    ],
    "size": [
     128,
-    93
+    91
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     64,
-    67
+    65
    ]
   },
   "fw_klf_3": {
    "anchor": [
     64,
-    13
+    11
    ],
    "size": [
     128,
-    93
+    91
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     64,
-    67
+    65
    ]
   },
   "fw_lf10_0": {
@@ -15053,35 +15053,35 @@
   "fw_lf10_2": {
    "anchor": [
     74,
-    20
+    18
    ],
    "size": [
     148,
-    113
+    111
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     74,
-    82
+    80
    ]
   },
   "fw_lf10_3": {
    "anchor": [
     74,
-    20
+    18
    ],
    "size": [
     148,
-    113
+    111
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     74,
-    82
+    80
    ]
   },
   "fw_tlf_0": {
@@ -15121,35 +15121,35 @@
   "fw_tlf_2": {
    "anchor": [
     80,
-    19
+    17
    ],
    "size": [
     160,
-    120
+    118
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     80,
-    85
+    83
    ]
   },
   "fw_tlf_3": {
    "anchor": [
     80,
-    19
+    17
    ],
    "size": [
     160,
-    120
+    118
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     80,
-    85
+    83
    ]
   },
   "fw_gwl_0": {
@@ -15189,35 +15189,35 @@
   "fw_gwl_2": {
    "anchor": [
     82,
-    15
+    13
    ],
    "size": [
     168,
-    120
+    118
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     82,
-    85
+    83
    ]
   },
   "fw_gwl_3": {
    "anchor": [
     86,
-    15
+    13
    ],
    "size": [
     168,
-    120
+    118
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     86,
-    85
+    83
    ]
   },
   "fw_rw_0": {
@@ -15529,35 +15529,35 @@
   "rd_itw_2": {
    "anchor": [
     88,
-    8
+    6
    ],
    "size": [
     178,
-    128
+    126
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     88,
-    88
+    86
    ]
   },
   "rd_itw_3": {
    "anchor": [
     90,
-    8
+    6
    ],
    "size": [
     178,
-    128
+    126
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     90,
-    88
+    86
    ]
   },
   "aw_muell_0": {
@@ -15597,35 +15597,35 @@
   "aw_muell_2": {
    "anchor": [
     86,
-    20
+    18
    ],
    "size": [
     176,
-    130
+    128
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     86,
-    92
+    90
    ]
   },
   "aw_muell_3": {
    "anchor": [
     90,
-    20
+    18
    ],
    "size": [
     176,
-    130
+    128
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     90,
-    92
+    90
    ]
   },
   "aw_kehr_0": {
@@ -15665,35 +15665,35 @@
   "aw_kehr_2": {
    "anchor": [
     90,
-    20
+    18
    ],
    "size": [
     174,
-    126
+    124
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     90,
-    92
+    90
    ]
   },
   "aw_kehr_3": {
    "anchor": [
     84,
-    20
+    18
    ],
    "size": [
     174,
-    126
+    124
    ],
    "lit": true,
    "mask": false,
    "amask": false,
    "pivot": [
     84,
-    92
+    90
    ]
   },
   "rb_triebwagen_0": {
@@ -16052,6 +16052,78 @@
     70
    ],
    "hframes": 1,
+   "vframes": 4
+  },
+  "fig_6": {
+   "cell": [
+    48,
+    59
+   ],
+   "pivot": [
+    24,
+    54
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_7": {
+   "cell": [
+    48,
+    62
+   ],
+   "pivot": [
+    24,
+    57
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_8": {
+   "cell": [
+    48,
+    65
+   ],
+   "pivot": [
+    24,
+    60
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_9": {
+   "cell": [
+    48,
+    59
+   ],
+   "pivot": [
+    24,
+    54
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_10": {
+   "cell": [
+    48,
+    59
+   ],
+   "pivot": [
+    24,
+    54
+   ],
+   "hframes": 7,
+   "vframes": 4
+  },
+  "fig_11": {
+   "cell": [
+    48,
+    59
+   ],
+   "pivot": [
+    24,
+    54
+   ],
+   "hframes": 7,
    "vframes": 4
   }
  },

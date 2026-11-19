@@ -306,6 +306,7 @@ func _refresh() -> void:
 		if not _beings.has(name):
 			var bn := BeingNode.new()
 			bn.sim = sim
+			bn.cv = cv
 			bn.being = name
 			bn.z_index = 3   # ueber Gebaeuden wie die Markierungen der Figuren, sonst verdeckt der Bauhof das Wesen
 			bn.scale = Vector2(1.5, 1.5)   # Groesse der Buergerfiguren
@@ -382,6 +383,7 @@ class HouseNode:
 class BeingNode:
 	extends Node2D
 	var sim: Simulation
+	var cv
 	var being := ""
 	var _last_x := 0.0
 	var _facing := 1
@@ -503,9 +505,15 @@ class BeingNode:
 		var col: Color = b.color
 		var font := ThemeDB.fallback_font
 		var money := float(b.get("geld", 0.0))
-		var tag := str(b.name) + ("  %s" % Catalog.money(money) if money > 0.0 else "")
+		var focused: bool = cv.entity_view.selected.get("kind", "") == "being" and str(cv.entity_view.selected.get("id", "")) == being
+		var hovered: bool = cv.entity_view.hovered.get("kind", "") == "being" and str(cv.entity_view.hovered.get("id", "")) == being
+		var tag := str(b.name) + ("  %s" % Catalog.money(money) if focused and money > 0.0 else "")
 		var tag_y := head_top - 3.0 if above else 12.0   # am Steuer: Schild ueber dem Kopf statt quer ueber der Kabine
 		draw_string(font, Vector2(-40, tag_y), tag, HORIZONTAL_ALIGNMENT_CENTER, 80, 7, Color.WHITE)
+		if not focused and not hovered:
+			if float(b.say_left) > 0.0 and str(b.say) != "":
+				_draw_speech(b, head_top, held_n, tag_y, above)
+			return
 		# Autonomie sichtbar: Ziel, letzte Entscheidung (warum, Ergebnis), frische Erkenntnis
 		var now := Time.get_ticks_msec()
 		var info_y := tag_y - 8.0 if above else 19.0
@@ -523,14 +531,19 @@ class BeingNode:
 		var les: Dictionary = b.get("erkenntnis", {})
 		if not les.is_empty() and now - int(les.get("ms", 0)) < 15000:
 			draw_string(font, Vector2(-70, info_y), "Gelernt (%s): %s" % [les.art, str(les.text).left(40)], HORIZONTAL_ALIGNMENT_CENTER, 140, 6, Color("#e1bee7"))
-		if float(b.say_left) > 0.0 and str(b.say) != "":
-			var text := str(b.say)
-			var w := minf(160.0, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 7).x + 10.0)
-			var lines := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, w - 8.0, 7)
-			var box := Rect2(-w * 0.5, (info_y - 4.0 if above else head_top - 12 - held_n * 5) - lines.y, w, lines.y + 6)
-			draw_rect(box, Color(1, 1, 1, 0.92))
-			draw_rect(box, col.darkened(0.3), false, 1.0)
-			draw_multiline_string(font, box.position + Vector2(4, 9), text, HORIZONTAL_ALIGNMENT_LEFT, w - 8.0, 7, -1, Color("#222"))
+		_draw_speech(b, head_top, held_n, info_y, above)
+
+	func _draw_speech(b: Dictionary, head_top: float, held_n: int, info_y: float, above: bool) -> void:
+		if float(b.say_left) <= 0.0 or str(b.say) == "":
+			return
+		var font := ThemeDB.fallback_font
+		var text := str(b.say)
+		var w := minf(160.0, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 7).x + 10.0)
+		var lines := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, w - 8.0, 7)
+		var box := Rect2(-w * 0.5, (info_y - 4.0 if above else head_top - 12 - held_n * 5) - lines.y, w, lines.y + 6)
+		draw_rect(box, Color(1, 1, 1, 0.92))
+		draw_rect(box, Color(b.color).darkened(0.3), false, 1.0)
+		draw_multiline_string(font, box.position + Vector2(4, 9), text, HORIZONTAL_ALIGNMENT_LEFT, w - 8.0, 7, -1, Color("#222"))
 
 	## Lumo (eigener Entwurf): runder Kopf mit Bildschirmgesicht und zwei leuchtenden Augen, die ab und zu blinzeln,
 	## Antenne mit pulsierendem Licht, mintgruener Koerper mit Herzschlag-Anzeige, kleine Arme, Kettenfahrwerk.

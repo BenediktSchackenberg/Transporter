@@ -44,7 +44,8 @@ SUN_STEP = (-1, 0, 2)    # Richtung zur Sonne je Schritt: -x, +2z (Schattenlaeng
 
 class Model:
     def __init__(self, sx, sy, sz):
-        self.g = np.zeros((sx, sy, sz), dtype=np.uint8)
+        # Die gemeinsamen Materialpaletten aller Asset-Gruppen koennen ueber 255 Eintraege wachsen.
+        self.g = np.zeros((sx, sy, sz), dtype=np.uint16)
         self.size = (sx, sy, sz)
 
     # --- Grundformen (halboffene Intervalle, werden auf das Gitter beschnitten)

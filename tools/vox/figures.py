@@ -5,13 +5,19 @@ from engine import Model, mat, M
 
 S = 14
 FRAMES = 7
-STYLES = [  # Haut, Haar, Frisur, Hose
-    ("skin_a", "hair_brown", "short", "trou_blue"),
-    ("skin_d", "hair_black", "short", "trou_grey"),
-    ("skin_b", "hair_blond", "long", "trou_dark"),
-    ("skin_a", "hair_red", "cap", "trou_blue"),
-    ("skin_c", "hair_grey", "short", "trou_dark"),
-    ("skin_a", "hair_black", "bun", "trou_grey"),
+STYLES = [  # Haut, Haar, Frisur, Hose, Kleidung
+    ("skin_a", "hair_brown", "short", "trou_blue", "jacket"),
+    ("skin_d", "hair_black", "short", "trou_grey", "vest"),
+    ("skin_b", "hair_blond", "long", "trou_dark", "dress"),
+    ("skin_a", "hair_red", "cap", "trou_blue", "overalls"),
+    ("skin_c", "hair_grey", "short", "trou_dark", "coat"),
+    ("skin_a", "hair_black", "bun", "trou_grey", "jacket"),
+    ("skin_d", "hair_brown", "braid", "trou_blue", "dress"),
+    ("skin_c", "hair_black", "curly", "trou_dark", "hoodie"),
+    ("skin_b", "hair_red", "wide_hat", "trou_grey", "coat"),
+    ("skin_a", "hair_blond", "short", "trou_dark", "vest"),
+    ("skin_d", "hair_grey", "cap", "trou_blue", "overalls"),
+    ("skin_c", "hair_brown", "long", "trou_grey", "hoodie"),
 ]
 
 
@@ -32,10 +38,14 @@ def init():
     mat("eye", "#1a1a1e", noise=0.0, top=False)
     mat("tool", "#b8bec6", noise=0.03, top=False)
     mat("hat_cap", "#a33a33", noise=0.04, top=False)
+    mat("hat_brim", "#d1ae73", noise=0.03, top=False)
+    mat("shirt_light", "#f5f0df", noise=0.01, top=False)
+    mat("shirt_seam", "#5e6671", noise=0.02, top=False)
+    mat("bag_leather", "#986c48", noise=0.03, top=False)
 
 
 def figure(style=0, frame=0, umbrella=False, only_umbrella=False):
-    skin, hair, cut, trou = STYLES[style % len(STYLES)]
+    skin, hair, cut, trou, outfit = STYLES[style % len(STYLES)]
     m = Model(S, S, 40)
     cx, cy = S // 2, S // 2          # Mitte
     swing = [0, 2, 0, -2, 0, 0, 0][frame] if 1 <= frame <= 4 else 0
@@ -58,6 +68,26 @@ def figure(style=0, frame=0, umbrella=False, only_umbrella=False):
         # Torso (Hemd = Firmenfarbe)
         m.box(cx - 1, cy - 3, zt, cx + 2, cy + 3, zt + 7, M("comp"))
         m.box(cx - 1, cy - 3, zt, cx + 2, cy + 3, zt + 1, M("comp_dark"))
+        if outfit == "dress":
+            m.box(cx - 2, cy - 4, zt - 3, cx + 3, cy + 4, zt + 1, M("comp"))
+            m.box(cx - 1, cy - 4, zt + 1, cx + 2, cy + 4, zt + 2, M("comp_dark"))
+        elif outfit == "coat":
+            m.box(cx - 2, cy - 4, zt - 2, cx + 3, cy + 4, zt + 7, M("comp"))
+            m.box(cx + 2, cy + 3, zt - 2, cx + 3, cy + 4, zt + 5, M("comp_dark"))
+        elif outfit == "hoodie":
+            m.box(cx - 2, cy - 4, zt + 4, cx + 3, cy + 4, zt + 8, M("comp_dark"))
+            m.box(cx - 2, cy - 3, zt + 1, cx - 1, cy + 3, zt + 3, M("shirt_seam"))
+        elif outfit == "overalls":
+            for yy in (cy - 2, cy + 2):
+                m.box(cx - 1, yy, zt + 4, cx + 2, yy + 1, zt + 7, M("comp_dark"))
+            m.box(cx - 1, cy - 2, zt + 1, cx + 2, cy + 2, zt + 5, M("comp"))
+        elif outfit == "vest":
+            m.box(cx - 1, cy - 3, zt + 4, cx + 2, cy + 3, zt + 6, M("shirt_light"))
+            m.box(cx - 1, cy + 2, zt + 1, cx + 2, cy + 3, zt + 3, M("comp_dark"))
+        else:  # offenes Sakko und helles Hemd
+            m.box(cx + 1, cy - 1, zt + 2, cx + 2, cy + 2, zt + 6, M("shirt_light"))
+        if outfit in ("jacket", "coat", "vest"):
+            m.box(cx + 2, cy + 2, zt + 1, cx + 3, cy + 3, zt + 2, M("bag_leather"))
         # Arme
         for side, sg in ((-1, 1), (1, -1)):
             ay = cy - 4 if side < 0 else cy + 3
@@ -87,6 +117,15 @@ def figure(style=0, frame=0, umbrella=False, only_umbrella=False):
             m.box(cx - 1, cy - 2, zh + 4, cx + 4, cy + 2, zh + 5, M("hat_cap"))
         elif cut == "bun":
             m.box(cx - 2, cy - 1, zh + 5, cx, cy + 1, zh + 7, M(hair))
+        elif cut == "braid":
+            m.box(cx - 2, cy + 2, zh - 5, cx, cy + 4, zh + 4, M(hair))
+            m.box(cx - 2, cy + 2, zh - 7, cx - 1, cy + 4, zh - 5, M(hair))
+        elif cut == "curly":
+            for hx, hy in ((-2, -2), (0, -3), (2, -2), (-2, 2), (1, 2)):
+                m.box(cx + hx - 1, cy + hy - 1, zh + 4, cx + hx + 2, cy + hy + 2, zh + 6, M(hair))
+        elif cut == "wide_hat":
+            m.box(cx - 4, cy - 4, zh + 4, cx + 5, cy + 5, zh + 5, M("hat_brim"))
+            m.box(cx - 2, cy - 2, zh + 5, cx + 3, cy + 3, zh + 8, M("hat_brim"))
     if umbrella:
         zu = z0 + 25
         m.box(cx + 1, cy + 3, z0 + 12, cx + 2, cy + 4, zu, M("steel_dark"))

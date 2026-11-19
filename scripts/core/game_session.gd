@@ -58,6 +58,7 @@ var frame_stats := {"frames": 0, "max_ms": 0.0, "sum_ms": 0.0, "over_100ms": 0, 
 var _sounds := {}
 var _sound_cooldown := {}
 var _dragging := false
+var _last_hover_ms := 0
 var _sim_acc := 0.0                  # Rest-Simulationszeit (fester Schritt fuer reproduzierbare Ablaeufe)
 
 
@@ -105,6 +106,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	add_child(city_view)
 	city_view.build(sim)
 	entity_view = EntityView.new()
+	city_view.entity_view = entity_view
 	city_view.add_child(entity_view)
 	entity_view.build(sim, city_view)
 	# Eigene Ebene ueber Nachtfaerbung, Fensterlicht und Wetter (folgt der Kamera), damit Markierungen auch nachts sichtbar sind
@@ -878,6 +880,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				cam.position += before - cam.get_global_mouse_position()
 		elif event.button_index in [MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
 			_dragging = event.pressed
+			if _dragging:
+				entity_view.hovered = {}
 		elif event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			var sel := entity_view.pick(cam.get_global_mouse_position())
 			entity_view.selected = sel
@@ -886,6 +890,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _dragging:
 		following = false
 		cam.position -= event.relative / cam.zoom.x
+	elif event is InputEventMouseMotion:
+		# Die teure Gebaeudeauswahl nur bei Bewegung und hoechstens fuenfmal je Sekunde ausfuehren.
+		if Time.get_ticks_msec() - _last_hover_ms >= 200:
+			_last_hover_ms = Time.get_ticks_msec()
+			entity_view.hover_at(cam.get_global_mouse_position())
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_SPACE: toggle_pause()

@@ -143,7 +143,7 @@ const PERSONALITIES := {
 const COMPANY_COLORS := [Color("#e04a3a"), Color("#3a8fe0"), Color("#3ac06a"), Color("#e0b020"),
 	Color("#b05ae0"), Color("#20c0c0")]
 const COLOR_NAMES := ["Rot", "Blau", "Grün", "Gelb", "Violett", "Türkis"]
-const AVATAR_COUNT := 6
+const AVATAR_COUNT := 12
 
 
 ## Eigene Modelle des Fahrzeugwerks (Auftrag 24, VehicleWorks): "D<n>" -> Werte wie VEHICLE_MODELS plus "base" (Grundbild).

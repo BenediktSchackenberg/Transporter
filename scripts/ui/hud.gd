@@ -1350,6 +1350,28 @@ func _update_selection() -> void:
 		sel_text.text = ""
 		return
 	match sel.kind:
+		"being":
+			var b: Dictionary = sim.eko.beings.get(str(sel.id), {})
+			if b.is_empty():
+				session.entity_view.selected = {}
+				return
+			var firm_id: int = sim.eko.active_firm(b)
+			var role := "Stadtoberhaupt" if int(b.get("amt", -1)) >= 0 else ("Unternehmer" if firm_id >= 0 else "Freies Wesen")
+			sel_title.text = "%s · %s" % [str(b.name), role]
+			sel_text.text = "Ort: %s · Vermoegen: %s" % [str(sim.eko.tile_of(b)), Catalog.money(float(b.get("geld", 0.0)))]
+			if firm_id >= 0:
+				sel_text.text += " · Firma: %s" % sim.company(firm_id).company_name
+			var goal: Dictionary = b.get("ziel", {})
+			if str(goal.get("status", "")) == "aktiv":
+				sel_text.text += "\nZiel: %s (%d %%)" % [str(goal.get("ziel", "")), int(goal.get("fortschritt", 0))]
+			var dec: Dictionary = b.get("entscheidung", {})
+			if not dec.is_empty():
+				sel_text.text += "\nLetzte Entscheidung: %s · %s" % [str(dec.get("aktion", "")), str(dec.get("status", ""))]
+				var why := str(dec.get("warum", ""))
+				if why != "":
+					sel_text.text += " · %s" % why
+			if float(b.get("say_left", 0.0)) > 0.0 and str(b.get("say", "")) != "":
+				sel_text.text += "\nSagt: %s" % str(b.say)
 		"citizen":
 			var people: Array = sim.citizens.people.filter(func(p): return int(p.id) == int(sel.id))
 			if people.is_empty():
