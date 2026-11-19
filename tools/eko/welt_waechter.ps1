@@ -13,8 +13,8 @@ param(
     [int]$StartHaeuser = -1,       # neue Partie: hoechstens so viele Wohnhaeuser je Startort (die Orte wachsen dann selbst)
     [int]$TagSekunden = -1,        # neue Partie: Laenge eines Spieltags in Sim-Sekunden (Standard 60; Eko empfohlen 600)
     [int]$Tempo = 2,               # neue Partie: Spielgeschwindigkeit 1/2/4/8/16 (Autotest-Standard waere 16 – zu schnell fuer denkende Wesen)
-    [string]$Modell = "qwen3.5:9b-q4_K_M",   # Modell der Wesen (Ollama); Benedikt 19.11.: nur noch qwen3.5:9b (vorher Qwen 27B, Grafikspeicher voll)
-    [int]$Ctx = 0                  # Kontextfenster der Wesen (0 = Standard des Schwarms)
+    [string]$Modell = "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M",   # Modell der Wesen (Ollama); Benedikt 19.11. abends: zurueck zu Qwen 27B (qwen3.5:9b schaffte die Bau-Kette nicht)
+    [int]$Ctx = 16384              # Kontextfenster der Wesen; 19.11.: 16k, sonst ist mit Qwen 27B der Grafikspeicher voll (Spiel hakte)
 )
 $ErrorActionPreference = "Continue"
 $logs = Join-Path $env:USERPROFILE "PixelTransportRivals-Eko\welt"
