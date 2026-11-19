@@ -13,7 +13,7 @@ param(
     [int]$StartHaeuser = -1,       # neue Partie: hoechstens so viele Wohnhaeuser je Startort (die Orte wachsen dann selbst)
     [int]$TagSekunden = -1,        # neue Partie: Laenge eines Spieltags in Sim-Sekunden (Standard 60; Eko empfohlen 600)
     [int]$Tempo = 2,               # neue Partie: Spielgeschwindigkeit 1/2/4/8/16 (Autotest-Standard waere 16 – zu schnell fuer denkende Wesen)
-    [string]$Modell = "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M",   # Modell der Wesen (Ollama); Benedikt 16.11.: Qwen 27B lokal
+    [string]$Modell = "qwen3.5:9b-q4_K_M",   # Modell der Wesen (Ollama); Benedikt 19.11.: nur noch qwen3.5:9b (vorher Qwen 27B, Grafikspeicher voll)
     [int]$Ctx = 0                  # Kontextfenster der Wesen (0 = Standard des Schwarms)
 )
 $ErrorActionPreference = "Continue"

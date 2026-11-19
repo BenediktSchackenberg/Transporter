@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 CONTINUE = "Bitte nicht aufhören. Mach einfach weiter mit dem, was du tun möchtest."
 REFLECT = ("Nimm dir kurz Zeit: Wie fühlst du dich gerade (observe → gefuehle)? Halte Wichtiges in EPISODIC_MEMORY.jsonl "
            "(append_memory) und geprüftes Wissen in SEMANTIC_MEMORY.md fest. Danach mach weiter, womit du willst.")
-DEFAULT_MODEL = "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M"   # Benedikt 16.11.2026: Qwen 27B lokal (gpt-oss:20b erfand Angebote, kaputte Aufrufe)
+DEFAULT_MODEL = "qwen3.5:9b-q4_K_M"   # Benedikt 19.11.2026: nur noch qwen3.5:9b lokal (Qwen 27B fuellte den Grafikspeicher, Spiel hakte)
 MAX_MESSAGES = 60         # Gespraechslaenge, danach werden die aeltesten Schritte verworfen (das Gedaechtnis liegt in Dateien)
 KEEP_MESSAGES = 36
 REREAD_S = 900            # dieselbe unveraenderte Datei so lange nur als Kurzfassung (Leseschleife 17.11.)

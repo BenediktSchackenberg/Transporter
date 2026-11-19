@@ -31,7 +31,7 @@ var eko_brain_opt: OptionButton   # womit die Wesen denken
 var eko_mode_hint: Label
 var day_seconds_spin: SpinBox
 ## Benedikt 16.11.2026: Qwen 27B lokal ist Standard (sorgfaeltiger als gpt-oss:20b, das Angebote erfand und oft kaputte Werkzeugaufrufe schrieb).
-const EKO_BRAINS := [["ollama", "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M", "Ollama lokal · Qwen 27B (sorgfältig)"], ["ollama", "gpt-oss:20b", "Ollama lokal · gpt-oss:20b (schnell)"]]
+const EKO_BRAINS := [["ollama", "qwen3.5:9b-q4_K_M", "Ollama lokal · qwen3.5:9b"]]   # Benedikt 19.11.: nur noch dieses Modell
 const WORLDS := ["region", "kueste", "stadt"]   # Auftrag 17: neue Partien standardmaessig als Region mehrerer Staedte
 const WORLDS_LABEL := ["Region (je Spieler eine Stadt)", "Küstenort", "Rasterstadt"]
 var town_label: Label
@@ -400,7 +400,7 @@ func _update_eko_controls() -> void:
 ## eine andere Kontextgroesse verlangt; mit einem Wert bleibt das Modell geladen.
 const OLLAMA_CTX := 24576
 ## Lokaler Buergermeister: groesseres Modell auf dem eigenen Ollama (langsamer, daher lange Wartezeit und seltener).
-const MAYOR_LOCAL_MODEL := "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M"
+const MAYOR_LOCAL_MODEL := "qwen3.5:9b-q4_K_M"
 const MAYOR_LOCAL_URL := "http://127.0.0.1:11435"
 
 
