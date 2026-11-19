@@ -83,8 +83,11 @@ func on_month(_month: int) -> void:
 		if _audit_roll(c.id, _month) < AUDIT_CHANCE:
 			audit(c, _month)
 	for k in sim.towns.count():   # jede Stadt gibt Mittel ueber ihrem Startstand aus (Auftraege an S0)
+		if sim.wildnis:   # 19.11.: Wildnis-Staedte starten mit ~5 Mio. – die Pauschale zog monatlich die Haelfte ab (Auenklippe ins Minus); dort baut der Buergermeister selbst
+			continue
 		var acct := Towns.account_of(k)
-		var excess: float = float(sim.economy.accounts.get(acct, 0.0)) - (float(Economy.SEED.P0) if k == 0 else Towns.START_BUDGET)
+		var bound: float = float(sim.towns.mayor(k).commitments) if sim.towns.mayor(k) != null else 0.0   # beschlossene Projekte bleiben gedeckt
+		var excess: float = float(sim.economy.accounts.get(acct, 0.0)) - (float(Economy.SEED.P0) if k == 0 else Towns.START_BUDGET) - bound
 		if excess > 0.0:
 			sim.economy.transfer(acct, "S0", SPEND_SHARE * excess)
 			spending_total += SPEND_SHARE * excess

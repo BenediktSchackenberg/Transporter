@@ -8860,6 +8860,11 @@ func test_wildnis_found() -> void:
 		var an: Dictionary = s.towns.mayor(k).hub_connection()
 		ok(not an.is_empty() and str(an.ref) == "anschluss" and not (an.road_plan as Array).is_empty() and (an.material as Dictionary).is_empty(), "Bauamt beschließt den Straßenanschluss ans Großlager")
 		ok(s.towns.mayor(k).hub_connection().is_empty(), "Anschluss nur einmal beschlossen")
+	# 19.11.: die pauschale Monatsausgabe der öffentlichen Hand zog Wildnis-Städten die Hälfte ihrer Millionen ab
+	var town_cash: float = float(s.economy.accounts.get(Towns.account_of(k), 0.0))
+	s.public_sector.on_month(1)
+	ok(is_equal_approx(float(s.economy.accounts.get(Towns.account_of(k), 0.0)), town_cash) or float(s.economy.accounts.get(Towns.account_of(k), 0.0)) >= town_cash * 0.95,
+		"Wildnis-Stadtkasse bleibt beim Monatswechsel erhalten (%.0f → %.0f)" % [town_cash, float(s.economy.accounts.get(Towns.account_of(k), 0.0))])
 	ok(absf(s.economy.conservation_error()) < 1.0, "Geldbuch stimmt")
 	RegionGenerator.neubeginn = false
 	RegionGenerator.wildnis = false
