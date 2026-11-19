@@ -14785,6 +14785,7 @@ func test_eko_office_and_goals() -> void:
 		var a := {"action": "decide_application", "decision": w[0]}
 		ok(EkoWorld.normalize_office(a) == "" and a.decision == w[1], "decision %s -> %s" % w)
 	ok(EkoWorld.normalize_office({"action": "decide_application", "decision": "vielleicht"}).contains("genehmigen, bedingungen"), "unklare decision: Hinweis")
+	ok(EkoWorld._municipal_code("Kindergarten") == "KI-01" and EkoWorld._municipal_code("Polizei") == "PO-01", "Kindergarten → Kita, Polizei → Polizeiwache")
 	var af: Dictionary = E.input(m, "Amt", {"aktion": {"action": "assess_financing"}})
 	ok(af.ok and str(af.msg).contains("Offene Projekte"), "assess_financing ohne project_id: Übersicht (%s)" % str(af.msg).left(80))
 	var M: Mayor = s.towns.mayor(0)

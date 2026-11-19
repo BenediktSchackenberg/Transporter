@@ -2846,8 +2846,13 @@ static func _best(word: String, options: Array, min_sim := 0.7) -> String:
 	return best if best_s >= min_sim else ""
 
 
+## 19.11.: Thomas Roth "kindergarten" → Kita (Label "Kita" enthielt das Wort nicht)
+const MUNICIPAL_WORDS := {"kindergarten": "kita", "kindertagesstaette": "kita", "polizei": "polizeiwache", "schule": "grundschule", "krankenhaus": "klinik"}
+
+
 static func _municipal_code(word: String) -> String:
 	var w := _plain(word)
+	w = str(MUNICIPAL_WORDS.get(w, w))
 	for code in Municipal.TYPES:
 		var label := _plain(str(Municipal.TYPES[code].label))
 		var dienst := _plain(str(Municipal.TYPES[code].get("dienst", "")))
