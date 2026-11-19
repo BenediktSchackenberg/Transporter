@@ -919,7 +919,7 @@ func _demand_town() -> int:
 ## Bautraeger: erstes passendes Grundstueck fuer `def_id` reservieren und den Bauantrag stellen.
 func _developer_try(cands: Array, def_id: String) -> bool:
 	var floors := 3 if def_id == "mehrfamilienhaus" else int(Planning.DEFS[def_id].floors[0])
-	var town := sim.towns.of_parcel(str(cands[0].id)) if not cands.is_empty() else 0
+	var town: int = sim.towns.of_parcel(str(cands[0].id)) if not cands.is_empty() else 0
 	var profile: Dictionary = sim.town_plan.of(town) if sim.town_plan != null else {}
 	var style := str(profile.get("form", ""))
 	var pressure := clampf(float(sim.towns.mayor(town).waiting) / 12.0, 0.25, 1.0) if town >= 0 else 0.5
