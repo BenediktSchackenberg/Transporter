@@ -18,6 +18,8 @@ const SCHEMA := {
 		"desc": "Einen geprüften Frischwasser- oder Abwasserleitungsabschnitt aus obs.versorgungsleitungen wählen. Er folgt verbundenen Straßen, braucht Material und Baufirma und versorgt Gebäude erst nach Fertigstellung."},
 	"stromstoerung_priorisieren": {"params": {"trasse": "string", "reason": "string"},
 		"desc": "Bei einer unterbrochenen Trasse aus obs.strom.netz.reparaturen zusätzliche Netzkräfte bezahlen; der Trupp fährt weiterhin zur Schadstelle und repariert dort schneller."},
+	"kraftwerk_notfall": {"params": {"massnahme": "string", "reason": "string"},
+		"desc": "Nach einem Angriff auf das Kernkraftwerk aus obs.strom.kraftwerk.notfall handeln: stabilisieren (45 000 EUR, Reparatur und kürzere Sperre) oder bei Katastrophe evakuieren (20 000 EUR, Wesen verlassen die Sperrzone). Jede Maßnahme nur einmal; Strom und Wasser können ausfallen."},
 	"kommunal_schliessen": {"params": {"einrichtung": "string", "reason": "string"}, "desc": "Kommunale Einrichtung schließen (Personal frei, keine Kosten mehr)."},
 	"fahrzeug_entwerfen": {"params": {"klasse": "string", "name": "string", "farbe": "string", "akzent": "string?", "form": "string?", "nutzlast": "int?",
 		"leistung": "string?", "qualitaet": "string?", "kuehlung": "bool?", "preis": "number?", "reason": "string"},
@@ -721,6 +723,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.water.request_main(town, str(a.get("option", "")), str(a.get("reason", "Neue Stadtteile versorgen"))) if sim.water != null and sim.water.enabled() else {"ok": false, "msg": "Keine kommunalen Leitungen in dieser Welt."}
 			"stromstoerung_priorisieren":
 				res = sim.grid.net.prioritize_repair(town, str(a.get("trasse", "")))
+			"kraftwerk_notfall":
+				res = sim.plant.respond(town, str(a.get("massnahme", "")))
 			"kommunal_bauen":
 				res = sim.services.build(town, str(a.typ), str(a.reason), "Bürgermeister %s" % name, str(a.get("grundstueck", ""))) if sim.services != null and sim.municipal.enabled() else {"ok": false, "msg": "Keine kommunalen Dienste."}
 			"kommunal_fahrzeug":

@@ -23,7 +23,7 @@ const WARM_SPOIL := 0.5              # Kuehlware je Tag ohne Strom
 const START_BATCHES := 4
 const UPSTREAM := {"getreide": "feld", "holz": "forst", "mehl": "muehle", "schlachttier": "tierhaltung", "mastschwein": "schweinemast",
 	"mastrind": "rindermast", "fleisch": "schlachthof", "koks": "kokerei", "eisenerz": "bergwerk", "kohle": "bergwerk", "kalkstein": "bergwerk",
-	"naturstein": "bergwerk", "naturstein_aufbereitet": "steinmetz"}
+	"naturstein": "bergwerk", "naturstein_aufbereitet": "steinmetz", "uranerz": "uranbergwerk", "brennelement": "brennelementwerk"}
 ## Lagerstaetten (Abschnitt 5, vereinfacht): ausgewaehlte freie Parzellen ausserhalb von Wohn- und Mischgebiet tragen ein Vorkommen.
 ## Deterministisch aus Stadtsamen und Parzellen-ID; Menge in Einheiten (100 kg), Qualitaet 0,6-1,0 (Foerderung je Person).
 const DEPOSIT_KINDS := ["eisenerz", "kohle", "kalkstein", "rohmaterial", "naturstein"]
@@ -1617,9 +1617,9 @@ func market_obs() -> Dictionary:
 
 
 func _market_obs() -> Dictionary:
-	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0, "baufirma": 0, "stahlwerk": 0, "elektrostahlwerk": 0, "kokerei": 0, "bergwerk": 0, "brauerei": 0, "moebelwerk": 0, "forst": 0, "it": 0}
+	var n := {"feld": 0, "muehle": 0, "baeckerei": 0, "tierhaltung": 0, "schlachthof": 0, "restaurant": 0, "baufirma": 0, "stahlwerk": 0, "elektrostahlwerk": 0, "kokerei": 0, "bergwerk": 0, "brauerei": 0, "moebelwerk": 0, "forst": 0, "it": 0, "kohlekraftwerk": 0, "uranbergwerk": 0, "brennelementwerk": 0}
 	for b in sim.biz.items.values():
-		if n.has(b.branch) and b.status in Businesses.RUNNING:
+		if n.has(b.branch) and (b.status in Businesses.RUNNING or (b.branch in ["kohlekraftwerk", "uranbergwerk", "brennelementwerk"] and b.status != "geschlossen")):
 			n[b.branch] = int(n[b.branch]) + 1
 	var waiting := {}
 	for b in sim.biz.items.values():
@@ -1631,7 +1631,9 @@ func _market_obs() -> Dictionary:
 			var far := remote_deposit(str(item))
 			if not far.is_empty():
 				access[item] = far
-	return {"bergwerke_gesamt": sim.biz.items.values().filter(func(b): return b.branch == "bergwerk" and b.status != "geschlossen").size(), "bau_wartend": sim.crews.waiting().size(), "bautrupps_frei": sim.crews.crews.values().filter(func(t): return t.state == "frei").size(), "engpaesse": waiting, "zufahrt_noetig": access, "zufahrten_im_bau": sim.access.running(), "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "brauereien": n.brauerei, "moebelwerke": n.moebelwerk, "it_betriebe": n.it, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
+	return {"bergwerke_gesamt": sim.biz.items.values().filter(func(b): return b.branch == "bergwerk" and b.status != "geschlossen").size(), "kohlebergwerke": sim.biz.items.values().filter(func(b): return b.branch == "bergwerk" and str(b.get("deposit", {}).get("art", "")) == "kohle" and b.status != "geschlossen").size(),
+		"kohlekraftwerke": n.kohlekraftwerk, "uranbergwerke": n.uranbergwerk, "brennelementwerke": n.brennelementwerk,
+		"bau_wartend": sim.crews.waiting().size(), "bautrupps_frei": sim.crews.crews.values().filter(func(t): return t.state == "frei").size(), "engpaesse": waiting, "zufahrt_noetig": access, "zufahrten_im_bau": sim.access.running(), "felder": n.feld, "muehlen": n.muehle, "baeckereien": n.baeckerei, "tierhaltungen": n.tierhaltung, "schlachthoefe": n.schlachthof, "restaurants": n.restaurant, "baufirmen": n.baufirma, "stahlwerke": n.stahlwerk + n.elektrostahlwerk, "brauereien": n.brauerei, "moebelwerke": n.moebelwerk, "it_betriebe": n.it, "bauvorhaben": sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size(), "brot_import": int(sim.retail.stats.get("bread_import", 0))}
 
 
 ## Marktchancen fuer die KI: wie viel einer Stufe wird importiert statt lokal erzeugt (Brot: Grosshandelsimport).

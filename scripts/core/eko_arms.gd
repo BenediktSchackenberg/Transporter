@@ -592,6 +592,8 @@ func damage_building(bd: Dictionary, dmg: float, by: Dictionary, from: Vector2i)
 		dmg *= 0.3
 	var before := condition_of(bid)
 	_set_condition(bid, before - dmg)
+	if bid == int(_sim().plant.building) and dmg > 0.0:
+		_sim().plant.attack_damage(condition_of(bid), str(by.get("name", "Angriff")))
 	var t := Vector2i(int(bd.walk.x), int(bd.walk.y))
 	_incident(t, "%s beschädigt %s" % [str(by.get("name", "Explosion")), bd.name])
 	_alert_owner(bid, "%s wurde angegriffen (Zustand %d %%)." % [bd.name, int(condition_of(bid))])

@@ -167,7 +167,7 @@ func _allocate() -> void:
 	var emergency := clampf(PowerPlant.EMERGENCY_KW - free_em, 0.0, PowerPlant.EMERGENCY_KW)
 	var unserved := maxf(0.0, -free_em)   # Grundlast ohne Strom (abgehaengte Staedte ueber dem Notstrom)
 	last = {"grundlast": snappedf(base, 1.0), "betriebe": snappedf(demand, 0.1), "bedarf": snappedf(base + demand, 1.0), "versorgt": snappedf(given, 0.1), "abgeschaltet": off,
-		"kraftwerk_kw": snappedf(plant_kw, 1.0), "notstrom_kw": snappedf(emergency, 1.0), "staedte": towns,
+		"kraftwerk_kw": snappedf(plant_kw, 1.0), "privat_kw": snappedf(private_kw, 1.0), "muell_kw": snappedf(iv_kw, 1.0), "notstrom_kw": snappedf(emergency, 1.0), "staedte": towns,
 		"unversorgt_kw": snappedf(unserved, 1.0)}
 
 
@@ -177,7 +177,10 @@ func _bill() -> void:
 	# Erzeugung des abgelaufenen Tages: Kraftwerk (Brennstoff) und Notstrom von aussen; ersetzt die fruehere Pauschale je kWh
 	var total_kwh := (float(last.get("grundlast", 0.0)) + float(last.get("versorgt", 0.0))) * hours
 	var emerg_kwh := float(last.get("notstrom_kw", 0.0)) * hours
-	sim.plant.generate(maxf(0.0, total_kwh - emerg_kwh), emerg_kwh)
+	# Kohle-, Wind- und Solarstrom ist bereits als Ware von E0 gekauft. Er verbraucht kein zusaetzliches Brennelement.
+	var private_kwh := float(last.get("privat_kw", 0.0)) * hours
+	var waste_kwh := float(last.get("muell_kw", 0.0)) * hours
+	sim.plant.generate(maxf(0.0, total_kwh - emerg_kwh - private_kwh - waste_kwh), emerg_kwh)
 	# Bezug je Stadt (Grundlast + versorgte Betriebe) zum Erzeugungspreis an die gemeinsame Kraftwerksgesellschaft
 	var price := float(cfg().erzeugung_eur_kwh)
 	var tl: Dictionary = last.get("staedte", {})
@@ -252,7 +255,7 @@ func finish_expansion(kw: float) -> void:
 func summary() -> Dictionary:
 	return {"leistung_kw": snappedf(capacity, 1.0), "grundlast_kw": last.grundlast, "betriebe_kw": last.betriebe, "bedarf_kw": last.bedarf,
 		"auslastung": snappedf(float(last.bedarf) / maxf(1.0, capacity), 0.01), "abgeschaltete_betriebe": int(last.abgeschaltet),
-		"tarif_eur_kwh": tariff, "ausbau_laeuft": expansion_running(), "engpass_tage": int(stats.engpass_tage), "kraftwerk": sim.plant.summary(), "notstrom_kw": float(last.get("notstrom_kw", 0.0)),
+		"tarif_eur_kwh": tariff, "ausbau_laeuft": expansion_running(), "engpass_tage": int(stats.engpass_tage), "kraftwerk": sim.plant.summary(), "privat_kw": float(last.get("privat_kw", 0.0)), "notstrom_kw": float(last.get("notstrom_kw", 0.0)),
 		"ausbau": {"kw": EXPAND_KW, "kosten": EXPAND_COST, "tage": EXPAND_DAYS}, "staedte": last.get("staedte", {}),
 		"anteile": shares(), "letzter_ausgleich": last_settle, "netz": net.summary(), "gesellschaft_saldo": snappedf(float(sim.economy.accounts.get(PowerPlant.ACCT, 0.0)), 1.0)}
 

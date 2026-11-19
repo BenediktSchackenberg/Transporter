@@ -158,6 +158,7 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 	for name in a.visited:
 		visited.append({"ort": name, "zuletzt": Catalog.game_minutes_to_text(a.visited[name])})
 	var results: Array = sim.action_results[cid].filter(func(r): return r.t >= since).map(func(r): return r.text)
+	var energy_grid: Dictionary = sim.grid.summary()
 	return {
 		"zeit": {"spielzeit": Catalog.game_minutes_to_text(now), "verbleibende_echtzeit_min": snappedf(remaining_real_min, 0.1),
 			"stunde": int(Catalog.hour_of_day(now))},
@@ -168,7 +169,9 @@ static func build(sim: Simulation, cid: int, events: Array, since: float, remain
 		"freie_depotstandorte": free_sites.slice(0, 6), "verkehr": sim.traffic_events.map(func(e): return e.text),
 		"datum": GameCalendar.long_text(now), "bank": _bank(sim, cid), "unternehmen": sim.insolvency.summary_of(cid), "auktionen": sim.insolvency.auction_list(), "bauhof": _bauhof(sim, cid), "personal_lage": sim.households.summary_of(cid), "wohnmarkt": _housing(sim, cid), "bevoelkerung": _population(sim), "spielerkredite": sim.player_loans.summary_of(cid), "auflagen": sim.oversight.open_for("C%d" % cid).map(func(o): return {"id": o.id, "betrifft": o.label, "zustand": int(sim.oversight.condition_of(o.what)), "frist_tag": int(o.deadline)}), "gebaeudezustand": sim.care.summary_of(cid), "gesundheit_personal": sim.workforce.summary_of(cid),
 		"meldungen_nur_daten": sim.news.items.filter(func(i): return float(i.relevance) >= 0.5).slice(0, 3).map(func(i): return {"gemeldet": i.title, "einschaetzung_engine": "%s, Relevanz %d %%" % [i.cat, int(float(i.relevance) * 100.0)]}),
-		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "rivalitaet": sim.rivalry.summary_of(cid), "betriebe": sim.biz.obs_of(cid), "region": _region(sim, cid), "bergbau": sim.mining.steps_for(cid), "verfuegbare_branchen": _branches(sim, cid), "chancen": _chances(sim) + _build_chance(sim, cid), "produktion_markt": sim.prod.market_obs(), "immobilien_angebote": sim.realty.offers(2) if sim.company(cid).ledger.cash > 80000.0 else [], "it_angebote": sim.it.offers(), "grosslager": _hub(sim), "steinbauten": sim.stone.obs_of(cid), "freibau": sim.freebuild.obs_of(cid), "fremde_stammkunden": foreign_loyal.slice(0, 8),
+		"wetter": _weather(sim), "lage": _situation(sim, cid), "konkurrenten": rivals, "rivalitaet": sim.rivalry.summary_of(cid), "betriebe": sim.biz.obs_of(cid), "region": _region(sim, cid), "bergbau": sim.mining.steps_for(cid), "verfuegbare_branchen": _branches(sim, cid), "chancen": _chances(sim) + _build_chance(sim, cid), "produktion_markt": sim.prod.market_obs(),
+		"energie": {"auslastung": energy_grid.auslastung, "abgeschaltete_betriebe": energy_grid.abgeschaltete_betriebe, "brennelemente": sim.plant.fuel_elements(), "brennelemente_bestellt": sim.plant.ordered(), "heimische_brennelemente": sim.prod.sellers(PowerPlant.ITEM).size()},
+		"immobilien_angebote": sim.realty.offers(2) if sim.company(cid).ledger.cash > 80000.0 else [], "it_angebote": sim.it.offers(), "grosslager": _hub(sim), "steinbauten": sim.stone.obs_of(cid), "freibau": sim.freebuild.obs_of(cid), "fremde_stammkunden": foreign_loyal.slice(0, 8),
 		"nachrichten": msgs, "angebote_an_dich": offers_in, "deine_angebote": offers_out,
 		"ergebnisse_deiner_aktionen": results.slice(-10), "ereignisse": events.slice(-10),
 		"hinweis": hint, "plan": sim.plans.summary(cid), "gedaechtnis": sim.memory.relevant(cid, _context(sim, cid, market)),

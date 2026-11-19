@@ -1067,6 +1067,16 @@ static func power(sim: Simulation) -> String:
 	txt += "Tarif %.2f EUR/kWh · abgerechnet %s für %d kWh · Erzeugungskosten %s · Tage mit Abschaltung %d
 " % [float(g.tarif_eur_kwh),
 		Catalog.money(float(sim.grid.stats.erloes)), int(sim.grid.stats.kwh), Catalog.money(float(sim.grid.stats.erzeugung)), int(g.engpass_tage)]
+	var plant: Dictionary = g.get("kraftwerk", {})
+	txt += "Kernkraftwerk: %d Brennelemente im Lager · %d bestellt · %.0f MWh im Reaktor · private Einspeisung %.0f kW
+" % [int(plant.get("elemente_lager", 0)), int(plant.get("bestellt", 0)), float(plant.get("brennstoff_mwh", 0.0)), float(g.get("privat_kw", 0.0))]
+	var emergency: Dictionary = plant.get("notfall", {})
+	if not emergency.is_empty():
+		txt += "[color=#ff7755]KRAFTWERKSALARM: %s · außer Betrieb bis Tag %d%s[/color]
+" % [str(emergency.stufe).to_upper(), int(plant.get("ausser_betrieb_bis_tag", -1)) + 1,
+			" · Sperrzone bis Tag %d" % (int(emergency.sperre_bis) + 1) if str(emergency.stufe) == "katastrophe" else ""]
+		txt += "  Evakuierung %s · Stabilisierung %s (Amt: kraftwerk_notfall)
+" % ["erfolgt" if bool(emergency.evakuiert) else "offen", "erfolgt" if bool(emergency.stabilisiert) else "offen"]
 	if bool(g.ausbau_laeuft):
 		txt += "[color=#8fd18f]Netzausbau läuft: +%d kW[/color]
 " % int(g.ausbau.kw)

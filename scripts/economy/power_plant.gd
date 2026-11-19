@@ -33,6 +33,10 @@ var loaded_mwh := MWH_PER_ELEMENT
 var pending: Array = []              # {due, n}: bestellte Elemente, Ankunft am Terminal
 var maint_due := MAINT_DAYS
 var stats := {"mwh": 0.0, "fuel_cost": 0.0, "crew": 0.0, "maintenance": 0.0, "emergency_kwh": 0.0, "emergency_cost": 0.0, "disposal": 0.0, "elements_used": 0}
+var alarm := {}                       # {stufe, seit, ursache, sperre_bis, evakuiert, stabilisiert}
+const EXCLUSION_RADIUS := 8
+const RESPONSE_STABILIZE := 45000.0
+const RESPONSE_EVACUATE := 20000.0
 
 
 func setup(simulation) -> void:
@@ -60,7 +64,7 @@ func ordered() -> int:
 	for p in pending:
 		n += int(p.n)
 	for d in sim.prod.deals.values():
-		if d.item == ITEM and d.status in ["transport", "unterwegs"]:
+		if d.item == ITEM and d.buyer == "P0" and int(d.buyer_loc) == building and d.status in ["transport", "unterwegs"]:
 			n += int(d.qty)
 	return n
 
@@ -73,6 +77,8 @@ func maintenance_overdue() -> bool:
 func available_kw(nominal: float) -> float:
 	if GameCalendar.day_of(sim.game_min) < offline_until:
 		return 0.0   # nach einem Stoerfall abgeschaltet
+	if sim.eko != null and sim.eko.arms.condition_of(building) <= 0.0:
+		return 0.0   # ein zerstoertes Kraftwerk muss erst wiederaufgebaut werden
 	if loaded_mwh <= 0.0 and fuel_elements() <= 0:
 		return 0.0
 	return nominal * (0.5 if maintenance_overdue() else 1.0)
@@ -124,14 +130,108 @@ func _incident_roll(day: int) -> void:
 		"Störfall im Kernkraftwerk: %d Tage abgeschaltet, %s Reparatur. Die Bürger sind beunruhigt.") % [days, Catalog.money(cost)], "bad")
 
 
+## Ein Angriff fuehrt zuerst zur Sicherheitsabschaltung. Erst schwere, fortgesetzte Schaeden loesen eine regionale Katastrophe aus.
+## Die Spielwerte bilden Risiko und Folgen ab, keine realen kerntechnischen Prozesse.
+func attack_damage(condition: float, attacker: String) -> void:
+	var day := GameCalendar.day_of(sim.game_min)
+	var level := "abschaltung" if condition >= 60.0 else ("stoerfall" if condition >= 30.0 else "katastrophe")
+	var rank := {"abschaltung": 1, "stoerfall": 2, "katastrophe": 3}
+	if int(rank.get(alarm.get("stufe", ""), 0)) >= int(rank[level]):
+		return
+	var previous: String = str(alarm.get("stufe", ""))
+	var shutdown := 3 if level == "abschaltung" else (12 if level == "stoerfall" else 45)
+	offline_until = maxi(offline_until, day + shutdown)
+	alarm = {"stufe": level, "seit": day, "ursache": attacker, "sperre_bis": day + (35 if level == "katastrophe" else 0),
+		"evakuiert": false, "stabilisiert": false}
+	var bd: Dictionary = sim.city.building(building)
+	var at := Vector2i(int(bd.walk.x), int(bd.walk.y))
+	if level == "abschaltung":
+		sim.log_event("ALARM im Kernkraftwerk: Angriff durch %s, Sicherheitsabschaltung für mindestens %d Tage. Die Stadtwerke schalten auf Notstrom." % [attacker, shutdown], "warn")
+		return
+	if previous in ["", "abschaltung"]:
+		sim.fire.ignite(building, "Angriff auf das Kernkraftwerk", "Industriebrand")
+	if level == "stoerfall":
+		sim.log_event("STÖRFALL im Kernkraftwerk nach Angriff durch %s: Feuerwehreinsatz, %d Tage Abschaltung und Stromengpass." % [attacker, shutdown], "bad")
+		return
+	# Ein schwerer Schaden legt die Umgebung still; die sichtbare Sperrzone trifft auch den Angreifer.
+	sim.eko.arms.zones.append({"feld": [at.x, at.y], "radius": EXCLUSION_RADIUS, "bis_tag": day + 35, "quelle": "kraftwerk"})
+	sim.eko.conflict.fires.append({"feld": [at.x, at.y], "left": 30.0, "staerke": 1.0})
+	sim.eko.changed.emit()
+	for mayor in sim.towns.mayors:
+		mayor.approval = maxf(0.0, float(mayor.approval) - 18.0)
+	sim.log_event("KATASTROPHE im Kernkraftwerk nach Angriff durch %s! Reaktor außer Betrieb, Evakuierung und Sperrzone um %d/%d für 35 Tage. Feuerwehr und Rettung sind alarmiert." % [attacker, at.x, at.y], "bad")
+
+
+## Buergermeister entscheiden ueber Sofortschutz und Evakuierung; jede Massnahme ist einmalig und kostet die jeweilige Stadtkasse.
+func respond(town: int, measure: String) -> Dictionary:
+	if alarm.is_empty() or GameCalendar.day_of(sim.game_min) >= offline_until:
+		return {"ok": false, "msg": "Kein laufender Kraftwerksnotfall."}
+	if measure not in ["stabilisieren", "evakuieren"]:
+		return {"ok": false, "msg": "Maßnahme stabilisieren oder evakuieren wählen."}
+	if measure == "evakuieren" and str(alarm.stufe) != "katastrophe":
+		return {"ok": false, "msg": "Evakuierung ist nur bei einer Sperrzone nötig."}
+	var key := "stabilisiert" if measure == "stabilisieren" else "evakuiert"
+	if bool(alarm.get(key, false)):
+		return {"ok": false, "msg": "Maßnahme wurde bereits durchgeführt."}
+	var cost := RESPONSE_STABILIZE if measure == "stabilisieren" else RESPONSE_EVACUATE
+	if sim.towns.mayor(town).available_budget() < cost:
+		return {"ok": false, "msg": "Für %s fehlen %s." % [measure, Catalog.money(cost)]}
+	sim.economy.transfer(Towns.account_of(town), "K0" if measure == "stabilisieren" else "S0", cost)
+	alarm[key] = true
+	if measure == "stabilisieren":
+		offline_until = maxi(GameCalendar.day_of(sim.game_min) + 3, offline_until - 8)
+		if str(alarm.stufe) == "katastrophe":
+			alarm.sperre_bis = maxi(GameCalendar.day_of(sim.game_min) + 10, int(alarm.sperre_bis) - 10)
+			for zone in sim.eko.arms.zones:
+				if str(zone.get("quelle", "")) == "kraftwerk":
+					zone.bis_tag = int(alarm.sperre_bis)
+	else:
+		# Die sichtbaren Wesen verlassen die Sperrzone auf einem Fussweg zum naechsten sicheren Stadtzentrum.
+		var site: Dictionary = sim.city.building(building)
+		var center := Vector2i(int(site.walk.x), int(site.walk.y))
+		for being in sim.eko.beings.values():
+			if EkoWorld._dist(sim.eko.tile_of(being), center) > EXCLUSION_RADIUS:
+				continue
+			for t in sim.towns.list:
+				if EkoWorld._dist(t.center, center) > EXCLUSION_RADIUS:
+					var path: Array[Vector2i] = sim.nav.walk_path(sim.eko.tile_of(being), t.center)
+					if not path.is_empty():
+						being.mover.set_path(path)
+						break
+	sim.log_event("%s: Kraftwerksnotfall – %s für %s beschlossen." % [sim.towns.name_of(town), measure, Catalog.money(cost)], "good")
+	return {"ok": true, "msg": "%s beauftragt (%s)." % [measure.capitalize(), Catalog.money(cost)]}
+
+
+func _exclusion_day(day: int) -> void:
+	var active: bool = not alarm.is_empty() and str(alarm.get("stufe", "")) == "katastrophe" and day < int(alarm.get("sperre_bis", 0))
+	var site: Dictionary = sim.city.building(building)
+	if site.is_empty():
+		return
+	var center := Vector2i(int(site.walk.x), int(site.walk.y))
+	for biz in sim.biz.items.values():
+		var bd: Dictionary = sim.city.building(int(biz.site))
+		if bd.is_empty():
+			continue
+		var near := Vector2i(int(bd.walk.x), int(bd.walk.y)).distance_to(center) <= EXCLUSION_RADIUS
+		if active and near:
+			sim.biz.block(str(biz.id), "kraftwerk_sperrzone", "Kraftwerksnotfall: Betrieb in der Sperrzone")
+		else:
+			sim.biz.unblock(str(biz.id), "kraftwerk_sperrzone")
+
+
 func on_day(day: int) -> void:
+	if not alarm.is_empty() and day >= offline_until and day >= int(alarm.get("sperre_bis", 0)):
+		alarm.clear()
 	_incident_roll(day)
+	_exclusion_day(day)
 	sim.economy.transfer(ACCT, "H0", CREW_PER_DAY)   # Betriebsmannschaft
 	stats.crew = float(stats.crew) + CREW_PER_DAY
 	# Ankunft bestellter Elemente am Importterminal -> Spezialtransport zum Kraftwerk (echter Transportauftrag, Zahler P0)
 	for p in pending.duplicate():
-		if day >= int(p.due) and _ship(int(p.n)):
-			pending.erase(p)
+		if day >= int(p.due):
+			p.n = _ship(int(p.n))
+			if int(p.n) <= 0:
+				pending.erase(p)
 	if fuel_elements() + ordered() <= REORDER_AT:
 		pending.append({"due": day + LEAD_DAYS, "n": ORDER_QTY})
 		sim.log_event("Stadtwerke bestellen %d Brennelemente (Lieferzeit %d Tage)." % [ORDER_QTY, LEAD_DAYS], "info")
@@ -147,23 +247,35 @@ func on_day(day: int) -> void:
 			sim.log_event("Kraftwerk gewartet (%d Einheiten Stahl, %s)." % [MAINT_STEEL, Catalog.money(price)], "info")
 
 
-func _ship(n: int) -> bool:
+func _ship(n: int) -> int:
 	var port: int = int(sim.city_depot.port)
 	var ip := float(Production.art(ITEM).get("importpreis", 0.0))
-	var local: int = sim.prod.sell_from_producers(ITEM, n, ip * 0.9, ACCT, "Brennelemente für das Kernkraftwerk")   # zuerst aus der Welt
-	if local > 0:
-		sim.stock.add(ITEM, local, "P0", building, "Brennelemente aus dem Brennelementwerk", sim.game_min)
-		sim.log_event("Kernkraftwerk erhält %d Brennelemente aus heimischer Fertigung." % local, "info")
-		n -= local
+	# Heimische Brennelemente fahren als echte Fracht vom Werk zum Reaktor. Bis zur Ankunft bleiben sie beim Hersteller reserviert.
+	var suppliers: Array = sim.prod.sellers(ITEM)
+	suppliers.sort_custom(func(a, b): return float(a.price) < float(b.price))
+	for supplier in suppliers:
 		if n <= 0:
-			return true
+			break
+		var q := mini(n, int(supplier.avail))
+		var freight: float = sim.prod.freight(int(supplier.loc), building, ITEM, q)
+		if sim.prod._deal("P0", building, "", supplier, ITEM, q, float(supplier.price), freight):
+			var budget := float(supplier.price) * float(q) + freight
+			sim.economy.transfer(ACCT, "P0", budget)
+			stats.fuel_cost = float(stats.fuel_cost) + budget
+			sim.log_event("Kernkraftwerk bestellt %d Brennelemente aus %s: Spezialtransport zum Reaktor ausgeschrieben." % [q, sim.company(int(supplier.cid)).company_name], "info")
+			n -= q
+	if n <= 0:
+		return 0
 	if sim.harbor.enabled and sim.harbor.available(ITEM) < n:   # Kuestenort: Brennstoff kommt mit dem naechsten Schiff
 		sim.harbor.demand(ITEM, n - sim.harbor.available(ITEM))
-		return false
-	sim.prod._deal("P0", building, "", {"biz": "", "acct": "X0", "cid": -1, "loc": port, "avail": n, "price": ip}, ITEM, n, ip, sim.prod.freight(port, building, ITEM, n))
-	sim.economy.transfer(ACCT, "P0", ip * float(n))   # Bestellung laeuft ueber die Stadtwerke von Ort 0 (Lager P0), die Gesellschaft erstattet
-	stats.fuel_cost = float(stats.fuel_cost) + ip * float(n)
-	return true
+		return n
+	var freight: float = sim.prod.freight(port, building, ITEM, n)
+	if sim.prod._deal("P0", building, "", {"biz": "", "acct": "X0", "cid": -1, "loc": port, "avail": n, "price": ip}, ITEM, n, ip, freight):
+		var budget := ip * float(n) + freight
+		sim.economy.transfer(ACCT, "P0", budget)   # Die gemeinsame Kraftwerksgesellschaft finanziert Einkauf und Fracht.
+		stats.fuel_cost = float(stats.fuel_cost) + budget
+		return 0
+	return n
 
 
 ## Reststoffe: monatlich ein Teil kostenpflichtig zur externen Entsorgung (dokumentierter Abfallstrom).
@@ -178,11 +290,11 @@ func on_month(_m: int) -> void:
 func summary() -> Dictionary:
 	return {"gebaeude": building, "brennstoff_mwh": snappedf(loaded_mwh, 0.1), "elemente_lager": fuel_elements(), "bestellt": ordered(),
 		"wartung_faellig_tag": maint_due, "wartung_ueberfaellig": maintenance_overdue(), "reststoff": sim.stock.qty(SPENT, "P0", building), "reststoff_max": SPENT_CAP,
-		"notstrom_kwh": int(stats.emergency_kwh)}
+		"notstrom_kwh": int(stats.emergency_kwh), "notfall": alarm.duplicate(), "ausser_betrieb_bis_tag": offline_until}
 
 
 func to_dict() -> Dictionary:
-	return {"building": building, "loaded_mwh": loaded_mwh, "pending": pending, "maint_due": maint_due, "stats": stats, "offline_until": offline_until, "incidents": incidents}
+	return {"building": building, "loaded_mwh": loaded_mwh, "pending": pending, "maint_due": maint_due, "stats": stats, "offline_until": offline_until, "incidents": incidents, "alarm": alarm}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -201,6 +313,7 @@ func from_dict(d: Dictionary) -> void:
 		sim.city.buildings[building].sprite = "nuclear_plant"
 	offline_until = int(d.get("offline_until", -1))
 	incidents = d.get("incidents", [])
+	alarm = d.get("alarm", {})
 	loaded_mwh = float(d.get("loaded_mwh", loaded_mwh))
 	pending = d.get("pending", [])
 	maint_due = int(d.get("maint_due", maint_due))

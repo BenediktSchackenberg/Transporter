@@ -30,11 +30,12 @@ func _net() -> PowerNet:
 func _process(delta: float) -> void:
 	_phase += delta
 	_poll -= delta
-	if _poll > 0.0 or _net() == null or not _net().built():
+	if _poll > 0.0 or _net() == null:
 		return
-	_poll = 0.5
+	_poll = 0.2
 	var key := "%s|%s|%s" % [str(_view_cells()), ",".join(_net().edges.map(func(e): return "%s%s" % [e.id, e.state])), str(_net().planned.keys())]
-	if key != _key:
+	var animated := not sim.plant.alarm.is_empty() or sim.biz.items.values().any(func(b): return str(b.branch) in ["kohlekraftwerk", "uranbergwerk", "brennelementwerk"] or (str(b.branch) == "bergwerk" and str(b.get("deposit", {}).get("art", "")) == "kohle"))
+	if key != _key or animated:
 		_key = key
 	queue_redraw()
 
@@ -58,11 +59,15 @@ static func _foot(q: Vector2i) -> Vector2:
 func _draw() -> void:
 	ProcTimer.sub("zeichnen: power_net_view")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
 	var N := _net()
-	if N == null or not N.built():
+	if N == null:
 		return
 	var view := _view_cells()
 	if view.size.x * view.size.y > 160000:
 		return   # sehr weit herausgezoomt
+	if not N.built():
+		_draw_energy_sites(view)
+		_draw_reactor_alarm(view)
+		return
 	for e in N.edges:
 		var cells: Array = e.cells
 		var ok := str(e.state) == "ok"
@@ -129,6 +134,80 @@ func _draw() -> void:
 						if view.has_point(site):
 							_draw_substation_site(site)
 						break
+	_draw_energy_sites(view)
+	_draw_reactor_alarm(view)
+
+
+## Kleine, animierte Anlagendetails vor den Gebaeuden machen die Energiekette auf der Karte unterscheidbar.
+func _draw_energy_sites(view: Rect2i) -> void:
+	for biz in sim.biz.items.values():
+		var branch := str(biz.branch)
+		if branch not in ["bergwerk", "uranbergwerk", "brennelementwerk", "kohlekraftwerk"]:
+			continue
+		if branch == "bergwerk" and str(biz.get("deposit", {}).get("art", "")) != "kohle":
+			continue
+		var bd: Dictionary = sim.city.building(int(biz.site))
+		if bd.is_empty():
+			continue
+		var q := Vector2i(int(bd.x) + int(bd.w) / 2, int(bd.y) + int(bd.h) - 1)
+		if not view.has_point(q):
+			continue
+		var c := _foot(q) + Vector2(0, 10)
+		if str(biz.status) not in Businesses.RUNNING:
+			draw_rect(Rect2(c.x - 23, c.y - 7, 46, 14), STAKE, false, 1.5)
+			continue
+		match branch:
+			"bergwerk", "uranbergwerk":
+				var uranium := branch == "uranbergwerk"
+				var ore := Color("78a951") if uranium else Color("34353a")
+				# Foerderturm, Seilrolle, Grubenwagen und Halde direkt am Eingang.
+				draw_line(c + Vector2(-18, 1), c + Vector2(-11, -28), MAST, 2.0)
+				draw_line(c + Vector2(1, 1), c + Vector2(-11, -28), MAST, 2.0)
+				draw_line(c + Vector2(-19, -9), c + Vector2(1, -9), MAST, 1.4)
+				draw_circle(c + Vector2(-11, -28), 3.2, FENCE)
+				draw_line(c + Vector2(-11, -25), c + Vector2(-11, -5), WIRE, 1.2)
+				draw_colored_polygon(PackedVector2Array([c + Vector2(6, 2), c + Vector2(17, -9), c + Vector2(29, 2)]), ore)
+				draw_rect(Rect2(c.x - 7, c.y - 1, 13, 7), Color("5a6267"))
+				for x in [-5.0, 3.0]:
+					draw_circle(c + Vector2(x, 7), 2.0, Color("22252a"))
+				if uranium:
+					draw_circle(c + Vector2(20, -6), 2.2 + 0.7 * sin(_phase * 4.0), Color("b9eb67"))
+			"kohlekraftwerk":
+				var smoke := clampf(float(biz.get("today", 0)) / 6.0, 0.25, 1.0)
+				for x in [-14.0, 6.0]:
+					draw_rect(Rect2(c.x + x, c.y - 27, 7, 28), Color("886b5a"))
+					draw_line(c + Vector2(x - 1, -27), c + Vector2(x + 8, -27), Color("d5c4a4"), 2.0)
+					for i in 3:
+						var drift := fmod(_phase * 10.0 + float(i) * 12.0 + x, 35.0)
+						draw_circle(c + Vector2(x + 3.0 + drift * 0.25, -31.0 - drift), 3.0 + drift * 0.12, Color(0.31, 0.31, 0.32, smoke * (0.5 - drift / 90.0)))
+				draw_colored_polygon(PackedVector2Array([c + Vector2(12, 2), c + Vector2(22, -7), c + Vector2(31, 2)]), Color("303035"))
+			"brennelementwerk":
+				for x in [-12.0, 7.0]:
+					draw_rect(Rect2(c.x + x, c.y - 17, 12, 18), Color("627d8c"))
+					draw_line(c + Vector2(x, -17), c + Vector2(x + 12, -17), Color("b3d5df"), 2.0)
+					draw_line(c + Vector2(x + 6, -17), c + Vector2(x + 6, -24), Color("8fabb7"), 2.0)
+				draw_line(c + Vector2(-12, -5), c + Vector2(19, -5), Color("53a8c1"), 2.5)
+				draw_circle(c + Vector2(4, -22), 2.0 + sin(_phase * 5.0), Color("9adfe5"))
+
+
+func _draw_reactor_alarm(view: Rect2i) -> void:
+	var alert: Dictionary = sim.plant.alarm
+	if alert.is_empty() or GameCalendar.day_of(sim.game_min) >= int(sim.plant.offline_until):
+		return
+	var bd: Dictionary = sim.city.building(sim.plant.building)
+	if bd.is_empty():
+		return
+	var q := Vector2i(int(bd.x) + int(bd.w) / 2, int(bd.y) + int(bd.h) / 2)
+	if not view.has_point(q):
+		return
+	var c := _foot(q) + Vector2(0, -60)
+	var pulse := 0.55 + 0.4 * sin(_phase * 7.0)
+	var color := Color(1.0, 0.12, 0.08, pulse) if str(alert.stufe) == "katastrophe" else Color(1.0, 0.68, 0.06, pulse)
+	for radius in [18.0, 27.0]:
+		draw_arc(c, radius, 0.0, TAU, 32, color, 2.0)
+	draw_colored_polygon(PackedVector2Array([c + Vector2(0, -15), c + Vector2(14, 10), c + Vector2(-14, 10)]), color)
+	draw_line(c + Vector2(0, -6), c + Vector2(0, 3), Color.BLACK, 2.0)
+	draw_circle(c + Vector2(0, 7), 1.5, Color.BLACK)
 
 
 ## Gittermast: zwei schraege Beine, Querstreben, Traverse mit Isolatoren.

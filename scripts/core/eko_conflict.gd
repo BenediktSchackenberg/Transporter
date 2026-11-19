@@ -145,7 +145,7 @@ func _assault(cid: int, target: int, asset: String) -> Dictionary:
 	if not enemy.is_active() or not w.sim.town_ready(enemy.home_town) or not w.sim.town_ready(own.home_town) or enemy.home_town == own.home_town:
 		return {"ok": false, "msg": "Beide Firmen brauchen eine eigene gegründete Stadt."}
 	if asset != "" and _asset_building(target, asset).is_empty() and _asset_vehicle(target, asset) == null and _asset_tower(target, asset).is_empty():
-		return {"ok": false, "msg": "asset muss ein Gebäude der gegnerischen Stadt, ein gegnerisches Fahrzeug oder ein Wachturm sein (Name, building_<id>, fahrzeug_<id>, wachturm_<index>)."}
+		return {"ok": false, "msg": "asset muss ein Gebäude der gegnerischen Stadt, kraftwerk, ein gegnerisches Fahrzeug oder ein Wachturm sein."}
 	var armed := troops.keys().filter(func(id): return int(troops[id].cid) == cid and not (troops[id].weapon as Dictionary).is_empty())
 	if armed.is_empty():
 		return {"ok": false, "msg": "Mobilisiere mindestens einen Mitarbeiter mit einer Waffe aus deiner Waffenschmiede."}
@@ -198,6 +198,8 @@ func _approach(center: Vector2i, start: Vector2i, radii: Array = [29, 35, 42, 48
 func _asset_building(target: int, asset: String) -> Dictionary:
 	if asset == "":
 		return {}
+	if asset == "kraftwerk":
+		return w.sim.city.building(w.sim.plant.building)   # gemeinsame Anlage: ein Angriff trifft alle Staedte, auch die eigene
 	var bd: Dictionary = w.arms._building_by(asset)
 	if bd.is_empty() or w.sim.towns.of_building(int(bd.id)) != w.sim.company(target).home_town:
 		return {}
@@ -472,7 +474,8 @@ func observe(cid: int) -> Dictionary:
 		"angriff": assaults.get(str(cid), {}), "eigene_stadt_bedroht": assaults.values().any(func(a): return int(a.target) == cid),
 		"mauer": w.arms.walls.get(str(k), {}), "wachtuerme": w.arms.towers.filter(func(t): return int(t.stadt) == k).size(),
 		"angreifbare_wachtuerme": _tower_targets(rivals),
-		"aktionen": "set_city_strategy {form?, wirtschaft?, haltung: frieden|verteidigung|krieg, rival?, begruendung?}; mobilize_worker {worker_id, weapon?}; demobilize_worker {worker_id}; order_assault {target, asset?}; order_retreat {}. asset: Gebäude der Rivalenstadt, fahrzeug_<id> oder wachturm_<index>; ohne asset: Depot, dann Rathaus. Angriff braucht eigene Stadt, eine bewaffnete Truppe und Haltung krieg. Waffen entstehen in der eigenen Waffenschmiede. Frieden bleibt eine vollwertige Entscheidung."}
+		"kraftwerk": w.sim.plant.summary(),
+		"aktionen": "set_city_strategy {form?, wirtschaft?, haltung: frieden|verteidigung|krieg, rival?, begruendung?}; mobilize_worker {worker_id, weapon?}; demobilize_worker {worker_id}; order_assault {target, asset?}; order_retreat {}. asset: Gebäude der Rivalenstadt, kraftwerk, fahrzeug_<id> oder wachturm_<index>; ohne asset: Depot, dann Rathaus. Ein Kraftwerksangriff trifft die ganze Region und kann eine Sperrzone auslösen. Angriff braucht eigene Stadt, bewaffnete Truppe und Haltung krieg; Frieden bleibt möglich."}
 
 
 func _tower_targets(rivals: Array) -> Array:

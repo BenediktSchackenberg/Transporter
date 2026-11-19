@@ -2521,6 +2521,8 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"branchen_zum_gruenden": _branch_menu(o.get("verfuegbare_branchen", [])),
 		"chancen": (o.get("chancen", []) as Array).slice(0, 6),
 		"bergbau": o.get("bergbau", []),
+		"energiekette": {"lage": o.get("energie", {}), "betriebe_region": {"kohlekraftwerke": o.get("produktion_markt", {}).get("kohlekraftwerke", 0), "kohlebergwerke": o.get("produktion_markt", {}).get("kohlebergwerke", 0), "uranbergwerke": o.get("produktion_markt", {}).get("uranbergwerke", 0), "brennelementwerke": o.get("produktion_markt", {}).get("brennelementwerke", 0)},
+			"hinweis": "Kohle: Lagerstätte erkunden, Abbaurecht, Bergwerk, sichtbare Fracht zum Kohlekraftwerk. Uran: Uranbergwerk, Brennelementwerk, Spezialtransport zum Kernkraftwerk. Ein Angriff auf das gemeinsame Kraftwerk trifft alle Städte."},
 		"tunnel": sim.tunnels.summary(sim.companies[cid].home_town),
 		"aktionsschema": _firm_action_schema(),
 		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
@@ -2917,6 +2919,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
 	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "stromtrassen": ind.get("stromtrassen", []),
+		"kraftwerk_notfall": sim.plant.summary().get("notfall", {}),
 		"versorgungsleitungen": ind.get("versorgungsleitungen", []),
 		"versorgungsanlagen_standorte": ind.get("versorgungsanlagen_standorte", []),
 		"naechster_ausbauschritt": ind.get("stadtplan_naechster_abschnitt", {}), "stadtplan_erweiterung": ind.get("stadtplan_erweiterung", []),
@@ -2945,7 +2948,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	out["aktionen"] = "Amt {aktion: {action, ...}}: " + "; ".join(acts)
 	out["vorfaelle"] = sim.rivalry.incidents.slice(-8).map(func(i): return {"tag": GameCalendar.day_of(float(i.t)) + 1, "was": str(i.get("text", i.get("art", ""))).left(120)})
 	out["schiedsrichter"] = "Bei Sabotage, Blockaden oder unfairem Wettbewerb kannst du einschreiten: warn_company, order_inspection, mediate_rivalry."
-	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle Stadtteile, baue sie mit viertel_erschliessen aus und verschönere sie mit propose_project. Prüfe stromtrassen und beauftrage nötige Anschlüsse mit stromtrasse_bauen, bevor neue Betriebe Strom brauchen. Plane Wasserwerk, Hochbehälter und Kläranlage mit infra_ausbau vorausschauend. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)
+	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle Stadtteile, baue sie mit viertel_erschliessen aus und verschönere sie mit propose_project. Prüfe stromtrassen und beauftrage nötige Anschlüsse mit stromtrasse_bauen, bevor neue Betriebe Strom brauchen. Plane Wasserwerk, Hochbehälter und Kläranlage mit infra_ausbau vorausschauend. Bei Kraftwerksnotfall kraftwerk_notfall {massnahme: evakuieren|stabilisieren} erwägen. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)
 	return out
 
 

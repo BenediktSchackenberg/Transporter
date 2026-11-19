@@ -13,7 +13,7 @@ const LEGENDS := ["",
 	"Baustelle blockiert rot · wartet auf Lieferung orange · Straßensperrung/Baustelle/Überflutung dunkelrot · Stau gelb · Verkehrsdichte rot (je dichter)",
 	"Eisenerz rotbraun · Kohle schwarz · Kalkstein hell · Kies/Sand ocker · Naturstein blaugrau · kräftig = erkundet, blass = nur geschätzt · Rand weiß = Bergwerk/Abbaurecht",
 	"Viertel nach Zone (Wohnen grün · Mischgebiet gelb · Gewerbe orange · Grün hellgrün) · Rand gestrichelt = Entwurf, voll = beschlossen/in Erschließung, kräftig gefüllt = erschlossen · geplante Straßen orange · reservierte Grundstücke gelb umrandet · Stern = Ortskern"]
-const DEPOSIT_COLORS := {"eisenerz": Color("a0522d"), "kohle": Color("2b2b2b"), "kalkstein": Color("e6e2d0"), "rohmaterial": Color("d0a050"), "naturstein": Color("8f9aa6")}
+const DEPOSIT_COLORS := {"eisenerz": Color("a0522d"), "kohle": Color("2b2b2b"), "uranerz": Color("75a74e"), "kalkstein": Color("e6e2d0"), "rohmaterial": Color("d0a050"), "naturstein": Color("8f9aa6")}
 const ZONE_COLORS := {"wohnen": Color("5fb85f"), "mischgebiet": Color("e0c050"), "gewerbe": Color("e08a3c"), "industrie": Color("d0504a"), "oeffentlich": Color("4a8fd0"),
 	"gruen": Color("a6d98a"), "korridor": Color("8a8a8a")}
 

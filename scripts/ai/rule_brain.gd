@@ -530,7 +530,8 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	return {"summary": summary, "goal": goal, "actions": actions.slice(0, MAX_ACTIONS), "memory": "Strategie: %s" % personality}
 
 
-const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant", "baufirma", "bergwerk", "kokerei", "stahlwerk", "elektrostahlwerk", "forst", "brauerei", "moebelwerk", "it"]
+const ENERGY_BRANCHES := ["kohlekraftwerk", "uranbergwerk", "brennelementwerk"]
+const PROD_BRANCHES := ["feld", "muehle", "baeckerei", "tierhaltung", "schlachthof", "restaurant", "baufirma", "bergwerk", "kokerei", "stahlwerk", "elektrostahlwerk", "forst", "brauerei", "moebelwerk", "it", "kohlekraftwerk", "uranbergwerk", "brennelementwerk"]
 const PROD_MAX := {"wachstum": 2, "netzwerker": 1, "kostenoptimierer": 1, "risikospieler": 1}
 ## Erste Gruendung je Persoenlichkeit: [Branche, Zaehler in produktion_markt]. Gilt nur, solange die Stadt diese Stufe noch nicht hat.
 const PROD_OPENER := {"wachstum": ["baeckerei", "baeckereien"], "kostenoptimierer": ["feld", "felder"], "netzwerker": ["restaurant", "restaurants"], "risikospieler": ["tierhaltung", "tierhaltungen"]}
@@ -545,10 +546,13 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	if mk.is_empty():
 		return
 	var own: Array = obs.get("betriebe", []).filter(func(b): return b.branche in PROD_BRANCHES)
+	var own_core: Array = own.filter(func(b): return b.branche not in ENERGY_BRANCHES)
 	var own_ids: Array = own.map(func(b): return b.id)
 	# Preisregel (hoechstens alle 3 Tage): liegt Ware ohne Absatz, Preis senken (nicht unter 75 % des Basispreises, darunter deckt er
 	# Zutaten und Fracht nicht); verkauft sich taeglich mindestens der halbe Bestand, vorsichtig erhoehen (bis 150 %).
 	for b in own:
+		if b.branche in ENERGY_BRANCHES:
+			continue
 		if int(b.get("preis_seit_tagen", 0)) < 3:
 			continue
 		for item in b.get("preise", {}):
@@ -566,7 +570,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	# Vorlauf wie Mast oder Wachstum bekommen ihre Chance), spaetestens nach 50 Tagen, wenn nie etwas hergestellt wurde.
 	for b in own:
 		var tried: bool = int(b.get("produziert_seit_tagen", -1)) >= 20 or int(b.get("alter_tage", 0)) >= 50
-		if b.branche not in ["restaurant", "baufirma"] and tried and int(b.get("absatz_tag", 0)) == 0 and int(b.ergebnis) < -4000:
+		if b.branche not in ["restaurant", "baufirma", "kohlekraftwerk", "uranbergwerk", "brennelementwerk"] and tried and int(b.get("absatz_tag", 0)) == 0 and int(b.ergebnis) < -4000:
 			actions.append({"action": "close_business", "business_id": b.id, "reason": "seit %d Tagen ohne Absatz, Ergebnis %d EUR" % [int(b.alter_tage), int(b.ergebnis)]})
 			reasons.append("schließe %s, weil er seit Wochen nichts verkauft und Verlust macht" % b.id)
 			return
@@ -607,16 +611,29 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		return
 	var focus := str(me.get("fokus", ""))
 	var focus_open: bool = focus != "" and not own.any(func(b): return b.branche == focus)
-	if (own.size() >= int(PROD_MAX.get(personality, 1)) and not focus_open) or "found_business" in planned:
+	var energy: Dictionary = obs.get("energie", {})
+	var day: int = GameCalendar.day_of(float(obs.get("spielminute", 0.0)))
+	var energy_branch := ""
+	var rohstoff := ""
+	if day >= 5 and int(mk.get("kohlekraftwerke", 0)) == 0 and (float(energy.get("auslastung", 0.0)) >= 0.82 or int(energy.get("abgeschaltete_betriebe", 0)) > 0) and personality in ["wachstum", "kostenoptimierer"]:
+		energy_branch = "kohlekraftwerk"
+	elif day >= 10 and int(mk.get("kohlekraftwerke", 0)) > 0 and int(mk.get("kohlebergwerke", 0)) == 0 and obs.get("bergbau", {}).has("kohle") and personality in ["wachstum", "kostenoptimierer"]:
+		energy_branch = "bergwerk"
+		rohstoff = "kohle"
+	elif day >= 15 and int(mk.get("uranbergwerke", 0)) == 0 and obs.get("bergbau", {}).has("uranerz") and personality == "risikospieler":
+		energy_branch = "uranbergwerk"
+		rohstoff = "uranerz"
+	elif day >= 18 and int(mk.get("uranbergwerke", 0)) > 0 and int(mk.get("brennelementwerke", 0)) == 0 and personality in ["netzwerker", "wachstum"]:
+		energy_branch = "brennelementwerk"
+	if (own_core.size() >= int(PROD_MAX.get(personality, 1)) and not focus_open and energy_branch == "") or "found_business" in planned:
 		return
 	# Abgestimmt: zuerst die Vorstufe, auf die ein bestehender Betrieb wartet; Muehle erst mit Feld, Schlachthof erst mit Tierhaltung
-	var branch := ""
+	var branch := energy_branch
 	var waiting: Dictionary = mk.get("engpaesse", {})
-	var rohstoff := ""
 	for item in waiting:
-		if Production.UPSTREAM.has(item):
+		if branch == "" and Production.UPSTREAM.has(item):
 			branch = str(Production.UPSTREAM[item])
-			if branch == "bergwerk":
+			if branch in ["bergwerk", "uranbergwerk"]:
 				rohstoff = str(item)
 			break
 	var opener: Array = PROD_OPENER.get(personality, [])
@@ -659,12 +676,13 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "feld"
 	elif personality == "wachstum" and int(mk.brot_import) > 0:
 		branch = "baeckerei"
-	if branch == "" or own.any(func(b): return b.branche == branch):
+	# Ein Erzbergwerk darf die Gruendung eines Kohlebergwerks nicht verhindern.
+	if branch == "" or own.any(func(b): return b.branche == branch and (branch != "bergwerk" or rohstoff == "" or str(b.get("rohstoff", "")) == rohstoff)):
 		return
 	if branch in mk.get("zu_wenig_kundschaft", []):
 		return   # Theke traegt sich bei der Bevoelkerung nicht (Retail.counter_viable)
 	# Lagerstaette ohne Strassenanschluss (Kuestenort): erst die Zufahrt bauen lassen, dann gruenden
-	if branch == "bergwerk" and obs.has("bergbau"):
+	if branch in ["bergwerk", "uranbergwerk"] and obs.has("bergbau"):
 		# Bergwerk-Story: Probebohrung -> Abbauantrag -> Zufahrt -> Gruendung (der Bautrupp baut das Bergwerk)
 		var st: Dictionary = obs.bergbau.get(rohstoff, {})
 		if st.is_empty() or str(st.schritt) == "warten":
@@ -688,7 +706,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 					reasons.append("beantrage eine Zufahrt zur Lagerstätte %s" % st.grundstueck)
 				planned.append("found_business")
 				return
-	var far: Dictionary = mk.get("zufahrt_noetig", {}).get(rohstoff, {}) if branch == "bergwerk" and not obs.has("bergbau") else {}
+	var far: Dictionary = mk.get("zufahrt_noetig", {}).get(rohstoff, {}) if branch in ["bergwerk", "uranbergwerk"] and not obs.has("bergbau") else {}
 	if not far.is_empty():
 		if int(mk.get("zufahrten_im_bau", 0)) == 0 and cash > float(far.kosten) + buffer + PROD_RESERVE:
 			actions.append({"action": "build_access", "grundstueck": far.grundstueck, "reason": "%s fehlt, die Lagerstätte %s hat keine Zufahrt" % [rohstoff, far.grundstueck]})
@@ -701,9 +719,10 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	var cost := float(avail[branch])
 	if not _invest(cost, buffer * (2.0 if personality == "kostenoptimierer" else 1.0) + PROD_RESERVE, cash, me, personality, actions, reasons):
 		return
-	actions.append({"action": "found_business", "branche": branch, "rohstoff": rohstoff, "reason": "Kettenstufe fehlt in der Stadt (Bäckereien %d, Mühlen %d, Felder %d)" % [int(mk.baeckereien), int(mk.muehlen), int(mk.felder)]})
+	var why := "Energiekette: %s fehlt; Netzlast %d %% und Versorgung braucht Brennstoff oder Erzeugung." % [Businesses.branches()[branch].label, int(float(energy.get("auslastung", 0.0)) * 100.0)] if branch in ENERGY_BRANCHES or rohstoff in ["uranerz", "kohle"] else "Kettenstufe fehlt in der Stadt (Bäckereien %d, Mühlen %d, Felder %d)" % [int(mk.baeckereien), int(mk.muehlen), int(mk.felder)]
+	actions.append({"action": "found_business", "branche": branch, "rohstoff": rohstoff, "reason": why})
 	planned.append("found_business")
-	reasons.append("gründe %s, weil diese Stufe der Brotkette in der Stadt fehlt" % Businesses.branches()[branch].label)
+	reasons.append("gründe %s, weil diese Stufe der regionalen Produktion fehlt" % Businesses.branches()[branch].label)
 
 
 const REALTY_PERSONALITIES := ["kostenoptimierer", "netzwerker"]

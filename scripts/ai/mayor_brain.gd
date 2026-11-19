@@ -13,6 +13,15 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var housing: Dictionary = ind.wohnen
 	var stock := maxf(1.0, float(housing.bestand_einheiten))
 	var waiting := int(housing.wohnungssuchende_haushalte)
+	# Kraftwerksangriff: Evakuierung und Stabilisierung haben Vorrang vor der Tagesroutine.
+	var emergency: Dictionary = ind.get("strom", {}).get("kraftwerk", {}).get("notfall", {})
+	var emergency_budget := float(ind.haushalt.verfuegbar)
+	if not emergency.is_empty():
+		if str(emergency.get("stufe", "")) == "katastrophe" and not bool(emergency.get("evakuiert", false)) and emergency_budget >= PowerPlant.RESPONSE_EVACUATE:
+			actions.append({"action": "kraftwerk_notfall", "massnahme": "evakuieren", "reason": "Sperrzone am Kernkraftwerk: Menschen aus dem Gefahrenbereich bringen."})
+			emergency_budget -= PowerPlant.RESPONSE_EVACUATE
+		if not bool(emergency.get("stabilisiert", false)) and emergency_budget >= PowerPlant.RESPONSE_STABILIZE:
+			actions.append({"action": "kraftwerk_notfall", "massnahme": "stabilisieren", "reason": "Stromausfall begrenzen und die Anlage sichern."})
 	# 1) Bauantraege der Buergermeisterebene nach den benannten Voraussetzungen entscheiden
 	for d in ind.bauantraege.zur_entscheidung_details:
 		if actions.size() >= MAX_ACTIONS:
