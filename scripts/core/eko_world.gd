@@ -761,6 +761,7 @@ func next_steps(b: Dictionary) -> Array:
 		else:
 			out.append("Antworten – %s hat dir gesagt: „%s“. Antworte mit Talk {to: \"%s\", text: ...} (geht auch als Anruf aus der Ferne)." % [
 				offen.von, str(offen.text).left(120), offen.von])
+			pending_step = str(out.back())   # 19.11.: offene Antwort bleibt in den ersten drei
 	if cid >= 0:
 		for o in sim.social.offers.values():
 			if o.status == "open" and int(o.awaiting) == cid and float(o.expires) > sim.game_min:
@@ -2619,6 +2620,12 @@ func adopt_mayors() -> Array:
 const OVERVIEW_WORDS := ["", "status", "lage", "uebersicht", "übersicht", "info", "bericht", "projekte", "kommunale_dienste", "firmenlage", "tageslage", "pruefen", "prüfen"]
 
 
+## Erfundene Lage-Woerter wie "stadt_status", "finanzlage", "projekt_uebersicht" (nur fuer sonst unbekannte Aktionen pruefen).
+static func _looks_like_overview(action: String) -> bool:
+	var w := action.to_lower()
+	return ["status", "lage", "uebersicht", "übersicht", "bericht"].any(func(t): return w.ends_with(t)) and not w.ends_with("anlage")
+
+
 func _office_overview(k: int) -> Dictionary:
 	var M: Mayor = sim.towns.mayors[k]
 	var apps: Array = []
@@ -2662,6 +2669,8 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 	if a is Dictionary and str(a.get("action", "")) in ["build_defense", "rebuild_building"]:   # Verteidigung und Wiederaufbau (EkoArms)
 		return arms.office_action(b, k, a)
 	if not (a is Dictionary) or str(a.get("action", "")).to_lower() in OVERVIEW_WORDS:   # 17.11.: "Tageslage prüfen" ohne aktion, "projekte", "kommunale_dienste"
+		return _office_overview(k)
+	if not Mayor.SCHEMA.has(str(a.get("action", ""))) and _looks_like_overview(str(a.get("action", ""))):   # 19.11.: "stadt_status"
 		return _office_overview(k)
 	if not Mayor.SCHEMA.has(str(a.get("action", ""))):
 		return {"ok": false, "msg": "Amt braucht aktion: {\"action\": eine von %s, ...}. Parameter siehe mein_amt.aktionen." % ", ".join(Mayor.SCHEMA.keys())}

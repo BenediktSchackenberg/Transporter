@@ -14774,10 +14774,12 @@ func test_eko_office_and_goals() -> void:
 	ok(not tr.ok and str(tr.msg).contains("kein Handlungsbedarf"), "tender auf beauftragtes Projekt erklärt den Status (%s)" % str(tr.msg).left(90))
 	M.projects.erase("TST1")
 	# Lage statt Fehler (17.11.: "Tageslage prüfen" ohne aktion, erfundene Aktionen projekte/kommunale_dienste)
-	for d in [{"warum": "Tageslage"}, {"aktion": {"action": "projekte"}}, {"aktion": {"action": "kommunale_dienste", "einrichtung": "polizeiwache"}}]:
+	for d in [{"warum": "Tageslage"}, {"aktion": {"action": "projekte"}}, {"aktion": {"action": "kommunale_dienste", "einrichtung": "polizeiwache"}},
+			{"aktion": {"action": "stadt_status"}}, {"aktion": {"action": "finanzlage"}}]:   # 19.11.: Petra Engel "stadt_status"
 		var ov: Dictionary = E.input(m, "Amt", d)
 		ok(ov.ok and bool(ov.get("uebersicht", false)) and str(ov.msg).contains("Anträge zur Entscheidung"), "Amt-Lage für %s" % JSON.stringify(d).left(50))
 	ok(not E.input(m, "Amt", {"aktion": {"action": "sabotage"}}).ok, "unbekannte Amtshandlung bleibt ein Fehler")
+	ok(not E.input(m, "Amt", {"aktion": {"action": "klaeranlage"}}).ok, "Anlage ist kein Lage-Wort")
 	E.join("Fritz")
 	E.input("Fritz", "FoundCompany", {"name": "Fritz Fracht"})
 	if E.active_firm(E.beings.Fritz) >= 0:
