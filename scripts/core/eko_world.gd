@@ -439,6 +439,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 				type = "MoveTo"
 			elif data.has("feld"):
 				type = "Siedlung" if sim.wildnis and not settle.founded(sim.companies[active_firm(b)].home_town if active_firm(b) >= 0 else -1) else "MoveTo"
+			elif data.keys().all(func(key): return str(key) == "warum") and ["schlaf", "ruh", "akku", "laden", "pause"].any(func(w): return str(data.get("warum", "")).to_lower().contains(w)):
+				type = "Rest"   # 19.11.: Petra/Thomas {type: act, data: {warum: "schlafen gehen" / "Akku laden"}}
 	if arms.is_out(b) and type not in ["Inspect"]:
 		return {"ok": false, "status": "gescheitert", "msg": arms.out_msg(b)}
 	if b.has("im_lkw") and type in ["MoveTo", "Pickup", "Place", "Bauwerk", "Bauen", "Attack", "Fahrt", "Siedlung", "LKW", "MoveIn", "Rammen"]:
