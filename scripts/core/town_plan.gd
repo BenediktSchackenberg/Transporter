@@ -624,7 +624,7 @@ func street_plan(k: int, vid: String) -> Dictionary:
 		return {"cells": [], "platz": Vector2i(-1, -1), "text": text}
 	# Ein vorhandenes Straßenfeld am Rathaus ist die Wurzel. Nur mit ihm verbundene Straßen
 	# zählen als Netz; alte einzelne Rauten werden bei der nächsten Erschließung angeschlossen.
-	var hall: Dictionary = C.building(int(C.towns[k].get("town_hall", -1)))
+	var hall: Dictionary = C.building(int(C.towns[k].get("town_hall", -1))) if k >= 0 and k < C.towns.size() else {}   # 19.11.: Karte ohne Regionsorte
 	var root := Vector2i(-1, -1)
 	if not hall.is_empty() and C.is_road(hall.road):
 		root = hall.road
