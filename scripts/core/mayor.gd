@@ -1201,7 +1201,60 @@ func hub_connection() -> Dictionary:
 	var to := Vector2i(int(link.bis[0]), int(link.bis[1]))
 	var cells: Array = sim.eko.settle._road_between(from, to).filter(func(q): return not sim.city.is_road(q))
 	if cells.is_empty():
+		return _hub_tunnel(from)   # 19.11.: Bergstadt ohne ebenen Weg (Falkenwiek) – Tunnel aus dem Tunnelsystem
+	return _hub_road_project(cells)
+
+
+## Tunnel zum Grosslager: Vorschlag der Stadt, dessen Bergseite gegenueber an das Grosslager-Netz anschliesst
+## (direkt oder ueber einen ebenen Weg zum naechsten angebundenen Strassenfeld). Danach legt hub_connection die Restsrasse.
+func _hub_tunnel(linked: Vector2i) -> Dictionary:
+	if sim.tunnels == null:
 		return {}
+	for j in sim.tunnels.items.values():
+		if int(j.town) == town and str(j.status) not in ["fertig", "abgelehnt"]:
+			return {}
+	var hub_b: Dictionary = sim.city.building(int(sim.city.hub.get("buildings", {}).get("hauptlager", -1))) if not sim.city.hub.is_empty() else {}
+	var hall: Dictionary = sim.city.building(int(sim.city.towns[town].get("town_hall", -1))) if town < sim.city.towns.size() else {}
+	if hub_b.is_empty() or hall.is_empty():
+		return {}
+	var town_road: Vector2i = hall.road   # Falkenwiek 19.11.: Rathauszufahrt war keine Strasse, die Ortsstrasse lag 2 Felder daneben
+	if not sim.city.is_road(town_road):
+		for r in range(1, 7):
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					if not sim.city.is_road(town_road) and sim.city.is_road(hall.road + Vector2i(dx, dy)):
+						town_road = hall.road + Vector2i(dx, dy)
+	var best := {}
+	for pr in sim.tunnels.proposals(town, 12):
+		var von := Vector2i(int(pr.von[0]), int(pr.von[1]))
+		var nach := Vector2i(int(pr.nach[0]), int(pr.nach[1]))
+		if sim.nav.road_path(von, town_road).is_empty():
+			continue   # Eingangsportal nicht mit dem eigenen Ortsnetz verbunden
+		var pl: Dictionary = sim.tunnels.plan(von, nach)
+		var far := nach
+		if not (pl.approach as Array).is_empty():
+			var last := Vector2i(int(pl.approach[-1][0]), int(pl.approach[-1][1]))
+			for d in [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]:
+				if sim.city.is_road(last + d) and last + d != von:
+					far = last + d
+					break
+		var ok: bool = not sim.nav.road_path(far, hub_b.road).is_empty() or not sim.eko.settle._road_between(linked, far).is_empty()
+		if ok and (best.is_empty() or float(pl.cost) < float(best.cost)):
+			best = {"von": von, "nach": nach, "cost": float(pl.cost)}
+	if best.is_empty() or float(best.cost) > available_budget():
+		return {}
+	var r: Dictionary = sim.tunnels.build_city(town, best.von, best.nach, "Straßenanschluss ans Großlager durch den Berg (kein ebener Weg)", "Bauamt %s" % town_label())
+	if not bool(r.get("ok", false)):
+		return {}
+	var tj: Dictionary = sim.tunnels.items.get(str(r.get("ref", "")), {})
+	if projects.has(str(tj.get("project", ""))):   # das Stadtlager ist ohne Anschluss unerreichbar: Baufirma bringt das Material mit
+		projects[str(tj.project)]["material"] = {}
+		projects[str(tj.project)]["ref_anschluss"] = true
+	sim.log_event("%s: Bauamt beauftragt einen Tunnel zum Großlager (%s, %s) – kein ebener Straßenweg um den Berg." % [town_label(), str(r.get("ref", r.get("msg", ""))), Catalog.money(float(best.cost))], "info")
+	return {"ref": "tunnel", "tunnel": r}
+
+
+func _hub_road_project(cells: Array) -> Dictionary:
 	var cost := snappedf(float(cells.size()) * STREET_CELL_COST, 10.0)
 	if cost > available_budget():
 		return {}

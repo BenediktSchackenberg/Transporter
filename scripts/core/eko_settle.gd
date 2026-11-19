@@ -449,6 +449,12 @@ func road_link(k: int) -> Dictionary:
 		_link_cache[k] = out
 		return out
 	var tr: Vector2i = hall.road
+	if not C.is_road(tr):   # 19.11. Falkenwiek: Rathauszufahrt keine Strasse, die Ortsstrasse liegt daneben
+		for r in range(1, 7):
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					if not C.is_road(tr) and C.is_road(hall.road + Vector2i(dx, dy)):
+						tr = hall.road + Vector2i(dx, dy)
 	var hr: Vector2i = hub_b.road
 	if C.is_road(tr) and not sim.nav.road_path(tr, hr).is_empty():
 		_link_cache[k] = out
