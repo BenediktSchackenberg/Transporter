@@ -80,7 +80,7 @@ const ACTIONS := {
 	"attempt_sabotage": ["%s versucht eine Sabotage", "Konkurrenz schwächen", "Wird es entdeckt: Strafe und Rufverlust."],
 	"wait": ["%s wartet ab", "keine sinnvolle Aktion verfügbar", "–"],
 }
-const ORIGIN := {"api": "KI-Modell (API)", "plan": "Planschritt der KI", "fallback": "Regelbasierter Ersatzmodus", "foreman": "Vorarbeiter-Routine",
+const ORIGIN := {"api": "KI-Modell (API)", "plan": "Planschritt der KI", "fallback": "Regelbasierter Ersatzmodus", "dispatch": "Regel-Disposition", "foreman": "Vorarbeiter-Routine",
 	"auto": "Simulation", "spectator": "Zuschauer", "world": "Stadt"}
 ## Haeufige Ablehnungen der Engine -> [Ueberschrift, Ursache (Muster im Text), Verbesserung]
 const REJECTS := [

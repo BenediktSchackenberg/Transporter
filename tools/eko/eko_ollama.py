@@ -1,6 +1,6 @@
-"""Eko-Modus mit lokalem Modell (Ollama): freies Wesen ohne Ziel, Gedaechtnis als Dateien (Idee nach Clawblox, MIT).
+"""Eko-Modus mit lokalem Ollama oder IONOS: freies Wesen mit Gedaechtnis als Dateien (Idee nach Clawblox, MIT).
 
-Wie start_eko.ps1, aber statt Claude Code steuert ein lokales Modell ueber Werkzeugaufrufe (Ollama /api/chat, tools):
+Wie start_eko.ps1, aber statt Claude Code steuert ein Modell ueber Werkzeugaufrufe (Ollama /api/chat oder IONOS /chat/completions):
 observe, act, wait, list_files, read_file, write_file, append_memory. Das Wesen wird vom Skript angemeldet; das Modell
 handelt nur ueber diese Werkzeuge und darf nur Dateien in seinem Arbeitsordner lesen und schreiben.
 
@@ -142,6 +142,7 @@ MODEL_GATE = FairGate()
 IONOS_BASE_URL = "https://openai.inference.de-txl.ionos.com/v1"
 IONOS_MODEL = "Qwen/Qwen3.8-27B"
 IONOS_PARALLEL = threading.Semaphore(4)   # gehostet: einige Wesen gleichzeitig, aber nicht unbegrenzt
+IONOS_MIN_OUTPUT_TOKENS = 8000   # Qwen braucht bereits fuer den Denkanteil oft mehr als 2000 Token
 
 TOOLS = [
     {"name": "observe", "description": "Sieh dich um: wo du bist, was du trägst, Karte der Umgebung (21x21 Felder), Blöcke, "
@@ -345,14 +346,20 @@ def compact_obs(o, full=False):
             if isinstance(f.get(k), list):
                 f[k] = f[k][:n]
         if isinstance(f.get("branchen_zum_gruenden"), list):
-            f["branchen_zum_gruenden"] = [b.get("branche") for b in f["branchen_zum_gruenden"] if isinstance(b, dict)]
+            branches = f["branchen_zum_gruenden"]
+            f["branchen_zum_gruenden"] = branches[:8] + ([{"weitere_branchen": [b.get("branche") for b in branches[8:] if isinstance(b, dict)]}] if len(branches) > 8 else [])
         if isinstance(f.get("bergbau"), list):
             f["bergbau"] = "%d Lagerstätten – Details mit observe {voll: true}" % len(f["bergbau"]) if f["bergbau"] else []
         if isinstance(f.get("konkurrenz"), dict):
             k = f["konkurrenz"]
             f["konkurrenz"] = {"rivalitaet": (k.get("rivalitaet") or [])[:2], "deine_verstoesse": k.get("deine_verstoesse", 0)}
-        f.pop("hofbau", None)
-        f.pop("unternehmensplan", None)
+        # Baukoordinaten und der laufende Plan sind die Kerndaten fuer eigenstaendige Investitionen.
+        # Nur die ausfuehrlichen Planschritte kuerzen, statt die Strategie ganz zu verbergen.
+        plan = f.get("unternehmensplan")
+        if isinstance(plan, dict) and isinstance(plan.get("schritte"), list):
+            plan = dict(plan)
+            plan["schritte"] = [s for s in plan["schritte"] if s.get("status") != "erledigt"][:5]
+            f["unternehmensplan"] = plan
         o["meine_firma"] = f
     amt = o.get("mein_amt")
     if isinstance(amt, dict) and amt:
@@ -398,6 +405,23 @@ class Agent:
         self._arrival_failed = set()
         self.log = open(self.logs / "sitzung.log", "a", encoding="utf-8")
 
+    def status(self, state, **fields):
+        """Nur Betriebsdaten an den Schwarm melden; weder Schluessel noch Modelltext uebertragen."""
+        callback = getattr(self.args, "status_callback", None)
+        if callback:
+            try:
+                callback(self.args.name, state, **fields)
+            except Exception:
+                pass   # Statusanzeige darf das Wesen niemals anhalten
+
+    def observation_status(self, observation):
+        if not isinstance(observation, dict) or not observation.get("ok"):
+            return
+        steps = observation.get("naechste_schritte") or []
+        goal = observation.get("mein_ziel") or {}
+        self.status("beobachtet", next_step=str(steps[0])[:180] if steps else "",
+                    goal=str(goal.get("ziel", ""))[:120] if isinstance(goal, dict) else "")
+
     def _path(self, name):
         p = (self.ws / str(name)).resolve()
         if self.ws.resolve() not in p.parents and p != self.ws.resolve():
@@ -418,9 +442,13 @@ class Agent:
     def call_tool(self, name, a):
         try:
             if name == "observe":
-                return compact_obs(self.world.observe(), full=bool(a.get("voll", False)))
+                observation = compact_obs(self.world.observe(), full=bool(a.get("voll", False)))
+                self.observation_status(observation)
+                return observation
             if name == "act" and str(a.get("type", "")).lower() in ("observe", "beobachten"):   # Modelle rufen observe auch als Handlung auf
-                return compact_obs(self.world.observe())
+                observation = compact_obs(self.world.observe())
+                self.observation_status(observation)
+                return observation
             if name == "act" and str(a.get("type", "")) in AGENT_TOOLS:   # 17.11.: learn/wait als Handlung -> "Unbekannte Handlung"
                 data = a.get("data", {})
                 return self.call_tool(str(a["type"]), data if isinstance(data, dict) else {})
@@ -598,25 +626,59 @@ class Agent:
                 out.append({"role": m["role"], "content": m.get("content", "")})
         while out and out[0]["role"] == "tool":   # Werkzeugantwort ohne Aufruf ist im OpenAI-Format ungueltig
             out.pop(0)
+        base_budget = max(IONOS_MIN_OUTPUT_TOKENS, int(getattr(self.args, "max_output_tokens", IONOS_MIN_OUTPUT_TOKENS)))
         body = {"model": self.args.model, "messages": out, "tools": [{"type": "function", "function": t} for t in TOOLS],
-                "temperature": 0.8, "max_tokens": 2000}
-        req = urllib.request.Request(self.args.base_url.rstrip("/") + "/chat/completions", data=json.dumps(body).encode("utf-8"),
-                                     headers={"Content-Type": "application/json", "Authorization": "Bearer " + key})
-        with IONOS_PARALLEL:
-            try:
-                with urllib.request.urlopen(req, timeout=300) as r:
-                    msg = json.loads(r.read().decode("utf-8"))["choices"][0]["message"]
-            except urllib.error.HTTPError as e:   # Fehlertext von IONOS weitergeben, ohne den Schluessel
-                raise RuntimeError("IONOS HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300]))
-        calls = []
-        for c in msg.get("tool_calls") or []:
-            a = c["function"].get("arguments") or "{}"
-            try:
-                a = json.loads(a) if isinstance(a, str) else a
-            except ValueError:
-                a = {}
-            calls.append({"id": c.get("id", ""), "function": {"name": c["function"]["name"], "arguments": a}})
-        return {"content": msg.get("content") or "", "tool_calls": calls}
+                "temperature": 1.0, "top_p": 0.95, "reasoning_effort": "medium", "presence_penalty": 1.5,
+                "frequency_penalty": 0, "max_tokens": base_budget}
+        for attempt in range(2):   # genau ein erneuter Versuch mit mehr Budget bei leerer/abgeschnittener Antwort
+            body["max_tokens"] = base_budget * (attempt + 1)
+            req = urllib.request.Request(self.args.base_url.rstrip("/") + "/chat/completions", data=json.dumps(body).encode("utf-8"),
+                                         headers={"Content-Type": "application/json", "Authorization": "Bearer " + key})
+            started = time.monotonic()
+            with IONOS_PARALLEL:
+                try:
+                    with urllib.request.urlopen(req, timeout=300) as r:
+                        response = json.loads(r.read().decode("utf-8"))
+                except urllib.error.HTTPError as e:
+                    detail = e.read().decode("utf-8", "replace")[:300].replace(key, "[redacted]")
+                    raise RuntimeError("IONOS HTTP %d: %s" % (e.code, detail))
+            choices = response.get("choices") or []
+            if not choices:
+                raise ModelGlitch("IONOS antwortete ohne choices")
+            choice = choices[0]
+            msg = choice.get("message") or {}
+            reason = str(choice.get("finish_reason") or "")
+            usage = response.get("usage") or {}
+            completion = int(usage.get("completion_tokens") or 0)
+            details = usage.get("completion_tokens_details") or {}
+            reasoning = int(details.get("reasoning_tokens") or 0) if isinstance(details, dict) else 0
+            self.log.write("%s IONOS: finish=%s, completion=%d, reasoning=%d, budget=%d, dauer_ms=%d\n" %
+                           (time.strftime("%H:%M:%S"), reason, completion, reasoning, body["max_tokens"],
+                            int((time.monotonic() - started) * 1000)))
+            self.log.flush()
+            self.status("modellantwort", finish_reason=reason, completion_tokens=completion,
+                        reasoning_tokens=reasoning, output_budget=body["max_tokens"])
+            calls = []
+            invalid_arguments = False
+            for c in msg.get("tool_calls") or []:
+                fn = c.get("function") or {}
+                a = fn.get("arguments") or "{}"
+                try:
+                    a = json.loads(a) if isinstance(a, str) else a
+                except ValueError:
+                    invalid_arguments = True
+                    break
+                if not isinstance(a, dict) or not fn.get("name"):
+                    invalid_arguments = True
+                    break
+                calls.append({"id": c.get("id", ""), "function": {"name": fn["name"], "arguments": a}})
+            content = msg.get("content") or ""
+            if reason == "length" or invalid_arguments or (not calls and not str(content).strip()):
+                if attempt == 0:
+                    continue
+                raise ModelGlitch("IONOS-Antwort nach zwei Versuchen leer, abgeschnitten oder mit ungueltigen Werkzeugparametern (finish=%s)" % reason)
+            return {"content": content, "tool_calls": calls, "finish_reason": reason}
+        raise ModelGlitch("IONOS antwortete nicht verwertbar")
 
     def say(self, text):
         line = time.strftime("%H:%M:%S ") + text
@@ -641,7 +703,9 @@ class Agent:
         return out
 
     def run(self):
+        self.status("anmelden", last_error="")
         self.world.join(self.args.art)
+        self.status("bereit")
         system = {"role": "system", "content": self.system_prompt()}
         messages = [{"role": "user", "content": "Beginne. Lies zuerst deine Dateien (list_files, read_file). " + self.digest()}]
         steps = 0
@@ -659,25 +723,38 @@ class Agent:
                 self._reads = {}   # frische Sitzung: Dateien duerfen neu gelesen werden
                 self.say("☀ Neuer Tag – frische Sitzung, Gedächtnis aus den Dateien")
             messages = self.trim(messages)
+            started = time.monotonic()
+            self.status("denkt", waiting_on="Modellantwort")
             try:
                 msg = self.chat([system] + messages)
             except ModelGlitch as e:   # kaputter Werkzeugaufruf trotz Wiederholung: Verlauf behalten, Hinweis, weiter
-                self.say("⚠ Modell hat dreimal einen ungültigen Werkzeugaufruf erzeugt – neuer Anlauf (%s)" % str(e)[:120])
+                self._glitches = getattr(self, "_glitches", 0) + 1
+                delay = min(60, 5 * (2 ** min(self._glitches, 4)))
+                self.status("fehler", last_error=str(e)[:220], waiting_on="erneuter Modellversuch in %d s" % delay)
+                self.say("⚠ Modellantwort nicht verwertbar – neuer Anlauf in %d s (%s)" % (delay, str(e)[:120]))
                 messages.append({"role": "user", "content": "Dein letzter Werkzeugaufruf war ungültig. Wähle genau ein Werkzeug mit gültigen Parametern."})
-                time.sleep(2)
+                time.sleep(delay)
                 continue
             except Exception as e:   # Ollama ueberlastet oder Kontext voll: protokollieren, Verlauf kuerzen, kurz warten, weitermachen
-                self.say("⚠ Modellaufruf fehlgeschlagen: %s – Verlauf gekürzt, neuer Versuch in 10 s" % e)
+                self._api_errors = getattr(self, "_api_errors", 0) + 1
+                delay = min(300, 10 * (2 ** min(self._api_errors - 1, 5)))
+                self.status("fehler", last_error=str(e)[:220], waiting_on="erneuter Modellversuch in %d s" % delay)
+                self.say("⚠ Modellaufruf fehlgeschlagen: %s – Verlauf gekürzt, neuer Versuch in %d s" % (e, delay))
                 messages = self.trim(messages, hard=True)
                 self.log.write(traceback.format_exc())
-                time.sleep(10)
+                time.sleep(delay)
                 continue
+            self._glitches = 0
+            self._api_errors = 0
+            self.status("antwortet", last_model_at=time.time(), latency_ms=int((time.monotonic() - started) * 1000),
+                        last_error="", waiting_on="")
             calls = msg.get("tool_calls") or []
             messages.append({"role": "assistant", "content": msg.get("content", ""), "tool_calls": calls} if calls
                             else {"role": "assistant", "content": msg.get("content", "")})
             if msg.get("content", "").strip():
                 self.say("💭 " + msg["content"].strip().replace("\n", " ")[:300])
             if not calls:
+                self.status("spricht", waiting_on="Werkzeugaktion")
                 # Schleifenbremse fuer Antworten ohne Werkzeug (15.11.: Sabine hielt nach einer alten Notiz die Welt fuer
                 # unerreichbar und antwortete minutenlang nur mit Text): Lage zeigen, notfalls frische Sitzung
                 self._no_tool = getattr(self, "_no_tool", 0) + 1
@@ -704,14 +781,19 @@ class Agent:
                         a = json.loads(a)
                     except ValueError:
                         a = {}
+                self.status("handelt", tool=fn["name"], waiting_on="")
                 res = self.call_tool(fn["name"], a)
                 steps += 1
                 short = json.dumps(a, ensure_ascii=False)[:120]
                 verdict = (res.get("msg", "") if isinstance(res, dict) else "")[:100]
                 self.say("→ %s %s %s" % (fn["name"], short, ("· " + verdict) if verdict else ""))
+                pending = isinstance(res, dict) and (res.get("pending") or res.get("status") == "laeuft")
+                failed = isinstance(res, dict) and res.get("ok") is False
+                self.status("wartet" if pending else ("fehler" if failed else "bereit"), last_tool_at=time.time(),
+                            tool=fn["name"], waiting_on=verdict if pending else "",
+                            last_error=verdict if failed else "")
                 messages.append({"role": "tool", "tool_name": fn["name"], "tool_call_id": c.get("id", ""), "content": json.dumps(res, ensure_ascii=False)[:14000]})
                 # Schleifenbremse: dieselbe fehlgeschlagene Handlung dreimal hintereinander -> deutlicher Hinweis (Ralf fragte Greta 20-mal)
-                failed = isinstance(res, dict) and res.get("ok") is False
                 key = fn["name"] + json.dumps(a, sort_keys=True, ensure_ascii=False) if failed else ""
                 self._repeat = self._repeat + 1 if key and key == getattr(self, "_last_fail", "") else (1 if key else 0)
                 self._last_fail = key
@@ -747,6 +829,8 @@ def main():
     ap.add_argument("--anbieter", default="ollama", choices=["ollama", "ionos"], help="Modellanbieter: lokales Ollama oder IONOS AI Model Hub")
     ap.add_argument("--base-url", default=IONOS_BASE_URL, help="OpenAI-kompatible Adresse (fuer --anbieter ionos)")
     ap.add_argument("--key-env", default="IONOS_API_TOKEN", help="Umgebungsvariable mit dem API-Schluessel")
+    ap.add_argument("--max-output-tokens", type=int, default=IONOS_MIN_OUTPUT_TOKENS,
+                    help="Antwortbudget je IONOS-Aufruf (mindestens 8000 fuer Qwen)")
     ap.add_argument("--root", default=os.path.join(os.path.expanduser("~"), "PixelTransportRivals-Eko"))
     ap.add_argument("--ctx", type=int, default=32768, help="Kontextfenster (gpt-oss: 32k passt mit 16 GB Grafikspeicher)")
     ap.add_argument("--think", action="store_true", help="Denkmodus des Modells einschalten (langsamer)")

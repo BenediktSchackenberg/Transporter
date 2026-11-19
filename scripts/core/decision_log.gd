@@ -7,7 +7,7 @@ extends RefCounted
 ## Es werden nur kurze, vom Modell ausdruecklich formulierte Begruendungen gespeichert – keine Gedankenketten.
 
 const MAX := 600
-const ORIGIN_TEXT := {"api": "Strategie (API-Modell)", "plan": "Planschritt", "fallback": "Ersatzmodus/Demo",
+const ORIGIN_TEXT := {"api": "Strategie (API-Modell)", "plan": "Planschritt", "fallback": "Ersatzmodus/Demo", "dispatch": "Regel-Disposition",
 	"foreman": "Vorarbeiter-Routine", "auto": "Simulation", "spectator": "Zuschauer-Ereignis", "world": "Stadt (automatisch)"}
 
 var sim
@@ -30,7 +30,7 @@ func clear_context(cid: int) -> void:
 
 
 func record(cid: int, origin: String, action: Dictionary, result: Dictionary, key: String) -> void:
-	var ctx: Dictionary = context.get(cid, {}) if origin in ["api", "plan", "fallback"] else {}
+	var ctx: Dictionary = context.get(cid, {}) if origin in ["api", "plan", "fallback", "dispatch"] else {}
 	var refs := {}
 	for k in ["contract_id", "vehicle_id", "worker_id", "offer_id", "step_id", "task_id"]:
 		if action.get(k) != null:

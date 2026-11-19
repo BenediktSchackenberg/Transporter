@@ -214,8 +214,46 @@ func _load() -> void:
 	if d.is_empty():
 		return
 	var cfg: Dictionary = d.cfg
-	for p in cfg.players:
-		p["api_key"] = CredentialStore.read_key("slot%d" % int(p.slot)) if p.provider in ["openai", "ionos", "anthropic"] and p.get("save_key", false) else ""
+	if bool(cfg.get("eko_spieler", false)) and str(cfg.get("eko_anbieter", "")) == "ionos":
+		var key := menu.eko_key_edit.text.strip_edges() if menu != null else ""
+		if key == "" and bool(cfg.get("eko_save_key", false)):
+			key = CredentialStore.read_key("eko_ionos")
+		if key == "":
+			key = OS.get_environment("IONOS_API_TOKEN")
+		if key == "":
+			if menu == null:
+				_show_menu()
+			menu.status_label.text = "Dieser Eko-Spielstand braucht einen IONOS-Token. Bitte oben einen neuen Token eingeben und erneut „Spielstand laden“ wählen."
+			return
+		if SetupMenu.jwt_expired(key):
+			if menu == null:
+				_show_menu()
+			menu.status_label.text = "Der gespeicherte IONOS-Token ist abgelaufen. Bitte einen neuen Token eingeben und den Spielstand erneut laden."
+			return
+		cfg["eko_api_key"] = key
+		if menu != null and menu.eko_save_key.button_pressed:
+			cfg["eko_save_key"] = CredentialStore.save_key("eko_ionos", key)
+	else:
+		for p in cfg.players:
+			if p.provider not in ["openai", "ionos", "anthropic"]:
+				p["api_key"] = ""
+				continue
+			var key := ""
+			if menu != null and int(p.slot) < menu.rows.size():
+				key = menu.rows[int(p.slot)].api_key.text.strip_edges()
+			if key == "" and bool(p.get("save_key", false)):
+				key = CredentialStore.read_key("slot%d" % int(p.slot))
+			if key == "":
+				if menu == null:
+					_show_menu()
+				menu.status_label.text = "%s braucht nach dem Laden einen API-Key. Bitte im Spielerfeld eingeben und erneut „Spielstand laden“ wählen." % str(p.player_name)
+				return
+			if p.provider == "ionos" and SetupMenu.jwt_expired(key):
+				if menu == null:
+					_show_menu()
+				menu.status_label.text = "%s: Der IONOS-Token ist abgelaufen. Bitte einen neuen Token eingeben und erneut laden." % str(p.player_name)
+				return
+			p["api_key"] = key
 	_start(cfg, d)
 
 

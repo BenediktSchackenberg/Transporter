@@ -563,6 +563,11 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			cargo.name = "cargo"
 			cargo.centered = false
 			n.add_child(cargo)
+			var transfer := Sprite2D.new()
+			transfer.name = "transfer"
+			transfer.texture = cv.tex("i_crate")
+			transfer.z_index = 41
+			n.add_child(transfer)
 			var warn := Sprite2D.new()
 			warn.name = "warn"
 			warn.texture = cv.tex("i_warn")
@@ -589,6 +594,14 @@ func update_view(delta: float, sim_speed: float, zoom: float) -> void:
 			cs.texture = cv.tex(cname)
 			cs.offset = -cv.pivot_of(cname) + Vector2(0, -2.0 * float(MODEL_HEIGHT.get(Catalog.base_model(v.model), 30)) - 6.0 + (1.0 if int(anim_time * 4) % 2 == 0 else 0.0))
 			cs.position = spring
+		var transfer: Sprite2D = n.get_node("transfer")
+		transfer.visible = v.state in ["loading", "unloading"]
+		if transfer.visible:
+			var progress := fmod(anim_time * 1.8, 1.0)
+			var ground := Vector2(-30, -5)
+			var truck := Vector2(0, -2.0 * float(MODEL_HEIGHT.get(Catalog.base_model(v.model), 30)) - 12.0)
+			transfer.position = (ground.lerp(truck, progress) if v.state == "loading" else truck.lerp(ground, progress)) + spring
+			transfer.modulate.a = 0.7 + 0.3 * sin(progress * PI)
 		n.get_node("warn").visible = v.state == "broken" and int(anim_time * 3) % 2 == 0
 	for i in mini(service_nodes.size(), sim.safety.vehicles.size()):
 		var sv: Dictionary = sim.safety.vehicles[i]

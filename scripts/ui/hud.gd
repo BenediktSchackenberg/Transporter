@@ -49,7 +49,7 @@ var staff_rt: RichTextLabel
 var decisions_rt: RichTextLabel
 var decision_filter: OptionButton
 var event_panel: EventPanel
-const DECISION_FILTERS := [["Alle", ""], ["Strategie (API-Modell)", "api"], ["Planschritte", "plan"], ["Ersatzmodus/Demo", "fallback"],
+const DECISION_FILTERS := [["Alle", ""], ["Strategie (API-Modell)", "api"], ["Planschritte", "plan"], ["Ersatzmodus/Demo", "fallback"], ["Disposition", "dispatch"],
 	["Vorarbeiter", "foreman"], ["Simulation", "auto"], ["Zuschauer", "spectator"], ["Stadt (Ereignisse)", "world"], ["nur abgelehnt", "abgelehnt"]]
 var minimap: Minimap
 var sel_title: Label
@@ -1231,12 +1231,29 @@ func _update_ai() -> void:
 	for c in sim.companies:
 		var ctl: AgentController = session.controllers[c.id]
 		var cfg := ctl.config
+		if str(cfg.get("provider", "")) == "eko":
+			var swarm := session.eko_swarm_status()
+			var eko := session.eko_agent_status(c.id)
+			var label := "EKO %s @ %s" % [str(swarm.get("model", "?")), str(swarm.get("provider", "?"))]
+			var state := str(eko.get("state", "startet")) if bool(eko.get("fresh", false)) else "kein Schwarmkontakt"
+			txt += "[color=#%s][b]%s[/b][/color] – %s\n" % [c.color.lightened(0.3).to_html(false), _esc(c.player_name), _esc(label)]
+			txt += "Status: %s · Modellaufrufe %d · letzte Antwort %.0f ms\n" % [_esc(state), int(eko.get("calls", 0)), float(eko.get("latency_ms", 0.0))]
+			if str(eko.get("goal", "")) != "":
+				txt += "Ziel: %s\n" % _esc(str(eko.goal).left(180))
+			if str(eko.get("next_step", "")) != "":
+				txt += "Nächster Schritt: %s\n" % _esc(str(eko.next_step).left(180))
+			if str(eko.get("waiting_on", "")) != "":
+				txt += "Wartet auf: %s\n" % _esc(str(eko.waiting_on).left(180))
+			if str(eko.get("last_error", "")) != "":
+				txt += "[color=#ff6b5e]Letzter Fehler: %s[/color]\n" % _esc(str(eko.last_error).left(180))
+			txt += "\n"
+			continue
 		txt += "[color=#%s][b]%s[/b][/color] – %s\n" % [c.color.lightened(0.3).to_html(false), c.player_name,
 			"DEMO (simulierte Antworten, keine KI)" if ctl.is_demo() else "%s @ %s" % [cfg.get("model"), cfg.get("base_url")]]
 		txt += "Status: %s%s\n" % [ctl.status, "  [color=#ffb347][ERSATZMODUS – regelbasiert][/color]" if ctl.fallback_active else ""]
-		txt += "Anfragen %d/%d · Token %d/%d · OK %d · Fehler %d · ungültig %d · Aktionen ok %d / abgelehnt %d\n" % [
+		txt += "Anfragen %d/%d · Token %d/%d · OK %d · Fehler %d · ungültig %d · Aktionen angenommen %d (vorgemerkt %d) / abgelehnt %d\n" % [
 			ctl.stats.requests, int(cfg.get("max_requests", 0)), ctl.stats.tokens, int(cfg.get("max_tokens", 0)),
-			ctl.stats.ok, ctl.stats.errors, ctl.stats.invalid, ctl.stats.actions_ok, ctl.stats.actions_rejected]
+			ctl.stats.ok, ctl.stats.errors, ctl.stats.invalid, ctl.stats.actions_ok, int(ctl.stats.get("actions_pending", 0)), ctl.stats.actions_rejected]
 		if ctl.last_error != "":
 			txt += "[color=#ff6b5e]Letzter Fehler: %s[/color]\n" % _esc(ctl.last_error)
 		for s in ctl.summaries.slice(-4):
@@ -1258,7 +1275,7 @@ func _update_scroll(rt: RichTextLabel, text: String) -> void:
 ## Entscheidungsprotokoll: neueste zuerst; Herkunft farbig; Folgen werden aus dem aktuellen Zustand berechnet.
 func _update_decisions() -> void:
 	var flt: String = DECISION_FILTERS[decision_filter.selected][1]
-	var cols := {"api": "#7fc8ff", "plan": "#b48cff", "fallback": "#ffb347", "foreman": "#9fd8ff", "auto": "#999999", "spectator": "#f2c14e", "world": "#8fd0c0"}
+	var cols := {"api": "#7fc8ff", "plan": "#b48cff", "fallback": "#ffb347", "dispatch": "#87d6a5", "foreman": "#9fd8ff", "auto": "#999999", "spectator": "#f2c14e", "world": "#8fd0c0"}
 	var txt := ""
 	var n := 0
 	for i in range(sim.decisions.entries.size() - 1, -1, -1):

@@ -60,10 +60,11 @@ var _homes_min := -1.0
 var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
 const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.000 EUR Privatgeld (Einlage von aussen X0 -> Y0)
 const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
+const GRUNDZIEL_FIRMA := "Baue ein dauerhaft erfolgreiches Transportunternehmen auf: Fahrer einstellen, reale Auftraege abholen und zustellen, Gewinne in Fuhrpark, Betriebshof und Buero investieren und weitere Staedte bedienen."
 # Benedikt 18.11.: "Ziel pro KI ist, dass die Stadt waechst, mehr Einwohner kommen, die Wirtschaft in Schwung kommt"
 const GRUNDZIEL_WILDNIS := ("Wildnis – dein Ziel: deine Stadt wächst, immer mehr Einwohner ziehen zu, die Wirtschaft kommt in Schwung. Weg dorthin: sicheren Platz suchen, " +
 	"Betriebshof und Basis eröffnen, Bürgeramt bauen (dann gibt es die Stadt), Straße zum Großlager (ohne Straße liefert niemand), Häuser für Siedler, " +
-	"erste Betriebe (Arbeitsplätze, Umsatz). Material holst du selbst mit deinem LKW; Tagelöhner helfen beim Bauen. Transportaufträge gibt es erst, wenn Städte entstehen.")
+	"erste Betriebe (Arbeitsplätze, Umsatz), danach Fahrer und Fuhrpark erweitern und mehrere Städte bedienen. Material holst du selbst mit deinem LKW; Tagelöhner helfen beim Bauen. Transportaufträge gibt es erst, wenn Städte entstehen.")
 const GRUNDZIEL_AMT := "Bringe deine Stadt voran: Versorgung, Wohnraum, Arbeit, Sicherheit und Zufriedenheit der Bürger (Amt). Dein Zuhause ist dein Rathaus."
 const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
 var towns_funded := {}              # "k" -> true
@@ -737,15 +738,21 @@ const HOME_AKKU := 30.0   # darunter (oder nass/kalt) steht der Heimweg an erste
 func next_steps(b: Dictionary) -> Array:
 	_estate_goal_sync(b)
 	var out: Array = []
+	var urgent_step := ""
+	var firm_step := ""
+	var pending_step := ""
+	var goal_step := ""
 	var akku := float(b.get("akku", 100.0))
 	if float(b.get("rest_left", 0.0)) <= 0.0 and (akku < HOME_AKKU or float(b.get("nass", 0.0)) > 60.0 or float(b.get("kalt", 0.0)) > 60.0):
 		var why := "Akku %d %%" % int(akku) if akku < HOME_AKKU else ("du bist nass" if float(b.get("nass", 0.0)) > 60.0 else "dir ist kalt")
 		if is_home(b):
 			out.append("Ausruhen (%s): Rest – du bist zu Hause, dort lädst du schnell und wirst trocken und warm." % why)
+			urgent_step = str(out.back())
 		else:
 			var hint := home_hint(b)
 			if hint != "":
 				out.append("Nach Hause (%s):%s Für weite Wege: Fahrt." % [why, hint])
+				urgent_step = str(out.back())
 	var cid := active_firm(b)
 	var offen: Dictionary = b.get("offen", {})
 	if not offen.is_empty():
@@ -759,6 +766,7 @@ func next_steps(b: Dictionary) -> Array:
 			if o.status == "open" and int(o.awaiting) == cid and float(o.expires) > sim.game_min:
 				out.append("Angebot %s von %s wartet auf deine Antwort (%s): Firma {aktion: {action: \"accept_trade\", offer_id: \"%s\"}} – oder reject_trade bzw. counter_offer." % [
 					o.id, sim.company(int(o.from)).player_name, sim.social.describe(o).left(100), o.id])
+				pending_step = str(out.back())
 				break
 	var wild_build: bool = sim.wildnis and cid >= 0 and sim.personnel.employed(cid).all(func(x): return x.role == "owner")
 	if wild_build:
@@ -768,6 +776,7 @@ func next_steps(b: Dictionary) -> Array:
 			st0 = homes.next_step(cid)
 		if st0 != "":
 			out.append(st0)
+			firm_step = st0
 	if cid >= 0 and not wild_build:
 		var c = sim.company(cid)
 		if c.vehicle_ids.is_empty():
@@ -778,17 +787,23 @@ func next_steps(b: Dictionary) -> Array:
 			if not best.is_empty() and c.ledger.cash >= float(best.price):
 				out.append("Fahrzeug kaufen – ohne Fahrzeug verdient %s nichts: Firma {aktion: {action: \"buy_vehicle\", offer_id: \"%s\"}} (%s, %s; Firmenkasse %s). Angebots-IDs stehen in meine_firma.fahrzeugangebote, nicht bei anderen Unternehmern." % [
 					c.company_name, best.id, best.model, Catalog.money(float(best.price)), Catalog.money(c.ledger.cash)])
+				firm_step = str(out.back())
 		else:
 			var step := _fleet_step(cid, float(b.get("takt_min", 0.0)))
 			if step != "":
 				out.append(step)
+				firm_step = step
 		var st := settle.next_step(b, cid)
 		if st != "":
 			out.append(st)
+			if firm_step == "":
+				firm_step = st
 		elif sim.neubeginn:
 			var hs := homes.next_step(cid)
 			if hs != "":
 				out.append(hs)
+				if firm_step == "":
+					firm_step = hs
 	if int(b.get("amt", -1)) < 0:
 		var sug := estates.suggestion(str(b.name))
 		if not sug.is_empty():
@@ -802,7 +817,8 @@ func next_steps(b: Dictionary) -> Array:
 					sug.art, int(sug.feld), Catalog.money(float(sug.kosten)), Catalog.money(firm_cash)])
 	var g: Dictionary = b.get("ziel", {})
 	if g.is_empty() or str(g.get("status", "")) != "aktiv":
-		out.append("Setze dir ein Ziel: Ziel {ziel, warum, teilziele}. Grundziel: %s" % (GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else (GRUNDZIEL_WILDNIS if sim.wildnis and cid >= 0 else GRUNDZIEL)))
+		out.append("Setze dir ein Ziel: Ziel {ziel, warum, teilziele}. Grundziel: %s" % (GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else (GRUNDZIEL_WILDNIS if sim.wildnis and cid >= 0 else (GRUNDZIEL_FIRMA if cid >= 0 else GRUNDZIEL))))
+		goal_step = str(out.back())
 	else:
 		if not g.has("stand_min"):
 			g["stand_min"] = sim.game_min   # aeltere Ziele: ab jetzt messen
@@ -810,10 +826,18 @@ func next_steps(b: Dictionary) -> Array:
 		if days >= GOAL_STALE_DAYS:
 			out.append("Dein Ziel „%s“ steht seit %d Tagen bei %d %%. Melde Fortschritt (ZielStand), ändere den Weg oder ersetze es (Ziel {..., ersetzen: true})." % [
 				str(g.ziel).left(60), int(days), int(g.get("fortschritt", 0))])
+			goal_step = str(out.back())
 	var hint := _contact_hint(b, cid)
-	if hint != "":
-		out.insert(mini(1, out.size()), hint)   # vor Ziel-Erinnerungen (17.11.: als Letztes fiel er immer hinter die ersten drei)
-	return out.slice(0, 3)
+	# Je ein akuter Bedarf, Firmenfortschritt und offene Antwort bleiben im knappen Kontext sichtbar.
+	# Weitere Hinweise behalten ihre alte Reihenfolge; aktive Ziele sind in der Beobachtung zusaetzlich separat enthalten.
+	var prioritized: Array = []
+	for s in [urgent_step, firm_step, pending_step, hint, goal_step]:
+		if s != "" and s not in prioritized:
+			prioritized.append(s)
+	for s in out:
+		if s not in prioritized:
+			prioritized.append(s)
+	return prioritized.slice(0, 3)
 
 
 # ------------------------------------------------------------------ Koerperliche Arbeit (Wildnis, Benedikt 17.11.)
@@ -1559,7 +1583,7 @@ func observe(name: String) -> Dictionary:
 		"jobangebote": _job_obs(b) if active_firm(b) < 0 and int(b.get("amt", -1)) < 0 else [], "mein_auftrag": jobs.get(str(b.get("job", "")), {}).duplicate(),
 		"lebensziel": _home_obs(b), "meine_firma": firm_obs(b), "mein_amt": office_obs(b), "gefuehle": feelings(b),
 		"ablauf": {"offen": (b.get("ablauf", []) as Array).size(), "letzte_ergebnisse": (b.get("ablauf_log", []) as Array).slice(-5)},
-		"grundziel": GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else (GRUNDZIEL_WILDNIS if sim.wildnis and int(b.get("firma", -1)) >= 0 else (GRUNDZIEL if estates.estates.has(name) else "")), "mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
+		"grundziel": GRUNDZIEL_AMT if int(b.get("amt", -1)) >= 0 else (GRUNDZIEL_WILDNIS if sim.wildnis and int(b.get("firma", -1)) >= 0 else (GRUNDZIEL_FIRMA if int(b.get("firma", -1)) >= 0 else (GRUNDZIEL if estates.estates.has(name) else ""))), "mein_ziel": b.get("ziel", {}), "letzte_entscheidung": b.get("entscheidung", {}), "erkundung": _exploration_obs(b),
 		"koerper": arms.body_obs(b), "gefahren": arms.dangers(b),
 		"mein_stammsitz": estates.obs(b), "stammsitze_in_sicht": estates.visible(b),
 		"deine_letzten_ereignisse": b.events.slice(-10)}
@@ -2108,13 +2132,15 @@ const FOUND_INVESTOR := 20000.0     # Einlage des Kapitalgeberpools I0
 const FIRM_ACTIONS := [
 	# Fahrzeuge und Auftraege
 	"accept_contract", "assign_transport", "plan_tour", "clear_tour", "collect_contracts", "buy_vehicle", "sell_vehicle", "repair_vehicle",
+	"set_operations_policy", "create_transport_line", "pause_transport_line", "request_transport_help", "quote_transport_help", "book_air_cargo",
 	# Personal: Fahrer, Bauarbeiter, Vorarbeiter, Wachen
 	"recruit_worker", "recruit_foreman", "dismiss_worker", "assign_worker_task", "assign_foreman", "set_foreman_orders", "guard_target",
 	"schedule_rest", "offer_training", "request_replacement_worker",
 	# Hof und Bauen
 	"rent_depot", "place_building", "build_office", "upgrade_office", "install_internet", "free_build", "create_stone_work", "hub_buy",
 	# Betriebe: gruenden, ausbauen, Personal zuordnen, Preise, Bergbau, Grundstuecke, Handel mit Grosslager und Bauhof
-	"found_business", "upgrade_business", "close_business", "set_business_price", "assign_staff", "explore_deposit", "request_mining",
+	"found_business", "upgrade_business", "close_business", "set_business_price", "set_hotel_price", "set_venue_price", "buy_it_service",
+	"assign_staff", "explore_deposit", "request_mining",
 	"build_access", "buy_property", "sell_property", "hub_sell", "buy_material", "sell_material",
 	# Geld
 	"take_loan", "repay_loan", "entnahme",
@@ -2352,6 +2378,18 @@ func _no_vehicle_hint(cid: int) -> String:
 
 ## Kompakte Firmenlage fuer das Wesen (statt der grossen Unternehmer-Beobachtung): Kasse, Flotte, Auftraege, machbarer Markt,
 ## naechste Fahrzeugangebote, Bewerber, letzte Ergebnisse.
+func _firm_action_schema() -> Dictionary:
+	# Dieselben Parameter wie beim Executor anzeigen, damit Beispieltexte nicht von der Ausfuehrung abweichen.
+	var schema := ActionExecutor.all_schema()
+	var out := {}
+	for name in ["accept_contract", "assign_transport", "collect_contracts", "buy_vehicle", "sell_vehicle", "repair_vehicle",
+		"recruit_worker", "assign_worker_task", "build_office", "upgrade_office", "install_internet", "place_building",
+		"set_operations_policy", "create_transport_line", "pause_transport_line", "book_air_cargo", "buy_it_service",
+		"found_business", "upgrade_business", "assign_staff", "set_business_price", "set_hotel_price", "set_venue_price"]:
+		if name in FIRM_ACTIONS and schema.has(name):
+			out[name] = schema[name].get("params", {})
+	return out
+
 func firm_obs(b: Dictionary) -> Dictionary:
 	var cid := int(b.get("firma", -1))
 	if cid < 0 or sim.company(cid) == null:
@@ -2393,6 +2431,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"branchen_zum_gruenden": _branch_menu(o.get("verfuegbare_branchen", [])),
 		"chancen": (o.get("chancen", []) as Array).slice(0, 6),
 		"bergbau": o.get("bergbau", []),
+		"aktionsschema": _firm_action_schema(),
 		"hinweis": "Gänge der Firma (Arbeitsamt, Händler, Bewerber) erledigt deine Büroleitung selbstständig – das bist nicht du, " +
 			"du musst nicht darauf warten. Fahrten zuweisen, Fahrer einsetzen und Aufträge annehmen ist deine Sache; die Disposition springt " +
 			"nur alle drei Spielstunden für stehende Fahrzeuge ein (und normal, wenn du drei Minuten nichts tust). Aufträge sind schnell weg – nimm sie zügig an.",
@@ -2406,7 +2445,8 @@ func firm_obs(b: Dictionary) -> Dictionary:
 			"attempt_vehicle_sabotage {worker_id, vehicle_id} | buy_security {level} | set_insurance {active} | offer_trade/propose_cooperation (siehe Spielregeln) | " +
 			"auftrag_an_wesen {art: botengang|mauer, lohn} (Hilfsjob für freie Wesen wie Lumo) | " +
 			"found_business {branche, stadt?} (Betrieb gründen: Werk, Grube, Laden …, siehe branchen_zum_gruenden) | assign_staff {worker_id, business_id} | " +
-			"upgrade_business {business_id} | set_business_price {business_id, preis} | explore_deposit {grundstueck} | request_mining {grundstueck} | " +
+			"upgrade_business {business_id} | set_business_price {business_id, item, price} | set_hotel_price {business_id, price} | set_venue_price {business_id, price} | buy_it_service {leistung, business_id?} | " +
+			"create_transport_line {name, cargo, vehicle_ids, pickup_id?, dropoff_id?, via_depot?} | book_air_cargo {item, menge, standort, stadt} | explore_deposit {grundstueck} | request_mining {grundstueck} | " +
 			"hub_sell {item, qty} (Ware ans Großlager) | close_business {business_id}}"}
 
 

@@ -142,7 +142,7 @@ func _matches(l: Dictionary, k: Contract) -> bool:
 
 func _advance(l: Dictionary) -> void:
 	var cid := int(l.owner)
-	var pending := false
+	var active_jobs := 0
 	for kid in jobs:
 		var j: Dictionary = jobs[kid]
 		if j.line != l.id or j.counted:
@@ -154,7 +154,7 @@ func _advance(l: Dictionary) -> void:
 			else:
 				j.counted = true
 			continue
-		pending = true
+		active_jobs += 1
 		if j.stage == "inbound" and sim.logistics.stored(int(l.depot), kid) >= int(j.qty):
 			for vid in l.vehicles:
 				var v: FleetVehicle = sim.vehicles.get(int(vid))
@@ -165,7 +165,8 @@ func _advance(l: Dictionary) -> void:
 						j.vehicle = v.id
 						say(cid, "Lager", "%s ist am Hof eingelagert. #%d uebernimmt die Zustellung." % [kid, v.id], kid)
 					break
-	if pending or not l.active:
+	if not l.active:
+		_set_status(l, "pausiert · %s laufen" % _transport_count(active_jobs) if active_jobs > 0 else "pausiert")
 		return
 	var fleet: Array = []
 	for vid in l.vehicles:
@@ -173,14 +174,18 @@ func _advance(l: Dictionary) -> void:
 		if v and _free(v) and sim.driver_of(v) != null:
 			fleet.append(v)
 	if fleet.is_empty():
-		_set_status(l, "Fahrzeug oder Fahrer noch nicht bereit")
+		_set_status(l, "%s laufen · kein Lkw frei" % _transport_count(active_jobs) if active_jobs > 0 else "Fahrzeug oder Fahrer noch nicht bereit")
 		return
 	var delegated: Array = requests.values().filter(func(r): return int(r.owner) == cid and (r.status == "offen" or r.offers.any(func(oid): return sim.social.offers.get(oid, {}).get("status", "") == "accepted"))).map(func(r): return r.contract)
 	var candidates: Array = sim.contracts.values().filter(func(k): return k.id not in delegated and sim.company(cid).known.has(k.id) and _matches(l, k) and k.internal == "" and (k.status == "open" or (k.status == "accepted" and k.owner == cid and not jobs.has(k.id))))
 	candidates.sort_custom(func(a, b): return a.deadline < b.deadline)
 	var refusal := ""
 	for k in candidates:
+		if not fleet.any(func(v): return _free(v)):
+			break
 		for v in fleet:
+			if not _free(v):
+				continue
 			if not k.vehicle_ok(v.model) or k.qty > int(v.spec().capacity) or k.min_rep > sim.company(cid).reputation:
 				continue
 			var estimate := route_estimate(v, k, bool(l.via_depot))
@@ -190,8 +195,8 @@ func _advance(l: Dictionary) -> void:
 			if k.reward < float(estimate.cost):
 				refusal = "Fracht %s deckt die geschaetzten Fahrt- und Fahrerkosten nicht." % k.id
 				continue
-			if l.via_depot and (k.qty > sim.logistics.storage_cap(int(l.depot)) - sim.logistics.storage_used(int(l.depot)) or (k.needs_cold and sim.estate.is_plot(int(l.depot)) and k.qty > sim.estate.storage_cap(int(l.depot), true))):
-				_set_status(l, "Lagerplatz oder Kuehllager fehlt: Hof ausbauen oder Direktlinie waehlen")
+			if l.via_depot and not _line_storage_free(int(l.depot), k):
+				refusal = "Lagerplatz oder Kuehllager fehlt: Hof ausbauen oder Direktlinie waehlen"
 				continue
 			if k.status == "open":
 				var accepted: Dictionary = sim.executor._accept_contract(cid, k.id, -1)
@@ -201,10 +206,40 @@ func _advance(l: Dictionary) -> void:
 			var r: Dictionary = sim.executor._assign(cid, v.id, k.id, k.qty, Logistics.PICKUP, dest)
 			if r.ok:
 				jobs[k.id] = {"line": l.id, "vehicle": v.id, "stage": "inbound" if l.via_depot else "outbound", "qty": k.qty, "counted": false}
-				_set_status(l, "%s: %s → %s → %s" % [k.id, sim.city.building(k.pickup).name, "Betriebshof" if l.via_depot else "Direktfahrt", sim.city.building(k.dropoff).name])
 				say(cid, "Disposition", "%s an #%d: %d x %s, danach %s." % [k.id, v.id, k.qty, k.cargo_name(), "Umschlag am Hof" if l.via_depot else "zum Kunden"], k.id)
-				return
-	_set_status(l, refusal if refusal != "" else "Keine passende bekannte Fracht: Auftraege sammeln, Linie anpassen oder pausieren")
+				var driver: Worker = sim.driver_of(v)
+				if driver != null:
+					say(cid, driver.name, "Verstanden. Ich fahre zu %s, lade %d x %s und bringe alles %s." % [sim.city.building(k.pickup).name, k.qty, k.cargo_name(), "erst zum Hof" if l.via_depot else "direkt zu " + sim.city.building(k.dropoff).name], k.id, driver.id)
+				active_jobs += 1
+				break
+	if active_jobs > 0:
+		_set_status(l, "%s laufen · %d Lkw frei" % [_transport_count(active_jobs), fleet.filter(func(v): return _free(v)).size()])
+	else:
+		_set_status(l, refusal if refusal != "" else "Keine passende bekannte Fracht: Auftraege sammeln, Linie anpassen oder pausieren")
+
+
+func _transport_count(count: int) -> String:
+	return "%d %s" % [count, "Transport" if count == 1 else "Transporte"]
+
+
+func _line_storage_free(site: int, k: Contract) -> bool:
+	# Beruecksichtigt auch Ware, die gleichzeitig in anderen Lkw zum Hof unterwegs ist.
+	if k.qty > sim.logistics.storage_cap(site) - sim.logistics.storage_used(site) - sim.logistics._reserved_store_in(site):
+		return false
+	if not k.needs_cold or not sim.estate.is_plot(site):
+		return true
+	var cold := 0
+	for kid in sim.storage.get(site, {}):
+		var stored_contract: Contract = sim.contracts.get(kid)
+		if stored_contract != null and stored_contract.needs_cold:
+			cold += int(sim.storage[site][kid])
+	for v in sim.vehicles.values():
+		for st in v.stops:
+			if st.art == "abladen" and Logistics.store_site(str(st.ort)) == site:
+				var incoming: Contract = sim.contracts.get(str(st.contract_id))
+				if incoming != null and incoming.needs_cold:
+					cold += int(st.menge)
+	return cold + k.qty <= sim.estate.storage_cap(site, true)
 
 
 func route_estimate(v: FleetVehicle, k: Contract, via_depot: bool) -> Dictionary:
@@ -514,7 +549,18 @@ func quote_help(cid: int, rid: String, fee: float) -> Dictionary:
 func summary(cid: int) -> Dictionary:
 	var own: Array = lines.values().filter(func(l): return int(l.owner) == cid and int(l.generation) == sim.company(cid).generation).map(func(l): return l.duplicate())
 	for l in own:
-		l["pending"] = jobs.values().filter(func(j): return j.line == l.id and not j.counted).size()
+		var trips: Array = []
+		for kid in jobs:
+			var j: Dictionary = jobs[kid]
+			if j.line != l.id or j.counted:
+				continue
+			var k: Contract = sim.contracts.get(kid)
+			if k != null:
+				trips.append({"auftrag": kid, "lkw": int(j.vehicle), "phase": str(j.stage), "ware": k.cargo,
+					"menge": int(j.qty), "abholung": sim.city.building(k.pickup).name,
+					"ziel": sim.city.building(k.dropoff).name, "frist_in_min": maxi(0, int(k.deadline - sim.game_min))})
+		l["fahrten"] = trips
+		l["pending"] = trips.size()
 	var inquiries: Array = []
 	for r in requests.values():
 		if r.status != "offen" or sim.game_min >= float(r.expires) or int(r.generation) != sim.company(int(r.owner)).generation:

@@ -9,6 +9,8 @@ var sim: Simulation
 var cv: CityView
 var figures := {} # Reise-ID -> sichtbare Gruppenmitglieder
 var beach_spots := {} # Hotel-ID -> begehbare Sandzellen
+var beach_routes := {} # Hotel-ID -> Fussweg vom Hotel zum Strand
+var previous_positions := {} # Reise-ID -> letzte Weltposition fuer die Blickrichtung
 
 
 func setup(s: Simulation, city_view: CityView) -> void:
@@ -22,6 +24,7 @@ func update_view(_delta: float) -> void:
 			for n in figures[id]:
 				n.queue_free()
 			figures.erase(id)
+			previous_positions.erase(id)
 	for id in sim.tourism.trips:
 		var t: Dictionary = sim.tourism.trips[id]
 		if t.status in ["storniert", "abgereist"]:
@@ -32,20 +35,34 @@ func update_view(_delta: float) -> void:
 				var n := _make_figure((int(id.substr(1)) + i) % Catalog.AVATAR_COUNT, SHIRTS[i % SHIRTS.size()])
 				add_child(n)
 				figures[id].append(n)
-		var pos := sim.tourism.position_of(t)
-		var at_venue: bool = str(t.get("venue", "")) != "" and sim.game_min >= float(t.get("venue_from", 0.0)) and sim.game_min < float(t.get("venue_until", 0.0))
-		var at_beach: bool = t.status == "im_hotel" and not at_venue and Catalog.hour_of_day(sim.game_min) >= 10.0 and Catalog.hour_of_day(sim.game_min) <= 18.0
+		var world_pos: Vector2 = sim.tourism.visual_position_of(t)
+		var at_venue: bool = str(t.get("venue", "")) != "" and sim.game_min >= float(t.get("venue_from", 0.0)) - Tourism.local_transfer_minutes() and sim.game_min < float(t.get("venue_until", 0.0)) + Tourism.local_transfer_minutes()
+		var hour := Catalog.hour_of_day(sim.game_min)
+		var arriving: bool = GameCalendar.day_of(sim.game_min) == int(t.arrival_day) and sim.game_min < GameCalendar.day_start(int(t.arrival_day)) + Tourism.local_transfer_minutes() * 2.0
+		var at_beach: bool = t.status == "im_hotel" and not arriving and not at_venue and hour >= 9.0 and hour < 18.0
 		if at_beach:
-			pos = _beach_spot(str(t.hotel), pos)
+			var hotel: Dictionary = sim.biz.get_b(str(t.hotel))
+			if not hotel.is_empty():
+				var hotel_pos: Vector2i = sim.city.building(int(hotel.site)).walk
+				world_pos = _beach_world_position(str(t.hotel), hotel_pos, _beach_spot(str(t.hotel), hotel_pos), hour)
+		var before: Vector2 = previous_positions.get(id, world_pos)
+		var movement := world_pos - before
+		previous_positions[id] = world_pos
+		var direction := 2
+		if movement.length_squared() > 0.03:
+			if absf(movement.x) > absf(movement.y):
+				direction = 3 if movement.x > 0.0 else 1
+			else:
+				direction = 2 if movement.y > 0.0 else 0
 		for i in figures[id].size():
 			var n: Node2D = figures[id][i]
 			var phase := float(sim.game_min) * 0.045 + float(i) * 1.4
 			var offset := Vector2(cos(phase), sin(phase * 0.7)) * (8.0 if at_beach else 3.0)
-			n.position = Iso.to_screen(sim.city.tile_center(pos) + offset + Vector2(i * 5, -i * 3))
-			var walking: bool = t.status == "unterwegs" and t.mode == "strasse" or at_beach
+			n.position = Iso.to_screen(world_pos + offset + Vector2(i * 5, -i * 3))
+			var walking: bool = movement.length_squared() > 0.03 or at_beach
 			var frame := int(sim.game_min * 0.15 + i) % FRAMES if walking else 0
 			for layer in n.get_children():
-				(layer as Sprite2D).frame = 2 * FRAMES + frame
+				(layer as Sprite2D).frame = direction * FRAMES + frame
 
 
 func _make_figure(style: int, shirt: Color) -> Node2D:
@@ -77,8 +94,26 @@ func _beach_spot(hotel_id: String, hotel_pos: Vector2i) -> Vector2i:
 			if sim.city.g(c) != CityData.G.SAND or not sim.city.walkable(c):
 				continue
 			var d := absi(dx) + absi(dy)
-			if d < best_d:
+			if d < best_d and sim.nav.walk_reachable(hotel_pos, c):
 				best = c
 				best_d = d
 	beach_spots[hotel_id] = best
 	return best
+
+
+func _beach_world_position(hotel_id: String, hotel_pos: Vector2i, beach_pos: Vector2i, hour: float) -> Vector2:
+	if not beach_routes.has(hotel_id):
+		var path: Array[Vector2i] = sim.nav.walk_path(hotel_pos, beach_pos)
+		beach_routes[hotel_id] = path.map(func(p): return [p.x, p.y]) if not path.is_empty() and path[-1] == beach_pos else []
+	var route: Array = beach_routes[hotel_id]
+	if route.is_empty():
+		return sim.city.tile_center(hotel_pos)
+	var progress := 1.0
+	if hour < 10.0:
+		progress = clampf(hour - 9.0, 0.0, 1.0)
+	elif hour >= 17.0:
+		progress = 1.0 - clampf(hour - 17.0, 0.0, 1.0)
+	var index := progress * float(route.size() - 1)
+	var a: Array = route[clampi(int(floorf(index)), 0, route.size() - 1)]
+	var b: Array = route[clampi(int(ceilf(index)), 0, route.size() - 1)]
+	return sim.city.tile_center(Vector2i(int(a[0]), int(a[1]))).lerp(sim.city.tile_center(Vector2i(int(b[0]), int(b[1]))), index - floorf(index))

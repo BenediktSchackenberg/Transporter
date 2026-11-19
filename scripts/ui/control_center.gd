@@ -311,8 +311,18 @@ func _view_ki() -> void:
 	grid.add_theme_constant_override("v_separation", 8)
 	content.add_child(grid)
 	var ais := session.controllers.filter(func(c): return sim.company(c.cid) != null and sim.company(c.cid).is_active())
-	var api := ais.filter(func(c): return not c.fallback_active and c.config.get("provider", "demo") != "demo").size()
-	_kpi(grid, "Aktive KI-Unternehmen", str(ais.size()), "%d mit KI-Modell, %d im Ersatzmodus" % [api, ais.size() - api], 0, C_AI)
+	var api := 0
+	var ohne_kontakt := 0
+	for ctl in ais:
+		if str(ctl.config.get("provider", "demo")) == "eko":
+			var s := session.eko_agent_status(ctl.cid)
+			if bool(s.get("fresh", false)) and bool(s.get("alive", false)):
+				api += 1
+			else:
+				ohne_kontakt += 1
+		elif not ctl.fallback_active and str(ctl.config.get("provider", "demo")) != "demo":
+			api += 1
+	_kpi(grid, "Aktive KI-Unternehmen", str(ais.size()), "%d mit Modell, %d Ersatzmodus, %d ohne Schwarmkontakt" % [api, ais.size() - api - ohne_kontakt, ohne_kontakt], 0, C_WARN if ohne_kontakt > 0 else C_AI)
 	var staff := 0
 	for c in sim.companies:
 		staff += sim.personnel.employed(c.id).size()
@@ -408,7 +418,16 @@ func _ai_card(parent: Control, ctl: AgentController) -> void:
 	top.add_child(_h("%s" % c.player_name, 18, c.color.lightened(0.25)))
 	top.add_child(_t(c.company_name, 14, C_MUTED))
 	v.add_child(_t("Status: %s %s" % [st[2], st[0]], 14, st[1]))
-	v.add_child(_t("Ziel: %s" % (ctl.goal if ctl.goal != "" else "noch keines genannt"), 14))
+	var eko: Dictionary = session.eko_agent_status(ctl.cid) if str(ctl.config.get("provider", "")) == "eko" else {}
+	var goal_text := str(eko.get("goal", ctl.goal))
+	v.add_child(_t("Ziel: %s" % (goal_text if goal_text != "" else "noch keines genannt"), 14))
+	if not eko.is_empty():
+		if str(eko.get("next_step", "")) != "":
+			v.add_child(_t("Nächster Schritt: %s" % str(eko.next_step).left(180), 14, C_AI))
+		if str(eko.get("waiting_on", "")) != "":
+			v.add_child(_t("Wartet auf: %s" % str(eko.waiting_on).left(180), 14, C_MUTED))
+		if str(eko.get("last_error", "")) != "" and str(eko.get("state", "")) == "fehler":
+			v.add_child(_t("Letzter KI-Fehler: %s" % str(eko.last_error).left(180), 14, C_BAD))
 	v.add_child(_t("Gerade: %s" % LiveText.figure_text(sim, c.id).left(120), 14, C_MUTED))
 	var last := _last_decision(c.id)
 	if not last.is_empty():
@@ -428,6 +447,17 @@ func _ai_card(parent: Control, ctl: AgentController) -> void:
 ## [Statuswort, Farbe, Symbol]: plant (Modell denkt), aktiv, Ersatzmodus, braucht Hilfe (Fehlerserie, Geld knapp).
 func _ai_status(ctl: AgentController) -> Array:
 	var c: Company = sim.company(ctl.cid)
+	if str(ctl.config.get("provider", "")) == "eko":
+		var s := session.eko_agent_status(ctl.cid)
+		if not bool(s.get("fresh", false)):
+			return ["kein Kontakt zum Eko-Schwarm", C_WARN, "◇"]
+		if not bool(s.get("alive", false)) or str(s.get("state", "")) in ["fehler", "beendet"]:
+			return ["KI braucht Hilfe: %s" % str(s.get("last_error", s.get("state", ""))).left(90), C_BAD, "⚠"]
+		if str(s.get("state", "")) == "denkt":
+			return ["Modell denkt", C_AI, "◆"]
+		if str(s.get("state", "")) == "wartet":
+			return ["wartet auf Weltaktion", C_INFO, "◷"]
+		return ["Eko-Wesen: %s" % str(s.get("state", "bereit")), C_OK, "●"]
 	if c.ledger.cash < 0.0 or int(ctl.stats.get("errors", 0)) > int(ctl.stats.get("ok", 0)) + 3:
 		return ["braucht Hilfe", C_BAD, "⚠"]
 	if ctl.fallback_active or ctl.config.get("provider", "demo") == "demo":
@@ -440,7 +470,7 @@ func _ai_status(ctl: AgentController) -> Array:
 func _last_decision(cid: int) -> Dictionary:
 	for i in range(sim.decisions.entries.size() - 1, -1, -1):
 		var d: Dictionary = sim.decisions.entries[i]
-		if int(d.company) == cid and str(d.herkunft) in ["api", "plan", "fallback"] and DecisionText.action_of(d) not in ["wait", "collect_contracts"]:
+		if int(d.company) == cid and str(d.herkunft) in ["api", "plan", "fallback", "dispatch"] and DecisionText.action_of(d) not in ["wait", "collect_contracts"]:
 			return d
 	return {}
 
@@ -817,11 +847,23 @@ func _view_technik() -> void:
 	r3.add_child(_btn("Speichern", func(): session.save_game()))
 	r3.add_child(_t("Laden und Partie beenden: oben in der Leiste.", 14, C_MUTED, false))
 	_section("KI-Anbindung")
+	var eko_swarm := session.eko_swarm_status()
+	if str(eko_swarm.get("configuration_error", "")) != "":
+		content.add_child(_t("Eko-Konfiguration: %s" % str(eko_swarm.configuration_error), 14, C_BAD))
 	for ctl in session.controllers:
 		var c: Company = sim.company(ctl.cid)
 		var st := _ai_status(ctl)
-		content.add_child(_t("%s %s – %s · %s (%s) · Anfragen %d, Fehler %d, Aktionen ok %d / abgelehnt %d" % [st[2], c.player_name, st[0], str(ctl.config.get("provider", "")), str(ctl.config.get("model", "")),
-			int(ctl.stats.requests), int(ctl.stats.errors), int(ctl.stats.get("actions_ok", 0)), int(ctl.stats.get("actions_rejected", 0))], 14, st[1]))
+		if str(ctl.config.get("provider", "")) == "eko":
+			var eko := session.eko_agent_status(ctl.cid)
+			var swarm := session.eko_swarm_status()
+			content.add_child(_t("%s %s – %s · Eko %s / %s · Modellaufrufe %d · letzte Antwort %.0f ms" % [st[2], c.player_name, st[0], str(swarm.get("provider", "?")), str(swarm.get("model", "?")), int(eko.get("calls", 0)), float(eko.get("latency_ms", 0.0))], 14, st[1]))
+			if str(eko.get("tool", "")) != "":
+				content.add_child(_t("    letztes Werkzeug: %s · Antwortende: %s · Ausgabetoken %d" % [str(eko.get("tool", "")), str(eko.get("finish_reason", "?")), int(eko.get("completion_tokens", 0))], 13, C_MUTED))
+			if str(eko.get("last_error", "")) != "":
+				content.add_child(_t("    letzte Störung: %s" % str(eko.last_error).left(160), 13, C_WARN))
+			continue
+		content.add_child(_t("%s %s – %s · %s (%s) · Anfragen %d, Fehler %d, angenommen %d (vorgemerkt %d) / abgelehnt %d" % [st[2], c.player_name, st[0], str(ctl.config.get("provider", "")), str(ctl.config.get("model", "")),
+			int(ctl.stats.requests), int(ctl.stats.errors), int(ctl.stats.get("actions_ok", 0)), int(ctl.stats.get("actions_pending", 0)), int(ctl.stats.get("actions_rejected", 0))], 14, st[1]))
 		if ctl.last_error != "":
 			content.add_child(_t("    letzte Störung: %s" % ctl.last_error.left(160), 13, C_MUTED))
 	content.add_child(_t("Tastatur: F1 Leitstelle ein/aus · Tab Seitenleisten · O nächste Stadt · Mausrad Zoom.", 14, C_MUTED))
@@ -965,6 +1007,11 @@ func show_company(cid: int, tab: String = "ueberblick") -> void:
 			_kpi(grid, "Vermögen", Catalog.money(float(f.vermoegen)), "Bargeld + Buchwerte − Schulden", 0, C_INFO)
 			b.add_child(_t("Gerade: %s" % LiveText.figure_text(sim, cid), 15))
 			b.add_child(_t("Ruf %.0f · %d Mitarbeiter · %d Fahrzeuge · %d Betriebe · Stellplätze %d/%d" % [c.reputation, sim.personnel.employed(cid).size(), sim.company_vehicles(cid).size(), sim.biz.of(cid).size(), c.vehicle_ids.size(), c.fleet_limit()], 15, C_MUTED))
+			for hotel in sim.biz.of(cid):
+				if str(hotel.branch) != "hotel":
+					continue
+				var d: Dictionary = sim.tourism.detail(hotel)
+				b.add_child(_t("%s: %d/%d Zimmer belegt · %s/Nacht · Bewertung %.0f/100 (%d Gäste)" % [str(hotel.name), int(d.get("belegt", 0)), int(d.get("zimmer", 0)), Catalog.money(float(d.get("zimmerpreis", 0))), float(d.get("bewertung", 65.0)), int(d.get("bewertungen", 0))], 14, C_INFO))
 			if not c.depots.is_empty():
 				b.add_child(_btn("⌖ Firmensitz auf der Karte", func(): _jump_cell(sim.city.building(int(c.depots[0])).road)))
 		"finanzen":
@@ -1038,7 +1085,7 @@ func show_company(cid: int, tab: String = "ueberblick") -> void:
 			var n := 0
 			for i in range(sim.decisions.entries.size() - 1, -1, -1):
 				var d: Dictionary = sim.decisions.entries[i]
-				if int(d.company) != cid or str(d.herkunft) not in ["api", "plan", "fallback"]:
+				if int(d.company) != cid or str(d.herkunft) not in ["api", "plan", "fallback", "dispatch"]:
 					continue
 				var ok := str(d.pruefung) == "ok"
 				var line := _btn("Tag %d %s  %s %s" % [GameCalendar.day_of(float(d.t)), _when(float(d.t)), "✔" if ok else "✖", DecisionText.headline(sim, d)], func(): show_decision(str(d.id)), true)

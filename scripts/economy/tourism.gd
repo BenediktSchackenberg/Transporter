@@ -5,6 +5,8 @@ extends RefCounted
 
 const BEDS_PER_ROOM := 2
 const ROAD_TILES_PER_DAY := 180
+const MARKET_NIGHTLY_BUDGETS := [65.0, 90.0, 120.0, 155.0, 205.0, 285.0, 360.0]
+const LOCAL_TRANSFER_HOURS := 1.0
 const BREAKFAST_PRICE := 8.0
 const NIGHT_TAX := 2.0
 const VENUES := {"strandbar": {"price": 14.0, "capacity": 24, "from": 12, "to": 17},
@@ -14,7 +16,9 @@ const VENUES := {"strandbar": {"price": 14.0, "capacity": 24, "from": 12, "to": 
 var sim: Simulation
 var trips := {} # U<n> -> Reise mit Herkunft, Budget, Hotel, Weg, Belegung und Status
 var stats := {} # Stadt-ID -> Ankuenfte, Abreisen, Uebernachtungen, Ausgaben, Zufriedenheit
+var hotel_reviews := {} # Hotel-ID -> {score, count}; die Gaeste bewerten das gebuchte Hotel
 var _next := 1
+var _last_market_day := -1
 var venue_visits := {} # YYYY-Spieltag: Betriebs-ID -> bezahlte Gaeste
 
 
@@ -47,8 +51,10 @@ func detail(b: Dictionary) -> Dictionary:
 		return {"besucher_tag": int(b.get("visitors_today", 0)), "eintritt": int(b.get("entry_price", VENUES[str(b.branch)].price)),
 			"getraenke": sim.stock.available("fassgetraenk", "C%d" % int(b.owner), int(b.site))}
 	var day := GameCalendar.day_of(sim.game_min)
+	var reviews: Dictionary = hotel_reviews.get(str(b.id), {})
 	return {"zimmer": rooms(b), "belegt": occupied(str(b.id), day), "gebucht_morgen": occupied(str(b.id), day + 1),
-		"zimmerpreis": int(b.get("room_price", 65.0)), "gaeste_heute": int(summary(sim.towns.of_building(int(b.site))).aktive_gaeste)}
+		"zimmerpreis": int(b.get("room_price", 65.0)), "gaeste_heute": int(summary(sim.towns.of_building(int(b.site))).aktive_gaeste),
+		"bewertung": float(reviews.get("score", 65.0)), "bewertungen": int(reviews.get("count", 0))}
 
 
 func set_price(cid: int, bid: String, price: float) -> Dictionary:
@@ -133,6 +139,8 @@ func book(bid: String, persons: int, nights: int, budget: float, person_id: int 
 		"departure_day": departure, "rooms": need, "price": price, "paid_nights": 0, "breakfasts": 0, "venue_count": 0,
 		"kind": "Familie" if persons >= 3 else ("Paar" if persons == 2 else "Einzelgast"),
 		"status": "unterwegs", "position": 0, "booked_min": sim.game_min}
+	var transfer_from: Vector2i = _terminal_walk(town) if mode == "flug" else sim.city.building(int(b.site)).road
+	trips[id]["arrival_route"] = _walk_route(transfer_from, sim.city.building(int(b.site)).walk)
 	return {"ok": true, "ref": id, "arrival_day": arrival, "departure_day": departure, "mode": mode}
 
 
@@ -207,13 +215,87 @@ func position_of(t: Dictionary) -> Vector2i:
 	if b.is_empty():
 		return Vector2i.ZERO
 	if t.status == "unterwegs":
-		var air: Dictionary = sim.city.towns[int(t.town)].airport if sim.city.towns.size() > int(t.town) else sim.city.airport
-		return sim.city.building(int(air.get("terminal", b.site))).walk
-	if str(t.get("venue", "")) != "" and sim.game_min >= float(t.get("venue_from", 0.0)) and sim.game_min < float(t.get("venue_until", 0.0)):
+		return _terminal_walk(int(t.town))
+	var leg := _local_leg(t)
+	if not leg.is_empty():
+		return _route_cell(leg.route, float(leg.progress))
+	# Alte Spielstaende haben bereits einen Besuchsplan, aber noch keine gespeicherte Fussroute.
+	if str(t.get("venue", "")) != "" and t.get("venue_route", []).is_empty() and sim.game_min >= float(t.get("venue_from", 0.0)) and sim.game_min < float(t.get("venue_until", 0.0)):
 		var venue: Dictionary = sim.biz.get_b(str(t.venue))
 		if not venue.is_empty():
 			return sim.city.building(int(venue.site)).walk
 	return sim.city.building(int(b.site)).walk
+
+
+## Die Kartenansicht nutzt die laufende Position zwischen zwei Wegpunkten; position_of bleibt fuer Zellen/Inspektion erhalten.
+func visual_position_of(t: Dictionary) -> Vector2:
+	if t.mode == "strasse" and t.status == "unterwegs" and not t.route.is_empty():
+		var end_min := GameCalendar.day_start(int(t.arrival_day))
+		var fraction := clampf((sim.game_min - float(t.get("booked_min", sim.game_min))) / maxf(1.0, end_min - float(t.get("booked_min", sim.game_min))), 0.0, 1.0)
+		return _route_world(t.route, fraction)
+	var leg := _local_leg(t)
+	if not leg.is_empty():
+		return _route_world(leg.route, float(leg.progress))
+	return sim.city.tile_center(position_of(t))
+
+
+func _local_leg(t: Dictionary) -> Dictionary:
+	if t.status != "im_hotel":
+		return {}
+	var now := sim.game_min
+	var arrival_start := GameCalendar.day_start(int(t.arrival_day))
+	var transfer_min := local_transfer_minutes()
+	if now >= arrival_start and now < arrival_start + transfer_min * 2.0:
+		var arrival_route: Array = t.get("arrival_route", [])
+		if not arrival_route.is_empty():
+			return {"route": arrival_route, "progress": clampf((now - arrival_start) / (transfer_min * 2.0), 0.0, 1.0)}
+	var venue_route: Array = t.get("venue_route", [])
+	if venue_route.is_empty():
+		return {}
+	var start := float(t.get("venue_from", 0.0))
+	var finish := float(t.get("venue_until", 0.0))
+	if now >= start - transfer_min and now < start:
+		return {"route": venue_route, "progress": clampf((now - start + transfer_min) / transfer_min, 0.0, 1.0)}
+	if now >= start and now < finish:
+		return {"route": venue_route, "progress": 1.0}
+	if now >= finish and now < finish + transfer_min:
+		return {"route": venue_route, "progress": 1.0 - clampf((now - finish) / transfer_min, 0.0, 1.0)}
+	return {}
+
+
+static func local_transfer_minutes() -> float:
+	return GameCalendar.day_game_min * LOCAL_TRANSFER_HOURS / 24.0
+
+
+static func clock_min(day: int, hour: float) -> float:
+	return GameCalendar.day_start(day) + (hour - Catalog.START_HOUR) * GameCalendar.day_game_min / 24.0
+
+
+func _route_cell(route: Array, progress: float) -> Vector2i:
+	var p: Array = route[clampi(int(roundf(progress * float(route.size() - 1))), 0, route.size() - 1)]
+	return Vector2i(int(p[0]), int(p[1]))
+
+
+func _route_world(route: Array, progress: float) -> Vector2:
+	if route.is_empty():
+		return Vector2.ZERO
+	var index := clampf(progress, 0.0, 1.0) * float(route.size() - 1)
+	var a: Array = route[clampi(int(floorf(index)), 0, route.size() - 1)]
+	var b: Array = route[clampi(int(ceilf(index)), 0, route.size() - 1)]
+	return sim.city.tile_center(Vector2i(int(a[0]), int(a[1]))).lerp(sim.city.tile_center(Vector2i(int(b[0]), int(b[1]))), index - floorf(index))
+
+
+func _walk_route(from: Vector2i, to: Vector2i) -> Array:
+	var path: Array[Vector2i] = sim.nav.walk_path(from, to)
+	if path.is_empty() or path[-1] != to:
+		return []
+	return path.map(func(p): return [p.x, p.y])
+
+
+func _terminal_walk(town: int) -> Vector2i:
+	var air: Dictionary = sim.city.towns[town].airport if sim.city.towns.size() > town else sim.city.airport
+	var terminal := int(air.get("terminal", -1))
+	return sim.city.building(terminal).walk if terminal >= 0 and not sim.city.building(terminal).is_empty() else sim.towns.get_t(town).center
 
 
 func _visit_venues(day: int) -> void:
@@ -250,6 +332,10 @@ func _visit(t: Dictionary, b: Dictionary, day: int) -> bool:
 	var key := "%d:%s" % [day, str(b.id)]
 	if int(venue_visits.get(key, 0)) + int(t.persons) > int(spec.capacity) or sim.stock.available("fassgetraenk", "C%d" % int(b.owner), int(b.site)) < int(t.persons):
 		return false
+	var hotel: Dictionary = sim.biz.get_b(str(t.hotel))
+	var route: Array = _walk_route(sim.city.building(int(hotel.site)).walk, sim.city.building(int(b.site)).walk) if not hotel.is_empty() else []
+	if route.is_empty():
+		return false
 	if not _pay(t, b, price, "Besuch %s" % b.name):
 		return false
 	sim.stock.consume("fassgetraenk", int(t.persons), "C%d" % int(b.owner), int(b.site), "Gastronomie", sim.game_min)
@@ -258,28 +344,83 @@ func _visit(t: Dictionary, b: Dictionary, day: int) -> bool:
 	t["last_visit_day"] = day
 	t["venue_count"] = int(t.get("venue_count", 0)) + 1
 	t["venue"] = str(b.id)
-	t["venue_from"] = GameCalendar.day_start(day) + float(spec.from) * 60.0
-	t["venue_until"] = GameCalendar.day_start(day) + float(spec.to) * 60.0
+	t["venue_route"] = route
+	t["venue_from"] = clock_min(day, float(spec.from))
+	t["venue_until"] = clock_min(day, float(spec.to))
 	stats[int(t.town)]["nachtleben"] = int(stats[int(t.town)].get("nachtleben", 0)) + int(t.persons)
 	return true
 
 
 func _generate_demand(day: int) -> void:
-	for b in sim.biz.items.values():
-		if b.branch != "hotel" or b.status not in Businesses.RUNNING or sim.biz.staff_of(str(b.id)).is_empty():
-			continue
-		var town := sim.towns.of_building(int(b.site))
-		var has_future := trips.values().any(func(t): return t.hotel == b.id and int(t.arrival_day) == day + 1 and t.status not in ["storniert", "abgereist"])
-		if has_future:
-			continue
-		var price := float(b.get("room_price", 65.0))
-		var persons := 1 + posmod(day + int(b.site), 3) + (mini(3, sim.civic.attraction(town) / 2) if sim.civic != null and sim.civic.enabled() else 0)   # Auftrag 19: Sehenswuerdigkeiten
-		var nights := 1 + posmod(day + int(b.owner), 3)
-		book(str(b.id), persons, nights, price * ceili(float(persons) / BEDS_PER_ROOM) * nights + 120.0)
-		for p in sim.citizens.people:
-			if sim.citizens.home_town(p) != town and float(p.get("balance", 0.0)) >= price + 120.0:
-				if book(str(b.id), 1, 1, price + 100.0, int(p.id)).ok:
+	if day <= _last_market_day:
+		return
+	_last_market_day = day
+	var hotels: Array = sim.biz.items.values().filter(func(b): return b.branch == "hotel" and b.status in Businesses.RUNNING and not sim.biz.frozen(int(b.owner)) and not sim.biz.staff_of(str(b.id)).is_empty())
+	if hotels.is_empty():
+		return
+	hotels.sort_custom(func(a, b): return str(a.id) < str(b.id))
+	var attraction_total := 0
+	for town in sim.towns.count():
+		attraction_total += sim.civic.attraction(town) if sim.civic != null and sim.civic.enabled() else 0
+	var bad_weather := sim.wx != null and (sim.wx.is_heavy_rain() or sim.wx.is_strong_wind() or sim.wx.is_snow())
+	var groups := clampi(1 + sim.towns.count() + int(attraction_total / 4) - (1 if bad_weather else 0), 1, 8)
+	for slot in groups:
+		var domestic := sim.towns.count() > 1 and slot % 3 == 2
+		var persons := 1 if domestic else 1 + posmod(day * 7 + slot * 3 + sim.city.seed_value, 4)
+		var nights := 1 + posmod(day + slot * 2, 3)
+		var need := ceili(float(persons) / BEDS_PER_ROOM)
+		var nightly_budget := float(MARKET_NIGHTLY_BUDGETS[posmod(day * 5 + slot * 3 + sim.city.seed_value, MARKET_NIGHTLY_BUDGETS.size())])
+		var budget := nightly_budget * float(need * nights) + 55.0 * persons
+		var ranked: Array = []
+		for b in hotels:
+			var town := sim.towns.of_building(int(b.site))
+			var guest_id := -1
+			var travel_days := 1
+			var distance := 0
+			if domestic:
+				for p in sim.citizens.people:
+					var origin := sim.citizens.home_town(p)
+					if origin < 0 or origin == town or float(p.get("balance", 0.0)) < budget:
+						continue
+					var domestic_road := sim.nav.road_path(sim.towns.get_t(origin).center, sim.city.building(int(b.site)).road)
+					if not domestic_road.is_empty():
+						guest_id = int(p.id)
+						distance = domestic_road.size()
+						travel_days = maxi(1, ceili(float(distance) / ROAD_TILES_PER_DAY))
+						break
+				if guest_id < 0:
+					continue
+			else:
+				var airport: Airport = sim.towns.airport(town)
+				if not airport.enabled:
+					continue
+				var air: Dictionary = sim.city.towns[town].airport if sim.city.towns.size() > town else sim.city.airport
+				var terminal := int(air.get("terminal", -1))
+				if terminal < 0 or sim.city.building(terminal).is_empty():
+					continue
+				var airport_road := sim.nav.road_path(sim.city.building(terminal).road, sim.city.building(int(b.site)).road)
+				if airport_road.is_empty():
+					continue
+				distance = airport_road.size()
+			var price := float(b.get("room_price", 65.0))
+			if price * need * nights + 25.0 * persons > budget:
+				continue
+			var available := true
+			for stay_day in range(day + travel_days, day + travel_days + nights):
+				if occupied(str(b.id), stay_day) + need > rooms(b):
+					available = false
 					break
+			if not available:
+				continue
+			var reviews: Dictionary = hotel_reviews.get(str(b.id), {})
+			var rating := float(reviews.get("score", 65.0))
+			var attraction := sim.civic.attraction(town) if sim.civic != null and sim.civic.enabled() else 0
+			var score := rating * 0.35 + float(attraction) * 3.5 + 35.0 * (nightly_budget - price) / maxf(60.0, nightly_budget) - minf(18.0, float(distance) * 0.12)
+			ranked.append({"hotel": b, "person": guest_id, "score": score})
+		ranked.sort_custom(func(a, b): return float(a.score) > float(b.score) or (float(a.score) == float(b.score) and str(a.hotel.id) < str(b.hotel.id)))
+		for option in ranked:
+			if book(str(option.hotel.id), persons, nights, budget, int(option.person)).ok:
+				break
 
 
 func _pay(t: Dictionary, b: Dictionary, amount: float, service: String) -> bool:
@@ -315,6 +456,12 @@ func _rate(t: Dictionary) -> void:
 	var n := int(st.get("bewertungen", 0))
 	st["zufriedenheit"] = snappedf((float(st.get("zufriedenheit", 0.0)) * n + score) / (n + 1), 0.1)
 	st["bewertungen"] = n + 1
+	var hotel_id := str(t.hotel)
+	var reviews: Dictionary = hotel_reviews.get(hotel_id, {"score": 65.0, "count": 0})
+	var previous := int(reviews.get("count", 0))
+	reviews["score"] = snappedf((float(reviews.get("score", 65.0)) * previous + score) / (previous + 1), 0.1)
+	reviews["count"] = previous + 1
+	hotel_reviews[hotel_id] = reviews
 	sim.log_event("%s: %s reist ab und bewertet den Aufenthalt mit %d/100." % [sim.towns.name_of(town), t.kind, int(score)], "info", -1)
 
 
@@ -360,12 +507,34 @@ func summary(town: int) -> Dictionary:
 
 
 func to_dict() -> Dictionary:
-	return {"trips": trips.duplicate(true), "stats": stats.duplicate(true), "next": _next, "venue_visits": venue_visits.duplicate()}
+	return {"trips": trips.duplicate(true), "stats": stats.duplicate(true), "hotel_reviews": hotel_reviews.duplicate(true), "next": _next, "market_day": _last_market_day, "venue_visits": venue_visits.duplicate()}
 
 
 func from_dict(d: Dictionary) -> void:
 	trips = d.get("trips", {}).duplicate(true)
 	_next = int(d.get("next", 1))
+	_last_market_day = int(d.get("market_day", -1))
 	venue_visits = d.get("venue_visits", {}).duplicate()
+	hotel_reviews = d.get("hotel_reviews", {}).duplicate(true)
 	for k in d.get("stats", {}):
 		stats[int(k)] = d.stats[k].duplicate(true)
+	for t in trips.values():
+		var hotel: Dictionary = sim.biz.get_b(str(t.get("hotel", "")))
+		if hotel.is_empty():
+			continue
+		var hotel_walk: Vector2i = sim.city.building(int(hotel.site)).walk
+		if t.get("arrival_route", []).is_empty():
+			var transfer_from: Vector2i = _terminal_walk(int(t.town)) if str(t.get("mode", "flug")) == "flug" else sim.city.building(int(hotel.site)).road
+			t["arrival_route"] = _walk_route(transfer_from, hotel_walk)
+		var venue: Dictionary = sim.biz.get_b(str(t.get("venue", "")))
+		if venue.is_empty():
+			continue
+		var legacy_schedule := not t.has("venue_route")
+		if t.get("venue_route", []).is_empty():
+			t["venue_route"] = _walk_route(hotel_walk, sim.city.building(int(venue.site)).walk)
+		var visit_day := int(t.get("last_visit_day", -1))
+		if legacy_schedule and visit_day >= 0:
+			var spec: Dictionary = VENUES.get(str(venue.branch), {})
+			if not spec.is_empty():
+				t["venue_from"] = clock_min(visit_day, float(spec.from))
+				t["venue_until"] = clock_min(visit_day, float(spec.to))

@@ -10,6 +10,7 @@ signal menu_requested
 
 const SPEEDS := [1, 2, 4, 8, 16]
 const SAVE_PATH := "user://saves/quicksave.json"
+const EKO_STATUS_PATH := "user://eko_schwarm_status.json"
 const SUBSTEP := 0.1
 const MAX_FRAME_DT := 0.25
 const EKO_MIN_ZOOM := 0.75
@@ -20,6 +21,13 @@ var sim_budget_ms := 60.0         # max. Rechenzeit der Simulation je Bild (0 = 
 
 var cfg := {}                     # Spielkonfiguration OHNE API-Keys
 var _keys := {}                   # API-Schluessel je Profil-Slot (nur im Speicher, fuer die KI der spaeteren Gruender)
+var _eko_api_key := ""             # IONOS-Schluessel der freien Wesen, nur im Arbeitsspeicher
+var _eko_ready := false
+var _eko_port := 8790
+var _eko_status_cache := {}
+var _eko_status_checked_ms := -10000
+var _eko_health_left := 10.0
+var _eko_restarts := 0
 var sim: Simulation
 var controllers: Array[AgentController] = []
 var mayor_agent: MayorAgent          # Ort 0 (Kompatibilitaet); alle Orte in mayor_agents
@@ -59,7 +67,11 @@ var _new_game := false
 
 func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	cfg = config.duplicate(true)
+	_eko_api_key = str(cfg.get("eko_api_key", ""))
+	cfg.erase("eko_api_key")
 	_new_game = loaded.is_empty()
+	if _new_game and cfg.has("day_seconds"):
+		GameCalendar.configure(float(cfg.day_seconds))
 	var keys := {}
 	for p in cfg.players:
 		keys[int(p.slot)] = p.get("api_key", "")
@@ -89,7 +101,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	duration_seconds = maxf(0.0, float(cfg.get("duration_min", 30))) * 60.0   # 0 = Endlosmodus
 	if cfg.has("duration_seconds"):
 		duration_seconds = maxf(0.0, float(cfg.duration_seconds))
-	speed_idx = int(cfg.get("speed_idx", 1))
+	speed_idx = clampi(int(cfg.get("speed_idx", 0 if bool(cfg.get("eko_spieler", false)) else 1)), 0, SPEEDS.size() - 1)
 	api_log.open(Time.get_datetime_string_from_system().replace(":", "-") + "_%d" % sim.city.seed_value)
 	city_view = CityView.new()
 	add_child(city_view)
@@ -160,7 +172,7 @@ func start(config: Dictionary, loaded: Dictionary = {}) -> void:
 	ui.add_child(hud)
 	hud.build(self)
 	sim.founders.company_founded.connect(func(cid): hud.add_company_card(cid))
-	if bool(cfg.get("eko_spieler", false)):
+	if bool(cfg.get("eko_spieler", false)) and _eko_ready:
 		_eko_adopt()
 	end_screen = EndScreen.new()
 	end_screen.visible = false
@@ -439,6 +451,8 @@ func _on_logged(e: Dictionary) -> void:
 ## (optional --eko-port=8790) gestartet wurde. Agenten starten mit tools/eko/start_eko.ps1.
 func _start_eko_server() -> void:
 	var port := int(cfg.get("eko_port", 8790))
+	_eko_port = port
+	_eko_ready = false
 	var on := bool(cfg.get("eko", false)) or bool(cfg.get("eko_spieler", false))   # Startmenue "Freie Wesen" setzt beides
 	if bool(cfg.get("eko_folgen", false)):
 		city_view.eko_view.follow = true
@@ -474,6 +488,8 @@ func _start_eko_server() -> void:
 			call_deferred("_eko_collapse_center")
 	if not on:
 		return
+	if _new_game and FileAccess.file_exists(EKO_STATUS_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(EKO_STATUS_PATH))
 	sim.eko.persist_path = "user://eko_ersparnisse.json"   # Ersparnisse der Wesen ueberstehen einen Neustart der Welt
 	sim.eko.auto_estates = true   # jeder KI-Spieler (ausser Buergermeistern) bekommt einen Stammsitz
 	sim.eko.ensure_estates()
@@ -491,31 +507,93 @@ func _start_eko_server() -> void:
 		tf.store_string(ws.operator_token)
 		tf.close()
 	if ws.setup(sim.eko, port):
+		_eko_ready = true
 		sim.log_event("Eko-Modus: Weltschnittstelle auf http://127.0.0.1:%d – Agent mit tools/eko/start_eko.ps1 starten." % port, "system")
 		if swarm and bool(cfg.get("eko_schwarm", true)):
-			_launch_swarm(port)
+			_eko_ready = _launch_swarm(port)
+	else:
+		sim.log_event("Eko-Weltschnittstelle konnte nicht starten. Die klassische Steuerung bleibt aktiv.", "bad")
 
 
 ## Wesen-Schwarm (tools/eko/eko_schwarm.py) mit dem Spiel starten, damit eine Partie mit freien Wesen ohne zweite Konsole laeuft.
 ## Laeuft schon einer (von Hand, Welt-Waechter), beendet sich der neue selbst (Port-Sperre im Schwarm). Nicht in Tests/headless.
 var _swarm_pid := -1
-func _launch_swarm(port: int) -> void:
+func _launch_swarm(port: int) -> bool:
 	if DisplayServer.get_name() == "headless":
-		return
+		return true   # externer Schwarm kann in headless-Partien die Weltschnittstelle nutzen
 	var script := ProjectSettings.globalize_path("res://tools/eko/eko_schwarm.py")
 	if not FileAccess.file_exists(script):
 		sim.log_event("Eko-Schwarm nicht gefunden (%s) – Wesen bitte von Hand starten." % script, "bad")
-		return
+		return false
 	var args := [script, "--port", str(port), "--anbieter", str(cfg.get("eko_anbieter", "ollama"))]
 	if str(cfg.get("eko_modell", "")) != "":
 		args += ["--model", str(cfg.eko_modell)]
 	if int(cfg.get("eko_ctx", 0)) > 0:
 		args += ["--ctx", str(int(cfg.eko_ctx))]
+	var ionos := str(cfg.get("eko_anbieter", "ollama")) == "ionos"
+	var previous_key := OS.get_environment("IONOS_API_TOKEN")
+	if ionos and _eko_api_key == "" and previous_key == "":
+		sim.log_event("Eko-IONOS hat keinen Token. Im Startmenü einen neuen Token eingeben oder IONOS_API_TOKEN setzen.", "bad")
+		return false
+	if ionos and _eko_api_key != "":
+		OS.set_environment("IONOS_API_TOKEN", _eko_api_key)
 	_swarm_pid = OS.create_process("python", args, true)   # eigene Konsole: dort sieht man, was die Wesen denken
+	if ionos and _eko_api_key != "":
+		if previous_key == "":
+			OS.unset_environment("IONOS_API_TOKEN")
+		else:
+			OS.set_environment("IONOS_API_TOKEN", previous_key)
 	if _swarm_pid < 0:
 		sim.log_event("Eko-Schwarm ließ sich nicht starten (python nicht gefunden?) – python tools/eko/eko_schwarm.py von Hand starten.", "bad")
+		return false
 	else:
 		sim.log_event("Eko-Schwarm gestartet: die Wesen melden sich in einigen Sekunden an.", "system")
+	return true
+
+
+func eko_swarm_status() -> Dictionary:
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - _eko_status_checked_ms < 2000:
+		return _eko_status_cache
+	_eko_status_checked_ms = now_ms
+	_eko_status_cache = {}
+	if not FileAccess.file_exists(EKO_STATUS_PATH):
+		return _eko_status_cache
+	var d = JSON.parse_string(FileAccess.get_file_as_string(EKO_STATUS_PATH))
+	if d is Dictionary:
+		_eko_status_cache = d
+	return _eko_status_cache
+
+
+func eko_agent_status(cid: int) -> Dictionary:
+	var name: String = sim.eko.firm_being(cid)
+	if name == "":
+		return {}
+	var swarm := eko_swarm_status()
+	var agents: Dictionary = swarm.get("agents", {})
+	var state: Dictionary = agents.get(name, {}).duplicate()
+	state["fresh"] = float(swarm.get("updated_at", 0.0)) > Time.get_unix_time_from_system() - 10.0
+	return state
+
+
+func _eko_health_tick(delta: float) -> void:
+	if not _eko_ready or _swarm_pid <= 0 or not bool(cfg.get("eko_spieler", false)):
+		return
+	_eko_health_left -= delta
+	if _eko_health_left > 0.0:
+		return
+	_eko_health_left = 10.0
+	if OS.is_process_running(_swarm_pid):
+		return
+	if float(eko_swarm_status().get("updated_at", 0.0)) > Time.get_unix_time_from_system() - 10.0:
+		return   # ein von Hand gestarteter Schwarm betreibt die Welt bereits
+	if _eko_restarts >= 3:
+		_eko_ready = false
+		sim.log_event("Eko-Schwarm ist beendet und ließ sich nicht dauerhaft starten. KI-Wesen brauchen einen neuen Start.", "bad")
+		return
+	_eko_restarts += 1
+	sim.log_event("Eko-Schwarm beendet; Neustart %d/3." % _eko_restarts, "bad")
+	_launch_swarm(_eko_port)
 
 
 ## Startfirmen und Buergermeister an Wesen uebergeben: Firmen-Controller nur noch Tagesbetrieb (Anbieter eko),
@@ -579,6 +657,7 @@ func _process_timed(delta: float) -> void:
 		ctl.speed = float(speed())
 		ctl.remaining_real_min = sim.remaining_real_min
 	if running:
+		_eko_health_tick(delta)
 		sim.eko.update(minf(delta, 1.0))   # Eko-Wesen laufen in Echtzeit (ungedeckelt, sonst bei langsamen Bildern zu langsam)
 		if eko_autosave_s > 0.0:   # Absturzschutz: ungeklaerter Engine-Absturz (Index out of bounds), Waechter startet aus diesem Stand neu
 			_eko_save_left -= delta

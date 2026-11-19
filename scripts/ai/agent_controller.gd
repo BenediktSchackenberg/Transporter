@@ -38,7 +38,7 @@ var goal: String:
 		_goal = v
 var passive_streak := 0           # Entscheidungen in Folge ohne wirksame Aktion
 var summaries: Array = []         # [{t, text, source}]
-var stats := {"requests": 0, "ok": 0, "errors": 0, "invalid": 0, "tokens": 0, "actions_ok": 0, "actions_rejected": 0}
+var stats := {"requests": 0, "ok": 0, "errors": 0, "invalid": 0, "tokens": 0, "actions_ok": 0, "actions_pending": 0, "actions_rejected": 0}
 var status := "bereit"
 var gesture := ""                 # vom Modell gewaehlte Geste der Portraetfigur (PortraitArt.GESTURES)
 var gesture_at := 0               # Echtzeit (ms) der Geste; sie wirkt GESTURE_MS lang
@@ -485,7 +485,7 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 		pa["action"] = "set_plan"
 		if not _same_plan(pa):
 			actions = [pa] + actions   # Nur einen geaenderten Plan erneut festlegen
-	var origin := "api" if source == "KI" else "fallback"
+	var origin := "api" if source == "KI" else ("dispatch" if source == "Disposition" else "fallback")
 	sim.decisions.set_context(cid, _perceived, parsed.goal if parsed.get("goal", "") != "" else goal, summary)
 	var bought_pending := false
 	for a in actions:
@@ -524,6 +524,8 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 		i += 1
 		if res.ok:
 			stats.actions_ok += 1
+			if bool(res.get("pending", false)):
+				stats["actions_pending"] = int(stats.get("actions_pending", 0)) + 1
 			if str(actual.get("action", "")) not in PASSIVE:
 				effective += 1
 		elif res.get("already", false):
@@ -533,7 +535,7 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 			if config.get("provider", "") == "ollama":
 				_events.append("Abgelehnte Aktion %s: %s. Prüfe die gültigen IDs in verfuegbare_aktionen und ändere den nächsten Versuch." % [str(actual.get("action", "")), str(res.msg)])
 		api_log.write({"type": "action", "player": cid, "key": "%s:a%d" % [key_prefix, i - 1], "source": source,
-			"action": actual, "original_action": a if actual != a else {}, "ok": res.ok, "msg": res.msg})
+			"action": actual, "original_action": a if actual != a else {}, "ok": res.ok, "pending": bool(res.get("pending", false)), "msg": res.msg})
 	sim.decisions.clear_context(cid)
 	_release_holds(_release_later)
 	_release_later.clear()

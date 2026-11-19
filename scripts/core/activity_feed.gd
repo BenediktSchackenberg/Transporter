@@ -63,7 +63,7 @@ func from_decision(cid: int, origin: String, action: Dictionary, result: Diction
 	var kind: String = ACTION_KIND.get(name, "sonstiges")
 	var cell := locate(cid, action)
 	var who: String = sim.company(cid).player_name if sim.company(cid) != null else "?"
-	if origin == "Disponent":
+	if origin in ["Disponent", "dispatch"]:
 		who = "Disponent für " + who
 	var txt := "%s: %s" % [who, describe(name, action, result)]
 	add("C%d" % cid, cid, kind, txt, why if why != "" else str(result.get("msg", "")).left(160), cell, origin)

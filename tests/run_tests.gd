@@ -5207,7 +5207,7 @@ func test_tourism_venues() -> void:
 	var t: Dictionary = s.tourism.trips[str(trip.ref)]
 	ok(str(t.get("venue", "")) == str(vb.id) and s.tourism.summary(0).nachtleben >= 2, "Touristen besuchen sichtbar die Strandbar")
 	ok(s.stock.available("fassgetraenk", "C0", int(vb.site)) < 20 and int(vb.get("visitors_today", 0)) >= 2, "Besuche verbrauchen gelieferte Getränke")
-	s.game_min = float(t.venue_from) + 60.0
+	s.game_min = float(t.venue_from) + Tourism.local_transfer_minutes()
 	ok(s.tourism.position_of(t) == s.city.building(int(vb.site)).walk, "Besucher stehen während der Öffnungszeit an der Bar")
 	ok(identity_ok(s), "Barbesuche von Gästen und Bürgern wahren Geld- und Warenbilanz")
 	var saved: Dictionary = JSON.parse_string(JSON.stringify(s.to_dict()))
