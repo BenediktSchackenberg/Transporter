@@ -8605,6 +8605,7 @@ func test_wildnis_log_fixes() -> void:
 	var sl: Dictionary = E.input(p0, "act", {"warum": "Tag 23 zu Ende, Akku 85, schlafen gehen"})
 	ok(not str(sl.msg).contains("Unbekannte Handlung"), "act nur mit warum zum Schlafen wird Rest: %s" % str(sl.msg).left(60))
 	ok(not str(E.input(p0, "Fahrt", {"ziel": "Großlager"}).msg).contains("braucht tile"), "Fahrt zum Großlager per Namensanfang")
+	ok(not str(E.input(p0, "Fahrt", {"ziel": E.sim.towns.name_of(0)}).msg).contains("braucht tile"), "Fahrt zu einer Stadt per Stadtname")
 	# 4) Entnahme-Bremse
 	var okn := 0
 	for i in 6:
