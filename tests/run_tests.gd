@@ -8850,6 +8850,13 @@ func test_wildnis_found() -> void:
 	ok(s2.town_ready(k) and s2.city.buildings.size() == nb and int(s2.city.towns[k].town_hall) == int(s.city.towns[k].town_hall) and s2.eko.settle.founded(k),
 		"Siedlung mit Bürgeramt gespeichert und geladen")
 	ok(int(s2.towns.get_t(k).town_hall) == int(s.city.towns[k].town_hall) and s2.towns.get_t(k).center == s.towns.get_t(k).center, "nach dem Laden kennt das Towns-Register Rathaus und Mitte")
+	# 19.11.: ohne Strasse zum Grosslager beschliesst das Bauamt den Anschluss selbst (Material bringt die Baufirma)
+	var link: Dictionary = s.eko.settle.road_link(k)
+	if not bool(link.get("verbunden", true)) and link.has("von"):
+		s.economy.transfer("X0", Towns.account_of(k), 500000.0)
+		var an: Dictionary = s.towns.mayor(k).hub_connection()
+		ok(not an.is_empty() and str(an.ref) == "anschluss" and not (an.road_plan as Array).is_empty() and (an.material as Dictionary).is_empty(), "Bauamt beschließt den Straßenanschluss ans Großlager")
+		ok(s.towns.mayor(k).hub_connection().is_empty(), "Anschluss nur einmal beschlossen")
 	ok(absf(s.economy.conservation_error()) < 1.0, "Geldbuch stimmt")
 	RegionGenerator.neubeginn = false
 	RegionGenerator.wildnis = false

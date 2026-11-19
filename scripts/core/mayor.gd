@@ -598,6 +598,8 @@ func _rezone_cluster(zone: String, used: Dictionary) -> Dictionary:
 ## Menge nach Wirtschaftslage (Beschaeftigung) und Lebensqualitaet (mittleres Glueck, 50 = neutral); Grundrate je Monat aus
 ## config/residents.json "zuzug_je_monat" (Anteil der Haushalte, Standard 0,04).
 func on_day(_day: int) -> void:
+	if sim.wildnis:
+		hub_connection()
 	if _region():
 		_arrivals_town()
 		return
@@ -1151,7 +1153,7 @@ func _district_streets(v: Dictionary, reason: String) -> Dictionary:
 			var e: Dictionary = sim.construction.public.get(prj.id, {})
 			return {"ok": false, "already": true, "msg": "Für Viertel %s läuft schon %s (%s)." % [v.id, prj.id, ("noch %d Tage, %s" % [int(e.days_left), str(e.get("waiting", "")) if str(e.get("waiting", "")) != "" else "es wird gebaut"]) if not e.is_empty() else str(prj.status)]}
 	for prj in projects.values():   # Auftrag 8, Abschnitt 6: in Abschnitten wachsen – ein Strassennetz nach dem anderen
-		if prj.has("road_plan") and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+		if prj.has("road_plan") and str(prj.get("ref", "")) != "anschluss" and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
 			return {"ok": false, "msg": "Erst das laufende Straßennetz %s (Viertel %s) fertigstellen – die Stadt erschließt ein Viertel nach dem anderen." % [prj.id, prj.viertel]}
 	var sp: Dictionary = sim.town_plan.street_plan(town, str(v.id))
 	var cells: Array = sp.cells
@@ -1177,6 +1179,38 @@ func _district_streets(v: Dictionary, reason: String) -> Dictionary:
 	sim.log_event("%s: Straßennetz für Viertel %s (%s) beschlossen – %s, %d Felder, %s." % [town_label(), v.id, v.text, sp.text, cells.size(), Catalog.money(cost)], "info")
 	return {"ok": true, "msg": "Projekt %s: Straßennetz für Viertel %s (%s) – %s, %d Straßenfelder, Kosten %s. %s Danach entstehen an den neuen Straßen Grundstücke der Zone %s." % [
 		prj.id, v.id, v.text, sp.text, cells.size(), Catalog.money(cost), vote.text, v.zone], "project": prj.id}
+
+
+## Benedikt 19.11.: Wildnis-Staedte ohne Strasse zum Grosslager bekamen 60 Tage kein Baumaterial (Stadtlager-Lieferungen
+## "wartet_strasse"). Das Bauamt beschliesst den Strassenanschluss selbst: Trasse vom naechsten angebundenen Strassenfeld
+## bis zum Buergeramt, Ausschreibung, Baufirma baut mit eigenem Material (nichts aus dem unerreichbaren Stadtlager).
+func hub_connection() -> Dictionary:
+	if not sim.town_ready(town):
+		return {}
+	for prj in projects.values():
+		if str(prj.get("ref", "")) == "anschluss" and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			return {}
+	var link: Dictionary = sim.eko.settle.road_link(town)
+	if bool(link.get("verbunden", true)) or not link.has("von"):
+		return {}
+	var from := Vector2i(int(link.von[0]), int(link.von[1]))
+	var to := Vector2i(int(link.bis[0]), int(link.bis[1]))
+	var cells: Array = sim.eko.settle._road_between(from, to).filter(func(q): return not sim.city.is_road(q))
+	if cells.is_empty():
+		return {}
+	var cost := snappedf(float(cells.size()) * STREET_CELL_COST, 10.0)
+	if cost > available_budget():
+		return {}
+	commitments += cost
+	var prj := {"id": Towns.prefixed(town, "P", _next_project), "kind": "erschliessung", "ref": "anschluss", "parcels": [], "parts": ["strasse"],
+		"cost": cost, "days": maxi(3, int(ceil(cells.size() / 12.0))), "status": "ausgeschrieben", "day": _today(), "tender": {"opened_day": _today(), "bids": [], "by": "Bauamt"},
+		"material": {}, "viertel": "Anschluss", "road_plan": cells.map(func(q): return [q.x, q.y]),
+		"reason": "Straßenanschluss ans Großlager: ohne ihn liefert niemand Baumaterial ins Stadtlager (%d Felder)." % cells.size()}
+	_next_project += 1
+	projects[prj.id] = prj
+	sim.access.invalidate_city_reservations()
+	sim.log_event("%s: Bauamt beschließt den Straßenanschluss ans Großlager – %s, %d Felder, %s (Baufirma bringt das Material mit)." % [town_label(), prj.id, cells.size(), Catalog.money(cost)], "info")
+	return prj
 
 
 func _plan_infrastructure(a: Dictionary) -> Dictionary:

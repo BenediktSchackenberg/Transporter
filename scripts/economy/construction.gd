@@ -1142,6 +1142,13 @@ func _tender_public(M: Mayor, day: int) -> void:
 			var o := best_offer(offers, float(prj.cost))
 			if prj.kind in ["zufahrt", "bruecke", "tunnel"]:
 				o = _works_offer(prj, offers, o)
+			if str(prj.get("ref", "")) == "anschluss":   # 19.11.: Anschluss ans Grosslager ist dringend – fruehester Baubeginn im Budget
+				for of in offers:
+					if float(of.price) <= float(prj.cost) * 1.2 and (o.is_empty() or int(of.start) < int(o.start)):
+						o = of
+				if not o.is_empty():   # Vorrang: die belegenden Projekte warten ohnehin auf Material, das erst ueber diese Strasse kommt
+					o = o.duplicate()
+					o["start"] = day + 1
 			if o.is_empty() or float(o.price) > float(prj.cost) * 1.2:
 				prj.status = "beschlossen"      # kein tragfaehiges Angebot: neu planen oder ausschreiben
 				prj.tender["note"] = "kein Angebot innerhalb des Budgets"
@@ -1163,6 +1170,10 @@ func _finish_district(M: Mayor, prj: Dictionary) -> void:
 	sim.access._apply_cells(cells)
 	prj["road_cells"] = prj.road_plan
 	var k: int = M.town
+	if str(prj.get("ref", "")) == "anschluss":   # 19.11.: Landstrasse zum Grosslager – kein Viertel, kein Bauland entlang der Trasse
+		sim.eko.settle._link_cache.erase(k)
+		sim.log_event("%s: Straßenanschluss ans Großlager fertig (%d Felder) – das Stadtlager wird wieder beliefert." % [sim.towns.name_of(k), cells.size()], "good")
+		return
 	var pl := Vector2i(int(prj.platz[0]), int(prj.platz[1])) if prj.has("platz") else Vector2i(-1, -1)
 	if pl.x >= 0:
 		sim.events._add_building("fountain", Rect2i(pl, Vector2i(2, 2)), "Platz %s" % sim.towns.name_of(k))
