@@ -215,7 +215,7 @@ func _load() -> void:
 		return
 	var cfg: Dictionary = d.cfg
 	if bool(cfg.get("eko_spieler", false)) and str(cfg.get("eko_anbieter", "")) == "ionos":
-		var key := menu.eko_key_edit.text.strip_edges() if menu != null else ""
+		var key: String = menu.eko_key_edit.text.strip_edges() if menu != null else ""
 		if key == "" and bool(cfg.get("eko_save_key", false)):
 			key = CredentialStore.read_key("eko_ionos")
 		if key == "":

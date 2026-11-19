@@ -124,7 +124,7 @@ func build_city(town: int, start: Vector2i, finish: Vector2i, reason: String, by
 
 
 func _new(pl: Dictionary, cid: int, reason: String) -> Dictionary:
-	var town := sim.towns.of_cell(_point(pl.from))
+	var town: int = sim.towns.of_cell(_point(pl.from))
 	var j := {"id": "TU%d" % _next, "from": pl.from, "to": pl.to, "cells": pl.cells, "approach": pl.approach, "company": cid,
 		"town": town, "cost": float(pl.cost), "days": int(pl.days), "reason": reason.left(200),
 		"status": "antrag", "project": "", "day": GameCalendar.day_of(sim.game_min)}
@@ -184,7 +184,7 @@ func _open(j: Dictionary) -> void:
 		var q := _point(a)
 		if not sim.city.inside(q):
 			continue
-		var i := sim.city.idx(q)
+		var i: int = sim.city.idx(q)
 		if sim.city.building_at[i] >= 0:
 			continue
 		if sim.city.ground[i] != CityData.G.ROAD:
@@ -218,7 +218,7 @@ func on_day(day: int) -> void:
 		if j.status == "antrag" and day - int(j.day) >= REQUEST_DAYS:
 			var c: Company = sim.company(int(j.company))
 			var share := float(j.cost) * COMPANY_SHARE if c != null and c.is_active() else 0.0
-			var ok := c != null and c.is_active() and c.ledger.cash >= share and sim.towns.mayor(int(j.town)).available_budget() + share >= float(j.cost)
+			var ok: bool = c != null and c.is_active() and c.ledger.cash >= share and sim.towns.mayor(int(j.town)).available_budget() + share >= float(j.cost)
 			decide(int(j.town), str(j.id), ok, "Bauamt nach Antragsfrist", "Bauamt")
 
 
@@ -239,11 +239,11 @@ func proposals(town: int, limit: int = 5) -> Array:
 			if not sim.city.is_road(start) or sim.towns.of_cell(start) != town:
 				continue
 			for direction in DIRECTIONS:
-				var first := start + direction
+				var first: Vector2i = start + direction
 				if not sim.city.inside(first) or sim.city.height.is_empty() or sim.city.height[sim.city.idx(first)] == 0:
 					continue
 				for span in range(2, MAX_LENGTH + 1):
-					var finish := start + direction * (span + 1)
+					var finish: Vector2i = start + direction * (span + 1)
 					if not sim.city.inside(finish):
 						break
 					if sim.city.height[sim.city.idx(finish)] > 0:

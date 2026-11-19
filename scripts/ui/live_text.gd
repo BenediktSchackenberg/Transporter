@@ -1180,7 +1180,7 @@ static func bridge(sim: Simulation, b: Dictionary) -> String:
 
 
 static func tunnel(sim: Simulation, j: Dictionary) -> String:
-	var status := {"antrag": "Antrag beim Bauamt", "im_bau": "im Bau", "freigegeben": "freigegeben", "abgelehnt": "abgelehnt"}.get(str(j.status), str(j.status))
+	var status: String = {"antrag": "Antrag beim Bauamt", "im_bau": "im Bau", "freigegeben": "freigegeben", "abgelehnt": "abgelehnt"}.get(str(j.status), str(j.status))
 	var txt := "[b]%s[/b] · %d Felsfelder · %s\n" % [status, j.cells.size(), Catalog.money(float(j.cost))]
 	txt += "Portal %d,%d → %d,%d · Bauzeit %d Tage\n" % [int(j.from[0]), int(j.from[1]), int(j.to[0]), int(j.to[1]), int(j.days)]
 	if j.status == "im_bau":
