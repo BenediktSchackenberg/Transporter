@@ -769,6 +769,7 @@ func next_steps(b: Dictionary) -> Array:
 	var pending_step := ""
 	var goal_step := ""
 	var plan_step := ""
+	var home_step := ""   # 19.11.: Hausbau (Wildnis-Wachstum) wurde von Auftrag/Plan/Kontakt aus den ersten drei verdraengt
 	var crisis := urgency(b)
 	if int(crisis.prioritaet) >= 2:
 		urgent_step = str(crisis.grund) + " – jetzt Lage und passende Firmenaktion prüfen."
@@ -841,6 +842,7 @@ func next_steps(b: Dictionary) -> Array:
 			var hs := homes.next_step(cid)
 			if hs != "":
 				out.append(hs)
+				home_step = hs
 				if firm_step == "":
 					firm_step = hs
 	if int(b.get("amt", -1)) < 0:
@@ -870,7 +872,7 @@ func next_steps(b: Dictionary) -> Array:
 	# Je ein akuter Bedarf, Firmenfortschritt und offene Antwort bleiben im knappen Kontext sichtbar.
 	# Weitere Hinweise behalten ihre alte Reihenfolge; aktive Ziele sind in der Beobachtung zusaetzlich separat enthalten.
 	var prioritized: Array = []
-	for s in [urgent_step, firm_step, pending_step, plan_step, hint, goal_step]:
+	for s in [urgent_step, firm_step, home_step, pending_step, plan_step, hint, goal_step]:
 		if s != "" and s not in prioritized:
 			prioritized.append(s)
 	for s in out:
@@ -2276,6 +2278,8 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 			a["action"] = str(data.get("aktion", data.get("action")))
 			a.erase("aktion")
 			a.erase("warum")
+	if a is Dictionary and str(a.get("action", "")).to_lower() in OVERVIEW_WORDS and homes.sites.has(str(a.get("baustelle", ""))):
+		return _site_status(cid, str(a.baustelle))   # 19.11.: Viktor fragte 6x status {baustelle: BS12} und bekam nur die Firmenlage
 	if not (a is Dictionary) or str(a.get("action", "")).to_lower() in OVERVIEW_WORDS:   # 16./17.11.: "Firmenlage prüfen", action "status"
 		return _firm_overview(cid)
 	var redirect := _firm_redirect(b, cid, a)
@@ -2721,6 +2725,22 @@ func _office_overview(k: int) -> Dictionary:
 		plan_txt = " STADTPLAN: %s" % str(nd.text)
 	return {"ok": true, "uebersicht": true, "msg": "Lage %s: %s Anträge zur Entscheidung: %s.%s Handeln mit Amt {aktion: {action: ...}} – neue Einrichtungen mit kommunal_bauen {typ}." % [
 		sim.towns.name_of(k), str(fin.msg), ", ".join(apps) if not apps.is_empty() else "keine", plan_txt]}
+
+
+func _site_status(cid: int, id: String) -> Dictionary:
+	var st: Dictionary = homes.sites[id]
+	if int(st.cid) != cid:
+		return {"ok": false, "msg": "Baustelle %s gehört dir nicht." % id}
+	var app: Dictionary = sim.permits.apps.get(str(st.get("app", "")), {})
+	var parts: Array = ["Baustelle %s (%s auf %s): Status %s" % [id, st.typ, st.parcel, st.status]]
+	if not app.is_empty():
+		parts.append("Bauantrag %s: %s" % [app.id, app.status])
+	var miss: Dictionary = homes.missing(st)
+	if not miss.is_empty():
+		parts.append("fehlendes Material %s" % str(miss))
+	if float(st.get("work", 0.0)) > 0.0:
+		parts.append("Baufortschritt %d %%" % int(100.0 * float(st.get("progress", 0.0)) / float(st.work)))
+	return {"ok": true, "msg": ", ".join(parts) + "."}
 
 
 func _firm_overview(cid: int) -> Dictionary:

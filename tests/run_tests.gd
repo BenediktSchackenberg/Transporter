@@ -8448,6 +8448,8 @@ func test_neubeginn_homes() -> void:
 		return
 	var site: Dictionary = E.homes.sites[r.baustelle]
 	ok(s.company(cid).ledger.cash < cash0 and str(s.parcels.parcel(site.parcel).owner) == "C%d" % cid, "Grundstück gekauft")
+	var bst: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "status", "baustelle": r.baustelle}})
+	ok(bst.ok and str(bst.msg).begins_with("Baustelle %s" % r.baustelle), "status mit baustelle zeigt die Baustelle: %s" % str(bst.msg).left(90))
 	ok(s.permits.apps.has(site.app), "Bauantrag gestellt")
 	var app: Dictionary = s.permits.apps[site.app]
 	app.status = "entschieden"
