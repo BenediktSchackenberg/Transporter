@@ -701,6 +701,22 @@ func _infra_ausbau(anlage: String) -> Dictionary:
 	return sim.water.mayor_expand(town, anlage)
 
 
+## Benedikt 19.11.: Wildnis-Stadt ohne Strasse zum Grosslager – erst der Anschluss, dann Projekte mit Stadtlager-Material
+## (sonst warten sie auf Material, binden Geld und blockieren Baufirmen; Sonnenufer hatte 14 Projekte, 7 davon ohne Material).
+const HUB_FIRST_ACTIONS := ["kommunal_bauen", "infra_ausbau", "stromtrasse_bauen", "versorgungsleitung_bauen", "propose_project",
+	"viertel_erschliessen", "stadtteil_planen", "plan_infrastructure", "expand_harbor", "expand_airport", "expand_depot", "expand_power", "build_bridge"]
+
+
+func hub_blocked() -> String:
+	if not sim.wildnis or sim.eko == null or not sim.town_ready(town):
+		return ""
+	if bool(sim.eko.settle.road_link(town).get("verbunden", true)):
+		return ""
+	var run: Array = projects.values().filter(func(p): return str(p.get("ref", "")) == "anschluss" and str(p.status) not in ["fertig", "abgelehnt", "abgebrochen"])
+	return "Erst der Straßenanschluss ans Großlager: ohne ihn bekommt das Stadtlager kein Material, neue Bauprojekte würden nur warten. %s" % (
+		("Er läuft als %s – danach wieder planen." % run[0].id) if not run.is_empty() else "Das Bauamt beschließt ihn selbst.")
+
+
 func execute(action: Dictionary) -> Dictionary:
 	var a := ActionExecutor.normalize(action)
 	var act := str(a.get("action", a.get("type", "")))
@@ -708,6 +724,8 @@ func execute(action: Dictionary) -> Dictionary:
 	if err == "":
 		a["action"] = act
 		err = foreign_target(a)   # Region: keine Entscheidungen im Gebiet einer anderen Stadt
+	if err == "" and act in HUB_FIRST_ACTIONS:
+		err = hub_blocked()
 	var res: Dictionary
 	if err != "":
 		res = {"ok": false, "msg": err}

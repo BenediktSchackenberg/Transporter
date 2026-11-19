@@ -1138,7 +1138,10 @@ func _tender_public(M: Mayor, day: int) -> void:
 			prj.status = "ausgeschrieben"
 			prj.tender = {"opened_day": day, "bids": [], "by": "Bauamt"}
 			sim.log_event("Bauamt %s schreibt Projekt %s aus (%s), seit %d Tagen beschlossen." % [M.town_label(), prj.id, Catalog.money(float(prj.cost)), AUTO_TENDER_DAYS], "info")
+	var hub_wait: bool = M.hub_blocked() != ""
 	for prj in M.projects.values():
+		if hub_wait and str(prj.get("ref", "")) != "anschluss" and prj.kind != "tunnel" and not (prj.has("material") and (prj.material as Dictionary).is_empty()):
+			continue   # 19.11.: ohne Strasse zum Grosslager erst den Anschluss vergeben – Baufirmen bleiben frei
 		if prj.status == "ausgeschrieben" and not public.has(prj.id) and day > int(prj.tender.get("opened_day", day)):
 			var days := 0
 			for part in prj.parts:

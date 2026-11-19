@@ -8870,6 +8870,8 @@ func test_wildnis_found() -> void:
 		var an: Dictionary = s.towns.mayor(k).hub_connection()
 		ok(not an.is_empty() and str(an.ref) == "anschluss" and not (an.road_plan as Array).is_empty() and (an.material as Dictionary).is_empty(), "Bauamt beschließt den Straßenanschluss ans Großlager")
 		ok(s.towns.mayor(k).hub_connection().is_empty(), "Anschluss nur einmal beschlossen")
+		var early_build: Dictionary = s.towns.mayor(k).execute({"action": "kommunal_bauen", "typ": "PO-01", "reason": "Sicherheit"})
+		ok(not early_build.ok and str(early_build.msg).contains("Straßenanschluss"), "ohne Anschluss keine Projekte mit Stadtlager-Material: %s" % str(early_build.msg).left(80))
 	# 19.11.: die pauschale Monatsausgabe der öffentlichen Hand zog Wildnis-Städten die Hälfte ihrer Millionen ab
 	var town_cash: float = float(s.economy.accounts.get(Towns.account_of(k), 0.0))
 	s.public_sector.on_month(1)
