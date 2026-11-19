@@ -771,11 +771,14 @@ class Agent:
     def trim(self, messages, hard=False):
         """Aelteste Schritte verwerfen (nach Anzahl und Textlaenge), ohne ein Werkzeugergebnis von seinem Aufruf zu trennen."""
         size = lambda ms: sum(len(json.dumps(m, ensure_ascii=False)) for m in ms)
-        if not hard and len(messages) <= MAX_MESSAGES and size(messages) <= MAX_CHARS:
+        # 19.11.: bei 16k Kontext (Qwen 27B) liessen 24.000 Zeichen Verlauf + Systemprompt + Werkzeuge kaum Platz fuer die Antwort
+        # ("unexpected end of JSON input") – Grenze waechst mit dem Kontext
+        max_chars = int(MAX_CHARS * min(1.0, max(0.4, (int(getattr(self.args, "ctx", 32768) or 32768) - 8000) / 24768.0)))
+        if not hard and len(messages) <= MAX_MESSAGES and size(messages) <= max_chars:
             return messages
         keep = 8 if hard else KEEP_MESSAGES
         out = messages[-keep:]
-        while len(out) > 4 and size(out) > MAX_CHARS * 0.6:
+        while len(out) > 4 and size(out) > max_chars * 0.6:
             out = out[2:]
         while out and out[0]["role"] == "tool":   # Werkzeugergebnis ohne seinen Aufruf verwerfen
             out.pop(0)
