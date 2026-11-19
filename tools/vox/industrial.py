@@ -78,6 +78,83 @@ def factory(seed=1):
     return m, {"w": 4, "h": 4, "entrance": [85, H - 20], "delivery": [38, H - 20], "height": 100, "smoke": [chimney_smoke[0] * 2 - chimney_smoke[1] * 2, chimney_smoke[0] + chimney_smoke[1] - 140]}
 
 
+def nuclear_plant(seed=1):
+    """Eigenes kommunales Kraftwerk 4x4: Kuehltuerme, Kuppel, Turbinenhalle,
+    Trafogarten, Rohrbruecken und bewachter Betriebshof. Rein visuelles Modell."""
+    rng = random.Random(seed)
+    W = H = 4 * T
+    m = Model(W, H, 105)
+    slab(m, 0, 0, W, H, paving_fn(11, "concrete", "concrete2"))
+    # Zwei Kuehltuerme mit sichtbarer Taille und heller Oberkante.
+    for cx, cy in ((25, 27), (61, 27)):
+        for z in range(2, 70):
+            r = int(15 - 5 * math.sin(math.pi * z / 70.0))
+            for x in range(cx - r, cx + r + 1):
+                for y in range(cy - r, cy + r + 1):
+                    d = (x - cx) ** 2 + (y - cy) ** 2
+                    if (r - 2) ** 2 <= d <= r * r:
+                        m.put(x, y, z, M("white" if z >= 66 or z in (14, 15) else "concrete" if z % 9 else "concrete2"))
+        m.box(cx - 2, cy - 2, 2, cx + 2, cy + 2, 10, M("steel_dark"))
+        for dx, dy in ((-10, 0), (10, 0), (0, -10), (0, 10)):
+            m.box(cx + dx - 1, cy + dy - 1, 1, cx + dx + 1, cy + dy + 1, 8, M("steel"))
+    # Sicherheitsgebaeude mit gewoelbter Reaktorkuppel und Fensterband.
+    cx, cy, r = 37, 83, 19
+    for z in range(2, 29):
+        for x in range(cx - r, cx + r + 1):
+            for y in range(cy - r, cy + r + 1):
+                if (x - cx) ** 2 + (y - cy) ** 2 <= r * r:
+                    m.put(x, y, z, M("concrete2" if z % 7 else "steel"))
+    for z in range(29, 50):
+        rr = max(1, int(r * math.sqrt(max(0.0, 1.0 - ((z - 29) / 21.0) ** 2))))
+        for x in range(cx - rr, cx + rr + 1):
+            for y in range(cy - rr, cy + rr + 1):
+                if (x - cx) ** 2 + (y - cy) ** 2 <= rr * rr:
+                    m.put(x, y, z, M("zinc" if z % 6 else "steel"))
+    for x in range(cx - r, cx + r, 4):
+        m.box(x, cy + r - 2, 9, x + 2, cy + r, 13, M("glass_lit"))
+    # Turbinenhalle und Schaltwarte: Metall, Glasflaechen, Wartungsstege.
+    block(m, 75, 50, 2, 120, 99, 30, "steel", base="concrete", base_h=3)
+    flat_roof(m, 74, 49, 121, 100, 30, parapet="steel_dark", fill="zinc", tech=True)
+    for x in range(80, 118, 8):
+        m.box(x, 98, 9, x + 5, 99, 17, M("glass_lit"))
+        m.box(x, 98, 18, x + 5, 99, 21, M("glass"))
+    block(m, 82, 10, 2, 121, 43, 25, "concrete", base="concrete2", base_h=3)
+    flat_roof(m, 81, 9, 122, 44, 25, parapet="steel_dark", fill="zinc", tech=True)
+    for x in range(86, 118, 7):
+        m.box(x, 42, 11, x + 5, 43, 17, M("glass_lit2"))
+    # Rohrbruecke zwischen Halle, Kuppel und Kuehlkreis, mit Stuetze und Ventilen.
+    for y in range(50, 83):
+        m.box(66, y, 13, 72, y + 2, 17, M("orange" if y % 8 == 0 else "steel_dark"))
+    for x in range(55, 78):
+        m.box(x, 76, 13, x + 2, 80, 16, M("steel"))
+    for px, py in ((67, 55), (67, 75), (75, 77)):
+        m.box(px, py, 2, px + 2, py + 2, 17, M("steel_dark"))
+        m.box(px - 2, py - 2, 17, px + 4, py + 4, 19, M("orange"))
+    # Trafogarten mit gestaffelten Isolatoren und Warnstreifen.
+    for tx, ty in ((85, 109), (104, 109)):
+        m.box(tx, ty, 2, tx + 13, ty + 9, 9, M("steel_dark"))
+        for x in range(tx + 2, tx + 12, 3):
+            m.box(x, ty, 9, x + 1, ty + 9, 13, M("zinc"))
+        for x in (tx + 3, tx + 9):
+            m.box(x, ty + 3, 13, x + 2, ty + 5, 18, M("concrete2"))
+            m.box(x, ty + 3, 18, x + 2, ty + 5, 19, M("orange"))
+    for x in range(81, 123, 4):
+        m.box(x, 123, 1, x + 2, 125, 2, M("yellow"))
+    # Zaun, Tor, Wachhaus, Betriebsfahrzeug und Lichtpunkte.
+    fence(m, 0, H - 2, 18, H, 1, h=8, mat_f="steel")
+    fence(m, 58, H - 2, W, H, 1, h=8, mat_f="steel")
+    fence(m, 0, 0, 2, H, 1, h=8, mat_f="steel")
+    fence(m, W - 2, 0, W, H, 1, h=8, mat_f="steel")
+    m.box(5, 104, 2, 18, 116, 13, M("concrete"))
+    m.box(5, 115, 7, 18, 116, 11, M("glass_lit"))
+    m.box(4, 103, 13, 19, 117, 15, M("zinc"))
+    car(m, 26, 115, 1, color="white", along="x")
+    container(m, 60, 108, 1, "blue", "x")
+    for lx, ly in ((8, 88), (120, 86), (70, 105)):
+        lamp_post(m, lx, ly, 1, h=17)
+    return m, {"w": 4, "h": 4, "entrance": [38, H], "delivery": [70, H], "height": 74}
+
+
 def warehouse(seed=1):
     """Lagerhalle 4x3: Wellblechhalle mit Rolltoren, Laderampe mit Lkw-Andockstellen, Paletten, Gabelstapler."""
     rng = random.Random(seed)

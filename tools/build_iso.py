@@ -167,6 +167,7 @@ def building_specs():
     s["gas_station"] = lambda: C.gas_station(1)
     s["dealer"] = lambda: C.dealer(1)
     s["factory"] = lambda: I.factory(1)
+    s["nuclear_plant"] = lambda: I.nuclear_plant(1)
     s["warehouse"] = lambda: I.warehouse(1)
     s["farm"] = lambda: I.farm(1)
     s["port_office"] = lambda: I.port_office(1)
@@ -394,6 +395,8 @@ def main():
         build_buildings()
     if "public" in what:
         build_buildings(only=list(PB.specs().keys()))
+    if "utilities" in what:
+        build_buildings(only=["nuclear_plant"] + [name for name in PB.specs() if name.startswith(("pub_ww_", "pub_ht_", "pub_ka_"))])
     if "tourism" in what:
         build_buildings(only=["hotel_pension", "hotel_strand", "hotel_grand", "kneipe", "strandbar", "disco"])
     if "facilities" in what:

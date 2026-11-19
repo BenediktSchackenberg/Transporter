@@ -173,7 +173,31 @@ func _planned(k: int, code: String) -> bool:
 
 
 # ------------------------------------------------------------------ Massnahmen
-func build(k: int, code: String, reason: String, by: String) -> Dictionary:
+## Gepruefte Standorte fuer neue Versorgungsanlagen, damit die KI Lage und Stadtbild steuert.
+func utility_sites(k: int) -> Array:
+	if not sim.municipal.enabled() or not sim.town_plan.has(k):
+		return []
+	var codes: Array = []
+	if sim.water.works_of(k).is_empty():
+		codes.append("WW-01")
+	var today: Dictionary = sim.water.last.get(str(k), {})
+	if sim.water.tanks_of(k).is_empty() or (not today.is_empty() and float(today.get("bedarf", 0.0)) > sim.water.tank_capacity(k) * 0.9):
+		codes.append("WT-01")
+	if sim.water.plant().is_empty():
+		codes.append("KA-01")
+	var out: Array = []
+	for code in codes:
+		var info: Array = CityGenerator.TYPES[Municipal.TYPES[code].building]
+		var art := "laerm" if code == "KA-01" else "oeffentlich"
+		var req := {"w": int(info[1]), "h": int(info[2]), "art": art,
+			"zones": ["gewerbe", "industrie", "mischgebiet"] if art == "laerm" else ["oeffentlich", "mischgebiet", "gewerbe", "wohnen"]}
+		for site in (sim.sites.rank(k, req).list as Array).slice(0, 3):
+			out.append({"typ": code, "grundstueck": site.parcel, "feld": site.rect, "punkte": snappedf(float(site.score), 0.1),
+				"viertel": site.viertel_text})
+	return out
+
+
+func build(k: int, code: String, reason: String, by: String, preferred: String = "") -> Dictionary:
 	if not Municipal.TYPES.has(code):
 		return {"ok": false, "msg": "Unbekannter Typ %s (%s)." % [code, ", ".join(Municipal.TYPES.keys())]}
 	if _planned(k, code):
@@ -188,7 +212,16 @@ func build(k: int, code: String, reason: String, by: String) -> Dictionary:
 		return {"ok": false, "budget": true, "msg": "Verfügbare Mittel %s reichen nicht für %s (%s) plus Rücklage für %d Tage Dienstbetrieb (%s)." % [
 			Catalog.money(M.available_budget()), Municipal.TYPES[code].label, Catalog.money(cost), RESERVE_DAYS, Catalog.money(reserve)]}
 	var info: Array = CityGenerator.TYPES[Municipal.TYPES[code].building]
-	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]), "", str(Municipal.TYPES[code].label))
+	var site: Dictionary = {}
+	if preferred != "":
+		for choice in utility_sites(k):
+			if str(choice.typ) == code and str(choice.grundstueck) == preferred:
+				site = {"rect": choice.feld, "parcel": preferred}
+				break
+		if site.is_empty():
+			return {"ok": false, "msg": "Grundstück %s ist für %s nicht mehr verfügbar. Wähle einen aktuellen Standort aus versorgungsanlagen_standorte." % [preferred, code]}
+	else:
+		site = sim.civic._find_site(k, int(info[1]), int(info[2]), "", str(Municipal.TYPES[code].label))
 	if site.is_empty():
 		var bare: Array = sim.civic.sites_without_road(k, int(info[1]), int(info[2]), 4)
 		if sim.town_plan.has(k):   # Auftrag 8: Grundstuecke ohne Strasse in passender Zone/Viertel aus der Standortpruefung

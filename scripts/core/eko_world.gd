@@ -2884,7 +2884,9 @@ func office_obs(b: Dictionary) -> Dictionary:
 	var civic: Dictionary = ind.get("stadtentwicklung", {})
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
-	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k),
+	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "stromtrassen": ind.get("stromtrassen", []),
+		"versorgungsleitungen": ind.get("versorgungsleitungen", []),
+		"versorgungsanlagen_standorte": ind.get("versorgungsanlagen_standorte", []),
 		"naechster_ausbauschritt": ind.get("stadtplan_naechster_abschnitt", {}), "stadtplan_erweiterung": ind.get("stadtplan_erweiterung", []),
 		"stadtentwicklung": {"vision": civic.get("vision", ""), "bedarf": civic.get("bedarf", {}), "eigene_anlagen": civic.get("eigene_anlagen", []),
 			"vorgemerkte_ideen": civic.get("vorgemerkte_ideen", []), "bauvorlagen": civic.get("bauvorlagen", {}).keys()},
@@ -2911,7 +2913,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	out["aktionen"] = "Amt {aktion: {action, ...}}: " + "; ".join(acts)
 	out["vorfaelle"] = sim.rivalry.incidents.slice(-8).map(func(i): return {"tag": GameCalendar.day_of(float(i.t)) + 1, "was": str(i.get("text", i.get("art", ""))).left(120)})
 	out["schiedsrichter"] = "Bei Sabotage, Blockaden oder unfairem Wettbewerb kannst du einschreiten: warn_company, order_inspection, mediate_rivalry."
-	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle selbst das nächste Viertel und seine Nutzung (stadtteil_planen aus stadtplan_erweiterung), erschließe es mit viertel_erschliessen und gestalte die Stadt mit propose_project für Parks, Plätze und Spielorte. Laufende Projekte erst abschließen lassen; danach den Stadtplan weiterentwickeln. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)
+	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle Stadtteile, baue sie mit viertel_erschliessen aus und verschönere sie mit propose_project. Prüfe stromtrassen und beauftrage nötige Anschlüsse mit stromtrasse_bauen, bevor neue Betriebe Strom brauchen. Plane Wasserwerk, Hochbehälter und Kläranlage mit infra_ausbau vorausschauend. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)
 	return out
 
 

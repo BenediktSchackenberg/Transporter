@@ -44,6 +44,8 @@ func setup(simulation) -> void:
 	if building < 0:
 		building = int(sim.city_depot.building)
 	sim.city.buildings[building].name = "Kernkraftwerk (Stadtwerke)"
+	if str(sim.city.buildings[building].type) == "factory":
+		sim.city.buildings[building].sprite = "nuclear_plant"
 	sim.stock.add(ITEM, START_STOCK, "P0", building, "Anfangsbestand der Stadtwerke", 0.0)
 	sim.day_changed.connect(on_day)
 	sim.month_changed.connect(on_month)
@@ -186,7 +188,17 @@ func to_dict() -> Dictionary:
 func from_dict(d: Dictionary) -> void:
 	if d.is_empty():
 		return
-	building = int(d.get("building", building))
+	var saved_building := int(d.get("building", building))
+	if saved_building >= 0 and saved_building < sim.city.buildings.size() and str(sim.city.buildings[saved_building].type) == "factory":
+		building = saved_building
+	elif building != saved_building and building >= 0 and str(sim.city.buildings[building].type) == "factory":
+		# Alte Wildnis-Spielstaende lagerten Brennstoff im Depot, weil dort noch kein Kraftwerk stand.
+		for item in [ITEM, SPENT]:
+			var amount: int = sim.stock.qty(item, "P0", saved_building)
+			if amount > 0:
+				sim.stock.move(item, amount, "P0", saved_building, "P0", building, "Kraftwerk am Großlager übernommen", sim.game_min)
+	if building >= 0 and building < sim.city.buildings.size() and str(sim.city.buildings[building].type) == "factory":
+		sim.city.buildings[building].sprite = "nuclear_plant"
 	offline_until = int(d.get("offline_until", -1))
 	incidents = d.get("incidents", [])
 	loaded_mwh = float(d.get("loaded_mwh", loaded_mwh))

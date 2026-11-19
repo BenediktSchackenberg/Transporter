@@ -1076,15 +1076,14 @@ static func power(sim: Simulation) -> String:
 	if not nz.is_empty():
 		txt += "[b]Hochspannungsnetz[/b] · %d Trassen, %d Felder · " % [int(nz.trassen), int(nz.laenge_felder)]
 		var cut: Array = nz.defekt
+		var off_t: Array = nz.angeschlossen.keys().filter(func(k): return not bool(nz.angeschlossen[k])).map(func(k): return sim.towns.name_of(int(k)))
 		if cut.is_empty():
-			txt += "alle Umspannwerke angeschlossen
-"
+			txt += ("[color=#e0a040]Noch ohne Kraftwerksanschluss: %s[/color]\n" % ", ".join(off_t)) if not off_t.is_empty() else "alle Umspannwerke angeschlossen\n"
 		else:
-			var off_t: Array = nz.angeschlossen.keys().filter(func(k): return not bool(nz.angeschlossen[k])).map(func(k): return sim.towns.name_of(int(k)))
 			txt += "[color=#e05040]Trasse %s unterbrochen – ohne Kraftwerksstrom: %s (nur Notstrom)[/color]
 " % [", ".join(cut), ", ".join(off_t) if not off_t.is_empty() else "keine Stadt"]
 		for lb in nz.get("im_bau", []):
-			txt += "  [color=#8fd18f]Ringschluss im Bau: %s – %s (Projekt %s)[/color]\n" % [str(lb.von), str(lb.nach), str(lb.projekt)]
+			txt += "  [color=#8fd18f]Stromtrasse im Bau: %s – %s (Projekt %s)[/color]\n" % [str(lb.von), str(lb.nach), str(lb.projekt)]
 		for rp in nz.get("reparaturen", []):
 			txt += "  Netztrupp %s repariert Trasse %s (%s)\n" % [str(rp.trupp), str(rp.trasse), str(rp.ursache)]
 		var ns: Dictionary = nz.get("statistik", {})
@@ -1309,6 +1308,9 @@ static func water(sim: Simulation) -> String:
 			" · Ausbau im Bau" if int(w.ausbau_laeuft) > 0 else ""]
 		if bool(h.get("rohrbruch", false)):
 			txt += "  [color=#e05040]Rohrbruch: Netzabschnitt ohne Wasser, %.1f m³ Verlust – Wassertrupp unterwegs[/color]\n" % float(h.get("leck", 0.0))
+		txt += "  Verlegte Leitungen: Frischwasser %d Felder · Kanal %d Felder (Kartenansicht mit V wechseln)\n" % [int(h.get("wasserleitung_felder", 0)), int(h.get("kanal_felder", 0))]
+		if float(h.get("ohne_kanal_m3", 0.0)) > 0.01:
+			txt += "  [color=#e05040]%.1f m³ Abwasser ohne Kanalanschluss – neue Leitung beauftragen[/color]\n" % float(h.ohne_kanal_m3)
 	var pl: Dictionary = sim.water.plant_last
 	if not pl.is_empty():
 		txt += "%s (Region): Zulauf %.1f m³, geklärt %.1f m³ von %.0f m³ Leistung%s\n" % [str(pl.name), float(pl.zulauf), float(pl.geklaert), float(pl.leistung),

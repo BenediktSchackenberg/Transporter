@@ -588,7 +588,18 @@ func staffing(fid: String) -> float:
 	var need := 0
 	for b in f.get("staff_need", {}):
 		need += int(f.staff_need[b])
-	return 1.0 if need == 0 else minf(1.0, float(staff_count(fid)) / float(need))
+	var level := 1.0 if need == 0 else minf(1.0, float(staff_count(fid)) / float(need))
+	if f.is_empty() or str(f.code) in ["WW-01", "WT-01", "KA-01"]:
+		return level
+	var k := int(f.town)
+	if sim.water != null and sim.water.enabled() and not sim.water.last.get(str(k), {}).is_empty():
+		if float(TYPES[str(f.code)].get("water", 0.0)) > 0.0 and not sim.water.building_on_net(k, int(f.building)):
+			level *= 0.5
+		if not sim.water.power_ok(k):
+			level *= 0.5
+	if sim.grid != null and float(TYPES[str(f.code)].get("power", 0.0)) > 0.0 and not sim.grid.net.distributed(k, int(f.building)):
+		level *= 0.6
+	return level
 
 
 func _hire(f: Dictionary, by_id: Dictionary) -> void:

@@ -120,6 +120,7 @@ func _generate_once(seed_value: int, map_size: int) -> CityData:
 	_connect_hub()
 	if wildnis:
 		_hub_camps()
+		_wild_power_plant()
 	_land_cover_region()
 	c.height = heights
 	_finish()
@@ -611,6 +612,35 @@ func _hub_camps() -> void:
 			c.buildings[id]["town"] = k
 			c.start_depots.append(id)
 			towns_out[k]["start_plot"] = id
+
+
+## Die Wildnis hat noch keine Stadt. Das regionale Kraftwerk steht deshalb am Grosslager,
+## mit eigener Zufahrt und eigenem Grundstueck statt auf dem Startdepot einer KI.
+## Erst nach den Ankunftsplaetzen bauen, damit deren gespeicherte IDs stabil bleiben.
+func _wild_power_plant() -> void:
+	var old_town := town
+	var old_rect := town_rect
+	town = Vector2i(n * 2, hub_rect.get_center().y)
+	var r := hub_rect
+	var sites := [
+		Rect2i(r.position + Vector2i(3, -8), Vector2i(18, 10)),
+		Rect2i(Vector2i(r.position.x + 3, r.end.y - 2), Vector2i(18, 10)),
+		Rect2i(Vector2i(r.position.x - 8, r.position.y + 3), Vector2i(10, 17)),
+		Rect2i(Vector2i(r.end.x - 2, r.position.y + 3), Vector2i(10, 17))]
+	var id := -1
+	for site in sites:
+		town_rect = site
+		id = _put("factory", site.get_center(), "power_plant", "Kernkraftwerk (Stadtwerke)")
+		if id >= 0:
+			break
+	if id < 0:
+		town_rect = r
+		id = _put("factory", r.get_center(), "power_plant", "Kernkraftwerk (Stadtwerke)")
+	if id >= 0:
+		c.buildings[id]["hub"] = true
+		hub_out.buildings["kraftwerk"] = id
+	town = old_town
+	town_rect = old_rect
 
 
 ## Ziel der Zufahrt: naechstgelegene Ortsstrasse, die nachweislich mit der Ortsmitte verbunden ist (sonst endete die Zufahrt

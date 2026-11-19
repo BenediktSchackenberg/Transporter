@@ -6,12 +6,18 @@ extends RefCounted
 
 const SCHEMA := {
 	"wait": {"params": {}, "desc": "Nichts tun."},
-	"kommunal_bauen": {"params": {"typ": "string", "reason": "string"},
-		"desc": "Kommunale Einrichtung neu bauen (Auftrag 20): typ FW-01 Feuerwache|RW-01 Rettungswache|KH-01 Krankenhaus|BH-01 Bauhof|VB-01 Busbetriebshof|SC-01 Schule|KI-01 Kita|RC-01 Recyclinghof. Ratsbeschluss, Ausschreibung, Baufirma; Kosten und Bedarf siehe obs.kommunale_dienste."},
+	"kommunal_bauen": {"params": {"typ": "string", "reason": "string", "grundstueck": "string?"},
+		"desc": "Kommunale Einrichtung neu bauen. Für Wasserwerk WW-01, Hochbehälter WT-01 oder Kläranlage KA-01 kannst du ein geprüftes grundstueck aus obs.versorgungsanlagen_standorte wählen. Ratsbeschluss, Ausschreibung und Baufirma; Kosten und Bedarf siehe obs.kommunale_dienste."},
 	"kommunal_fahrzeug": {"params": {"einrichtung": "string", "fahrzeug": "string", "reason": "string"},
 		"desc": "Fahrzeug für eine Einrichtung kaufen (einrichtung = ID M<n>, fahrzeug HLF 20|DLK 23|RTW|NEF|Kipper|Streuwagen|Linienbus|Wertstoffwagen)."},
 	"infra_ausbau": {"params": {"anlage": "string", "reason": "string"},
 		"desc": "Versorgung vorausschauend ausbauen (obs.infrastruktur_lage, obs.wasser, obs.bahn): anlage wasserwerk | hochbehaelter | klaeranlage (Leistung ×1,5, 40 % der Neubaukosten, Baufirma, 12 Tage; Kläranlage teilen sich die Städte) oder gleis (Instandsetzung des schlechtesten Abschnitts an deiner Stadt, Land 75 %)."},
+	"stromtrasse_bauen": {"params": {"option": "string", "reason": "string"},
+		"desc": "Eine geprüfte Hochspannungstrasse aus obs.stromtrassen wählen. Die KI bestimmt Trasse und Standort des Umspannwerks; Material, Baufirma, Bauzeit und Kosten sind real. Nach Fertigstellung erhält die Stadt Kraftwerksstrom. Ein zweiter Weg schützt vor Ausfällen."},
+	"versorgungsleitung_bauen": {"params": {"option": "string", "reason": "string"},
+		"desc": "Einen geprüften Frischwasser- oder Abwasserleitungsabschnitt aus obs.versorgungsleitungen wählen. Er folgt verbundenen Straßen, braucht Material und Baufirma und versorgt Gebäude erst nach Fertigstellung."},
+	"stromstoerung_priorisieren": {"params": {"trasse": "string", "reason": "string"},
+		"desc": "Bei einer unterbrochenen Trasse aus obs.strom.netz.reparaturen zusätzliche Netzkräfte bezahlen; der Trupp fährt weiterhin zur Schadstelle und repariert dort schneller."},
 	"kommunal_schliessen": {"params": {"einrichtung": "string", "reason": "string"}, "desc": "Kommunale Einrichtung schließen (Personal frei, keine Kosten mehr)."},
 	"fahrzeug_entwerfen": {"params": {"klasse": "string", "name": "string", "farbe": "string", "akzent": "string?", "form": "string?", "nutzlast": "int?",
 		"leistung": "string?", "qualitaet": "string?", "kuehlung": "bool?", "preis": "number?", "reason": "string"},
@@ -314,6 +320,7 @@ func indicators() -> Dictionary:
 	if pop_history.size() >= 2:
 		trend = int(pop_history[-1]) - int(pop_history[-2])
 	return {
+		"stadt_id": town,
 		"buergermeister": {"name": name, "partei": party, "zustimmung": snappedf(approval, 0.1), "amtszeit_seit_tag": term_start_day, "tag": _today()},
 		"bevoelkerung": {"einwohner": Z.population_of(town), "veraenderung_letzter_monat": trend, "monat": GameCalendar.month_of(sim.game_min),
 			"stadtmarketing_bis_monat": marketing_until, "stadtmarketing_zuzug_plus": snappedf(marketing_boost, 0.01)},
@@ -359,6 +366,9 @@ func indicators() -> Dictionary:
 		"sicherheit_gesundheit": sim.safety.summary(),
 		"rivalitaet": sim.rivalry.mayor_summary(),
 		"strom": sim.grid.summary(),
+		"stromtrassen": sim.grid.net.option_brief(town),
+		"versorgungsleitungen": sim.water.main_brief(town) if sim.water != null and sim.water.enabled() else [],
+		"versorgungsanlagen_standorte": sim.services.utility_sites(town) if sim.services != null and sim.water != null and sim.water.enabled() else [],
 		"bahn": sim.trains.summary() if sim.trains != null and not sim.trains.path.is_empty() else {},
 		"wasser": sim.water.mayor_view(town) if sim.water != null and sim.water.enabled() else {},
 		"polizei": sim.police.summary(town) if sim.police != null and sim.police.enabled() else {},
@@ -703,8 +713,14 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.civic.propose(town, a) if sim.civic != null else {"ok": false, "msg": "Keine Stadtentwicklung."}
 			"infra_ausbau":
 				res = _infra_ausbau(str(a.anlage))
+			"stromtrasse_bauen":
+				res = sim.grid.net.request_line(town, str(a.get("option", "")), str(a.get("reason", "Stadtversorgung")))
+			"versorgungsleitung_bauen":
+				res = sim.water.request_main(town, str(a.get("option", "")), str(a.get("reason", "Neue Stadtteile versorgen"))) if sim.water != null and sim.water.enabled() else {"ok": false, "msg": "Keine kommunalen Leitungen in dieser Welt."}
+			"stromstoerung_priorisieren":
+				res = sim.grid.net.prioritize_repair(town, str(a.get("trasse", "")))
 			"kommunal_bauen":
-				res = sim.services.build(town, str(a.typ), str(a.reason), "Bürgermeister %s" % name) if sim.services != null and sim.municipal.enabled() else {"ok": false, "msg": "Keine kommunalen Dienste."}
+				res = sim.services.build(town, str(a.typ), str(a.reason), "Bürgermeister %s" % name, str(a.get("grundstueck", ""))) if sim.services != null and sim.municipal.enabled() else {"ok": false, "msg": "Keine kommunalen Dienste."}
 			"kommunal_fahrzeug":
 				var mf: Dictionary = sim.municipal.facilities.get(str(a.einrichtung), {})
 				res = {"ok": false, "msg": "Einrichtung %s gehört nicht zu dieser Stadt." % str(a.einrichtung)} if mf.is_empty() or int(mf.town) != town \

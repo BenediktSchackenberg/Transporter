@@ -65,6 +65,8 @@ var plant_month := 0.0 # Kosten der Klaeranlage im laufenden Monat
 var plant_last := {}   # letzter Tag der Klaeranlage {zulauf, geklaert, ueberlauf, leistung, grund}
 var tight := {}        # Einrichtungs-ID -> Tage in Folge ueber EXPAND_RATIO
 var expansions := {}   # Projekt-ID -> Einrichtungs-ID
+var mains := {"wasser": {}, "abwasser": {}}  # Ort -> verlegte Leitungsfelder; bestehende Startstrassen sind grundversorgt
+var main_projects := {}  # Bauprojekt -> {town, art, cells}
 var stats := {"rohrbrueche": 0, "reparaturen": 0, "ausbauten": 0}
 var rng := RandomNumberGenerator.new()
 var _net := {}         # Stadt -> {Vector2i: true} Strassenfelder mit Leitungsdruck (abgeleitet, taeglich neu)
@@ -197,6 +199,118 @@ func sources_of(k: int) -> Array:
 	return out
 
 
+static func _cell_key(q: Vector2i) -> String:
+	return "%d:%d" % [q.x, q.y]
+
+
+func ensure_mains(k: int) -> void:
+	var key := str(k)
+	if mains["wasser"].has(key):
+		return
+	var base := {}
+	var C: CityData = sim.city
+	for y in C.size:
+		for x in C.size:
+			var q := Vector2i(x, y)
+			if C.is_road(q) and C.town_of(q) == k:
+				base[_cell_key(q)] = true
+	mains["wasser"][key] = base.duplicate()
+	mains["abwasser"][key] = base.duplicate()
+
+
+func main_cells(k: int, art: String) -> Dictionary:
+	if art not in ["wasser", "abwasser"]:
+		return {}
+	ensure_mains(k)
+	return mains[art].get(str(k), {})
+
+
+## Die KI erschliesst neue Straßen abschnittsweise mit zwei eigenstaendigen Netzen.
+## Jedes Angebot beginnt an einer bereits verlegten Leitung und folgt befahrbaren Straßen.
+func main_options(k: int, art: String) -> Array:
+	if art not in ["wasser", "abwasser"] or main_projects.values().any(func(p): return int(p.town) == k and str(p.art) == art):
+		return []
+	var C: CityData = sim.city
+	var built: Dictionary = main_cells(k, art)
+	var starts: Array = []
+	for key in built:
+		var xy := str(key).split(":")
+		var q := Vector2i(int(xy[0]), int(xy[1]))
+		for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+			var next: Vector2i = q + d
+			if C.is_road(next) and C.town_of(next) == k and not built.has(_cell_key(next)):
+				starts.append(next)
+	var seen := {}
+	var options: Array = []
+	for start in starts:
+		if seen.has(start):
+			continue
+		var todo: Array = [start]
+		seen[start] = true
+		var i := 0
+		while i < todo.size() and i < 32:
+			var here: Vector2i = todo[i]
+			i += 1
+			for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+				var next: Vector2i = here + d
+				if not seen.has(next) and C.is_road(next) and C.town_of(next) == k and not built.has(_cell_key(next)):
+					seen[next] = true
+					todo.append(next)
+		var cells: Array = todo.slice(0, 32)
+		var nearby := 0
+		for q in cells:
+			for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+				var p: Vector2i = q + d
+				if C.inside(p) and C.building_at[C.idx(p)] >= 0:
+					nearby += 1
+		var cost := snappedf(float(cells.size()) * (130.0 if art == "wasser" else 170.0), 10.0)
+		options.append({"id": "%s:%d:%d" % [art, start.x, start.y], "art": art, "von": [start.x, start.y],
+			"felder": cells.size(), "gebaeude_nahe": nearby, "kosten": cost, "tage": maxi(2, ceili(float(cells.size()) / 8.0)),
+			"cells": cells.map(func(q): return [q.x, q.y])})
+	options.sort_custom(func(a, b): return int(a.gebaeude_nahe) * 4 + int(a.felder) > int(b.gebaeude_nahe) * 4 + int(b.felder))
+	return options.slice(0, 3)
+
+
+func main_brief(k: int) -> Array:
+	var out: Array = []
+	for art in ["wasser", "abwasser"]:
+		for o in main_options(k, art):
+			out.append({"id": o.id, "art": art, "von": o.von, "felder": o.felder, "gebaeude_nahe": o.gebaeude_nahe,
+				"kosten": o.kosten, "tage": o.tage})
+	return out
+
+
+func request_main(k: int, option_id: String, reason: String) -> Dictionary:
+	var art := option_id.get_slice(":", 0)
+	var option := {}
+	for o in main_options(k, art):
+		if str(o.id) == option_id:
+			option = o
+			break
+	if option.is_empty():
+		return {"ok": false, "msg": "Leitungsabschnitt nicht verfügbar. Wähle eine ID aus versorgungsleitungen."}
+	var M: Mayor = sim.towns.mayor(k)
+	if M.available_budget() < float(option.kosten):
+		return {"ok": false, "msg": "Leitung kostet %s, verfügbar %s." % [Catalog.money(float(option.kosten)), Catalog.money(M.available_budget())]}
+	var prj: Dictionary = M.add_works_project("versorgungsleitung", option_id, float(option.kosten), int(option.tage),
+		{"betonbauteile": maxi(1, int(option.felder) / 8), "stahl": maxi(1, int(option.felder) / 16)},
+		"%sleitung: %s" % [art.capitalize(), reason.left(140)])
+	main_projects[str(prj.id)] = {"town": k, "art": art, "cells": option.cells}
+	return {"ok": true, "msg": "%sleitung als Projekt %s ausgeschrieben; %d Felder." % [art.capitalize(), prj.id, int(option.felder)], "projekt": prj.id}
+
+
+func on_main_done(prj: Dictionary) -> void:
+	var p: Dictionary = main_projects.get(str(prj.id), {})
+	if p.is_empty():
+		return
+	main_projects.erase(str(prj.id))
+	var built: Dictionary = main_cells(int(p.town), str(p.art))
+	for a in p.cells:
+		built[_cell_key(Vector2i(int(a[0]), int(a[1])))] = true
+	_net.clear()
+	sim.log_event("%s: %sleitung fertig – %d Straßenfelder versorgt." % [sim.towns.name_of(int(p.town)), str(p.art).capitalize(), p.cells.size()], "good")
+
+
 ## Strassenfelder mit Leitungsdruck: Breitensuche ueber die Strassen der Stadt ab allen Einspeisepunkten, hoechstens ZONE_RANGE
 ## Felder weit; eine Bruchstelle sperrt das Netz dahinter.
 func compute_net(k: int) -> Dictionary:
@@ -204,6 +318,7 @@ func compute_net(k: int) -> Dictionary:
 	var net := {}
 	if src.is_empty():
 		return net
+	var built: Dictionary = main_cells(k, "wasser")
 	var br: Dictionary = breaks.get(str(k), {})
 	var shut := {}   # Rohrbruch: Schieber sperren den Strassenabschnitt um die Bruchstelle (BREAK_SPAN Felder in jede Richtung)
 	if not br.is_empty():
@@ -234,7 +349,7 @@ func compute_net(k: int) -> Dictionary:
 			continue
 		for dv in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			var n: Vector2i = c + dv
-			if net.has(n) or shut.has(n) or not sim.city.inside(n) or not sim.city.is_road(n) or sim.city.town_of(n) != k:
+			if net.has(n) or shut.has(n) or not sim.city.inside(n) or not sim.city.is_road(n) or sim.city.town_of(n) != k or not built.has(_cell_key(n)):
 				continue
 			net[n] = d + 1
 			q.append(n)
@@ -252,8 +367,13 @@ func building_on_net(k: int, building_id: int) -> bool:
 	return not b.is_empty() and _net[k].has(Vector2i(b.road))
 
 
+func building_on_sewer(k: int, building_id: int) -> bool:
+	var b: Dictionary = sim.city.building(building_id)
+	return not b.is_empty() and main_cells(k, "abwasser").has(_cell_key(Vector2i(b.road)))
+
+
 ## Anteil der Haushalte (mit Wohnung) je Stadt, deren Haus am Netz liegt.
-func _household_shares() -> Dictionary:
+func _household_shares(art: String = "wasser") -> Dictionary:
 	var tot := {}
 	var on := {}
 	for p in sim.citizens.people:
@@ -263,7 +383,7 @@ func _household_shares() -> Dictionary:
 		var bid := int(u.building)
 		var k: int = sim.towns.of_building(bid)
 		tot[k] = int(tot.get(k, 0)) + 1
-		if building_on_net(k, bid):
+		if (building_on_net(k, bid) if art == "wasser" else building_on_sewer(k, bid)):
 			on[k] = int(on.get(k, 0)) + 1
 	var out := {}
 	for k in tot:
@@ -288,9 +408,11 @@ func on_day(_day: int) -> void:
 	_net.clear()
 	_sewage_today.clear()
 	for t in sim.towns.list:
+		ensure_mains(int(t.id))
 		_pipe_breaks(int(t.id))
 	_net.clear()
 	var shares := _household_shares()
+	var sewer_shares := _household_shares("abwasser")
 	var biz_by_town := {}
 	var running: Array = sim.biz.items.values().filter(func(b): return b.status in Businesses.RUNNING and not sim.biz.frozen(int(b.owner)))
 	running.sort_custom(func(a, b): return float(a.founded) < float(b.founded) or (float(a.founded) == float(b.founded) and str(a.id) < str(b.id)))
@@ -301,12 +423,12 @@ func on_day(_day: int) -> void:
 		biz_by_town[k].append(b)
 	for t in sim.towns.list:
 		var k := int(t.id)
-		_supply_town(k, biz_by_town.get(k, []), float(shares.get(k, 1.0)))
+		_supply_town(k, biz_by_town.get(k, []), float(shares.get(k, 1.0)), float(sewer_shares.get(k, 1.0)))
 	_treat()
 	_check_expansion()
 
 
-func _supply_town(k: int, businesses: Array, hh_share: float = 1.0) -> void:
+func _supply_town(k: int, businesses: Array, hh_share: float = 1.0, sewer_share: float = 1.0) -> void:
 	var tt := _t(k)
 	var acct := Towns.account_of(k)
 	var werk := works_of(k)
@@ -338,16 +460,22 @@ func _supply_town(k: int, businesses: Array, hh_share: float = 1.0) -> void:
 	for b in businesses:
 		if not on_net(b):
 			sim.biz.unblock(b.id, "wasser")
+			sim.biz.unblock(b.id, "abwasser")
 			continue
 		var m3 := biz_need(b)
 		need_b += m3
 		if not connected(b):
 			sim.biz.block(b.id, "wasser", "Kein Wasseranschluss: Grundstück nicht erschlossen")
 			continue
-		if not building_on_net(k, int(b.site)) and not erschlossen(b):   # erschlossenes Grundstueck: eigene Zuleitung bei der Erschliessung gelegt
+		if not building_on_net(k, int(b.site)):
 			off += 1
 			sim.biz.block(b.id, "wasser", "Keine Wasserleitung: %s" % ("Rohrbruch im Netz" if breaks.has(str(k)) else "außerhalb der Druckzone"))
 			continue
+		if not building_on_sewer(k, int(b.site)):
+			off += 1
+			sim.biz.block(b.id, "abwasser", "Kein Kanalanschluss: Abwasserleitung zur Kläranlage fehlt")
+			continue
+		sim.biz.unblock(b.id, "abwasser")
 		if m3 > avail + 1e-6:
 			off += 1
 			sim.biz.block(b.id, "wasser", "Kein Wasser: %s" % (str(out.grund) if str(out.grund) != "" else "Wasserwerk ausgelastet"))
@@ -367,7 +495,8 @@ func _supply_town(k: int, businesses: Array, hh_share: float = 1.0) -> void:
 		storage[str(k)] = clampf(avail, 0.0, cap) if is_finite(avail) else cap
 	# Haushalte zahlen Wasser- und Abwassergebuehr an die Stadt; Einrichtungen verbrauchen auf eigene Rechnung der Stadt (keine Buchung)
 	var h_eur := got_h * price
-	var h_sew := got_h * SEWAGE_SHARE * sew_price
+	var sewer_ratio := clampf(sewer_share / maxf(hh_share, 0.001), 0.0, 1.0)
+	var h_sew := got_h * SEWAGE_SHARE * sewer_ratio * sew_price
 	if h_eur + h_sew > 0.0:
 		sim.economy.transfer("H0", acct, h_eur + h_sew)
 	var total := got_h + got_f + got_b
@@ -385,7 +514,14 @@ func _supply_town(k: int, businesses: Array, hh_share: float = 1.0) -> void:
 			sim.log_event("%s: Wasserknappheit – %.0f m³ fehlen (%s)." % [sim.towns.name_of(k), fehl,
 				str(out.grund) if str(out.grund) != "" else "Wasserwerk ausgelastet"], "warn")
 	var sw := total * SEWAGE_SHARE
-	_sewage_today[str(k)] = sw
+	var uncollected := (got_h + got_f) * SEWAGE_SHARE * (1.0 - sewer_ratio)
+	_sewage_today[str(k)] = sw - uncollected
+	if uncollected > 0.01:
+		var fee := minf(uncollected * OVERFLOW_FEE, maxf(0.0, float(sim.economy.accounts.get(acct, 0.0))))
+		sim.economy.transfer(acct, "X0", fee)
+		sewage[str(k)]["ohne_kanal_m3"] = float(sewage[str(k)].get("ohne_kanal_m3", 0.0)) + uncollected
+		if float(last.get(str(k), {}).get("ohne_kanal_m3", 0.0)) <= 0.01:
+			sim.log_event("%s: %.1f m³ Abwasser ohne Kanalanschluss – Leitungsbau nötig." % [sim.towns.name_of(k), uncollected], "warn")
 	tt.m3 = float(tt.m3) + total
 	tt.abwasser = float(tt.abwasser) + sw
 	tt.haushalte_eur = float(tt.haushalte_eur) + h_eur
@@ -400,7 +536,8 @@ func _supply_town(k: int, businesses: Array, hh_share: float = 1.0) -> void:
 		"versorgt": snappedf(total, 0.1), "fehl": snappedf(fehl, 0.1), "abgeschaltet": off, "grund": str(out.grund),
 		"abwasser": snappedf(sw, 0.1), "tarif": price, "abwassertarif": sew_price,
 		"ohne_anschluss": roundi(pop * (1.0 - hh_share)), "speicher": snappedf(float(storage.get(str(k), 0.0)), 0.1), "speicher_max": snappedf(cap, 0.1),
-		"leck": snappedf(leak, 0.1), "rohrbruch": breaks.has(str(k)), "netz_felder": _net.get(k, {}).size()}
+		"leck": snappedf(leak, 0.1), "rohrbruch": breaks.has(str(k)), "netz_felder": _net.get(k, {}).size(),
+		"ohne_kanal_m3": snappedf(uncollected, 0.1), "wasserleitung_felder": main_cells(k, "wasser").size(), "kanal_felder": main_cells(k, "abwasser").size()}
 
 
 # ------------------------------------------------------------------ Schritt 3: Rohrbrueche
@@ -618,7 +755,8 @@ func mayor_view(k: int) -> Dictionary:
 	var h: Dictionary = last.get(str(k), {})
 	if h.is_empty():
 		return {}
-	return {"bedarf_m3": h.bedarf, "leistung_m3": h.leistung, "fehl_m3": h.fehl, "ohne_anschluss": h.ohne_anschluss, "speicher_m3": h.speicher,
+	return {"bedarf_m3": h.bedarf, "leistung_m3": h.leistung, "fehl_m3": h.fehl, "ohne_anschluss": h.ohne_anschluss,
+		"ohne_kanal_m3": h.get("ohne_kanal_m3", 0.0), "wasserleitung_felder": h.get("wasserleitung_felder", 0), "kanal_felder": h.get("kanal_felder", 0), "speicher_m3": h.speicher,
 		"rohrbruch": h.rohrbruch, "gebuehr": h.tarif, "abwassergebuehr": h.abwassertarif, "klaeranlage": plant_last.duplicate(),
 		"ausbau_laeuft": summary(k).ausbau_laeuft}
 
@@ -626,7 +764,7 @@ func mayor_view(k: int) -> Dictionary:
 func to_dict() -> Dictionary:
 	return {"tariff": tariff, "by_town": by_town, "month": month, "last": last, "storage": storage, "breaks": breaks, "sewage_tariff": sewage_tariff,
 		"sewage": sewage, "sewage_month": sewage_month, "plant_month": plant_month, "plant_last": plant_last, "tight": tight, "expansions": expansions,
-		"stats": stats}
+		"stats": stats, "mains": mains, "main_projects": main_projects}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -643,6 +781,12 @@ func from_dict(d: Dictionary) -> void:
 	plant_last = d.get("plant_last", {})
 	tight = d.get("tight", {})
 	expansions = d.get("expansions", {})
+	mains = d.get("mains", {"wasser": {}, "abwasser": {}})
+	if not mains.has("wasser"):
+		mains["wasser"] = {}
+	if not mains.has("abwasser"):
+		mains["abwasser"] = {}
+	main_projects = d.get("main_projects", {})
 	var st0: Dictionary = stats.duplicate()
 	st0.merge(d.get("stats", {}), true)
 	stats = st0

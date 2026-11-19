@@ -256,7 +256,7 @@ func update(dt: float) -> void:
 		if v.kind == "netztrupp":   # Auftrag 22 Phase 3: Reparatur der Hochspannungstrasse erst ab Ankunft vor Ort
 			if str(v.phase) == "anfahrt":
 				v.phase = "arbeit"
-				v.until = now + PowerNet.REPAIR_MIN
+				v.until = now + PowerNet.REPAIR_MIN * (0.5 if bool(v.get("urgent", false)) else 1.0)
 			elif str(v.phase) == "arbeit" and now >= float(v.until):
 				sim.grid.net.repaired(str(v.edge))
 				v.phase = "rueckfahrt"

@@ -81,7 +81,22 @@ func _litter_of(building_id: int) -> float:
 
 ## Versorgung einer Wohneinheit: stadtweite Versorgung plus der Dreck im eigenen Viertel (Sauberkeit, Auftrag 22 Phase 2 Schritt 3).
 func supply_of(u: Dictionary) -> float:
-	return supply_score() - 10.0 * _litter_of(int(u.building))
+	var score := supply_score() - 10.0 * _litter_of(int(u.building))
+	var bid := int(u.building)
+	var k := sim.towns.of_building(bid)
+	if sim.water != null and sim.water.enabled():
+		var h: Dictionary = sim.water.last.get(str(k), {})
+		if not sim.water.building_on_net(k, bid):
+			score -= 28.0
+		if not sim.water.building_on_sewer(k, bid):
+			score -= 18.0
+		if not h.is_empty() and float(h.get("bedarf", 0.0)) > 0.0:
+			score -= minf(22.0, 40.0 * float(h.get("fehl", 0.0)) / float(h.bedarf))
+		if not sim.water.power_ok(k):
+			score -= 12.0
+	if sim.grid != null and not sim.grid.net.distributed(k, bid):
+		score -= 12.0
+	return clampf(score, 0.0, 100.0)
 
 
 func traffic_score() -> float:

@@ -84,7 +84,7 @@ func connected(b: Dictionary) -> bool:
 	var p: Dictionary = sim.parcels.of_building(int(b.site))
 	if p.is_empty():
 		return true
-	return bool(p.get("erschliessung", {}).get("strom", true))
+	return bool(p.get("erschliessung", {}).get("strom", true)) and net.distributed(town_of_biz(b), int(b.site))
 
 
 ## Tageslauf: Ausbau fertigstellen, Versorgung zuteilen, Verbrauch des abgelaufenen Tages abrechnen.

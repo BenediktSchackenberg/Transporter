@@ -11521,7 +11521,7 @@
     260,
     134
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11537,7 +11537,7 @@
     260,
     134
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11553,7 +11553,7 @@
     260,
     134
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11569,7 +11569,7 @@
     260,
     134
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11585,7 +11585,7 @@
     260,
     213
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11601,7 +11601,7 @@
     260,
     213
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11617,7 +11617,7 @@
     260,
     213
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11633,7 +11633,7 @@
     260,
     213
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11649,7 +11649,7 @@
     260,
     147
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11665,7 +11665,7 @@
     260,
     147
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11681,7 +11681,7 @@
     260,
     147
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11697,7 +11697,7 @@
     260,
     147
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11713,7 +11713,7 @@
     260,
     144
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11729,7 +11729,7 @@
     260,
     144
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11745,7 +11745,7 @@
     260,
     144
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11761,7 +11761,7 @@
     260,
     144
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11777,7 +11777,7 @@
     260,
     209
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11793,7 +11793,7 @@
     260,
     209
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11809,7 +11809,7 @@
     260,
     209
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -11825,7 +11825,7 @@
     260,
     209
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 2,
@@ -12033,7 +12033,7 @@
     452,
     230
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 4,
@@ -12049,7 +12049,7 @@
     452,
     230
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 4,
@@ -12081,7 +12081,7 @@
     452,
     230
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 4,
@@ -12145,7 +12145,7 @@
     452,
     257
    ],
-   "lit": false,
+   "lit": true,
    "mask": false,
    "amask": false,
    "w": 4,
@@ -12663,6 +12663,22 @@
    "w": 3,
    "h": 2,
    "height": 56
+  },
+  "nuclear_plant": {
+   "anchor": [
+    258,
+    109
+   ],
+   "size": [
+    516,
+    367
+   ],
+   "lit": true,
+   "mask": false,
+   "amask": false,
+   "w": 4,
+   "h": 4,
+   "height": 74
   }
  },
  "facilities": {

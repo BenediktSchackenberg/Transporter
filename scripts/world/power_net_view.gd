@@ -16,6 +16,7 @@ const STAKE := Color(0.95, 0.55, 0.12, 0.9)
 var sim: Simulation
 var _poll := 0.0
 var _key := ""
+var _phase := 0.0
 
 
 func setup(simulation: Simulation) -> void:
@@ -27,6 +28,7 @@ func _net() -> PowerNet:
 
 
 func _process(delta: float) -> void:
+	_phase += delta
 	_poll -= delta
 	if _poll > 0.0 or _net() == null or not _net().built():
 		return
@@ -34,7 +36,7 @@ func _process(delta: float) -> void:
 	var key := "%s|%s|%s" % [str(_view_cells()), ",".join(_net().edges.map(func(e): return "%s%s" % [e.id, e.state])), str(_net().planned.keys())]
 	if key != _key:
 		_key = key
-		queue_redraw()
+	queue_redraw()
 
 
 func _view_cells() -> Rect2i:
@@ -93,14 +95,17 @@ func _draw() -> void:
 				draw_colored_polygon(PackedVector2Array([c + Vector2(0, -9), c + Vector2(8, 5), c + Vector2(-8, 5)]), Color(1.0, 0.82, 0.1))
 				draw_line(c + Vector2(0, -4), c + Vector2(0, 1), Color.BLACK, 1.5)
 				draw_circle(c + Vector2(0, 3), 0.9, Color.BLACK)
-	for pid in N.planned:   # beschlossene Trasse (Ringschluss im Bau): abgesteckt mit Pflöcken
+	for pid in N.planned:   # beschlossene Trasse: sichtbare Vermessung und Baustellenpfaehle
 		var p: Dictionary = N.planned[pid]
-		var cells := PowerNet.line_cells(N.nodes[str(p.a)].cell, N.nodes[str(p.b)].cell)
+		var cells: Array = (p.get("cells", []) as Array).map(func(a): return Vector2i(int(a[0]), int(a[1])))
+		if cells.is_empty():
+			cells = PowerNet.line_cells(N.nodes[str(p.a)].cell, N.nodes[str(p.b)].cell)
 		for i in range(0, cells.size(), 2):
 			var q: Vector2i = cells[i]
 			if view.has_point(q):
 				var c := _foot(q)
-				draw_line(c, c + Vector2(0, -7), STAKE, 1.5)
+				draw_line(c, c + Vector2(0, -9), STAKE, 2.0)
+				draw_circle(c + Vector2(0, -9), 1.7, Color(1.0, 0.89, 0.35))
 	for id in N.nodes:
 		var n: Dictionary = N.nodes[id]
 		if int(n.town) >= 0 and view.has_point(n.cell):
@@ -110,6 +115,7 @@ func _draw() -> void:
 ## Gittermast: zwei schraege Beine, Querstreben, Traverse mit Isolatoren.
 func _draw_mast(f: Vector2) -> void:
 	var top := f + Vector2(0, -MAST_H)
+	draw_colored_polygon(PackedVector2Array([f + Vector2(-8, 1), f + Vector2(8, 1), f + Vector2(6, 4), f + Vector2(-6, 4)]), Color(0.38, 0.39, 0.38))
 	draw_line(f + Vector2(-5, 0), top, MAST, 1.4)
 	draw_line(f + Vector2(5, 0), top, MAST, 1.4)
 	for k in 3:
@@ -119,6 +125,10 @@ func _draw_mast(f: Vector2) -> void:
 	draw_line(top + Vector2(-9, 3), top + Vector2(9, 3), MAST, 1.6)   # Traverse
 	for x in [-8.0, 8.0]:
 		draw_line(top + Vector2(x, 3), top + Vector2(x, 6), Color(0.85, 0.85, 0.9), 1.2)
+		draw_circle(top + Vector2(x, 7), 1.5, Color(0.83, 0.67, 0.43))
+	for y in [-9.0, -18.0, -27.0]:
+		draw_line(f + Vector2(-4.0, y), f + Vector2(4.0, y - 5.0), Color(0.22, 0.26, 0.28), 0.8)
+		draw_line(f + Vector2(4.0, y), f + Vector2(-4.0, y - 5.0), Color(0.22, 0.26, 0.28), 0.8)
 
 
 ## Leiterseil mit leichtem Durchhang (Parabel).
@@ -129,6 +139,10 @@ func _draw_wire(a: Vector2, b: Vector2, col: Color) -> void:
 		var t := float(i) / 8.0
 		pts.append(a.lerp(b, t) + Vector2(0, sag * 4.0 * t * (1.0 - t) + 6.0))
 	draw_polyline(pts, col, 1.0, true)
+	if col == WIRE:
+		var t := fmod(_phase * 0.55, 1.0)
+		var q := a.lerp(b, t) + Vector2(0, sag * 4.0 * t * (1.0 - t) + 6.0)
+		draw_circle(q, 1.15, Color(1.0, 0.86, 0.43, 0.55))
 
 
 func _draw_dashed(a: Vector2, b: Vector2) -> void:
@@ -151,7 +165,13 @@ func _draw_substation(q: Vector2i, on: bool) -> void:
 		draw_rect(Rect2(o + Vector2(0, -10), Vector2(8, 10)), TRAFO)
 		draw_rect(Rect2(o + Vector2(0, -10), Vector2(8, 3)), TRAFO.lightened(0.25))
 		draw_line(o + Vector2(4, -10), o + Vector2(4, -14), Color(0.85, 0.85, 0.9), 1.2)
+		for rib in 3:
+			draw_line(o + Vector2(1 + rib * 2, -2), o + Vector2(1 + rib * 2, -9), Color(0.20, 0.29, 0.27), 0.7)
+		draw_circle(o + Vector2(4, -15), 1.3, Color(0.86, 0.71, 0.44))
 	draw_line(c + Vector2(-14, -MAST_H + 4), c + Vector2(14, -MAST_H + 4), MAST, 1.6)   # Portal
 	draw_line(c + Vector2(-13, 0), c + Vector2(-13, -MAST_H + 4), MAST, 1.2)
 	draw_line(c + Vector2(13, 0), c + Vector2(13, -MAST_H + 4), MAST, 1.2)
-	draw_circle(c + Vector2(0, -MAST_H + 8), 2.2, Color(0.3, 0.9, 0.35) if on else Color(1.0, 0.2, 0.15))
+	draw_circle(c + Vector2(0, -MAST_H + 8), 2.2 + 0.5 * sin(_phase * 5.0), Color(0.3, 0.9, 0.35) if on else Color(1.0, 0.2, 0.15))
+	for x in [-10.0, 10.0]:
+		draw_line(c + Vector2(x, 2), c + Vector2(x, -7), FENCE, 1.0)
+		draw_circle(c + Vector2(x, -7), 1.0, Color(1.0, 0.77, 0.34))

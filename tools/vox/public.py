@@ -1104,6 +1104,27 @@ def _mound(m, x0, y0, x1, y1, h):
     m.box(mx - 2, y1 - 1, 1, mx + 2, y1, 7, M("pub_wblue"))
 
 
+def _utility_trim(m, w, h, kind):
+    """Kleine lesbare Betriebsdetails: Rohrsammler, Handraeder, Messschrank,
+    Warnmarkierung und Hoflicht. Das Tor in der Mitte bleibt frei."""
+    accent = "pub_wblue" if kind != "sewage" else "pub_sludge2"
+    x1 = min(25, w // 2 - 7)
+    m.box(5, h - 10, 2, x1, h - 7, 5, M("steel_dark"))
+    for x in range(8, x1 - 1, 7):
+        m.box(x, h - 11, 5, x + 2, h - 6, 7, M(accent))
+        m.box(x - 2, h - 9, 7, x + 4, h - 8, 8, M("orange"))
+        m.box(x, h - 9, 8, x + 2, h - 7, 9, M("steel"))
+    sx = w - 22
+    m.box(sx, h - 12, 2, sx + 13, h - 8, 16, M("concrete2"))
+    m.box(sx + 2, h - 8, 8, sx + 11, h - 7, 13, M(accent))
+    for x in range(sx + 4, sx + 10, 3):
+        m.box(x, h - 7, 10, x + 1, h - 6, 11, M("pub_white"))
+    for x in range(6, w - 5, 6):
+        if x < w // 2 - 10 or x > w // 2 + 10:
+            m.box(x, h - 3, 1, x + 3, h - 2, 2, M("yellow"))
+    lamp_post(m, w - 6, h - 5, 1, h=16)
+
+
 def waterworks(v, st, seed):
     """Wasserwerk: Filterhalle (Pumpen), Becken, Reinwasserbehaelter oder Huegel-Hochbehaelter, Brunnenhaeuschen; sechs Grundformen."""
     rng = random.Random(seed)
@@ -1144,6 +1165,7 @@ def waterworks(v, st, seed):
     fence(m, 0, H - 2, 44, H, 1, h=6, mat_f="steel")
     fence(m, 84, H - 2, W, H, 1, h=6, mat_f="steel")
     greenery(m, st, [(124, 90), (4, 50)], rng)
+    _utility_trim(m, W, H, "water")
     return m, {"w": 4, "h": 3, "entrance": [64, H], "delivery": [64, H], "height": 56}
 
 
@@ -1329,6 +1351,7 @@ def water_tank(v, st, seed):
         house(m, st, 40, 40, 62, 62, 1, rng)
         top = 20
     fence(m, 0, H - 2, W, H, 1, h=5, mat_f="steel")
+    _utility_trim(m, W, H, "tank")
     return m, {"w": 2, "h": 2, "entrance": [W // 2, H], "delivery": [W // 2, H], "height": top}
 
 
@@ -1406,6 +1429,7 @@ def sewage_plant(v, st, seed):
     fence(m, 0, H - 2, 44, H, 1, h=6, mat_f="steel")
     fence(m, 84, H - 2, W, H, 1, h=6, mat_f="steel")
     greenery(m, st, [(124, 90), (4, 50)], rng)
+    _utility_trim(m, W, H, "sewage")
     return m, {"w": 4, "h": 3, "entrance": [64, H], "delivery": [64, H], "height": 46}
 
 

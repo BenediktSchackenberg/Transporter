@@ -128,6 +128,24 @@ static func decide(ind: Dictionary) -> Dictionary:
 			given += 1
 	# 1h1) Strom: Netz ueber 85 % ausgelastet oder Betriebe abgeschaltet -> ausbauen (nur mit Reserve)
 	var pw: Dictionary = ind.get("strom", {})
+	var net: Dictionary = pw.get("netz", {})
+	var my_town := str(ind.get("stadt_id", 0))
+	if not net.is_empty() and not bool(net.get("angeschlossen", {}).get(my_town, true)) and (net.get("reparaturen", []) as Array).any(func(r): return not bool(r.get("priorisiert", false))) \
+			and float(ind.haushalt.verfuegbar) > 10000.0:
+		var broken: Dictionary = (net.reparaturen as Array).filter(func(r): return not bool(r.get("priorisiert", false)))[0]
+		actions.insert(0, {"action": "stromstoerung_priorisieren", "trasse": broken.trasse,
+			"reason": "Stromausfall: Wasserwerk, Betriebe und Verkehrssignale schützen"})
+	var line_options: Array = ind.get("stromtrassen", [])
+	if not line_options.is_empty():
+		var line: Dictionary = line_options[0]
+		var cash := float(ind.haushalt.verfuegbar)
+		if cash > float(line.kosten) * (1.15 if str(line.art) == "Stadtanschluss" else 2.0):
+			var line_action := {"action": "stromtrasse_bauen", "option": line.id,
+				"reason": "Stadtanschluss für neue Viertel" if str(line.art) == "Stadtanschluss" else "Zweiter Stromweg für Versorgungssicherheit"}
+			if str(line.art) == "Stadtanschluss":
+				actions.insert(0, line_action)
+			elif actions.size() < MAX_ACTIONS:
+				actions.append(line_action)
 	if actions.size() < MAX_ACTIONS and not pw.is_empty() and not bool(pw.ausbau_laeuft) and (float(pw.auslastung) > 0.85 or int(pw.abgeschaltete_betriebe) > 0) 			and float(ind.haushalt.verfuegbar) > float(pw.ausbau.kosten) * 1.5:
 		actions.append({"action": "expand_power", "reason": "Stromnetz zu %.0f %% ausgelastet, %d Betriebe ohne Strom." % [float(pw.auslastung) * 100.0, int(pw.abgeschaltete_betriebe)]})
 	# 1h1-) Hafen: Einfuhren stauen sich ueber mehr als eine Schiffsladung -> naechste Stufe, wenn die Kasse das 1,5-fache traegt
@@ -325,6 +343,21 @@ static func decide(ind: Dictionary) -> Dictionary:
 			"reason": "Stadtentwicklung: Bedarf %s %.0f Punkte, Vision: %s" % [best_cat, best_need, str(dev.get("vision", ""))], "priority": 60})
 	# Auftrag 22 Phase 8: Versorgung vorausschauend ausbauen (Wasser knapp oder Werk fast ausgelastet; Gleis mit Langsamfahrstelle)
 	var w: Dictionary = ind.get("wasser", {})
+	var mains: Array = ind.get("versorgungsleitungen", [])
+	var chosen := {}
+	for option in mains:
+		if chosen.is_empty() or (str(option.art) == "wasser" and str(chosen.art) != "wasser"):
+			chosen = option
+	if not chosen.is_empty() and budget > float(chosen.kosten) * 1.2:
+		actions.insert(0, {"action": "versorgungsleitung_bauen", "option": chosen.id,
+			"reason": "Neue Straßen und Gebäude an das %snetz anschließen" % ("Frischwasser" if str(chosen.art) == "wasser" else "Abwasser")})
+	var utility_sites: Array = ind.get("versorgungsanlagen_standorte", [])
+	if mains.is_empty() and not w.is_empty() and int(w.get("ohne_anschluss", 0)) >= 20 and budget > 700000.0:
+		for candidate in utility_sites:
+			if str(candidate.typ) == "WT-01":
+				actions.insert(mini(1, actions.size()), {"action": "kommunal_bauen", "typ": "WT-01", "grundstueck": candidate.grundstueck,
+					"reason": "Neue Druckzone und Wasservorrat für die gewachsenen Stadtteile"})
+				break
 	if not w.is_empty() and int(w.get("ausbau_laeuft", 0)) == 0:
 		var why := "Wasserbedarf %.1f m³ bei Leistung %.1f m³ – Engpass vermeiden." % [float(w.get("bedarf_m3", 0.0)), float(w.get("leistung_m3", 0.0))]
 		if float(w.get("fehl_m3", 0.0)) > 0.0:   # echter Mangel: Vorrang vor Routine

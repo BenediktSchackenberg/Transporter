@@ -35,6 +35,8 @@ static func of_town(sim, k: int) -> Dictionary:
 		out["abwasser"] = {"ampel": "warn", "text": "keine Kläranlage"}
 	elif float(pl.get("ueberlauf", 0.0)) > 0.0:
 		out["abwasser"] = {"ampel": "krit", "text": "Überlauf %.1f m³ (%s)" % [float(pl.ueberlauf), str(pl.get("grund", ""))]}
+	elif float(h.get("ohne_kanal_m3", 0.0)) > 0.01:
+		out["abwasser"] = {"ampel": "warn", "text": "%.1f m³ ohne Kanalanschluss" % float(h.ohne_kanal_m3)}
 	else:
 		out["abwasser"] = {"ampel": "ok", "text": "geklärt"}
 	# Muell: ueberquellende Tonnen

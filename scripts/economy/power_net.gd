@@ -1,9 +1,8 @@
 class_name PowerNet
 extends RefCounted
 ## Stromnetz als Graph (Auftrag 22 Phase 3 Schritt 2, docs/INFRASTRUCTURE.md). Knoten: das gemeinsame Kraftwerk ("KW") und je Stadt
-## ein Umspannwerk ("U<k>", neben dem Rathaus). Kanten: Hochspannungstrassen als echte Zellenfolge (Freileitung, gerade Linie,
-## quert Wasser und Bebauung). Startnetz = minimaler Spannbaum ab dem Kraftwerk (kuerzeste Gesamtlaenge), so ist jede Stadt
-## angeschlossen. Eine Stadt bekommt Kraftwerksstrom nur, wenn ihr Umspannwerk ueber intakte Trassen ("ok") mit dem Kraftwerk
+## ein Umspannwerk ("U<k>"). Kanten: Hochspannungstrassen als echte Zellenfolge. Eine Stadt bekommt Kraftwerksstrom nur, wenn
+## ihr Umspannwerk ueber intakte Trassen ("ok") mit dem Kraftwerk
 ## verbunden ist; sonst nur den begrenzten Notstrom (PowerGrid).
 ## Schritt 3: Leitungsschaeden. Taeglich kann eine intakte Trasse reissen (Sturm: starke Boeen, sonst selten durch Alterung). Die
 ## Stelle liegt an einem Mast mit Strassenzufahrt; der Netztrupp der naechsten angeschlossenen Stadt faehrt vom Rathaus hin (echtes
@@ -26,12 +25,14 @@ const LINE_DAYS_MIN := 10
 var sim
 var nodes := {}                       # id -> {id, cell: Vector2i, town: int (-1 = Kraftwerk)}
 var edges: Array = []                 # [{id, a, b, cells: [[x, y], ...], len, state: "ok"|"defekt"}]
-var planned := {}                     # Projekt-ID -> {a, b}: beschlossene Trassen im Bau (Ringschluss)
+var planned := {}                     # Projekt-ID -> {a, b, cells, station}: beschlossene Trassen im Bau
 var repairs := {}                     # Trassen-ID -> {cell: [x, y], road: [x, y], town, vehicle, since, cause}
 var stats := {"schaeden": 0, "reparaturen": 0, "kosten": 0.0, "ausfall_min": 0.0}
 var rng := RandomNumberGenerator.new()   # eigener Zufall: der gemeinsame Strom sim.rng bleibt unveraendert
 var _reach := {}                      # Cache: Knoten-ID -> true (vom Kraftwerk erreichbar)
 var _dirty := true
+var _local_cache := {}
+var _local_keys := {}
 
 
 func setup(simulation) -> void:
@@ -43,38 +44,193 @@ func built() -> bool:
 	return not nodes.is_empty()
 
 
-## Netz einmalig anlegen (nachdem Kraftwerk und Orte stehen; auch fuer alte Spielstaende ohne Netz).
+## Das Startgebiet hat einen Anschluss; neue und weitere Staedte entscheiden selbst ueber ihre Trasse.
+## Gespeicherte Netze bleiben erhalten. Spaeter gegruendete Orte erhalten nur einen Knoten.
 func ensure() -> void:
-	if built() or sim.plant == null or int(sim.plant.building) < 0:
+	if sim.plant == null or int(sim.plant.building) < 0:
 		return
-	nodes = {"KW": {"id": "KW", "cell": _center(int(sim.plant.building)), "town": -1}}
+	var fresh := not built()
+	if fresh:
+		nodes = {"KW": {"id": "KW", "cell": _center(int(sim.plant.building)), "town": -1}}
+		edges = []
 	for k in maxi(1, sim.towns.count()):
-		nodes["U%d" % k] = {"id": "U%d" % k, "cell": _substation_cell(k), "town": k}
-	edges = []
-	# Prim: vom Kraftwerk aus immer die kuerzeste Verbindung eines angeschlossenen zu einem neuen Knoten
-	var inside := {"KW": true}
-	while inside.size() < nodes.size():
-		var best := []
-		var best_d := 1 << 30
-		for a in inside:
-			for b in nodes:
-				if inside.has(b):
-					continue
-				var d := _dist(nodes[a].cell, nodes[b].cell)
-				if d < best_d or (d == best_d and str(b) < str(best[1])):
-					best_d = d
-					best = [a, b]
-		inside[best[1]] = true
-		add_edge(str(best[0]), str(best[1]))
-	_dirty = true
+		var id := "U%d" % k
+		if not nodes.has(id):
+			nodes[id] = {"id": id, "cell": _substation_cell(k), "town": k}
+			_dirty = true
+		elif sim.town_ready(k) and not connected(k) and not planned.values().any(func(p): return str(p.b) == id):
+			# In der Wildnis wird das Rathaus erst spaeter gesetzt; bis zum Trassenbau folgt
+			# der freie Umspannwerk-Knoten diesem Ort statt dem alten Ankunftsplatz.
+			nodes[id].cell = _substation_cell(k)
+	if fresh and not sim.wildnis:
+		add_edge("KW", "U0")
 
 
-func add_edge(a: String, b: String) -> Dictionary:
-	var cells := line_cells(nodes[a].cell, nodes[b].cell)
+func add_edge(a: String, b: String, route: Array = []) -> Dictionary:
+	var cells := route if not route.is_empty() else line_cells(nodes[a].cell, nodes[b].cell)
 	var e := {"id": "L%d" % (edges.size() + 1), "a": a, "b": b, "cells": cells.map(func(c): return [c.x, c.y]), "len": cells.size(), "state": "ok"}
 	edges.append(e)
 	_dirty = true
+	_local_keys.clear()
 	return e
+
+
+## Drei begruendbare Bauvarianten fuer den Buergermeister. Kosten und Siedlungskonflikte
+## stammen aus der tatsaechlichen Trasse, nicht aus einem pauschalen Ausbauknopf.
+func connection_options(k: int) -> Array:
+	ensure()
+	var target := "U%d" % k
+	if not nodes.has(target) or planned.values().any(func(p): return str(p.b) == target):
+		return []
+	var connected_now := connected(k)
+	if connected_now:
+		var safe := true
+		for e in edges:
+			if not _bfs("KW", str(e.id)).has(target):
+				safe = false
+				break
+		if safe:
+			return []
+	var stations: Array = [nodes[target].cell] if connected_now else _station_candidates(k)
+	var options: Array = []
+	for origin in nodes:
+		if origin == target or (origin != "KW" and not connected(int(nodes[origin].town))):
+			continue
+		if edges.any(func(e): return (str(e.a) == origin and str(e.b) == target) or (str(e.b) == origin and str(e.a) == target)):
+			continue
+		for station in stations:
+			for variant in 3:
+				var cells := _line_route(nodes[origin].cell, station, variant)
+				var conflicts := _route_conflicts(cells)
+				var cost := snappedf(float(cells.size()) * LINE_EUR_PER_CELL + float(conflicts) * 160.0, 100.0)
+				options.append({"id": "%s:%d:%d:%d" % [origin, station.x, station.y, variant], "a": origin, "b": target,
+					"station": [station.x, station.y], "cells": cells.map(func(q): return [q.x, q.y]), "felder": cells.size(),
+					"kosten": cost, "tage": maxi(LINE_DAYS_MIN, ceili(float(cells.size()) / float(LINE_CELLS_PER_DAY))),
+					"konflikte": conflicts, "art": "Ringschluss" if connected_now else "Stadtanschluss"})
+	options.sort_custom(func(a, b): return float(a.kosten) < float(b.kosten))
+	var out: Array = []
+	for option in options:
+		if out.size() >= 3:
+			break
+		if not out.any(func(x): return x.cells == option.cells):
+			out.append(option)
+	return out
+
+
+func option_brief(k: int) -> Array:
+	return connection_options(k).map(func(o): return {"id": o.id, "art": o.art, "von": _label(str(o.a)), "umspannwerk": o.station,
+		"felder": o.felder, "kosten": o.kosten, "tage": o.tage, "konflikte": o.konflikte})
+
+
+func request_line(k: int, option_id: String, reason: String) -> Dictionary:
+	var option := {}
+	for o in connection_options(k):
+		if str(o.id) == option_id:
+			option = o
+			break
+	if option.is_empty():
+		return {"ok": false, "msg": "Trasse nicht verfügbar. Wähle eine ID aus stromtrassen."}
+	var M: Mayor = sim.towns.mayor(k)
+	if M.available_budget() < float(option.kosten):
+		return {"ok": false, "msg": "Trasse kostet %s, verfügbar %s." % [Catalog.money(float(option.kosten)), Catalog.money(M.available_budget())]}
+	var vote: Dictionary = M.civic_vote("erschliessung", float(option.kosten))
+	if not bool(vote.passed):
+		return {"ok": false, "msg": "Rat lehnt die Stromtrasse ab: %s" % str(vote.text)}
+	var prj: Dictionary = M.add_works_project("trasse", "%s|%s" % [option.a, option.b], float(option.kosten), int(option.tage),
+		{"stahl": maxi(1, int(option.felder) / 8), "betonbauteile": maxi(1, int(option.felder) / 12)},
+		"Stromtrasse %s: %s" % [option.art, reason.left(140)])
+	planned[str(prj.id)] = {"a": option.a, "b": option.b, "cells": option.cells, "station": option.station}
+	sim.log_event("%s: %s zum Umspannwerk beauftragt: %d Felder, %s, %d Tage. %s" % [sim.towns.name_of(k),
+		option.art, int(option.felder), Catalog.money(float(option.kosten)), int(option.tage), reason.left(100)], "info")
+	return {"ok": true, "msg": "Trasse %s als Projekt %s ausgeschrieben." % [option.id, prj.id], "projekt": prj.id}
+
+
+func _station_candidates(k: int) -> Array:
+	var C: CityData = sim.city
+	var base: Vector2i = nodes["U%d" % k].cell
+	var out: Array = []
+	for d in [Vector2i(4, 0), Vector2i(-4, 0), Vector2i(0, 4), Vector2i(0, -4),
+		Vector2i(4, 4), Vector2i(-4, 4), Vector2i(4, -4), Vector2i(-4, -4), Vector2i.ZERO]:
+		var q: Vector2i = base + d
+		if C.inside(q) and C.building_at[C.idx(q)] < 0 and not C.is_road(q) and C.g(q) != CityData.G.WATER and C.town_of(q) == k and _road_near(q).x >= 0:
+			out.append(q)
+		if out.size() >= 4:
+			break
+	if out.is_empty():
+		out.append(base)
+	return out
+
+
+func _line_route(a: Vector2i, b: Vector2i, variant: int) -> Array:
+	if variant == 0:
+		return line_cells(a, b)
+	var mid := (a + b) / 2
+	var delta := b - a
+	var normal := Vector2i(-signi(delta.y), signi(delta.x)) * (12 if variant == 1 else -12)
+	var via := mid + normal
+	var first := line_cells(a, via)
+	first.pop_back()
+	return first + line_cells(via, b)
+
+
+func _route_conflicts(cells: Array) -> int:
+	var C: CityData = sim.city
+	var n := 0
+	for i in range(1, cells.size() - 1, MAST_EVERY):
+		var q: Vector2i = cells[i]
+		if not C.inside(q) or C.g(q) == CityData.G.WATER:
+			n += 4
+		elif C.building_at[C.idx(q)] >= 0:
+			n += 3
+	return n
+
+
+## Ortsnetz auf den befahrbaren Strassen. Damit ist ein Parzellen-Haekchen allein
+## kein Stromanschluss fuer einen abgetrennten neuen Stadtteil.
+func local_roads(k: int) -> Dictionary:
+	ensure()
+	var node := "U%d" % k
+	if not nodes.has(node):
+		return {}
+	var C: CityData = sim.city
+	var key := "%d:%d:%s" % [k, C.road_count, str(nodes[node].cell)]
+	if str(_local_keys.get(k, "")) != key:
+		_local_cache.erase(k)
+		_local_keys[k] = key
+	if _local_cache.has(k):
+		return _local_cache[k]
+	var root: Vector2i = nodes[node].cell
+	var start := Vector2i(-1, -1)
+	var best := 999
+	for dy in range(-6, 7):
+		for dx in range(-6, 7):
+			var q := root + Vector2i(dx, dy)
+			var dist := absi(dx) + absi(dy)
+			if dist < best and C.is_road(q):
+				best = dist
+				start = q
+	var found := {}
+	if start.x >= 0:
+		found[start] = true
+		var todo: Array = [start]
+		var i := 0
+		while i < todo.size() and i < 20000:
+			var here: Vector2i = todo[i]
+			i += 1
+			for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+				var next: Vector2i = here + d
+				if not found.has(next) and C.is_road(next) and C.town_of(next) == k:
+					found[next] = true
+					todo.append(next)
+	_local_cache[k] = found
+	return found
+
+
+func distributed(k: int, building_id: int) -> bool:
+	var b: Dictionary = sim.city.building(building_id)
+	if b.is_empty():
+		return false
+	return local_roads(k).has(Vector2i(b.road))
 
 
 func edge(id: String) -> Dictionary:
@@ -209,6 +365,31 @@ func _dispatch(id: String) -> void:
 	v["edge"] = id
 	rp.town = best
 	rp.vehicle = int(v.id)
+	if bool(rp.get("urgent", false)):
+		v["urgent"] = true
+
+
+## Buergermeister kann bei einem Ausfall einen zusaetzlichen Bereitschaftstrupp bezahlen.
+## Der laufende Netztrupp arbeitet dann vor Ort schneller; die Anfahrt bleibt sichtbar.
+func prioritize_repair(k: int, id: String) -> Dictionary:
+	if not repairs.has(id):
+		return {"ok": false, "msg": "Diese Trasse ist nicht defekt."}
+	var rp: Dictionary = repairs[id]
+	if bool(rp.get("urgent", false)):
+		return {"ok": false, "msg": "Trasse %s hat bereits Vorrang." % id}
+	var M: Mayor = sim.towns.mayor(k)
+	var cost := 5000.0
+	if M.available_budget() < cost:
+		return {"ok": false, "msg": "Für zusätzliche Netzkräfte fehlen %s." % Catalog.money(cost)}
+	sim.economy.transfer(Towns.account_of(k), "S0", cost)
+	rp["urgent"] = true
+	for v in sim.fleet.vehicles:
+		if v.kind == "netztrupp" and str(v.get("edge", "")) == id:
+			v["urgent"] = true
+			if str(v.phase) == "arbeit":
+				v.until = maxf(sim.game_min + 1.0, float(v.until) - REPAIR_MIN * 0.5)
+	sim.log_event("%s priorisiert die Reparatur der Stromtrasse %s: zusätzlicher Bereitschaftstrupp, %s." % [sim.towns.name_of(k), id, Catalog.money(cost)], "info")
+	return {"ok": true, "msg": "Reparatur %s hat Vorrang; Netztrupp arbeitet schneller." % id}
 
 
 ## Vom Netztrupp nach getaner Arbeit vor Ort gemeldet.
@@ -284,7 +465,11 @@ func on_line_done(prj: Dictionary) -> void:
 	if p.is_empty():
 		return
 	planned.erase(str(prj.id))
-	var e := add_edge(str(p.a), str(p.b))
+	if p.has("station") and str(p.b).begins_with("U"):
+		var cell: Array = p.station
+		nodes[str(p.b)].cell = Vector2i(int(cell[0]), int(cell[1]))
+	var route: Array = (p.get("cells", []) as Array).map(func(a): return Vector2i(int(a[0]), int(a[1])))
+	var e := add_edge(str(p.a), str(p.b), route)
 	sim.log_event("Stromnetz: Trasse %s (%s – %s) in Betrieb – das Netz ist jetzt ringförmig und übersteht einen Leitungsschaden." % [
 		e.id, _label(str(p.a)), _label(str(p.b))], "good")
 
@@ -327,7 +512,8 @@ func summary() -> Dictionary:
 		towns[str(k)] = connected(k)
 	return {"trassen": edges.size(), "laenge_felder": edges.reduce(func(s, e): return s + int(e.len), 0),
 		"defekt": edges.filter(func(e): return str(e.state) != "ok").map(func(e): return str(e.id)), "angeschlossen": towns,
-		"reparaturen": repairs.keys().map(func(id): return {"trasse": id, "ursache": str(repairs[id].cause), "trupp": sim.towns.name_of(int(repairs[id].town)) if int(repairs[id].town) >= 0 else "-"}),
+		"reparaturen": repairs.keys().map(func(id): return {"trasse": id, "ursache": str(repairs[id].cause),
+			"priorisiert": bool(repairs[id].get("urgent", false)), "trupp": sim.towns.name_of(int(repairs[id].town)) if int(repairs[id].town) >= 0 else "-"}),
 		"statistik": stats, "im_bau": planned.keys().map(func(id): return {"projekt": id, "von": _label(str(planned[id].a)), "nach": _label(str(planned[id].b))})}
 
 
