@@ -11,6 +11,10 @@ const DEPTS := {
 	"strassen": {"label": "Straßenmeisterei", "share": 0.25, "aufgabe": "Straßenwartung (ein Bautrupp je 4 Kräfte)"},
 	"pruefdienst": {"label": "Prüfdienst", "share": 0.10, "aufgabe": "Prüfungen bei Firmen (2 je Prüfer und Monat)"},
 }
+## 19.11.: Wesen nennen Abteilungen frei ("rathaus" – Petra Engel); naheliegende Namen auf die vier Abteilungen abbilden.
+const DEPT_ALIASES := {"rathaus": "verwaltung", "allgemein": "verwaltung", "buergeramt": "verwaltung", "bürgeramt": "verwaltung",
+	"baugenehmigung": "bauamt", "strasse": "strassen", "straße": "strassen", "straßen": "strassen", "strassenmeisterei": "strassen",
+	"straßenmeisterei": "strassen", "pruefung": "pruefdienst", "prüfdienst": "pruefdienst", "pruefer": "pruefdienst", "prüfer": "pruefdienst"}
 const MAX_PER_ACTION := 5
 const MIN_PER_DEPT := 1
 const MAX_TOTAL := 120
@@ -120,6 +124,7 @@ func vacancies() -> int:
 ## Einstellen: Soll-Bestand der Abteilung erhoehen. Besetzt wird zum Monatsende aus den Arbeitslosen.
 func hire(dept: String, n: int, who: String = "") -> Dictionary:
 	ensure_targets()
+	dept = DEPT_ALIASES.get(dept.strip_edges().to_lower(), dept.strip_edges().to_lower())
 	if not DEPTS.has(dept):
 		return _refuse("Unbekannte Abteilung '%s' (%s)." % [dept, ", ".join(DEPTS.keys())])
 	if n < 1 or n > MAX_PER_ACTION:
@@ -142,6 +147,7 @@ func hire(dept: String, n: int, who: String = "") -> Dictionary:
 ## Entlassen: Soll-Bestand senken; die Entlassung wirkt zum Monatsende (Arbeitsmarkt).
 func dismiss(dept: String, n: int) -> Dictionary:
 	ensure_targets()
+	dept = DEPT_ALIASES.get(dept.strip_edges().to_lower(), dept.strip_edges().to_lower())
 	if not DEPTS.has(dept):
 		return _refuse("Unbekannte Abteilung '%s' (%s)." % [dept, ", ".join(DEPTS.keys())])
 	if n < 1 or n > MAX_PER_ACTION:

@@ -6412,6 +6412,8 @@ func test_town_hall() -> void:
 	s.economy.transfer("X0", "P0", 500000.0)
 	var r: Dictionary = s.mayor.execute({"action": "hire_staff", "abteilung": "pruefdienst", "anzahl": 1, "reason": "Prüfungen"})
 	ok(r.ok and s.mayor.decisions.back().action == "hire_staff", "Bürgermeister kann einstellen und es wird protokolliert")
+	var ra: Dictionary = s.mayor.execute({"action": "hire_staff", "abteilung": "Rathaus", "anzahl": 1, "reason": "offene Stellen"})
+	ok(ra.ok and "Verwaltung" in str(ra.msg), "Abteilung „Rathaus“ wird zur Verwaltung: " + str(ra.msg).left(70))
 	ok(s.mayor.indicators().has("rathaus") and s.mayor.indicators().rathaus.abteilungen.has("bauamt"), "Beobachtung enthält das Rathaus")
 	ok("hire_staff" in Mayor.SCHEMA and "dismiss_staff" in Mayor.SCHEMA, "Aktionen stehen im Schema (und damit im Prompt)")
 	# Speichern und Laden
