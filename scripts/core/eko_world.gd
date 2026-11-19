@@ -2279,7 +2279,14 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 			a.erase("aktion")
 			a.erase("warum")
 	if a is Dictionary and str(a.get("action", "")).to_lower() in OVERVIEW_WORDS and homes.sites.has(str(a.get("baustelle", ""))):
-		return _site_status(cid, str(a.baustelle))   # 19.11.: Viktor fragte 6x status {baustelle: BS12} und bekam nur die Firmenlage
+		return _site_status(cid, str(a.baustelle))
+	if a is Dictionary and str(a.get("action", "")).to_lower() in ["baustelle_status", "baustellen", "baustellen_status", "baustelle"]:   # 19.11.: Greta
+		var mine: Array = homes.open_sites(cid)
+		if homes.sites.has(str(a.get("baustelle", a.get("id", "")))):
+			return _site_status(cid, str(a.get("baustelle", a.get("id", ""))))
+		if mine.is_empty():
+			return {"ok": true, "msg": "Keine offene Baustelle. Neue: haus_bauen, buergeramt_bauen, strasse_bauen."}
+		return {"ok": true, "msg": " | ".join(mine.map(func(x): return str(_site_status(cid, str(x.id)).msg)))}   # 19.11.: Viktor fragte 6x status {baustelle: BS12} und bekam nur die Firmenlage
 	if not (a is Dictionary) or str(a.get("action", "")).to_lower() in OVERVIEW_WORDS:   # 16./17.11.: "Firmenlage prüfen", action "status"
 		return _firm_overview(cid)
 	var redirect := _firm_redirect(b, cid, a)
