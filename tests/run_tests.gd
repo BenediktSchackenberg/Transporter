@@ -8807,6 +8807,10 @@ func test_wildnis_found() -> void:
 	var ba: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "buergeramt_bauen"}})
 	ok(ba.ok, "Bürgeramt geplant: %s" % str(ba.msg).left(100))
 	ok(not str(E.urgency(B).grund).contains("buergeramt_bauen"), "nach dem Auftrag nicht mehr dringend")
+	ok(str(E.urgency(B).grund).contains("baustelle"), "Bürgeramt ohne Material: dringend mit Sammelkauf (%s)" % str(E.urgency(B).grund).left(80))
+	var bulk: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "baustelle": str(ba.baustelle)}})
+	ok(bulk.ok and E.homes.waiting_goods(cid).size() >= 4, "hub_buy {baustelle} kauft alles Fehlende (%s)" % str(bulk.msg).left(90))
+	ok(str(E.urgency(B).grund).contains("abholen"), "danach: Material abholen")
 	if not ba.ok:
 		return
 	var hs: Dictionary = E.homes.sites[ba.baustelle]

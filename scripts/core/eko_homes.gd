@@ -638,9 +638,9 @@ func next_step(cid: int) -> String:
 			var m := missing(s)
 			if m.is_empty():
 				continue   # Material eben angekommen – der Bau beginnt im naechsten Takt (18.11.: Index-Fehler)
-			var item: String = m.keys()[0]
-			return "Baustelle %s braucht Material: Firma {aktion: {action: \"hub_buy\", item: \"%s\", qty: %d}} – dann mit dem LKW holen. Fehlt insgesamt: %s." % [
-				s.id, item, int(m[item]), ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x]))]
+			# 19.11.: qwen3.5:9b kaufte die fuenf Materialien des Buergeramts nie einzeln – ein Schritt kauft alles Fehlende
+			return "Baustelle %s braucht Material (%s): alles auf einmal kaufen – Firma {aktion: {action: \"hub_buy\", baustelle: \"%s\"}} – dann mit dem LKW holen (LKW {ziel: \"grosslager\"})." % [
+				s.id, ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x])), s.id]
 	# 5) Strasse zum Grosslager, Gewerbe, Wohnraum
 	if sim.wildnis and sim.town_ready(k) and not open.any(func(s): return s.typ == "strasse"):
 		var link: Dictionary = w.settle.road_link(k)

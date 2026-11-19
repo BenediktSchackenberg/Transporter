@@ -749,6 +749,18 @@ func urgency(b: Dictionary) -> Dictionary:
 	if sim.wildnis and home_k >= 0 and settle.founded(home_k) and not sim.town_ready(home_k) 			and not homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) == "buergeramt"):
 		# 19.11.: qwen3.5:9b lief drei Spieltage herum statt das Buergeramt anzulegen – ohne es waechst nichts
 		return {"prioritaet": 2, "grund": "Deine Siedlung hat noch kein Bürgeramt (ohne es keine Stadt, keine Siedler, keine Lieferungen): Firma {aktion: {action: \"buergeramt_bauen\"}}"}
+	if sim.wildnis and home_k >= 0 and not sim.town_ready(home_k):
+		for st in homes.sites.values():   # 19.11.: Buergeramt wartete 20 Minuten auf Material, keiner kaufte
+			if int(st.cid) == cid and str(st.typ) == "buergeramt" and str(st.status) == "material":
+				var miss: Dictionary = homes.missing(st)
+				var open_buy := false
+				var waiting: Dictionary = homes.waiting_goods(cid)
+				for item in miss:
+					open_buy = open_buy or int(miss[item]) > int(waiting.get(item, 0))
+				if open_buy:
+					return {"prioritaet": 2, "grund": "Bürgeramt %s wartet auf Material: alles kaufen – Firma {aktion: {action: \"hub_buy\", baustelle: \"%s\"}}" % [st.id, st.id]}
+				if not miss.is_empty():
+					return {"prioritaet": 2, "grund": "Material für Bürgeramt %s ist gekauft – abholen: LKW {ziel: \"grosslager\"}" % st.id}
 	for k in sim.contracts.values():
 		if k.owner != cid or k.status not in ["accepted", "assigned", "loading", "in_transit"]:
 			continue
@@ -2380,6 +2392,27 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", "")), "pending": bool(r.get("pending", false))}
 
 
+## Alles Fehlende einer Baustelle am Grosslager kaufen (abzueglich bereits gekaufter, noch abzuholender Ware). Abholen bleibt eigener Schritt.
+func _buy_for_site(b: Dictionary, cid: int, sid: String) -> Dictionary:
+	var st: Dictionary = homes.sites[sid]
+	if int(st.cid) != cid:
+		return {"ok": false, "msg": "Baustelle %s gehört dir nicht." % sid}
+	var miss: Dictionary = homes.missing(st)
+	var waiting: Dictionary = homes.waiting_goods(cid)
+	var parts: Array = []
+	var ok := false
+	for item in miss:
+		var qty := int(miss[item]) - int(waiting.get(item, 0))
+		if qty <= 0:
+			continue
+		var r := _firm_action_inner(b, {"aktion": {"action": "hub_buy", "item": item, "qty": qty}})
+		ok = ok or bool(r.get("ok", false))
+		parts.append("%s: %s" % [item, str(r.get("msg", "")).left(70)])
+	if parts.is_empty():
+		return {"ok": true, "msg": "Für Baustelle %s ist alles gekauft – jetzt abholen: LKW {ziel: \"grosslager\"}." % sid if not miss.is_empty() else "Baustelle %s hat alles Material." % sid}
+	return {"ok": ok, "msg": "Material für %s: %s. Jetzt abholen: LKW {ziel: \"grosslager\"}." % [sid, " | ".join(parts)]}
+
+
 func _firm_metrics(cid: int) -> Dictionary:
 	var c: Company = sim.company(cid)
 	return {"bargeld": int(c.ledger.cash), "gewinn": int(c.ledger.profit()), "umsatz": int(c.ledger.revenue()),
@@ -2407,6 +2440,8 @@ const FIRM_HUB_INFO := ["hub_status", "grosslager", "großlager", "lager_status"
 
 func _firm_redirect(b: Dictionary, cid: int, a: Dictionary) -> Dictionary:
 	var act := str(a.get("action", "")).to_lower().strip_edges()
+	if act in ["hub_buy", "buy_material", "material_kaufen"] and homes.sites.has(str(a.get("baustelle", ""))):
+		return _buy_for_site(b, cid, str(a.baustelle))
 	if act in FIRM_SETTLE:
 		var r := input(str(b.name), "Siedlung", a)
 		r["msg"] = "(Siedlung ist eine eigene Handlung: Siedlung {feld: [x, y]}, keine Firmen-Aktion.) " + str(r.get("msg", ""))
