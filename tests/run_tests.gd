@@ -8801,9 +8801,11 @@ func test_wildnis_found() -> void:
 	ok(not s.town_ready(k) and int(s.city.towns[k].get("town_hall", -1)) < 0, "noch keine Stadt (kein Bürgeramt)")
 	ok(s.towns.get_t(k).center == Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1])), "Towns-Register kennt die neue Mitte")
 	ok((s.settlements[str(k)].plots as Array).size() >= 2, "Bauland um den Hof (%d Grundstücke)" % (s.settlements[str(k)].plots as Array).size())
+	ok(int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("buergeramt_bauen"), "gegründet ohne Bürgeramt: dringend mit Aktion")
 	# Buergeramt: Material kaufen, selbst abholen, selbst bauen
 	var ba: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "buergeramt_bauen"}})
 	ok(ba.ok, "Bürgeramt geplant: %s" % str(ba.msg).left(100))
+	ok(not str(E.urgency(B).grund).contains("buergeramt_bauen"), "nach dem Auftrag nicht mehr dringend")
 	if not ba.ok:
 		return
 	var hs: Dictionary = E.homes.sites[ba.baustelle]

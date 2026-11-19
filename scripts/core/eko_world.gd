@@ -745,6 +745,10 @@ func urgency(b: Dictionary) -> Dictionary:
 	if cid < 0:
 		return {"prioritaet": 0, "grund": ""}
 	var best := {"prioritaet": 0, "grund": ""}
+	var home_k: int = sim.company(cid).home_town
+	if sim.wildnis and home_k >= 0 and settle.founded(home_k) and not sim.town_ready(home_k) 			and not homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) == "buergeramt"):
+		# 19.11.: qwen3.5:9b lief drei Spieltage herum statt das Buergeramt anzulegen – ohne es waechst nichts
+		return {"prioritaet": 2, "grund": "Deine Siedlung hat noch kein Bürgeramt (ohne es keine Stadt, keine Siedler, keine Lieferungen): Firma {aktion: {action: \"buergeramt_bauen\"}}"}
 	for k in sim.contracts.values():
 		if k.owner != cid or k.status not in ["accepted", "assigned", "loading", "in_transit"]:
 			continue
