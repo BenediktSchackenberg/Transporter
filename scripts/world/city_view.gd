@@ -9,6 +9,7 @@ const GFX := "res://assets/gfx/"
 const STRIP := 64                          # Breite der Tiefensortierstreifen in Pixeln
 
 var sim: Simulation
+var entity_view: EntityView = null      # Auswahl/Hover fuer Beschriftungen der Wesen (GameSession setzt sie, ffedb9c)
 var man: Dictionary                        # assets/iso/manifest.json
 var ground: TileMapLayer
 var buildings_node := Node2D.new()
