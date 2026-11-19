@@ -265,6 +265,8 @@ func lose_worker(w: Worker, reason: String) -> void:
 func can_take(w: Worker, kind: String) -> String:
 	if w.lost:
 		return "%s ist nicht mehr verfügbar." % w.name
+	if sim.eko != null and sim.eko.conflict.has_worker(w.id):
+		return "%s ist für den Stadtschutz mobilisiert." % w.name
 	if w.role == "foreman":
 		return "%s ist Vorarbeiter und führt selbst keine Aufgaben aus." % w.name
 	if w.task_id != "" and tasks.has(w.task_id) and not tasks[w.task_id].is_final() and tasks[w.task_id].kind != "gehen" and not tasks[w.task_id].is_filler():
@@ -411,6 +413,8 @@ func _walkable_near(cell: Vector2i) -> Vector2i:
 func update(dt: float) -> void:
 	for w in workers.values():
 		if w.lost:
+			continue
+		if sim.eko != null and sim.eko.conflict.has_worker(w.id):
 			continue
 		if w.vehicle_id >= 0 and sim.vehicles.has(w.vehicle_id):
 			w.pos = sim.vehicles[w.vehicle_id].pos
@@ -785,6 +789,8 @@ func idle_tick(now: float) -> void:
 			continue
 		var given := 0
 		for w in employed(c.id):
+			if sim.eko != null and sim.eko.conflict.has_worker(w.id):
+				continue
 			if w.role != "worker" or w.lost or given >= 2:
 				continue
 			var t: WorkerTask = tasks.get(w.task_id)
@@ -836,7 +842,7 @@ func _idle_job(c: Company, w: Worker, now: float) -> WorkerTask:
 	var rivals: Array = sim.companies.filter(func(o): return o.id != cid and o.is_active())
 	if not rivals.is_empty():
 		var roll: float = sim.rng.randf()
-		var aggressive: bool = c.personality == "risikospieler" and c.ledger.cash > 15000.0 and float(cooldowns.get("block:%d" % cid, 0.0)) <= now
+		var aggressive: bool = c.personality == "risikospieler" and str(sim.eko.conflict.strategy(cid).haltung) == "krieg" and c.ledger.cash > 15000.0 and float(cooldowns.get("block:%d" % cid, 0.0)) <= now
 		if aggressive and roll < idle_aggression:
 			var targets := rivals.filter(func(o): return float(cooldowns.get("block:%d:%d" % [cid, o.id], 0.0)) <= now and o.protected_until <= now)
 			if not targets.is_empty():

@@ -222,11 +222,21 @@ COMPANY_TOOLS = [
         "worker_id": {"type": "string"}}, "required": ["worker_id"]}},
     {"name": "repair_vehicle", "description": "Eigenen LKW reparieren.", "parameters": {"type": "object", "properties": {
         "vehicle_id": {"type": "integer"}}, "required": ["vehicle_id"]}},
+    {"name": "city_strategy", "description": "Eigene Stadtform, Wirtschaftsrichtung und Haltung zu Rivalen festlegen. Frieden ist eine vollwertige Strategie.", "parameters": {"type": "object", "properties": {
+        "form": {"type": "string", "enum": ["hafenort", "buchtenstadt", "gartenstadt", "hangstadt", "flussstadt", "marktort"]},
+        "wirtschaft": {"type": "string"}, "haltung": {"type": "string", "enum": ["frieden", "verteidigung", "krieg"]},
+        "rival": {"type": "integer"}, "begruendung": {"type": "string"}}, "required": ["haltung"]}},
+    {"name": "mobilize_worker", "description": "Eigenen freien Mitarbeiter zur Stadtwache machen; weapon ist ein fertiger Entwurf aus der Waffenschmiede.", "parameters": {"type": "object", "properties": {
+        "worker_id": {"type": "string"}, "weapon": {"type": "string"}}, "required": ["worker_id"]}},
+    {"name": "order_assault", "description": "Bewaffnete Truppe gegen eine andere gegründete KI-Stadt senden. Optional ein gegnerisches Gebäude oder Fahrzeug als asset angeben. Nur bei Haltung krieg.", "parameters": {"type": "object", "properties": {
+        "target": {"type": "integer"}, "asset": {"type": "string"}}, "required": ["target"]}},
+    {"name": "order_retreat", "description": "Laufenden Angriff abbrechen und zur Verteidigung zurückkehren.", "parameters": {"type": "object", "properties": {}}},
 ]
 TOOLS.extend(COMPANY_TOOLS)
 COMPANY_TOOL_ACTIONS = {"review_company_plan": "review_plan", "dispatch_policy": "set_dispatch_policy",
                         "hire_worker": "recruit_worker", "accept_contract": "accept_contract", "buy_vehicle": "buy_vehicle",
-                        "repair_vehicle": "repair_vehicle"}
+                        "repair_vehicle": "repair_vehicle", "city_strategy": "set_city_strategy",
+                        "mobilize_worker": "mobilize_worker", "order_assault": "order_assault", "order_retreat": "order_retreat"}
 
 
 class ModelGlitch(RuntimeError):
@@ -477,7 +487,9 @@ class Agent:
                          "eine angenommene Aktion ist noch kein verdientes Geld. Bevor du baust oder plauderst, "
                          "pruefe dringende Lieferungen und Liquiditaet. Vermeide wiederholte Beobachtungen ohne Entscheidung.")
             lines.append("Nutze die direkten Werkzeuge company_plan, review_company_plan, dispatch_policy, accept_contract, buy_vehicle, "
-                         "hire_worker und repair_vehicle. Die Firmenbeobachtung zeigt transportchancen mit geschaetztem Deckungsbeitrag, "
+                         "hire_worker, repair_vehicle und city_strategy. Krieg ist optional: Frieden, Handel und Kooperation koennen dauerhaft bestehen. "
+                         "Bei Bedrohung mobilize_worker nutzen; bewaffnete Angriffe brauchen eine eigene Waffenschmiede, fertige Waffen und order_assault. "
+                         "Die Firmenbeobachtung zeigt transportchancen mit geschaetztem Deckungsbeitrag, "
                          "entscheidungsfolgen und dringlichkeit. Gib der Routine klare Grenzen und pruefe deinen Plan taeglich.")
             if getattr(self.args, "strategy", ""):
                 lines.append("Deine eigene Unternehmensstrategie: " + self.args.strategy[:400])

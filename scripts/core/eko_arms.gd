@@ -588,7 +588,7 @@ func damage_building(bd: Dictionary, dmg: float, by: Dictionary, from: Vector2i)
 	var k: int = _sim().towns.of_building(bid)
 	if fortified.has(str(bid)):
 		dmg *= 0.5
-	if bool(walls.get(str(k), {}).get("fertig", false)) and not _town_rect(k).has_point(from):
+	if bool(walls.get(str(k), {}).get("fertig", false)) and not bool(walls.get(str(k), {}).get("durchbruch", false)) and not _town_rect(k).has_point(from):
 		dmg *= 0.3
 	var before := condition_of(bid)
 	_set_condition(bid, before - dmg)
@@ -771,14 +771,17 @@ func office_action(b: Dictionary, k: int, a: Dictionary) -> Dictionary:
 		return _rebuild(b, bd, "Stadtkasse", func(cost): _sim().economy.transfer(acct, "K0", cost), cash)
 	var art := str(a.get("art", ""))
 	if art == "stadtmauer":
-		if walls.has(str(k)):
+		var repair: bool = bool(walls.get(str(k), {}).get("durchbruch", false))
+		if walls.has(str(k)) and not repair:
 			return {"ok": false, "msg": "Die Stadtmauer ist schon gebaut oder im Bau."}
-		if cash < WALL_COST:
-			return {"ok": false, "msg": "Die Stadtmauer kostet %s, die Stadtkasse hat %s." % [Catalog.money(WALL_COST), Catalog.money(cash)]}
-		_sim().economy.transfer(acct, "K0", WALL_COST)
-		walls[str(k)] = {"fertig_tag": _day() + WALL_DAYS, "fertig": false}
-		_sim().log_event("%s lässt eine Stadtmauer um %s bauen (%d Tage)." % [b.name, _sim().towns.name_of(k), WALL_DAYS], "info")
-		return {"ok": true, "msg": "Stadtmauer beauftragt: %s, fertig in %d Tagen. Durchlass nur an den Straßen." % [Catalog.money(WALL_COST), WALL_DAYS]}
+		var cost: float = WALL_COST * (0.5 if repair else 1.0)
+		var days: int = maxi(1, int(WALL_DAYS / 2)) if repair else WALL_DAYS
+		if cash < cost:
+			return {"ok": false, "msg": "Die Stadtmauer kostet %s, die Stadtkasse hat %s." % [Catalog.money(cost), Catalog.money(cash)]}
+		_sim().economy.transfer(acct, "K0", cost)
+		walls[str(k)] = {"fertig_tag": _day() + days, "fertig": false, "durchbruch": repair}
+		_sim().log_event("%s lässt die Stadtmauer um %s %s (%d Tage)." % [b.name, _sim().towns.name_of(k), "reparieren" if repair else "bauen", days], "info")
+		return {"ok": true, "msg": "Stadtmauer %s: %s, fertig in %d Tagen." % ["reparieren" if repair else "bauen", Catalog.money(cost), days]}
 	if art == "wachturm":
 		var f = a.get("feld", null)
 		var at: Vector2i = w.tile_of(b) if not (f is Array) else Vector2i(int(f[0]), int(f[1]))
@@ -816,6 +819,7 @@ func _raise_wall(k: int) -> void:
 		_sim().nav.walk.set_point_solid(c, true)
 		n += 1
 	walls[str(k)].fertig = true
+	walls[str(k)].durchbruch = false
 	_sim().log_event("Die Stadtmauer um %s ist fertig (%d Felder, Tore an den Straßen)." % [_sim().towns.name_of(k), n], "good")
 	w.changed.emit()
 

@@ -70,7 +70,7 @@ func _process(_delta: float) -> void:
 		for name in _houses:
 			_houses[name].queue_redraw()
 	var A: EkoArms = sim.eko.arms
-	if not (A.ruins.is_empty() and A.towers.is_empty() and A.blasts.is_empty() and A.zones.is_empty() and A.bombs.is_empty() and sim.eko.estates.estates.is_empty()):
+	if not (A.ruins.is_empty() and A.towers.is_empty() and A.blasts.is_empty() and A.zones.is_empty() and A.bombs.is_empty() and sim.eko.estates.estates.is_empty() and sim.eko.conflict.troops.is_empty() and sim.eko.conflict.fires.is_empty()):
 		queue_redraw()
 
 
@@ -125,6 +125,24 @@ func _draw() -> void:
 	for z in A.zones:
 		var c := Iso.to_screen(sim.city.tile_center(Vector2i(int(z.feld[0]), int(z.feld[1]))))
 		draw_circle(c, float(z.radius) * 32.0, Color(0.4, 1.0, 0.2, 0.10 + 0.04 * sin(ms / 400.0)))
+	# Schaden an echten Stadtgebaeuden bleibt sichtbar, bis sie repariert werden:
+	# Risse, dunkler Rauch und bei schwerem Schaden kleine Flammen.
+	for bd in sim.city.buildings:
+		var condition: float = A.condition_of(int(bd.id))
+		if condition >= 75.0 or condition <= 0.0:
+			continue
+		var p := Iso.to_screen(sim.city.tile_center(Vector2i(int(bd.walk.x), int(bd.walk.y))))
+		var severe := condition < 35.0
+		draw_line(p + Vector2(-17, -19), p + Vector2(-3, -34), Color(0.12, 0.11, 0.1, 0.8), 2.0)
+		draw_line(p + Vector2(-3, -34), p + Vector2(8, -26), Color(0.12, 0.11, 0.1, 0.8), 2.0)
+		if condition < 55.0:
+			for i in 3:
+				var ph := fmod(ms / 2200.0 + i * 0.32, 1.0)
+				draw_circle(p + Vector2(sin(ph * 8.0 + i) * 7.0, -32.0 - ph * 43.0), 4.0 + ph * 7.0, Color(0.14, 0.13, 0.12, 0.34 * (1.0 - ph)))
+		if severe:
+			var flame := sin(ms / 170.0 + float(bd.id)) * 3.0
+			draw_colored_polygon(PackedVector2Array([p + Vector2(-8, -19), p + Vector2(flame, -47), p + Vector2(9, -19)]), Color(1.0, 0.35, 0.04, 0.75))
+			draw_circle(p + Vector2(flame, -22), 4.0, Color(1.0, 0.83, 0.16, 0.9))
 	for key in A.ruins:
 		var bd: Dictionary = sim.city.building(int(key))
 		if bd.is_empty():
@@ -139,6 +157,34 @@ func _draw() -> void:
 		draw_rect(Rect2(c.x - 5, c.y - 34, 10, 34), Color("#6d5d4b"))
 		draw_rect(Rect2(c.x - 8, c.y - 40, 16, 7), Color("#8d7b66"))
 		draw_circle(c + Vector2(0, -44), 2.5, Color(1.0, 0.2, 0.2, 0.6 + 0.4 * sin(ms / 250.0)))
+		if float(tw.get("hp", 80.0)) < 80.0:
+			draw_rect(Rect2(c.x - 10, c.y - 50, 20, 3), Color(0.1, 0.1, 0.1, 0.8))
+			draw_rect(Rect2(c.x - 10, c.y - 50, 20.0 * clampf(float(tw.hp) / 80.0, 0.0, 1.0), 3), Color("#e8a344"))
+	# Rekrutierte Mitarbeiter bleiben echte Worker-Figuren; die farbigen Wimpel zeigen
+	# ihre Zugehoerigkeit und den aktuellen Befehl auch aus grosser Entfernung.
+	for id in sim.eko.conflict.troops:
+		var t: Dictionary = sim.eko.conflict.troops[id]
+		var soldier: Worker = sim.personnel.workers.get(str(id))
+		if soldier == null:
+			continue
+		var p := Iso.to_screen(soldier.pos)
+		var col: Color = sim.company(int(t.cid)).color
+		draw_circle(p + Vector2(0, -7), 11.0, Color(col, 0.23))
+		draw_line(p + Vector2(0, -10), p + Vector2(0, -38), Color(0.15, 0.12, 0.1), 2.0)
+		draw_colored_polygon(PackedVector2Array([p + Vector2(0, -38), p + Vector2(16, -33), p + Vector2(0, -28)]), col)
+		if str(t.mode) == "angriff":
+			draw_string(ThemeDB.fallback_font, p + Vector2(-5, -43), "⚔", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
+		draw_rect(Rect2(p.x - 10, p.y - 45, 20, 3), Color(0.12, 0.1, 0.1, 0.8))
+		draw_rect(Rect2(p.x - 10, p.y - 45, 20.0 * clampf(soldier.health / 100.0, 0.0, 1.0), 3), Color("#69d17b"))
+	for f in sim.eko.conflict.fires:
+		var fp := Iso.to_screen(sim.city.tile_center(Vector2i(int(f.feld[0]), int(f.feld[1]))))
+		var sway := sin(ms / 130.0 + float(f.feld[0])) * 5.0
+		draw_circle(fp + Vector2(0, -10), 18.0, Color(0.2, 0.18, 0.16, 0.38))
+		draw_colored_polygon(PackedVector2Array([fp + Vector2(-13, 0), fp + Vector2(-7, -24), fp + Vector2(sway, -46), fp + Vector2(11, -20), fp + Vector2(14, 0)]), Color(1.0, 0.26, 0.04, 0.78))
+		draw_colored_polygon(PackedVector2Array([fp + Vector2(-6, 0), fp + Vector2(sway * 0.5, -28), fp + Vector2(7, 0)]), Color(1.0, 0.82, 0.13, 0.9))
+		for i in 3:
+			var phase := fmod(ms / 2300.0 + i * 0.31, 1.0)
+			draw_circle(fp + Vector2(sway + sin(phase * 8.0 + i) * 9.0, -48.0 - phase * 55.0), 5.0 + phase * 9.0, Color(0.18, 0.17, 0.16, 0.45 * (1.0 - phase)))
 	for bm in A.bombs:
 		var c := Iso.to_screen(sim.city.tile_center(Vector2i(int(bm.feld[0]), int(bm.feld[1]))))
 		draw_circle(c, 5.0, Color("#222"))

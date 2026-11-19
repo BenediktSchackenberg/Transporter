@@ -102,6 +102,29 @@ wenn Menschen zugezogen sind. Bis dahin baust du **alles selbst**.
    ein Unfall (beide Fahrzeuge beschädigt, Werkstatt). Absichtlich beschädigen geht nur mit `Rammen {fahrzeug: id}` oder
    `Rammen {gebaeude: id | feld: [x, y]}` – dein eigener LKW wird dabei auch beschädigt, und die betroffene Firma wird dir feindlich.
 
+### Stadtpolitik, Frieden und Krieg
+
+`meine_firma.stadtpolitik_und_konflikt` zeigt die eigene Strategie, andere gegründete Städte, mobilisierte Mitarbeiter,
+laufende Angriffe, Wachtürme und eine akute Bedrohung. `mein_amt.gruenderstrategie` gibt dem Bürgermeister die Stadtidee des
+Gründers weiter. Die gewählte Stadtform prägt den Stadtplan ab Fertigstellung des Bürgeramts. Ein bestehender Stadtplan wird
+durch spätere Strategiewechsel nicht umgebaut.
+
+- `Firma {aktion: {action: "set_city_strategy", form: "gartenstadt", wirtschaft: "Versorgung", haltung: "frieden", rival: -1, begruendung: "..."}}`
+  entscheidet über Stadtbild und die Beziehung zu Rivalen. Die Haltungen sind `frieden`, `verteidigung` und `krieg`.
+  Friedliche Kooperation ist dauerhaft möglich; keine KI wird zum Angriff gezwungen. Auch eine friedliche Firma wehrt einen
+  Angriff auf ihre Stadt ab. Sabotage und Blockaden verlangen eine bewusst gewählte Kriegshaltung.
+- Waffen für Truppen kommen aus der bestehenden `waffenschmiede`: Betrieb gründen, Mitarbeiter zuordnen,
+  `design_weapon`, `forge_weapon`. Nur fertige Nah- oder Fernwaffen im Firmenarsenal können ausgegeben werden.
+- `Firma {aktion: {action: "mobilize_worker", worker_id: "...", weapon: "Entwurfsname"}}` zieht einen freien eigenen Mitarbeiter
+  aus dem Tagesbetrieb ab. Ohne `weapon` dient er als Stadtwache. `demobilize_worker` gibt ihn und seine Waffe zurück.
+- `Firma {aktion: {action: "order_assault", target: 1, asset: "building_42"}}` setzt eine bewaffnete Truppe zu Fuß in Bewegung.
+  `asset` ist optional: ein Gebäude der Zielstadt, `fahrzeug_<id>` für einen stehenden LKW oder `wachturm_<index>`.
+  Ohne `asset` greift die Truppe zunächst den Betriebshof und dann das Rathaus an. Eine intakte Stadtmauer muss erst
+  durchbrochen werden; die Bürgermeister KI sieht den Alarm und kann `build_defense` wählen. `order_retreat` zieht die Truppe zurück.
+- Gebäudeschäden bleiben als Zustand, Risse, Rauch, Feuer und Ruinen sichtbar. Zerstörte Betriebe werden stillgelegt und können
+  mit `rebuild_building` wiederaufgebaut werden. Eine kaputte Mauer kann vom Bürgermeister mit `build_defense {art: "stadtmauer"}`
+  repariert werden. Die Stadt kapituliert erst, wenn sowohl Rathaus als auch Betriebshof zerstört sind.
+
 ## Endpunkte
 
 Basis: `http://127.0.0.1:8790` (oder der Port, den dir dein Start nennt).

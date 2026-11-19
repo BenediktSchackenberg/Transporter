@@ -141,6 +141,11 @@ func derive(k: int, kern: Vector2i) -> Dictionary:
 		if s > best_s:
 			best_s = s
 			best = f
+	# Der Gruender legt die Stadtform vor dem Bau des Buergeramts fest.
+	if sim.eko != null:
+		var founder_form := str(sim.eko.conflict.strategy_for_town(k).get("form", ""))
+		if FORMS.has(founder_form):
+			best = founder_form
 	var F: Dictionary = FORMS[best]
 	var d := {"v": VERSION, "town": k, "form": best, "label": F.label, "kern": [kern.x, kern.y], "landschaft": L,
 		"wasser_richtung": L.richtung, "block": F.block, "hoehen": F.hoehen, "freiraum": F.freiraum, "wirtschaft": F.wirtschaft,
