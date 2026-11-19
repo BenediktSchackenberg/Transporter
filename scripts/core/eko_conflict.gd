@@ -463,7 +463,7 @@ func observe(cid: int) -> Dictionary:
 	for other in w.sim.companies:
 		if other.id == cid or not other.is_active():
 			continue
-		var enemy_city := w.sim.town_ready(other.home_town)
+		var enemy_city: bool = w.sim.town_ready(other.home_town)
 		var incoming := assaults.values().any(func(a): return int(a.target) == cid)
 		rivals.append({"id": other.id, "firma": other.company_name, "stadt": w.sim.towns.name_of(other.home_town), "gegruendet": enemy_city,
 			"truppen": troops.values().filter(func(t): return int(t.cid) == other.id).size(), "angriff_auf_mich": incoming})
