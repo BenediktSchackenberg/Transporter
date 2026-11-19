@@ -39,6 +39,13 @@ while ($true) {
     $started = Get-Date
     $stale = $false
     while (-not $p.WaitForExit(10000)) {
+        # 19.11.2026: Absturz 34 s nach dem Start - der Konsolen-Starter blieb nach dem CrashHandler haengen, die
+        # Lebenszeichen-Pruefung griff erst nach 3 min. Ein Absturzbericht im Protokoll beendet die Reste sofort.
+        if ((Test-Path "$out.err") -and (Select-String -Path "$out.err" -Pattern "CrashHandlerException" -Quiet)) {
+            Write-Host "[$(Get-Date -Format HH:mm:ss)] Absturzbericht im Protokoll - beende Reste." -ForegroundColor Yellow
+            Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'Godot*' -or ($_.Name -like 'python*' -and $_.CommandLine -match 'eko_') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            break
+        }
         if (((Get-Date) - $started).TotalSeconds -lt 180 -or -not (Test-Path $beat)) { continue }
         if (((Get-Date) - (Get-Item $beat).LastWriteTime).TotalSeconds -gt 120) {
             $stale = $true
