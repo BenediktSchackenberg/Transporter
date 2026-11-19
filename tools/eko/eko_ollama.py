@@ -521,9 +521,16 @@ class Agent:
                 return self.call_tool(str(a["type"]), data if isinstance(data, dict) else {})
             if name == "act":
                 data = a.get("data", {})
-                if isinstance(data, str):
-                    data = json.loads(data) if data.strip().startswith("{") else {}
-                r = self.world.act(str(a.get("type", "")), data)
+                if isinstance(data, str):   # 19.11.: Viktor schickte '{"MoveTo":{"tile":[..]}},"warum":...' – erstes Objekt nehmen
+                    try:
+                        data = json.JSONDecoder().raw_decode(data.strip())[0] if data.strip().startswith("{") else {}
+                    except ValueError:
+                        data = {}
+                if isinstance(data, dict) and len(data) == 1:   # {"MoveTo": {...}} bei type MoveTo: Inhalt auspacken
+                    only = next(iter(data))
+                    if only.lower() == str(a.get("type", "")).lower() and isinstance(data[only], dict):
+                        data = data[only]
+                r = self.world.act(str(a.get("type", "")), data if isinstance(data, dict) else {})
                 if str(a.get("type", "")) == "Rest" and isinstance(r, dict) and r.get("ok"):
                     time.sleep(20)   # die Pause wirklich abwarten (das Modell schickte sonst alle 2 s erneut Rest)
                     r["msg"] = str(r.get("msg", "")) + " Die Pause ist vorbei."
