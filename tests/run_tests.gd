@@ -8604,6 +8604,7 @@ func test_wildnis_log_fixes() -> void:
 	ok(not str(nest.msg).contains("Unbekannte Handlung"), "verschachtelt {data: {...}, type: Rest} wird Rest: %s" % str(nest.msg).left(60))
 	var sl: Dictionary = E.input(p0, "act", {"warum": "Tag 23 zu Ende, Akku 85, schlafen gehen"})
 	ok(not str(sl.msg).contains("Unbekannte Handlung"), "act nur mit warum zum Schlafen wird Rest: %s" % str(sl.msg).left(60))
+	ok(not str(E.input(p0, "Fahrt", {"ziel": "Großlager"}).msg).contains("braucht tile"), "Fahrt zum Großlager per Namensanfang")
 	# 4) Entnahme-Bremse
 	var okn := 0
 	for i in 6:

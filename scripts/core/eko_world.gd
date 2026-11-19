@@ -1269,6 +1269,10 @@ func _ride(b: Dictionary, data: Dictionary) -> Dictionary:
 		for bd in sim.city.buildings:
 			if to.x < 0 and str(bd.get("name", "")) == name:
 				to = Vector2i(int(bd.walk.x), int(bd.walk.y))
+		var low := _plain(name)
+		for bd in sim.city.buildings:   # 19.11.: Greta "Großlager" statt "Großlager – Hauptlager" – Namensanfang genuegt
+			if to.x < 0 and low.length() >= 4 and _plain(str(bd.get("name", ""))).begins_with(low):
+				to = Vector2i(int(bd.walk.x), int(bd.walk.y))
 	if to.x < 0 or not sim.city.inside(to):
 		return {"ok": false, "msg": "Fahrt braucht tile: [x, y] oder ziel: Name eines Gebäudes, Wesens oder Unternehmers."}
 	var m: Mover = b.mover
