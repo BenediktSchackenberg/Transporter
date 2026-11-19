@@ -20,7 +20,10 @@ static var font: FontFile
 static func get_theme() -> Theme:
 	if _theme:
 		return _theme
-	font = load("res://assets/fonts/PixelifySans.ttf")
+	# Die TTF direkt lesen: ein fehlgeschlagener Editor-Import darf die Spieloberflaeche
+	# nicht lahmlegen. FontFile verarbeitet dieselben Originaldaten.
+	font = FontFile.new()
+	font.data = FileAccess.get_file_as_bytes("res://assets/fonts/PixelifySans.ttf")
 	font.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	font.hinting = TextServer.HINTING_NONE
 	font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED

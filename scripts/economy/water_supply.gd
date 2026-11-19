@@ -293,7 +293,7 @@ func request_main(k: int, option_id: String, reason: String) -> Dictionary:
 	if M.available_budget() < float(option.kosten):
 		return {"ok": false, "msg": "Leitung kostet %s, verfügbar %s." % [Catalog.money(float(option.kosten)), Catalog.money(M.available_budget())]}
 	var prj: Dictionary = M.add_works_project("versorgungsleitung", option_id, float(option.kosten), int(option.tage),
-		{"betonbauteile": maxi(1, int(option.felder) / 8), "stahl": maxi(1, int(option.felder) / 16)},
+		{"beton": maxi(1, int(option.felder) / 8), "stahl": maxi(1, int(option.felder) / 16)},
 		"%sleitung: %s" % [art.capitalize(), reason.left(140)])
 	main_projects[str(prj.id)] = {"town": k, "art": art, "cells": option.cells}
 	return {"ok": true, "msg": "%sleitung als Projekt %s ausgeschrieben; %d Felder." % [art.capitalize(), prj.id, int(option.felder)], "projekt": prj.id}

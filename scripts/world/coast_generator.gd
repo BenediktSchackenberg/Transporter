@@ -246,7 +246,7 @@ func _road(a: Vector2i, b: Vector2i) -> void:
 func _district_at(p: Vector2i) -> int:
 	if p.x >= town.x - 2:
 		return 3          # Hafen
-	if town_rect.grow(-6).has_point(p):
+	if town_rect.size.x > 12 and town_rect.size.y > 12 and town_rect.grow(-6).has_point(p):
 		return 0          # Ortskern
 	return 1
 

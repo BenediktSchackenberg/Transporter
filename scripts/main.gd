@@ -268,7 +268,9 @@ func _start_autotest() -> void:
 			"api_key": OS.get_environment(args.get("api-key-env", "")) if args.has("api-key-env") else "",
 			"interval": float(args.get("interval", "3")), "max_requests": 500, "max_tokens": 2000000,
 			"max_tokens_per_request": 900, "fallback": true, "timeout": float(args.get("timeout", "20")), "strategy": ""})
-	var cfg := {"seed": int(args.get("seed", str(randi() % 100000))), "duration_min": 240,   # ohne --seed jedes Mal eine neue Karte "duration_seconds": float(args.get("seconds", "60")),
+	# Ohne --seed entsteht jedes Mal eine neue Karte; --seconds begrenzt den Autotest.
+	var cfg := {"seed": int(args.get("seed", str(randi() % 100000))), "duration_min": 240,
+		"duration_seconds": float(args.get("seconds", "60")),
 		"speed_idx": GameSession.SPEEDS.find(int(args.get("speed", "16"))), "demo_fault_rate": float(args.get("fault", "0.1")),
 		"map_size": int(args.get("map", str(Catalog.MAP_SIZE))), "players": players,
 		"weather": args.get("weather", "sim"), "weather_replay": args.get("weather-replay", ""), "welt": args.get("welt", "region")}
@@ -608,6 +610,22 @@ func _process_timed(_delta: float) -> void:
 				var mb: Dictionary = session.sim.city.building(int(mf.building))
 				session.set_follow(false)
 				session.city_view.set_camera_world(Vector2((float(mb.x) + float(mb.w) * 0.5) * 32.0, (float(mb.y) + float(mb.h) * 0.5) * 32.0))
+		if args.has("shot-utility"):
+			var code := str(args["shot-utility"]).to_upper()
+			var utility: Dictionary = {}
+			if code == "KW":
+				utility = session.sim.city.building(session.sim.plant.building)
+			elif code in ["WW", "WT", "KA"]:
+				for facility in session.sim.municipal.facilities.values():
+					if str(facility.code).begins_with(code + "-") and str(facility.status) == "in_betrieb":
+						utility = session.sim.city.building(int(facility.building))
+						break
+			if not utility.is_empty():
+				session.set_follow(false)
+				session.city_view.eko_view.follow = false
+				if session.hud and session.hud.control_center:
+					session.hud.control_center.set_expanded(false)
+				args["shot-tile"] = "%d,%d" % [int(utility.x) + int(utility.w) / 2, int(utility.y) + int(utility.h) / 2]
 		if args.has("shot-bahn") and session.sim.rail != null and session.sim.rail.is_built():   # Eisenbahn (Auftrag 22 Phase 6): Bahnhof n, sonst erste "bruecke"/"uebergang"/"tunnel"/"kurve"
 			var RN: RailNet = session.sim.rail
 			var want := str(args["shot-bahn"])
@@ -821,6 +839,8 @@ func _process_timed(_delta: float) -> void:
 		else:
 			tex.get_image().save_png(args["screenshot"])
 			print("AUTOTEST: Screenshot gespeichert: ", ProjectSettings.globalize_path(args["screenshot"]))
+		if args.has("quit-after-shot"):
+			get_tree().quit()
 
 
 ## Leitstelle fuer Screenshots: Bereich bzw. Detail oeffnen (ki, welt, gespraeche, firmen, firma:N[:tab], staedte, stadt:N, finanzen, technik, warum, suche:Text, zu)

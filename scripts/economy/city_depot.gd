@@ -786,7 +786,7 @@ func roster() -> Array:
 	var out: Array = []
 	var i := 0
 	for p in sim.citizens.people:
-		if p.employer != "stadtlager":
+		if p.employer != "stadtlager" or int(p.get("depot_town", 0)) != town:
 			continue
 		var st: Dictionary = crew.get(int(p.id), {"fatigue": 0.0, "sick_until": -1, "rest_until": -1})
 		var role: String = ROLE_CYCLE[i % ROLE_CYCLE.size()]
@@ -925,12 +925,26 @@ func expand(kind: String, by: String = "Verwaltung") -> Dictionary:
 		"staff":
 			if roster().size() >= STAFF_MAX:
 				return {"ok": false, "msg": "Das Lagerpersonal ist mit %d Stellen ausgelastet." % STAFF_MAX}
-			for p in sim.citizens.people:
-				if p.employer == "":
-					sim.citizens._employ(p, "stadtlager", 0.5)
-					sim.citizens.cap["stadtlager"] = int(sim.citizens.cap.get("stadtlager", 0)) + 1
-					sim.log_event("Stadtlager: %s stellt %s als Lagerkraft ein." % [by, p.name], "info")
-					return {"ok": true, "msg": "%s eingestellt." % p.name}
+			var applicants: Array = sim.citizens.people.filter(func(p): return p.employer == "")
+			if applicants.is_empty():
+				# Essentielle Baustoffe duerfen nicht wochenlang liegen bleiben, nur weil die Stadt gerade keine Bewerber hat.
+				var home := ""
+				for unit in sim.housing.vacant_units():
+					if sim.towns.of_building(int(unit.building)) == town:
+						home = str(unit.id)
+						unit.tenant = "B"
+						break
+				sim.citizens.immigrate(1, GameCalendar.month_of(sim.game_min), home)
+				applicants = sim.citizens.people.filter(func(p): return p.employer == "")
+			applicants.sort_custom(func(a, b): return int(sim.citizens.home_town(a) == town) > int(sim.citizens.home_town(b) == town))
+			if not applicants.is_empty():
+				var p: Dictionary = applicants[0]
+				sim.citizens._employ(p, "stadtlager", 0.5)
+				p["depot_town"] = town
+				sim.citizens.base_cap["stadtlager"] = int(sim.citizens.base_cap.get("stadtlager", 0)) + 1
+				sim.citizens.cap["stadtlager"] = int(sim.citizens.cap.get("stadtlager", 0)) + 1
+				sim.log_event("Stadtlager: %s stellt %s als Lagerkraft ein." % [by, p.name], "info")
+				return {"ok": true, "msg": "%s eingestellt." % p.name}
 			return {"ok": false, "msg": "Es gibt keine arbeitslosen Bewerber."}
 	return {"ok": false, "msg": "Unbekannte Maßnahme %s (ramp, staff, forklift)." % kind}
 

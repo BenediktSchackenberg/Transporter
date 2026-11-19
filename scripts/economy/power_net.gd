@@ -133,11 +133,11 @@ func request_line(k: int, option_id: String, reason: String) -> Dictionary:
 	var M: Mayor = sim.towns.mayor(k)
 	if M.available_budget() < float(option.kosten):
 		return {"ok": false, "msg": "Trasse kostet %s, verfügbar %s." % [Catalog.money(float(option.kosten)), Catalog.money(M.available_budget())]}
-	var vote: Dictionary = M.civic_vote("erschliessung", float(option.kosten))
+	var vote: Dictionary = M.civic_vote("versorgung", float(option.kosten))
 	if not bool(vote.passed):
 		return {"ok": false, "msg": "Rat lehnt die Stromtrasse ab: %s" % str(vote.text)}
 	var prj: Dictionary = M.add_works_project("trasse", "%s|%s" % [option.a, option.b], float(option.kosten), int(option.tage),
-		{"stahl": maxi(1, int(option.felder) / 8), "betonbauteile": maxi(1, int(option.felder) / 12)},
+		{"stahl": maxi(1, int(option.felder) / 8), "beton": maxi(1, int(option.felder) / 12)},
 		"Stromtrasse %s: %s" % [option.art, reason.left(140)])
 	planned[str(prj.id)] = {"a": option.a, "b": option.b, "cells": option.cells, "station": option.station}
 	sim.log_event("%s: %s zum Umspannwerk beauftragt: %d Felder, %s, %d Tage. %s" % [sim.towns.name_of(k),
@@ -335,12 +335,16 @@ func damage(id: String, cause: String) -> bool:
 			break
 	if road.x < 0:
 		road = site
+	var powered_before: Array = []
+	for k in maxi(1, sim.towns.count()):
+		if connected(k):
+			powered_before.append(k)
 	set_state(id, "defekt")
 	e["cause"] = cause
 	repairs[id] = {"cell": [site.x, site.y], "road": [road.x, road.y], "town": -1, "vehicle": -1, "since": sim.game_min, "cause": cause, "getrennt": 0}
 	stats.schaeden = int(stats.schaeden) + 1
 	var off: Array = []
-	for k in maxi(1, sim.towns.count()):
+	for k in powered_before:
 		if not connected(k):
 			off.append(sim.towns.name_of(k))
 	repairs[id].getrennt = off.size()

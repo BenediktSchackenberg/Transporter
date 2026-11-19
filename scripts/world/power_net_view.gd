@@ -100,16 +100,35 @@ func _draw() -> void:
 		var cells: Array = (p.get("cells", []) as Array).map(func(a): return Vector2i(int(a[0]), int(a[1])))
 		if cells.is_empty():
 			cells = PowerNet.line_cells(N.nodes[str(p.a)].cell, N.nodes[str(p.b)].cell)
-		for i in range(0, cells.size(), 2):
+		var work: Dictionary = sim.construction.public.get(str(pid), {})
+		var progress := clampf(1.0 - float(work.get("days_left", work.get("days", 1))) / maxf(1.0, float(work.get("days", 1))), 0.0, 1.0) if not work.is_empty() else 0.0
+		for i in range(0, cells.size(), PowerNet.MAST_EVERY):
 			var q: Vector2i = cells[i]
 			if view.has_point(q):
 				var c := _foot(q)
-				draw_line(c, c + Vector2(0, -9), STAKE, 2.0)
-				draw_circle(c + Vector2(0, -9), 1.7, Color(1.0, 0.89, 0.35))
+				if float(i) / float(cells.size()) <= progress and progress > 0.0:
+					_draw_mast(c)
+				else:
+					draw_line(c, c + Vector2(0, -9), STAKE, 2.0)
+					draw_circle(c + Vector2(0, -9), 1.7, Color(1.0, 0.89, 0.35))
+	var installed := {}
+	for e in N.edges:
+		installed[str(e.a)] = true
+		installed[str(e.b)] = true
 	for id in N.nodes:
 		var n: Dictionary = N.nodes[id]
-		if int(n.town) >= 0 and view.has_point(n.cell):
-			_draw_substation(n.cell, sim.grid.net.connected(int(n.town)))
+		if int(n.town) >= 0:
+			if installed.has(id):
+				if view.has_point(n.cell):
+					_draw_substation(n.cell, sim.grid.net.connected(int(n.town)))
+			else:
+				for pid in N.planned:
+					var p: Dictionary = N.planned[pid]
+					if str(p.b) == id:
+						var site := Vector2i(int(p.station[0]), int(p.station[1]))
+						if view.has_point(site):
+							_draw_substation_site(site)
+						break
 
 
 ## Gittermast: zwei schraege Beine, Querstreben, Traverse mit Isolatoren.
@@ -175,3 +194,17 @@ func _draw_substation(q: Vector2i, on: bool) -> void:
 	for x in [-10.0, 10.0]:
 		draw_line(c + Vector2(x, 2), c + Vector2(x, -7), FENCE, 1.0)
 		draw_circle(c + Vector2(x, -7), 1.0, Color(1.0, 0.77, 0.34))
+
+
+func _draw_substation_site(q: Vector2i) -> void:
+	var a := Vector2(q) * 32.0
+	var pad := PackedVector2Array([Iso.to_screen(a), Iso.to_screen(a + Vector2(32, 0)), Iso.to_screen(a + Vector2(32, 32)), Iso.to_screen(a + Vector2(0, 32))])
+	draw_colored_polygon(pad, Color(0.58, 0.49, 0.30, 0.66))
+	var rim := pad.duplicate()
+	rim.append(pad[0])
+	draw_polyline(rim, STAKE, 2.0)
+	var c := _foot(q)
+	draw_line(c + Vector2(-8, 0), c + Vector2(-8, -17), STAKE, 1.8)
+	draw_line(c + Vector2(8, 0), c + Vector2(8, -17), STAKE, 1.8)
+	draw_line(c + Vector2(-8, -17), c + Vector2(8, -17), STAKE, 1.8)
+	draw_circle(c + Vector2(0, -19), 2.2 + 0.7 * sin(_phase * 5.0), Color(1.0, 0.77, 0.18))

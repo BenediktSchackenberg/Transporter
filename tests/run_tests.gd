@@ -11809,6 +11809,10 @@ func test_power_net() -> void:
 	var G: PowerGrid = s.grid
 	var N: PowerNet = G.net
 	next_day(s)
+	ok(N.built() and N.nodes.size() == 5 and N.edges.size() == 1 and N.connected(0) and not N.connected(1), "Startnetz: nur die erste Stadt ist angeschlossen")
+	for k in range(1, 4):
+		N.add_edge("KW", "U%d" % k)
+	next_day(s)
 	ok(N.built() and N.nodes.size() == 5 and N.edges.size() == 4, "Netz: Kraftwerk + 4 Umspannwerke, 4 Trassen (Spannbaum)")
 	var contiguous := true
 	for e in N.edges:
@@ -11866,7 +11870,7 @@ func test_power_repair() -> void:
 	ok(trupp.size() == 1, "ein Netztrupp ist unterwegs (%s)" % (str(trupp[0].label) if not trupp.is_empty() else "-"))
 	var rp: Dictionary = N.repairs[cut]
 	var road := Vector2i(int(rp.road[0]), int(rp.road[1]))
-	ok(s.city.is_road(road) and N.connected(int(rp.town)), "Schadstelle mit Straßenzufahrt, Trupp aus einer versorgten Stadt (%s)" % s.towns.name_of(int(rp.town)))
+	ok(s.city.is_road(road) and (N.connected(int(rp.town)) or not range(4).any(func(k): return N.connected(k))), "Schadstelle mit Straßenzufahrt, Trupp aus der nächsten Stadt (%s)" % s.towns.name_of(int(rp.town)))
 	ok(LiveText.power(s).contains("Netztrupp"), "Strom-Ansicht zeigt den Netztrupp")
 	# Laden mitten in der Reparatur: Fahrzeug entfaellt, der Tageslauf schickt einen neuen Trupp
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
@@ -11903,6 +11907,10 @@ func test_power_ring() -> void:
 	var G: PowerGrid = s.grid
 	var N: PowerNet = G.net
 	next_day(s)
+	# Der Ringschluss braucht mehrere zuvor gebaute Trassen; beim Spielstart steht nur der erste Anschluss.
+	for k in range(1, 4):
+		N.add_edge("KW", "U%d" % k)
+	next_day(s)
 	var far := 0
 	for k in 4:
 		if N.path_to(k).size() > N.path_to(far).size():
@@ -11920,7 +11928,7 @@ func test_power_ring() -> void:
 	var cut_e: Dictionary = N.edge(cut)
 	ok(not ((str(pl.a) == str(cut_e.a) and str(pl.b) == str(cut_e.b)) or (str(pl.a) == str(cut_e.b) and str(pl.b) == str(cut_e.a))), "Ringschluss %s – %s ist eine neue Verbindung" % [str(pl.a), str(pl.b)])
 	ok(N.plan_ring(cut).is_empty(), "nur ein Ringschluss zugleich")
-	ok(LiveText.power(s).contains("Ringschluss im Bau"), "Strom-Ansicht zeigt den Bau")
+	ok(LiveText.power(s).contains("Stromtrasse im Bau"), "Strom-Ansicht zeigt den Bau")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.grid.net.planned.has(pid), "geplante Trasse nach Laden erhalten")
 	var day := GameCalendar.day_of(s.game_min)

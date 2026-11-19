@@ -53,10 +53,12 @@ static func decide(ind: Dictionary) -> Dictionary:
 	# 1c) Zentrallager ausbauen: wiederkehrend wartende Lkw -> Rampe, Rueckstau im Wareneingang -> Personal bzw. Stapler
 	var sl: Dictionary = ind.stadtlager
 	if actions.size() < MAX_ACTIONS:
-		if int(sl.lkw_wartezeiten_letzte_10_tage) >= 3 and int(sl.rampen) < CityDepot.MAX_RAMPS and float(ind.haushalt.verfuegbar) > CityDepot.RAMP_COST * 2.0:
+		if int(sl.kapazitaet_wareneingang_je_tag) == 0 and (int(sl.rueckstau_wareneingang_einheiten) > 0 or int(sl.bestellungen_offen) > 0):
+			actions.append({"action": "expand_depot", "kind": "staff", "reason": "Das Stadtlager hat kein Personal für ankommende Baustoffe und kann keine Lieferung einlagern."})
+		elif int(sl.lkw_wartezeiten_letzte_10_tage) >= 3 and int(sl.rampen) < CityDepot.MAX_RAMPS and float(ind.haushalt.verfuegbar) > CityDepot.RAMP_COST * 2.0:
 			actions.append({"action": "expand_depot", "kind": "ramp", "reason": "Lkw mussten an %d der letzten 10 Tage auf eine freie Rampe warten (Rampen: %d)." % [int(sl.lkw_wartezeiten_letzte_10_tage), int(sl.rampen)]})
 		elif int(sl.rueckstau_wareneingang_einheiten) > 2 * maxi(int(sl.kapazitaet_wareneingang_je_tag), 1) and float(ind.haushalt.verfuegbar) > 30000.0:
-			var kind := "forklift" if int(sl.gabelstapler) < 2 else "staff"
+			var kind := "forklift" if int(sl.gabelstapler) < 2 and int(sl.personal_gesamt) >= 2 else "staff"
 			actions.append({"action": "expand_depot", "kind": kind, "reason": "Rückstau im Wareneingang: %d Einheiten bei %d je Tag Kapazität." % [int(sl.rueckstau_wareneingang_einheiten), int(sl.kapazitaet_wareneingang_je_tag)]})
 	# 1d) Wiederkehrende Engpaesse (an mehreren Tagen ueberfuellt) entlasten: Kreuzung -> Ampelsteuerung, Strecke -> Ausbau
 	for sp in ind.verkehr.get("engpaesse", []):
