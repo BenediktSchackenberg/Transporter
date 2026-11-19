@@ -611,8 +611,8 @@ func _road_path(cell: Vector2i, limit: int) -> Array:
 
 ## Ein Weg fuer LKW-Strassen benutzt nur Kanten-Nachbarn. Fusswege koennen diagonal verlaufen
 ## und erzeugten beim Uebernehmen die isolierten Straßenrauten auf der Karte.
-func _road_between(from: Vector2i, to: Vector2i) -> Array:
-	if not _road_cell_ok(to):
+func _road_between(from: Vector2i, to: Vector2i, planned := {}) -> Array:   # planned: Felder geplanter Stadtstrassen (werden ohnehin Strasse)
+	if not _road_cell_ok(to) and not planned.has(to):
 		return []
 	var prev := {from: from}
 	var todo: Array = [from]
@@ -633,7 +633,7 @@ func _road_between(from: Vector2i, to: Vector2i) -> Array:
 			return path
 		for d in dirs:
 			var next: Vector2i = here + d
-			if prev.has(next) or not bounds.has_point(next) or not _road_cell_ok(next):
+			if prev.has(next) or not bounds.has_point(next) or not (_road_cell_ok(next) or planned.has(next)):
 				continue
 			prev[next] = here
 			todo.append(next)

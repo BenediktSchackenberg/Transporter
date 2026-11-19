@@ -1208,7 +1208,12 @@ func hub_connection() -> Dictionary:
 		return {}
 	var from := Vector2i(int(link.von[0]), int(link.von[1]))
 	var to := Vector2i(int(link.bis[0]), int(link.bis[1]))
-	var cells: Array = sim.eko.settle._road_between(from, to).filter(func(q): return not sim.city.is_road(q))
+	var planned := {}   # 19.11. (fe89198): das Kern-Strassennetz reserviert seine Felder – die Anschlusstrasse darf sie kreuzen
+	for p in projects.values():
+		if p.has("road_plan") and str(p.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			for c in p.road_plan:
+				planned[Vector2i(int(c[0]), int(c[1]))] = true
+	var cells: Array = sim.eko.settle._road_between(from, to, planned).filter(func(q): return not sim.city.is_road(q) and not planned.has(q))
 	if cells.is_empty():
 		return _hub_tunnel(from)   # 19.11.: Bergstadt ohne ebenen Weg (Falkenwiek) – Tunnel aus dem Tunnelsystem
 	return _hub_road_project(cells)
