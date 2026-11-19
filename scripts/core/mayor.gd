@@ -1518,6 +1518,10 @@ func from_dict(d: Dictionary) -> void:
 	waiting = int(d.get("waiting", 0))
 	plans = d.get("plans", {})
 	projects = d.get("projects", {})
+	for p in projects.values():   # 19.11.: Stadtwerke-Projekte nannten den Anzeigenamen "betonbauteile" statt des Artikels "beton"
+		if p.get("material") is Dictionary and p.material.has("betonbauteile"):
+			p.material["beton"] = int(p.material.get("beton", 0)) + int(p.material.betonbauteile)
+			p.material.erase("betonbauteile")
 	decisions = d.get("decisions", [])
 	notes = d.get("notes", [])
 	commitments = float(d.get("commitments", 0.0))

@@ -1380,6 +1380,11 @@ func from_dict(d: Dictionary) -> void:
 		for k in ["cid", "qty", "left", "lead", "loc", "day"]:
 			of[k] = int(of[k])
 	project_res = d.get("project_res", {})
+	for r in project_res.values():   # 19.11.: "betonbauteile" (Anzeigename) -> Artikel "beton"
+		for key in ["items", "reserved"]:
+			if r.get(key) is Dictionary and r[key].has("betonbauteile"):
+				r[key]["beton"] = int(r[key].get("beton", 0)) + int(r[key].betonbauteile)
+				r[key].erase("betonbauteile")
 	for r in project_res.values():
 		for k in r.items:
 			r.items[k] = int(r.items[k])
