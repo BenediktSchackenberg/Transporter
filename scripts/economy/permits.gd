@@ -36,6 +36,8 @@ func draft(applicant: String, parcel_id: String, params: Dictionary) -> Dictiona
 		return {"ok": false, "msg": "%s hat an %s weder Eigentum noch eine Reservierung." % [applicant, parcel_id]}
 	if not Planning.DEFS.has(str(params.get("def", ""))):
 		return {"ok": false, "msg": "Gebäudeart '%s' unbekannt." % params.get("def", "")}
+	if not BuildingDesigns.valid_for(str(params.get("design", "")), str(params.def)):
+		return {"ok": false, "msg": "Entwurf passt nicht zur Gebäudeart."}
 	for a in apps.values():
 		if a.parcel == parcel_id and a.status != "entschieden":
 			return {"ok": false, "msg": "Für %s läuft bereits der Antrag %s." % [parcel_id, a.id]}
@@ -44,7 +46,7 @@ func draft(applicant: String, parcel_id: String, params: Dictionary) -> Dictiona
 	if not sim.tiers.unlocked(str(params.def)):
 		return {"ok": false, "msg": sim.tiers.unlock_text(str(params.def))}
 	var d: Dictionary = Planning.DEFS[params.def]
-	var app := {"id": "A%d" % _next, "applicant": applicant, "parcel": parcel_id, "def": str(params.def), "floors": int(params.get("floors", d.floors[0])),
+	var app := {"id": "A%d" % _next, "applicant": applicant, "parcel": parcel_id, "def": str(params.def), "design": str(params.get("design", "")), "floors": int(params.get("floors", d.floors[0])),
 		"parking": int(params.get("parking", d.parking)), "financing": params.get("financing", {}).duplicate(), "status": "entwurf", "result": "",
 		"effort": 0, "progress": 0, "filed_day": -1, "decided_day": -1, "questions": [], "conditions": [], "reasons": [], "answers": [],
 		"decided_by": "", "decision": "", "fees_paid": 0.0, "valid_until": -1, "history": [], "expired": false}
@@ -83,9 +85,16 @@ func revise(app_id: String, changes: Dictionary, answer: String = "") -> Diction
 	var a: Dictionary = apps.get(app_id, {})
 	if a.is_empty() or a.status != "rueckfrage":
 		return {"ok": false, "msg": "Antrag %s hat keine offene Rückfrage." % app_id}
+	var revised_def := str(changes.get("def", a.def))
+	var revised_design := str(changes.get("design", a.get("design", "")))
+	if not BuildingDesigns.valid_for(revised_design, revised_def):
+		if changes.has("design"):
+			return {"ok": false, "msg": "Entwurf passt nicht zur Gebäudeart."}
+		revised_design = ""
 	for k in ["floors", "parking", "def"]:
 		if changes.has(k):
 			a[k] = int(changes[k]) if k != "def" else str(changes[k])
+	a["design"] = revised_design
 	if changes.has("financing"):
 		a.financing = changes.financing.duplicate()
 	a.answers.append({"day": _today(), "text": answer if answer != "" else "Angaben überarbeitet"})

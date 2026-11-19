@@ -107,7 +107,7 @@ func housing_score(u: Dictionary, income: float) -> float:
 	var cond: float = sim.care.get_condition(int(u.building))
 	var burden := 0.0 if income <= 0.0 else float(u.rent) / income
 	var burden_score := clampf(100.0 * (0.6 - burden) / 0.4, 0.0, 100.0)
-	return clampf(0.5 * cond + 0.5 * burden_score - 20.0 * minf(2.0, float(u.arrears)), 0.0, 100.0)
+	return clampf(0.5 * cond + 0.5 * burden_score + 0.25 * (float(u.get("comfort", 60)) - 60.0) - 20.0 * minf(2.0, float(u.arrears)), 0.0, 100.0)
 
 
 func work_score(members: Array) -> float:

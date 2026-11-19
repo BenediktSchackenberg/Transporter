@@ -29,6 +29,7 @@ import civic as CV
 import public as PB
 import meat as MT
 import stoneworks as SW
+import designs as DS
 
 OUT = os.path.join(HERE, "..", "assets", "iso")
 os.makedirs(OUT, exist_ok=True)
@@ -185,6 +186,7 @@ def building_specs():
     s["airport_fire"] = lambda: A.fire(1)
     s.update(MT.specs())   # Fleischkette (Auftrag 21 Teil 2): Schweinemast, Rindermast, Schlachthof, Metzgerei
     s.update(PB.specs())   # kommunale Gebaeude (Auftrag 20): je Typ 6 Grundvarianten x 4 Stadtstile
+    s.update(DS.specs())
     return s
 
 
@@ -198,7 +200,7 @@ def build_buildings(only=None):
         model = res[0] if isinstance(res, tuple) else res
         r = engine.render(model)
         keep = name == "depot"
-        info = save_result("b_" + name, r, keep_mask=keep)
+        info = save_result("b_" + name, r, keep_mask=keep, keep_amask=name.startswith("design_"))
         info["w"] = model.size[0] // 32
         info["h"] = model.size[1] // 32
         info["height"] = meta.get("height", model.size[2])
@@ -393,6 +395,8 @@ def main():
         build_ground()
     if "buildings" in what:
         build_buildings()
+    if "designs" in what:
+        build_buildings(only=list(DS.specs().keys()))
     if "public" in what:
         build_buildings(only=list(PB.specs().keys()))
     if "utilities" in what:

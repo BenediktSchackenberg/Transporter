@@ -198,7 +198,7 @@ func start_project(app_id: String) -> Dictionary:
 	var res := Planning.assess(parcel, a)
 	var costs: Dictionary = res.costs
 	var base := float(costs.bau)
-	var pr := {"id": "BP%d" % _next, "client": a.applicant, "parcel": a.parcel, "app": a.id, "def": a.def, "floors": int(a.floors), "status": "angebote",
+	var pr := {"id": "BP%d" % _next, "client": a.applicant, "parcel": a.parcel, "app": a.id, "def": a.def, "design": str(a.get("design", "")), "floors": int(a.floors), "status": "angebote",
 		"base": base, "build_days": _region_days(int(res.days.bau)), "dev_days": _region_days(int(res.days.erschliessung)), "missing": res.missing.duplicate(), "dev_cost": float(costs.erschliessung),
 		"levy": float(costs.erschliessungsbeitrag), "offers": [], "builder": "", "price": 0.0, "reserved": 0.0, "paid": 0.0, "temp_access": false,
 		"phase": 0, "progress": 0.0, "mats": {}, "blockers": [], "defects": 0, "units": [], "history": [], "lost_days": {}, "start": -1, "end_planned": -1, "end": -1,
@@ -605,6 +605,8 @@ func _hand_over(pr: Dictionary, day: int) -> void:
 		return
 	var parcel: Dictionary = sim.parcels.parcel(pr.parcel)
 	var d: Dictionary = Planning.DEFS[pr.def]
+	var design: Dictionary = BuildingDesigns.design(str(pr.get("design", "")))
+	var label := str(design.get("label", d.label))
 	var w := int(d.w)
 	var h := int(d.h)
 	if w > int(parcel.rect[2]) or h > int(parcel.rect[3]):
@@ -612,13 +614,16 @@ func _hand_over(pr: Dictionary, day: int) -> void:
 		w = h
 		h = t
 	var r := Rect2i(int(parcel.rect[0]) + (int(parcel.rect[2]) - w) / 2, int(parcel.rect[1]) + (int(parcel.rect[3]) - h) / 2, w, h)
-	var b: Dictionary = sim.events._add_building(str(d.sprite), r, "%s (%s)" % [d.label, pr.id])
+	var b: Dictionary = sim.events._add_building(str(d.sprite), r, "%s (%s)" % [label, pr.id], {}, str(design.get("sprite", "")))
 	if b.is_empty():
 		var shifted := Rect2i(int(parcel.rect[0]), int(parcel.rect[1]), w, h)
-		b = sim.events._add_building(str(d.sprite), shifted, "%s (%s)" % [d.label, pr.id])
+		b = sim.events._add_building(str(d.sprite), shifted, "%s (%s)" % [label, pr.id], {}, str(design.get("sprite", "")))
 	if b.is_empty():
 		pr.blockers = ["Gebäude kann nicht übergeben werden (kein Straßenzugang an der Parzelle)."]
 		return
+	if str(pr.client).begins_with("C"):
+		b["owner"] = str(pr.client)
+		sim.events.added_buildings[-1]["owner"] = str(pr.client)
 	sim.market.refresh()
 	sim.residents.add_for_buildings([b.id])
 	if str(d.use) == "versorgung" and pr.client == DEVELOPER:
@@ -644,14 +649,16 @@ func _hand_over(pr: Dictionary, day: int) -> void:
 
 func _create_units(pr: Dictionary, parcel: Dictionary) -> void:
 	var d: Dictionary = Planning.DEFS[pr.def]
+	var design: Dictionary = BuildingDesigns.design(str(pr.get("design", "")))
 	var n := Planning.units_of(pr.def, int(pr.floors))
 	if d.use not in ["wohnen", "misch"]:
 		return
 	sim.towns.mayor(sim.towns.of_building(int(pr.building))).stock_units += n   # Bestand der Stadt, in der das Haus steht (vorher immer Ort 0)
 	for i in n:
-		var u := {"id": "W%d" % _next_unit, "building": int(pr.building), "project": pr.id, "owner": pr.client, "tenant": "", "rent": RENT_PER_UNIT_MONTH, "area": 60 + 10 * i % 3 * 5, "move_in_day": -1}
+		var u := {"id": "W%d" % _next_unit, "building": int(pr.building), "project": pr.id, "owner": pr.client, "tenant": "", "rent": RENT_PER_UNIT_MONTH,
+			"area": float(design.get("area", 60 + 10 * i % 3 * 5)), "comfort": int(design.get("comfort", 60)), "move_in_day": -1}
 		_next_unit += 1
-		var hu: Dictionary = sim.housing.register_unit(int(pr.building), float(u.area), str(pr.client))   # Mietvertraege laufen ueber Housing
+		var hu: Dictionary = sim.housing.register_unit(int(pr.building), float(u.area), str(pr.client), int(u.comfort))   # Mietvertraege laufen ueber Housing
 		u["hid"] = hu.id
 		u.rent = hu.rent
 		units[u.id] = u
@@ -912,13 +919,19 @@ func _demand_town() -> int:
 ## Bautraeger: erstes passendes Grundstueck fuer `def_id` reservieren und den Bauantrag stellen.
 func _developer_try(cands: Array, def_id: String) -> bool:
 	var floors := 3 if def_id == "mehrfamilienhaus" else int(Planning.DEFS[def_id].floors[0])
+	var town := sim.towns.of_parcel(str(cands[0].id)) if not cands.is_empty() else 0
+	var profile: Dictionary = sim.town_plan.of(town) if sim.town_plan != null else {}
+	var style := str(profile.get("form", ""))
+	var pressure := clampf(float(sim.towns.mayor(town).waiting) / 12.0, 0.25, 1.0) if town >= 0 else 0.5
+	var choice: Dictionary = BuildingDesigns.pick(def_id, style, _next + sim.permits.apps.size() + town * 19,
+		available_funds(DEVELOPER) * (2.0 if sim.towns.is_region() else 1.0), pressure)
 	if not cands.is_empty():   # Auftrag 8: bewertete Reihenfolge (Kern, Viertel, Nachbarschaft) statt billigstes Grundstueck zuerst
 		var k: int = Towns.town_of_owner(str(cands[0].owner)) if Towns.is_public(str(cands[0].owner)) else sim.towns.of_parcel(str(cands[0].id))   # Stadt des Eigentuemers (wie die Suche)
 		var dd: Dictionary = Planning.DEFS[def_id]
 		var art := "versorgung" if str(dd.use) == "versorgung" else ("gewerbe" if str(dd.use) == "gewerbe" else "wohnen")
 		if k >= 0 and sim.town_plan.has(k):
 			cands = sim.sites.order_parcels(k, cands, {"w": int(dd.w), "h": int(dd.h), "art": art, "floors": floors, "label": str(dd.label)}, sim.wildnis)
-	var probe := {"def": def_id, "floors": floors, "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": 1.0e9}}
+	var probe := {"def": def_id, "design": str(choice.get("id", "")), "floors": floors, "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": 1.0e9}}
 	for p in cands:
 		var chk := Planning.assess(p, probe)
 		var own_share := (1.0 - ADVANCE_SHARE) if sim.towns.is_region() else 1.0   # Region: die Anzahlung der Anleger kommt bei Vertragsschluss
@@ -936,8 +949,8 @@ func _developer_try(cands: Array, def_id: String) -> bool:
 		var kt: int = sim.towns.of_parcel(str(p.id))
 		if sim.town_plan.has(kt):   # Auftrag 8: Standortentscheidung des Bautraegers nachvollziehbar festhalten
 			var v: Dictionary = sim.town_plan.district_at(kt, Vector2i(int(p.rect[0]) + int(p.rect[2]) / 2, int(p.rect[1]) + int(p.rect[3]) / 2))
-			sim.town_plan.note_decision(kt, {"was": str(Planning.DEFS[def_id].label) + " (Bauträger)", "grundstueck": str(p.id), "viertel": str(v.get("text", "außerhalb der Viertel")),
-				"begruendung": "%s auf %s (%s): bestbewerteter gültiger Platz der Standortprüfung, Bauantrag gestellt." % [Planning.DEFS[def_id].label, p.id, str(v.get("text", "außerhalb der Viertel"))], "alternativen": []})
+			sim.town_plan.note_decision(kt, {"was": str(choice.get("label", Planning.DEFS[def_id].label)) + " (Bauträger)", "grundstueck": str(p.id), "viertel": str(v.get("text", "außerhalb der Viertel")),
+				"begruendung": "%s auf %s (%s): Standort, Stadtmarke %s, Bedarf und Kosten geprüft; Bauantrag gestellt." % [str(choice.get("label", Planning.DEFS[def_id].label)), p.id, str(v.get("text", "außerhalb der Viertel")), style], "alternativen": []})
 		return true
 	return false
 

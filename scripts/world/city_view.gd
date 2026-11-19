@@ -363,6 +363,18 @@ func add_building_sprite(b: Dictionary) -> void:
 	var origin := Iso.tile_origin(cell)
 	var key: String = "b_" + b.sprite
 	var parts := add_iso_object(buildings_node, key, info, origin, int(info.get("w", b.w)), int(info.get("h", b.h)), true, key + "_mask" if b.sprite == "depot" else "")
+	if bool(info.get("amask", false)) and has_tex(key + "_amask") and sim.town_plan != null:
+		var brand: Dictionary = sim.town_plan.of(sim.towns.of_building(int(b.id))).get("marke", {})
+		var accent := Color.html(str(brand.get("akzent", "#7788aa")))
+		for s in parts:
+			var badge := Sprite2D.new()
+			badge.texture = tex(key + "_amask")
+			badge.centered = false
+			badge.region_enabled = true
+			badge.region_rect = s.region_rect
+			badge.offset = s.offset
+			badge.modulate = accent
+			s.add_child(badge)
 	_building_parts[int(b.id)] = parts
 	_apply_wear(int(b.id))
 	var anchor := Vector2(info.anchor[0], info.anchor[1])

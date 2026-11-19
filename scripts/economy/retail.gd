@@ -94,13 +94,7 @@ func setup(s: Simulation) -> void:
 	for b in s.city.buildings:
 		if b.role == "plot":
 			continue
-		var kind := ""
-		if b.type == "restaurant":
-			kind = "restaurant"
-		elif b.type == "pharmacy":
-			kind = "drogerie"
-		elif b.type == "shop":
-			kind = str(SHOP_KIND.get(str(b.name).split(" ")[0], ""))
+		var kind := kind_for(b)
 		if kind != "" and int(per_kind.get(kind, 0)) < int(MAX_PER_KIND[kind]):
 			per_kind[kind] = int(per_kind.get(kind, 0)) + 1
 			_open_shop(b, kind)
@@ -221,6 +215,9 @@ func spec_of(s: Dictionary) -> Dictionary:
 
 ## Geschaeftsart, die zu einem Gebaeude passt ("" = keines).
 static func kind_for(b: Dictionary) -> String:
+	var design: Dictionary = BuildingDesigns.design(str(b.get("design", b.get("sprite", ""))))
+	if not design.is_empty() and str(design.get("function", "")) in KINDS:
+		return str(design.function)
 	if b.type == "restaurant":
 		return "restaurant"
 	if b.type == "pharmacy":
@@ -465,7 +462,9 @@ func customers(s: Dictionary, r: RandomNumberGenerator) -> int:
 	elif s.kind != "restaurant" and sim.wx.is_heavy_rain():
 		wx = 0.9
 	var elastic := pow(1.0 / maxf(0.5, float(s.price_factor)), 1.6)
-	var location := sim.contentment.building_factor(int(s.building))   # attraktive Viertel haben mehr Kundschaft
+	var building: Dictionary = sim.city.building(int(s.building))
+	var design: Dictionary = BuildingDesigns.design(str(building.get("design", building.get("sprite", ""))))
+	var location := sim.contentment.building_factor(int(s.building)) * float(design.get("appeal", 1.0))   # Ausstattung und Lage beeinflussen die Kundschaft
 	var tier_demand := sim.tiers.demand_factor(s)   # Wohnstufen im Viertel (gehobene Angebote brauchen höhere Stufen)
 	return maxi(0, int(round(base * pop * power * wx * elastic * location * tier_demand * r.randf_range(0.8, 1.2))))
 
@@ -749,10 +748,26 @@ func on_month(_month: int) -> void:
 		var pay_w := minf(wages, cash)
 		sim.economy.transfer(s.id, "S0", pay_w)   # S0 zahlt die Loehne des Handels (Citizens, Arbeitgeber "handel")
 		s.wages += pay_w
-		var rent := minf(float(spec.rent), maxf(0.0, float(sim.economy.accounts[s.id])))
-		sim.economy.transfer(s.id, "D0" if sim.construction.dev_shops.has(int(s.building)) else Towns.account_of(sim.towns.of_building(int(s.building))), rent)   # Eigentuemer: Bautraeger oder Stadt
+		var building: Dictionary = sim.city.building(int(s.building))
+		var design: Dictionary = BuildingDesigns.design(str(building.get("design", building.get("sprite", ""))))
+		var due := float(spec.rent) * float(design.get("cost_factor", 1.0))
+		var rent := minf(due, maxf(0.0, float(sim.economy.accounts[s.id])))
+		var owner := str(building.get("owner", ""))
+		if owner.begins_with("C") and owner.substr(1).is_valid_int() and sim.company(int(owner.substr(1))) != null:
+			var town_account := Towns.account_of(sim.towns.of_building(int(s.building)))
+			var property_tax := rent * 0.10
+			sim.economy.transfer(s.id, town_account, property_tax)
+			sim.company(int(owner.substr(1))).ledger.book("rent_income", rent - property_tax, true, "Gewerbemiete %s" % s.name, sim.game_min, s.id)
+			if not design.is_empty():
+				sim.company(int(owner.substr(1))).ledger.book("property_costs", -float(design.maintenance_month), true, "Unterhalt %s" % s.name, sim.game_min, "S0")
+		else:
+			var developer_owned := sim.construction.dev_shops.has(int(s.building))
+			sim.economy.transfer(s.id, "D0" if developer_owned else Towns.account_of(sim.towns.of_building(int(s.building))), rent)
+			if developer_owned and not design.is_empty():
+				sim.economy.transfer("D0", "S0", float(design.maintenance_month))
+				sim.economy.transfer("D0", Towns.account_of(sim.towns.of_building(int(s.building))), rent * 0.10)
 		s.rent += rent
-		if pay_w < wages or rent < float(spec.rent):
+		if pay_w < wages or rent < due:
 			s.status = "zahlungsschwach"
 			s.closed_months = int(s.closed_months) + 1
 			s.last_event = "Monat: Löhne/Miete nicht voll bezahlt."

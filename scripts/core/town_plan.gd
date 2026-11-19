@@ -149,9 +149,10 @@ func derive(k: int, kern: Vector2i) -> Dictionary:
 		if FORMS.has(founder_form):
 			best = founder_form
 	var F: Dictionary = FORMS[best]
+	var palette := _palette(k)
 	var d := {"v": VERSION, "town": k, "form": best, "label": F.label, "kern": [kern.x, kern.y], "landschaft": L,
 		"wasser_richtung": L.richtung, "block": F.block, "hoehen": F.hoehen, "freiraum": F.freiraum, "wirtschaft": F.wirtschaft,
-		"stil": STYLE_OF_FORM[best], "palette": _palette(k), "hausformen": _house_forms(k, best)}
+		"stil": STYLE_OF_FORM[best], "palette": palette, "hausformen": _house_forms(k, best), "marke": _brand(k, best, palette)}
 	d["achse"] = _axis(kern, L)
 	d["viertel"] = _districts(d)
 	return d
@@ -481,6 +482,22 @@ func _palette(k: int) -> Array:
 	return order.slice(0, 3)
 
 
+## Stadtmarke: Herkunft, Farbton und Materialwelt werden einmal festgelegt und gespeichert.
+## Der Stil steuert die Neubauentwuerfe, die Farbe macht gleichartige Stadtformen unterscheidbar.
+func _brand(k: int, form: String, palette: Array) -> Dictionary:
+	var colors := ["#b96045", "#4d83ab", "#68945a", "#b49a73", "#6b89a0", "#c98a4b"]
+	var color_index := posmod(absi(hash([sim.city.seed_value, k, form, palette])), colors.size())
+	var used := {}
+	for key in towns:
+		if int(key) != k:
+			used[str(towns[key].get("marke", {}).get("akzent", ""))] = true
+	while used.has(colors[color_index]) and used.size() < colors.size():
+		color_index = (color_index + 1) % colors.size()
+	return {"name": "%s · %s" % [_name(k), FORMS[form].label], "stil": form,
+		"akzent": colors[color_index], "palette": palette.duplicate(), "leitbild": FORMS[form].text,
+		"signatur": "%s/%d" % [form, color_index]}
+
+
 ## Bauformen der Wohnhaeuser (Silhouette): 5 von 8, je Grundform verschoben, damit Staedte unterschiedliche Familien haben.
 func _house_forms(k: int, form: String) -> Array:
 	var start := (FORMS.keys().find(form) * 3 + absi(hash([sim.city.seed_value, k])) % 2) % HOUSE_FORMS
@@ -543,7 +560,7 @@ func brief(k: int) -> Dictionary:
 	var p := of(k)
 	if p.is_empty():
 		return {}
-	return {"grundform": p.label, "leitbild": FORMS[p.form].text, "freiraum": p.freiraum, "wirtschaft": p.wirtschaft,
+	return {"grundform": p.label, "stadtmarke": p.get("marke", {}), "leitbild": FORMS[p.form].text, "freiraum": p.freiraum, "wirtschaft": p.wirtschaft,
 		"grundstuecke": "%dx%d" % [int(p.block[0]), int(p.block[1])], "hoehen_kern_mitte_rand": p.hoehen,
 		"viertel": (p.viertel as Array).map(func(v): return {"id": v.id, "rolle": v.rolle, "zone": v.zone, "mitte": v.mitte,
 			"geschosse_max": v.geschosse, "zweck": v.text, "status": v.status}),
@@ -859,6 +876,8 @@ func from_dict(d: Dictionary) -> void:
 			p.v = VERSION
 	for key in towns:   # JSON liefert Zahlen als float
 		var p: Dictionary = towns[key]
+		if not p.has("marke") and FORMS.has(str(p.form)):
+			p["marke"] = _brand(int(p.town), str(p.form), p.get("palette", []))
 		p.town = int(p.town)
 		p.hausformen = (p.hausformen as Array).map(func(x): return int(x))
 		p.hoehen = (p.hoehen as Array).map(func(x): return int(x))

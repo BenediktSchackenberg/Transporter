@@ -114,9 +114,10 @@ func assign_household(h: Dictionary) -> Dictionary:
 
 
 ## Neue Wohneinheit eines Bauherrn (aus Construction). Der Eigentuemer erhaelt die Miete.
-func register_unit(building: int, area: float, owner: String) -> Dictionary:
-	var base := roundf(area * RENT_PER_SQM)
-	var u := {"id": "E%d" % _next, "building": building, "area": area, "base": base, "rent": roundf(base * index), "owner": owner, "tenant": "", "arrears": 0, "paid": 0.0}
+func register_unit(building: int, area: float, owner: String, comfort: int = 60) -> Dictionary:
+	var quality := clampf(1.0 + (float(comfort) - 60.0) / 130.0, 0.85, 1.25)
+	var base := roundf(area * RENT_PER_SQM * quality)
+	var u := {"id": "E%d" % _next, "building": building, "area": area, "comfort": comfort, "base": base, "rent": roundf(base * index), "owner": owner, "tenant": "", "arrears": 0, "paid": 0.0}
 	_next += 1
 	units[u.id] = u
 	return u
@@ -238,10 +239,43 @@ func _citizen_occupants() -> Dictionary:
 # ------------------------------------------------------------------ Monat
 func on_month(_month: int) -> void:
 	_update_rents()
+	_design_property_costs()
 	_distribute_landlord_income()
 	_evict_overdue()
 	_house_homeless()
 	stats.homeless = homeless_count()
+
+
+## Ausstattung kostet laufend Geld; besteuerte Neubauten erzeugen Stadteinnahmen.
+## Pro Haus nur einmal abrechnen, auch wenn es viele Wohnungen hat.
+func _design_property_costs() -> void:
+	var groups := {}
+	for u in units.values():
+		var owner := str(u.owner)
+		if owner != "D0" and not (owner.begins_with("C") and owner.substr(1).is_valid_int()):
+			continue
+		var bid := int(u.building)
+		var key := "%s:%d" % [owner, bid]
+		if not groups.has(key):
+			groups[key] = {"owner": owner, "building": bid, "rent": 0.0}
+		groups[key].rent = float(groups[key].rent) + float(u.rent)
+	for g in groups.values():
+		var b: Dictionary = sim.city.building(int(g.building))
+		var design: Dictionary = BuildingDesigns.design(str(b.get("design", b.get("sprite", ""))))
+		if design.is_empty():
+			continue
+		var upkeep := float(design.maintenance_month)
+		var tax := float(g.rent) * PROPERTY_TAX_SHARE
+		var town_account := Towns.account_of(sim.towns.of_building(int(g.building)))
+		if str(g.owner) == "D0":
+			sim.economy.transfer("D0", "S0", upkeep)
+			sim.economy.transfer("D0", town_account, tax)
+		else:
+			var c = sim.company(int(str(g.owner).substr(1)))
+			if c == null:
+				continue
+			c.ledger.book("property_costs", -upkeep, true, "Unterhalt %s" % b.name, sim.game_min, "S0")
+			c.ledger.book("property_costs", -tax, true, "Grundsteuer %s" % b.name, sim.game_min, town_account)
 
 
 ## Mietspiegel: folgt dem Mietindex des Buergermeisters (Wohnungssuchende, Leerstand), hoechstens INDEX_STEP je Monat.

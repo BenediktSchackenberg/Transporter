@@ -110,6 +110,10 @@ static func assess(parcel: Dictionary, app: Dictionary) -> Dictionary:
 	var d: Dictionary = DEFS.get(str(app.get("def", "")), {})
 	if d.is_empty():
 		return {"ok": false, "blocking": ["Gebäudeart unbekannt."], "questions": [], "conditions": [], "costs": {}, "days": {}, "missing": [], "units": 0}
+	var design_id := str(app.get("design", ""))
+	if not BuildingDesigns.valid_for(design_id, str(app.get("def", ""))):
+		return {"ok": false, "blocking": ["Der Bauentwurf passt nicht zur Gebäudeart."], "questions": [], "conditions": [], "costs": {}, "days": {}, "missing": [], "units": 0}
+	var design: Dictionary = BuildingDesigns.design(design_id)
 	var zone: String = parcel.zone
 	var zr: Dictionary = rules(zone)
 	var floors := int(app.get("floors", d.floors[0]))
@@ -155,7 +159,7 @@ static func assess(parcel: Dictionary, app: Dictionary) -> Dictionary:
 		blocking.append("Im %s ist ein Lieferzugang erforderlich; es gibt keinen Straßenzugang." % zr.label)
 	var ground := int(d.w) * int(d.h) * floors
 	var fee := float(zr.gebuehr_basis) + float(zr.gebuehr_je_geschossfeld) * float(ground)
-	var cost := build_cost(str(app.def), floors)
+	var cost := snappedf(build_cost(str(app.def), floors) * float(design.get("cost_factor", 1.0)), 10.0)
 	var costs := {"bau": cost, "gebuehr": snappedf(fee, 1.0), "erschliessungsbeitrag": snappedf(levy, 1.0), "erschliessung": snappedf(dev_cost, 1.0)}
 	costs["gesamt"] = cost + costs.gebuehr + costs.erschliessungsbeitrag + costs.erschliessung
 	# Finanzierung: nur gesicherte Mittel zaehlen; eine unverbindliche Kreditanfrage ist keine Finanzierung
@@ -169,7 +173,7 @@ static func assess(parcel: Dictionary, app: Dictionary) -> Dictionary:
 			questions.append("Der Kredit ist nicht zugesagt; gesichert sind %s von %s." % [Catalog.money(secured), Catalog.money(float(costs.gesamt))])
 		else:
 			questions.append("Die Finanzierung ist nicht gesichert: es fehlen %s." % Catalog.money(gap))
-	var days := {"bau": build_days(str(app.def), floors), "erschliessung": dev_days}
+	var days := {"bau": maxi(1, int(ceil(build_days(str(app.def), floors) * (1.0 + maxf(0.0, float(design.get("cost_factor", 1.0)) - 1.0) * 0.25)))), "erschliessung": dev_days}
 	var ok := blocking.is_empty()
 	return {"ok": ok, "blocking": blocking, "questions": questions, "conditions": conditions, "costs": costs, "days": days,
 		"missing": missing, "units": units_of(str(app.def), floors), "cover": cover}

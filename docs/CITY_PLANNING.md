@@ -315,3 +315,11 @@ Reservierung). Danach (Etappe 4) laufen alle Pfade der Tabelle über `SiteSelect
   Bauaktion; ohne gültigen Platz den Hinweis auf fehlende Straßen. Die Firma entscheidet selbst.
 - Bürgermeister-Kennzahl `stadtplan_naechster_abschnitt` mit fertiger Aktion; die Regel-KI erschließt den nächsten Abschnitt vor
   Routineaufgaben (ein Straßennetz nach dem anderen).
+
+### Entwurfskatalog und Stadtmarke (19.11.2026)
+
+- `config/building_designs.json` enthält 120 Wohnentwürfe in fünf Bauarten und 120 Gewerbeentwürfe in zehn Bauarten. Jeder Entwurf hat eine eigene stabile Voxelgrafik, Ausstattung, Kostenfaktor, Komfort, Energiebedarf und Funktion. Mit `python tools/generate_design_catalog.py` wird der Katalog reproduzierbar erzeugt; `python tools/build_iso.py designs` rendert die Grafiken und aktualisiert das Manifest.
+- Das gespeicherte Stadtprofil `marke` enthält Name, Leitbild, Materialstil und Akzentfarbe. Die sechs Formstile bestimmen Fassaden und Dächer der KI-Neubauten. Schilder und Eingangsmosaike bekommen auf der Karte die individuelle Stadtfarbe als Sprite-Maske.
+- Bauanträge tragen optional `design`; `Planning.assess` prüft die Bauart und berechnet daraus Preis und Dauer. Bauvorhaben und Wildnis-Baustellen erhalten genau dieses Sprite. Der Bauträger wählt Entwürfe nach Stadtmarke, Nachfrage, Abwechslung und Kapital; die KI-Unternehmer sehen kurze Wohn- und Gewerbeangebote und können mit `haus_bauen` beziehungsweise `gewerbe_bauen` selbst wählen.
+- Wohnentwürfe verändern Wohnfläche, Miete, Wohnzufriedenheit, Strom- und Wassergrundlast. Läden behalten ihre Waren-, Personal- und Lieferketten; Ausstattung beeinflusst Kundschaft und Gewerbemiete. Unterhalt belastet den Eigentümer, Grundsteuer fließt an die Stadt. Büros, Lager und Passagen sind baubare Immobilien; für einen zusätzlichen Geschäftsbetrieb ist eine passende Firmengründung nötig.
+- Alte Spielstände ohne Entwurf oder Marke behalten ihre bisherige Bauart und erhalten beim Laden eine deterministische Stadtmarke. Neue Entwurf-Sprites bleiben über den Gebäudeeintrag gespeichert.

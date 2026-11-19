@@ -315,7 +315,9 @@ func indicators() -> Dictionary:
 		if a.status == "zur_entscheidung" and _mine(str(a.parcel)):
 			queue_ids.append(a.id)
 			var pre := Planning.assess(sim.parcels.parcel(a.parcel), a)
-			pending.append({"id": a.id, "antragsteller": a.applicant, "grundstueck": a.parcel, "art": Planning.DEFS[a.def].label, "geschosse": a.floors,
+			var design: Dictionary = BuildingDesigns.design(str(a.get("design", "")))
+			pending.append({"id": a.id, "antragsteller": a.applicant, "grundstueck": a.parcel, "art": str(design.get("label", Planning.DEFS[a.def].label)), "geschosse": a.floors,
+				"entwurf": str(a.get("design", "")), "komfort": int(design.get("comfort", 60)), "ausstattung": design.get("amenities", []),
 				"einheiten": pre.units, "kosten_gesamt": pre.costs.get("gesamt", 0.0), "vorpruefung_ok": pre.ok, "ablehnungsgruende": pre.blocking,
 				"offene_punkte": pre.questions, "auflagen": pre.conditions.map(func(c): return c.text), "rueckfragen_bisher": int(a.get("mayor_queries", 0))})
 	var trend := 0
@@ -355,6 +357,7 @@ func indicators() -> Dictionary:
 		"projekte": projects.values().map(func(p): return {"id": p.id, "art": p.kind, "status": p.status, "kosten": p.cost, "prioritaet": p.get("priority", 0), "grundstuecke": p.parcels.slice(0, MAX_CLUSTER)}),
 		"stadtlager": stadtlager_indicators(),
 		"entwicklungsvorschlaege": quarter_candidates(3),
+		"stadtplan": sim.town_plan.brief(town) if sim.town_plan != null else {},
 		"stadtplan_naechster_abschnitt": sim.town_plan.next_district(town, waiting > 0) if sim.town_plan != null else {},
 		"stadtplan_erweiterung": sim.town_plan.expansion_sites(town) if sim.town_plan != null else [],
 		"planungsregeln": ["wohnen", "mischgebiet", "gewerbe", "industrie"].map(func(z): return Planning.rules(z)),

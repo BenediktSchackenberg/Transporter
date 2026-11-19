@@ -141,7 +141,9 @@ func output_of(k: int) -> Dictionary:
 
 
 func biz_need(b: Dictionary) -> float:
-	return BIZ_BASE + BIZ_PER_KW * float(b.get("energy_kw", 0.0))
+	var site := int(b.get("site", -1))
+	var building: Dictionary = sim.city.building(site) if site >= 0 else {}
+	return (BIZ_BASE + BIZ_PER_KW * float(b.get("energy_kw", 0.0))) * float(building.get("water_factor", 1.0))
 
 
 ## Einrichtungen: TYPES.water gilt fuer eine Stadt mit REF_POP Einwohnern; kleinere Orte anteilig (mind. 5 %), davon die Haelfte
@@ -441,7 +443,7 @@ func _supply_town(k: int, businesses: Array, hh_share: float = 1.0, sewer_share:
 		leak = minf(BREAK_LEAK, avail)
 		avail -= leak
 	var pop := float(sim.citizens.population_of(k))
-	var need_h := pop * hh_share * L_PER_PERSON
+	var need_h := pop * hh_share * L_PER_PERSON * BuildingDesigns.residential_factor(sim, k, "water_factor")
 	var need_f := 0.0
 	for f in sim.municipal.facilities.values():
 		if int(f.town) == k and f.status == "in_betrieb" and building_on_net(k, int(f.building)):

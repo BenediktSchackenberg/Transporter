@@ -874,6 +874,10 @@ static func town(sim: Simulation, k: int = 0) -> String:
 	var chr: String = str(T.get_t(k).get("charakter", ""))
 	var txt := "[b][color=#f2c14e]%s[/color][/b]%s  (Bürgermeister %s, %s, Zustimmung %d %%%s)\n" % [esc(name).to_upper(), (" · " + chr) if chr != "" else "", esc(M.name), M.party, int(M.approval),
 		", Stadt %d von %d · Taste O wechselt" % [k + 1, T.count()] if region else ""]
+	var brand: Dictionary = sim.town_plan.of(k).get("marke", {}) if sim.town_plan != null else {}
+	if not brand.is_empty():
+		var styled := sim.city.buildings.filter(func(b): return b.has("design") and T.of_building(int(b.id)) == k).size()
+		txt += "[color=%s]◆[/color] [b]Stadtmarke[/b] %s · %s · %d individuelle Neubauten\n" % [str(brand.akzent), esc(str(brand.name)), esc(str(brand.leitbild)), styled]
 	var homes := sim.housing.units.values().filter(func(u): return T.of_building(int(u.building)) == k) if region else sim.housing.units.values()
 	var nb: int = sim.city.buildings.filter(func(b): return not region or T.of_building(int(b.id)) == k).size()
 	txt += "Einwohner %d · Wohnungen %d (Leerstand %d %%) · Wohnungssuchende %d · Wohnhäuser %d · Geschäfte %d · Gebäude %d · Zufriedenheit %.0f\n" % [sim.citizens.population_of(k),
@@ -1431,8 +1435,11 @@ static func mountain(sim: Simulation, pid: String) -> String:
 
 static func site(sim: Simulation, pr: Dictionary) -> String:
 	var C: Construction = sim.construction
+	var design: Dictionary = BuildingDesigns.design(str(pr.get("design", "")))
 	var txt := "Bauherr: %s · Baufirma: %s · Genehmigung: %s · Status: %s
 " % [pr.client, C.builders[pr.builder].name if pr.builder != "" else "noch keine", pr.app, pr.status]
+	if not design.is_empty():
+		txt += "Entwurf: %s · Komfort %d/100 · Ausstattung %s · Baukostenfaktor %.2f\n" % [esc(str(design.label)), int(design.comfort), esc(", ".join(design.amenities)), float(design.cost_factor)]
 	txt += "Preis %s · bezahlt %s · zurückgelegt %s · Phase: %s · Fortschritt %.0f %% · Fertigstellung ca. Tag %d
 " % [Catalog.money(float(pr.price)), Catalog.money(float(pr.paid)),
 		Catalog.money(float(pr.reserved)), C.phase_label(pr), C.progress_of(pr) * 100.0, C.forecast_day(pr)]

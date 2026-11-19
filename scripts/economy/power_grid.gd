@@ -61,7 +61,7 @@ func shares() -> Dictionary:
 
 
 func base_load_of(k: int) -> float:
-	return float(sim.citizens.population_of(k)) * float(cfg().grundlast_kw_je_einwohner)
+	return float(sim.citizens.population_of(k)) * float(cfg().grundlast_kw_je_einwohner) * BuildingDesigns.residential_factor(sim, k, "energy_factor")
 
 
 func town_of_biz(b: Dictionary) -> int:
@@ -76,7 +76,16 @@ func _town(k: int) -> Dictionary:
 
 
 func base_load() -> float:
-	return float(sim.citizens.population()) * float(cfg().grundlast_kw_je_einwohner)
+	var total := 0.0
+	for k in maxi(1, sim.towns.count()):
+		total += base_load_of(k)
+	return total
+
+
+func effective_kw(b: Dictionary) -> float:
+	var site := int(b.get("site", -1))
+	var building: Dictionary = sim.city.building(site) if site >= 0 else {}
+	return float(b.get("energy_kw", 0.0)) * float(building.get("energy_factor", 1.0))
 
 
 ## Stromanschluss des Betriebsgrundstuecks (Erschliessung der Parzelle des Standortgebaeudes; ohne Parzelle: Bestand gilt als angeschlossen).
@@ -135,7 +144,7 @@ func _allocate() -> void:
 		free_plant = 0.0
 	supplied.clear()
 	for b in consumers:
-		var kw := float(b.energy_kw)
+		var kw := effective_kw(b)
 		demand += kw
 		var tk: Dictionary = towns.get(str(town_of_biz(b)), towns["0"])
 		tk.betriebe = float(tk.betriebe) + kw
@@ -196,7 +205,7 @@ func _bill() -> void:
 		var b: Dictionary = sim.biz.get_b(id)
 		if b.is_empty() or b.status not in Businesses.RUNNING or sim.biz.frozen(int(b.owner)):
 			continue
-		var kwh := float(b.energy_kw) * hours
+		var kwh := effective_kw(b) * hours
 		var cost := minf(kwh * tariff, maxf(0.0, sim.company(int(b.owner)).ledger.cash))   # nie ins Minus; Versorgung endet dann (siehe _allocate)
 		var k := town_of_biz(b)
 		sim.company(int(b.owner)).ledger.book("energy", -cost, true, "Strom %s (%.0f kWh)" % [b.name, kwh], sim.game_min, Towns.account_of(k), id)

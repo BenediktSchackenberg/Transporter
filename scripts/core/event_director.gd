@@ -215,7 +215,7 @@ func _free(r: Rect2i) -> bool:
 ## wurde ein 2x2-Bild an der hinteren Ecke (leere Rasenflaeche, falsche Tiefensortierung) und jedes neue Haus bekam dieselbe Variante.
 ## Keine Zelle der Grundflaeche darf Strasse, Wasser oder ein anderes Gebaeude sein; Belegung erst nach allen Pruefungen.
 ## Variante: seedstabil aus Lage, moeglichst verschieden von den Nachbarn. `replay`: Eintrag aus dem Spielstand exakt wiederherstellen.
-func _add_building(type: String, r: Rect2i, name: String, replay: Dictionary = {}) -> Dictionary:
+func _add_building(type: String, r: Rect2i, name: String, replay: Dictionary = {}, sprite_override: String = "") -> Dictionary:
 	var c: CityData = sim.city
 	var info: Array = CityGenerator.TYPES[type]
 	var fp := r
@@ -225,7 +225,7 @@ func _add_building(type: String, r: Rect2i, name: String, replay: Dictionary = {
 			fp = _footprint_in(r, Vector2i(int(info[1]), int(info[2])))
 			if fp.size.x <= 0:
 				return {}
-		sprite = str(replay.get("sprite", "")) if not replay.is_empty() else _pick_variant(type, fp)
+		sprite = str(replay.get("sprite", "")) if not replay.is_empty() else (sprite_override if sprite_override != "" else _pick_variant(type, fp))
 	if sprite == "":
 		sprite = _pick_variant(type, fp)   # alter Spielstand (v1): Grundflaeche wie gespeichert, Variante nur fuer die Darstellung
 	if replay.is_empty():
@@ -245,6 +245,15 @@ func _add_building(type: String, r: Rect2i, name: String, replay: Dictionary = {
 	var b := {"id": c.buildings.size(), "type": type, "sprite": sprite, "x": fp.position.x, "y": fp.position.y,
 		"w": fp.size.x, "h": fp.size.y, "district": c.district_of(fp.position), "in": info[3], "out": info[4], "role": "customer",
 		"name": name, "lot": [r.position.x, r.position.y, r.size.x, r.size.y]}
+	if replay.has("owner"):
+		b["owner"] = str(replay.owner)
+	var design: Dictionary = BuildingDesigns.design(sprite)
+	if not design.is_empty():
+		b["design"] = sprite
+		b["comfort"] = int(design.comfort)
+		b["energy_factor"] = float(design.energy_factor)
+		b["water_factor"] = float(design.water_factor)
+		b["maintenance_month"] = int(design.maintenance_month)
 	for y in range(fp.position.y, fp.end.y):
 		for x in range(fp.position.x, fp.end.x):
 			var p := Vector2i(x, y)

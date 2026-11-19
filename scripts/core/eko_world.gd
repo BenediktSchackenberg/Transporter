@@ -2191,7 +2191,7 @@ const FIRM_ACTIONS := [
 	# Unternehmensplan (PlanBook): Ziel, Schritte, Nutzen, Risiken, Abbruchbedingungen
 	"set_plan", "review_plan", "execute_plan_step", "update_plan_step", "cancel_plan",
 	# Konkurrenz: fair und unfair (das Wesen entscheidet selbst; ermittelte Verstoesse werden bei Wiederholung immer teurer)
-	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "bauleute", "tageloehner", "strasse_bauen", "buergeramt_bauen",
+	"send_message", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "propose_cooperation", "poach_customer", "report_rival", "auftrag_an_wesen", "haus_bauen", "gewerbe_bauen", "bauleute", "tageloehner", "strasse_bauen", "buergeramt_bauen",
 	"buy_security", "set_insurance", "block_road", "attempt_sabotage", "attempt_vehicle_sabotage",
 	# Waffenschmiede (nur mit eigener, laufender Waffenschmiede)
 	"design_weapon", "forge_weapon", "fortify_building", "rebuild_building",
@@ -2312,6 +2312,10 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		var rh := homes.plan(cid, a)
 		_event(b, "Firma: haus_bauen → %s" % str(rh.msg).left(80))
 		return rh
+	if str(a.action) == "gewerbe_bauen":
+		var rc := homes.plan_commercial(cid, a)
+		_event(b, "Firma: gewerbe_bauen → %s" % str(rc.msg).left(80))
+		return rc
 	if str(a.action) == "tageloehner":   # Wildnis (18.11.): Hilfskraefte vom Grosslager, bauen auch ohne den Inhaber
 		return homes.hire_helpers(cid, a)
 	if str(a.action) == "bauleute":
@@ -2476,6 +2480,32 @@ func _firm_action_schema() -> Dictionary:
 			out[name] = schema[name].get("params", {})
 	return out
 
+func _design_style(town: int) -> String:
+	var style := str(sim.town_plan.of(town).get("form", "")) if sim.town_plan != null else ""
+	if style == "":
+		style = str(conflict.strategy_for_town(town).get("form", ""))
+	return style if TownPlan.FORMS.has(style) else "gartenstadt"
+
+
+func _home_design_options(town: int) -> Array:
+	var style := _design_style(town)
+	var out: Array = []
+	for base in EkoHomes.HOMES:
+		if sim.tiers.unlocked(base):
+			for option in BuildingDesigns.shortlist(base, style):
+				out.append(option)
+	return out
+
+
+func _commercial_design_options(town: int) -> Array:
+	var style := _design_style(town)
+	var out: Array = []
+	for base in EkoHomes.COMMERCIAL:
+		for option in BuildingDesigns.shortlist(base, style):
+			out.append(option)
+	return out
+
+
 func firm_obs(b: Dictionary) -> Dictionary:
 	var cid := int(b.get("firma", -1))
 	if cid < 0 or sim.company(cid) == null:
@@ -2488,6 +2518,9 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var models: Dictionary = o.fahrzeugmodelle
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
 		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),
+		"stadtmarke": sim.town_plan.brief(sim.companies[cid].home_town).get("stadtmarke", {}) if sim.town_plan != null and sim.town_plan.has(sim.companies[cid].home_town) else {},
+		"bauentwuerfe": _home_design_options(sim.companies[cid].home_town),
+		"gewerbeentwuerfe": _commercial_design_options(sim.companies[cid].home_town),
 		"standortangebote": sim.sites.offers(sim.companies[cid].home_town, "einfamilienhaus") if sim.wildnis and sim.town_plan.has(sim.companies[cid].home_town) else [],
 		"unternehmensplan": sim.plans.summary(cid) if sim.get("plans") != null else {},
 		"dispositionsvorgaben": sim.operations.dispatch_policy(cid),
@@ -2531,7 +2564,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
 			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +
-			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus, grundstueck?} (Wohnhaus selbst bauen: Material per hub_buy holen, vermieten oder sell_property) | bauleute {baustelle, worker_ids} | strasse_bauen {bis: [x, y], von?: [x, y]} (Straßenbaustelle, Kies vom Hof) | buergeramt_bauen {} (danach gibt es die Stadt) | hub_buy {item, qty} | sell_property {gebaeude} | " +
+			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus|stadtvilla|hochhaus, entwurf?: design_w_NNN, grundstueck?} | gewerbe_bauen {typ, entwurf?: design_g_NNN, grundstueck?} (Entwurf aus gewerbeentwuerfe wählen; Material per hub_buy holen) | bauleute {baustelle, worker_ids} | strasse_bauen {bis: [x, y], von?: [x, y]} (Straßenbaustelle, Kies vom Hof) | buergeramt_bauen {} (danach gibt es die Stadt) | hub_buy {item, qty} | sell_property {gebaeude} | " +
 			"recruit_foreman {worker_id} | assign_foreman {foreman_id, worker_ids} | guard_target {worker_id, site_id} | request_tunnel {von: [x,y], nach: [x,y]} | " +
 			"place_building {plot_id, typ, x, y, rot} (Hofbau, Vorschläge in hofbau) | free_build {name, form, material} | " +
 			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +
