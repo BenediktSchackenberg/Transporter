@@ -1450,6 +1450,7 @@ func _minute_tick() -> void:
 		airport.update_fire(game_min)   # Feuerwehr: Wehrauto hin und rueck (Etappe E5)
 	if minute_index % 5 == 0:
 		crews.tick(game_min)
+		construction.tick_public_connectors(game_min)
 	if minute_index % VehicleWorks.TICK_MIN == 0:
 		vworks.tick(game_min)
 	air.tick(game_min)
@@ -1742,9 +1743,9 @@ static func from_dict(d: Dictionary) -> Simulation:
 			for pl in st.plots:
 				s.parcels.carve(Rect2i(int(pl[0]), int(pl[1]), int(pl[2]), int(pl[3])), str(pl[4]) if pl.size() > 4 else "wohnen", Towns.owner_of(int(key)))
 
-	for M in s.towns.mayors:   # Strassen aus fertigen Erschliessungen wieder anlegen
+	for M in s.towns.mayors:   # fertige und bereits gebaute Abschnitte laufender Erschliessungen wieder anlegen
 		for prj in M.projects.values():
-			if prj.get("status", "") == "fertig" and prj.has("road_cells"):
+			if prj.has("road_cells") and str(prj.get("status", "")) not in ["abgebrochen", "abgelehnt"]:
 				s.access.reapply(prj.road_cells)
 	s.construction.from_dict(d.get("construction", {}))
 	s.city_depot.from_dict(d.get("city_depot", {}))

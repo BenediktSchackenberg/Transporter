@@ -1113,6 +1113,14 @@ func _public_day(day: int) -> void:
 	for e in public.values():
 		if e.status != "laufend" or day < int(e.start):
 			continue
+		# In der Wildnis haengt jede weitere staedtische Lieferung an diesem ersten Anschluss. Die Baufirma
+		# bringt ihr Material selbst mit; auch bereits gespeicherte lange Auftraege erhalten den Gruendungstakt.
+		if sim.wildnis and int(e.days_left) > 2:
+			var M: Mayor = sim.towns.mayor_of_project(str(e.project))
+			var connector: Dictionary = M.projects.get(str(e.project), {}) if M != null else {}
+			if str(connector.get("ref", "")) == "anschluss":
+				e.days_left = 2
+				e.days = 2
 		if builders[e.builder].status != "aktiv":
 			continue
 		if not sim.towns.depot(Towns.town_of_id(str(e.project))).project_complete(str(e.project)):
@@ -1129,6 +1137,35 @@ func _public_day(day: int) -> void:
 
 
 const AUTO_TENDER_DAYS := 3   # beschlossenes Projekt ohne Ausschreibung: danach schreibt das Bauamt selbst aus (langsame KI)
+const HUB_ROAD_BUILD_MIN := 240.0   # erste Verbindung: sichtbare Strassenabschnitte ueber vier Spielstunden
+
+
+## Den ersten Anschluss nach Ankunft des Bautrupps Feld fuer Feld anlegen. Tagesprojekte erschienen bisher
+## bei 600-Sekunden-Tagen erst nach vielen Echtzeitminuten auf der Karte, obwohl der Trupp schon arbeitete.
+func tick_public_connectors(now: float) -> void:
+	if not sim.wildnis:
+		return
+	for e in public.values():
+		if str(e.status) != "laufend" or GameCalendar.day_of(now) < int(e.start):
+			continue
+		var M: Mayor = sim.towns.mayor_of_project(str(e.project))
+		var prj: Dictionary = M.projects.get(str(e.project), {}) if M != null else {}
+		if str(prj.get("ref", "")) != "anschluss" or not prj.has("road_plan") or prj.road_plan.is_empty():
+			continue
+		if builders[e.builder].status != "aktiv" or not sim.towns.depot(M.town).project_complete(str(e.project)) or not sim.crews.on_site("pub", str(e.project)):
+			continue
+		if not e.has("road_start_min"):
+			e["road_start_min"] = now
+		var cells: Array = prj.road_plan
+		var placed := int(e.get("road_placed", 0))
+		var target := mini(cells.size(), int(floor((now - float(e.road_start_min)) / HUB_ROAD_BUILD_MIN * float(cells.size()))))
+		if target > placed:
+			var section: Array = cells.slice(placed, target).map(func(a): return Vector2i(int(a[0]), int(a[1])))
+			sim.access._apply_cells(section)
+			prj["road_cells"] = cells.slice(0, target)
+			e["road_placed"] = target
+		if target >= cells.size():
+			_finish_public(e)
 
 
 func _tender_public(M: Mayor, day: int) -> void:
@@ -1153,6 +1190,8 @@ func _tender_public(M: Mayor, day: int) -> void:
 				days = PowerGrid.EXPAND_DAYS
 			if prj.has("days"):
 				days = int(prj.days)   # Bruecke: Bauzeit aus Variante und Spannweite
+			if sim.wildnis and str(prj.get("ref", "")) == "anschluss":
+				days = 2   # erste Lieferstrasse: zwei Arbeitstage mit einer professionellen Baufirma
 			var offers := make_offers(float(prj.cost), days, str(prj.id))
 			prj.tender["bids"] = offers
 			var o := best_offer(offers, float(prj.cost))

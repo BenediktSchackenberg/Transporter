@@ -40,6 +40,7 @@ func _initialize() -> void:
 	test_names.append("test_neubeginn_homes")
 	test_names.append("test_wildnis_start")
 	test_names.append("test_wildnis_found")
+	test_names.append("test_wildnis_connector_progress")
 	test_names.append("test_wildnis_log_fixes")
 	test_names.append("test_wildnis_hub_supply")
 	test_names.append("test_collisions")
@@ -8753,6 +8754,45 @@ func test_wildnis_helpers() -> void:
 	RegionGenerator.wildnis = false
 
 
+func test_wildnis_connector_progress() -> void:
+	var s := wildnis_sim(2)
+	var route: Array = []
+	for y in range(60, s.city.size - 60, 12):
+		if not route.is_empty():
+			break
+		for x in range(60, s.city.size - 65, 12):
+			var candidate: Array = []
+			for dx in 4:
+				var q := Vector2i(x + dx, y)
+				if not s.eko.settle._road_cell_ok(q) or s.city.is_road(q):
+					candidate.clear()
+					break
+				candidate.append([q.x, q.y])
+			if candidate.size() == 4:
+				route = candidate
+				break
+	ok(route.size() == 4, "vier freie Straßenfelder für den Anschluss-Test")
+	if route.is_empty():
+		return
+	var M: Mayor = s.towns.mayor(0)
+	M.projects["P999"] = {"id": "P999", "kind": "erschliessung", "ref": "anschluss", "parcels": [], "parts": ["strasse"],
+		"cost": 400.0, "status": "beauftragt", "road_plan": route, "viertel": "Anschluss"}
+	s.construction.public["P999"] = {"project": "P999", "builder": "BF1", "price": 400.0, "days_left": 8, "days": 8,
+		"status": "laufend", "start": 0, "paid": 0.0, "waiting": ""}
+	s.crews.crews["T999"] = {"id": "T999", "builder": "BF1", "name": "Testtrupp", "home": route[0], "site": route[0], "at": route[0],
+		"next": 0.0, "state": "bauen", "job": {"kind": "pub", "id": "P999"}, "delivery": "", "src": "", "note": ""}
+	s.construction._public_day(0)
+	ok(int(s.construction.public.P999.days_left) <= 2, "alter langer Anschlussauftrag erhält den schnellen Gründungstakt")
+	s.construction.tick_public_connectors(s.game_min)
+	s.construction.tick_public_connectors(s.game_min + Construction.HUB_ROAD_BUILD_MIN / 2.0)
+	var partial: Array = M.projects.P999.get("road_cells", [])
+	ok(partial.size() == 2 and s.city.is_road(Vector2i(int(route[0][0]), int(route[0][1]))) and not s.city.is_road(Vector2i(int(route[3][0]), int(route[3][1]))), "Anschluss wächst sichtbar in Abschnitten")
+	var loaded := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(loaded.city.is_road(Vector2i(int(route[0][0]), int(route[0][1]))) and not loaded.city.is_road(Vector2i(int(route[3][0]), int(route[3][1]))), "angefangene Straßenabschnitte überstehen Speichern und Laden")
+	s.construction.tick_public_connectors(s.game_min + Construction.HUB_ROAD_BUILD_MIN + 1.0)
+	ok(str(s.construction.public.P999.status) == "fertig" and s.city.is_road(Vector2i(int(route[3][0]), int(route[3][1]))), "erster Straßenanschluss wird nach vier Spielstunden fertig")
+
+
 func test_wildnis_found() -> void:
 	var s := wildnis_sim(2)
 	var E: EkoWorld = s.eko
@@ -8827,7 +8867,7 @@ func test_wildnis_found() -> void:
 	if not ba.ok:
 		return
 	var hs: Dictionary = E.homes.sites[ba.baustelle]
-	ok(E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "holz", "qty": 20}}).ok, "Holz gekauft")
+	ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "holz", "qty": 20}}).ok, "bereits für das Bürgeramt gekauftes Holz wird nicht doppelt bestellt")
 	ok(E.homes.next_step(cid).contains("LKW {ziel"), "nächster Schritt: selbst abholen (%s)" % E.homes.next_step(cid).left(80))
 	var tr: Dictionary = E.input(p0, "LKW", {"ziel": "grosslager"})
 	if tr.ok and str(tr.get("status", "")) == "laeuft" and not B.has("im_lkw"):   # erst zum LKW gehen
@@ -8866,8 +8906,15 @@ func test_wildnis_found() -> void:
 	ok(int(s.towns.get_t(k).town_hall) == int(s.city.towns[k].get("town_hall", -2)), "Towns-Register kennt das Rathaus")
 	ok(E.blocks.size() == nb0, "Rohbau-Blöcke durch das Gebäude ersetzt")
 	ok(E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister wacht auf")
-	# Strasse selbst bauen
 	var ctr := Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1]))
+	var hint_day := GameCalendar.day_of(s.game_min)
+	E.settle._link_cache[k] = {"day": hint_day, "verbunden": false, "von": [ctr.x, ctr.y], "bis": [ctr.x + 8, ctr.y], "felder": 8}
+	ok(E.homes.next_step(cid).contains("Straße bauen"), "ohne kommunalen Auftrag wird eine fehlende Straße vorgeschlagen")
+	s.towns.mayor(k).projects["P_HINT"] = {"id": "P_HINT", "ref": "anschluss", "status": "beauftragt"}
+	ok(not E.homes.next_step(cid).contains("Straße bauen"), "kommunaler Straßenauftrag beendet widersprüchlichen KI-Hinweis")
+	s.towns.mayor(k).projects.erase("P_HINT")
+	E.settle._link_cache.erase(k)
+	# Strasse selbst bauen
 	var far := Vector2i(-1, -1)
 	for dy in range(-20, 21):
 		if far.x >= 0:
@@ -8917,8 +8964,36 @@ func test_wildnis_found() -> void:
 		var an: Dictionary = s.towns.mayor(k).hub_connection()
 		ok(not an.is_empty() and str(an.ref) == "anschluss" and not (an.road_plan as Array).is_empty() and (an.material as Dictionary).is_empty(), "Bauamt beschließt den Straßenanschluss ans Großlager")
 		ok(s.towns.mayor(k).hub_connection().is_empty(), "Anschluss nur einmal beschlossen")
+		ok(not E.homes.next_step(cid).contains("Deine Stadt hat keine Straße zum Großlager"), "beauftragte städtische Trasse erzeugt keinen widersprüchlichen privaten Straßenauftrag")
+		s.construction._tender_public(s.towns.mayor(k), GameCalendar.day_of(s.game_min) + 1)
+		var connector_work: Dictionary = s.construction.public.get(str(an.id), {})
+		ok(not connector_work.is_empty() and int(connector_work.days) == 2, "professionelle Anschlussstraße braucht in der Wildnis nur zwei Arbeitstage")
 		var early_build: Dictionary = s.towns.mayor(k).execute({"action": "kommunal_bauen", "typ": "PO-01", "reason": "Sicherheit"})
 		ok(not early_build.ok and str(early_build.msg).contains("Straßenanschluss"), "ohne Anschluss keine Projekte mit Stadtlager-Material: %s" % str(early_build.msg).left(80))
+		if not connector_work.is_empty():
+			connector_work.start = GameCalendar.day_of(s.game_min)
+			s.crews.crews["TEST_CONNECTOR"] = {"id": "TEST_CONNECTOR", "builder": connector_work.builder, "state": "bauen", "job": {"kind": "pub", "id": an.id}}
+			s.construction.tick_public_connectors(s.game_min)
+			connector_work.road_start_min = s.game_min - Construction.HUB_ROAD_BUILD_MIN / 2.0
+			s.construction.tick_public_connectors(s.game_min)
+			var partial := int(connector_work.get("road_placed", 0))
+			ok(partial > 0 and partial < (an.road_plan as Array).size() and s.towns.mayor(k).projects[str(an.id)].road_cells.size() == partial, "Anschlussstraße wächst sichtbar in Abschnitten")
+			var partial_cell: Array = an.road_plan[0]
+			var loaded_partial := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+			ok(loaded_partial.city.is_road(Vector2i(int(partial_cell[0]), int(partial_cell[1]))), "sichtbarer Straßenabschnitt übersteht Speichern und Laden")
+			connector_work.road_start_min = s.game_min - Construction.HUB_ROAD_BUILD_MIN - 1.0
+			s.construction.tick_public_connectors(s.game_min)
+			ok(str(connector_work.status) == "fertig" and bool(E.settle.road_link(k).verbunden), "erster Anschluss wird nach vier Spielstunden fertig und verbindet die Stadt")
+	var home_order: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}})
+	ok(home_order.ok, "nach dem Bürgeramt kann die KI das erste Wohnhaus planen")
+	if home_order.ok:
+		var home_site: Dictionary = E.homes.sites[str(home_order.baustelle)]
+		if str(home_site.status) == "genehmigung":
+			home_site.status = "material"   # isoliert den Materialkauf, der Bürgermeister wird separat getestet
+		var home_buy: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "baustelle": home_site.id}})
+		ok(home_buy.ok and int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("abholen"), "gekauftes Hausmaterial wird vor Straßenexperimenten abgeholt")
+		var one_item: String = str(home_site.need.keys()[0])
+		ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": one_item, "qty": 1}}).ok, "direkter Doppelkauf für ein Wohnhaus wird abgewiesen")
 	# 19.11.: die pauschale Monatsausgabe der öffentlichen Hand zog Wildnis-Städten die Hälfte ihrer Millionen ab
 	var town_cash: float = float(s.economy.accounts.get(Towns.account_of(k), 0.0))
 	s.public_sector.on_month(1)

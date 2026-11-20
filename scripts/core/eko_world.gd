@@ -763,6 +763,21 @@ func urgency(b: Dictionary) -> Dictionary:
 					return {"prioritaet": 2, "grund": "Material für Bürgeramt %s ist gekauft – abholen: LKW {ziel: \"grosslager\"}" % st.id}
 			if int(st.cid) == cid and str(st.typ) == "buergeramt" and str(st.status) == "bau" and str(b.get("baut", "")) != str(st.id) and not homes.owner_working(st) and (st.get("helfer", {}) as Dictionary).is_empty():
 				return {"prioritaet": 2, "grund": "Bürgeramt %s hat alles Material, aber niemand baut: Bauen {baustelle: \"%s\"} oder Firma {aktion: {action: \"tageloehner\", baustelle: \"%s\", anzahl: 2}}. Keine weiteren Baustoffe kaufen." % [st.id, st.id, st.id]}
+	# Nach der Gruendung ist das erste Wohnhaus die sichtbare Wachstumsstufe. Gekauftes Material und baubereite
+	# Haeuser duerfen nicht hinter immer neuen Versuchen fuer eine bereits staedtisch beauftragte Strasse verschwinden.
+	if sim.wildnis and home_k >= 0 and sim.town_ready(home_k):
+		for st in homes.open_sites(cid):
+			if str(st.typ) == "strasse" or str(st.typ) == "buergeramt":
+				continue
+			if str(st.status) == "bau" and not homes.owner_working(st) and (st.get("helfer", {}) as Dictionary).is_empty():
+				return {"prioritaet": 2, "grund": "Baustelle %s (%s) ist baubereit, aber niemand arbeitet: Bauen {baustelle: \"%s\"} oder Firma {aktion: {action: \"tageloehner\", baustelle: \"%s\", anzahl: 2}}." % [st.id, st.typ, st.id, st.id]}
+			if str(st.status) == "material":
+				var miss: Dictionary = homes.missing(st)
+				if miss.is_empty():
+					continue
+				var waiting: Dictionary = homes.waiting_goods(cid)
+				if miss.keys().all(func(item): return int(waiting.get(item, 0)) >= int(miss[item])):
+					return {"prioritaet": 2, "grund": "Material für Baustelle %s (%s) ist gekauft und liegt am Großlager. Jetzt abholen: LKW {ziel: \"grosslager\"}. Nicht noch einmal kaufen oder eine neue Straße planen." % [st.id, st.typ]}
 	for k in sim.contracts.values():
 		if k.owner != cid or k.status not in ["accepted", "assigned", "loading", "in_transit"]:
 			continue
@@ -2393,6 +2408,13 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	if sim.wildnis and str(a.action) == "hub_buy" and not a.has("baustelle"):
 		var item := str(a.get("item", ""))
 		var open: Array = homes.open_sites(cid)
+		var material_need := 0
+		for st in open:
+			if str(st.status) == "material":
+				material_need += int(homes.missing(st).get(item, 0))
+		var bought := int(homes.waiting_goods(cid).get(item, 0))
+		if material_need > 0 and bought >= material_need:
+			return {"ok": false, "msg": "%d %s für deine offenen Baustellen sind bereits am Großlager gekauft. Kein Doppelkauf – hole sie mit LKW {ziel: \"grosslager\"} ab." % [bought, item]}
 		var ready_halls: Array = open.filter(func(st): return st.typ == "buergeramt" and st.status == "bau" and st.need.has(item))
 		var other_need: bool = open.any(func(st): return st.status == "material" and homes.missing(st).has(item))
 		if not ready_halls.is_empty() and not other_need:
