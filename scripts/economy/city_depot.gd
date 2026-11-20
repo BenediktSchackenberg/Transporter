@@ -1430,6 +1430,18 @@ func from_dict(d: Dictionary) -> void:
 	var st: Dictionary = d.get("stats", {})
 	for k in st:
 		stats[k] = st[k]
+	# Stadt-Lkw sind Laufzeitobjekte und werden nicht gespeichert. Nach dem Laden
+	# erneut disponieren, statt die Ware nach Ablauf von truck_until unsichtbar anzuliefern.
+	for o in orders.values():
+		if str(o.status) != "stadt_lkw":
+			continue
+		var paid := float(o.get("freight_paid", 0.0))
+		if paid > 0.0:
+			sim.economy.transfer("S0", owner(), paid)
+			stats.freight -= paid
+		o.freight_paid = 0.0
+		o.erase("truck_until")
+		o.status = "wartet_strasse"
 	var nx: Array = d.get("next", [1, 1])
 	_next_order = int(nx[0])
 	_next_offer = int(nx[1])

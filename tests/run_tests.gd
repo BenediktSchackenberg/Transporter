@@ -4958,6 +4958,17 @@ func test_city_depot() -> void:
 	run(s, 60.0 * 2.0)
 	var D := s.city_depot
 	var ST := s.stock
+	var reloaded_order: Dictionary = D._new_order("kabel", 1, "Neudisposition nach Laden")
+	D.orders[reloaded_order.id] = reloaded_order
+	reloaded_order.status = "stadt_lkw"
+	reloaded_order.freight_paid = 42.0
+	reloaded_order["truck_until"] = s.game_min + 1800.0
+	s.economy.transfer(D.owner(), "S0", 42.0)
+	D.stats.freight += 42.0
+	var cash_after_dispatch: float = float(s.economy.accounts[D.owner()])
+	D.from_dict(D.to_dict())
+	ok(str(D.orders[reloaded_order.id].status) == "wartet_strasse" and not D.orders[reloaded_order.id].has("truck_until") and absf(float(s.economy.accounts[D.owner()]) - cash_after_dispatch - 42.0) < 0.01, "nicht gespeicherter Stadt-Lkw wird neu disponiert und Transportgeld erstattet")
+	D.orders.erase(reloaded_order.id)
 	ok(D.building >= 0 and D.building != s.trader.bauhof, "Zentrallager ist ein eigenes Gebäude neben dem Bauhof des Großhändlers")
 	ok(CityGoods.GROUPS.size() == 16 and CityGoods.items().size() >= 70, "Katalog: 16 Warengruppen (Auftrag 19: Anlagen/Denkmäler), %d Artikel" % CityGoods.items().size())
 	var complete := true
