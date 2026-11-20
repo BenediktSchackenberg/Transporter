@@ -224,6 +224,10 @@ COMPANY_TOOLS = [
         "offer_id": {"type": "string"}}, "required": ["offer_id"]}},
     {"name": "hire_worker", "description": "Bewerber aus meine_firma.bewerber einstellen.", "parameters": {"type": "object", "properties": {
         "worker_id": {"type": "string"}}, "required": ["worker_id"]}},
+    {"name": "found_business", "description": "Neuen Betrieb am geprueften Standort aus meine_firma.wirtschaftsaufbau gruenden. Danach Personal einstellen und zuordnen.", "parameters": {"type": "object", "properties": {
+        "branche": {"type": "string"}, "grundstueck": {"type": "string"}, "stadt": {"type": "integer"}}, "required": ["branche", "grundstueck"]}},
+    {"name": "assign_business_staff", "description": "Eigenen Mitarbeiter einem eigenen Betrieb zuordnen.", "parameters": {"type": "object", "properties": {
+        "worker_id": {"type": "string"}, "business_id": {"type": "string"}}, "required": ["worker_id", "business_id"]}},
     {"name": "repair_vehicle", "description": "Eigenen LKW reparieren.", "parameters": {"type": "object", "properties": {
         "vehicle_id": {"type": "integer"}}, "required": ["vehicle_id"]}},
     {"name": "city_strategy", "description": "Eigene Stadtform, Wirtschaftsrichtung und Haltung zu Rivalen festlegen. Frieden ist eine vollwertige Strategie.", "parameters": {"type": "object", "properties": {
@@ -239,6 +243,7 @@ COMPANY_TOOLS = [
 TOOLS.extend(COMPANY_TOOLS)
 COMPANY_TOOL_ACTIONS = {"review_company_plan": "review_plan", "dispatch_policy": "set_dispatch_policy",
                         "hire_worker": "recruit_worker", "accept_contract": "accept_contract", "buy_vehicle": "buy_vehicle",
+                        "found_business": "found_business", "assign_business_staff": "assign_staff",
                         "repair_vehicle": "repair_vehicle", "city_strategy": "set_city_strategy",
                         "mobilize_worker": "mobilize_worker", "order_assault": "order_assault", "order_retreat": "order_retreat"}
 
@@ -505,7 +510,7 @@ class Agent:
                          "sollen eine echte Lieferung ergeben: nimm den Auftrag selbst an oder aktiviere die Regel-Disposition. "
                          "Vermeide wiederholte Beobachtungen ohne Entscheidung.")
             lines.append("Nutze die direkten Werkzeuge company_plan, review_company_plan, dispatch_policy, accept_contract, buy_vehicle, "
-                         "hire_worker, repair_vehicle und city_strategy. Krieg ist optional: Frieden, Handel und Kooperation koennen dauerhaft bestehen. "
+                         "hire_worker, found_business, assign_business_staff, repair_vehicle und city_strategy. Krieg ist optional: Frieden, Handel und Kooperation koennen dauerhaft bestehen. "
                          "Bei Bedrohung mobilize_worker nutzen; bewaffnete Angriffe brauchen eine eigene Waffenschmiede, fertige Waffen und order_assault. "
                          "Die Firmenbeobachtung zeigt transportchancen mit geschaetztem Deckungsbeitrag, "
                          "entscheidungsfolgen und dringlichkeit. Gib der Routine klare Grenzen und pruefe deinen Plan taeglich.")
