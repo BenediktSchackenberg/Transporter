@@ -427,7 +427,7 @@ def general_memory(doc):
     for line in doc.splitlines():
         if line.startswith("- ") and (HISTORICAL_ID.search(line) or HISTORICAL_COUNT.search(line)):
             continue
-        if line.startswith("- ") and re.search(r"Rest\s*\{|Amt\s*\{.{0,100}?status", line, re.I):
+        if line.startswith("- ") and re.search(r"Rest\s*\{|Amt\s+status|Amt\s*\{.{0,100}?status", line, re.I):
             continue
         kept.append(line)
     return "\n".join(kept)
@@ -524,6 +524,18 @@ class Agent:
 
     def call_tool(self, name, a):
         try:
+            if name == "act" and getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_passive_office", 0) >= 3:
+                typ = str(a.get("type", ""))
+                data = a.get("data", {}) if isinstance(a.get("data"), dict) else {}
+                office = data.get("aktion", {}) if isinstance(data.get("aktion"), dict) else {}
+                status_again = typ == "Amt" and str(office.get("action", "")) in ("", "status", "overview")
+                resting = typ == "Rest"
+                if status_again or resting:
+                    current = self.world.observe()
+                    energy = float(current.get("du", {}).get("akku", 100)) if isinstance(current, dict) else 100.0
+                    if status_again or energy >= 50.0:
+                        return {"ok": False, "msg": "Wiederholte Statusabfrage oder Pause ohne Stadtentscheidung. Nutze die aktuelle Lage und waehle eine konkrete Amtshandlung.",
+                                "naechste_schritte": current.get("naechste_schritte", [])[:3] if isinstance(current, dict) else []}
             if name == "company_plan":
                 steps = a.get("schritte", [])
                 if not isinstance(steps, list) or not steps or not all(isinstance(s, str) for s in steps):
@@ -928,9 +940,12 @@ class Agent:
                 if fn["name"] == "act" and getattr(self.args, "rolle", "") == "buergermeister":
                     data = a.get("data", {}) if isinstance(a.get("data"), dict) else {}
                     office = data.get("aktion", {}) if isinstance(data.get("aktion"), dict) else {}
-                    passive = str(a.get("type", "")) == "Rest" or (str(a.get("type", "")) == "Amt" and str(office.get("action", "")) in ("status", "overview"))
-                    self._passive_office = getattr(self, "_passive_office", 0) + 1 if passive else 0
-                    if self._passive_office >= 3:
+                    passive = str(a.get("type", "")) == "Rest" or (str(a.get("type", "")) == "Amt" and str(office.get("action", "")) in ("", "status", "overview"))
+                    if passive:
+                        self._passive_office = min(4, getattr(self, "_passive_office", 0) + 1)
+                    elif not failed:
+                        self._passive_office = 0
+                    if self._passive_office == 3:
                         current = self.world.observe()
                         steps_now = current.get("naechste_schritte", []) if isinstance(current, dict) else []
                         office_now = current.get("mein_amt", {}) if isinstance(current, dict) else {}
@@ -938,7 +953,6 @@ class Agent:
                         messages.append({"role": "user", "content": "Du hast wiederholt nur geruht oder den Status gelesen. Die Stadt entwickelt sich dadurch nicht weiter. "
                                          "Aktueller Ausbauschritt: %s. Deine nächsten Schritte: %s. Wähle eine konkrete Amtshandlung oder begründe eine andere Stadtentscheidung."
                                          % (json.dumps(action, ensure_ascii=False)[:800], json.dumps(steps_now, ensure_ascii=False)[:1000])})
-                        self._passive_office = 0
                 # Schleifenbremse: dieselbe fehlgeschlagene Handlung dreimal hintereinander -> deutlicher Hinweis (Ralf fragte Greta 20-mal)
                 key = fn["name"] + json.dumps(a, sort_keys=True, ensure_ascii=False) if failed else ""
                 self._repeat = self._repeat + 1 if key and key == getattr(self, "_last_fail", "") else (1 if key else 0)
