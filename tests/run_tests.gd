@@ -8870,6 +8870,8 @@ func test_wildnis_found() -> void:
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "holz", "qty": 20}}).ok, "bereits für das Bürgeramt gekauftes Holz wird nicht doppelt bestellt")
 	ok(E.homes.next_step(cid).contains("LKW {ziel"), "nächster Schritt: selbst abholen (%s)" % E.homes.next_step(cid).left(80))
 	var hub_deals: Array = s.hub.deals.values().filter(func(d): return str(d.party) == "C%d" % cid and str(d.status) == "abholbereit")
+	var hub_view: Dictionary = E.firm_obs(B).grosslager
+	ok(hub_view.feld == s.city.hub.center and int(hub_view.wartende_baustoffe.get("holz", 0)) > 0, "KI sieht Großlagerposition getrennt vom Betriebshof und gekaufte Ware")
 	var stale: Dictionary = hub_deals[1]
 	var public_pickup: Dictionary = hub_deals[2]
 	var old_stale := str(stale.contract)

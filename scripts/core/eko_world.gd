@@ -965,6 +965,10 @@ func _truck(b: Dictionary, data: Dictionary) -> Dictionary:
 		b["im_lkw"] = v.id
 		var end: Vector2i = v.path[-1] if not v.path.is_empty() else cell
 		var note := "" if end == cell else " Das Feld selbst ist nicht befahrbar (Baum, Gebäude, Wasser oder Hang) – du hältst am nächsten freien Feld %s." % str([end.x, end.y])
+		if not c.depots.is_empty() and not homes.waiting_goods(cid).is_empty():
+			var own_dep: Dictionary = sim.city.building(int(c.depots[0]))
+			if not own_dep.is_empty() and Rect2i(int(own_dep.x), int(own_dep.y), int(own_dep.w), int(own_dep.h)).grow(16).has_point(cell):
+				note += " Das ist dein Betriebshof, nicht das Großlager. Gekaufte Ware lädt nur LKW {ziel: \"grosslager\" am Großlager %s." % str(sim.city.hub.get("center", []))
 		return {"ok": true, "status": "laeuft", "msg": "Du fährst mit deinem LKW nach %s (querfeldein langsamer als auf Straßen).%s" % [str(ziel), note]}
 	var z := str(ziel).to_lower()
 	if z in ["hof", "betriebshof", "heim", "basis"]:
@@ -2629,6 +2633,8 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var models: Dictionary = o.fahrzeugmodelle
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
 		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),
+		"grosslager": {"feld": sim.city.hub.get("center", []), "abholen": "LKW {ziel: \"grosslager\"}",
+			"wartende_baustoffe": homes.waiting_goods(cid), "hinweis": "Das Großlager ist nicht dein Betriebshof. Gekaufte Ware wird nur bei der Großlagerfahrt verladen und zum eigenen Hof geliefert."},
 		"stadtmarke": sim.town_plan.brief(sim.companies[cid].home_town).get("stadtmarke", {}) if sim.town_plan != null and sim.town_plan.has(sim.companies[cid].home_town) else {},
 		"bauentwuerfe": _home_design_options(sim.companies[cid].home_town),
 		"gewerbeentwuerfe": _commercial_design_options(sim.companies[cid].home_town),
