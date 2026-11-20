@@ -885,7 +885,7 @@ class Agent:
                 continue
             except Exception as e:   # Ollama ueberlastet oder Kontext voll: protokollieren, Verlauf kuerzen, kurz warten, weitermachen
                 self._api_errors = getattr(self, "_api_errors", 0) + 1
-                context_full = "exceeds available context" in str(e).lower() or "context length" in str(e).lower()
+                context_full = any(mark in str(e).lower() for mark in ("exceeds the available context", "exceed_context_size_error", "context length"))
                 delay = 1 if context_full and self._api_errors == 1 else min(300, 10 * (2 ** min(self._api_errors - 1, 5)))
                 self.status("fehler", last_error=str(e)[:220], waiting_on="erneuter Modellversuch in %d s" % delay)
                 self.say("⚠ Modellaufruf fehlgeschlagen: %s – Verlauf gekürzt, neuer Versuch in %d s" % (e, delay))
