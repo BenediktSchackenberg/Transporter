@@ -228,6 +228,9 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 		sim.depot_owner.erase(arrival)
 	c.depots.push_front(yard)
 	sim.depot_owner[yard] = cid
+	for business in sim.biz.items.values():
+		if str(business.branch) == "transport" and int(business.owner) == cid and int(business.site) == arrival:
+			business.site = yard   # Betrieb gehoert zum neuen Hof, nicht mehr zum Ankunftsplatz
 	sim.estate.grant_founded(cid, yard, yard_field, arrival)
 	# Partie 18.11.: Amira kaufte Kies vor der Gruendung – er ging an den Startplatz und fehlte am neuen Hof. Noch nicht geladene
 	# Grosslager-Kaeufe der Firma werden deshalb auf den neuen Hof umgeleitet.
@@ -291,6 +294,10 @@ func open_town(k: int, rect: Rect2i) -> bool:
 		st["harbor"] = harbor
 	sim.towns.sync_from_city(k)
 	_seed_city_access(k, [bauhof, hall])
+	connect_founding_yard(k)
+	sim.grid.net.ensure()
+	sim.grid.net.reanchor_town(k)
+	sim.water.reanchor_town(k)
 	sim.town_plan.ensure(k, "gruendung")   # Auftrag 8: Profil vor den ersten regulaeren Bauplatzentscheidungen
 	_start_package(k)
 	_activate(k)
@@ -357,6 +364,79 @@ func _seed_city_access(k: int, buildings: Array) -> void:
 							st["roads"] = (st.get("roads", []) as Array) + cells.map(func(q): return [q.x, q.y])
 							sim.log_event("%s: Zufahrt zum städtischen Baulager angelegt." % sim.towns.name_of(k), "good")
 							return
+
+
+## Der erste Betriebshof braucht eine echte Zufahrt zum Stadtkern. Der Gruendungsweg
+## umgeht Berge, Wasser und Gebaeude und verlaeuft nur im eigenen Stadtgebiet.
+func connect_founding_yard(k: int) -> bool:
+	var sim = _sim()
+	var C: CityData = sim.city
+	var st: Dictionary = sim.settlements.get(str(k), {})
+	var yard: Dictionary = C.building(int(st.get("yard", -1)))
+	var hall: Dictionary = C.building(int(C.towns[k].get("town_hall", -1)))
+	if yard.is_empty() or hall.is_empty():
+		return false
+	var start: Vector2i = hall.road
+	if not C.is_road(start):
+		for radius in range(1, 7):
+			for dy in range(-radius, radius + 1):
+				for dx in range(-radius, radius + 1):
+					var near: Vector2i = Vector2i(hall.road) + Vector2i(dx, dy)
+					if C.is_road(near):
+						start = near
+						break
+				if C.is_road(start): break
+			if C.is_road(start): break
+	if not C.is_road(start):
+		return false
+	var goal: Vector2i = yard.road
+	if C.is_road(goal) and not sim.nav.road_path(start, goal).is_empty():
+		return true
+	var a: Array = st.get("rect", [])
+	if a.size() < 4:
+		return false
+	var area := Rect2i(int(a[0]), int(a[1]), int(a[2]), int(a[3]))
+	if not area.has_point(goal):
+		return false
+	var other_plots: Array = []
+	var owner := int(sim.depot_owner.get(int(st.yard), -1))
+	for plot in sim.estate.plots.values():
+		if int(plot.owner) != owner:
+			other_plots.append(Rect2i(int(plot.x), int(plot.y), int(plot.w), int(plot.h)))
+	var prev := {start: start}
+	var todo: Array[Vector2i] = [start]
+	var head := 0
+	while head < todo.size() and head < 4000 and not prev.has(goal):
+		var here: Vector2i = todo[head]
+		head += 1
+		for direction in [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]:
+			var next: Vector2i = here + direction
+			if prev.has(next) or not area.has_point(next) or C.town_of(next) != k:
+				continue
+			var i := C.idx(next)
+			if C.building_at[i] >= 0 or (not C.height.is_empty() and C.height[i] > 0):
+				continue
+			if C.ground[i] in [CityData.G.WATER, CityData.G.RAIL, CityData.G.RUNWAY, CityData.G.QUAY]:
+				continue
+			if other_plots.any(func(p): return p.has_point(next)):
+				continue
+			prev[next] = here
+			todo.append(next)
+	if not prev.has(goal):
+		return false
+	var route: Array = []
+	var at: Vector2i = goal
+	while at != start:
+		route.push_front(at)
+		at = prev[at]
+	if route.size() > 70:
+		return false
+	var fresh: Array = route.filter(func(q): return not C.is_road(q))
+	sim.access._apply_cells(fresh)
+	if not fresh.is_empty():
+		st["roads"] = (st.get("roads", []) as Array) + fresh.map(func(q): return [q.x, q.y])
+		sim.log_event("%s: %d Felder Gruendungszufahrt verbinden den Betriebshof mit dem Stadtkern." % [sim.towns.name_of(k), fresh.size()], "good")
+	return C.is_road(goal) and not sim.nav.road_path(start, goal).is_empty()
 
 
 ## Meer oder See? Ein Gewaesser zaehlt nur als Meer, wenn es den Kartenrand erreicht. Ergebnis je Wasserfeld gemerkt

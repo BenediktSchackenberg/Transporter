@@ -106,7 +106,7 @@ func setup(simulation) -> void:
 
 ## Flugzeug zu Spielzeit now: {pos: Vector2 (Feld), h: Hoehe (Feld), dir: 0..3, on_ground}. leer = nicht vorhanden.
 func state(now: float) -> Dictionary:
-	if not enabled:
+	if not enabled or not has_demand() or not flight_ok():
 		return {}
 	var t := fmod(float(now), PERIOD) / PERIOD
 	var rx0: float = float(track.run_x0)
@@ -345,6 +345,12 @@ func flight_ok() -> bool:
 	var wx: Weather = sim.wx
 	return not (wx.is_heavy_rain() or wx.is_snow() or wx.is_strong_wind() or wx.is_icy() or wx.is_fog())
 
+
+func has_demand() -> bool:
+	if not manifest.is_empty():
+		return true
+	return trips.values().any(func(t): return str(t.status) in ["gebucht", "return"])
+
 ## Pro Minute-Tick: Ein neuer Flugzyklus (PERIOD Spielminuten) beendet sich genau einmal pro Periode.
 ## Bei Flugwetter wird die wartende Fracht ins Frachtterminal ausgeliefert, bei schlechtem Wetter
 ## faellt der eine Flug aus (ein Abbruch, nicht pro Minute). Der Flugzaehler laeuft weiter, damit die
@@ -356,13 +362,18 @@ func on_minute(now: float) -> void:
 	if flights_done <= _last_flight:
 		return
 	_last_flight = flights_done
+	if not has_demand():
+		return
 	if flight_ok():
+		var cargo_before := int(stats.einheiten_ein)
+		var passengers_before := int(stats.passagiere)
 		if not manifest.is_empty():
 			_unload_manifest(flights_done)
 		_passengers_go(flights_done)
+		if int(stats.einheiten_ein) > cargo_before or int(stats.passagiere) > passengers_before:
+			stats.fluege = int(stats.fluege) + 1
 	else:
-		if not manifest.is_empty():
-			stats.abgebrochen = int(stats.abgebrochen) + 1
+		stats.abgebrochen = int(stats.abgebrochen) + 1
 		# Passagiere bleiben am Boden (Wetter); bei der Rueckkehr gilt das Gleiche – sie warten auf klareren Himmel.
 
 # ------------------------------------------------------------------ Passagiere (Etappe E3)
@@ -494,7 +505,6 @@ func _unload_manifest(flight_no: int = -1) -> void:
 			manifest.erase(m)
 	if units_out > 0:
 		sim.economy.transfer(Towns.account_of(town), "X0", airfreight_fee())   # Betreiberpauschale
-		stats.fluege = int(stats.fluege) + 1
 		var rest := manifest.size()
 		sim.log_event("Luftfracht: %d Ladeeinheiten gelandet%s (Flug %d, Raum %d)." % [
 			units_out, ", %d Posten warten auf den naechsten Flug" % rest if rest > 0 else "", flight_no, cargo_cap()], "info")

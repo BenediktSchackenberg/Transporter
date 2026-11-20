@@ -694,7 +694,9 @@ func choose_design(k: int, a: Dictionary) -> Dictionary:
 		if str(option.id) == id:
 			choice = option
 	if choice.is_empty():
-		return {"ok": false, "msg": "Entwurf nicht verfügbar. Wähle eine ID aus stadtplan_naechster_abschnitt.entwuerfe."}
+		var ids: Array = options.map(func(option): return str(option.id))
+		return {"ok": false, "msg": "Entwurf '%s' für %s nicht verfügbar. Gültige IDs jetzt: %s. Verwende exakt eine davon mit viertel: '%s'." % [
+			id, vid, ", ".join(ids), vid], "gueltige_entwuerfe": ids}
 	v["entwurf"] = id
 	v["entwurf_grund"] = str(a.get("reason", "")).left(180)
 	v["entwurf_punkte"] = int(choice.punkte)

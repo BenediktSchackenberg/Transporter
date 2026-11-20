@@ -1681,7 +1681,11 @@ func _region_from_dict(r: Dictionary) -> void:
 	var saved: Array = r.get("staedte", [])
 	for i in mini(saved.size(), towns.count()):
 		var t: Dictionary = towns.get_t(i)
-		if str(saved[i].name) != str(t.name) or int(saved[i].zentrum[0]) != t.center.x or int(saved[i].zentrum[1]) != t.center.y:
+		var actual_center: Vector2i = t.center
+		var founded: Dictionary = settlements.get(str(i), {}) if wildnis else {}
+		if founded.has("center"):
+			actual_center = Vector2i(int(founded.center[0]), int(founded.center[1]))
+		if str(saved[i].name) != str(t.name) or int(saved[i].zentrum[0]) != actual_center.x or int(saved[i].zentrum[1]) != actual_center.y:
 			load_warnings.append("Ort %d weicht ab: gespeichert %s %s, erzeugt %s %s (Generator geändert?)" % [i, saved[i].name, str(saved[i].zentrum), t.name, str(t.center)])
 	if saved.size() != towns.count() and towns.is_region():
 		load_warnings.append("Spielstand hat %d Orte, erzeugt wurden %d" % [saved.size(), towns.count()])
@@ -1933,6 +1937,18 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.rivalry.from_dict(d.rivalry)
 	s.talk.from_dict(d.get("talk", {}))
 	s.biz.from_dict(d.get("businesses", {}))
+	if s.wildnis:
+		for business in s.biz.items.values():
+			if str(business.branch) != "transport":
+				continue
+			var cid := int(business.owner)
+			if cid < 0 or cid >= s.companies.size():
+				continue
+			var town := int(s.companies[cid].home_town)
+			var arrival := int(s.city.towns[town].get("start_plot", -1))
+			var yard := int(s.settlements.get(str(town), {}).get("yard", -1))
+			if yard >= 0 and int(business.site) == arrival:
+				business.site = yard
 	for hb in s.biz.items.values():
 		if hb.branch == "hotel" and int(hb.site) >= 0 and int(hb.site) < s.city.buildings.size():
 			s.city.buildings[int(hb.site)].sprite = str(BusinessStages.stage_def(hb).get("sprite", "hotel_pension"))
@@ -1942,6 +1958,15 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.wildnis = bool(d.get("wildnis", false))
 	s.settlements = d.get("settlements", {})
 	s.grid.from_dict(d.get("grid", {}))
+	if s.wildnis:
+		for k in s.towns.count():
+			if not s.town_ready(k):
+				continue
+			s.eko.settle.connect_founding_yard(k)
+			var power_moved := s.grid.net.reanchor_town(k)
+			var water_moved := s.water.reanchor_town(k)
+			if power_moved or water_moved:
+				s.log_event("Ladepruefung: Versorgungsnetze an den gegruendeten Ort %s angepasst." % s.towns.name_of(k), "info")
 	var migrated := s.biz.migrate() if int(d.get("save_version", 1)) < 2 else 0   # Spielstand vor Version 2: Speditionen werden Transportbetriebe
 	if migrated > 0:
 		s.log_event("Spielstand übernommen: %d Speditionen sind jetzt Transportbetriebe ihrer Unternehmer." % migrated, "system")

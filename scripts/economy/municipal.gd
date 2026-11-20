@@ -390,39 +390,45 @@ func ensure_start() -> void:
 
 ## Fehlende Typen der Startausstattung je Stadt einmal nachbauen (z. B. Bauhof fuer Spielstaende vor Etappe 6).
 func ensure_kit() -> void:
+	var codes: Array = ["WW-01", "WT-01"] if sim.wildnis else START_KIT
 	for t in sim.towns.list:
 		var k := int(t.id)
-		for code in START_KIT:
+		if sim.wildnis and not sim.town_ready(k):
+			continue
+		for code in codes:
 			var key := "%d|%s" % [k, code]
 			if kit_tried.has(key):
 				continue
-			kit_tried[key] = true
-			if not of_town(k).any(func(f): return str(f.code) == code):
-				_place(k, code)
+			if of_town(k).any(func(f): return str(f.code) == code) or not _place(k, code).is_empty():
+				kit_tried[key] = true
 
 
 ## Regionale Einrichtungen (Kreiskrankenhaus): einmal je Region, in der einwohnerstaerksten Stadt mit passendem Bauplatz.
 ## Auch fuer Spielstaende, die vor Etappe 5 entstanden sind (eigenes Merkmal).
 func ensure_regional() -> void:
-	if regional_started and REGIONAL_KIT.all(func(c): return kit_tried.has("R|" + c)):
+	var codes: Array = ["KA-01"] if sim.wildnis else REGIONAL_KIT
+	if regional_started and codes.all(func(c): return kit_tried.has("R|" + c)):
 		return
-	if regional_started:
-		kit_tried["R|KH-01"] = true   # Spielstand vor Etappe 13: Kreiskrankenhaus wurde schon versucht
 	regional_started = true
 	var order: Array = sim.towns.list.map(func(t): return int(t.id))
 	order.sort_custom(func(a, b): return _pop(a) > _pop(b))
-	for code in REGIONAL_KIT:
+	for code in codes:
 		if kit_tried.has("R|" + code):
 			continue
-		kit_tried["R|" + code] = true
 		if facilities.values().any(func(f): return str(f.code) == code):
+			kit_tried["R|" + code] = true
 			continue
 		if code == "FW-05":
 			_airport_fire()
+			if facilities.values().any(func(f): return str(f.code) == code):
+				kit_tried["R|" + code] = true
 			continue
 		for k in order:
+			if sim.wildnis and not sim.town_ready(k):
+				continue
 			var f := _place(k, code)
 			if not f.is_empty():
+				kit_tried["R|" + code] = true
 				_share_regional(f)
 				break
 
@@ -475,9 +481,10 @@ func _place(k: int, code: String, district: String = "") -> Dictionary:
 func on_day(day: int) -> void:
 	if not started:
 		ensure_start()
-	if not regional_started or not REGIONAL_KIT.all(func(c): return kit_tried.has("R|" + c)):
+	var regional_codes: Array = ["KA-01"] if sim.wildnis else REGIONAL_KIT
+	if not regional_started or not regional_codes.all(func(c): return kit_tried.has("R|" + c)):
 		ensure_regional()
-	if kit_tried.size() < sim.towns.count() * START_KIT.size():
+	if sim.wildnis or kit_tried.size() < sim.towns.count() * START_KIT.size():
 		ensure_kit()
 	var by_id := _staff_index()
 	var vol := _volunteer_index()
@@ -906,6 +913,17 @@ func from_dict(d: Dictionary) -> void:
 	started = bool(d.get("started", false))
 	regional_started = bool(d.get("regional_started", false))
 	kit_tried = d.get("kit_tried", {})
+	# Alte Wildnisstaende markierten fehlgeschlagene Platzierungen als erledigt.
+	# Nur vorhandene Einrichtungen duerfen die erneute Suche unterdruecken.
+	if sim.wildnis:
+		for t in sim.towns.list:
+			var k := int(t.id)
+			for code in START_KIT:
+				if not of_town(k).any(func(f): return str(f.code) == code):
+					kit_tried.erase("%d|%s" % [k, code])
+		for code in REGIONAL_KIT:
+			if not facilities.values().any(func(f): return str(f.code) == code):
+				kit_tried.erase("R|" + code)
 	stats = d.get("stats", stats)
 	for k in d.get("next", {}):
 		_next[k] = int(d.next[k])

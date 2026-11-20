@@ -1232,7 +1232,7 @@ func _district_streets(v: Dictionary, reason: String) -> Dictionary:
 			return {"ok": false, "already": true, "msg": "Für Viertel %s läuft schon %s (%s)." % [v.id, prj.id, ("noch %d Tage, %s" % [int(e.days_left), str(e.get("waiting", "")) if str(e.get("waiting", "")) != "" else "es wird gebaut"]) if not e.is_empty() else str(prj.status)]}
 	for prj in projects.values():   # Auftrag 8, Abschnitt 6: in Abschnitten wachsen – ein Strassennetz nach dem anderen
 		if prj.has("road_plan") and str(prj.get("ref", "")) != "anschluss" and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
-			return {"ok": false, "msg": "Erst das laufende Straßennetz %s (Viertel %s) fertigstellen – die Stadt erschließt ein Viertel nach dem anderen." % [prj.id, prj.viertel]}
+			return {"ok": false, "msg": "Erst das laufende Straßennetz %s (Viertel %s) fertigstellen – die Stadt erschließt ein Viertel nach dem anderen." % [prj.id, str(prj.get("viertel", "Anschluss"))]}
 	var sp: Dictionary = sim.town_plan.street_plan(town, str(v.id))
 	var cells: Array = sp.cells
 	if cells.is_empty():

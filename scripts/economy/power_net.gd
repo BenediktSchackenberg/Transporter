@@ -66,6 +66,37 @@ func ensure() -> void:
 		add_edge("KW", "U0")
 
 
+## Eine Wildnisstadt kann weit vom generierten Ankunftsort entstehen. Alte Knoten und bereits
+## bezahlte Trassen muessen dann dem wirklichen Rathaus folgen, auch nach dem Laden eines Spielstands.
+func reanchor_town(k: int) -> bool:
+	var id := "U%d" % k
+	if not nodes.has(id) or not sim.town_ready(k):
+		return false
+	var target := _substation_cell(k)
+	if _dist(nodes[id].cell, target) <= 8:
+		return false   # bewusst gewaehlt: ein Umspannwerk darf ein paar Felder neben dem Rathaus stehen
+	nodes[id].cell = target
+	for e in edges:
+		if str(e.a) != id and str(e.b) != id:
+			continue
+		var a: Vector2i = nodes[str(e.a)].cell
+		var b: Vector2i = nodes[str(e.b)].cell
+		var route: Array = line_cells(a, b)
+		e.cells = route.map(func(c): return [c.x, c.y])
+		e.len = route.size()
+	for project_id in planned:
+		var p: Dictionary = planned[project_id]
+		if str(p.get("a", "")) != id and str(p.get("b", "")) != id:
+			continue
+		p.station = [target.x, target.y]
+		var route: Array = line_cells(nodes[str(p.a)].cell, nodes[str(p.b)].cell)
+		p.cells = route.map(func(c): return [c.x, c.y])
+	_dirty = true
+	_local_cache.erase(k)
+	_local_keys.erase(k)
+	return true
+
+
 func add_edge(a: String, b: String, route: Array = []) -> Dictionary:
 	var cells := route if not route.is_empty() else line_cells(nodes[a].cell, nodes[b].cell)
 	var e := {"id": "L%d" % (edges.size() + 1), "a": a, "b": b, "cells": cells.map(func(c): return [c.x, c.y]), "len": cells.size(), "state": "ok"}

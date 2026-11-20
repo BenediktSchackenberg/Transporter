@@ -347,7 +347,7 @@ func _find_site(k: int, w: int, h: int, district: String = "", label: String = "
 		var d := district.to_lower()
 		if d.contains("rand") or d.contains("außen") or d.contains("aussen"):
 			art = "laerm" if art == "oeffentlich" else art
-		var ch: Dictionary = sim.sites.choose(k, {"w": w, "h": h, "art": art, "label": label if label != "" else "Bau %d×%d" % [w, h],
+		var ch: Dictionary = sim.sites.choose(k, {"w": w, "h": h, "art": art, "district": district, "label": label if label != "" else "Bau %d×%d" % [w, h],
 			"zones": ["mischgebiet", "oeffentlich", "wohnen", "gewerbe"] if art != "laerm" else ["gewerbe", "industrie", "mischgebiet"]})
 		if ch.ok:
 			return {"rect": ch.rect, "parcel": ch.parcel, "begruendung": ch.begruendung}
@@ -515,6 +515,11 @@ func ideas(k: int, ana: Dictionary = {}) -> Array:
 ## Bedarfsanalyse im Rathaus und Entscheidung: bis zu zwei gepruefte Projekte, sonst Begruendung, warum nicht.
 func decide(k: int) -> Array:
 	var ana := analyze(k)
+	var basics_ready := true
+	if sim.wildnis:
+		var units: Array = sim.towns.mayor(k).town_units()
+		basics_ready = not sim.water.works_of(k).is_empty() and not sim.water.plant().is_empty() \
+			and sim.grid.net.connected(k) and not sim.grid.net.local_roads(k).is_empty() and units.size() >= 2
 	var chosen: Array = []
 	var open: Array = anlagen.values().filter(func(a): return int(a.town) == k and str(a.status) in ["geplant", "material", "im_bau"])
 	if open.size() >= MAX_OPEN:
@@ -528,6 +533,8 @@ func decide(k: int) -> Array:
 		if chosen.size() >= MAX_PER_VISIT or float(idea.score) < 8.0 or checks >= 4:
 			break   # hoechstens 4 Pruefungen je Besuch (Bauplatzsuche ist die teure Stelle)
 		var t: Dictionary = TEMPLATES[idea.template]
+		if not basics_ready and str(t.cat) in ["prestige", "sport", "gruen", "markt"]:
+			continue   # Grundversorgung und Wohnraum zuerst, dann Plaetze und Denkmaeler
 		if cats.has(t.cat) or spent + float(t.cost) > float(ana.mittel) * 0.8 or chosen.size() + open.size() >= MAX_OPEN:
 			continue
 		if t.cat == "prestige" and prestige_open:

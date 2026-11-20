@@ -3093,6 +3093,14 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 	var fix := normalize_office(a)
 	if fix != "":
 		return {"ok": false, "msg": fix}
+	if str(a.action) == "infra_ausbau":
+		var plant_code: String = {"wasserwerk": "WW-01", "hochbehaelter": "WT-01", "klaeranlage": "KA-01"}.get(str(a.get("anlage", "")), "")
+		if plant_code != "":
+			var present: bool = sim.municipal.facilities.values().any(func(f): return str(f.code) == plant_code and (plant_code == "KA-01" or int(f.town) == k))
+			if not present:
+				a["action"] = "kommunal_bauen"   # Ausbauen einer fehlenden Anlage meint zuerst den Neubau
+				a["typ"] = plant_code
+				a.erase("anlage")
 	if str(a.action) == "propose_project":
 		if str(a.get("project", "")) == "":
 			if str(a.get("name", "")) != "":
@@ -3137,7 +3145,7 @@ func _plan_wait_text(k: int) -> String:
 	for prj in M.projects.values():
 		if prj.has("road_plan") and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
 			var e: Dictionary = sim.construction.public.get(prj.id, {})
-			return " Das Straßennetz %s (Viertel %s) ist %s – danach gibt es dort Grundstücke mit Straße." % [prj.id, prj.viertel,
+			return " Das Straßennetz %s (Viertel %s) ist %s – danach gibt es dort Grundstücke mit Straße." % [prj.id, str(prj.get("viertel", "Anschluss")),
 				("in %d Tagen fertig%s" % [int(e.days_left), (" (" + str(e.waiting) + ")") if str(e.get("waiting", "")) != "" else ""]) if not e.is_empty() else str(prj.status)]
 	var nd: Dictionary = sim.town_plan.next_district(k, int(M.waiting) > 0) if sim.town_plan != null else {}
 	return (" Bauland entsteht mit: Amt {aktion: %s}." % JSON.stringify(nd.aktion)) if nd.has("aktion") else ""
@@ -3225,8 +3233,8 @@ static func normalize_office(a: Dictionary) -> String:
 							break
 				if code != "":
 					a["typ"] = code
-			else:
-				return "Unbekannte kommunale Einrichtung '%s'. Wähle einen typ-Code aus mein_amt.stadtentwicklung.bauvorlagen oder beobachte die aktuellen Einrichtungen." % t
+				else:
+					return "Unbekannte kommunale Einrichtung '%s'. Wähle einen typ-Code aus mein_amt.stadtentwicklung.bauvorlagen oder beobachte die aktuellen Einrichtungen." % t
 		"hire_staff":
 			var dep := _plain(str(a.get("abteilung", "")))
 			if dep != "" and dep not in ["verwaltung", "bauamt", "strassen", "pruefdienst"]:

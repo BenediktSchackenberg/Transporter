@@ -52,6 +52,7 @@ const SUBSIDY_CELL := 0.45    # Landeszuschuss je gefahrenem Feld und Zug (Regio
 const LEISURE := 0.0002       # Reisewuensche je Tag und Richtung = LEISURE x Einwohner A x Einwohner B
 const COMMUTE_TRIPS := 0.3    # Fahrten je Bahnpendler, Tag und Richtung (Rest Homeoffice, Mitfahrt)
 const STAFF_CODE := "BG-01"
+const CONTRACT_DRIVER_DAY_EUR := 900.0   # befristete Lokfuehrer, bis die Betriebsstelle selbst Personal findet
 const MAX_TRAINS := 3           # alle Zuege der Linie (Regionalbahn und Gueterzug)
 const BRANCH := -1              # Blockschluessel des Anschlussgleises
 const FREIGHT_CARS := 5         # Lok + vier Wagen
@@ -98,6 +99,8 @@ var waiting := {}             # Stadt (str) -> {Ziel-Stadt (str) -> Anzahl (floa
 var by_town := {}             # Stadt (str) -> {ein, aus}
 var last_settle := {}
 var facility := ""            # Municipal BG-01
+var contract_driver_day := -1
+var contract_drivers := 0
 var _cells_acc := 0.0         # gefahrene Felder seit der letzten Abrechnung
 var crossings: Array = []     # [{idx (Fahrweg), cell: Vector2i}] Bahnuebergaenge der Linie (abgeleitet)
 var closed := {}              # Vector2i -> true: derzeit geschlossene Schranken (abgeleitet)
@@ -506,7 +509,24 @@ func reset_for_new_network() -> void:
 
 
 func drivers() -> int:
-	return sim.municipal.staff_count(facility, "lokfuehrer") if facility != "" and sim.municipal != null else 0
+	var permanent: int = int(sim.municipal.staff_count(facility, "lokfuehrer")) if facility != "" and sim.municipal != null else 0
+	return permanent + (contract_drivers if contract_driver_day == GameCalendar.day_of(sim.game_min) else 0)
+
+
+func _cover_drivers() -> void:
+	if facility == "" or trains.is_empty():
+		return
+	var day := GameCalendar.day_of(sim.game_min)
+	var permanent: int = int(sim.municipal.staff_count(facility, "lokfuehrer"))
+	var needed := maxi(0, trains.size() - permanent)
+	if contract_driver_day == day and contract_drivers >= needed:
+		return
+	var additional := needed - (contract_drivers if contract_driver_day == day else 0)
+	contract_drivers = needed
+	contract_driver_day = day
+	if additional > 0:
+		sim.economy.transfer(ACCT, "S0", float(additional) * CONTRACT_DRIVER_DAY_EUR)
+		sim.log_event("Regionalbahn: %d befristete Lokführer übernehmen den Fahrdienst, bis die Betriebsstelle eigenes Personal findet." % needed, "info")
 
 
 func conductors() -> int:
@@ -688,6 +708,7 @@ func _start_trains() -> void:
 func update(dt: float) -> void:
 	if not ensure():
 		return
+	_cover_drivers()
 	var dmin := dt * Catalog.GAME_MIN_PER_SIM_SEC
 	var now: float = sim.game_min
 	for t in trains:
@@ -1302,7 +1323,7 @@ func summary() -> Dictionary:
 		wt[sim.towns.name_of(int(stops[i].town))] = waiting_at(i)
 	return {"linie": stops.map(func(s): return sim.towns.name_of(int(s.town))), "zuege": tl, "laenge_felder": path.size(),
 		"fahrzeit_min": snappedf(float(path.size()) / SPEED, 1.0), "statistik": stats.duplicate(), "wartende": wt,
-		"personal": {"triebfahrzeugfuehrer": drivers(), "zugbegleiter": conductors()}, "gesellschaft_saldo": snappedf(float(sim.economy.accounts.get(ACCT, 0.0)), 1.0),
+		"personal": {"triebfahrzeugfuehrer": drivers(), "davon_extern": contract_drivers if contract_driver_day == GameCalendar.day_of(sim.game_min) else 0, "zugbegleiter": conductors()}, "gesellschaft_saldo": snappedf(float(sim.economy.accounts.get(ACCT, 0.0)), 1.0),
 		"letzter_ausgleich": last_settle, "fahrpreis_beispiel": fare(0, stops.size() - 1) if stops.size() > 1 else 0.0,
 		"stoerungen": disruptions.values().map(func(dz): return {"art": dz.art, "seit_min": snappedf(sim.game_min - float(dz.since), 1.0), "trupp_aus": sim.towns.name_of(int(dz.town))}),
 		"schranken_zu": closed.size(), "ausbau": expansion_options(), "gueter_wartend": queued_units(),
@@ -1313,6 +1334,7 @@ func summary() -> Dictionary:
 
 func to_dict() -> Dictionary:
 	return {"trains": trains, "blocks": blocks, "stats": stats, "waiting": waiting, "by_town": by_town, "last_settle": last_settle, "facility": facility,
+		"contract_driver_day": contract_driver_day, "contract_drivers": contract_drivers,
 		"cells_acc": _cells_acc, "disruptions": disruptions, "double_blocks": double_blocks, "planned_tracks": planned_tracks, "ordered": ordered,
 		"freight_queue": freight_queue, "condition": condition, "repairs": repairs}
 
@@ -1335,6 +1357,8 @@ func from_dict(d: Dictionary) -> void:
 	by_town = d.get("by_town", {})
 	last_settle = d.get("last_settle", {})
 	facility = str(d.get("facility", ""))
+	contract_driver_day = int(d.get("contract_driver_day", -1))
+	contract_drivers = int(d.get("contract_drivers", 0))
 	_cells_acc = float(d.get("cells_acc", 0.0))
 	double_blocks = {}
 	for k in d.get("double_blocks", {}):

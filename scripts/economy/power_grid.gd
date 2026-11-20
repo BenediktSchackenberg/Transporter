@@ -93,7 +93,9 @@ func connected(b: Dictionary) -> bool:
 	var p: Dictionary = sim.parcels.of_building(int(b.site))
 	if p.is_empty():
 		return true
-	return bool(p.get("erschliessung", {}).get("strom", true)) and net.distributed(town_of_biz(b), int(b.site))
+	# Wildnis-Parzellen wurden vor der Stadtgruendung oft mit "kein Netz" markiert.
+	# Das inzwischen wirklich erreichbare Strassennetz ist dort massgeblich.
+	return net.distributed(town_of_biz(b), int(b.site)) and (sim.wildnis or bool(p.get("erschliessung", {}).get("strom", true)))
 
 
 ## Tageslauf: Ausbau fertigstellen, Versorgung zuteilen, Verbrauch des abgelaufenen Tages abrechnen.

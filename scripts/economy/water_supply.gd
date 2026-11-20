@@ -177,7 +177,7 @@ func connected(b: Dictionary) -> bool:
 	var p: Dictionary = sim.parcels.of_building(int(b.site))
 	if p.is_empty():
 		return true
-	return bool(p.get("erschliessung", {}).get("wasser", true))
+	return bool(p.get("erschliessung", {}).get("wasser", true)) or (sim.wildnis and building_on_net(sim.city.town_of_building(int(b.site)), int(b.site)))
 
 
 ## Grundstueck mit ausdruecklich gelegtem Wasseranschluss (Erschliessung "wasser" = true): hat seine eigene Zuleitung.
@@ -218,6 +218,44 @@ func ensure_mains(k: int) -> void:
 				base[_cell_key(q)] = true
 	mains["wasser"][key] = base.duplicate()
 	mains["abwasser"][key] = base.duplicate()
+
+
+## Die Grundversorgung folgt den Strassen der tatsaechlich gegruendeten Stadt. Vor der
+## Gruendung angelegte Leitungen um den generierten Ankunftsort gehoeren nicht zu ihr.
+func reanchor_town(k: int) -> bool:
+	if not sim.wildnis or not sim.town_ready(k):
+		return false
+	var settlement: Dictionary = sim.settlements.get(str(k), {})
+	if settlement.is_empty():
+		return false
+	var a: Array = settlement.get("rect", [])
+	if a.size() < 4:
+		return false
+	var area := Rect2i(int(a[0]), int(a[1]), int(a[2]), int(a[3])).grow(8)
+	var roads := {}
+	for y in range(maxi(0, area.position.y), mini(sim.city.size, area.end.y)):
+		for x in range(maxi(0, area.position.x), mini(sim.city.size, area.end.x)):
+			var q := Vector2i(x, y)
+			if sim.city.is_road(q) and sim.city.town_of(q) == k:
+				roads[_cell_key(q)] = true
+	if roads.is_empty():
+		return false
+	var changed := false
+	for art in ["wasser", "abwasser"]:
+		var previous: Dictionary = mains.get(art, {}).get(str(k), {})
+		var current := {}
+		for cell_key in previous:
+			var xy := str(cell_key).split(":")
+			if xy.size() == 2 and area.has_point(Vector2i(int(xy[0]), int(xy[1]))):
+				current[cell_key] = true
+		for cell_key in roads:
+			current[cell_key] = true
+		if current.size() != previous.size():
+			changed = true
+		mains[art][str(k)] = current
+	_net.erase(k)
+	_fern.erase(k)
+	return changed
 
 
 func main_cells(k: int, art: String) -> Dictionary:

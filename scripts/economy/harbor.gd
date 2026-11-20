@@ -37,11 +37,14 @@ const CRANE_FACTOR := 2.5         # mit Kran
 const MIN_STAFF := 2
 const MAX_STAFF := 6
 const WAIT_HIRE_MIN := 90.0       # wartet ein Schiff so lange ohne Fortschritt, stellt die Hafenverwaltung jemanden ein
+const CONTRACT_CREW := 2          # externer Hafenbetrieb, falls im jungen Ort niemand arbeitslos ist
+const CONTRACT_COST := 1400.0     # ein Spieltag mit zwei Fachkraeften und Kran
 static var default_instant := false   # Testlauf setzt true: bestehende Logikpruefungen ohne Zeitablauf
 var instant := false              # Sofortabfertigung (nur Tests)
 var queue: Array = []              # Posten in Arbeit: {dir: ein|aus, m (Einfuhr), fit, item, qty, units}
 var work_acc := 0.0               # geleistete Ladeeinheiten am aktuellen Posten
 var stalled_since := -1.0         # Spielminute, seit der kein Fortschritt mehr moeglich war
+var contractor_until := -1.0     # bezahlter externer Ladetrupp; bleibt nur solange ein Schiff wartet
 
 
 func setup(simulation) -> void:
@@ -206,7 +209,14 @@ func on_minute(now: float) -> void:
 	if rate <= 0.0:
 		if stalled_since < 0.0:
 			stalled_since = now
-		return
+		if (now - stalled_since >= WAIT_HIRE_MIN or contractor_until >= 0.0) and _mayor().available_budget() >= CONTRACT_COST:
+			sim.economy.transfer(Towns.account_of(town), "S0", CONTRACT_COST)
+			contractor_until = now + GameCalendar.days_to_min(1.0)
+			sim.log_event("Hafen %s beauftragt zwei externe Hafenarbeiter: Schiff %s wird abgefertigt (%s)." % [
+				_town_label(), str(ship.get("name", "")), Catalog.money(CONTRACT_COST)], "info")
+			rate = rate_per_min()
+		if rate <= 0.0:
+			return
 	stalled_since = -1.0
 	work_acc += rate
 	while not queue.is_empty() and work_acc >= float(queue[0].units):
@@ -220,6 +230,7 @@ func on_minute(now: float) -> void:
 			_load_out(str(e.item), int(e.qty))
 	if queue.is_empty():
 		work_acc = 0.0
+		contractor_until = -1.0
 		sim.log_event("Schiff „%s“ abgefertigt in %s: %s gelöscht, %s geladen." % [ship.name, _town_label(), _list(ship.geloescht), _list(ship.geladen)], "info")
 
 
@@ -237,7 +248,7 @@ func cranes() -> int:
 
 
 func rate_per_min() -> float:
-	var n := workers().size()
+	var n := workers().size() + (CONTRACT_CREW if contractor_until > sim.game_min else 0)
 	if n <= 0:
 		return 0.0
 	return float(n) * RATE_PER_WORKER * (CRANE_FACTOR if cranes() > 0 else 1.0) * (1.0 + 0.25 * float(stage - 1))
@@ -253,7 +264,7 @@ func idle_reason() -> String:
 	if not queue.is_empty():
 		if not docked(sim.game_min):
 			return "Schiff legt an"
-		return "kein Personal" if workers().is_empty() else ""
+		return "kein Personal" if workers().is_empty() and contractor_until <= sim.game_min else ""
 	if ship.is_empty() or ship.status != "am_kai":
 		var wait := INTERVAL_DAYS - GameCalendar.day_of(sim.game_min) % INTERVAL_DAYS
 		return "nächstes Schiff in %d Tag%s" % [wait, "en" if wait != 1 else ""]
@@ -366,13 +377,14 @@ func summary() -> Dictionary:
 	return {"stufe": stage, "stufe_name": stage_name(), "ladung_je_schiff": capacity(), "rueckstau_schiffsladungen": backlog_ships(), "ausbau_laeuft": expansion_running(),
 		"ausbau": {} if nd.is_empty() else {"ziel": nd.name, "ladung": int(nd.ladung), "kosten": int(nd.kosten), "tage": int(nd.tage)},
 		"aktiv": enabled, "schiff": ship.duplicate(true), "naechstes_in_tagen": INTERVAL_DAYS - GameCalendar.day_of(sim.game_min) % INTERVAL_DAYS,
-		"abfertigung": {"posten": queue.size(), "arbeiter": workers().size(), "leistung_je_min": snappedf(rate_per_min(), 0.1), "grund": idle_reason()},
+		"abfertigung": {"posten": queue.size(), "arbeiter": workers().size(), "externe": CONTRACT_CREW if contractor_until > sim.game_min else 0,
+			"leistung_je_min": snappedf(rate_per_min(), 0.1), "grund": idle_reason()},
 		"wartende_einfuhren": manifest.size(), "wartende_einheiten": waiting_units(), "ausfuhr_am_kai": export_wait.duplicate(), "statistik": stats.duplicate()}
 
 
 func to_dict() -> Dictionary:
 	return {"town": town, "stage": stage, "manifest": manifest.duplicate(true), "export_wait": export_wait.duplicate(), "ship": ship.duplicate(true), "stats": stats.duplicate(), "next": _next,
-		"queue": queue.duplicate(true), "work_acc": work_acc, "stalled_since": stalled_since}
+		"queue": queue.duplicate(true), "work_acc": work_acc, "stalled_since": stalled_since, "contractor_until": contractor_until}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -398,3 +410,4 @@ func from_dict(d: Dictionary) -> void:
 			e.m.qty = int(e.m.qty)
 	work_acc = float(d.get("work_acc", 0.0))
 	stalled_since = float(d.get("stalled_since", -1.0))
+	contractor_until = float(d.get("contractor_until", -1.0))

@@ -26,8 +26,8 @@ const ART_ZONES := {
 	"laerm": ["gewerbe", "industrie"], "oeffentlich": ["mischgebiet", "oeffentlich", "wohnen", "gewerbe"], "tourismus": ["mischgebiet", "wohnen"],
 }
 ## Bevorzugte Viertelzone je Nutzungsart (Stadtstruktur)
-const ART_DISTRICT := {"wohnen": ["wohnen", "mischgebiet"], "versorgung": ["mischgebiet"], "gewerbe": ["gewerbe"], "laerm": ["gewerbe"],
-	"oeffentlich": ["mischgebiet"], "tourismus": ["mischgebiet"]}
+const ART_DISTRICT := {"wohnen": ["wohnen", "mischgebiet"], "versorgung": ["mischgebiet", "wohnen"], "gewerbe": ["gewerbe"], "laerm": ["gewerbe", "industrie"],
+	"oeffentlich": ["mischgebiet", "wohnen"], "tourismus": ["mischgebiet", "wohnen"]}
 const LOUD_TYPES := ["warehouse", "freight_shed", "factory", "depot", "workshop", "workshop_small", "incineration_plant", "containers", "gas_station", "crane"]
 const HOME_TYPES := ["house", "semi", "villa", "apartment", "highrise"]
 const NAMES := {"bedarf": "Bedarf", "nachbarschaft": "Nachbarschaft", "struktur": "Stadtstruktur", "erreichbar": "Erreichbarkeit",
@@ -84,6 +84,7 @@ func rank(k: int, req: Dictionary) -> Dictionary:
 	var art := str(req.get("art", "oeffentlich"))
 	var zones: Array = req.get("zones", ART_ZONES.get(art, ["mischgebiet"]))
 	var holder := str(req.get("holder", ""))
+	var wanted_district := str(req.get("district", "")).to_upper()
 	var kern := _kern(k)
 	var out := {"list": [], "ohne_strasse": [], "gruen": 0, "zu_klein": 0}
 	if kern.x < 0:
@@ -114,6 +115,26 @@ func rank(k: int, req: Dictionary) -> Dictionary:
 		var p: Dictionary = e[1]
 		var pr: Rect2i = e[2]
 		var v: Dictionary = sim.town_plan.district_at(k, pr.get_center()) if sim.town_plan != null else {}
+		var fringe := false
+		if v.is_empty() and sim.town_plan != null and sim.town_plan.has(k) and art != "laerm":
+			# Kleine Gruendungsviertel haben kaum Platz fuer ganze Parzellen. Ihr direkter Rand
+			# darf mitwachsen; entfernte Einzelstandorte werden nicht als Stadt verkauft.
+			var nearest := INF
+			for district in sim.town_plan.of(k).get("viertel", []):
+				if str(district.zone) not in ART_DISTRICT.get(art, []):
+					continue
+				var midpoint := Vector2(float(district.mitte[0]), float(district.mitte[1]))
+				var distance := Vector2(pr.get_center()).distance_to(midpoint)
+				if distance <= float(district.radius) + 6.0 and distance < nearest:
+					v = district
+					nearest = distance
+					fringe = true
+		if sim.town_plan != null and sim.town_plan.has(k) and art != "laerm" and v.is_empty():
+			continue
+		if not v.is_empty() and str(v.zone) not in ART_DISTRICT.get(art, []):
+			continue
+		if wanted_district.begins_with("V") and wanted_district.substr(1).is_valid_int() and (v.is_empty() or str(v.id) != wanted_district):
+			continue
 		if not v.is_empty() and sim.town_plan.zone_at(k, pr.get_center()) == "gruen":
 			out.gruen += 1
 			continue   # Gruenzug, Aussicht, Uferweg des Stadtplans bleiben frei
@@ -123,11 +144,11 @@ func rank(k: int, req: Dictionary) -> Dictionary:
 				out.ohne_strasse.append(str(p.id))
 			continue
 		maxprice = maxf(maxprice, float(p.price))
-		valid.append({"parcel": str(p.id), "rect": [fit.position.x, fit.position.y, w, h], "dist": float(e[0]), "p": p, "v": v, "fit": fit})
+		valid.append({"parcel": str(p.id), "rect": [fit.position.x, fit.position.y, w, h], "dist": float(e[0]), "p": p, "v": v, "fringe": fringe, "fit": fit})
 	for c in valid:
 		c.parts = _score_parts(k, art, req, c, ctx, maxprice)
 		c.score = _total(k, art, c.parts)
-		c.viertel_text = ("%s %s" % [c.v.id, c.v.text]) if not c.v.is_empty() else "außerhalb der geplanten Viertel"
+		c.viertel_text = ("%s %s%s" % [c.v.id, c.v.text, " (am Rand)" if bool(c.fringe) else ""]) if not c.v.is_empty() else "außerhalb der geplanten Viertel"
 		c.erase("p")
 		c.erase("fit")
 	valid.sort_custom(func(a, b): return float(a.score) > float(b.score))
@@ -258,7 +279,7 @@ func _score_parts(k: int, art: String, req: Dictionary, c: Dictionary, ctx: Dict
 			nachbar = 1.0 - 0.5 * minf(1.0, loud / 3.0)
 	var struktur := 0.2
 	if not v.is_empty():
-		struktur = 1.0 if sim.town_plan.zone_at(k, ctr) in ART_DISTRICT.get(art, []) else 0.4
+		struktur = (0.7 if bool(c.get("fringe", false)) else 1.0) if str(v.zone) in ART_DISTRICT.get(art, []) else 0.4
 	if built >= 2:
 		struktur = minf(1.0, struktur + 0.3)   # Baulücke schließen statt verstreut bauen
 	var erreichbar := 1.0 if sim.civic._touches_road(fit) else 0.0
