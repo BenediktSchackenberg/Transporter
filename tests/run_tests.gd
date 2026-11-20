@@ -3908,6 +3908,12 @@ func test_fuel_planner() -> void:
 	c.fuel = c.fuel_cap * 0.3
 	FuelPlanner.run_rules(s)
 	ok(s.resources.pending_fuel(0) >= FuelPlanner.min_order(c.fuel_cap), "unter halbem Tank: Bestellung mindestens %d l (%d l)" % [int(FuelPlanner.min_order(c.fuel_cap)), int(s.resources.pending_fuel(0))])
+	var early := new_sim(2)
+	var ec := early.companies[0]
+	ec.fuel = 690.0
+	ok(FuelPlanner.set_rule(early, 0, 700.0, 700.0, "").ok, "vorausschauende Tankregel wird angenommen")
+	FuelPlanner.run_rules(early)
+	ok(early.resources.pending_fuel(0) >= FuelPlanner.min_order(ec.fuel_cap), "Tankwagen schon vor dem halben Tank bestellt, damit er vor Leerfahrt ankommt")
 	c.fuel_rule = {}
 	# Regel-KI: 6 Fahrzeuge, Tank fast voll -> kein Diesel
 	var obs := {"vorraete": {"treibstoff_l": int(c.fuel_cap) - 150, "treibstoff_unterwegs_l": 0, "tank_kapazitaet_l": int(c.fuel_cap), "nachtank_regel": true}}
@@ -15042,6 +15048,9 @@ func test_eko_office_and_goals() -> void:
 	ok(EkoWorld._municipal_code("Kindergarten") == "KI-01" and EkoWorld._municipal_code("Polizei") == "PO-01", "Kindergarten → Kita, Polizei → Polizeiwache")
 	var af: Dictionary = E.input(m, "Amt", {"aktion": {"action": "assess_financing"}})
 	ok(af.ok and str(af.msg).contains("Offene Projekte"), "assess_financing ohne project_id: Übersicht (%s)" % str(af.msg).left(80))
+	var plain: Dictionary = E.input(m, "Amt", {"aktion": "status"})
+	ok(plain.ok and bool(plain.get("uebersicht", false)), "einfaches Amtswort status wird ohne JSON-Fehler als Lage gelesen")
+	ok(E.office_obs(E.beings[m]).has("bau_blockaden"), "Amtslage nennt blockierte Bauprojekte getrennt")
 	var M: Mayor = s.towns.mayor(0)
 	var prj := {"id": "TST1", "status": "beauftragt", "builder": "", "cost": 1000.0}
 	M.projects["TST1"] = prj

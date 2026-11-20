@@ -997,7 +997,7 @@ static func _cardinal(a: Vector2i) -> Vector2i:
 
 ## Naechster Entwicklungsabschnitt (Auftrag 8, Abschnitt 6): laeuft schon ein Strassennetz, erst dieses; sonst das naechste Entwurfs-
 ## Viertel mit freiem Land – bei Wohnungsnot zuerst Wohnen, dann nach Naehe zum Kern. {} = nichts zu tun.
-func next_district(k: int, housing_need: bool) -> Dictionary:
+func next_district(k: int, housing_need: bool, jobs_need: bool = false) -> Dictionary:
 	var p := of(k)
 	if p.is_empty():
 		return {}
@@ -1009,7 +1009,7 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 				active_road = str(prj.id)
 				break
 	var repair := _repair_step(k, p) if active_road == "" else {}
-	if not repair.is_empty():
+	if not repair.is_empty() and not jobs_need:
 		return repair
 	var kern := Vector2(int(p.kern[0]), int(p.kern[1]))
 	var best := {}
@@ -1017,10 +1017,12 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 	for v in p.viertel:
 		if str(v.status) != "entwurf" or str(v.zone) == "gruen" or str(v.rolle) == "kern":
 			continue
+		if jobs_need and str(v.zone) == "wohnen":
+			continue
 		var c := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
 		if maxf(free_share(c, 5), _raw_free_share(c, 5, k)) < 0.3:
 			continue
-		var sc := Vector2(c).distance_to(kern) - (40.0 if housing_need and str(v.zone) == "wohnen" else 0.0)
+		var sc := Vector2(c).distance_to(kern) - (40.0 if housing_need and str(v.zone) == "wohnen" else 0.0) - (60.0 if jobs_need and str(v.zone) in ["gewerbe", "industrie"] else 0.0)
 		if sc < best_s:
 			best_s = sc
 			best = v
@@ -1029,9 +1031,9 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 			return {"warten": active_road, "text": "Straßennetz %s läuft; Material, Bautrupp und übrige Stadtversorgung prüfen." % active_road}
 		var sites := expansion_sites(k)
 		if sites.is_empty():
-			return {}
+			return repair
 		var zones: Array = (p.viertel as Array).map(func(v): return str(v.zone))
-		var zone := "wohnen" if housing_need else ("gewerbe" if not zones.has("gewerbe") else ("industrie" if not zones.has("industrie") else ("gruen" if zones.size() % 5 == 0 else "mischgebiet")))
+		var zone := ("gewerbe" if not zones.has("gewerbe") else "industrie") if jobs_need else ("wohnen" if housing_need else ("gewerbe" if not zones.has("gewerbe") else ("industrie" if not zones.has("industrie") else ("gruen" if zones.size() % 5 == 0 else "mischgebiet"))))
 		return {"text": "Neue Stadterweiterung planen: Standort und Nutzung anhand der freien Flächen wählen.",
 			"kandidaten": sites, "aktion": {"action": "stadtteil_planen", "mitte": sites[0].feld, "zone": zone,
 				"name": "Neues %sviertel" % ("Grün" if zone == "gruen" else "Wohn" if zone == "wohnen" else "Gewerbe" if zone == "gewerbe" else "Industrie" if zone == "industrie" else "Misch"),

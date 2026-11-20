@@ -128,8 +128,10 @@ func _plan_building(cid: int, typ: String, want: String, design_id: String = "")
 		var p0: Dictionary = sim.parcels.parcel(want)
 		if p0.is_empty():
 			return {"ok": false, "msg": "Grundstück %s gibt es nicht." % want}
-		if Planning.assess(p0, probe).ok:
-			cands = [p0]
+		var assessed: Dictionary = Planning.assess(p0, probe)
+		if not bool(assessed.ok):
+			return {"ok": false, "msg": "Der gewählte Standort %s passt nicht zu %s (%s). Wähle einen anderen geprüften Standort." % [want, typ, ", ".join(assessed.blocking)]}
+		cands = [p0]
 	if cands.is_empty() and sim.wildnis and not is_commercial:
 		# Wildnis: zuerst die Baugrundstuecke der Siedlung (17.11.: die Suche lieferte nur die 30 billigsten Reststreifen);
 		# sind alle belegt, neue um den Hof anlegen
@@ -551,6 +553,12 @@ func business_hint(cid: int) -> String:
 			if not applicants.is_empty():
 				return "Dein neuer Betrieb %s (%s) braucht Personal. Stelle %s ein: Firma {aktion: {action: \"recruit_worker\", worker_id: \"%s\"}}; danach assign_staff mit business_id \"%s\"." % [b.name, b.id, applicants[0].name, applicants[0].id, b.id]
 			return "Dein neuer Betrieb %s (%s) braucht Personal. Prüfe Bewerber und stelle jemanden ein; danach assign_staff." % [b.name, b.id]
+	for b in owned:
+		if str(b.status) != "blockiert":
+			continue
+		var blockers: Array = b.get("blockers", []).filter(func(x): return str(x.get("key", "")) != "personal" or sim.biz.staff_of(str(b.id)).size() < int(Businesses.branches().get(str(b.branch), {}).get("personal_min", 1)))
+		if not blockers.is_empty():
+			return "Betrieb %s (%s) ist blockiert: %s. Behebe erst Einkaufskette oder Stadtversorgung, bevor du den nächsten Betrieb gründest; prüfe danach, ob der Betrieb wirklich produziert." % [b.name, b.id, "; ".join(blockers.map(func(x): return str(x.text)))]
 	if owned.any(func(b): return str(b.status) == "im_bau"):
 		return "Ein neuer Betrieb wird gebaut. Prüfe Baufortschritt und bereite Personal vor; danach weitere Gewerbe- und Industriebetriebe planen."
 	var target: int = mini(6, maxi(1, int(ceil(float(sim.citizens.population_of(k)) / 12.0))))

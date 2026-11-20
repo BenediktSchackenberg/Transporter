@@ -1133,8 +1133,15 @@ func _public_day(day: int) -> void:
 				e.days = maxi(4, int(e.days) - (int(e.days_left) - 4))
 		if builders[e.builder].status != "aktiv":
 			continue
-		if not sim.towns.depot(Towns.town_of_id(str(e.project))).project_complete(str(e.project)):
-			e["waiting"] = "Material aus dem Stadtlager fehlt"
+		var depot: CityDepot = sim.towns.depot(Towns.town_of_id(str(e.project)))
+		if not depot.project_complete(str(e.project)):
+			var res: Dictionary = depot.project_res.get(str(e.project), {})
+			var missing: Array = []
+			for item in res.get("items", {}):
+				var qty := int(res.items[item]) - int(res.get("reserved", {}).get(item, 0))
+				if qty > 0:
+					missing.append("%d %s" % [qty, item])
+			e["waiting"] = "Stadtlager: %s fehlt" % ", ".join(missing) if not missing.is_empty() else "Material aus dem Stadtlager fehlt"
 			continue
 		if not sim.crews.on_site("pub", str(e.project)):
 			var t: Dictionary = sim.crews.crew_for("pub", str(e.project))

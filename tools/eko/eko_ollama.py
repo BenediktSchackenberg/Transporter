@@ -187,6 +187,11 @@ TOOLS = [
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12], \"warum\": \"Hafen erkunden\"}. "
                   "warum (kurz) ist bei jeder Handlung erlaubt und wird im Spiel angezeigt. Die Antwort hat status: laeuft, abgeschlossen, gescheitert oder doppelt."}},
          "required": ["type", "data"]}},
+    {"name": "mayor_action", "description": "Nur fuer Buergermeister: eine konkrete Stadtentscheidung aus mein_amt.naechster_ausbauschritt oder mein_amt.aktionen ausfuehren. Verwende exakte IDs und Parameter aus der aktuellen Beobachtung. Liefert danach Bau- und Wirtschaftsstand zur Erfolgskontrolle.",
+     "parameters": {"type": "object", "properties": {
+         "action": {"type": "string", "enum": ["viertel_erschliessen", "quartier_entwurf_waehlen", "stadtteil_planen", "plan_infrastructure", "designate_quarter", "offer_parcels", "decide_application", "propose_project", "set_vision", "kommunal_bauen", "fahrzeug_entwerfen", "build_harbor", "build_airport", "build_station", "build_bridge", "build_tunnel", "expand_harbor", "expand_airport", "expand_power", "expand_depot", "repair_road", "stromtrasse_bauen", "versorgungsleitung_bauen", "infra_ausbau"]},
+         "params": {"type": "object", "description": "Parameter der Amtshandlung aus mein_amt.aktionen; z. B. {viertel: V7, reason: Arbeitsplaetze}."}},
+         "required": ["action", "params"]}},
     {"name": "wait", "description": "Warte einige Sekunden – mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist, oder mit "
      "bis: \"antwort\", bis dich jemand anspricht oder anruft (höchstens 90 s, ohne dass du dazwischen nachdenken musst). Danach bekommst du deine Lage.",
      "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}, "bis": {"type": "string", "enum": ["ankunft", "antwort"]}}}},
@@ -226,6 +231,10 @@ COMPANY_TOOLS = [
         "worker_id": {"type": "string"}}, "required": ["worker_id"]}},
     {"name": "found_business", "description": "Neuen Betrieb am geprueften Standort aus meine_firma.wirtschaftsaufbau gruenden. Danach Personal einstellen und zuordnen.", "parameters": {"type": "object", "properties": {
         "branche": {"type": "string"}, "grundstueck": {"type": "string"}, "stadt": {"type": "integer"}}, "required": ["branche", "grundstueck"]}},
+    {"name": "build_home", "description": "Wohnhaus aus einer selbst gewaehlten Vorlage und einem geprueften Standort bauen. Vergleiche Kosten, Komfort, Stadtmarke und Nachbarschaft in meine_firma.bauentwuerfe und standortangebote.", "parameters": {"type": "object", "properties": {
+        "typ": {"type": "string"}, "entwurf": {"type": "string"}, "grundstueck": {"type": "string"}}, "required": ["typ", "entwurf", "grundstueck"]}},
+    {"name": "build_commercial", "description": "Gewerbegebaeude aus einer selbst gewaehlten Vorlage am geprueften Standort bauen. Vergleiche Funktion, Kosten und Lage in meine_firma.gewerbeentwuerfe und gewerbestandorte.", "parameters": {"type": "object", "properties": {
+        "typ": {"type": "string"}, "entwurf": {"type": "string"}, "grundstueck": {"type": "string"}}, "required": ["typ", "entwurf", "grundstueck"]}},
     {"name": "assign_business_staff", "description": "Eigenen Mitarbeiter einem eigenen Betrieb zuordnen.", "parameters": {"type": "object", "properties": {
         "worker_id": {"type": "string"}, "business_id": {"type": "string"}}, "required": ["worker_id", "business_id"]}},
     {"name": "repair_vehicle", "description": "Eigenen LKW reparieren.", "parameters": {"type": "object", "properties": {
@@ -243,7 +252,8 @@ COMPANY_TOOLS = [
 TOOLS.extend(COMPANY_TOOLS)
 COMPANY_TOOL_ACTIONS = {"review_company_plan": "review_plan", "dispatch_policy": "set_dispatch_policy",
                         "hire_worker": "recruit_worker", "accept_contract": "accept_contract", "buy_vehicle": "buy_vehicle",
-                        "found_business": "found_business", "assign_business_staff": "assign_staff",
+                        "found_business": "found_business", "build_home": "haus_bauen", "build_commercial": "gewerbe_bauen",
+                        "assign_business_staff": "assign_staff",
                         "repair_vehicle": "repair_vehicle", "city_strategy": "set_city_strategy",
                         "mobilize_worker": "mobilize_worker", "order_assault": "order_assault", "order_retreat": "order_retreat"}
 
@@ -517,7 +527,14 @@ class Agent:
             lines.append("Wenn observe.meine_firma.wirtschaftsaufbau einen konkreten Standort und found_business nennt, "
                          "gruende dort nach dringenden Lieferungen einen Betrieb. Pruefe danach Baufortschritt, stelle "
                          "Personal ein und ordne es dem Betrieb zu. Bei Arbeitslosen ohne offene Stellen hat ein neuer "
-                         "Betrieb Vorrang vor einem weiteren Wohnhaus.")
+                         "Betrieb Vorrang vor einem weiteren Wohnhaus. Wenn ein fertiger Betrieb blockiert ist, "
+                         "behebe zuerst die sichtbaren Blockaden bei Personal, Rohstoffen oder Versorgung und pruefe "
+                         "echte Produktion, bevor du weitere Betriebe gruendest.")
+            lines.append("Erkunde die Umgebung deiner Stadt und vergleiche vor Neubauten mehrere Standortangebote. "
+                         "Waehle bei build_home und build_commercial selbst eine konkrete Vorlagen-ID (entwurf) und "
+                         "ein passendes Grundstueck; begruende die Wahl in deinem Plan oder Gedächtnis mit Kosten, "
+                         "Komfort, Funktion, Stadtmarke und Versorgung. Fahrzeugmodelle waehlst du aus den echten "
+                         "Angeboten; eine Vorlage ist eine Option, kein Bauauftrag.")
             if getattr(self.args, "strategy", ""):
                 lines.append("Deine eigene Unternehmensstrategie: " + self.args.strategy[:400])
         elif getattr(self.args, "rolle", "") == "buergermeister":
@@ -529,10 +546,30 @@ class Agent:
                          "Ein fertiges, abgebrochenes oder nicht existentes Projekt ist kein aktuelles Ziel mehr. "
                          "Alte Notizen, die eine Status-Schleife empfehlen, sind durch diese Regel ueberholt. "
                          "Frieden, Handel und schoene Stadtviertel sind vollwertige strategische Entscheidungen.")
+            lines.append("Nutze fuer konkrete Bauentscheidungen das direkte Werkzeug mayor_action mit action und params aus "
+                         "mein_amt.naechster_ausbauschritt. Lies nach jedem Versuch nachkontrolle: nur ok=true und ein "
+                         "fortschreitendes Projekt zaehlen. Wenn arbeitslos hoch ist, erschliesse zuerst Gewerbe- und "
+                         "Industrieviertel mit Strasse und Versorgung; Prestige kann warten. Wiederhole eine fehlgeschlagene "
+                         "infra_ausbau-Aktion erst, wenn sich Standort oder Anlagenzustand geaendert hat.")
         return "\n".join(lines)
 
     def call_tool(self, name, a):
         try:
+            if name == "mayor_action":
+                if getattr(self.args, "rolle", "") != "buergermeister":
+                    return {"ok": False, "msg": "Nur Buergermeister koennen mayor_action nutzen."}
+                action = str(a.get("action", ""))
+                params = a.get("params", {})
+                if not action or not isinstance(params, dict):
+                    return {"ok": False, "msg": "action und params aus mein_amt.aktionen angeben."}
+                result = self.call_tool("act", {"type": "Amt", "data": {"aktion": {"action": action, **params}}})
+                current = compact_obs(self.world.observe())
+                office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
+                if isinstance(result, dict):
+                    result["nachkontrolle"] = {"naechster_ausbauschritt": office.get("naechster_ausbauschritt", {}),
+                                               "wirtschaftsaufbau": office.get("wirtschaftsaufbau", {}),
+                                               "bau_blockaden": office.get("bau_blockaden", [])[:4]}
+                return result
             if name == "act" and getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_passive_office", 0) >= 3:
                 typ = str(a.get("type", ""))
                 data = a.get("data", {}) if isinstance(a.get("data"), dict) else {}
@@ -950,7 +987,17 @@ class Agent:
                 self.status("wartet" if pending else ("fehler" if failed else "bereit"), last_tool_at=time.time(),
                             tool=fn["name"], waiting_on=verdict if pending else "",
                             last_error=verdict if failed else "")
+                if fn["name"] == "mayor_action":
+                    self._mayor_ok = getattr(self, "_mayor_ok", 0) + (0 if failed else 1)
+                    self._mayor_fail = getattr(self, "_mayor_fail", 0) + (1 if failed else 0)
+                    self.status("fehler" if failed else "bereit", city_actions_ok=self._mayor_ok,
+                                city_actions_failed=self._mayor_fail)
                 messages.append({"role": "tool", "tool_name": fn["name"], "tool_call_id": c.get("id", ""), "content": json.dumps(res, ensure_ascii=False)[:14000]})
+                if fn["name"] == "mayor_action" and failed:
+                    check = res.get("nachkontrolle", {}) if isinstance(res, dict) else {}
+                    messages.append({"role": "user", "content": "Diese Amtshandlung wurde abgelehnt: %s. Aktueller Ausbauschritt: %s. "
+                                     "Waehle eine andere gueltige Stadtentscheidung; wiederhole den gleichen Aufruf nicht ohne Lageaenderung."
+                                     % (verdict, json.dumps(check.get("naechster_ausbauschritt", {}), ensure_ascii=False)[:700])})
                 if fn["name"] == "act" and getattr(self.args, "rolle", "") == "buergermeister":
                     data = a.get("data", {}) if isinstance(a.get("data"), dict) else {}
                     office = data.get("aktion", {}) if isinstance(data.get("aktion"), dict) else {}

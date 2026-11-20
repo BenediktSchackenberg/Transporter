@@ -63,7 +63,8 @@ static func set_rule(sim: Simulation, cid: int, below_l: float, buy_l: float, st
 
 ## Alle 30 Spielminuten: Regeln ausfuehren (Routine, keine KI-Anfrage noetig).
 ## Kleinste sinnvolle Tankwagenbestellung: 30 % des Tanks (Partie 09.11.: 43-95 Lieferungen je Firma, oft 100-230 l,
-## Tankwagen 44-68 EUR je Fahrt = bis 25 % Aufschlag). Bestellschwelle hoechstens halber Tank.
+## Tankwagen 44-68 EUR je Fahrt = bis 25 % Aufschlag). Die Schwelle darf bis zur
+## Mindestbestellmenge unter der Tankkapazitaet reichen: sonst kommt der Tankwagen bei langen Fahrten zu spaet.
 const MIN_ORDER_SHARE := 0.3
 static func min_order(cap: float) -> float:
 	return maxf(50.0, cap * MIN_ORDER_SHARE)
@@ -71,7 +72,7 @@ static func min_order(cap: float) -> float:
 
 static func run_rules(sim: Simulation) -> void:
 	for c in sim.companies:
-		if c.fuel_rule.is_empty() or not c.is_active() or c.fuel + sim.resources.pending_fuel(c.id) >= minf(float(c.fuel_rule.below), c.fuel_cap * 0.5):
+		if c.fuel_rule.is_empty() or not c.is_active() or c.fuel + sim.resources.pending_fuel(c.id) >= minf(float(c.fuel_rule.below), c.fuel_cap - min_order(c.fuel_cap)):
 			continue
 		var want := minf(maxf(float(c.fuel_rule.buy), min_order(c.fuel_cap)), c.fuel_cap - c.fuel - sim.resources.pending_fuel(c.id))
 		if want < min_order(c.fuel_cap):

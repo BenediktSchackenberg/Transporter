@@ -162,7 +162,7 @@ func offers(k: int, def_id: String, n: int = 3) -> Array:
 		out.append({"grundstueck": c.parcel, "feld": [int(c.rect[0]), int(c.rect[1])], "preis": int(p.get("price", 0)), "bewertung": c.score,
 			"viertel": c.viertel_text, "vorteile": pros, "auflagen": "Zone %s%s" % [p.zone, (", höchstens %d Geschosse" % int(v.geschosse)) if not v.is_empty() and int(v.geschosse) > 0 else ""],
 			"erschliessung": "Straße liegt am Grundstück" if float(c.parts.erreichbar) >= 1.0 else "ohne Straße",
-			"bauen": "Firma {aktion: {action: \"haus_bauen\", typ: \"%s\", grundstueck: \"%s\"}}" % [def_id, c.parcel]})
+			"bauen": "Firma {aktion: {action: \"%s\", typ: \"%s\", grundstueck: \"%s\"}}" % ["gewerbe_bauen" if art == "gewerbe" else "haus_bauen", def_id, c.parcel]})
 	if out.is_empty() and not (r.ohne_strasse as Array).is_empty():
 		out.append({"hinweis": "Nur Grundstücke ohne Straße (%s) – erst eine Straße bauen (strasse_bauen) oder auf die Erschließung der Stadt warten." % ", ".join((r.ohne_strasse as Array).slice(0, 3))})
 	_offer_cache[key] = [now, out]
