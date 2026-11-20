@@ -1747,6 +1747,23 @@ static func from_dict(d: Dictionary) -> Simulation:
 		for prj in M.projects.values():
 			if prj.has("road_cells") and str(prj.get("status", "")) not in ["abgebrochen", "abgelehnt"]:
 				s.access.reapply(prj.road_cells)
+				# Ein Anschlussplan speichert nur neu gebaute Felder. Ein bereits vorhandenes
+				# Zwischenfeld kann nach dem Laden fehlen und die fertige Verbindung trennen.
+				if s.wildnis and str(prj.get("ref", "")) == "anschluss" and str(prj.status) == "fertig":
+					var plan: Array = prj.get("road_plan", [])
+					var gaps: Array = []
+					for i in range(1, plan.size()):
+						var a := Vector2i(int(plan[i - 1][0]), int(plan[i - 1][1]))
+						var b := Vector2i(int(plan[i][0]), int(plan[i][1]))
+						if absi(a.x - b.x) + absi(a.y - b.y) == 2 and (a.x == b.x or a.y == b.y):
+							var mid := Vector2i((a.x + b.x) / 2, (a.y + b.y) / 2)
+							if not s.city.is_road(mid):
+								gaps.append([mid.x, mid.y])
+					if not gaps.is_empty():
+						s.access.reapply(gaps)
+						for xy in gaps:
+							if s.city.is_road(Vector2i(int(xy[0]), int(xy[1]))):
+								prj.road_cells.append(xy)   # die Reparatur beim naechsten Speichern behalten
 	s.construction.from_dict(d.get("construction", {}))
 	s.city_depot.from_dict(d.get("city_depot", {}))
 	s.traffic_flow.from_dict(d.get("traffic_flow", {}))

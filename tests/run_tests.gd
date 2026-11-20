@@ -9041,6 +9041,26 @@ func test_wildnis_found() -> void:
 		ok(E.input(p0, "Firma", {"aktion": {"action": "ueberblick"}}).ok, "ueberblick liefert statt einer unbekannten Aktion die Firmenlage")
 		var one_item: String = str(home_site.need.keys()[0])
 		ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": one_item, "qty": 1}}).ok, "direkter Doppelkauf für ein Wohnhaus wird abgewiesen")
+	# Ein beim Bau vorhandenes Zwischenfeld kann nach dem Laden aus einer fertigen Anschlussstraße fehlen.
+	var gap := Vector2i(-1, -1)
+	for gy in range(40, s.city.size - 40, 20):
+		for gx in range(40, s.city.size - 42, 20):
+			var mid := Vector2i(gx + 1, gy)
+			if [Vector2i(gx, gy), mid, Vector2i(gx + 2, gy)].all(func(q): return s.city.g(q) == CityData.G.GRASS and s.city.building_at[s.city.idx(q)] < 0 and s.city.height[s.city.idx(q)] == 0):
+				gap = mid
+				break
+		if gap.x >= 0:
+			break
+	ok(gap.x >= 0, "freies Zwischenfeld fuer Anschluss-Ladetest gefunden")
+	if gap.x >= 0:
+		var left := [gap.x - 1, gap.y]
+		var right := [gap.x + 1, gap.y]
+		var gap_id := "P_LOAD_GAP"
+		s.towns.mayor(k).projects[gap_id] = {"id": gap_id, "kind": "erschliessung", "ref": "anschluss", "status": "fertig", "road_plan": [left, right], "road_cells": [left, right]}
+		var restored := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+		ok(restored.city.is_road(gap) and [gap.x, gap.y] in restored.towns.mayor(k).projects[gap_id].road_cells,
+			"fertiger Wildnis-Anschluss schliesst und speichert ein fehlendes Zwischenfeld beim Laden")
+		s.towns.mayor(k).projects.erase(gap_id)
 	# 19.11.: die pauschale Monatsausgabe der öffentlichen Hand zog Wildnis-Städten die Hälfte ihrer Millionen ab
 	var town_cash: float = float(s.economy.accounts.get(Towns.account_of(k), 0.0))
 	s.public_sector.on_month(1)
