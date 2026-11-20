@@ -50,11 +50,21 @@ func setup(simulation) -> void:
 	enabled = true
 	sim.economy.accounts[ACCOUNT] = 0.0
 	sim.economy.transfer("X0", ACCOUNT, START_CAPITAL)
-	for k in sim.towns.count() - 1:
-		_add_route(k, k + 1)
-	for r in routes:
-		planes.append({"id": "FZ%d" % (planes.size() + 1), "route": r.id, "at": int(r.a), "flight": "", "next_dep": 30.0 + 15.0 * planes.size()})
+	refresh_routes()
 	sim.day_changed.connect(on_day)
+
+
+## Auch nach einer Wildnis-Gruendung: sobald beide Flughaefen existieren, entsteht die Linie.
+func refresh_routes() -> void:
+	if not enabled:
+		return
+	for k in sim.towns.count() - 1:
+		if not sim.towns.airport(k).enabled or not sim.towns.airport(k + 1).enabled or not route_between(k, k + 1).is_empty():
+			continue
+		_add_route(k, k + 1)
+		var r: Dictionary = routes[-1]
+		planes.append({"id": "FZ%d" % (planes.size() + 1), "route": r.id, "at": int(r.a), "flight": "", "next_dep": sim.game_min + 30.0 + 15.0 * planes.size()})
+		sim.log_event("Regionalflug: Verbindung %s – %s nach dem Bau beider Flughaefen aufgenommen." % [sim.towns.name_of(k), sim.towns.name_of(k + 1)], "good")
 
 
 func _add_route(a: int, b: int) -> void:

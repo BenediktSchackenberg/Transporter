@@ -344,7 +344,7 @@ func sprite_cell(b: Dictionary, info: Dictionary) -> Vector2i:
 
 
 func add_building_sprite(b: Dictionary) -> void:
-	if b.type == "plot":
+	if bool(b.get("retired", false)) or b.type == "plot":
 		return   # Firmengrundstuecke zeichnet EstateView
 	if sim.construction.building_under_construction(int(b.id)):
 		return   # Betriebsbau laeuft: SiteView zeichnet die Baustelle, das Gebaeude erscheint bei Fertigstellung
@@ -522,6 +522,7 @@ func _build_decor() -> void:
 		s.material = _sway_mat
 		_tree_sprites[t[0]] = s
 	sim.access.roads_built.connect(_on_roads_built)
+	sim.eko.settle.airfield_built.connect(_on_rail_built)
 	sim.prod.trees_felled.connect(_on_trees_felled)
 	for b in c.benches:
 		_detail_nodes.append(_prop("d_bench", Vector2(b.x * 32 + 16, b.y * 32 + 16), decor_node))

@@ -23,28 +23,36 @@ func setup(simulation: Simulation) -> void:
 	sim = simulation
 	var towns: Array = range(sim.towns.count()) if sim.towns != null and sim.towns.count() > 0 else [0]
 	for k in towns:
-		var H: Harbor = sim.towns.harbor(k) if sim.towns != null and sim.towns.count() > 0 else sim.harbor
-		if not H.enabled:
-			continue
-		var info := _port_info(int(k))
-		if info.is_empty():
-			continue
-		var jetty := JettyNode.new()   # Holzanleger vom Ufer ins Wasser, das Linienschiff liegt suedlich laengsseits
-		jetty.from_x = info.jx0
-		jetty.to_x = info.jx1
-		jetty.y = info.jy
-		jetty.position = Iso.to_screen(Vector2((jetty.from_x + jetty.to_x) * 0.5, jetty.y + 0.5) * 32.0)
-		add_child(jetty)
-		var liner := ShipNode.new()
-		liner.visible = false
-		add_child(liner)
-		info["liner"] = liner
-		info["jetty"] = jetty
-		_ports[int(k)] = info
+		_add_port(int(k))
 	if _ports.has(0):
 		berth = _ports[0].berth
 	elif not _ports.is_empty():
 		berth = _ports.values()[0].berth
+
+
+func _add_port(k: int) -> void:
+	if _ports.has(k):
+		return
+	var H: Harbor = sim.towns.harbor(k) if sim.towns != null and sim.towns.count() > 0 else sim.harbor
+	if not H.enabled:
+		return
+	var info := _port_info(k)
+	if info.is_empty():
+		return
+	var jetty := JettyNode.new()
+	jetty.from_x = info.jx0
+	jetty.to_x = info.jx1
+	jetty.y = info.jy
+	jetty.position = Iso.to_screen(Vector2((jetty.from_x + jetty.to_x) * 0.5, jetty.y + 0.5) * 32.0)
+	add_child(jetty)
+	var liner := ShipNode.new()
+	liner.visible = false
+	add_child(liner)
+	info["liner"] = liner
+	info["jetty"] = jetty
+	_ports[k] = info
+	if _ports.size() == 1:
+		berth = info.berth
 
 
 ## Liegeplatz, Einfahrt am Kartenrand und Anleger eines Hafenorts (Weltpixel bzw. Felder).
@@ -63,7 +71,7 @@ func _port_info(k: int) -> Dictionary:
 	if port.is_empty():
 		return {}
 	var y: int = int(port.y) + int(port.h) + 1
-	var west := sim.city.world == "region" and k < sim.city.towns.size() and str(sim.city.towns[k].get("ecke", "")).ends_with("W")
+	var west := bool(sim.city.towns[k].get("port_west", false)) if k < sim.city.towns.size() and sim.city.towns[k].has("port_west") else (sim.city.world == "region" and k < sim.city.towns.size() and str(sim.city.towns[k].get("ecke", "")).ends_with("W"))
 	var x: int = int(port.x) if west else int(port.x) + int(port.w)
 	var direction := -1 if west else 1
 	while x > 0 and x < sim.city.size - 1 and sim.city.g(Vector2i(x, y)) != CityData.G.WATER:
@@ -78,6 +86,9 @@ func _port_info(k: int) -> Dictionary:
 func update_view(_delta: float) -> void:
 	if sim == null:
 		return
+	for k in sim.towns.count():
+		if sim.towns.harbor(k).enabled and not _ports.has(k):
+			_add_port(k)
 	var now: float = sim.game_min
 	var night := GameCalendar.hour_of(now) >= 19.0 or GameCalendar.hour_of(now) < 6.0
 	for k in _ports:

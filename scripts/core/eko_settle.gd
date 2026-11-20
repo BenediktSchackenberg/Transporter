@@ -1,5 +1,6 @@
 class_name EkoSettle
 extends RefCounted
+signal airfield_built(cells: Array)
 ## Wildnis (Benedikt 17.11.2026): "Es gibt am Anfang keine Stadt. Jede KI sucht sich die beste Stelle ... findet einen sicheren Platz,
 ## eroeffnet dort ihren Bauplatz, sichert sich ab und baut dort die Stadt." Nachtrag: "Er soll frei entscheiden, wo er seine Stadt
 ## gruendet und den Bauhof; er hat einen Gelaende-LKW und braucht keine Strassen; er muss alles bauen, Strassen, Haeuser, solange er
@@ -21,10 +22,13 @@ const ROAD_KIES := 2
 const ROAD_MAX := 40
 const ON_SITE := 15             # so nah muss das Wesen am Platz sein, um zu gruenden (selbst hinfahren)
 const PLOT := Vector2i(9, 8)    # Baugrundstueck: Einfamilien-, Doppel- und Mehrfamilienhaus passen
+const HARBOR_BUILD_COST := 80000.0
+const AIRPORT_BUILD_COST := 140000.0
 
 var w                           # EkoWorld
 var _deposit_cells: Array = []  # [[Vector2i, art], ...]
 var _best_cache := {}
+var _transport_cache := {}
 
 
 func setup(world) -> void:
@@ -355,10 +359,9 @@ func _seed_city_access(k: int, buildings: Array) -> void:
 							return
 
 
-## Meer oder See? Ein Gewaesser zaehlt als Meer, wenn es den Kartenrand erreicht (oder sehr gross ist). Ergebnis je Wasserfeld gemerkt
+## Meer oder See? Ein Gewaesser zaehlt nur als Meer, wenn es den Kartenrand erreicht. Ergebnis je Wasserfeld gemerkt
 ## (eine Flutfuellung je Gewaesser).
 var _sea_memo := {}
-const SEA_FILL_MAX := 60000
 
 
 func is_sea(cell: Vector2i) -> bool:
@@ -374,9 +377,8 @@ func is_sea(cell: Vector2i) -> bool:
 	while i < todo.size():
 		var c: Vector2i = todo[i]
 		i += 1
-		if c.x == 0 or c.y == 0 or c.x == C.size - 1 or c.y == C.size - 1 or todo.size() > SEA_FILL_MAX:
+		if c.x == 0 or c.y == 0 or c.x == C.size - 1 or c.y == C.size - 1:
 			sea = true
-			break
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			var q: Vector2i = c + d
 			if not seen.has(q) and C.inside(q) and C.ground[C.idx(q)] == CityData.G.WATER:
@@ -428,9 +430,14 @@ func reapply_loaded() -> void:
 		var k := int(key)
 		var t: Dictionary = sim.city.towns[k]
 		t["siedlung"] = true
-		for f in ["town_hall", "bauhof", "harbor"]:
+		for f in ["town_hall", "bauhof", "harbor", "port_office"]:
 			if st.has(f):
 				t[f] = int(st[f])
+		if st.has("port_west"):
+			t["port_west"] = bool(st.port_west)
+		if st.has("airport"):
+			t["airport"] = st.airport.duplicate(true)
+			_apply_airfield_geometry(t.airport)
 		if int(t.get("harbor", -1)) >= 0:
 			var hb: Dictionary = sim.city.building(int(t.harbor))
 			if hb.is_empty() or not _sea_near(Vector2i(int(hb.x), int(hb.y)), 12):   # alter Anleger an einem See: kein Hafen
@@ -446,6 +453,8 @@ func reapply_loaded() -> void:
 			var D = sim.towns.depot(k)
 			D.building = int(t.bauhof)
 			D.port = sim.towns.harbor(k).building if sim.towns.harbor(k).enabled else D.building
+			if not t.get("airport", {}).is_empty() and not sim.towns.airport(k).enabled:
+				sim.towns.airport(k).setup(sim)
 
 
 # ------------------------------------------------------------------ Strassen und Bauland
@@ -671,7 +680,7 @@ func _road_path(cell: Vector2i, limit: int) -> Array:
 
 ## Ein Weg fuer LKW-Strassen benutzt nur Kanten-Nachbarn. Fusswege koennen diagonal verlaufen
 ## und erzeugten beim Uebernehmen die isolierten Straßenrauten auf der Karte.
-func _road_between(from: Vector2i, to: Vector2i, planned := {}) -> Array:   # planned: Felder geplanter Stadtstrassen (werden ohnehin Strasse)
+func _road_between(from: Vector2i, to: Vector2i, planned := {}, forbidden := {}) -> Array:   # planned: Felder geplanter Stadtstrassen (werden ohnehin Strasse)
 	if not _road_cell_ok(to) and not planned.has(to):
 		return []
 	var prev := {from: from}
@@ -693,7 +702,7 @@ func _road_between(from: Vector2i, to: Vector2i, planned := {}) -> Array:   # pl
 			return path
 		for d in dirs:
 			var next: Vector2i = here + d
-			if prev.has(next) or not bounds.has_point(next) or not (_road_cell_ok(next) or planned.has(next)):
+			if prev.has(next) or forbidden.has(next) or not bounds.has_point(next) or not (_road_cell_ok(next) or planned.has(next)):
 				continue
 			prev[next] = here
 			todo.append(next)
@@ -807,6 +816,230 @@ func _harbor_at(cell: Vector2i, nm: String) -> int:
 	var off := _place("port_office", land + Vector2i(-2, -3), land + Vector2i(2, 3), "Anleger %s" % nm)
 	var wh := _place("warehouse", land + Vector2i(-4, -4), land + Vector2i(4, 4), "Hafenlager")
 	return wh if off >= 0 and wh >= 0 else -1
+
+
+## Neue Verkehrsstandorte werden von der Stadt gewaehlt. Der Hafen liegt ausschliesslich an Meerwasser;
+## das Flugfeld braucht 16 x 13 freie, ebene Felder. Beide erhalten eine echte Strassenanbindung.
+func transport_site(k: int, kind: String) -> Dictionary:
+	if kind not in ["hafen", "flughafen"] or not _sim().town_ready(k):
+		return {}
+	var key := "%d:%s" % [k, kind]
+	var cached: Dictionary = _transport_cache.get(key, {})
+	if not cached.is_empty() and _sim().game_min - float(cached.at) < GameCalendar.days_to_min(1.0):
+		return cached.site.duplicate(true)
+	var C: CityData = _sim().city
+	var center := Vector2i(int(C.towns[k].center[0]), int(C.towns[k].center[1]))
+	var candidates: Array = []
+	if kind == "hafen":
+		for y in range(8, C.size - 8, 3):
+			for x in range(8, C.size - 8, 3):
+				var water := Vector2i(x, y)
+				if C.ground[C.idx(water)] != CityData.G.WATER or not is_sea(water):
+					continue
+				for inward in [Vector2i.LEFT, Vector2i.RIGHT]:
+					var land: Vector2i = water + inward
+					if not C.inside(land) or C.ground[C.idx(land)] == CityData.G.WATER or C.town_of(land) != k:
+						continue
+					var office := Rect2i(water + inward * 3 + Vector2i(0, -1), Vector2i(3, 2))
+					var warehouse := Rect2i(water + inward * 9 + Vector2i(0, -1), Vector2i(4, 3))
+					if inward == Vector2i.LEFT:
+						office.position.x -= 2
+						warehouse.position.x -= 3
+					if not _transport_free(office) or not _transport_free(warehouse):
+						continue
+					if not C.inside(water + Vector2i(0, 2)) or C.ground[C.idx(water + Vector2i(0, 2))] != CityData.G.WATER:
+						continue
+					var dest := warehouse.position + Vector2i(-1, 1) if inward == Vector2i.LEFT else Vector2i(warehouse.end.x, warehouse.position.y + 1)
+					var score := absi(center.x - dest.x) + absi(center.y - dest.y)
+					candidates.append({"score": score, "site": [water.x, water.y], "office": [office.position.x, office.position.y, office.size.x, office.size.y],
+						"warehouse": [warehouse.position.x, warehouse.position.y, warehouse.size.x, warehouse.size.y], "dest": [dest.x, dest.y], "west": inward == Vector2i.RIGHT})
+	else:
+		for y in range(maxi(6, center.y - 150), mini(C.size - 20, center.y + 150), 6):
+			for x in range(maxi(6, center.x - 150), mini(C.size - 20, center.x + 150), 6):
+				var rect := Rect2i(x, y, 16, 13)
+				var distance := absi(center.x - rect.get_center().x) + absi(center.y - rect.get_center().y)
+				if distance < 25 or C.town_of(rect.get_center()) != k or not _transport_free(rect):
+					continue
+				var dest := Vector2i(rect.position.x - 1, rect.position.y + 10) if rect.get_center().x >= center.x else Vector2i(rect.end.x, rect.position.y + 10)
+				candidates.append({"score": distance, "site": [x, y], "rect": [x, y, 16, 13], "dest": [dest.x, dest.y]})
+	candidates.sort_custom(func(a, b): return int(a.score) < int(b.score))
+	var origin := _transport_origin(k)
+	var chosen := {}
+	if origin.x >= 0:
+		for cand in candidates.slice(0, 40):
+			var blocked := {}
+			var rects: Array = [_rect(cand.office), _rect(cand.warehouse)] if kind == "hafen" else [_rect(cand.rect)]
+			for r in rects:
+				for yy in range(r.position.y, r.end.y):
+					for xx in range(r.position.x, r.end.x):
+						blocked[Vector2i(xx, yy)] = true
+			var dest := Vector2i(int(cand.dest[0]), int(cand.dest[1]))
+			if not _road_cell_ok(dest):
+				continue
+			var road: Array = _road_between(origin, dest, {}, blocked)
+			if road.is_empty() and origin != dest:
+				continue
+			if road.size() > 260:
+				continue
+			cand["road"] = road.map(func(p): return [p.x, p.y])
+			cand["origin"] = [origin.x, origin.y]
+			chosen = cand
+			break
+	_transport_cache[key] = {"at": _sim().game_min, "site": chosen.duplicate(true)}
+	return chosen
+
+
+static func _rect(a: Array) -> Rect2i:
+	return Rect2i(int(a[0]), int(a[1]), int(a[2]), int(a[3]))
+
+
+func _transport_free(r: Rect2i) -> bool:
+	var C: CityData = _sim().city
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var q := Vector2i(x, y)
+			if not C.inside(q):
+				return false
+			var i := C.idx(q)
+			if C.ground[i] not in [CityData.G.GRASS, CityData.G.SAND] or C.building_at[i] != -1 or (not C.height.is_empty() and C.height[i] > 0):
+				return false
+			if _sim().access.reserved(q) or _sim().eko.protected(q):
+				return false
+	return true
+
+
+func _transport_origin(k: int) -> Vector2i:
+	var C: CityData = _sim().city
+	var b: Dictionary = C.building(int(C.towns[k].get("town_hall", -1)))
+	if not b.is_empty() and C.is_road(b.road):
+		return b.road
+	var center := Vector2i(int(C.towns[k].center[0]), int(C.towns[k].center[1]))
+	for r in range(1, 31):
+		for p in [center + Vector2i(r, 0), center + Vector2i(-r, 0), center + Vector2i(0, r), center + Vector2i(0, -r)]:
+			if C.is_road(p):
+				return p
+	return Vector2i(-1, -1)
+
+
+func request_transport(k: int, kind: String, reason: String) -> Dictionary:
+	var sim = _sim()
+	if kind not in ["hafen", "flughafen"] or not sim.town_ready(k):
+		return {"ok": false, "msg": "Erst die Stadt gründen; danach Hafen oder Flughafen planen."}
+	if (kind == "hafen" and sim.towns.harbor(k).enabled) or (kind == "flughafen" and sim.towns.airport(k).enabled):
+		return {"ok": false, "msg": "%s besitzt bereits einen %s." % [sim.towns.name_of(k), kind]}
+	var M: Mayor = sim.towns.mayor(k)
+	var project_kind := "hafenbau" if kind == "hafen" else "flughafenbau"
+	for p in M.projects.values():
+		if str(p.kind) == project_kind and str(p.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			return {"ok": false, "msg": "%s wird bereits als Projekt %s gebaut." % [kind.capitalize(), p.id]}
+	var site := transport_site(k, kind)
+	if site.is_empty():
+		return {"ok": false, "msg": "Kein freier, anschliessbarer %sstandort gefunden%s." % [kind, " am Meer" if kind == "hafen" else " auf ebenem Land"]}
+	var cost := (HARBOR_BUILD_COST if kind == "hafen" else AIRPORT_BUILD_COST) + float(site.road.size()) * 180.0
+	if M.available_budget() < cost:
+		return {"ok": false, "msg": "%s braucht %s frei verfuegbare Stadtkasse." % [kind.capitalize(), Catalog.money(cost)]}
+	var materials := {"betonfertigteil": 22, "schotter": 24, "verbindung": 8} if kind == "hafen" else {"betonfertigteil": 55, "schotter": 40, "verbindung": 15}
+	var days := 4 + int(ceil(float(site.road.size()) / 45.0)) if kind == "hafen" else 6 + int(ceil(float(site.road.size()) / 45.0))
+	var prj: Dictionary = M.add_works_project(project_kind, "standort", cost, days, materials, reason)
+	prj["site"] = site.duplicate(true)
+	prj["ref"] = "transportzufahrt"
+	prj["road_plan"] = site.road.duplicate(true)
+	sim.log_event("%s: %s am Feld %s als Bauprojekt %s beschlossen (%s, %d Tage, %d Strassenfelder)." % [sim.towns.name_of(k), kind.capitalize(), str(site.site), prj.id, Catalog.money(cost), days, site.road.size()], "good")
+	return {"ok": true, "msg": "%s %s als Projekt %s ausgeschrieben (%d Tage)." % [kind.capitalize(), sim.towns.name_of(k), prj.id, days], "ref": prj.id}
+
+
+func finish_transport(k: int, prj: Dictionary) -> bool:
+	var sim = _sim()
+	var C: CityData = sim.city
+	var kind: String = "hafen" if str(prj.kind) == "hafenbau" else "flughafen"
+	var site: Dictionary = prj.get("site", {})
+	if site.is_empty() or (kind == "hafen" and sim.towns.harbor(k).enabled) or (kind == "flughafen" and sim.towns.airport(k).enabled):
+		return false
+	var rects: Array = [_rect(site.office), _rect(site.warehouse)] if kind == "hafen" else [_rect(site.rect)]
+	for r in rects:
+		if not _transport_free(r):
+			return false
+	if kind == "hafen":
+		var water := Vector2i(int(site.site[0]), int(site.site[1]))
+		if not is_sea(water):
+			return false
+	var road: Array = (site.road as Array).map(func(a): return Vector2i(int(a[0]), int(a[1])))
+	lay_road_cells(k, road)
+	var t: Dictionary = C.towns[k]
+	var st: Dictionary = sim.settlements[str(k)]
+	var added: Array = []
+	if kind == "hafen":
+		var office: Dictionary = sim.events._add_building("port_office", _rect(site.office), "Hafenkontor %s" % str(t.name))
+		var warehouse: Dictionary = sim.events._add_building("warehouse", _rect(site.warehouse), "Hafenlager %s" % str(t.name))
+		if office.is_empty() or warehouse.is_empty():
+			return false
+		office["town"] = k
+		warehouse["town"] = k
+		t["port_office"] = int(office.id)
+		t["port_west"] = bool(site.west)
+		t["harbor"] = int(warehouse.id)
+		st["port_office"] = int(office.id)
+		st["port_west"] = bool(site.west)
+		st["harbor"] = int(warehouse.id)
+		_activate(k)
+		sim.towns.depot(k).port = int(warehouse.id)
+		added = [office.id, warehouse.id]
+	else:
+		var r := _rect(site.rect)
+		_apply_airfield_geometry({"rect": site.rect, "run_y": r.position.y + 1, "run_x0": r.position.x + 1, "run_x1": r.position.x + 14})
+		var parts := [
+			["airport_terminal", Rect2i(r.position.x + 1, r.position.y + 3, 4, 3)],
+			["airport_tower", Rect2i(r.position.x + 5, r.position.y + 3, 2, 2)],
+			["airport_fire", Rect2i(r.position.x + 8, r.position.y + 3, 3, 2)],
+			["airport_hangar", Rect2i(r.position.x + 1, r.position.y + 6, 4, 3)],
+			["airport_cargo", Rect2i(r.position.x + 6, r.position.y + 6, 6, 4)],
+		]
+		var ids := {}
+		for part in parts:
+			var b: Dictionary = sim.events._add_building(str(part[0]), part[1], "%s %s" % [str(part[0]).capitalize(), str(t.name)])
+			if b.is_empty():
+				return false
+			b["town"] = k
+			ids[str(part[0])] = int(b.id)
+			added.append(b.id)
+		var geom := {"rect": site.rect, "run_y": r.position.y + 1, "run_x0": r.position.x + 1, "run_x1": r.position.x + 14, "dir": 1,
+			"apron": [[r.position.x + 2, r.position.y + 3], [r.position.x + 3, r.position.y + 3], [r.position.x + 5, r.position.y + 4]],
+			"terminal": ids.airport_terminal, "tower": ids.airport_tower, "fire": ids.airport_fire, "hangar": ids.airport_hangar, "cargo": ids.airport_cargo,
+			"name": "Flughafen %s" % str(t.name)}
+		t["airport"] = geom
+		st["airport"] = geom.duplicate(true)
+		sim.towns.airport(k).setup(sim)
+		sim.air.refresh_routes()
+	sim.towns.sync_from_city(k)
+	sim.events.buildings_added.emit(added)
+	_transport_cache.clear()
+	sim.log_event("%s: %s in Betrieb – %d Felder Zufahrt, %d neue Gebaeude." % [str(t.name), kind.capitalize(), road.size(), added.size()], "good")
+	return true
+
+
+func _apply_airfield_geometry(a: Dictionary) -> void:
+	var C: CityData = _sim().city
+	var r := _rect(a.rect)
+	var cleared: Array = []
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var q := Vector2i(x, y)
+			if C.building_at[C.idx(q)] < 0:
+				C.blocked[C.idx(q)] = 0
+				_sim().nav.walk.set_point_solid(q, false)
+			cleared.append(q)
+	var cut := {}
+	for q in cleared:
+		cut[q] = true
+	C.trees = C.trees.filter(func(t): return not cut.has(t[0]))
+	for x in range(int(a.run_x0), int(a.run_x1) + 1):
+		C.ground[C.idx(Vector2i(x, int(a.run_y)))] = CityData.G.RUNWAY
+	for y in range(r.position.y + 3, r.position.y + 9):
+		for x in range(r.position.x + 1, r.position.x + 15):
+			C.ground[C.idx(Vector2i(x, y))] = CityData.G.APRON
+	for x in range(r.position.x + 1, r.position.x + 9):
+		C.ground[C.idx(Vector2i(x, r.position.y + 2))] = CityData.G.PARKING
+	airfield_built.emit(cleared)
 
 
 ## Vorschlag nach einer Ablehnung: der beste erreichbare Platz in der Naehe (mit Weg dorthin), sonst die Richtung zum Weitersuchen.

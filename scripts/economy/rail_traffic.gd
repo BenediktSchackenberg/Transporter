@@ -279,8 +279,8 @@ func _freight_branch(t: Dictionary, dmin: float, now: float) -> void:
 
 # ------------------------------------------------------------------ Ladung (Phase 7 Schritt 2)
 func accepts_freight(town: int) -> bool:
-	if sim.wildnis:
-		return false   # 18.11.: Bahnhoefe liegen an den Orten vom Kartenstart, nicht an den gegruendeten Siedlungen – Ware per Lkw
+	if sim.wildnis and not sim.town_ready(town):
+		return false
 	return not fpath.is_empty() and stop_of_town(town) >= 0 and trains.any(func(t): return is_freight(t))
 
 
@@ -437,10 +437,12 @@ func _ensure_staff() -> void:
 	if M == null or not M.enabled():
 		return
 	if facility != "" and M.facilities.has(facility):
+		_sync_facility_station()
 		return
 	for f in M.facilities.values():
 		if str(f.code) == STAFF_CODE:
 			facility = f.id
+			_sync_facility_station()
 			return
 	var best := -1
 	for s in stops:
@@ -460,6 +462,47 @@ func _ensure_staff() -> void:
 	M._share_regional(f)
 	facility = f.id
 	M._hire(f, M._staff_index())
+
+
+func _sync_facility_station() -> void:
+	if facility == "" or not sim.municipal.facilities.has(facility) or stops.is_empty():
+		return
+	var best := int(stops[0].town)
+	for s in stops:
+		if sim.citizens.population_of(int(s.town)) > sim.citizens.population_of(best):
+			best = int(s.town)
+	var st: Dictionary = sim.rail.station_of(best)
+	if st.is_empty():
+		return
+	var b: Dictionary = sim.city.building(int(st.building))
+	var f: Dictionary = sim.municipal.facilities[facility]
+	f["building"] = int(b.id)
+	f["cell"] = [int(b.x), int(b.y)]
+	f["town"] = best
+	b["role"] = "municipal"
+	b["town"] = best
+
+
+func reset_for_new_network() -> void:
+	path.clear()
+	stops.clear()
+	trains.clear()
+	blocks.clear()
+	waiting.clear()
+	by_town.clear()
+	crossings.clear()
+	closed.clear()
+	disruptions.clear()
+	double_blocks.clear()
+	planned_tracks.clear()
+	ordered.clear()
+	_double_cells.clear()
+	fpath.clear()
+	freight_queue.clear()
+	condition.clear()
+	repairs.clear()
+	junction = -1
+	fstop = 0.0
 
 
 func drivers() -> int:

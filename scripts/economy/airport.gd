@@ -100,7 +100,8 @@ func setup(simulation) -> void:
 		fire_vehicle = Mover.new()
 		fire_vehicle.speed = 3.4
 		fire_vehicle.pos = sim.city.tile_center(sim.city.building(fire_station).road)
-	sim.day_changed.connect(on_day)
+	if not sim.day_changed.is_connected(on_day):
+		sim.day_changed.connect(on_day)
 
 
 ## Flugzeug zu Spielzeit now: {pos: Vector2 (Feld), h: Hoehe (Feld), dir: 0..3, on_ground}. leer = nicht vorhanden.

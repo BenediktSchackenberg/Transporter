@@ -76,11 +76,26 @@ static func _dir_of(a: Vector2, b: Vector2) -> int:
 
 
 var _region_planes := {}       # Flugzeug-ID -> Node (Region: echte Fluege des AirNetwork)
+var _local_planes := {}        # Stadt-ID -> Linienflug am eigenen Flughafen
 
 
 ## Region: je Flugzeug des Flugnetzes ein Sprite an seiner aus dem Flugzustand berechneten Position.
 func _update_region() -> void:
 	_plane.visible = false
+	for k in sim.towns.count():
+		var A: Airport = sim.towns.airport(k)
+		if not A.enabled:
+			continue
+		if not _local_planes.has(k):
+			_local_planes[k] = _make_plane()
+		var local: Node2D = _local_planes[k]
+		var ls: Dictionary = A.state(sim.game_min)
+		if ls.is_empty():
+			local.visible = false
+			continue
+		var before: Dictionary = A.state(sim.game_min - 0.5)
+		var after: Dictionary = A.state(sim.game_min + 0.5)
+		_place(local, ls, _dir_of(before.pos, after.pos) if not before.is_empty() and not after.is_empty() else 0)
 	for p in sim.air.planes:
 		if not _region_planes.has(p.id):
 			_region_planes[p.id] = _make_plane()

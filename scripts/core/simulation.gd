@@ -1940,6 +1940,11 @@ static func from_dict(d: Dictionary) -> Simulation:
 		a.pos = Vector2(d.avatars[cid].x, d.avatars[cid].y)
 	for depot in s.towns.depots:
 		depot.ensure_city_location()
+	if s.rail.repair_wildnis_stations():
+		s.rail.ensure(true)
+		s.rail.ensure_freight()
+		s.eko.clear_rails()
+		s.trains.ensure()
 	# Fahrzeuge auf ihr gespeichertes Ziel neu routen
 	for v in s.vehicles.values():
 		s.logistics.sync_view(v)

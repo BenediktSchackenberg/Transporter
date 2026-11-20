@@ -268,6 +268,28 @@ func _add_building(type: String, r: Rect2i, name: String, replay: Dictionary = {
 	return b
 
 
+## Alte Wildnis-Bahnhöfe bleiben als ID-Platzhalter im Spielstand, geben aber ihr Land frei.
+## So behalten alle später entstandenen Gebäude beim Laden ihre gespeicherten IDs.
+func retire_building(id: int) -> void:
+	var c: CityData = sim.city
+	var b: Dictionary = c.building(id)
+	if b.is_empty() or bool(b.get("retired", false)):
+		return
+	b["retired"] = true
+	b["role"] = "retired"
+	for y in range(int(b.y), int(b.y) + int(b.h)):
+		for x in range(int(b.x), int(b.x) + int(b.w)):
+			var q := Vector2i(x, y)
+			if c.inside(q) and c.building_at[c.idx(q)] == id:
+				c.building_at[c.idx(q)] = -1
+				c.blocked[c.idx(q)] = 0
+				sim.nav.walk.set_point_solid(q, false)
+	for ab in added_buildings:
+		if int(ab.x) == int(b.x) and int(ab.y) == int(b.y) and str(ab.type) == str(b.type):
+			ab["retired"] = true
+			break
+
+
 ## Grundflaeche `size` im Baufeld `r`: die freie Lage mit dem kuerzesten Weg zur Strasse (straßenseitig, Garten dahinter).
 ## Ist das Baufeld nicht groesser als die Grundflaeche, bleibt es unveraendert (Betriebe, Felder, exakt geplante Bauten).
 func _footprint_in(r: Rect2i, size: Vector2i) -> Rect2i:
@@ -392,7 +414,9 @@ func to_dict() -> Dictionary:
 
 func from_dict(d: Dictionary) -> void:
 	for ab in d.get("added_buildings", []):   # zur Laufzeit entstandene Gebaeude in gleicher Reihenfolge (= gleiche IDs) neu anlegen
-		_add_building(ab.type, Rect2i(int(ab.x), int(ab.y), int(ab.w), int(ab.h)), ab.name, ab)   # exakt wie gespeichert (v1: alte Grundflaeche)
+		var b: Dictionary = _add_building(ab.type, Rect2i(int(ab.x), int(ab.y), int(ab.w), int(ab.h)), ab.name, ab)   # exakt wie gespeichert (v1: alte Grundflaeche)
+		if bool(ab.get("retired", false)) and not b.is_empty():
+			retire_building(int(b.id))
 	events = d.get("events", [])
 	next_id = int(d.get("next_id", 1))
 	demand = d.get("demand", {})

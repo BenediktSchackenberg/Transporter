@@ -25,6 +25,7 @@ const BLOCK := 4              # Grobraster wie die Autobahn (RegionalProjects.HW
 const BLOCK_ROAD := 3.0       # Kosten je Grobblock
 const BLOCK_WATER := 10.0     # Bruecke
 const BLOCK_MOUNTAIN := 14.0  # Tunnel
+const STATION_BUILD_COST := 90000.0
 
 var sim
 var stations := {}            # Stadt (str) -> {town, name, orient: "h"|"v", rect, track, platform, building, ends}
@@ -64,9 +65,15 @@ func is_rail(q: Vector2i) -> bool:
 
 
 # ------------------------------------------------------------------ Aufbau
-func ensure() -> void:
+func ensure(force_wildnis: bool = false) -> void:
 	if tried or not enabled():
 		return
+	if sim.wildnis:
+		for k in sim.towns.count():
+			if not sim.town_ready(k):
+				return   # Bahnhof und Zug gehören an die tatsächlich gegründete Stadt.
+		if not force_wildnis:
+			return   # In neuen Wildnis-Partien beschliesst jede KI ihren Bahnhof selbst.
 	tried = true
 	_grid0 = _blocks()
 	_open = _open_land(_grid0)
@@ -97,6 +104,109 @@ func ensure() -> void:
 	_grid0 = {}
 	_open = {}
 	built.emit(made)
+
+
+func request_station(k: int, reason: String) -> Dictionary:
+	if not enabled() or not sim.town_ready(k) or stations.has(str(k)):
+		return {"ok": false, "msg": "Bahnhof fehlt nicht oder die Stadt ist noch nicht gegruendet."}
+	var M: Mayor = sim.towns.mayor(k)
+	for p in M.projects.values():
+		if str(p.kind) == "bahnhofbau" and str(p.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			return {"ok": false, "msg": "Bahnhofprojekt %s laeuft bereits." % p.id}
+	if M.available_budget() < STATION_BUILD_COST:
+		return {"ok": false, "msg": "Bahnhof braucht %s freie Stadtkasse." % Catalog.money(STATION_BUILD_COST)}
+	var prj: Dictionary = M.add_works_project("bahnhofbau", "bahnhof", STATION_BUILD_COST, 6,
+		{"betonfertigteil": 35, "schotter": 35, "verbindung": 10}, reason)
+	var c: Vector2i = sim.towns.get_t(k).center
+	prj["site"] = [c.x, c.y]
+	sim.log_event("%s: eigener Bahnhof als Projekt %s ausgeschrieben; nach Anschluss an die Regionalstrecke fahren Zuege." % [sim.towns.name_of(k), prj.id], "good")
+	return {"ok": true, "msg": "Bahnhof %s als Projekt %s ausgeschrieben (6 Tage)." % [sim.towns.name_of(k), prj.id], "ref": prj.id}
+
+
+func finish_station(k: int) -> bool:
+	if stations.has(str(k)):
+		return false
+	_grid0 = _blocks()
+	_open = _open_land(_grid0)
+	var st: Dictionary = _place_station(k)
+	if st.is_empty():
+		_grid0 = {}
+		_open = {}
+		return false
+	stations[str(k)] = st
+	var made: Array = _apply(st.track + st.platform + st.get("loop", []))
+	_index()
+	if stations.size() == sim.towns.count():
+		var order: Array = stations.keys().map(func(key): return int(key))
+		var mid := Vector2(sim.city.size, sim.city.size) * 0.5
+		order.sort_custom(func(a, b): return (Vector2(sim.towns.get_t(a).center) - mid).angle() < (Vector2(sim.towns.get_t(b).center) - mid).angle())
+		for i in order.size() - 1:
+			var e: Dictionary = _route(int(order[i]), int(order[i + 1]))
+			if e.is_empty():
+				continue
+			edges.append(e)
+			made.append_array(_apply(e.cells))
+			_index()
+		tried = true
+	_grid0 = {}
+	_open = {}
+	built.emit(made)
+	if not edges.is_empty():
+		ensure_freight()
+		sim.trains.reset_for_new_network()
+		sim.trains.ensure()
+	sim.log_event("%s: Bahnhof eroeffnet; %d von %d Stadtbahnhoefen stehen, %d Strecken aktiv." % [sim.towns.name_of(k), stations.size(), sim.towns.count(), edges.size()], "good")
+	return true
+
+
+## Ältere Wildnis-Spielstände haben Bahnhöfe an den unbewohnten Generatororten.
+## Die IDs bleiben als unsichtbare Platzhalter erhalten, die Gleise und Zugläufe werden neu aufgebaut.
+func repair_wildnis_stations() -> bool:
+	if not sim.wildnis:
+		return false
+	for k in sim.towns.count():
+		if not sim.town_ready(k):
+			return false
+	var misplaced: bool = stations.is_empty() and tried
+	if stations.is_empty() and not tried:
+		return false
+	for key in stations:
+		var st: Dictionary = stations[key]
+		var center: Vector2i = sim.towns.get_t(int(key)).center
+		var rect: Array = st.rect
+		if maxi(absi(int(rect[0]) - center.x), absi(int(rect[1]) - center.y)) > SEARCH_MAX + 8:
+			misplaced = true
+			break
+	if not misplaced:
+		return false
+	var old_cells: Array = cells.keys()
+	for q in old_cells:
+		if sim.city.ground[sim.city.idx(q)] == CityData.G.RAIL:
+			sim.city.ground[sim.city.idx(q)] = CityData.G.GRASS
+	for st in stations.values():
+		sim.events.retire_building(int(st.building))
+	if not freight.is_empty():
+		sim.events.retire_building(int(freight.building))
+	for M in sim.towns.mayors:
+		for p in M.projects.values():
+			if str(p.kind) != "gleis" or str(p.status) in ["fertig", "abgelehnt", "abgebrochen"]:
+				continue
+			p.status = "abgebrochen"
+			M.commitments = maxf(0.0, M.commitments - float(p.cost))
+			sim.towns.depot(M.town).release_project(str(p.id))
+			if sim.construction.public.has(str(p.id)):
+				sim.construction.public[str(p.id)].status = "abgebrochen"
+	stations.clear()
+	edges.clear()
+	failed.clear()
+	freight.clear()
+	cells.clear()
+	tried = false
+	freight_tried = false
+	sim.trains.reset_for_new_network()
+	sim.log_event("Eisenbahn: alte Wildnis-Bahnhöfe fern der gegründeten Städte stillgelegt; Trasse und Zuglauf werden an die neuen Stadtzentren verlegt.", "info")
+	built.emit(old_cells)
+	return true
 
 
 ## Grobbloecke, die von der Kartenmitte aus (Breitensuche ueber passierbare Bloecke) erreichbar sind. Ein Bahnhof, dessen Gleisenden

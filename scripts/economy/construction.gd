@@ -1156,7 +1156,7 @@ func tick_public_connectors(now: float) -> void:
 		var M: Mayor = sim.towns.mayor_of_project(str(e.project))
 		var prj: Dictionary = M.projects.get(str(e.project), {}) if M != null else {}
 		var road_kind := str(prj.get("ref", ""))
-		if road_kind not in ["anschluss", "viertel"] or not prj.has("road_plan") or prj.road_plan.is_empty():
+		if road_kind not in ["anschluss", "viertel", "transportzufahrt"] or not prj.has("road_plan") or prj.road_plan.is_empty():
 			continue
 		if builders[e.builder].status != "aktiv" or not sim.towns.depot(M.town).project_complete(str(e.project)) or not sim.crews.on_site("pub", str(e.project)):
 			continue
@@ -1171,6 +1171,8 @@ func tick_public_connectors(now: float) -> void:
 			sim.access._apply_cells(section)
 			prj["road_cells"] = cells.slice(0, target)
 			e["road_placed"] = target
+			if road_kind == "transportzufahrt" and not section.is_empty():
+				sim.crews.follow_public_road(str(e.project), section[-1])
 		if road_kind == "anschluss" and target >= cells.size():
 			_finish_public(e)
 
@@ -1278,6 +1280,15 @@ func _finish_district(M: Mayor, prj: Dictionary) -> void:
 func _finish_public(e: Dictionary) -> void:
 	var M: Mayor = sim.towns.mayor_of_project(str(e.project))   # die beauftragende Stadt bezahlt aus ihrer Kasse
 	var prj: Dictionary = M.projects[e.project]
+	var transport_failed: bool = str(prj.kind) in ["hafenbau", "flughafenbau"] and not sim.eko.settle.finish_transport(M.town, prj)
+	var station_failed: bool = str(prj.kind) == "bahnhofbau" and not sim.rail.finish_station(M.town)
+	if transport_failed or station_failed:
+		e.status = "abgebrochen"
+		prj.status = "abgebrochen"
+		M.commitments = maxf(0.0, M.commitments - float(prj.cost))
+		sim.towns.depot(M.town).release_project(str(prj.id))
+		sim.log_event("%s: Verkehrsbau %s abgebrochen – Standort inzwischen belegt oder ungueltig; neue Planung noetig." % [M.town_label(), prj.id], "warn")
+		return
 	var pay := 0.0
 	if prj.has("shares"):
 		# Gemeinschaftsprojekt: jede Stadt zahlt genau ihren beschlossenen Anteil am Werklohn und gibt ihre Reservierung frei
@@ -1307,7 +1318,7 @@ func _finish_public(e: Dictionary) -> void:
 		sim.parcels.touch(pid)
 	if prj.kind in ["verbindung", "autobahn"]:
 		sim.regional.finish(str(prj.ref))
-	if prj.has("road_plan"):   # Auftrag 8: Strassennetz eines Viertels nach Grundform
+	if prj.has("road_plan") and prj.kind == "erschliessung":   # Auftrag 8: Strassennetz eines Viertels nach Grundform
 		_finish_district(M, prj)
 	elif prj.kind == "erschliessung" and "strasse" in prj.parts:
 		prj["road_cells"] = sim.access.lay_roads(prj.parcels)   # neue Strassen bis an die Grundstuecke (sichtbar, befahrbar)

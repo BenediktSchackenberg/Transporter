@@ -290,6 +290,14 @@ func _site_of(kind: String, id: String) -> Vector2i:
 		return nearest_road(_parcel_center(str(pr.parcel)))
 	var prj: Dictionary = sim.towns.project(id)
 	match str(prj.get("kind", "")):
+		"bahnhofbau":
+			var station_site: Array = prj.get("site", [])
+			if station_site.size() >= 2:
+				return nearest_road(Vector2i(int(station_site[0]), int(station_site[1])), 50)
+		"hafenbau", "flughafenbau":
+			var site: Dictionary = prj.get("site", {})
+			if not site.is_empty():
+				return Vector2i(int(site.origin[0]), int(site.origin[1]))
 		"zufahrt":
 			var j: Dictionary = sim.access.jobs.get(str(prj.ref), {})
 			if not j.is_empty():
@@ -318,6 +326,18 @@ func _site_of(kind: String, id: String) -> Vector2i:
 	if not prj.get("parcels", []).is_empty():
 		return nearest_road(_parcel_center(str(prj.parcels[0])))
 	return sim.fleet.depot_road()
+
+
+## Der Straßenbautrupp rückt mit dem sichtbaren Ausbau zur Küste bzw. zum Flugfeld vor.
+func follow_public_road(id: String, cell: Vector2i) -> void:
+	var t: Dictionary = crew_for("pub", id)
+	if t.is_empty() or str(t.state) != "bauen":
+		return
+	t.site = [cell.x, cell.y]
+	t.at = t.site
+	var v: Dictionary = _vehicles.get(str(t.id), {})
+	if not v.is_empty():
+		sim.fleet.reroute(v, cell)
 
 
 func _parcel_center(pid: String) -> Vector2i:

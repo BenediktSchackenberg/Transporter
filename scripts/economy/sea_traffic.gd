@@ -127,6 +127,12 @@ func on_day(day: int) -> void:
 	if sim.neubeginn:
 		_settlers_day(day)
 		return   # Neubeginn: noch keine Kreuzfahrt- und Autotransporter-Linien (keine Hotels, keine Haendler in den Orten)
+	ports.clear()
+	for k in sim.towns.count():
+		if sim.towns.harbor(k).enabled:
+			ports.append(k)
+	if ports.size() < 2:
+		return
 	for s in FLEET:
 		var leg: Dictionary = legs.get(s.id, {})
 		if (day + int(s.offset)) % int(s.every) != 0:

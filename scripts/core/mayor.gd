@@ -81,8 +81,11 @@ const SCHEMA := {
 		"desc": "Stromnetz der Stadtwerke ausbauen: +500 kW Leistung nach 10 Tagen für 60 000 EUR. Sinnvoll, wenn obs.strom.auslastung über 0,85 liegt oder Betriebe abgeschaltet sind."},
 	"expand_harbor": {"params": {"reason": "string"},
 		"desc": "Hafen eine Stufe ausbauen (obs.hafen.ausbau: Ziel, Ladung je Schiff, Kosten, Tage): Stadtprojekt, eine Baufirma baut mit Material aus dem Stadtlager. Sinnvoll, wenn obs.hafen.rueckstau_schiffsladungen über 1 liegt (Einfuhren warten auf mehrere Schiffe)."},
+	"build_harbor": {"params": {"reason": "string"}, "desc": "Einmalig einen Hafen am echten Meer mit Zufahrt bauen; Standort aus obs.verkehrsstandorte.hafen. Ein See ist kein Hafenstandort."},
 	"expand_airport": {"params": {"reason": "string"},
 		"desc": "Flughafen eine Stufe ausbauen (obs.flughafen.ausbau: Ziel, Plaetze, Fracht je Flug, Kosten, Tage): Stadtprojekt, eine Baufirma baut mit Material aus dem Stadtlager. Danach mehr Passagiere und mehr Frachtplatz je Flug, hoechere Abfertigungsgebuhr. Sinnvoll, wenn obs.flughafen.rueckstau_fluege ueber 1 liegt (Luftfracht wartet auf mehrere Fluege)."},
+	"build_airport": {"params": {"reason": "string"}, "desc": "Einmalig einen Flughafen auf freiem ebenem Land mit Zufahrt bauen; Standort aus obs.verkehrsstandorte.flughafen."},
+	"build_station": {"params": {"reason": "string"}, "desc": "Einmalig einen Bahnhof an der gegruendeten Stadt bauen. Nach dem zweiten Bahnhof verbindet die Regionalbahn die Staedte mit Personen- und Gueterzug."},
 	"warn_company": {"params": {"firma": "int", "reason": "string"},
 		"desc": "Firma öffentlich verwarnen (nur wenn sie in den letzten 7 Tagen eskaliert hat, siehe obs.rivalitaet.verursacher): Ruf −2, für 10 Tage kostet jede weitere Eskalation zusätzlich Ruf."},
 	"build_bridge": {"params": {"grundstueck": "string", "bruecke": "string?", "vergabe": "string?", "firma": "int?", "reason": "string"},
@@ -284,6 +287,34 @@ func _state_grant() -> void:
 	sim.log_event("Landeszuweisung für %s: %s (Strukturförderung kleiner Orte, %d Einwohner)." % [town_label(), Catalog.money(grant_last), pop], "info")
 
 
+func transport_indicators() -> Dictionary:
+	var out := {}
+	for kind in ["hafen", "flughafen"]:
+		var built: bool = harbor().enabled if kind == "hafen" else airport().enabled
+		var pending := ""
+		for p in projects.values():
+			if str(p.kind) == ("hafenbau" if kind == "hafen" else "flughafenbau") and str(p.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+				pending = str(p.id)
+				break
+		var site: Dictionary = sim.eko.settle.transport_site(town, kind) if not built and pending == "" and sim.wildnis else {}
+		out[kind] = {"gebaut": built, "projekt": pending, "standort": site.get("site", []), "strassenfelder": (site.get("road", []) as Array).size(),
+			"kosten": (EkoSettle.HARBOR_BUILD_COST if kind == "hafen" else EkoSettle.AIRPORT_BUILD_COST) + (site.get("road", []) as Array).size() * 180 if not site.is_empty() else 0,
+			"grund": "kein freier Meereshafen mit Zufahrt" if kind == "hafen" and site.is_empty() and not built else ("kein freies ebenes Flugfeld mit Zufahrt" if site.is_empty() and not built else "")}
+	var st: Dictionary = sim.rail.station_of(town) if sim.rail != null else {}
+	var center: Vector2i = sim.towns.get_t(town).center
+	var sr: Array = st.get("rect", [])
+	var rail_pending := ""
+	for p in projects.values():
+		if str(p.kind) == "bahnhofbau" and str(p.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			rail_pending = str(p.id)
+			break
+	out["bahn"] = {"bahnhof": not st.is_empty(), "gebaut": not st.is_empty(), "projekt": rail_pending, "kosten": RailNet.STATION_BUILD_COST,
+		"standort": sr.slice(0, 2) if not st.is_empty() else [center.x, center.y],
+		"entfernung_zur_stadt": absi(int(sr[0]) - center.x) + absi(int(sr[1]) - center.y) if sr.size() >= 2 else -1,
+		"zuege": sim.trains.trains.size() if sim.trains != null else 0}
+	return out
+
+
 func indicators() -> Dictionary:
 	var Z: Citizens = sim.citizens
 	var vac_jobs := 0
@@ -388,6 +419,7 @@ func indicators() -> Dictionary:
 		"region": _region_obs(),
 		"hafen": harbor().summary() if harbor().enabled else {},
 		"flughafen": airport().summary() if airport().enabled else {},
+		"verkehrsstandorte": transport_indicators(),
 		"gedaechtnis": notes.slice(-6),
 		"entscheidungen_zuletzt": decisions.slice(-4).map(func(d): return {"tag": d.day, "aktion": d.action, "ok": d.ok, "ergebnis": d.msg.left(120)}),
 		"zuletzt_abgelehnt": decisions.slice(-12).filter(func(d): return not d.ok).map(func(d): return "%s: %s" % [d.action, d.msg.left(100)]),
@@ -706,7 +738,7 @@ func _infra_ausbau(anlage: String) -> Dictionary:
 ## Benedikt 19.11.: Wildnis-Stadt ohne Strasse zum Grosslager – erst der Anschluss, dann Projekte mit Stadtlager-Material
 ## (sonst warten sie auf Material, binden Geld und blockieren Baufirmen; Sonnenufer hatte 14 Projekte, 7 davon ohne Material).
 const HUB_FIRST_ACTIONS := ["kommunal_bauen", "infra_ausbau", "stromtrasse_bauen", "versorgungsleitung_bauen", "propose_project",
-	"viertel_erschliessen", "stadtteil_planen", "plan_infrastructure", "expand_harbor", "expand_airport", "expand_depot", "expand_power", "build_bridge"]
+	"viertel_erschliessen", "stadtteil_planen", "plan_infrastructure", "build_harbor", "build_airport", "build_station", "expand_harbor", "expand_airport", "expand_depot", "expand_power", "build_bridge"]
 
 
 func hub_blocked() -> String:
@@ -826,8 +858,14 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.grid.expand("Bürgermeister %s" % name, self)
 			"expand_harbor":
 				res = harbor().expand("Bürgermeister %s" % name)
+			"build_harbor":
+				res = sim.eko.settle.request_transport(town, "hafen", str(a.get("reason", "Neuer Meereshafen")))
 			"expand_airport":
 				res = airport().expand("Bürgermeister %s" % name)
+			"build_airport":
+				res = sim.eko.settle.request_transport(town, "flughafen", str(a.get("reason", "Neuer Flughafen")))
+			"build_station":
+				res = sim.rail.request_station(town, str(a.get("reason", "Neuer Bahnhof")))
 			"build_bridge":
 				res = sim.access.order_city(str(a.grundstueck), "Bürgermeister %s" % name, _build_choice(a))
 			"build_tunnel":
