@@ -8906,6 +8906,7 @@ func test_wildnis_found() -> void:
 	ok(int(s.towns.get_t(k).town_hall) == int(s.city.towns[k].get("town_hall", -2)), "Towns-Register kennt das Rathaus")
 	ok(E.blocks.size() == nb0, "Rohbau-Blöcke durch das Gebäude ersetzt")
 	ok(E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister wacht auf")
+	ok(int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("haus_bauen"), "nach der Gründung wird das erste Wohnhaus dringend")
 	var ctr := Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1]))
 	var hint_day := GameCalendar.day_of(s.game_min)
 	E.settle._link_cache[k] = {"day": hint_day, "verbunden": false, "von": [ctr.x, ctr.y], "bis": [ctr.x + 8, ctr.y], "felder": 8}
@@ -8992,6 +8993,8 @@ func test_wildnis_found() -> void:
 			home_site.status = "material"   # isoliert den Materialkauf, der Bürgermeister wird separat getestet
 		var home_buy: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "baustelle": home_site.id}})
 		ok(home_buy.ok and int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("abholen"), "gekauftes Hausmaterial wird vor Straßenexperimenten abgeholt")
+		ok(not E.input(p0, "Firma", {"aktion": {"action": "strasse_bauen", "bis": [ctr.x + 4, ctr.y]}}).ok, "neue Straßenversuche warten, bis gekauftes Hausmaterial abgeholt ist")
+		ok(E.input(p0, "Firma", {"aktion": {"action": "ueberblick"}}).ok, "ueberblick liefert statt einer unbekannten Aktion die Firmenlage")
 		var one_item: String = str(home_site.need.keys()[0])
 		ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": one_item, "qty": 1}}).ok, "direkter Doppelkauf für ein Wohnhaus wird abgewiesen")
 	# 19.11.: die pauschale Monatsausgabe der öffentlichen Hand zog Wildnis-Städten die Hälfte ihrer Millionen ab

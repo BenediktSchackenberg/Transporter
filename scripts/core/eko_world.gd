@@ -778,6 +778,10 @@ func urgency(b: Dictionary) -> Dictionary:
 				var waiting: Dictionary = homes.waiting_goods(cid)
 				if miss.keys().all(func(item): return int(waiting.get(item, 0)) >= int(miss[item])):
 					return {"prioritaet": 2, "grund": "Material für Baustelle %s (%s) ist gekauft und liegt am Großlager. Jetzt abholen: LKW {ziel: \"grosslager\"}. Nicht noch einmal kaufen oder eine neue Straße planen." % [st.id, st.typ]}
+		var housing_types := ["einfamilienhaus", "doppelhaus", "mehrfamilienhaus", "stadtvilla", "hochhaus"]
+		var housing_started: bool = homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) in housing_types and str(st.status) != "abgelehnt")
+		if not housing_started:
+			return {"prioritaet": 2, "grund": "Deine Stadt hat noch kein Wohnhaus und kann nicht wachsen. Entscheide jetzt Typ und Entwurf: Firma {aktion: {action: \"haus_bauen\", typ: \"einfamilienhaus\"}} (oder einen anderen Wohnentwurf)."}
 	for k in sim.contracts.values():
 		if k.owner != cid or k.status not in ["accepted", "assigned", "loading", "in_transit"]:
 			continue
@@ -2369,6 +2373,14 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	if str(a.action) == "bauleute":
 		return homes.assign_crew(cid, a)
 	if str(a.action) == "strasse_bauen":   # Wildnis: Strassenbaustelle (EkoSettle -> EkoHomes), gebaut wird mit Bauen
+		if sim.wildnis and sim.town_ready(sim.company(cid).home_town):
+			for st in homes.open_sites(cid):
+				if str(st.typ) == "strasse" or str(st.status) != "material":
+					continue
+				var miss: Dictionary = homes.missing(st)
+				var waiting: Dictionary = homes.waiting_goods(cid)
+				if not miss.is_empty() and miss.keys().all(func(item): return int(waiting.get(item, 0)) >= int(miss[item])):
+					return {"ok": false, "msg": "Baustelle %s (%s) wartet auf bereits gekauftes Material. Hole es zuerst am Großlager ab: LKW {ziel: \"grosslager\"}. Danach kannst du weitere Straßen planen." % [st.id, st.typ]}
 		return settle.plan_road(cid, a)
 	if str(a.action) == "auftrag_an_wesen":   # Firma schreibt selbst einen Hilfsjob fuer freie Wesen aus
 		var c2 = sim.company(cid)
@@ -2830,7 +2842,7 @@ func adopt_mayors() -> Array:
 
 
 ## Firma/Amt ohne Aktion oder mit einem Lage-Wort: kurze Uebersicht statt Fehler (Wesen wollen "die Lage pruefen").
-const OVERVIEW_WORDS := ["", "status", "lage", "uebersicht", "übersicht", "info", "bericht", "projekte", "kommunale_dienste", "firmenlage", "tageslage", "pruefen", "prüfen"]
+const OVERVIEW_WORDS := ["", "status", "lage", "ueberblick", "überblick", "uebersicht", "übersicht", "info", "bericht", "projekte", "kommunale_dienste", "firmenlage", "tageslage", "pruefen", "prüfen"]
 
 
 ## Erfundene Lage-Woerter wie "stadt_status", "finanzlage", "projekt_uebersicht" (nur fuer sonst unbekannte Aktionen pruefen).
