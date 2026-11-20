@@ -540,11 +540,33 @@ func business_hint(cid: int) -> String:
 	var k: int = sim.companies[cid].home_town
 	if not sim.wildnis or not sim.town_ready(k) or sim.citizens.population_of(k) <= 0:
 		return ""
-	if sim.biz.items.values().any(func(b): return int(b.get("owner", -1)) == cid and str(b.get("status", "")) != "geschlossen"):
+	# Der Transportbetrieb am Hof ist kein Laden und schafft keine zusaetzlichen Stellen in der Stadt.
+	var owned: Array = sim.biz.of(cid).filter(func(b): return str(b.branch) != "transport")
+	for b in owned:
+		if str(b.status) in Businesses.RUNNING and sim.biz.staff_of(str(b.id)).size() < int(Businesses.branches().get(str(b.branch), {}).get("personal_min", 1)):
+			var free_staff: Array = sim.personnel.employed(cid).filter(func(w): return str(w.business) == "" and str(w.role) != "owner")
+			if not free_staff.is_empty():
+				return "Dein neuer Betrieb %s (%s) braucht Personal. Ordne %s zu: Firma {aktion: {action: \"assign_staff\", business_id: \"%s\", worker_id: \"%s\"}}." % [b.name, b.id, free_staff[0].name, b.id, free_staff[0].id]
+			if not sim.personnel.applicants.is_empty():
+				return "Dein neuer Betrieb %s (%s) braucht Personal. Stelle %s ein: Firma {aktion: {action: \"recruit_worker\", worker_id: \"%s\"}}; danach assign_staff mit business_id \"%s\"." % [b.name, b.id, sim.personnel.applicants[0].name, sim.personnel.applicants[0].id, b.id]
+			return "Dein neuer Betrieb %s (%s) braucht Personal. Prüfe Bewerber und stelle jemanden ein; danach assign_staff." % [b.name, b.id]
+	if owned.any(func(b): return str(b.status) == "im_bau"):
+		return "Ein neuer Betrieb wird gebaut. Prüfe Baufortschritt und bereite Personal vor; danach weitere Gewerbe- und Industriebetriebe planen."
+	var target: int = mini(6, maxi(1, int(ceil(float(sim.citizens.population_of(k)) / 12.0))))
+	if owned.size() >= target:
 		return ""
-	return ("In %s wohnen jetzt Menschen (%d) – Zeit für Gewerbe: ein erster Betrieb bringt Umsatz und Arbeitsplätze, z. B. " +
-		"Firma {aktion: {action: \"found_business\", branche: \"baeckerei\"}} (Laden mit Theke) oder eine Kiesgrube für deinen eigenen Straßenbau " +
-		"(found_business branche: \"bergwerk\", rohstoff: \"kies\").") % [sim.towns.name_of(k), sim.citizens.population_of(k)]
+	var c = sim.company(cid)
+	for branch in ["baeckerei", "moebelwerk", "muehle", "brauerei", "schreinerei", "betonwerk"]:
+		if owned.any(func(b): return str(b.branch) == branch):
+			continue
+		var spec: Dictionary = Businesses.branches().get(branch, {})
+		if c.ledger.cash < float(spec.get("ausstattung", 0.0)) + 10000.0 or not bool(sim.retail.counter_viable(branch).get("ok", false)):
+			continue
+		var hints: Array = sim.prod.site_hints(branch, 1, k)
+		if not hints.is_empty():
+			return "In %s wohnen %d Menschen. Gruende einen Betrieb mit echten Arbeitsplaetzen auf dem geprueften Standort %s: Firma {aktion: {action: \"found_business\", branche: \"%s\", stadt: %d, grundstueck: \"%s\"}}. Danach Personal einstellen und dem Betrieb zuordnen." % [
+				sim.towns.name_of(k), sim.citizens.population_of(k), str(hints[0].grundstueck), branch, k, str(hints[0].grundstueck)]
+	return "In %s fehlt ein befahrbares freies Gewerbe- oder Industriegrundstueck fuer einen neuen Betrieb. Bitte den Buergermeister um ein erschlossenes Wirtschaftsviertel; bis dahin weiter liefern und Wohnraum schaffen." % sim.towns.name_of(k)
 
 
 # ------------------------------------------------------------------ Beobachtung und naechste Schritte

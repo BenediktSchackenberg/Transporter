@@ -2729,6 +2729,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 				"jede weitere Ermittlung kostet mehr (bis fünffach). Blockaden erst ab hoher Spannung. Schutz: guard_target, buy_security, set_insurance."},
 		"hofbau": (o.get("betriebshof", {}) as Dictionary).get("bauvorschlaege_xy_rot", {}),
 		"betriebe": o.get("betriebe", []),
+		"wirtschaftsaufbau": homes.business_hint(cid),
 		"branchen_zum_gruenden": _branch_menu(o.get("verfuegbare_branchen", [])),
 		"chancen": (o.get("chancen", []) as Array).slice(0, 6),
 		"bergbau": o.get("bergbau", []),
@@ -3006,6 +3007,29 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 	var fix := normalize_office(a)
 	if fix != "":
 		return {"ok": false, "msg": fix}
+	if str(a.action) == "propose_project":
+		if str(a.get("project", "")) == "":
+			if str(a.get("name", "")) != "":
+				a["project"] = str(a.name)
+			else:
+				return {"ok": false, "msg": "propose_project braucht project (z. B. Stadtpark) und category (z. B. gruen). Wähle eine konkrete Bauidee."}
+		if str(a.get("category", "")) == "":
+			var idea := _plain(str(a.project))
+			a["category"] = "gruen" if idea.contains("park") or idea.contains("garten") else ("sport" if idea.contains("sport") or idea.contains("stadion") else "familie")
+	if str(a.action) == "viertel_erschliessen":
+		var valid: Array = sim.town_plan.of(k).get("viertel", []) if sim.town_plan.has(k) else []
+		var chosen: Dictionary = {}
+		for v in valid:
+			if str(v.id) == str(a.get("viertel", "")).to_upper():
+				chosen = v
+		if chosen.is_empty() or str(chosen.get("status", "")) == "erschlossen":
+			var fresh: Dictionary = sim.town_plan.next_district(k, sim.housing.planning_aids().get("bedarf", 0) > 0)
+			return {"ok": false, "msg": "Viertel %s ist in %s nicht mehr zu erschließen. Aktuelle Viertel: %s. %s" % [str(a.get("viertel", "")), sim.towns.name_of(k), ", ".join(valid.map(func(v): return "%s %s" % [v.id, v.status])), str(fresh.get("text", "Bitte den Stadtplan erneut beobachten."))]}
+	if str(a.action) == "kommunal_bauen" and str(a.get("grundstueck", "")) != "":
+		var code := str(a.get("typ", ""))
+		var wanted := str(a.grundstueck)
+		if not sim.services.utility_sites(k).any(func(site): return str(site.typ) == code and str(site.grundstueck) == wanted):
+			a.erase("grundstueck")   # veraltete Standort-ID: Bauamt waehlt den aktuell besten gueltigen Standort
 	# Wiederholungsbremse (Partie 18.11.: Polizeiwache dreimal in zwei Minuten, jedes Mal "kein Grundstueck mit Strasse")
 	var key := "%s|%s" % [a.action, str(a.get("typ", a.get("viertel", a.get("parcel_ids", ""))))]
 	var day := GameCalendar.day_of(sim.game_min)
@@ -3102,6 +3126,7 @@ static func normalize_office(a: Dictionary) -> String:
 			if code != "":
 				return "%s ist keine Versorgungsanlage (infra_ausbau: %s). Kommunale Einrichtungen baust du mit Amt {aktion: {action: \"kommunal_bauen\", typ: \"%s\"}} (%s)." % [
 					want, " | ".join(INFRA_PLANTS), code, str(Municipal.TYPES[code].label)]
+			return "Unbekannte Versorgungsanlage '%s'. Möglich: %s; Stromtrassen und Wasserleitungen haben eigene Aktionen." % [want, " | ".join(INFRA_PLANTS)]
 		"kommunal_bauen":
 			var t := str(a.get("typ", ""))
 			if not Municipal.TYPES.has(t):
@@ -3114,6 +3139,8 @@ static func normalize_office(a: Dictionary) -> String:
 							break
 				if code != "":
 					a["typ"] = code
+			else:
+				return "Unbekannte kommunale Einrichtung '%s'. Wähle einen typ-Code aus mein_amt.stadtentwicklung.bauvorlagen oder beobachte die aktuellen Einrichtungen." % t
 		"hire_staff":
 			var dep := _plain(str(a.get("abteilung", "")))
 			if dep != "" and dep not in ["verwaltung", "bauamt", "strassen", "pruefdienst"]:
@@ -3145,6 +3172,12 @@ func office_obs(b: Dictionary) -> Dictionary:
 		"gruenderstrategie": conflict.strategy_for_town(k),
 		"bedrohung": conflict.assaults.values().filter(func(a): return int(a.stadt) == k),
 		"firmen": sim.companies.filter(func(c): return c.is_active()).map(func(c): return {"firma": c.id, "name": c.company_name, "inhaber": c.player_name})}
+	var zones: Dictionary = ind.get("flaechenplanung", {}).get("zonen", {})
+	var local_businesses: Array = sim.biz.items.values().filter(func(item): return str(item.branch) != "transport" and str(item.status) != "geschlossen" and int(item.site) >= 0 and sim.towns.of_building(int(item.site)) == k)
+	out["wirtschaftsaufbau"] = {"einwohner": ind.get("bevoelkerung", {}).get("einwohner", 0), "arbeitslos": ind.get("arbeit", {}).get("arbeitslos", 0),
+		"offene_stellen": ind.get("arbeit", {}).get("offene_stellen", 0), "neue_betriebe": local_businesses.size(),
+		"gewerbe_frei_mit_strasse": zones.get("gewerbe", {}).get("frei_mit_strasse", 0), "industrie_frei_mit_strasse": zones.get("industrie", {}).get("frei_mit_strasse", 0),
+		"hinweis": "Bei Arbeitslosen ohne offene Stellen braucht die Stadt erschlossene Gewerbe- und Industriegrundstuecke. Unternehmer gruenden dort Betriebe; das Amt baut die Viertel und Versorgungsanschluesse."}
 	var size := 0
 	var skipped: Array = []
 	for key in keys:

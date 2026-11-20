@@ -1163,14 +1163,15 @@ func tick_public_connectors(now: float) -> void:
 		var road_kind := str(prj.get("ref", ""))
 		if road_kind not in ["anschluss", "viertel", "transportzufahrt"] or not prj.has("road_plan") or prj.road_plan.is_empty():
 			continue
-		if builders[e.builder].status != "aktiv" or not sim.towns.depot(M.town).project_complete(str(e.project)) or not sim.crews.on_site("pub", str(e.project)):
+		var fraction: float = sim.towns.depot(M.town).project_reserved_fraction(str(e.project))
+		if builders[e.builder].status != "aktiv" or fraction <= 0.0 or not sim.crews.on_site("pub", str(e.project)):
 			continue
 		if not e.has("road_start_min"):
 			e["road_start_min"] = now
 		var cells: Array = prj.road_plan
 		var placed := int(e.get("road_placed", 0))
 		var duration := HUB_ROAD_BUILD_MIN if road_kind == "anschluss" else (maxf(HUB_ROAD_BUILD_MIN, float(GameCalendar.day_game_min) * 0.75) if road_kind == "transportzufahrt" else maxf(HUB_ROAD_BUILD_MIN, float(e.days) * float(GameCalendar.day_game_min)))
-		var target := mini(cells.size(), int(floor((now - float(e.road_start_min)) / duration * float(cells.size()))))
+		var target := mini(int(floor(float(cells.size()) * fraction)), mini(cells.size(), int(floor((now - float(e.road_start_min)) / duration * float(cells.size())))))
 		if target > placed:
 			var section: Array = cells.slice(placed, target).map(func(a): return Vector2i(int(a[0]), int(a[1])))
 			sim.access._apply_cells(section)

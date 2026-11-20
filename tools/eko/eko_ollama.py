@@ -816,10 +816,14 @@ class Agent:
 
     def trim(self, messages, hard=False):
         """Aelteste Schritte verwerfen (nach Anzahl und Textlaenge), ohne ein Werkzeugergebnis von seinem Aufruf zu trennen."""
+        if hard:
+            # Ein Kontextfehler braucht einen echten Neustart des Dialogs. Acht alte Nachrichten plus
+            # Digest blieben bei Qwen 27B trotz Kuerzung noch ueber dem 16k-Fenster.
+            return [{"role": "user", "content": MORNING + " Beobachte die aktuelle Lage und entscheide den naechsten Schritt. " + self.digest()[:1200]}]
         size = lambda ms: sum(len(json.dumps(m, ensure_ascii=False)) for m in ms)
         # 19.11.: bei 16k Kontext (Qwen 27B) liessen 24.000 Zeichen Verlauf + Systemprompt + Werkzeuge kaum Platz fuer die Antwort
         # ("unexpected end of JSON input") – Grenze waechst mit dem Kontext
-        max_chars = int(MAX_CHARS * min(1.0, max(0.4, (int(getattr(self.args, "ctx", 32768) or 32768) - 8000) / 24768.0)))
+        max_chars = int(MAX_CHARS * min(1.0, max(0.25, (int(getattr(self.args, "ctx", 32768) or 32768) - 8000) / 24768.0)))
         if not hard and len(messages) <= MAX_MESSAGES and size(messages) <= max_chars:
             return messages
         keep = 8 if hard else KEEP_MESSAGES
@@ -881,7 +885,8 @@ class Agent:
                 continue
             except Exception as e:   # Ollama ueberlastet oder Kontext voll: protokollieren, Verlauf kuerzen, kurz warten, weitermachen
                 self._api_errors = getattr(self, "_api_errors", 0) + 1
-                delay = min(300, 10 * (2 ** min(self._api_errors - 1, 5)))
+                context_full = "exceeds available context" in str(e).lower() or "context length" in str(e).lower()
+                delay = 1 if context_full and self._api_errors == 1 else min(300, 10 * (2 ** min(self._api_errors - 1, 5)))
                 self.status("fehler", last_error=str(e)[:220], waiting_on="erneuter Modellversuch in %d s" % delay)
                 self.say("⚠ Modellaufruf fehlgeschlagen: %s – Verlauf gekürzt, neuer Versuch in %d s" % (e, delay))
                 messages = self.trim(messages, hard=True)

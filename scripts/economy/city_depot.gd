@@ -1188,6 +1188,19 @@ func project_complete(project_id: String) -> bool:
 			return false
 	return true
 
+## Anteil der Baustoffe, mit denen ein fortlaufender Strassenbau bereits arbeiten kann.
+## Das knappste Material begrenzt die sichtbare Laenge; fertig wird das Projekt erst mit voller Reservierung.
+func project_reserved_fraction(project_id: String) -> float:
+	var res: Dictionary = project_res.get(project_id, {})
+	if res.is_empty():
+		return 1.0
+	var fraction := 1.0
+	for item in res.items:
+		var needed := int(res.items[item])
+		if needed > 0:
+			fraction = minf(fraction, float(res.reserved.get(item, 0)) / float(needed))
+	return clampf(fraction, 0.0, 1.0)
+
 
 func _top_up_projects() -> void:
 	for pid in project_res.keys():

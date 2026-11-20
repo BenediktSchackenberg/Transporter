@@ -566,19 +566,24 @@ func goals() -> Dictionary:
 func zoning() -> Dictionary:
 	var area := {}
 	var free := {}
+	var road_free := {}
 	var total := 0
 	for p in sim.parcels.items.values():
+		if sim.towns.is_region() and sim.towns.of_parcel(str(p.id)) != town:
+			continue
 		if not sim.parcels.is_buildable(p) or not ZONE_TARGET.has(p.zone):
 			continue
 		area[p.zone] = int(area.get(p.zone, 0)) + int(p.area)
 		total += int(p.area)
 		if p.state == "frei" and p.owner == land_owner():
 			free[p.zone] = int(free.get(p.zone, 0)) + int(p.area)
+			if bool(sim.parcels.utilities_of(p).strasse):
+				road_free[p.zone] = int(road_free.get(p.zone, 0)) + 1
 	var zones := {}
 	var short: Array = []
 	for z in ZONE_TARGET:
 		var share := float(area.get(z, 0)) / maxf(1.0, float(total))
-		zones[z] = {"flaeche": int(area.get(z, 0)), "frei_staedtisch": int(free.get(z, 0)), "anteil": snappedf(share, 0.01), "richtwert": ZONE_TARGET[z],
+		zones[z] = {"flaeche": int(area.get(z, 0)), "frei_staedtisch": int(free.get(z, 0)), "frei_mit_strasse": int(road_free.get(z, 0)), "anteil": snappedf(share, 0.01), "richtwert": ZONE_TARGET[z],
 			"abweichung": snappedf(share - float(ZONE_TARGET[z]), 0.01)}
 		if z != "wohnen" and share < float(ZONE_TARGET[z]) - 0.05:
 			short.append(z)
@@ -605,6 +610,8 @@ func _center() -> Vector2:
 func _rezone_cluster(zone: String, used: Dictionary) -> Dictionary:
 	var groups := {}
 	for p in sim.parcels.items.values():
+		if sim.towns.is_region() and sim.towns.of_parcel(str(p.id)) != town:
+			continue
 		if p.owner != land_owner() or p.state != "frei" or p.zone != "wohnen" or not sim.parcels.is_buildable(p) or used.has(p.id):
 			continue
 		var key := Vector2i(int(p.rect[0]) / 24, int(p.rect[1]) / 24)

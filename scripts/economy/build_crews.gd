@@ -77,7 +77,11 @@ func demand() -> Array:
 			out.append({"kind": "cw", "id": wid, "builder": w.builder})
 	for pid in C.public:
 		var e: Dictionary = C.public[pid]
-		if e.status == "laufend" and today >= int(e.start) and sim.towns.depot(Towns.town_of_id(str(pid))).project_complete(str(pid)):
+		var M: Mayor = sim.towns.mayor_of_project(str(pid))
+		var prj: Dictionary = M.projects.get(str(pid), {}) if M != null else {}
+		var road_work: bool = str(prj.get("ref", "")) in ["viertel", "anschluss", "transportzufahrt"] and not (prj.get("road_plan", []) as Array).is_empty()
+		var depot: CityDepot = sim.towns.depot(Towns.town_of_id(str(pid)))
+		if e.status == "laufend" and today >= int(e.start) and (depot.project_complete(str(pid)) or (road_work and depot.project_reserved_fraction(str(pid)) > 0.0)):
 			out.append({"kind": "pub", "id": pid, "builder": e.builder})
 	return out
 
