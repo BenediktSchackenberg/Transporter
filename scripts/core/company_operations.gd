@@ -205,8 +205,15 @@ func tick() -> void:
 func _auto_dispatch(cid: int) -> void:
 	if not bool(dispatch_policy(cid).auto_accept) or sim.executor.active_contracts(cid) >= sim.company(cid).contract_capacity():
 		return
-	if sim.eko != null and not sim.eko.homes.waiting_goods(cid).is_empty():
-		return
+	if sim.eko != null:
+		var waiting: Dictionary = sim.eko.homes.waiting_goods(cid)
+		if not waiting.is_empty():
+			for site in sim.eko.homes.open_sites(cid):
+				if str(site.status) != "material":
+					continue
+				for item in sim.eko.homes.missing(site):
+					if waiting.has(item):
+						return
 	for item in dispatch_opportunities(cid, 8, true):
 		var k: Contract = sim.contracts.get(str(item.contract_id))
 		var v: FleetVehicle = sim.vehicles.get(int(item.vehicle_id))

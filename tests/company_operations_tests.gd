@@ -113,8 +113,11 @@ static func auto_customer(t) -> void:
 	s.operations._auto_dispatch(0)
 	t.ok(k.status == "open", "ohne KI-Freigabe nimmt die Disposition keine Kundenfracht an")
 	s.operations.dispatch_policies[0].auto_accept = true
+	s.hub.deals["H_STALE"] = {"kind": "kauf", "party": "C0", "status": "abholbereit", "item": "kies", "qty": 10}
+	t.ok(s.eko != null and int(s.eko.homes.waiting_goods(0).get("kies", 0)) == 10, "alte Materialware ist im Grosslager erfasst")
 	s.operations._auto_dispatch(0)
-	t.ok(k.status in ["assigned", "in_transit"], "KI-Freigabe disponiert bekannte Kundenfracht mit Fahrer")
+	t.ok(k.status in ["assigned", "in_transit"], "alte Materialkaeufe ohne offene Baustelle blockieren keine Kundenfracht")
+	s.hub.deals.erase("H_STALE")
 	for i in 5000:
 		if k.status == "delivered":
 			break
