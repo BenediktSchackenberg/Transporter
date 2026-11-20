@@ -360,20 +360,20 @@ func _offroad_step(v: FleetVehicle, n: Node2D, delta: float) -> Vector2:
 		offroad_fx = OffroadFx.new()
 		offroad_fx.sim = sim
 		get_parent().add_child(offroad_fx)
-	var d := _dir_of(v.heading)
+	var sm: Vector2 = n.get_meta("smooth_h", v.heading)
+	sm = sm.lerp(v.heading, minf(1.0, delta * 5.0)).normalized()
+	n.set_meta("smooth_h", sm)
+	var d := _dir_of(sm)
 	if int(n.get_meta("dir")) < 0:
-		_set_vehicle_dir(n, v.heading)
+		_set_vehicle_dir(n, sm)
 	elif d != int(n.get_meta("dir")):
 		var cand_t := float(n.get_meta("dir_t", 0.0)) + delta if int(n.get_meta("dir_c", -1)) == d else 0.0
 		n.set_meta("dir_c", d)
 		n.set_meta("dir_t", cand_t)
 		if cand_t > 0.18:
-			_set_vehicle_dir(n, v.heading)
+			_set_vehicle_dir(n, sm)
 	else:
 		n.set_meta("dir_c", -1)
-	var sm: Vector2 = n.get_meta("smooth_h", v.heading)
-	sm = sm.lerp(v.heading, minf(1.0, delta * 6.0))
-	n.set_meta("smooth_h", sm)
 	var soil: String = SOIL.get(sim.city.g(v.tile()), "")
 	return offroad_fx.feed(v.id, v.pos, sm, soil, delta)
 

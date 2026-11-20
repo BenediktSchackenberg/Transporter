@@ -750,7 +750,7 @@ func _local_system_prompt() -> String:
 	var names := ["collect_contracts", "accept_contract", "assign_vehicle", "plan_tour", "assign_worker_task", "recruit_worker",
 		"buy_vehicle", "sell_vehicle", "rent_depot", "cancel_depot", "build_office", "upgrade_office", "install_internet",
 		"set_operations_policy", "create_transport_line", "pause_transport_line", "request_transport_help", "quote_transport_help", "offer_trade", "accept_trade", "reject_trade", "counter_offer", "take_loan", "request_loan", "repay_loan", "repair_vehicle", "buy_supplies", "set_plan", "execute_plan_step", "wait",
-		"found_business", "explore_deposit", "request_mining", "build_access", "create_stone_work", "free_build", "hub_buy", "assign_staff"]
+		"found_business", "explore_deposit", "request_mining", "build_access", "create_stone_work", "free_build", "hub_buy", "call_material_heli", "assign_staff"]
 	var all := ActionExecutor.all_schema()
 	var lines: Array = []
 	for name in names:

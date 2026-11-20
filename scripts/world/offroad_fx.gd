@@ -5,7 +5,7 @@ extends Node2D
 ## langsam); die Kind-Ebene `dust` liegt ueber den Objekten (Staub, Schlamm, Schnee, Auspuffwoelkchen).
 ## Gefuettert von EntityView je Bild: feed(id, pos, heading, moving, offroad, dt). Alles in Weltkoordinaten, gezeichnet ueber Iso.
 
-const TRACK_LIFE := 120.0      # Sekunden, bis eine Spur verblasst ist
+const TRACK_LIFE := 30.0       # frische Spuren statt dauerhafter dunkler Linien ueber die ganze Karte
 const TRACK_MAX := 1200
 const PUFF_MAX := 260
 const REAR := -24.0            # Hinterachse relativ zur Fahrzeugmitte entlang der Fahrtrichtung (offroad.py: Achsen x0+14/x0+56, Mitte 45)
@@ -167,14 +167,15 @@ func _draw() -> void:
 	for tr in tracks:
 		var age := (_time - float(tr[2])) / TRACK_LIFE
 		var wet: bool = tr[3]
-		var a := (0.5 if wet else 0.36) * (1.0 - age)
+		var a := (0.28 if wet else 0.12) * (1.0 - age)
 		if a <= 0.01:
 			continue
 		var c := Color(0.24, 0.17, 0.09, a) if wet else Color(0.25, 0.22, 0.12, a)
 		var p0: Vector2 = Iso.to_screen(tr[0])
 		var p1: Vector2 = Iso.to_screen(tr[1])
-		draw_line(p0, p1, c, 4.0 if wet else 3.2)                    # Reifenbreite
-		draw_line(p0, p1, Color(c.r, c.g, c.b, a * 0.8), 1.2)         # Profilrille dunkler in der Mitte
+		draw_line(p0, p1, c, 3.0 if wet else 2.0)
+		if wet:
+			draw_line(p0, p1, Color(c.r, c.g, c.b, a * 0.6), 0.8)
 
 
 class DustLayer:

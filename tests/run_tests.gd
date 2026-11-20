@@ -33,6 +33,8 @@ func _initialize() -> void:
 	test_names.append("test_eko_destruction")
 	test_names.append("test_eko_play_fixes")
 	test_names.append("test_eko_estates")
+	test_names.append("test_eko_water")
+	test_names.append("test_material_heli")
 	test_names.append("test_eko_estates_vs_traffic")
 	test_names.append("test_eko_next_steps")
 	test_names.append("test_eko_office_and_goals")
@@ -8867,6 +8869,18 @@ func test_wildnis_found() -> void:
 	var site := Vector2i(int(best[0].feld[0]), int(best[0].feld[1]))
 	ok(not E.input(p0, "Siedlung", {"feld": [site.x, site.y]}).ok, "gründen nur vor Ort (erst hinfahren)")
 	# querfeldein hinfahren, das Wesen sitzt im LKW
+	var footpath: Array[Vector2i] = s.nav.walk_path(v.tile(), site)
+	var truckpath: Array[Vector2i] = s.offroad_path(v.tile(), site)
+	var foot_turns := 0
+	var truck_turns := 0
+	for i in range(2, footpath.size()):
+		if footpath[i] - footpath[i - 1] != footpath[i - 1] - footpath[i - 2]:
+			foot_turns += 1
+	for i in range(2, truckpath.size()):
+		if truckpath[i] - truckpath[i - 1] != truckpath[i - 1] - truckpath[i - 2]:
+			truck_turns += 1
+	ok(not truckpath.is_empty() and truckpath.all(func(q): return s._walk_free(q)) and truck_turns <= foot_turns,
+		"LKW-Geländepfad bleibt frei und lenkt seltener (%d statt %d Kurven)" % [truck_turns, foot_turns])
 	B.mover.pos = v.pos
 	var rt: Dictionary = E.input(p0, "LKW", {"ziel": [site.x, site.y]})
 	ok(rt.ok and B.has("im_lkw"), "LKW-Fahrt ins Gelände: %s" % str(rt.msg).left(90))
@@ -8903,34 +8917,27 @@ func test_wildnis_found() -> void:
 	ok(str(E.urgency(B).grund).contains("baustelle"), "Bürgeramt ohne Material: dringend mit Sammelkauf (%s)" % str(E.urgency(B).grund).left(80))
 	var bulk: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "baustelle": str(ba.baustelle)}})
 	ok(bulk.ok and E.homes.waiting_goods(cid).size() >= 4, "hub_buy {baustelle} kauft alles Fehlende (%s)" % str(bulk.msg).left(90))
-	ok(str(E.urgency(B).grund).contains("abholen"), "danach: Material abholen")
+	ok(str(E.urgency(B).grund).contains("Materialhubschrauber"), "danach: Materialflug abwarten")
 	if not ba.ok:
 		return
 	var hs: Dictionary = E.homes.sites[ba.baustelle]
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "holz", "qty": 20}}).ok, "bereits für das Bürgeramt gekauftes Holz wird nicht doppelt bestellt")
-	ok(E.homes.next_step(cid).contains("LKW {ziel"), "nächster Schritt: selbst abholen (%s)" % E.homes.next_step(cid).left(80))
-	var hub_deals: Array = s.hub.deals.values().filter(func(d): return str(d.party) == "C%d" % cid and str(d.status) == "abholbereit")
+	ok(E.homes.next_step(cid).contains("Materialhubschrauber"), "nächster Schritt: Lieferung abwarten (%s)" % E.homes.next_step(cid).left(80))
+	var hub_deals: Array = s.hub.deals.values().filter(func(d): return str(d.party) == "C%d" % cid and str(d.status) == "helikopter")
 	var hub_view: Dictionary = E.firm_obs(B).grosslager
-	ok(hub_view.feld == s.city.hub.center and int(hub_view.wartende_baustoffe.get("holz", 0)) > 0, "KI sieht Großlagerposition getrennt vom Betriebshof und gekaufte Ware")
-	var stale: Dictionary = hub_deals[1]
-	var public_pickup: Dictionary = hub_deals[2]
-	var old_stale := str(stale.contract)
-	var old_public := str(public_pickup.contract)
-	s.contracts[old_stale].status = "expired"
-	s.contracts[old_public].exclusive_for = -1   # alter Spielstand: oeffentlich neu ausgeschrieben
-	var hub_center: Array = s.city.hub.center
-	var tr: Dictionary = E.input(p0, "LKW", {"ziel": [int(hub_center[0]), int(hub_center[1])]})
-	if tr.ok and str(tr.get("status", "")) == "laeuft" and not B.has("im_lkw"):   # erst zum LKW gehen
-		_run_until(s, func(): return B.has("im_lkw"), 600)
-	ok(str(stale.contract) != old_stale and str(public_pickup.contract) != old_public and s.contracts[old_public].status == "cancelled" and int(s.contracts[str(stale.contract)].exclusive_for) == cid,
-		"LKW holt alte abgelaufene und öffentliche Kaufabholungen wieder zur eigenen Firma")
-	ok(float(s.contracts[str(stale.contract)].offer_until) - s.game_min >= GameCalendar.days_to_min(29.0), "gekaufte Ware bleibt lange exklusiv abholbar")
-	ok(B.has("im_lkw"), "fährt selbst zum Großlager: %s" % str(tr.msg).left(100))
+	ok(hub_view.feld == s.city.hub.center and int(hub_view.wartende_baustoffe.get("holz", 0)) > 0 and hub_view.hubschrauber.has("landeplatz_hauptlager"),
+		"KI sieht Großlager, gekaufte Ware und eigenen Landeplatz")
+	ok(hub_deals.size() >= 4 and s.material_heli.helis.has(str(cid)), "Baustoffe sind dem eigenen Materialhubschrauber zugeordnet")
+	var first_flight: Dictionary = s.material_heli.flight_state(cid)
+	ok(first_flight.phase == "parked" or first_flight.phase == "loading", "Flugzustand ist sichtbar")
 	var dep_id := int(s.company(cid).depots[0])
-	var got := _run_until(s, func(): return s.stock.available("holz", "C%d" % cid, dep_id) >= 20 and not B.has("im_lkw"), 9000)
-	ok(got, "Holz auf dem eigenen Hof angekommen, Wesen ausgestiegen (Hof hat %d)" % s.stock.available("holz", "C%d" % cid, dep_id))
-	for item in hs.need:
-		s.stock.add(item, int(hs.need[item]), "C%d" % cid, dep_id, "Test")
+	for _i in 200:
+		if hub_deals.all(func(d): return str(d.status) == "geliefert"):
+			break
+		s.game_min += 3.0
+		s.material_heli.update(1.0)
+	ok(hub_deals.all(func(d): return str(d.status) == "geliefert") and s.stock.available("holz", "C%d" % cid, dep_id) >= 20,
+		"Materialflüge entladen die Ware auf dem eigenen Hof")
 	E.homes.tick(1.0)
 	ok(hs.status == "bau", "Material da: Bau kann beginnen")
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "baustelle": hs.id}}).ok, "baubereite Baustelle kauft Material nicht erneut")
@@ -9061,7 +9068,7 @@ func test_wildnis_found() -> void:
 		if str(home_site.status) == "genehmigung":
 			home_site.status = "material"   # isoliert den Materialkauf, der Bürgermeister wird separat getestet
 		var home_buy: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "baustelle": home_site.id}})
-		ok(home_buy.ok and int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("abholen"), "gekauftes Hausmaterial wird vor Straßenexperimenten abgeholt")
+		ok(home_buy.ok and int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("Materialhubschrauber"), "gekauftes Hausmaterial fliegt vor Straßenexperimenten zum Hof")
 		ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "kies", "qty": 500}}).ok, "sachfremder Großeinkauf wartet auf das erste Wohnhaus")
 		ok(not E.input(p0, "Firma", {"aktion": {"action": "strasse_bauen", "bis": [ctr.x + 4, ctr.y]}}).ok, "neue Straßenversuche warten, bis gekauftes Hausmaterial abgeholt ist")
 		ok(E.input(p0, "Firma", {"aktion": {"action": "ueberblick"}}).ok, "ueberblick liefert statt einer unbekannten Aktion die Firmenlage")
@@ -10367,6 +10374,7 @@ func test_region_town_figures() -> void:
 ## Auftrag 19, Etappe 1: zentrales Grosslager in der Kartenmitte (Generator 3), Zufahrt je Himmelsrichtung, Strasse zu jeder Stadt.
 func test_central_hub() -> void:
 	var s := region_sim(4, 21)
+	ok(s.material_heli.helis.size() == 4, "auch vier KI erhalten je einen freien Landeplatz am Hauptlager")
 	var H: Dictionary = s.city.hub
 	ok(not H.is_empty(), "Großlager existiert ab Spielbeginn")
 	if H.is_empty():
@@ -10403,14 +10411,14 @@ func test_hub_trade() -> void:
 	var c := s.companies[0]
 	c.ledger.inject(100000.0)
 	var cash0 := c.ledger.cash
-	var r := s.executor.execute(0, {"action": "hub_buy", "item": "stahl", "qty": 150})
+	var r := s.executor.execute(0, {"action": "hub_buy", "item": "stahl", "qty": 100})
 	ok(r.ok and c.ledger.cash < cash0, "Firma kauft Stahl: " + str(r.msg).left(90))
 	ok(H.price("stahl") > p_full, "knapper Bestand macht teurer (%.2f -> %.2f)" % [p_full, H.price("stahl")])
 	var k: Contract = s.contracts.get(str(r.get("contract", "")))
 	ok(k != null and k.exclusive_for == 0 and k.pickup == H.loc and k.dropoff == int(c.depots[0]), "Abholung nur mit eigenem Fahrzeug: exklusiver Auftrag Lager -> Depot")
-	ok(s.stock.qty("stahl", "C0", H.loc) == 150 and s.stock.qty("stahl", "C0", int(c.depots[0])) == 0, "Ware gehört der Firma, liegt aber noch im Lager (keine Teleportation)")
+	ok(s.stock.qty("stahl", "C0", H.loc) == 100 and s.stock.qty("stahl", "C0", int(c.depots[0])) == 0, "Ware gehört der Firma, liegt aber noch im Lager (keine Teleportation)")
 	s.hub.contract_delivered(k)
-	ok(s.stock.qty("stahl", "C0", int(c.depots[0])) == 150, "nach der Abholfahrt liegt der Stahl im Depot")
+	ok(s.stock.qty("stahl", "C0", int(c.depots[0])) == 100, "nach der Abholfahrt liegt der Stahl im Depot")
 	# Verkauf an das Lager: Ware aus dem Depot, Zahlung erst bei Anlieferung
 	var lager0: int = s.stock.qty("stahl", CentralHub.ACCT, H.loc)
 	var cash1 := c.ledger.cash
@@ -15170,6 +15178,105 @@ func test_eko_estates() -> void:
 	E.ensure_estates()
 	ok(E.estates.estates.has("Mia") and not E.estates.estates.has(ms[0]), "Nachvergabe fuer KI-Spieler ohne Stammsitz, nicht fuer Buergermeister")
 	ok(identity_ok(s) and absf(s.economy.conservation_error()) < 0.01, "Identitaet und Geldbilanz")
+
+
+## Bestehende Huetten auf Wasser werden beim Laden versetzt; neue Blockbauten
+## werden vor dem Bezahlen und vor dem Setzen auf Wasser geprueft.
+func test_eko_water() -> void:
+	var s := region_sim(2)
+	var E: EkoWorld = s.eko
+	E.auto_estates = true
+	E.join("Viktor")
+	var hut: Dictionary = (E.estates.estates.Viktor.bauten as Array).filter(func(x): return x.art == "huette")[0]
+	var old: Array = hut.origin
+	var wet := Vector2i(int(old[0]) / EkoWorld.PER_TILE, int(old[1]) / EkoWorld.PER_TILE)
+	s.city.ground[s.city.idx(wet)] = CityData.G.WATER
+	var E2 := EkoWorld.new()
+	E2.setup(s)
+	E2.from_dict(JSON.parse_string(JSON.stringify(E.to_dict())))
+	var moved: Dictionary = (E2.estates.estates.Viktor.bauten as Array).filter(func(x): return x.art == "huette")[0]
+	ok(moved.origin != old and not E2.estates._blocks_on_water(E2.estates._hut_blocks(Vector2i(int(moved.origin[0]), int(moved.origin[1])))), "alte Huette nach Laden auf trockenem Land")
+	ok(not E2.blocks.keys().any(func(p): return Vector2i(int(p.x) / EkoWorld.PER_TILE, int(p.y) / EkoWorld.PER_TILE) == wet), "keine Huettenbloecke bleiben im Wasser")
+	var f0: Rect2i = E2.estates.field_rect("Viktor", 0)
+	s.city.ground[s.city.idx(f0.position)] = CityData.G.WATER
+	ok(not E2.estates.build_plan(E2.beings.Viktor, {"feld": 0, "schichten": [["S"]]}).ok, "eigener Bauplan auf Wasser abgelehnt")
+	var tower: Array = E2.estates._template("Viktor", "turm", 0, "stein", 2)
+	var tower_tile := Vector2i(int(tower[0][0]) / EkoWorld.PER_TILE, int(tower[0][1]) / EkoWorld.PER_TILE)
+	s.city.ground[s.city.idx(tower_tile)] = CityData.G.WATER
+	ok(not E2.estates.order(E2.beings.Viktor, {"art": "turm", "feld": 0}).ok, "Bauwerk auf Wasser abgelehnt")
+
+
+func test_material_heli() -> void:
+	var s := wildnis_sim(2, 9367)
+	var visual := MaterialHeliView.new()
+	ok(visual != null, "Tandemrotor-Animation ist ladbar")
+	visual.free()
+	ok(s.material_heli.helis.size() == 2, "jede KI startet mit eigenem Chinook")
+	var pads := {}
+	for c in s.companies:
+		var h: Dictionary = s.material_heli.helis[str(c.id)]
+		var p := Vector2i(int(h.pad[0]), int(h.pad[1]))
+		pads[p] = true
+		ok(s.material_heli._pad_free(Rect2i(p, Vector2i(4, 4))), "Landeplatz %d liegt frei auf trockenem Hauptlagerboden" % c.id)
+	ok(pads.size() == 2, "KI-Landeplätze überlappen nicht")
+	var a := s.company(0)
+	var b := s.company(1)
+	var a_depot := int(a.depots[0])
+	var b_depot := int(b.depots[0])
+	var cash := a.ledger.cash
+	var bought: Dictionary = s.hub.buy("C0", "holz", 18, a_depot, "Test", false, true)
+	ok(bought.ok and bought.has("flug") and a.ledger.cash < cash, "KI bestellt Baustoffe mit Frachtgebühr")
+	var ref := str(bought.get("ref", ""))
+	ok(s.stock.available("holz", "C0", a_depot) == 0 and s.stock.has_reservation("hub:" + ref), "Ware bleibt bis zur Landung reserviert")
+	s.material_heli.update(1.0)
+	var saved := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(saved.material_heli.jobs.size() == 1 and saved.material_heli.helis.size() == 2, "Flug und Landeplätze überstehen Speichern und Laden")
+	for _i in 70:
+		if str(saved.hub.deals[ref].status) == "geliefert":
+			break
+		saved.game_min += 4.0
+		saved.material_heli.update(1.0)
+	ok(str(saved.hub.deals[ref].status) == "geliefert" and saved.stock.available("holz", "C0", a_depot) == 18, "sichtbarer Flug liefert 18 Holz am Hof ab")
+	ok(not saved.stock.has_reservation("hub:" + ref), "Lieferung löst die Reservierung auf")
+	# Bilateraler Materialhandel: Verkäufer bietet an, Käufer nimmt an und holt mit eigenem Chinook ab.
+	saved.stock.add("stahl", 7, "C0", a_depot, "Testbestand")
+	var offered: Dictionary = saved.social.create_offer(0, 1, "sell_material", {"item": "stahl", "menge": 7, "site_id": a_depot, "price": 350.0})
+	ok(offered.ok, "KI kann Material aus ihrem Hof zum Verkauf anbieten")
+	if offered.ok:
+		var accepted: Dictionary = saved.social.accept_offer(1, str(offered.id))
+		ok(accepted.ok and saved.stock.has_reservation("peer:" + str(offered.id)), "Kauf nach Verhandlung reserviert die Ware beim Verkäufer")
+		for _i in 70:
+			if saved.stock.available("stahl", "C1", b_depot) >= 7:
+				break
+			saved.game_min += 4.0
+			saved.material_heli.update(1.0)
+		ok(saved.stock.available("stahl", "C1", b_depot) == 7 and str(saved.social.offers[str(offered.id)].material_status) == "geliefert", "Chinook holt bezahlte Ware bei der anderen KI ab")
+	# Altbestand mit offenem LKW-Auftrag wird beim Laden auf Fluglieferung umgestellt.
+	var legacy: Dictionary = saved.hub.buy("C1", "ziegel", 9, b_depot)
+	ok(legacy.ok and legacy.has("contract"), "alter LKW-Kauf bleibt wählbar")
+	var migrated := Simulation.from_dict(JSON.parse_string(JSON.stringify(saved.to_dict())))
+	ok(str(migrated.hub.deals[str(legacy.ref)].status) == "helikopter", "offene alte Kaufabholung wird beim Laden zum Materialflug")
+	# Städtische Bau- und Versorgungsbestellungen nutzen denselben sichtbaren Dienst.
+	RegionGenerator.neubeginn = false
+	RegionGenerator.wildnis = false
+	var region := region_sim(2, 21)
+	var city_store: CityDepot = region.towns.depot(0)
+	var order: Dictionary = city_store._new_order("holz", 5, "Materialflugtest")
+	order.status = "bestellt"
+	order.loc = region.hub.loc
+	order.supplier = CentralHub.ACCT
+	order.freight = 90.0
+	city_store.orders[order.id] = order
+	var before := region.stock.qty("holz", city_store.owner(), city_store.building)
+	ok(region.stock.reserve("order:" + str(order.id), "holz", 5, CentralHub.ACCT, region.hub.loc), "Stadtware am Hauptlager reserviert")
+	ok(region.material_heli.queue_city(0, order) and str(order.status) == "heli_wartet", "Bürgermeisterbestellung wird als Materialflug disponiert (Lager %d, Hub %d, Helis %d)" % [city_store.building, region.hub.loc, region.material_heli.helis.size()])
+	for _i in 70:
+		if str(order.status) == "angeliefert":
+			break
+		region.game_min += 4.0
+		region.material_heli.update(1.0)
+	ok(str(order.status) == "angeliefert" and region.stock.qty("holz", city_store.owner(), city_store.building) == before + 5,
+		"Stadtlager erhält nach der Landung echte Ware zur Prüfung")
 
 
 ## Eigener Bauplan (15.11.2026): das Wesen entwirft Schicht fuer Schicht, die Baufirma baut genau das; auf dem Stammsitz und auf dem

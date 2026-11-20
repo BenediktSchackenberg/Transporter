@@ -257,8 +257,8 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 	sim.settlements[str(k)] = {"center": t.center, "rect": t.rect, "roads": [], "plots": [], "yard": yard}
 	carve_area(k, ctr, 10)
 	sim.log_event("%s eröffnet den Bauplatz %s (%s)." % [b.name, t.name, ", ".join(sc.gruende)], "good", cid)
-	return {"ok": true, "msg": ("Betriebshof und Basis %s eröffnet (%s). Jetzt baust du alles selbst: Material kaufen (hub_buy) und mit deinem LKW holen " +
-		"(LKW {ziel: \"grosslager\"}), Basis sichern (Bauwerk), Bürgeramt (buergeramt_bauen), Häuser (haus_bauen), Straßen (strasse_bauen); " +
+	return {"ok": true, "msg": ("Betriebshof und Basis %s eröffnet (%s). Jetzt baust du alles selbst: Material kaufen (hub_buy) und per eigenem Materialhubschrauber zum Hof liefern lassen, " +
+		"Basis sichern (Bauwerk), Bürgeramt (buergeramt_bauen), Häuser (haus_bauen), Straßen (strasse_bauen); " +
 		"gearbeitet wird mit Bauen {baustelle}.") % [t.name, Catalog.money(FOUND_COST)], "stadt": k, "bewertung": sc}
 
 

@@ -848,7 +848,7 @@ func urgency(b: Dictionary) -> Dictionary:
 				if open_buy:
 					return {"prioritaet": 2, "grund": "Bürgeramt %s wartet auf Material: alles kaufen – Firma {aktion: {action: \"hub_buy\", baustelle: \"%s\"}}" % [st.id, st.id]}
 				if not miss.is_empty():
-					return {"prioritaet": 2, "grund": "Material für Bürgeramt %s ist gekauft – abholen: LKW {ziel: \"grosslager\"}" % st.id}
+					return {"prioritaet": 2, "grund": "Material für Bürgeramt %s ist gekauft – Materialhubschrauber bringt es zum Hof. Alte LKW-Sendungen ggf. mit call_material_heli nachfordern." % st.id}
 			if int(st.cid) == cid and str(st.typ) == "buergeramt" and str(st.status) == "bau" and str(b.get("baut", "")) != str(st.id) and not homes.owner_working(st) and (st.get("helfer", {}) as Dictionary).is_empty():
 				return {"prioritaet": 2, "grund": "Bürgeramt %s hat alles Material, aber niemand baut: Bauen {baustelle: \"%s\"} oder Firma {aktion: {action: \"tageloehner\", baustelle: \"%s\", anzahl: 2}}. Keine weiteren Baustoffe kaufen." % [st.id, st.id, st.id]}
 	# Nach der Gruendung ist das erste Wohnhaus die sichtbare Wachstumsstufe. Gekauftes Material und baubereite
@@ -865,7 +865,7 @@ func urgency(b: Dictionary) -> Dictionary:
 					continue
 				var waiting: Dictionary = homes.waiting_goods(cid)
 				if miss.keys().all(func(item): return int(waiting.get(item, 0)) >= int(miss[item])):
-					return {"prioritaet": 2, "grund": "Material für Baustelle %s (%s) ist gekauft und liegt am Großlager. Jetzt abholen: LKW {ziel: \"grosslager\"}. Nicht noch einmal kaufen oder eine neue Straße planen." % [st.id, st.typ]}
+					return {"prioritaet": 2, "grund": "Material für Baustelle %s (%s) ist gekauft und unterwegs. Materialhubschrauber abwarten; nicht noch einmal kaufen oder eine neue Straße planen." % [st.id, st.typ]}
 		var housing_types := ["einfamilienhaus", "doppelhaus", "mehrfamilienhaus", "stadtvilla", "hochhaus"]
 		var housing_started: bool = homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) in housing_types and str(st.status) != "abgelehnt")
 		if not housing_started:
@@ -1180,7 +1180,7 @@ func _work(b: Dictionary, data: Dictionary) -> Dictionary:
 		if open.is_empty():
 			var mat: Array = homes.open_sites(cid).filter(func(x): return x.status == "material")
 			if not mat.is_empty():
-				return {"ok": false, "msg": "Baustelle %s wartet auf Material: %s – kaufen (hub_buy) und mit dem LKW holen." % [mat[0].id, str(homes.missing(mat[0]))]}
+				return {"ok": false, "msg": "Baustelle %s wartet auf Material: %s – mit hub_buy kaufen und per Materialhubschrauber liefern lassen." % [mat[0].id, str(homes.missing(mat[0]))]}
 			return {"ok": false, "msg": "Keine Baustelle bereit. Neue: haus_bauen, buergeramt_bauen, strasse_bauen."}
 		s = open[0]
 	if int(s.cid) != cid:
@@ -2356,7 +2356,7 @@ const FIRM_ACTIONS := [
 	"recruit_worker", "recruit_foreman", "dismiss_worker", "assign_worker_task", "assign_foreman", "set_foreman_orders", "guard_target",
 	"schedule_rest", "offer_training", "request_replacement_worker",
 	# Hof und Bauen
-	"rent_depot", "place_building", "build_office", "upgrade_office", "install_internet", "free_build", "create_stone_work", "hub_buy",
+	"rent_depot", "place_building", "build_office", "upgrade_office", "install_internet", "free_build", "create_stone_work", "hub_buy", "call_material_heli",
 	# Betriebe: gruenden, ausbauen, Personal zuordnen, Preise, Bergbau, Grundstuecke, Handel mit Grosslager und Bauhof
 	"found_business", "upgrade_business", "close_business", "set_business_price", "set_hotel_price", "set_venue_price", "buy_it_service",
 	"assign_staff", "explore_deposit", "request_mining",
@@ -2507,7 +2507,7 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 				var miss: Dictionary = homes.missing(st)
 				var waiting: Dictionary = homes.waiting_goods(cid)
 				if not miss.is_empty() and miss.keys().all(func(item): return int(waiting.get(item, 0)) >= int(miss[item])):
-					return {"ok": false, "msg": "Baustelle %s (%s) wartet auf bereits gekauftes Material. Hole es zuerst am Großlager ab: LKW {ziel: \"grosslager\"}. Danach kannst du weitere Straßen planen." % [st.id, st.typ]}
+					return {"ok": false, "msg": "Baustelle %s (%s) wartet auf bereits gekauftes Material. Materialhubschrauber abwarten oder alte LKW-Sendung mit call_material_heli nachfordern. Danach kannst du weitere Straßen planen." % [st.id, st.typ]}
 		return settle.plan_road(cid, a)
 	if str(a.action) == "auftrag_an_wesen":   # Firma schreibt selbst einen Hilfsjob fuer freie Wesen aus
 		var c2 = sim.company(cid)
@@ -2555,9 +2555,9 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		var first_home_done := homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) in EkoHomes.HOMES and str(st.status) == "fertig")
 		var first_home_waiting := open.any(func(st): return str(st.typ) in EkoHomes.HOMES)
 		if first_home_waiting and not first_home_done and material_need == 0 and homes.waiting_goods(cid).values().any(func(q): return int(q) > 0):
-			return {"ok": false, "msg": "Dein erstes Wohnhaus wartet auf die bereits gekauften Baustoffe. Hole sie zuerst ab: LKW {ziel: \"grosslager\"}. %s wird derzeit nicht für den Bau gebraucht." % item}
+			return {"ok": false, "msg": "Dein erstes Wohnhaus wartet auf bereits gekaufte Baustoffe. Materialhubschrauber abwarten oder alte LKW-Sendungen nachfordern. %s wird derzeit nicht für den Bau gebraucht." % item}
 		if material_need > 0 and bought >= material_need:
-			return {"ok": false, "msg": "%d %s für deine offenen Baustellen sind bereits am Großlager gekauft. Kein Doppelkauf – hole sie mit LKW {ziel: \"grosslager\"} ab." % [bought, item]}
+			return {"ok": false, "msg": "%d %s für deine offenen Baustellen sind bereits gekauft. Kein Doppelkauf – Materialhubschrauber abwarten oder alte LKW-Sendungen nachfordern." % [bought, item]}
 		var ready_halls: Array = open.filter(func(st): return st.typ == "buergeramt" and st.status == "bau" and st.need.has(item))
 		var other_need: bool = open.any(func(st): return st.status == "material" and homes.missing(st).has(item))
 		if not ready_halls.is_empty() and not other_need:
@@ -2573,7 +2573,7 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	return {"ok": bool(r.get("ok", false)), "msg": str(r.get("msg", "")), "pending": bool(r.get("pending", false))}
 
 
-## Alles Fehlende einer Baustelle am Grosslager kaufen (abzueglich bereits gekaufter, noch abzuholender Ware). Abholen bleibt eigener Schritt.
+## Alles Fehlende einer Baustelle am Grosslager kaufen (abzueglich bereits gekaufter, noch ausstehender Ware).
 func _buy_for_site(b: Dictionary, cid: int, sid: String) -> Dictionary:
 	var st: Dictionary = homes.sites[sid]
 	if int(st.cid) != cid:
@@ -2593,8 +2593,8 @@ func _buy_for_site(b: Dictionary, cid: int, sid: String) -> Dictionary:
 		ok = ok or bool(r.get("ok", false))
 		parts.append("%s: %s" % [item, str(r.get("msg", "")).left(70)])
 	if parts.is_empty():
-		return {"ok": true, "msg": "Für Baustelle %s ist alles gekauft – jetzt abholen: LKW {ziel: \"grosslager\"}." % sid if not miss.is_empty() else "Baustelle %s hat alles Material." % sid}
-	return {"ok": ok, "msg": "Material für %s: %s. Jetzt abholen: LKW {ziel: \"grosslager\"}." % [sid, " | ".join(parts)]}
+		return {"ok": true, "msg": "Für Baustelle %s ist alles gekauft – Materialflug abwarten." % sid if not miss.is_empty() else "Baustelle %s hat alles Material." % sid}
+	return {"ok": ok, "msg": "Material für %s: %s. Materialflug zum Hof läuft." % [sid, " | ".join(parts)]}
 
 
 func _firm_metrics(cid: int) -> Dictionary:
@@ -2667,7 +2667,7 @@ func _stock_report(cid: int) -> String:
 	for k in sim.contracts.values():
 		if str(k.order_ref).begins_with("hub:") and int(k.exclusive_for) == cid and k.status in ["open", "accepted", "assigned"]:
 			open_ids.append("%s %s" % [k.id, k.label.trim_prefix("Großlager: ")])
-	return "Bestand: %s. Wartende Abholungen im Großlager: %s – LKW {ziel: \"grosslager\"} lädt bis zu %d je Fahrt." % [
+	return "Bestand: %s. Wartende Abholungen im Großlager: %s – call_material_heli {ref: H...} lässt den Chinook liefern; LKW kann bis zu %d je Fahrt laden." % [
 		" | ".join(parts), ", ".join(open_ids) if not open_ids.is_empty() else "keine", c.contract_capacity()]
 
 
@@ -2749,8 +2749,8 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var models: Dictionary = o.fahrzeugmodelle
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
 		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),
-		"grosslager": {"feld": sim.city.hub.get("center", []), "abholen": "LKW {ziel: \"grosslager\"}",
-			"wartende_baustoffe": homes.waiting_goods(cid), "hinweis": "Das Großlager ist nicht dein Betriebshof. Gekaufte Ware wird nur bei der Großlagerfahrt verladen und zum eigenen Hof geliefert."},
+		"grosslager": {"feld": sim.city.hub.get("center", []), "abholen": "hub_buy liefert per Materialhubschrauber; ältere Abholaufträge: call_material_heli {ref: H...}",
+			"wartende_baustoffe": homes.waiting_goods(cid), "hubschrauber": sim.material_heli.obs(cid), "hinweis": "Das Großlager ist nicht dein Betriebshof. Der eigene Chinook bringt gekaufte Baustoffe zum Hof; Lagerpersonal belädt ihn am Hauptlager."},
 		"stadtmarke": sim.town_plan.brief(sim.companies[cid].home_town).get("stadtmarke", {}) if sim.town_plan != null and sim.town_plan.has(sim.companies[cid].home_town) else {},
 		"bauentwuerfe": _home_design_options(sim.companies[cid].home_town),
 		"gewerbeentwuerfe": _commercial_design_options(sim.companies[cid].home_town),
@@ -2799,7 +2799,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"aktionen": "Firma {aktion: {action: accept_contract, contract_id, vehicle_id?} | buy_vehicle {offer_id} | recruit_worker {worker_id} | " +
 			"assign_worker_task {kind: fahren, worker_id, vehicle_id} | collect_contracts {} | rent_depot {depot_id} | take_loan {amount} | sell_vehicle {vehicle_id} | send_message {to, text} | " +
 			"entnahme {betrag} (Privatgeld für dich, mind. 5.000 EUR bleiben in der Firma) | plan_tour {vehicle_id, stopps} | " +
-			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus|stadtvilla|hochhaus, entwurf?: design_w_NNN, grundstueck?} | gewerbe_bauen {typ, entwurf?: design_g_NNN, grundstueck?} (Entwurf aus gewerbeentwuerfe wählen; Material per hub_buy holen) | bauleute {baustelle, worker_ids} | strasse_bauen {bis: [x, y], von?: [x, y]} (Straßenbaustelle, Kies vom Hof) | buergeramt_bauen {} (danach gibt es die Stadt) | hub_buy {item, qty} | sell_property {gebaeude} | " +
+			"haus_bauen {typ: einfamilienhaus|doppelhaus|mehrfamilienhaus|stadtvilla|hochhaus, entwurf?: design_w_NNN, grundstueck?} | gewerbe_bauen {typ, entwurf?: design_g_NNN, grundstueck?} (Entwurf aus gewerbeentwuerfe wählen; Material per hub_buy und Chinook liefern) | bauleute {baustelle, worker_ids} | strasse_bauen {bis: [x, y], von?: [x, y]} (Straßenbaustelle, Kies vom Hof) | buergeramt_bauen {} (danach gibt es die Stadt) | hub_buy {item, qty} | call_material_heli {ref: H...} | sell_property {gebaeude} | " +
 			"recruit_foreman {worker_id} | assign_foreman {foreman_id, worker_ids} | guard_target {worker_id, site_id} | request_tunnel {von: [x,y], nach: [x,y]} | " +
 			"place_building {plot_id, typ, x, y, rot} (Hofbau, Vorschläge in hofbau) | free_build {name, form, material} | " +
 			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +

@@ -51,6 +51,7 @@ var ship_view := ShipView.new()           # Linienschiff im Hafen (Kuestenort)
 var bridge_view := BridgeView.new()       # Bruecken im Bau und freigegeben (Kuestenort)
 var tunnel_view := TunnelView.new()       # Tunnelportale, Bauzustand und freigegebene Unterquerungen
 var air_view := AirView.new()            # Fluganimation ueber der Karte (Kuestenort, Flughafen)
+var material_heli_view := MaterialHeliView.new()
 var waste_view := WasteView.new()         # Deponie und Muellabfuhr
 var tourist_view := TouristView.new()     # sichtbare Reisende am Hotel und Strand
 var _lit_nodes: Array = []                 # Fensterlichter (Sprite2D)
@@ -180,6 +181,8 @@ func build(simulation: Simulation) -> void:
 	utility_network_view.setup(sim)
 	add_child(air_view)
 	air_view.setup(sim, self)
+	add_child(material_heli_view)
+	material_heli_view.setup(sim, self)
 	_build_decor()
 	_build_weather_fx()
 	camera.position = Iso.to_screen(sim.city.tile_center(sim.city.building(sim.companies[0].depots[0]).road))
@@ -679,6 +682,7 @@ func update_view(delta: float) -> void:
 	ambient_view.update_view(delta)
 	air_view.set_night(night_factor)
 	air_view.update_view(delta)
+	material_heli_view.update_view(delta, night_factor)
 	parcel_layer.update_view(delta)
 	# Depots: Besitzerwechsel und Stoerungen
 	for site in _depot_marks:

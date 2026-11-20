@@ -600,7 +600,9 @@ func _advance_orders(day: int) -> void:
 						# Importware trifft am Anlieferpunkt ein und gehoert bis zur Anlieferung dem Ausland
 						sim.stock.add(o.item, int(o.qty), "X0", port, "Import Stadtlager")
 						sim.stock.reserve("order:" + str(o.id), o.item, int(o.qty), "X0", port)
-						_issue_contract(o)
+						_dispatch_order(o)
+				elif sim.material_heli.queue_city(town, o):
+					pass   # sichtbarer Materialflug ab Lieferant, unabhängig vom Straßennetz
 				elif str(o.supplier) == CentralHub.ACCT and sim.trains != null and sim.trains.accepts_freight(town):
 					_to_rail(o, day)   # Auftrag 22 Phase 7 Schritt 2: Grosslager-Ware faehrt mit dem Gueterzug
 				else:
@@ -666,7 +668,7 @@ func on_ship(order_id: String, fit: int = -1) -> void:
 	o.aftership = int(o.get("aftership", 0)) + n
 	if int(o.aftership) >= int(o.qty):
 		o.status = "bestellt"
-		_issue_contract(o)
+		_dispatch_order(o)
 
 
 ## Kuestenort: das Flugzeug hat die Luftfracht im Frachtterminal abgesetzt (die Ware liegt bereits dort als X0);
@@ -677,7 +679,12 @@ func on_aircraft(order_id: String) -> void:
 		return
 	sim.stock.reserve("order:" + str(o.id), o.item, int(o.qty), "X0", airport().cargo_building)
 	o.status = "bestellt"
-	_issue_contract(o)
+	_dispatch_order(o)
+
+
+func _dispatch_order(o: Dictionary) -> void:
+	if not sim.material_heli.queue_city(town, o):
+		_issue_contract(o)
 
 
 func _issue_contract(o: Dictionary) -> void:
@@ -1291,7 +1298,7 @@ func critical_items() -> Array:
 
 
 func open_orders() -> Array:
-	return orders.values().filter(func(o): return o.status in ["vorschlag", "bestellt", "transport", "unterwegs", "angeliefert"])
+	return orders.values().filter(func(o): return o.status in ["vorschlag", "bestellt", "heli_wartet", "transport", "unterwegs", "angeliefert"])
 
 
 func summary() -> Dictionary:

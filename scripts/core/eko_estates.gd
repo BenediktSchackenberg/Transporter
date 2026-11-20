@@ -76,9 +76,15 @@ func suggestion(name: String) -> Dictionary:
 		if not _cost_cache.has(key):
 			var mat: String = {"mauer": "stein", "schloss": "stein", "turm": "stein", "garten": "boden"}[art]
 			var c := 0.0
-			for bl in _template(name, art, f, mat, 4 if art == "mauer" else 2):
+			var proposal := _template(name, art, f, mat, 4 if art == "mauer" else 2)
+			if _blocks_on_water(proposal):
+				_cost_cache[key] = -1.0
+				continue
+			for bl in proposal:
 				c += float(EkoWorld.PRICES.get(str(bl[3]), 3.0)) + LABOR
 			_cost_cache[key] = snappedf(c, 1.0)
+		if float(_cost_cache[key]) < 0.0:
+			continue
 		return {"art": art, "feld": f, "kosten": float(_cost_cache[key])}
 	return {}
 
@@ -165,6 +171,9 @@ func _try(name: String, cands: Array, busy: PackedByteArray, stat: Dictionary, h
 		var why := _block_reason(r, busy, hills_ok, water_ok)
 		if why != "":
 			stat[why] = int(stat.get(why, 0)) + 1
+			continue
+		if _hut_site(r).is_empty():
+			stat["huette_ohne_trockenplatz"] = int(stat.get("huette_ohne_trockenplatz", 0)) + 1
 			continue
 		stat.frei += 1
 		var ctr: Vector2i = r.get_center()
@@ -261,6 +270,8 @@ func order(b: Dictionary, data: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Unbekanntes Material %s." % mat}
 	var h := clampi(int(data.get("hoehe", 4 if art == "mauer" else 2)), 2, 8)
 	var blocks := _template(name, art, f, mat, h)
+	if _blocks_on_water(blocks):
+		return {"ok": false, "msg": "Der Bauplan berührt Wasser. Wähle ein trockenes Feld oder einen anderen Standort."}
 	var cost := 0.0
 	for bl in blocks:
 		cost += float(EkoWorld.PRICES.get(str(bl[3]), 3.0)) + LABOR
@@ -289,9 +300,61 @@ const HUT_FIELD := 7
 
 
 func _starter_hut(name: String) -> void:
-	var F := field_rect(name, HUT_FIELD)
-	var x0 := F.position.x * P + 10
-	var y0 := F.position.y * P + 10
+	var site := _hut_site(rect_of(name))
+	if site.is_empty():
+		_sim().log_event("Für %s wurde kein trockener Platz für die Starthütte gefunden." % name, "warn")
+		return
+	var origin: Vector2i = site.origin
+	for bl in _hut_blocks(origin):
+		w.blocks[Vector3i(int(bl[0]), int(bl[1]), int(bl[2]))] = str(bl[3])
+	(estates[name].bauten as Array).append({"id": "S%d" % _next, "art": "huette", "feld": int(site.feld), "origin": [origin.x, origin.y], "material": "holz", "blocks": [],
+		"placed": 0, "acc": 0.0, "status": "fertig"})
+	_next += 1
+	w.changed.emit()
+
+
+## Die Hütte belegt 12 x 12 Blöcke (bis zu vier Kacheln je Achse). Das Feld
+## darf Wasser als Landschaft enthalten, aber jeder Block des Hauses braucht Land.
+func _hut_site(r: Rect2i, old_origin := Vector2i(-1, -1)) -> Dictionary:
+	var old := Rect2i(old_origin, Vector2i(12, 12))
+	for f in [HUT_FIELD, 6, 8, 3, 5, 1, 0, 2, 4]:
+		var base := (r.position + Vector2i((f % 3) * FIELD, (f / 3) * FIELD)) * P
+		for oy in [10, 6, 14, 2, 18]:
+			for ox in [10, 6, 14, 2, 18]:
+				var origin := base + Vector2i(ox, oy)
+				var footprint := Rect2i(origin, Vector2i(12, 12))
+				var free := true
+				for ty in range(origin.y / P, (footprint.end.y - 1) / P + 1):
+					for tx in range(origin.x / P, (footprint.end.x - 1) / P + 1):
+						var q := Vector2i(tx, ty)
+						var c = _sim().city
+						if c.g(q) == CityData.G.WATER or not c.inside(q) or c.building_at[c.idx(q)] >= 0 or c.is_road(q) or c.g(q) == CityData.G.RAIL or (not c.height.is_empty() and c.height[c.idx(q)] > 0):
+							free = false
+							break
+					if not free:
+						break
+				if not free:
+					continue
+				for x in range(origin.x, footprint.end.x):
+					for y in range(origin.y, footprint.end.y):
+						if old.has_point(Vector2i(x, y)):
+							continue
+						for z in 4:
+							if w.blocks.has(Vector3i(x, y, z)):
+								free = false
+								break
+						if not free:
+							break
+					if not free:
+						break
+				if free:
+					return {"feld": f, "origin": origin}
+	return {}
+
+
+func _hut_blocks(origin: Vector2i) -> Array:
+	var x0 := origin.x
+	var y0 := origin.y
 	var blocks: Array = []
 	for z in 3:
 		for x in range(x0, x0 + 12):
@@ -309,11 +372,43 @@ func _starter_hut(name: String) -> void:
 	blocks.append([x0 + 9, y0 + 2, 0, "ladestation"])
 	blocks.append([x0 + 2, y0 + 8, 0, "tisch"])
 	blocks.append([x0 + 9, y0 + 8, 0, "lampe"])
+	return blocks
+
+
+func _blocks_on_water(blocks: Array) -> bool:
+	var checked := {}
 	for bl in blocks:
+		var q := Vector2i(floori(float(bl[0]) / P), floori(float(bl[1]) / P))
+		if checked.has(q):
+			continue
+		checked[q] = true
+		if _sim().city.g(q) == CityData.G.WATER:
+			return true
+	return false
+
+
+func _repair_hut(name: String, hut: Dictionary) -> void:
+	var f := int(hut.get("feld", HUT_FIELD))
+	var F := field_rect(name, f)
+	var saved: Array = hut.get("origin", [F.position.x * P + 10, F.position.y * P + 10])
+	var old := Vector2i(int(saved[0]), int(saved[1]))
+	var old_blocks := _hut_blocks(old)
+	if not _blocks_on_water(old_blocks):
+		return
+	var site := _hut_site(rect_of(name), old)
+	if site.is_empty():
+		_sim().log_event("Starthütte von %s steht im Wasser; kein trockener Ersatzplatz gefunden." % name, "warn")
+		return
+	for bl in old_blocks:
+		var p := Vector3i(int(bl[0]), int(bl[1]), int(bl[2]))
+		if w.blocks.get(p, "") == str(bl[3]):
+			w.blocks.erase(p)
+	var origin: Vector2i = site.origin
+	for bl in _hut_blocks(origin):
 		w.blocks[Vector3i(int(bl[0]), int(bl[1]), int(bl[2]))] = str(bl[3])
-	(estates[name].bauten as Array).append({"id": "S%d" % _next, "art": "huette", "feld": HUT_FIELD, "material": "holz", "blocks": [],
-		"placed": 0, "acc": 0.0, "status": "fertig"})
-	_next += 1
+	hut.feld = int(site.feld)
+	hut.origin = [origin.x, origin.y]
+	_sim().log_event("Starthütte von %s auf trockenes Land versetzt." % name, "info")
 	w.changed.emit()
 
 
@@ -441,7 +536,7 @@ func tick(dt: float) -> void:
 				s.acc = float(s.acc) - 1.0
 				var bl: Array = s.blocks[int(s.placed)]
 				var p := Vector3i(int(bl[0]), int(bl[1]), int(bl[2]))
-				if not w.blocks.has(p):
+				if not w.blocks.has(p) and _sim().city.g(Vector2i(floori(float(p.x) / P), floori(float(p.y) / P))) != CityData.G.WATER:
 					w.blocks[p] = str(bl[3])
 				s.placed = int(s.placed) + 1
 			if int(s.placed) >= (s.blocks as Array).size():
@@ -596,8 +691,11 @@ func from_dict(d: Dictionary) -> void:
 	plans = d.get("plans", [])
 	for name in estates:
 		_open(rect_of(name))
-		if not (estates[name].bauten as Array).any(func(x): return x.art == "huette"):   # aeltere Stammsitze bekommen die Starthuette nachgeliefert
+		var huts: Array = (estates[name].bauten as Array).filter(func(x): return x.art == "huette")
+		if huts.is_empty():   # aeltere Stammsitze bekommen die Starthuette nachgeliefert
 			_starter_hut(name)
+		else:
+			_repair_hut(name, huts[0])
 		if not (estates[name].wall_tiles as Array).is_empty():
 			apply_walls(name)
 
@@ -659,6 +757,8 @@ func build_plan(b: Dictionary, data: Dictionary) -> Dictionary:
 				cost += float(EkoWorld.PRICES.get(legend[ch], 3.0)) + LABOR
 	if blocks.is_empty() or blocks.size() > PLAN_MAX_BLOCKS:
 		return {"ok": false, "msg": "Ein Plan hat 1-%d Blöcke (deiner: %d)." % [PLAN_MAX_BLOCKS, blocks.size()]}
+	if _blocks_on_water(blocks):
+		return {"ok": false, "msg": "Der Bauplan berührt Wasser. Wähle einen trockenen Bauplatz."}
 	cost = snappedf(cost, 1.0)
 	if pays_firm(b, data):
 		var c = _sim().company(w.active_firm(b))
@@ -694,7 +794,7 @@ func _plans_tick(dt: float) -> void:
 			pl.acc = float(pl.acc) - 1.0
 			var bl: Array = pl.blocks[int(pl.placed)]
 			var p := Vector3i(int(bl[0]), int(bl[1]), int(bl[2]))
-			if not w.blocks.has(p):
+			if not w.blocks.has(p) and _sim().city.g(Vector2i(floori(float(p.x) / P), floori(float(p.y) / P))) != CityData.G.WATER:
 				w.blocks[p] = str(bl[3])
 			pl.placed = int(pl.placed) + 1
 		if int(pl.placed) >= (pl.blocks as Array).size():

@@ -24,6 +24,7 @@ import buildings as B
 import commercial as C
 import industrial as I
 import airport as A
+import helicopter as HELI
 import tourism as TU
 import civic as CV
 import public as PB
@@ -49,6 +50,7 @@ def init():
     PR.init()
     CV.init()
     A.init()
+    HELI.init()
     PB.init()
     MT.init()
     SW.init()
@@ -388,6 +390,28 @@ def build_aircraft():
     print("Flugzeuge:", len(out) - 1, "+ Bodenschatten")
 
 
+def build_helicopter():
+    """Chinook ohne Rotorblaetter; die Tandemrotoren dreht MaterialHeliView."""
+    out = manifest.setdefault("helicopter", {})
+    base = HELI.chinook()
+    n = base.size[0]
+    for k in range(4):
+        r = engine.render(base.rotated(k), shadow_len=0, ground_shadow=False)
+        info = save_result("heli_%d" % k, r, top=False)
+        info["pivot"] = [r["anchor"][0], r["anchor"][1] + n]
+        # Rotorzentren im Bild relativ zum Fuss-/Bodenanker.
+        centers = []
+        for x in (31, 68):
+            y, z = 50, 40
+            for _ in range(k):
+                x, y = n - 1 - y, x
+            centers.append([2 * (x - y), x + y - 2 * z - n])
+            x = 31 if len(centers) == 1 else 68
+        info["rotors"] = centers
+        out[str(k)] = info
+    print("Materialhubschrauber: 4 Richtungen")
+
+
 def main():
     what = sys.argv[1:] or ["ground", "buildings", "facilities", "vehicles", "figures", "props", "aircraft"]
     init()
@@ -413,6 +437,8 @@ def main():
         build_props()
     if "aircraft" in what:
         build_aircraft()
+    if "helicopter" in what:
+        build_helicopter()
     manifest["projection"] = {"tile_px": [128, 64], "voxels_per_tile": 32}
     json.dump(manifest, open(MANIFEST_PATH, "w", encoding="utf8"), indent=1)
     print("manifest:", MANIFEST_PATH)

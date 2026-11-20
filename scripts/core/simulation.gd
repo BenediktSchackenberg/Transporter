@@ -97,6 +97,7 @@ var access := AccessRoads.new()   # Zufahrten zu abgelegenen Lagerstaetten (Auft
 var stages := BusinessStages.new()   # Gebaeudestufen der Betriebe (Auftrag 15, Etappe E)
 var mining := Mining.new()        # Bergwerk-Story: Probebohrung, Abbaurecht, Foerderabgabe
 var hub := CentralHub.new()
+var material_heli := MaterialHeli.new() # je KI ein schwerer Materialhubschrauber am Grosslager
 var stone := StoneWorks.new()      # Steinbauten und Stein-Kreationen der Unternehmer (Auftrag 23)
 var freebuild := FreeBuild.new()   # freies Bauen der Unternehmer Stein auf Stein (13.11.2026)
 var eko := EkoWorld.new()   # Eko-Modus: freie Wesen, gesteuert ueber die Weltschnittstelle (15.11.2026)
@@ -231,6 +232,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	month_changed.connect(func(_m): mining.on_month())
 	prod.setup(self)
 	hub.setup(self)
+	material_heli.setup(self)
 	stone.setup(self)
 	freebuild.setup(self)
 	eko.setup(self)
@@ -308,6 +310,7 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 		a.owner = i
 		a.pos = city.tile_center(city.building(site).walk)
 		avatars[i] = a
+	material_heli.ensure_fleet()   # alle Spieler existieren erst nach der Startplatzvergabe
 	personnel.setup(self)
 	if start_profile in ["spedition", "transportstart"]:
 		biz.migrate()   # Startprofil Spedition: jede Company beginnt mit ihrem Transportbetrieb
@@ -563,6 +566,13 @@ func offroad_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	var p := nav.walk_path(start, to)   # Teilweg bis zum naechsten erreichbaren Punkt, wenn das Ziel selbst gesperrt ist
 	if p.is_empty() or maxi(absi(p[-1].x - to.x), absi(p[-1].y - to.y)) > SNAP_R:
 		return []
+	# Der Fussweg-A* wechselt auf freiem Gelaende oft in jedem Feld die Richtung.
+	# Der LKW faehrt auf laengeren freien Geraden; die L-Stuecke bleiben lueckenlos
+	# und pruefen jedes Feld gegen dasselbe Hindernisgitter wie der Originalpfad.
+	var smooth: Array = PathStraighten.straighten(p, _walk_free)
+	p.clear()
+	for q in smooth:
+		p.append(q)
 	if start != from:
 		p.push_front(from)
 	return p
@@ -1419,6 +1429,7 @@ func step(dt: float) -> void:
 	recycling.update(dt)
 	council.update(dt)
 	fleet.update(dt)
+	material_heli.update(dt)
 	for v in vehicles.values():
 		_update_vehicle(v, dt)
 	_rebuild_hash()
@@ -1642,7 +1653,7 @@ func to_dict() -> Dictionary:
 	return {"world": city.world, "town_name": city.town_name, "population_target": population_target, "seed": city.seed_value, "map_size": city.size, "reserve": reserve_share, "parcels": parcels.to_dict(), "sim_time": sim_time, "game_min": game_min, "calendar_day_seconds": GameCalendar.day_seconds, "minute_index": minute_index,
 		"rng_state": str(rng.state), "companies": companies.map(func(c): return c.to_dict()), "vehicles": vs,
 		"contracts": ks, "avatars": avs, "storage": _storage_dict(), "step_count": step_count, "plans": plans.to_dict(), "memory": memory.to_dict(), "decisions": decisions.to_dict(), "events": events.to_dict(), "world_events": world_events.to_dict(), "game_master": game_master.to_dict(), "town_hall": town_hall.to_dict(), "town_plans": town_plan.to_dict(), "inspections": inspections.to_dict(), "road_care": road_care.to_dict(), "access": access.to_dict(), "bridges": bridges.to_dict(), "tunnels": tunnels.to_dict(), "crews": crews.to_dict(), "hub": hub.to_dict(), "stone": stone.to_dict(), "freebuild": freebuild.to_dict(), "eko": eko.to_dict(), "civic": civic.to_dict(), "municipal": municipal.to_dict(), "vworks": vworks.to_dict(), "fire": fire.to_dict(), "rescue": rescue.to_dict(), "police": police.to_dict(), "winter": winter.to_dict(), "street_cleaning": street_cleaning.to_dict(), "water": water.to_dict(), "rail": rail.to_dict(), "trains": trains.to_dict(), "transit": transit.to_dict(), "education": education.to_dict(), "recycling": recycling.to_dict(), "council": council.to_dict(), "services": services.to_dict(), "center": center.to_dict(), "finance": finance.to_dict(), "regional": regional.to_dict(), "air": air.to_dict(), "sea": sea.to_dict(), "founders": founders.to_dict(), "commute": commute.to_dict(), "mining": mining.to_dict(), "stages": stages.to_dict(), "population": population.to_dict(), "activity": activity.to_dict(), "safety": safety.to_dict(), "residents": residents.to_dict(), "experiments": experiments.to_dict(), "estate": estate.to_dict(), "yard": yard.to_dict(), "personnel": personnel.to_dict(), "operations": operations.to_dict(), "resources": resources.to_dict(), "customers": cust, "depot_owner": owners,
-		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "tourism": tourism.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "region": _region_dict(), "log": log_entries.slice(-150),
+		"weather": wx.to_dict(), "economy": economy.to_dict(), "banking": banking.to_dict(), "player_loans": player_loans.to_dict(), "strategy": strategy.to_dict(), "insolvency": insolvency.to_dict(), "stock": stock.to_dict(), "standings": standings.to_dict(), "fuel": fuel.to_dict(), "households": households.to_dict(), "public_sector": public_sector.to_dict(), "citizens": citizens.to_dict(), "housing": housing.to_dict(), "contentment": contentment.to_dict(), "tiers": tiers.to_dict(), "central_bank": central_bank.to_dict(), "oversight": oversight.to_dict(), "permits": permits.to_dict(), "mayor": mayor.to_dict(), "construction": construction.to_dict(), "city_depot": city_depot.to_dict(), "traffic_flow": traffic_flow.to_dict(), "retail": retail.to_dict(), "production": prod.to_dict(), "plant": plant.to_dict(), "it": it.to_dict(), "tourism": tourism.to_dict(), "waste": waste.to_dict(), "care": care.to_dict(), "workforce": workforce.to_dict(), "news": news.to_dict(), "trader": trader.to_dict(), "harbor": harbor.to_dict(), "airport": airport.to_dict(), "material_heli": material_heli.to_dict(), "region": _region_dict(), "log": log_entries.slice(-150),
 		"next_vehicle_id": next_vehicle_id, "market": market.to_dict(),
 		"social": social.to_dict(), "rivalry": rivalry.to_dict(), "talk": talk.to_dict(), "businesses": biz.to_dict(), "start_profile": start_profile, "neubeginn": neubeginn, "wildnis": wildnis, "settlements": settlements, "grid": grid.to_dict(), "save_version": SAVE_VERSION, "action_results": action_results}
 
@@ -1839,6 +1850,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.commute.from_dict(d.get("commute", {}))
 	s.crews.from_dict(d.get("crews", {}))
 	s.hub.from_dict(d.get("hub", {}))
+	s.material_heli.from_dict(d.get("material_heli", {}))
 	s.stone.from_dict(d.get("stone", {}))
 	s.freebuild.from_dict(d.get("freebuild", {}))
 	s.eko.from_dict(d.get("eko", {}))

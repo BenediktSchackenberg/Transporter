@@ -119,7 +119,7 @@ static func _loads(qty: int) -> int:
 
 # ------------------------------------------------------------------ Kaufen und Verkaufen
 ## Kauf durch ein Unternehmen ("C<n>") oder eine Stadt (Konto der Stadt, Towns.account_of). Ziel: Gebaeude-ID der Anlieferung.
-func buy(buyer: String, item: String, qty: int, dest: int, note: String = "", rail: bool = false) -> Dictionary:
+func buy(buyer: String, item: String, qty: int, dest: int, note: String = "", rail: bool = false, by_heli: bool = false) -> Dictionary:
 	if not enabled:
 		return {"ok": false, "msg": "Es gibt kein Großlager auf dieser Karte."}
 	if not GOODS.has(item):
@@ -136,14 +136,18 @@ func buy(buyer: String, item: String, qty: int, dest: int, note: String = "", ra
 	var amount := snappedf(unit * float(qty), 0.01)
 	var company := buyer.begins_with("C")
 	var by_rail: bool = rail and company and sim.trains != null and sim.trains.accepts_freight(sim.towns.of_building(dest))
+	by_heli = by_heli and company and not rail
 	if rail and not by_rail:
 		return {"ok": false, "msg": "Kein Güterzug zum Bahnhof deiner Stadt – ohne bahn kaufen (Abholung im Großlager)."}
+	if by_heli and not sim.material_heli.can_book_company(int(buyer.substr(1)), loc, dest, qty):
+		return {"ok": false, "msg": "Materialhubschrauber nicht verfügbar oder über %d Einheiten. Teile die Bestellung auf." % MaterialHeli.CAPACITY}
 	if company:
 		var c = sim.company(int(buyer.substr(1)))
 		if c == null or not c.is_active():
 			return {"ok": false, "msg": "Unternehmen kann nicht kaufen."}
-		if c.ledger.cash < amount:
-			return {"ok": false, "msg": "Nicht genug Bargeld: %s nötig." % Catalog.money(amount)}
+		var heli_fee: float = sim.material_heli.fee(loc, dest, qty) if by_heli else 0.0
+		if c.ledger.cash < amount + heli_fee:
+			return {"ok": false, "msg": "Nicht genug Bargeld: %s nötig (Ware und Transport)." % Catalog.money(amount + heli_fee)}
 		c.ledger.book("supplies", -amount, true, "Großlager: %d × %s" % [qty, item_name(item)], sim.game_min, ACCT)
 	else:
 		if float(sim.economy.accounts.get(buyer, 0.0)) < amount:
@@ -161,6 +165,10 @@ func buy(buyer: String, item: String, qty: int, dest: int, note: String = "", ra
 	stats.verkaeufe = int(stats.verkaeufe) + 1
 	if by_rail:
 		return _book_rail(d)
+	if by_heli:
+		var flight: Dictionary = sim.material_heli.queue_hub(int(buyer.substr(1)), d)
+		if bool(flight.get("ok", false)):
+			return {"ok": true, "msg": "Gekauft: %d × %s für %s. %s" % [qty, item_name(item), Catalog.money(amount), str(flight.msg)], "ref": id, "flug": flight.flug}
 	_issue(d, loc, dest, buyer if company else "")
 	sim.log_event("Großlager: %s kauft %d × %s für %s." % [_party_name(buyer), qty, item_name(item), Catalog.money(amount)], "info")
 	return {"ok": true, "msg": "Gekauft: %d × %s für %s (%s je Einheit). %s" % [qty, item_name(item), Catalog.money(amount), Catalog.money(unit),

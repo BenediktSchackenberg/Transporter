@@ -23,8 +23,9 @@ const SCHEMA := {
 		"auto_repair": "bool?", "reassign_blocked": "bool?", "darf_teile_kaufen": "bool?", "repair_budget": "number?"},
 		"desc": "Ziel und Befugnisse: prioritaet fristgerecht|kosten|auslastung; Fahrer einteilen, Reparaturen veranlassen, Aufgaben umverteilen, Ersatzteile kaufen; repair_budget = Geld für Routine. Investitionen/Sabotage nie."},
 	"request_progress_report": {"params": {"foreman_id": "string"}, "desc": "Sofortigen Bericht des Vorarbeiters anfordern."},
-	"hub_buy": {"params": {"item": "string", "qty": "int", "bahn": "bool?"},
-		"desc": "Ware im zentralen Großlager kaufen (Preise unter grosslager). Bezahlt sofort; abholen musst du mit eigenem Fahrzeug (exklusiver Auftrag zum eigenen Depot). bahn true: Wagenplatz im Güterzug bis zum Bahnhof deiner Stadt buchen (60 % der Lkw-Fracht), dort holst du ab – kurzer Weg statt Fahrt zum Großlager."},
+	"hub_buy": {"params": {"item": "string", "qty": "int", "helikopter": "bool?", "bahn": "bool?"},
+		"desc": "Ware im zentralen Großlager kaufen. In der Wildnis liefert dein Chinook-Materialhubschrauber standardmäßig sichtbar zum eigenen Hof (max. 800 je Flug, Frachtgebühr); helikopter=false bedeutet Selbstabholung mit LKW, bahn=true Güterzug."},
+	"call_material_heli": {"params": {"ref": "string"}, "desc": "Bereits gekaufte, noch am Großlager liegende Sendung H... mit deinem Materialhubschrauber abholen lassen. Jede KI hat einen eigenen Chinook und Landeplatz am Hauptlager."},
 	"hub_sell": {"params": {"item": "string", "qty": "int"},
 		"desc": "Ware aus deinem Depot an das Großlager verkaufen (Ankaufpreis). Du lieferst mit eigenem Fahrzeug, Zahlung bei Anlieferung."},
 	"buy_supplies": {"params": {"resource_id": "string", "amount": "number", "lieferung": "string?"},
@@ -202,7 +203,10 @@ func run(cid: int, name: String, a: Dictionary, on_site: bool) -> Dictionary:
 			if hc == null or hc.depots.is_empty():
 				return {"ok": false, "msg": "Ohne Depot gibt es keinen Lieferort."}
 			return sim.hub.buy("C%d" % cid, str(a.get("item", "")), ActionExecutor._i(a.get("qty", 0)), int(hc.depots[0]), "",
-				str(a.get("bahn", "false")).to_lower() in ["true", "1", "ja"])
+				str(a.get("bahn", "false")).to_lower() in ["true", "1", "ja"],
+				str(a.get("helikopter", "true" if sim.wildnis else "false")).to_lower() in ["true", "1", "ja"])
+		"call_material_heli":
+			return sim.material_heli.call_hub(cid, str(a.get("ref", "")))
 		"hub_sell":
 			return sim.hub.sell(cid, str(a.get("item", "")), ActionExecutor._i(a.get("qty", 0)))
 		"buy_supplies":

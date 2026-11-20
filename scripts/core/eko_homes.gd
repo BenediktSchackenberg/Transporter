@@ -4,7 +4,7 @@ extends RefCounted
 ## keine Angestellten hat".
 ##
 ## Baustellen: Wohnhaus (haus_bauen), Buergeramt (buergeramt_bauen; danach gibt es die Stadt und ihren Buergermeister), Strasse
-## (strasse_bauen, EkoSettle.plan_road). Ablauf: Material im Grosslager kaufen und mit dem eigenen LKW auf den Betriebshof holen ->
+## (strasse_bauen, EkoSettle.plan_road). Ablauf: Material im Grosslager kaufen und per Hubschrauber zum Betriebshof bringen ->
 ## sobald alles da ist, beginnt der Bau -> gearbeitet wird nur, wenn das Wesen selbst vor Ort arbeitet (Handlung Bauen) oder
 ## zugeteilte Mitarbeiter (bauleute) da sind. Haeuser wachsen sichtbar Block fuer Block, Strassen Feld fuer Feld.
 ## Fertige Wohnungen gehoeren der Firma (Miete ueber Housing, Verkauf mit sell_property).
@@ -181,6 +181,9 @@ func _plan_building(cid: int, typ: String, want: String, design_id: String = "")
 		cands = kept
 	var why := "kein freies Baugrundstück – mit strasse_bauen entstehen neue an der Straße"
 	for p in cands:
+		if not _parcel_dry(p):
+			why = "Grundstück %s enthält Wasser und darf nicht bebaut werden" % str(p.id)
+			continue
 		var chk := Planning.assess(p, probe)
 		if not chk.ok or not chk.questions.is_empty():
 			why = " ".join(chk.blocking + chk.questions)
@@ -217,9 +220,19 @@ func _plan_building(cid: int, typ: String, want: String, design_id: String = "")
 		sites[s.id] = s
 		var label: String = "Bürgeramt" if is_hall else str(design.get("label", Planning.DEFS[typ].label))
 		sim.log_event("%s plant %s auf %s." % [sim.company(cid).company_name, label, p.id], "info", cid)
-		return {"ok": true, "msg": "Baustelle %s: %s auf %s (%s)%s. Material: %s – kaufen (hub_buy), mit dem LKW holen (LKW {ziel: \"grosslager\"}), dann selbst bauen (Bauen {baustelle: \"%s\"})." % [
+		return {"ok": true, "msg": "Baustelle %s: %s auf %s (%s)%s. Material: %s – kaufen (hub_buy), per Materialhubschrauber liefern lassen, dann selbst bauen (Bauen {baustelle: \"%s\"})." % [
 			s.id, label, p.id, Catalog.money(float(p.price)), (", Bauantrag %s" % app) if app != "" else "", _need_text(s), s.id], "baustelle": s.id}
 	return {"ok": false, "msg": "Kein Bauplatz gefunden: %s." % why}
+
+
+func _parcel_dry(p: Dictionary) -> bool:
+	var C: CityData = _sim().city
+	for y in range(int(p.rect[1]), int(p.rect[1]) + int(p.rect[3])):
+		for x in range(int(p.rect[0]), int(p.rect[0]) + int(p.rect[2])):
+			var q := Vector2i(x, y)
+			if not C.inside(q) or C.g(q) == CityData.G.WATER:
+				return false
+	return true
 
 
 ## Strassenbaustelle (EkoSettle.plan_road): cells in Bau-Reihenfolge.
@@ -614,9 +627,9 @@ func site_text(cid: int, id: String) -> String:
 			var m := missing(s)
 			var wg := waiting_goods(cid)
 			var to_buy: Array = m.keys().filter(func(x): return int(wg.get(x, 0)) < int(m[x]))
-			if to_buy.is_empty():   # alles gekauft, liegt am Grosslager
-				return head + "alles Material ist gekauft und liegt am Großlager (%s) – NICHT nochmal kaufen, nur abholen: LKW {ziel: \"grosslager\"}." % ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x]))
-			return head + "es fehlt noch auf deinem Hof: %s – kaufen (hub_buy) nur: %s; Gekauftes liegt am Großlager, mit dem LKW holen." % [", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x])), ", ".join(to_buy)]
+			if to_buy.is_empty():
+				return head + "alles Material ist gekauft und unterwegs oder abholbereit (%s) – NICHT nochmal kaufen. Materialhubschrauber abwarten; alte LKW-Sendungen ggf. abholen." % ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x]))
+			return head + "es fehlt noch auf deinem Hof: %s – kaufen (hub_buy) nur: %s; der Materialhubschrauber liefert direkt zum Hof." % [", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x])), ", ".join(to_buy)]
 		"bau":
 			var who := "du arbeitest gerade hier" if owner_working(s) else ("Tagelöhner arbeiten hier" if not (s.get("helfer", {}) as Dictionary).is_empty() else "NIEMAND arbeitet")
 			return head + "Material vollständig, %d %% gebaut, %s. %s" % [int(100.0 * float(s.progress) / float(s.work)), who,
@@ -637,7 +650,7 @@ func purchase_note(cid: int, item: String, qty: int = 0) -> String:
 	for s in open:
 		if s.status == "material" and missing(s).has(item):
 			if qty > 0 and bought - qty >= int(missing(s)[item]):   # Partie 18.11.: Greta kaufte das Material fuer ihr Buergeramt dreimal
-				return " ACHTUNG: %d %s waren schon gekauft und liegen am Großlager – das war ein Doppelkauf. Nicht nochmal kaufen, sondern abholen: LKW {ziel: \"grosslager\"}." % [bought - qty, item]
+				return " ACHTUNG: %d %s waren schon gekauft – das war ein Doppelkauf. Materialhubschrauber abwarten oder alte LKW-Sendung abholen." % [bought - qty, item]
 			return ""
 	var idle: Array = open.filter(func(s): return s.status == "bau" and not owner_working(s) and (s.get("helfer", {}) as Dictionary).is_empty())
 	var tip := (" Stattdessen wartet %s (%s) mit vollständigem Material auf Arbeit: Bauen {baustelle: \"%s\"} oder Tagelöhner." % [idle[0].id, idle[0].typ, idle[0].id]) if not idle.is_empty() else ""
@@ -648,7 +661,7 @@ func purchase_note(cid: int, item: String, qty: int = 0) -> String:
 func waiting_goods(cid: int) -> Dictionary:
 	var out := {}
 	for d in _sim().hub.deals.values():
-		if str(d.kind) == "kauf" and str(d.party) == "C%d" % cid and str(d.status) == "abholbereit":
+		if str(d.kind) == "kauf" and str(d.party) == "C%d" % cid and str(d.status) in ["abholbereit", "helikopter"]:
 			out[str(d.item)] = int(out.get(str(d.item), 0)) + int(d.qty)
 	return out
 
@@ -661,7 +674,7 @@ func next_step(cid: int) -> String:
 	var k: int = sim.companies[cid].home_town
 	var open := open_sites(cid)
 	var wait := waiting_goods(cid)
-	var fetch := "Im Großlager liegt deine gekaufte Ware (%s) – selbst abholen: LKW {ziel: \"grosslager\"} (du fährst mit und lädst auf dem Hof ab)."
+	var fetch := "Gekaufte Ware (%s) ist noch unterwegs oder abholbereit. Materialhubschrauber abwarten; für ältere LKW-Sendungen call_material_heli {ref: H...} nutzen oder selbst abholen."
 	# 1) Buergeramt: erst damit gibt es Stadt, Buergermeister, Siedler und Stadtlager
 	if sim.wildnis and w.settle.founded(k) and not sim.town_ready(k) and not sites.values().any(func(s): return s.typ == "buergeramt" and int(s.cid) == cid and s.status != "abgelehnt"):
 		return "Zuerst das Bürgeramt – erst damit gibt es deine Stadt, einen Bürgermeister, Siedler und Lieferungen: Firma {aktion: {action: \"buergeramt_bauen\"}}."
@@ -698,7 +711,7 @@ func next_step(cid: int) -> String:
 			if m.is_empty():
 				continue   # Material eben angekommen – der Bau beginnt im naechsten Takt (18.11.: Index-Fehler)
 			# 19.11.: qwen3.5:9b kaufte die fuenf Materialien des Buergeramts nie einzeln – ein Schritt kauft alles Fehlende
-			return "Baustelle %s braucht Material (%s): alles auf einmal kaufen – Firma {aktion: {action: \"hub_buy\", baustelle: \"%s\"}} – dann mit dem LKW holen (LKW {ziel: \"grosslager\"})." % [
+			return "Baustelle %s braucht Material (%s): alles auf einmal kaufen – Firma {aktion: {action: \"hub_buy\", baustelle: \"%s\"}}. Der Materialhubschrauber bringt es zum Hof." % [
 				s.id, ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x])), s.id]
 	# 5) Strasse zum Grosslager, Gewerbe, Wohnraum. Der staedtische Anschluss ist bereits ein eigener Bauauftrag.
 	# Eine parallel empfohlene Firmenstrasse scheitert an dessen reservierter Trasse und lenkt vom ersten Haus ab.

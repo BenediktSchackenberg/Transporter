@@ -5,7 +5,7 @@ extends RefCounted
 ## und dessen Annahme (accept_trade); erst dann prueft und bucht die Engine die Transaktion.
 
 const OFFER_KINDS := ["sell_vehicle", "buy_vehicle", "transfer_contract", "payment", "cooperation",
-	"capacity_rental", "storage_share", "split_contract"]
+	"capacity_rental", "storage_share", "split_contract", "sell_material"]
 const MAX_ROUNDS := 3     # Angebot + hoechstens 2 Gegenangebote, dann Entscheidung oder Abbruch
 
 var sim
@@ -115,6 +115,7 @@ func create_offer(from: int, to: int, kind: String, p: Dictionary) -> Dictionary
 		"note": str(p.get("note", "")).left(160), "created": sim.game_min,
 		"expires": sim.game_min + Catalog.OFFER_EXPIRY_MIN, "strafe": maxf(0.0, float(p.get("strafe", 0.0))),
 		"site_id": int(p.get("site_id", -1)), "plaetze": int(p.get("plaetze", 0)), "menge": int(p.get("menge", 0)),
+			"item": str(p.get("item", "")),
 		"awaiting": to, "round": 1}
 	if kind != "transfer_contract" and o.price < 0.0:
 		return {"ok": false, "msg": "Preis darf nicht negativ sein."}
@@ -150,6 +151,8 @@ func describe(o: Dictionary) -> String:
 			return "überlässt %d Lagerplätze in Depot %d für %d h, Preis %s" % [o.plaetze, o.site_id, int(o.duration_hours), Catalog.money(o.price)]
 		"split_contract":
 			return "vergibt %d Einheiten von %s als Unterauftrag, zahlt %s bei Lieferung, Strafe bei Verfehlung %s" % [o.menge, o.contract_id, Catalog.money(o.price), Catalog.money(o.strafe)]
+		"sell_material":
+			return "verkauft %d × %s aus Depot %d für %s; der Käufer schickt seinen Materialhubschrauber" % [o.menge, o.item, o.site_id, Catalog.money(o.price)]
 	return o.kind
 
 
@@ -227,6 +230,15 @@ func _validate(o: Dictionary, final: bool) -> String:
 				return "%s erfüllt die Mindestreputation nicht." % b.company_name
 			if final and a.ledger.cash < o.price:
 				return "%s kann den Unterauftrag nicht bezahlen." % a.company_name
+		"sell_material":
+			if str(o.item) == "" or int(o.menge) <= 0 or int(o.menge) > MaterialHeli.CAPACITY:
+				return "Material und Menge müssen angegeben sein (max. %d je Flug)." % MaterialHeli.CAPACITY
+			if int(o.site_id) not in a.depots or sim.stock.available(str(o.item), "C%d" % a.id, int(o.site_id)) < int(o.menge):
+				return "%s hat nicht genug freie Ware im angegebenen Depot." % a.company_name
+			if b.depots.is_empty() or not sim.material_heli.can_book_company(b.id, int(o.site_id), int(b.depots[0]), int(o.menge)):
+				return "%s hat keinen nutzbaren Materialhubschrauber oder Zielhof." % b.company_name
+			if final and b.ledger.cash < float(o.price) + sim.material_heli.fee(int(o.site_id), int(b.depots[0]), int(o.menge)):
+				return "%s kann Ware und Materialflug nicht bezahlen." % b.company_name
 	return ""
 
 
@@ -385,6 +397,11 @@ func _execute(o: Dictionary) -> void:
 			_pay(b, a, o.price, "Auftragsübernahme " + k.id)
 		"payment":
 			_pay(a, b, o.price, "Zahlung")
+		"sell_material":
+			_pay(b, a, o.price, "Materialhandel %s" % o.item)
+			sim.stock.move(str(o.item), int(o.menge), "C%d" % a.id, int(o.site_id), "C%d" % b.id, int(o.site_id), "Materialkauf %s" % o.id, now)
+			sim.stock.reserve("peer:" + str(o.id), str(o.item), int(o.menge), "C%d" % b.id, int(o.site_id))
+			sim.material_heli.queue_peer(b.id, o)
 		"cooperation":
 			pacts[pair_key(a.id, b.id)] = now + o.duration_hours * 60.0
 			add_trust(a.id, b.id, 12.0)
