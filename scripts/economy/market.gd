@@ -158,6 +158,12 @@ func build_contract(src_id: int, dst_id: int, cargo: String, label: String, qmin
 	var slack := rng.randf_range(1.5, 2.0) if urgent else rng.randf_range(2.2, 3.4)
 	var travel_min := k.distance / 2.2 * Catalog.GAME_MIN_PER_SIM_SEC
 	k.deadline = now + travel_min * slack + 120.0   # inkl. Anfahrt und Laden
+	if sim.wildnis:
+		# Auf der grossen Karte steht anfangs nur ein langsamer Gelaende-Lkw je Firma.
+		# Die Frist muss auch seine Anfahrt aus der eigenen Stadt erlauben, sonst ist
+		# fast jeder Kundenauftrag schon bei Bekanntwerden praktisch unerfuellbar.
+		var starter_trip := Logistics.travel_minutes(float(k.distance) + 160.0, 1.2)
+		k.deadline = now + starter_trip * slack + 180.0
 	var base := 80.0 + k.distance * 3.2 * (1.0 + k.qty / 8.0) * float(info.value)
 	base *= saturation[sim.city.district_of(src.road)]
 	if urgent:
@@ -167,7 +173,7 @@ func build_contract(src_id: int, dst_id: int, cargo: String, label: String, qmin
 		base *= 1.15
 		k.min_rep = 55.0 if rng.randf() < 0.5 else 45.0
 	k.created = now
-	k.offer_until = now + rng.randf_range(90.0, 160.0)
+	k.offer_until = now + (rng.randf_range(360.0, 720.0) if sim.wildnis else rng.randf_range(90.0, 160.0))
 	var loyal: int = sim.loyal_company(src_id)
 	if loyal >= 0:
 		k.exclusive_for = loyal

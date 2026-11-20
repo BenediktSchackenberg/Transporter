@@ -8940,6 +8940,9 @@ func test_wildnis_found() -> void:
 	ok(E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister wacht auf")
 	s.market.refresh()
 	var market_sources := s.market.source_total
+	var wildnis_offer: Contract = s.market.build_contract(int(dep.id), int(city_depot.id), "pakete", "Testlieferung", 3, 3, s.game_min, 3, 1)
+	ok(wildnis_offer.offer_until - s.game_min >= 360.0 and wildnis_offer.deadline - s.game_min >= Logistics.travel_minutes(float(wildnis_offer.distance) + 160.0, 1.2) * 1.5 + 180.0,
+		"Wildnis-Kundenauftrag laesst Zeit fuer KI-Entscheidung und Anfahrt des langsamen Start-Lkw")
 	var loaded_city := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(market_sources > 0 and loaded_city.market.source_total == market_sources, "beim Laden werden neue Stadtgebäude wieder Absender bezahlter Fracht")
 	var goal_project := "P9876"
