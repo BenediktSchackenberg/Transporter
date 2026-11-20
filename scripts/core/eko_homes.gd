@@ -331,15 +331,16 @@ func tick(dt_min: float) -> void:
 					continue
 				var crew := crew_now(s)
 				if crew <= 0:
-					# Die KI hat den Bau bereits beschlossen und das Material beschafft. Bleibt das Bürgeramt dennoch liegen,
-					# organisiert die Firma einen sichtbaren Bautrupp; die Standort- und Bauentscheidung bleibt bei der KI.
-					if s.typ == "buergeramt" and sim.wildnis and not sim.town_ready(sim.company(int(s.cid)).home_town) \
+					# Nach Standortwahl, Genehmigung und Materialbeschaffung darf das erste Wohnhaus nicht wieder
+					# stillstehen: die Firma organisiert dann wie beim Bürgeramt einen sichtbaren Bautrupp.
+					var first_home := str(s.typ) in HOMES and not sites.values().any(func(other): return int(other.cid) == int(s.cid) and str(other.typ) in HOMES and str(other.status) == "fertig")
+					if sim.wildnis and ((s.typ == "buergeramt" and not sim.town_ready(sim.company(int(s.cid)).home_town)) or first_home) \
 							and not s.has("helfer") and sim.game_min - float(s.get("ready_min", sim.game_min)) >= HALL_HELPER_DELAY \
 							and sim.game_min >= float(s.get("helper_retry_min", 0.0)):
 						s["helper_retry_min"] = sim.game_min + HALL_HELPER_DELAY
 						var hired: Dictionary = hire_helpers(int(s.cid), {"baustelle": s.id, "anzahl": 2})
 						if bool(hired.get("ok", false)):
-							sim.log_event("%s schickt zwei Tagelöhner zum feststeckenden Bürgeramt %s." % [sim.company(int(s.cid)).company_name, s.id], "good", int(s.cid))
+							sim.log_event("%s schickt zwei Tagelöhner zur feststeckenden Baustelle %s." % [sim.company(int(s.cid)).company_name, s.id], "good", int(s.cid))
 					continue
 				if owner_working(s):
 					var b: Dictionary = w.beings[w.firm_being(int(s.cid))]
