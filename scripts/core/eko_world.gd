@@ -2506,6 +2506,8 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 					continue
 				var miss: Dictionary = homes.missing(st)
 				var waiting: Dictionary = homes.waiting_goods(cid)
+				if not miss.is_empty() and miss.keys().any(func(item): return int(waiting.get(item, 0)) < int(miss[item])):
+					return {"ok": false, "msg": "Baustelle %s (%s) braucht zuerst Material. Bestelle die Stückliste mit hub_buy {baustelle: \"%s\"}; die Bauleitung ruft nach kurzer Wartezeit auch selbst den Materialhubschrauber. Danach weitere Straßen planen." % [st.id, st.typ, st.id]}
 				if not miss.is_empty() and miss.keys().all(func(item): return int(waiting.get(item, 0)) >= int(miss[item])):
 					return {"ok": false, "msg": "Baustelle %s (%s) wartet auf bereits gekauftes Material. Materialhubschrauber abwarten oder alte LKW-Sendung mit call_material_heli nachfordern. Danach kannst du weitere Straßen planen." % [st.id, st.typ]}
 		return settle.plan_road(cid, a)

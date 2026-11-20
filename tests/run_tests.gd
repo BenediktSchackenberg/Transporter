@@ -9067,6 +9067,10 @@ func test_wildnis_found() -> void:
 		ok(not s.permits.queue().is_empty() and str(s.permits.queue()[0].id) == str(home_site.app), "erster Wohnhausantrag erhält Vorrang in der Bauverwaltung")
 		if str(home_site.status) == "genehmigung":
 			home_site.status = "material"   # isoliert den Materialkauf, der Bürgermeister wird separat getestet
+		home_site["material_since"] = s.game_min - EkoHomes.PROCURE_DELAY - 1.0
+		E.homes.tick(1.0)
+		ok(home_site.need.keys().all(func(item): return int(E.homes.waiting_goods(cid).get(item, 0)) >= int(E.homes.missing(home_site).get(item, 0))),
+			"Bauleitung bestellt fehlende Stückliste nach kurzer KI-Untätigkeit per Chinook")
 		var home_buy: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "baustelle": home_site.id}})
 		ok(home_buy.ok and int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("Materialhubschrauber"), "gekauftes Hausmaterial fliegt vor Straßenexperimenten zum Hof")
 		ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "kies", "qty": 500}}).ok, "sachfremder Großeinkauf wartet auf das erste Wohnhaus")

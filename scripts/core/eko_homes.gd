@@ -26,6 +26,7 @@ const HELPER_MAX := 4
 const HELPER_HIRE := 300.0      # Anwerbung und Anfahrt je Kopf
 const HELPER_WAGE := 150.0      # Lohn je Kopf und Spieltag
 const HALL_HELPER_DELAY := 180.0 # Bürgeramt: nach drei Spielstunden Stillstand fährt ein sichtbarer Bautrupp los
+const PROCURE_DELAY := 45.0     # Bauleitung besorgt feste Stückliste, wenn die KI sie noch nicht bestellt hat
 const MAX_SITES := 3
 const MAX_CREW := 6
 const NEAR := 6                 # so nah muss das Wesen an der Arbeitsstelle sein (Felder)
@@ -216,6 +217,7 @@ func _plan_building(cid: int, typ: String, want: String, design_id: String = "")
 			need[item] = ceili(float(need[item]) * float(design.get("cost_factor", 1.0)))
 		var s := {"id": "BS%d" % _next, "cid": cid, "typ": typ, "design": design_id, "floors": floors, "parcel": p.id, "app": app, "status": status,
 			"need": need, "progress": 0.0, "work": float(WORK_HOURS.get(typ, maxf(4.0, float(foot) * 0.25))) * float(design.get("cost_factor", 1.0)), "crew": [], "building": -1, "day": sim.game_min, "placed": 0}
+		s["material_since"] = sim.game_min if status == "material" else -1.0
 		_next += 1
 		sites[s.id] = s
 		var label: String = "Bürgeramt" if is_hall else str(design.get("label", Planning.DEFS[typ].label))
@@ -331,11 +333,17 @@ func tick(dt_min: float) -> void:
 				if not app.is_empty() and str(app.status) == "entschieden":
 					if str(app.result).begins_with("genehmigt"):
 						s.status = "material"
+						s["material_since"] = sim.game_min
 						sim.notify(int(s.cid), "Baustelle %s genehmigt – Material holen: %s." % [s.id, _need_text(s)])
 					else:
 						s.status = "abgelehnt"
 						sim.notify(int(s.cid), "Baustelle %s: Antrag abgelehnt (%s)." % [s.id, str(app.get("decision", "")).left(120)])
 			"material":
+				if sim.wildnis and sim.hub.enabled and not missing(s).is_empty() \
+						and sim.game_min >= float(s.get("material_since", s.day)) + PROCURE_DELAY \
+						and sim.game_min >= float(s.get("next_procure_min", 0.0)):
+					s["next_procure_min"] = sim.game_min + 90.0
+					_procure_by_office(s)
 				if missing(s).is_empty():
 					for item in s.need:
 						sim.stock.consume(item, int(s.need[item]), "C%d" % int(s.cid), _depot(int(s.cid)), "Baustelle %s" % s.id, sim.game_min)
@@ -371,6 +379,27 @@ func tick(dt_min: float) -> void:
 					_block_progress(s)
 				if float(s.progress) >= float(s.work):
 					_finish(s)
+
+
+## Standort, Entwurf und Budget setzt die KI; die Einkaufsliste ist dann reine
+## Bauleitungsroutine. Wartende Fluege und alte Abholauftraege zaehlen mit.
+func _procure_by_office(s: Dictionary) -> void:
+	var sim = _sim()
+	var cid := int(s.cid)
+	var missing_now: Dictionary = missing(s)
+	var waiting: Dictionary = waiting_goods(cid)
+	for deal in sim.hub.deals.values():
+		if str(deal.get("party", "")) == "C%d" % cid and str(deal.get("status", "")) == "abholbereit" and missing_now.has(str(deal.get("item", ""))):
+			sim.material_heli.call_hub(cid, str(deal.id))
+	for item in missing_now:
+		var qty := int(missing_now[item]) - int(waiting.get(item, 0))
+		var have: int = int(sim.hub.stock_of(str(item)))
+		qty = mini(qty, mini(MaterialHeli.CAPACITY, have / 2 if have >= 40 else have))
+		if qty <= 0:
+			continue
+		var bought: Dictionary = sim.hub.buy("C%d" % cid, str(item), qty, _depot(cid), "Bauleitung %s" % str(s.id), false, true)
+		if bool(bought.get("ok", false)):
+			sim.log_event("%s: Bauleitung bestellt %d × %s für %s per Materialhubschrauber." % [sim.company(cid).company_name, qty, item, s.id], "good", cid)
 
 
 func _road_progress(s: Dictionary) -> void:
