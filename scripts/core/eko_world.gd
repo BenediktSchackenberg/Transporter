@@ -114,6 +114,56 @@ func setup(simulation) -> void:
 	settle.setup(self)
 	changed.connect(func(): _block_tiles_n = -1)
 	sim.visit_completed.connect(_on_visit_completed)
+	sim.day_changed.connect(_economy_watch)
+
+## Rueckfallebene fuer lange Partien: der KI-Unternehmer erhaelt einen lokalen Betrieb,
+## wenn trotz Einwohnern und Arbeitslosen noch keiner entstanden ist. Modellentscheidungen
+## haben bis Tag 30 Vorrang; die Regel nutzt nur gepruefte, bezahlbare Standorte.
+func _economy_watch(day: int) -> void:
+	if day < 30 or not sim.wildnis or not auto_estates:
+		return
+	for c in sim.companies:
+		var cid: int = c.id
+		var name: String = firm_being(cid)
+		if name == "" or not c.is_active():
+			continue
+		var town: int = c.home_town
+		if not sim.town_ready(town):
+			continue
+		var owned: Array = sim.biz.of(cid).filter(func(b): return str(b.branch) != "transport")
+		if owned.is_empty() and sim.citizens.population_of(town) >= 20 and sim.citizens.unemployed_of(town) >= 8:
+			for branch in ["baeckerei", "moebelwerk", "muehle", "brauerei"]:
+				var spec: Dictionary = Businesses.branches().get(branch, {})
+				if c.ledger.cash < float(spec.get("ausstattung", 0.0)) + 20000.0 or not bool(sim.retail.counter_viable(branch).get("ok", false)):
+					continue
+				var sites: Array = sim.prod.site_hints(branch, 1, town)
+				if sites.is_empty():
+					continue
+				var site := str(sites[0].grundstueck)
+				var result: Dictionary = sim.biz.found(cid, branch, "KI-Wirtschaftsleitung: Arbeitsplätze für %s" % sim.towns.name_of(town), {"stadt": town, "grundstueck": site})
+				if bool(result.get("ok", false)):
+					_event(beings[name], "Wirtschaftsleitung gründet %s auf %s: %s" % [branch, site, str(result.msg).left(120)])
+					sim.log_event("KI-Wirtschaftsleitung %s gründet %s auf %s für %s (%d Arbeitslose)." % [c.company_name, spec.label, site, sim.towns.name_of(town), sim.citizens.unemployed_of(town)], "ai", cid)
+					break
+		# Ein fertiges Werk ohne Personal laeuft nicht. Die Wirtschaftsleitung besetzt es,
+		# wenn der Agent waehrend der gesamten Bauzeit niemanden zugeordnet hat.
+		for b in sim.biz.of(cid):
+			if str(b.branch) == "transport" or str(b.status) not in Businesses.RUNNING:
+				continue
+			if sim.biz.staff_of(str(b.id)).size() >= int(Businesses.branches().get(str(b.branch), {}).get("personal_min", 1)):
+				continue
+			var spare: Array = sim.personnel.employed(cid).filter(func(w): return str(w.role) != "owner" and str(w.business) == "")
+			var worker = spare[0] if not spare.is_empty() else null
+			if worker == null and c.ledger.cash >= 20000.0:
+				var applicants: Array = sim.personnel.available().filter(func(w): return str(w.role) == "worker" and float(w.hire_fee) <= c.ledger.cash - 20000.0)
+				if not applicants.is_empty():
+					worker = applicants[0]
+					sim.personnel.hire(cid, worker)
+			if worker != null:
+				var assigned: Dictionary = sim.biz.assign(cid, str(worker.id), str(b.id))
+				if bool(assigned.get("ok", false)):
+					_event(beings[name], "Wirtschaftsleitung besetzt %s mit %s." % [b.name, worker.name])
+					sim.log_event("KI-Wirtschaftsleitung %s besetzt %s mit %s." % [c.company_name, b.name, worker.name], "ai", cid)
 
 
 ## Ergebnis einer Firmen-Handlung, die erst vor Ort ausgefuehrt wurde, an das Wesen der Firma melden (vorher sah es nur "Figur geht zu ...").

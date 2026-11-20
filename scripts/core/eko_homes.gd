@@ -547,8 +547,9 @@ func business_hint(cid: int) -> String:
 			var free_staff: Array = sim.personnel.employed(cid).filter(func(w): return str(w.business) == "" and str(w.role) != "owner")
 			if not free_staff.is_empty():
 				return "Dein neuer Betrieb %s (%s) braucht Personal. Ordne %s zu: Firma {aktion: {action: \"assign_staff\", business_id: \"%s\", worker_id: \"%s\"}}." % [b.name, b.id, free_staff[0].name, b.id, free_staff[0].id]
-			if not sim.personnel.applicants.is_empty():
-				return "Dein neuer Betrieb %s (%s) braucht Personal. Stelle %s ein: Firma {aktion: {action: \"recruit_worker\", worker_id: \"%s\"}}; danach assign_staff mit business_id \"%s\"." % [b.name, b.id, sim.personnel.applicants[0].name, sim.personnel.applicants[0].id, b.id]
+			var applicants: Array = sim.personnel.available().filter(func(w): return str(w.role) == "worker" and float(w.hire_fee) <= sim.company(cid).ledger.cash)
+			if not applicants.is_empty():
+				return "Dein neuer Betrieb %s (%s) braucht Personal. Stelle %s ein: Firma {aktion: {action: \"recruit_worker\", worker_id: \"%s\"}}; danach assign_staff mit business_id \"%s\"." % [b.name, b.id, applicants[0].name, applicants[0].id, b.id]
 			return "Dein neuer Betrieb %s (%s) braucht Personal. Prüfe Bewerber und stelle jemanden ein; danach assign_staff." % [b.name, b.id]
 	if owned.any(func(b): return str(b.status) == "im_bau"):
 		return "Ein neuer Betrieb wird gebaut. Prüfe Baufortschritt und bereite Personal vor; danach weitere Gewerbe- und Industriebetriebe planen."
