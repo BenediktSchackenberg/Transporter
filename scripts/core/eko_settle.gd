@@ -209,15 +209,22 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 		return {"ok": false, "msg": "Für deine Basis (24 × 24 Felder) ist hier kein freier Platz – etwas versetzt versuchen."}
 	var ctr: Vector2i = w.estates.center_of(str(b.name))
 	var yard := -1
+	var yard_field := Rect2i()
 	for f in [1, 3, 5, 0, 2, 6, 8]:   # erst das obere Mittelfeld, sonst ein anderes freies Feld der Basis (Wasser/Huegel in der Basis)
 		var fr: Rect2i = w.estates.field_rect(str(b.name), f)
 		yard = _place("freight_shed", fr.position + Vector2i(1, 1), fr.end - Vector2i(2, 2), "%s (Betriebshof)" % c.company_name)
 		if yard >= 0:
+			yard_field = fr
 			break
 	if yard < 0:
 		return {"ok": false, "msg": "Der Betriebshof passt hier nicht – etwas versetzt versuchen."}
+	var arrival := int(sim.city.towns[k].get("start_plot", -1))
+	if arrival >= 0:
+		c.depots.erase(arrival)
+		sim.depot_owner.erase(arrival)
 	c.depots.push_front(yard)
 	sim.depot_owner[yard] = cid
+	sim.estate.grant_founded(cid, yard, yard_field, arrival)
 	# Partie 18.11.: Amira kaufte Kies vor der Gruendung – er ging an den Startplatz und fehlte am neuen Hof. Noch nicht geladene
 	# Grosslager-Kaeufe der Firma werden deshalb auf den neuen Hof umgeleitet.
 	for d in sim.hub.deals.values():

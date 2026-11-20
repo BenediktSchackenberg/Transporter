@@ -23,8 +23,21 @@ func setup(simulation: Simulation, city_view: CityView) -> void:
 
 
 func update_view(blink_on: bool) -> void:
+	for id in sim.estate.plots:
+		if not _plots.has(id):
+			var n := Node2D.new()
+			n.z_index = -9
+			add_child(n)
+			_plots[id] = {"node": n, "owner": -2}
 	for id in _plots:
 		var p: Dictionary = sim.estate.plots[id]
+		var arrival: bool = str(p.get("mode", "")) == "arrival"
+		_plots[id].node.visible = not arrival
+		if arrival:
+			if _yards.has(id):
+				_yards[id].node.queue_free()
+				_yards.erase(id)
+			continue
 		if _plots[id].owner != p.owner:
 			_draw_plot(id)
 		# Betriebsstoerung (Sabotage/Ereignis): blinkende Warnung ueber dem Hof
@@ -51,7 +64,8 @@ func update_view(blink_on: bool) -> void:
 			_add_fac(f)
 		_update_fac(f, blink_on)
 	for site in _plots:
-		_update_yard(site)
+		if str(sim.estate.plots[site].get("mode", "")) != "arrival":
+			_update_yard(site)
 
 
 ## Vorhandener Bestand und tatsaechliche Hofzonen. Keine dekorativ erfundenen Lieferungen.

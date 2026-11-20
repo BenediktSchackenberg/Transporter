@@ -282,11 +282,15 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 		c.home_town = towns.of_building(site)   # Region: je Ort genau ein Startunternehmer
 		c.ledger.public_acct = Towns.account_of(c.home_town)
 		c.depots.append(site)
-		depot_owner[site] = i
-		city.buildings[site].name = c.company_name + " (Betriebshof)"
+		if not wildnis:
+			depot_owner[site] = i
+			city.buildings[site].name = c.company_name + " (Betriebshof)"
 		companies.append(c)
 		economy.attach(c.ledger, "C%d" % i)
-		estate.grant_start(i, site)
+		if wildnis:
+			estate.mark_arrival(site)
+		else:
+			estate.grant_start(i, site)
 		action_results[i] = []
 		_fuel[i] = 0.0
 		# Startausstattung Spedition: 1 Kleintransporter (aus dem Startkapital gekauft = Investition), Personal siehe unten
@@ -1862,8 +1866,32 @@ static func from_dict(d: Dictionary) -> Simulation:
 	s.depot_owner.clear()
 	for site in d.depot_owner:
 		s.depot_owner[int(site)] = int(d.depot_owner[site])
+	if s.wildnis:
+		# Alte Spielstände hatten die Ankunftsplätze als dauerhafte Firmenhöfe gespeichert.
+		for c in s.companies:
+			var k: int = c.home_town
+			var arrival: int = int(s.city.towns[k].get("start_plot", -1))
+			if arrival < 0:
+				continue
+			s.estate.mark_arrival(arrival)
+			s.depot_owner.erase(arrival)
+			s.city.buildings[arrival].name = "Ankunftsplatz %s" % str(s.city.towns[k].name)
+			var founded_yard: int = int(s.settlements.get(str(k), {}).get("yard", -1))
+			if founded_yard < 0:
+				continue
+			c.depots.erase(arrival)
+			if not c.depots.has(founded_yard):
+				c.depots.push_front(founded_yard)
+			s.depot_owner[founded_yard] = c.id
+			var yard_building: Dictionary = s.city.building(founded_yard)
+			var yard_cell := Vector2i(int(yard_building.x), int(yard_building.y))
+			for f in 9:
+				var field: Rect2i = s.eko.estates.field_rect(str(c.player_name).left(24), f)
+				if field.has_point(yard_cell):
+					s.estate.grant_founded(c.id, founded_yard, field, arrival)
+					break
 	for c in s.companies:
-		if not c.depots.is_empty() and int(c.depots[0]) < s.city.buildings.size():
+		if not c.depots.is_empty() and int(c.depots[0]) < s.city.buildings.size() and (not s.wildnis or int(c.depots[0]) != int(s.city.towns[c.home_town].get("start_plot", -1))):
 			s.city.buildings[c.depots[0]].name = c.company_name + " (Betriebshof)"
 	if d.get("weather") is Dictionary:
 		s.wx.from_dict(d.weather)

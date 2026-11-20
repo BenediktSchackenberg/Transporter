@@ -101,7 +101,7 @@ func setup(simulation) -> void:
 
 
 func is_plot(site: int) -> bool:
-	return plots.has(site)
+	return plots.has(site) and str(plots[site].get("mode", "")) != "arrival"
 
 
 func plot_of(cid: int) -> Array:
@@ -112,6 +112,35 @@ func plot_of(cid: int) -> Array:
 func grant_start(cid: int, site: int) -> void:
 	plots[site].owner = cid
 	plots[site].mode = "start"
+	_refresh_company(cid)
+
+
+## Der Platz am Großlager ist nur eine Ankunftsfläche, kein Firmengrundstück.
+func mark_arrival(site: int) -> void:
+	if not plots.has(site):
+		return
+	var previous_owner: int = int(plots[site].owner)
+	plots[site].owner = -1
+	plots[site].mode = "arrival"
+	plots[site].rent = 0.0
+	auctions.erase(site)
+	plot_offers.erase(site)
+	_cache.clear()
+	if previous_owner >= 0:
+		_refresh_company(previous_owner)
+
+
+## Erst die Siedlungsgründung vergibt den Betriebshof am gewählten Stadtstandort.
+func grant_founded(cid: int, site: int, area: Rect2i, arrival: int = -1) -> void:
+	if arrival >= 0:
+		mark_arrival(arrival)
+	var b: Dictionary = sim.city.building(site)
+	var gate := Vector2i(clampi(b.road.x, area.position.x, area.end.x - 1),
+		clampi(b.road.y, area.position.y, area.end.y - 1))
+	plots[site] = {"id": site, "owner": cid, "mode": "start", "rent": 0.0,
+		"price": LAND_PRICE_PER_TILE * area.size.x * area.size.y, "parent": -1,
+		"x": area.position.x, "y": area.position.y, "w": area.size.x, "h": area.size.y,
+		"entrance": [gate.x, gate.y]}
 	_refresh_company(cid)
 
 
@@ -137,7 +166,7 @@ func _refresh_company(cid: int) -> void:
 	c.plot_office_level = hq
 	c.dispositions = done(cid, "disposition").size()
 	c.fuel_cap = 1000.0 + 3000.0 * done(cid, "tankstelle").size()
-	c.plot_count = plot_of(cid).filter(func(p): return int(p.parent) < 0).size()
+	c.plot_count = plot_of(cid).filter(func(p): return int(p.parent) < 0 and p.mode != "arrival").size()
 	_cache.clear()
 
 
@@ -561,7 +590,7 @@ func remove(cid: int, fid: String) -> Dictionary:
 
 func expand(cid: int, plot_id: int, mode: String) -> Dictionary:
 	var p: Dictionary = plots.get(plot_id, {})
-	if p.is_empty() or p.owner >= 0:
+	if p.is_empty() or p.owner >= 0 or str(p.mode) == "arrival":
 		return {"ok": false, "msg": "Grundstück %d ist nicht verfügbar." % plot_id}
 	if int(p.parent) >= 0 and plots[int(p.parent)].owner != cid:
 		return {"ok": false, "msg": "Erweiterungsfläche %d grenzt nicht an dein Grundstück." % plot_id}
@@ -664,6 +693,8 @@ func open_permits() -> Array:
 ## zurueckgeben (80 % des Preises).
 func start_auction(cid: int, plot_id: int) -> Dictionary:
 	var p: Dictionary = plots.get(plot_id, {})
+	if p.is_empty() or str(p.mode) == "arrival":
+		return {"ok": false, "msg": "Der Ankunftsplatz am Großlager ist kein Baugrundstück."}
 	if auctions.has(plot_id):
 		return bid(cid, plot_id, float(auctions[plot_id].best) * (1.0 + BID_STEP))
 	var c: Company = sim.company(cid)

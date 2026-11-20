@@ -8520,6 +8520,10 @@ func test_wildnis_start() -> void:
 		var dep: Dictionary = s.city.building(int(c.depots[0]))
 		ok(str(dep.name).begins_with("Ankunftsplatz") and s.nav.reachable(dep.road, s.nearest_building_of("dealer", dep.road).road) if s.nav.has_method("reachable") else true,
 			"%s steht am Ankunftsplatz" % c.company_name)
+		var arrival: int = int(c.depots[0])
+		ok(str(s.estate.plots[arrival].mode) == "arrival" and int(s.estate.plots[arrival].owner) < 0 and not s.depot_owner.has(arrival) and s.estate.plot_of(c.id).is_empty(),
+			"%s besitzt vor der Stadtgründung keinen Betriebshof am Großlager" % c.company_name)
+		ok(not s.estate.expand(c.id, arrival, "kaufen").ok, "Ankunftsplatz darf nicht gekauft werden")
 	var end_min := s.game_min + GameCalendar.days_to_min(2)
 	while s.game_min < end_min:
 		s.step(1.0)
@@ -8759,6 +8763,7 @@ func test_wildnis_found() -> void:
 	var B: Dictionary = E.beings[p0]
 	var cid := E.active_firm(B)
 	var k: int = s.companies[cid].home_town
+	var arrival: int = int(s.company(cid).depots[0])
 	var v := E.own_truck(cid)
 	ok(v != null and v.model == "gelaende_lkw" and s.companies[cid].fuel >= 1000.0, "Start mit vollem Gelände-LKW, den der Inhaber fährt")
 	ok(not E.settle.founded(k) and not E.estates.estates.has(p0) and float(B.geld) == 0.0, "vor der Gründung: kein Hof, keine Basis, kein Privatgeld")
@@ -8800,6 +8805,9 @@ func test_wildnis_found() -> void:
 		return
 	var dep: Dictionary = s.city.building(int(s.company(cid).depots[0]))
 	ok(str(dep.name).contains("Betriebshof") and E.estates.estates.has(p0) and E.estates.covers(Vector2i(int(dep.x), int(dep.y))), "Betriebshof steht in der Basis")
+	ok(not s.company(cid).depots.has(arrival) and not s.depot_owner.has(arrival) and int(s.estate.plots[arrival].owner) < 0 and str(s.estate.plots[arrival].mode) == "arrival", "Ankunftsplatz bleibt nach der Gründung neutral")
+	ok(int(s.estate.plots[int(dep.id)].owner) == cid and str(s.estate.plots[int(dep.id)].mode) == "start" and s.estate.plot_of(cid).size() == 1, "Firmengrundstück entsteht erst am gewählten Stadtstandort")
+	ok(s.companies.filter(func(other): return other.id != cid).all(func(other): return s.estate.plot_of(other.id).is_empty() and not s.depot_owner.has(int(other.depots[0]))), "andere KI besitzen am Großlager ebenfalls keinen Hof")
 	var hr: Array = s.city.hub.rect
 	var hub_area := Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3]))
 	ok(not hub_area.grow(16).intersects(Rect2i(int(dep.x), int(dep.y), int(dep.w), int(dep.h))), "KI-Betriebshof steht außerhalb des gemeinsamen Großlagers")
@@ -8886,6 +8894,14 @@ func test_wildnis_found() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.town_ready(k) and s2.city.buildings.size() == nb and int(s2.city.towns[k].town_hall) == int(s.city.towns[k].town_hall) and s2.eko.settle.founded(k),
 		"Siedlung mit Bürgeramt gespeichert und geladen")
+	ok(not s2.company(cid).depots.has(arrival) and not s2.depot_owner.has(arrival) and s2.estate.plot_of(cid).size() == 1 and s2.estate.is_plot(int(s2.company(cid).depots[0])), "nach dem Laden nur der neue Hof in der Stadt")
+	var legacy: Dictionary = JSON.parse_string(JSON.stringify(s.to_dict()))
+	legacy.estate.plots[str(arrival)].owner = cid
+	legacy.estate.plots[str(arrival)].mode = "start"
+	legacy.companies[cid].depots.append(arrival)
+	legacy.depot_owner[str(arrival)] = cid
+	var migrated := Simulation.from_dict(legacy)
+	ok(not migrated.company(cid).depots.has(arrival) and not migrated.depot_owner.has(arrival) and str(migrated.estate.plots[arrival].mode) == "arrival" and migrated.estate.plot_of(cid).size() == 1, "alter Spielstand: Hof am Großlager wird entfernt")
 	ok(int(s2.towns.get_t(k).town_hall) == int(s.city.towns[k].town_hall) and s2.towns.get_t(k).center == s.towns.get_t(k).center, "nach dem Laden kennt das Towns-Register Rathaus und Mitte")
 	# 19.11.: ohne Strasse zum Grosslager beschliesst das Bauamt den Anschluss selbst (Material bringt die Baufirma)
 	var link: Dictionary = s.eko.settle.road_link(k)
