@@ -15362,6 +15362,9 @@ func test_parcel_ids_and_districts() -> void:
 	Q.from_dict(saved)
 	for id in [a, b, c]:
 		ok(Q.items.has(id) and str(Q.items[id].rect) == str(P.items[id].rect), "%s: gleiche Fläche nach dem Laden" % id)
+	Q.touched["G999999"] = true   # Ein veralteter ID-Verweis darf das Speichern nicht abbrechen.
+	var resaved: Dictionary = Q.to_dict()
+	ok(not resaved.touched.has("G999999") and resaved.touched.has(a), "veraltete Grundstücks-ID wird beim Speichern übersprungen")
 	ok(str(Q.parcel(a).owner) == Towns.owner_of(1) and str(Q.parcel(a).state) == "im_bau", "Zustand und Eigentum bleiben beim richtigen Grundstück")
 	ok(str(Q.parcel(c).zone) == "gewerbe" and str(Q.at_cell(r1.position).id) == a, "Zellen zeigen auf die richtige Nummer")
 	# Viertel erschliessen: echtes Projekt mit Kosten, Umwidmung nach Plan

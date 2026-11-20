@@ -443,6 +443,7 @@ func _claim_id(id: String, rect: Array) -> void:
 	items[id] = a
 	if b.is_empty():
 		items.erase(other)
+		touched.erase(other)
 	else:
 		b.id = other
 		items[other] = b
@@ -503,6 +504,8 @@ func repair_runtime(plot_town: Dictionary, keep: Dictionary) -> int:
 func to_dict() -> Dictionary:
 	var out := {}
 	for id in touched:
+		if not items.has(id):
+			continue   # Ein beim ID-Abgleich entfallenes Grundstück darf den ganzen Spielstand nicht ungültig machen.
 		var p: Dictionary = items[id]
 		var d := {}
 		for k in DYNAMIC:
