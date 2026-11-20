@@ -742,6 +742,63 @@ class Agent:
             return TOOLS
         return TOOLS[:-len(COMPANY_TOOLS)]
 
+    def chat_json_tool(self, messages):
+        """Ollamas JSON-Modus umgeht den fehleranfaelligen nativen Tool-Parser lokaler Modelle."""
+        available = self.model_tools()
+        names = {tool["name"] for tool in available}
+        menu = []
+        for tool in available:
+            params = tool["parameters"]
+            fields = [key + ("" if key in params.get("required", []) else "?")
+                      for key in params.get("properties", {})]
+            purpose = ("Weltaktion mit type und data; z.B. LKW, Siedlung, Firma, Amt, MoveTo oder Rest"
+                       if tool["name"] == "act" else tool["description"][:150])
+            menu.append("%s(%s): %s" % (tool["name"], ", ".join(fields), purpose))
+        # Ohne deklarierte native Tools auch den bisherigen Verlauf als reinen Dialog senden.
+        plain = []
+        for message in messages:
+            role = message["role"]
+            if role == "tool":
+                plain.append({"role": "user", "content": "Ergebnis des letzten Werkzeugs: " + str(message.get("content", ""))})
+            elif message.get("tool_calls"):
+                calls = [{"name": c.get("function", {}).get("name", ""),
+                          "arguments": c.get("function", {}).get("arguments", {})} for c in message["tool_calls"]]
+                plain.append({"role": "assistant", "content": str(message.get("content", "")) +
+                              "\nAusgefuehrte Werkzeugaufrufe: " + json.dumps(calls, ensure_ascii=False)})
+            else:
+                plain.append({"role": role, "content": str(message.get("content", ""))})
+        schema = {"type": "object", "properties": {
+            "tool": {"type": "string", "enum": sorted(names)}, "arguments": {"type": "object"}},
+            "required": ["tool", "arguments"]}
+        plain.append({"role": "user", "content":
+                      "Waehle genau eine konkrete naechste Handlung aus dieser Werkzeugliste:\n" +
+                      "\n".join(menu) +
+                      "\nAntworte ausschliesslich als JSON nach diesem Schema: " + json.dumps(schema) +
+                      '. Beispiel: {"tool":"act","arguments":{"type":"LKW","data":{"ziel":[202,269]}}}. '
+                      "In arguments stehen nur die Werte der Felder des gewaehlten Werkzeugs; keine Feldnamenliste oder Beschreibung. "
+                      "Nutze aktuelle Kennungen und Koordinaten aus der Beobachtung."})
+        body = {"model": self.args.model, "messages": plain, "stream": False, "think": False,
+                "format": schema, "options": {"num_ctx": self.args.ctx, "temperature": 0.2}}
+        req = urllib.request.Request(self.args.ollama + "/api/chat", data=json.dumps(body).encode("utf-8"),
+                                     headers={"Content-Type": "application/json"})
+        weight = 1.0 if getattr(self.args, "rolle", "") == "buergermeister" else 2.0
+        with MODEL_GATE.slot(self.args.name, weight, self.urgency), urllib.request.urlopen(req, timeout=600) as r:
+            content = json.loads(r.read().decode("utf-8"))["message"].get("content", "")
+        try:
+            chosen = json.loads(content)
+        except (TypeError, ValueError) as e:
+            raise ModelGlitch("Ollama-JSON-Antwort ungueltig: %s" % str(e)) from e
+        name = chosen.get("tool") if isinstance(chosen, dict) else None
+        arguments = chosen.get("arguments") if isinstance(chosen, dict) else None
+        if name not in names or not isinstance(arguments, dict):
+            raise ModelGlitch("Ollama-JSON-Antwort ohne gueltiges Werkzeug: %s" % str(name)[:80])
+        parameters = next(t["parameters"] for t in available if t["name"] == name)
+        arguments = {key: value for key, value in arguments.items() if key in parameters.get("properties", {})}
+        required = parameters.get("required", [])
+        if any(key not in arguments for key in required):
+            raise ModelGlitch("Ollama-JSON-Antwort fuer %s ohne Pflichtparameter" % name)
+        return {"content": "", "tool_calls": [{"function": {"name": name, "arguments": arguments}}]}
+
     def chat(self, messages):
         if getattr(self.args, "anbieter", "ollama") == "ionos":
             return self.chat_openai(messages)
@@ -749,6 +806,12 @@ class Agent:
         # Verlauf sonst mit role=tool und Ollama liefert HTTP 500 ("No user query found in messages").
         if messages and messages[-1]["role"] == "tool":
             messages = messages + [{"role": "user", "content": "Nutze das letzte Werkzeugergebnis und handle mit dem nächsten sinnvollen Schritt."}]
+        if getattr(self, "_ollama_json_mode", False):
+            try:
+                return self.chat_json_tool(messages)
+            except ModelGlitch:
+                self._ollama_json_mode = False
+                raise
         think = self.args.think
         if "gpt-oss" in str(self.args.model):   # gpt-oss denkt immer; Stufe statt an/aus (low: schnell, --think: medium)
             think = "medium" if self.args.think is True else "low"
@@ -777,6 +840,17 @@ class Agent:
                 self.log.flush()
                 if fixed:   # Aufruf war bis auf Klammern/Kommas vollstaendig: ausfuehren statt neu rechnen (16.11.: 381 Fehler)
                     return fixed
+                if "invalid tool call arguments" in full:
+                    try:
+                        result = self.chat_json_tool(messages)
+                        self._ollama_json_mode = True
+                        self.log.write(time.strftime("%H:%M:%S ") + "Ollama: JSON-Werkzeugmodus nach fehlerhaftem nativen Aufruf aktiv\n")
+                        self.log.flush()
+                        return result
+                    except (ModelGlitch, urllib.error.HTTPError, urllib.error.URLError) as fallback_error:
+                        self.log.write(time.strftime("%H:%M:%S ") + "Ollama JSON-Werkzeugmodus fehlgeschlagen: %s\n" %
+                                       str(fallback_error)[:220])
+                        self.log.flush()
                 if "No user query found" in full:   # 19.11.: Qwen-27B-Vorlage verlangt eine user-Nachricht – gleicher Verlauf scheitert immer wieder
                     messages = messages + [{"role": "user", "content": "Weiter: wähle den nächsten Schritt."}]
         raise ModelGlitch("Ollama 500 nach 3 Versuchen: %s" % last)
