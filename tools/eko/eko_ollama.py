@@ -487,7 +487,9 @@ class Agent:
                          "einsetzen, Ware wirklich liefern, Zahlung und Kosten pruefen, dann gezielt in Personal, Fuhrpark "
                          "oder Betrieb investieren. Nach jeder Firmenhandlung pruefe Ergebnis und Folgezustand; "
                          "eine angenommene Aktion ist noch kein verdientes Geld. Bevor du baust oder plauderst, "
-                         "pruefe dringende Lieferungen und Liquiditaet. Vermeide wiederholte Beobachtungen ohne Entscheidung.")
+                         "pruefe dringende Lieferungen und Liquiditaet. Ein freier Lkw und ein bezahlter machbarer Kundenauftrag "
+                         "sollen eine echte Lieferung ergeben: nimm den Auftrag selbst an oder aktiviere die Regel-Disposition. "
+                         "Vermeide wiederholte Beobachtungen ohne Entscheidung.")
             lines.append("Nutze die direkten Werkzeuge company_plan, review_company_plan, dispatch_policy, accept_contract, buy_vehicle, "
                          "hire_worker, repair_vehicle und city_strategy. Krieg ist optional: Frieden, Handel und Kooperation koennen dauerhaft bestehen. "
                          "Bei Bedrohung mobilize_worker nutzen; bewaffnete Angriffe brauchen eine eigene Waffenschmiede, fertige Waffen und order_assault. "
@@ -495,6 +497,15 @@ class Agent:
                          "entscheidungsfolgen und dringlichkeit. Gib der Routine klare Grenzen und pruefe deinen Plan taeglich.")
             if getattr(self.args, "strategy", ""):
                 lines.append("Deine eigene Unternehmensstrategie: " + self.args.strategy[:400])
+        elif getattr(self.args, "rolle", "") == "buergermeister":
+            lines.append("Du leitest eine wachsende Stadt. Lies in observe mein_amt.naechster_ausbauschritt und naechste_schritte. "
+                         "Entscheide aktiv ueber Viertel, Strassen, Strom, Wasser, Abwasser, Wohnungen, Gewerbe und Stadtbild. "
+                         "Wenn ein Bauprojekt wartet, lies seinen konkreten Material- oder Bautrupp-Blocker und entscheide ueber "
+                         "einen anderen machbaren Ausbauschritt. Amt status dient nur zur Klaerung einer neuen Lage; wiederholtes "
+                         "Amt status und Rest ohne Zustandsaenderung sind keine Stadtentwicklung. Rest nur bei wirklichem Energiemangel. "
+                         "Ein fertiges, abgebrochenes oder nicht existentes Projekt ist kein aktuelles Ziel mehr. "
+                         "Alte Notizen, die eine Status-Schleife empfehlen, sind durch diese Regel ueberholt. "
+                         "Frieden, Handel und schoene Stadtviertel sind vollwertige strategische Entscheidungen.")
         return "\n".join(lines)
 
     def call_tool(self, name, a):
