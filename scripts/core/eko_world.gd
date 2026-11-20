@@ -2432,6 +2432,10 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 			if str(st.status) == "material":
 				material_need += int(homes.missing(st).get(item, 0))
 		var bought := int(homes.waiting_goods(cid).get(item, 0))
+		var first_home_done := homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) in EkoHomes.HOMES and str(st.status) == "fertig")
+		var first_home_waiting := open.any(func(st): return str(st.typ) in EkoHomes.HOMES)
+		if first_home_waiting and not first_home_done and material_need == 0 and homes.waiting_goods(cid).values().any(func(q): return int(q) > 0):
+			return {"ok": false, "msg": "Dein erstes Wohnhaus wartet auf die bereits gekauften Baustoffe. Hole sie zuerst ab: LKW {ziel: \"grosslager\"}. %s wird derzeit nicht für den Bau gebraucht." % item}
 		if material_need > 0 and bought >= material_need:
 			return {"ok": false, "msg": "%d %s für deine offenen Baustellen sind bereits am Großlager gekauft. Kein Doppelkauf – hole sie mit LKW {ziel: \"grosslager\"} ab." % [bought, item]}
 		var ready_halls: Array = open.filter(func(st): return st.typ == "buergeramt" and st.status == "bau" and st.need.has(item))

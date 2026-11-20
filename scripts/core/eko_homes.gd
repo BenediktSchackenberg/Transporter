@@ -60,6 +60,11 @@ func plan(cid: int, a: Dictionary) -> Dictionary:
 	var typ := str(a.get("typ", a.get("art", "einfamilienhaus"))).to_lower().replace(" ", "")
 	if typ not in HOMES:
 		return {"ok": false, "msg": "Wohnhaustyp unbekannt. Wähle einen Typ aus bauentwuerfe."}
+	var first_home_done := sites.values().any(func(s): return int(s.cid) == cid and str(s.typ) in HOMES and str(s.status) == "fertig")
+	if not first_home_done:
+		for s in open_sites(cid):
+			if str(s.typ) in HOMES:
+				return {"ok": false, "msg": "Dein erstes Wohnhaus %s ist schon geplant (%s). Schließe es zuerst ab: %s" % [s.id, s.status, next_step(cid)]}
 	var design_id := str(a.get("entwurf", ""))
 	if not BuildingDesigns.valid_for(design_id, typ):
 		return {"ok": false, "msg": "Entwurf %s passt nicht zu %s." % [design_id, typ]}

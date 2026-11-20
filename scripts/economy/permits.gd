@@ -172,14 +172,35 @@ func withdraw(app_id: String, applicant: String) -> Dictionary:
 ## Verwaltungskapazitaet: Bearbeitungspunkte je Tag aus den Rathaus-Beschaeftigten.
 func capacity() -> float:
 	var towns: int = sim.towns.count() if sim.towns != null and sim.towns.is_region() else 1
-	return maxf(1.0, sim.town_hall.permit_points()) * towns   # Region: jede Stadt hat ihre eigene Bauverwaltung
+	# Frisch gegruendete Wildnisstaedte haben noch kaum Rathauspersonal. Der erste Wohnbau darf
+	# dadurch nicht tagelang in der gemeinsamen Antragswarteschlange liegen bleiben.
+	var baseline := 3.0 if sim.wildnis else 1.0
+	return maxf(baseline, sim.town_hall.permit_points()) * towns   # Region: jede Stadt hat ihre eigene Bauverwaltung
 
 
 ## Warteschlange in Bearbeitungsreihenfolge (aeltester Antrag zuerst).
 func queue() -> Array:
 	var out: Array = apps.values().filter(func(a): return a.status in ["beantragt", "in_pruefung"])
-	out.sort_custom(func(a, b): return a.filed_day < b.filed_day or (a.filed_day == b.filed_day and a.id < b.id))
+	# Das erste Wohnhaus jeder jungen Stadt erhaelt Vorrang vor spaeteren Ausbauplaenen.
+	# Sonst steht eine neu gegruendete Stadt hinter der gesamten regionalen Warteschlange.
+	out.sort_custom(func(a, b):
+		var a_first := _first_home_application(a)
+		var b_first := _first_home_application(b)
+		if a_first != b_first:
+			return a_first
+		return a.filed_day < b.filed_day or (a.filed_day == b.filed_day and a.id < b.id))
 	return out
+
+
+func _first_home_application(a: Dictionary) -> bool:
+	if not sim.wildnis or sim.eko == null or not str(a.applicant).begins_with("C"):
+		return false
+	var cid := int(str(a.applicant).substr(1))
+	var sites: Array = sim.eko.homes.sites.values().filter(func(s): return int(s.cid) == cid and str(s.typ) in EkoHomes.HOMES)
+	if sites.is_empty() or sites.any(func(s): return str(s.status) == "fertig"):
+		return false
+	sites.sort_custom(func(x, y): return float(x.day) < float(y.day))
+	return str(sites[0].get("app", "")) == str(a.id)
 
 
 ## Voraussichtlicher Entscheidungstag eines Antrags in der Warteschlange.

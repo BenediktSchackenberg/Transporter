@@ -8986,10 +8986,13 @@ func test_wildnis_found() -> void:
 	ok(home_order.ok, "nach dem Bürgeramt kann die KI das erste Wohnhaus planen")
 	if home_order.ok:
 		var home_site: Dictionary = E.homes.sites[str(home_order.baustelle)]
+		ok(not E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}}).ok, "vor Fertigstellung kein zweites erstes Wohnhaus")
+		ok(not s.permits.queue().is_empty() and str(s.permits.queue()[0].id) == str(home_site.app), "erster Wohnhausantrag erhält Vorrang in der Bauverwaltung")
 		if str(home_site.status) == "genehmigung":
 			home_site.status = "material"   # isoliert den Materialkauf, der Bürgermeister wird separat getestet
 		var home_buy: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "baustelle": home_site.id}})
 		ok(home_buy.ok and int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("abholen"), "gekauftes Hausmaterial wird vor Straßenexperimenten abgeholt")
+		ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "kies", "qty": 500}}).ok, "sachfremder Großeinkauf wartet auf das erste Wohnhaus")
 		ok(not E.input(p0, "Firma", {"aktion": {"action": "strasse_bauen", "bis": [ctr.x + 4, ctr.y]}}).ok, "neue Straßenversuche warten, bis gekauftes Hausmaterial abgeholt ist")
 		ok(E.input(p0, "Firma", {"aktion": {"action": "ueberblick"}}).ok, "ueberblick liefert statt einer unbekannten Aktion die Firmenlage")
 		var one_item: String = str(home_site.need.keys()[0])

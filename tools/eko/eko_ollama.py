@@ -821,9 +821,10 @@ class Agent:
                     urgent = situation.get("dringlichkeit") or {}
                     reason = str(urgent.get("grund", "")) if isinstance(urgent, dict) else ""
                     self.observation_status(situation)
-                    # 19.11.: einmaliger Hinweis ging unter (Viktor baute Strassen statt seines Buergeramts) – alle 5 Minuten wiederholen
-                    if self.urgency >= 2 and (reason != getattr(self, "_last_urgent_reason", "") or time.monotonic() - getattr(self, "_urgent_said_at", 0.0) >= 300):
-                        messages.append({"role": "user", "content": "Dringendes Ereignis in der Welt: %s. Prüfe und handle jetzt." % reason})
+                    # Dringende Bau- und Lieferketten koennen mehrere Modellaufrufe dauern. Den aktuellen
+                    # naechsten Schritt regelmaessig wiederholen, damit alte Plaene ihn nicht verdraengen.
+                    if self.urgency >= 2 and (reason != getattr(self, "_last_urgent_reason", "") or time.monotonic() - getattr(self, "_urgent_said_at", 0.0) >= 45):
+                        messages.append({"role": "user", "content": "Aktuelle dringende Aufgabe: %s. Handle als naechstes an dieser Aufgabe; beginne kein neues Bauprojekt, solange das erste Wohnhaus wartet." % reason})
                         self._urgent_said_at = time.monotonic()
                     self._last_urgent_reason = reason
             started = time.monotonic()
