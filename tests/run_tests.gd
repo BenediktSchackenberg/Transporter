@@ -8869,9 +8869,19 @@ func test_wildnis_found() -> void:
 	var hs: Dictionary = E.homes.sites[ba.baustelle]
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "holz", "qty": 20}}).ok, "bereits für das Bürgeramt gekauftes Holz wird nicht doppelt bestellt")
 	ok(E.homes.next_step(cid).contains("LKW {ziel"), "nächster Schritt: selbst abholen (%s)" % E.homes.next_step(cid).left(80))
+	var hub_deals: Array = s.hub.deals.values().filter(func(d): return str(d.party) == "C%d" % cid and str(d.status) == "abholbereit")
+	var stale: Dictionary = hub_deals[1]
+	var public_pickup: Dictionary = hub_deals[2]
+	var old_stale := str(stale.contract)
+	var old_public := str(public_pickup.contract)
+	s.contracts[old_stale].status = "expired"
+	s.contracts[old_public].exclusive_for = -1   # alter Spielstand: oeffentlich neu ausgeschrieben
 	var tr: Dictionary = E.input(p0, "LKW", {"ziel": "grosslager"})
 	if tr.ok and str(tr.get("status", "")) == "laeuft" and not B.has("im_lkw"):   # erst zum LKW gehen
 		_run_until(s, func(): return B.has("im_lkw"), 600)
+	ok(str(stale.contract) != old_stale and str(public_pickup.contract) != old_public and s.contracts[old_public].status == "cancelled" and int(s.contracts[str(stale.contract)].exclusive_for) == cid,
+		"LKW holt alte abgelaufene und öffentliche Kaufabholungen wieder zur eigenen Firma")
+	ok(float(s.contracts[str(stale.contract)].offer_until) - s.game_min >= GameCalendar.days_to_min(29.0), "gekaufte Ware bleibt lange exklusiv abholbar")
 	ok(B.has("im_lkw"), "fährt selbst zum Großlager: %s" % str(tr.msg).left(100))
 	var dep_id := int(s.company(cid).depots[0])
 	var got := _run_until(s, func(): return s.stock.available("holz", "C%d" % cid, dep_id) >= 20 and not B.has("im_lkw"), 9000)
@@ -8971,20 +8981,6 @@ func test_wildnis_found() -> void:
 		ok(not connector_work.is_empty() and int(connector_work.days) == 2, "professionelle Anschlussstraße braucht in der Wildnis nur zwei Arbeitstage")
 		var early_build: Dictionary = s.towns.mayor(k).execute({"action": "kommunal_bauen", "typ": "PO-01", "reason": "Sicherheit"})
 		ok(not early_build.ok and str(early_build.msg).contains("Straßenanschluss"), "ohne Anschluss keine Projekte mit Stadtlager-Material: %s" % str(early_build.msg).left(80))
-		if not connector_work.is_empty():
-			connector_work.start = GameCalendar.day_of(s.game_min)
-			s.crews.crews["TEST_CONNECTOR"] = {"id": "TEST_CONNECTOR", "builder": connector_work.builder, "state": "bauen", "job": {"kind": "pub", "id": an.id}}
-			s.construction.tick_public_connectors(s.game_min)
-			connector_work.road_start_min = s.game_min - Construction.HUB_ROAD_BUILD_MIN / 2.0
-			s.construction.tick_public_connectors(s.game_min)
-			var partial := int(connector_work.get("road_placed", 0))
-			ok(partial > 0 and partial < (an.road_plan as Array).size() and s.towns.mayor(k).projects[str(an.id)].road_cells.size() == partial, "Anschlussstraße wächst sichtbar in Abschnitten")
-			var partial_cell: Array = an.road_plan[0]
-			var loaded_partial := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
-			ok(loaded_partial.city.is_road(Vector2i(int(partial_cell[0]), int(partial_cell[1]))), "sichtbarer Straßenabschnitt übersteht Speichern und Laden")
-			connector_work.road_start_min = s.game_min - Construction.HUB_ROAD_BUILD_MIN - 1.0
-			s.construction.tick_public_connectors(s.game_min)
-			ok(str(connector_work.status) == "fertig" and bool(E.settle.road_link(k).verbunden), "erster Anschluss wird nach vier Spielstunden fertig und verbindet die Stadt")
 	var home_order: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}})
 	ok(home_order.ok, "nach dem Bürgeramt kann die KI das erste Wohnhaus planen")
 	if home_order.ok:

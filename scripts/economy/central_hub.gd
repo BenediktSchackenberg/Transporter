@@ -262,6 +262,10 @@ func _issue(d: Dictionary, from_b: int, to_b: int, own_party: String) -> void:
 		var cid := int(own_party.substr(1))
 		k.payer = "firm:%d" % cid      # eigene Ware mit eigenem Fahrzeug: keine Verguetung (Simulation._deliver)
 		k.exclusive_for = cid
+		# Gekaufte Ware bleibt im Lager Eigentum der Firma. Ihre Abholung darf nicht nach vier Spieltagen
+		# vom Markt verschwinden, waehrend die KI noch Stadt und Zufahrt aufbaut.
+		k.offer_until = sim.game_min + GameCalendar.days_to_min(30.0)
+		k.deadline = sim.game_min + GameCalendar.days_to_min(60.0)
 		k.exclusive_until = k.deadline
 		sim.companies[cid].known[k.id] = true
 	else:
@@ -448,9 +452,27 @@ func _watch(_day: int) -> void:
 		var from := loc if d.kind == "kauf" else int(d.get("from", loc))
 		var to := int(d.dest) if d.kind == "kauf" else loc
 		var own := str(d.party) if str(d.party).begins_with("C") else ""
-		if own != "" and d.kind == "kauf":
-			own = ""   # Unternehmen hat nicht abgeholt: das Lager schreibt die Lieferung frei aus (Kaeufer zahlt nichts extra)
 		_issue(d, from, to, own)
+
+
+## Alte Spielstaende enthalten gekaufte Ware mit abgelaufenem oder oeffentlich neu ausgeschriebenem Auftrag.
+## Vor einer Fahrt des Inhabers solche unzugeteilten Abholungen wieder exklusiv anbieten, ohne Ware neu zu kaufen.
+func reclaim_pickups(cid: int) -> int:
+	var restored := 0
+	var party := "C%d" % cid
+	for d in deals.values():
+		if str(d.kind) != "kauf" or str(d.party) != party or str(d.status) != "abholbereit":
+			continue
+		var k: Contract = sim.contracts.get(str(d.contract))
+		if k != null and k.status in ["accepted", "assigned", "loading", "in_transit", "delivered"]:
+			continue   # ein fremder oder eigener LKW liefert bereits
+		if k != null and k.status == "open" and int(k.exclusive_for) == cid:
+			continue
+		if k != null and k.status == "open":
+			k.status = "cancelled"   # der alte oeffentliche Auftrag darf nicht doppelt angenommen werden
+		_issue(d, loc, int(d.dest), party)
+		restored += 1
+	return restored
 
 
 func _shortage(item: String, missing: int) -> void:

@@ -968,6 +968,7 @@ func _truck(b: Dictionary, data: Dictionary) -> Dictionary:
 		b["im_lkw"] = v.id
 		return {"ok": true, "status": "laeuft", "msg": "Du fährst zu deinem Betriebshof."}
 	# Grosslager: gekaufte Ware abholen (eigene Abholauftraege), tanken
+	sim.hub.reclaim_pickups(cid)
 	var taken: Array = []
 	for k in sim.contracts.values():
 		if k.status == "open" and str(k.order_ref).begins_with("hub:") and int(k.exclusive_for) == cid:
