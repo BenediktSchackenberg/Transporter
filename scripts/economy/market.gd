@@ -180,6 +180,16 @@ func build_contract(src_id: int, dst_id: int, cargo: String, label: String, qmin
 		k.exclusive_until = now + 60.0
 		base *= 1.1
 		sim.companies[loyal].known[k.id] = true   # Stammkunden melden sich direkt
+	elif sim.wildnis:
+		# Kunden aus der Nachbarschaft rufen ihre lokale Firma auch ohne Internet an.
+		# Fuer entfernte Auftraege bleiben Jobboerse und Bueroausbau relevant.
+		var source_town: int = sim.city.town_of_building(src_id)
+		for c in sim.companies:
+			if not c.is_active() or int(c.home_town) != source_town or c.depots.is_empty():
+				continue
+			var home: Vector2i = sim.depot_road(c.id)
+			if absi(home.x - src.road.x) + absi(home.y - src.road.y) <= 80:
+				c.known[k.id] = true
 	k.reward = roundf(base / 10.0) * 10.0
 	sim.contracts[k.id] = k
 	return k
