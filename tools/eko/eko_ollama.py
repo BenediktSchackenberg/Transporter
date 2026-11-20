@@ -509,6 +509,10 @@ class Agent:
                          "Bei Bedrohung mobilize_worker nutzen; bewaffnete Angriffe brauchen eine eigene Waffenschmiede, fertige Waffen und order_assault. "
                          "Die Firmenbeobachtung zeigt transportchancen mit geschaetztem Deckungsbeitrag, "
                          "entscheidungsfolgen und dringlichkeit. Gib der Routine klare Grenzen und pruefe deinen Plan taeglich.")
+            lines.append("Wenn observe.meine_firma.wirtschaftsaufbau einen konkreten Standort und found_business nennt, "
+                         "gruende dort nach dringenden Lieferungen einen Betrieb. Pruefe danach Baufortschritt, stelle "
+                         "Personal ein und ordne es dem Betrieb zu. Bei Arbeitslosen ohne offene Stellen hat ein neuer "
+                         "Betrieb Vorrang vor einem weiteren Wohnhaus.")
             if getattr(self.args, "strategy", ""):
                 lines.append("Deine eigene Unternehmensstrategie: " + self.args.strategy[:400])
         elif getattr(self.args, "rolle", "") == "buergermeister":
