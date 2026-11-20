@@ -8840,11 +8840,18 @@ func test_wildnis_found() -> void:
 		s.stock.add(item, int(hs.need[item]), "C%d" % cid, dep_id, "Test")
 	E.homes.tick(1.0)
 	ok(hs.status == "bau", "Material da: Bau kann beginnen")
+	ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "baustelle": hs.id}}).ok, "baubereite Baustelle kauft Material nicht erneut")
+	ok(not E.input(p0, "Firma", {"aktion": {"action": "hub_buy", "item": "holz", "qty": 20}}).ok, "direkter Doppelkauf für Bürgeramt wird abgewiesen")
+	ok(int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("niemand baut"), "Bürgeramt ohne Bauarbeiter ist dringend")
 	E.homes.tick(120.0)
 	ok(float(hs.progress) == 0.0, "ohne das Wesen wird nicht gebaut")
+	hs.ready_min = s.game_min - EkoHomes.HALL_HELPER_DELAY - 1.0
+	E.homes.tick(1.0)
+	ok(hs.has("helfer") and s.fleet.vehicles.any(func(x): return x.kind == "helfer" and str(x.baustelle) == hs.id), "nach Stillstand fährt ein sichtbarer Bautrupp zum Bürgeramt")
 	var wb: Dictionary = E.input(p0, "Bauen", {"baustelle": hs.id})
 	ok(wb.ok and str(B.get("baut", "")) == hs.id, "Bauen: %s" % str(wb.msg).left(80))
 	B.mover.pos = s.city.tile_center(E.homes.work_cell(hs))
+	ok(E.homes.next_step(cid).contains("Bleib dort") and not E.homes.next_step(cid).contains("Großlager"), "laufender Bauauftrag bleibt vor weiteren Einkäufen")
 	var nb0 := E.blocks.size()
 	E.homes.tick(60.0)   # 18.11.: Buergeramt braucht nur noch 5 Spielstunden – 600 min waeren schon fertig
 	ok(float(hs.progress) > 0.0 and E.blocks.size() > nb0, "das Wesen baut, Rohbau wächst Block für Block (%d Blöcke)" % (E.blocks.size() - nb0))

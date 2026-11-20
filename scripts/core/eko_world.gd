@@ -761,6 +761,8 @@ func urgency(b: Dictionary) -> Dictionary:
 					return {"prioritaet": 2, "grund": "Bürgeramt %s wartet auf Material: alles kaufen – Firma {aktion: {action: \"hub_buy\", baustelle: \"%s\"}}" % [st.id, st.id]}
 				if not miss.is_empty():
 					return {"prioritaet": 2, "grund": "Material für Bürgeramt %s ist gekauft – abholen: LKW {ziel: \"grosslager\"}" % st.id}
+			if int(st.cid) == cid and str(st.typ) == "buergeramt" and str(st.status) == "bau" and str(b.get("baut", "")) != str(st.id) and not homes.owner_working(st) and (st.get("helfer", {}) as Dictionary).is_empty():
+				return {"prioritaet": 2, "grund": "Bürgeramt %s hat alles Material, aber niemand baut: Bauen {baustelle: \"%s\"} oder Firma {aktion: {action: \"tageloehner\", baustelle: \"%s\", anzahl: 2}}. Keine weiteren Baustoffe kaufen." % [st.id, st.id, st.id]}
 	for k in sim.contracts.values():
 		if k.owner != cid or k.status not in ["accepted", "assigned", "loading", "in_transit"]:
 			continue
@@ -1053,6 +1055,9 @@ func _work(b: Dictionary, data: Dictionary) -> Dictionary:
 	b["baut"] = str(s.id)
 	var target := homes.work_cell(s)
 	var p: Array[Vector2i] = sim.nav.walk_path(tile_of(b), target)
+	if p.is_empty() and maxi(absi(tile_of(b).x - target.x), absi(tile_of(b).y - target.y)) > EkoHomes.NEAR:
+		b.erase("baut")
+		return {"ok": false, "msg": "Du erreichst Baustelle %s zu Fuß nicht. Setze Tagelöhner ein: Firma {aktion: {action: \"tageloehner\", baustelle: \"%s\", anzahl: 2}}." % [s.id, s.id]}
 	if not p.is_empty():
 		(b.mover as Mover).set_path(p)
 	return {"ok": true, "status": "laeuft", "msg": "Du gehst zur Baustelle %s (%s) und arbeitest dort, bis du etwas anderes tust. Bauen kostet Akku." % [s.id, s.typ]}
@@ -2385,6 +2390,13 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 		b.geld = float(b.get("geld", 0.0)) + want
 		_event(b, "entnimmt %s aus %s" % [Catalog.money(want), c.company_name])
 		return {"ok": true, "msg": "%s privat entnommen. Du hast jetzt %s, die Firma %s." % [Catalog.money(want), Catalog.money(float(b.geld)), Catalog.money(c.ledger.cash)]}
+	if sim.wildnis and str(a.action) == "hub_buy" and not a.has("baustelle"):
+		var item := str(a.get("item", ""))
+		var open: Array = homes.open_sites(cid)
+		var ready_halls: Array = open.filter(func(st): return st.typ == "buergeramt" and st.status == "bau" and st.need.has(item))
+		var other_need: bool = open.any(func(st): return st.status == "material" and homes.missing(st).has(item))
+		if not ready_halls.is_empty() and not other_need:
+			return {"ok": false, "msg": "Bürgeramt %s hat %s bereits verbaut. Kein Doppelkauf: fahre zur Baustelle und arbeite mit Bauen {baustelle: \"%s\"}, oder hole Tagelöhner." % [ready_halls[0].id, item, ready_halls[0].id]}
 	# Wie eine Modellentscheidung behandeln: verkauftes Fahrzeugangebot durch gleichwertiges ersetzen, verschwundenen Auftrag ersetzen usw.
 	# (Partie 16.11.: Bodo scheiterte an "Angebot F12 ist bereits verkauft", weil das Wesen erst nach einigen Sekunden Denken kaufte.)
 	sim.executor.eko_call = true
@@ -2401,6 +2413,9 @@ func _buy_for_site(b: Dictionary, cid: int, sid: String) -> Dictionary:
 	var st: Dictionary = homes.sites[sid]
 	if int(st.cid) != cid:
 		return {"ok": false, "msg": "Baustelle %s gehört dir nicht." % sid}
+	if str(st.status) != "material":
+		return {"ok": false, "msg": "Baustelle %s ist %s; ihr Material wurde bereits verbaut oder sie wartet auf Genehmigung. Keine weiteren Baustoffe kaufen. %s" % [
+			sid, st.status, homes.site_text(cid, sid)]}
 	var miss: Dictionary = homes.missing(st)
 	var waiting: Dictionary = homes.waiting_goods(cid)
 	var parts: Array = []

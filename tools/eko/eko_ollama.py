@@ -659,6 +659,10 @@ class Agent:
     def chat(self, messages):
         if getattr(self.args, "anbieter", "ollama") == "ionos":
             return self.chat_openai(messages)
+        # Qwen3.8 verlangt in seiner Ollama-Vorlage eine aktuelle Nutzerfrage. Nach einem Werkzeugergebnis endet der
+        # Verlauf sonst mit role=tool und Ollama liefert HTTP 500 ("No user query found in messages").
+        if messages and messages[-1]["role"] == "tool":
+            messages = messages + [{"role": "user", "content": "Nutze das letzte Werkzeugergebnis und handle mit dem nächsten sinnvollen Schritt."}]
         think = self.args.think
         if "gpt-oss" in str(self.args.model):   # gpt-oss denkt immer; Stufe statt an/aus (low: schnell, --think: medium)
             think = "medium" if self.args.think is True else "low"

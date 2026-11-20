@@ -25,6 +25,7 @@ const ROAD_HOURS_PER_CELL := 0.1
 const HELPER_MAX := 4
 const HELPER_HIRE := 300.0      # Anwerbung und Anfahrt je Kopf
 const HELPER_WAGE := 150.0      # Lohn je Kopf und Spieltag
+const HALL_HELPER_DELAY := 180.0 # Bürgeramt: nach drei Spielstunden Stillstand fährt ein sichtbarer Bautrupp los
 const MAX_SITES := 3
 const MAX_CREW := 6
 const NEAR := 6                 # so nah muss das Wesen an der Arbeitsstelle sein (Felder)
@@ -315,6 +316,7 @@ func tick(dt_min: float) -> void:
 					for item in s.need:
 						sim.stock.consume(item, int(s.need[item]), "C%d" % int(s.cid), _depot(int(s.cid)), "Baustelle %s" % s.id, sim.game_min)
 					s.status = "bau"
+					s["ready_min"] = sim.game_min
 					if s.typ != "strasse":
 						sim.parcels.mark(str(s.parcel), "im_bau", str(s.app))
 					sim.log_event("%s: Baustelle %s – Material da, es kann gebaut werden." % [sim.company(int(s.cid)).company_name, s.id], "info", int(s.cid))
@@ -324,6 +326,15 @@ func tick(dt_min: float) -> void:
 					continue
 				var crew := crew_now(s)
 				if crew <= 0:
+					# Die KI hat den Bau bereits beschlossen und das Material beschafft. Bleibt das Bürgeramt dennoch liegen,
+					# organisiert die Firma einen sichtbaren Bautrupp; die Standort- und Bauentscheidung bleibt bei der KI.
+					if s.typ == "buergeramt" and sim.wildnis and not sim.town_ready(sim.company(int(s.cid)).home_town) \
+							and not s.has("helfer") and sim.game_min - float(s.get("ready_min", sim.game_min)) >= HALL_HELPER_DELAY \
+							and sim.game_min >= float(s.get("helper_retry_min", 0.0)):
+						s["helper_retry_min"] = sim.game_min + HALL_HELPER_DELAY
+						var hired: Dictionary = hire_helpers(int(s.cid), {"baustelle": s.id, "anzahl": 2})
+						if bool(hired.get("ok", false)):
+							sim.log_event("%s schickt zwei Tagelöhner zum feststeckenden Bürgeramt %s." % [sim.company(int(s.cid)).company_name, s.id], "good", int(s.cid))
 					continue
 				if owner_working(s):
 					var b: Dictionary = w.beings[w.firm_being(int(s.cid))]
@@ -613,6 +624,13 @@ func next_step(cid: int) -> String:
 	# 1) Buergeramt: erst damit gibt es Stadt, Buergermeister, Siedler und Stadtlager
 	if sim.wildnis and w.settle.founded(k) and not sim.town_ready(k) and not sites.values().any(func(s): return s.typ == "buergeramt" and int(s.cid) == cid and s.status != "abgelehnt"):
 		return "Zuerst das Bürgeramt – erst damit gibt es deine Stadt, einen Bürgermeister, Siedler und Lieferungen: Firma {aktion: {action: \"buergeramt_bauen\"}}."
+	# Ein bereits gewählter Bauauftrag bleibt vorrangig, bis er fertig ist. Sonst schickte die KI den Inhaber mitten im Rohbau
+	# erneut zum Großlager und die Baustelle blieb bei 0 % stehen.
+	var founder: String = w.firm_being(cid)
+	var building: String = str(w.beings.get(founder, {}).get("baut", "")) if founder != "" else ""
+	for s in open:
+		if s.status == "bau" and str(s.id) == building:
+			return "Du baust an Baustelle %s (%s, %d %%). Bleib dort und lass die Arbeit weiterlaufen; warte bis zur Ankunft oder 20 Sekunden. Kaufe dafür kein weiteres Material und fahre nicht weg." % [s.id, s.typ, int(100.0 * float(s.progress) / float(s.work))]
 	# 2) stillstehende Baustelle (Buergeramt zuerst)
 	var idle: Array = open.filter(func(s): return s.status == "bau" and not owner_working(s) and (s.get("helfer", {}) as Dictionary).is_empty())
 	idle.sort_custom(func(a, b): return a.typ == "buergeramt" and b.typ != "buergeramt")
@@ -667,6 +685,8 @@ func from_dict(d: Dictionary) -> void:
 	sites = d.get("sites", {})
 	_next = int(d.get("next", 1))
 	for s in sites.values():
+		if str(s.status) == "bau" and not s.has("ready_min"):
+			s["ready_min"] = _sim().game_min
 		for item in s.need:
 			s.need[item] = int(s.need[item])
 		s["placed"] = int(s.get("placed", 0))
