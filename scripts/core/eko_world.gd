@@ -864,11 +864,15 @@ func next_steps(b: Dictionary) -> Array:
 				urgent_step = str(out.back())
 	var cid := active_firm(b)
 	if int(b.get("amt", -1)) >= 0:
-		var district: Dictionary = sim.town_plan.next_district(int(b.amt), sim.housing.planning_aids().get("bedarf", 0) > 0)
-		if district.has("aktion"):
-			civic_step = "Stadt jetzt weiterbauen: %s Amt {aktion: %s}." % [str(district.text), JSON.stringify(district.aktion)]
-		elif district.has("warten"):
-			civic_step = "Stadtprojekt %s läuft. Prüfe Material und Bautrupp; plane in der Zwischenzeit Anlagen, Grün und Wohnen." % str(district.warten)
+		var depot: CityDepot = sim.towns.depot(int(b.amt))
+		if depot.backlog_units() > maxi(100, depot.dock_capacity() * 2) and depot.roster().size() < 3:
+			civic_step = "Im Stadtlager warten %d Baustoffe auf Prüfung, nur %d Lagerkräfte arbeiten dort. Entscheide über eine weitere Stelle: Amt {aktion: {action: \"expand_depot\", kind: \"staff\", reason: \"Baustoffe für Stadtprojekte schneller einlagern\"}}." % [depot.backlog_units(), depot.roster().size()]
+		else:
+			var district: Dictionary = sim.town_plan.next_district(int(b.amt), sim.housing.planning_aids().get("bedarf", 0) > 0)
+			if district.has("aktion"):
+				civic_step = "Stadt jetzt weiterbauen: %s Amt {aktion: %s}." % [str(district.text), JSON.stringify(district.aktion)]
+			elif district.has("warten"):
+				civic_step = "Stadtprojekt %s läuft. Prüfe Material und Bautrupp; plane in der Zwischenzeit Anlagen, Grün und Wohnen." % str(district.warten)
 	var offen: Dictionary = b.get("offen", {})
 	if not offen.is_empty():
 		if float(sim.game_min) - float(offen.min) > GameCalendar.days_to_min(1):
