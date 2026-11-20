@@ -64,6 +64,23 @@ class JsonToolFallbackTest(unittest.TestCase):
             result = agent.chat_json_tool([{"role": "user", "content": "Beobachte"}])
         self.assertEqual(result["tool_calls"][0]["function"]["arguments"], {})
 
+    def test_repeated_observation_requires_next_step(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
+                                     ctx=16384, name="Viktor")
+        agent.urgency = 0
+        agent._observe_streak = 2
+        requests = []
+
+        def urlopen(request, timeout):
+            requests.append(json.loads(request.data))
+            return Response({"message": {"content": '{"tool":"wait","arguments":{"seconds":10}}'}})
+
+        with patch.object(eko_ollama.urllib.request, "urlopen", side_effect=urlopen):
+            result = agent.chat_json_tool([{"role": "user", "content": "Lage ist bekannt"}])
+        self.assertNotIn("observe", requests[0]["format"]["properties"]["tool"]["enum"])
+        self.assertEqual(result["tool_calls"][0]["function"]["name"], "wait")
+
 
 if __name__ == "__main__":
     unittest.main()

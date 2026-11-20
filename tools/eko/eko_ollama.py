@@ -745,6 +745,9 @@ class Agent:
     def chat_json_tool(self, messages):
         """Ollamas JSON-Modus umgeht den fehleranfaelligen nativen Tool-Parser lokaler Modelle."""
         available = self.model_tools()
+        observed_enough = getattr(self, "_observe_streak", 0) >= 2
+        if observed_enough:
+            available = [tool for tool in available if tool["name"] not in ("observe", "list_files", "read_file")]
         names = {tool["name"] for tool in available}
         menu = []
         for tool in available:
@@ -771,6 +774,8 @@ class Agent:
             "tool": {"type": "string", "enum": sorted(names)}, "arguments": {"type": "object"}},
             "required": ["tool", "arguments"]}
         plain.append({"role": "user", "content":
+                      ("Du hast die Lage bereits zweimal hintereinander beobachtet. Nutze die letzte Beobachtung "
+                       "und waehle jetzt eine Weltaktion oder einen sinnvollen Warteschritt.\n" if observed_enough else "") +
                       "Waehle genau eine konkrete naechste Handlung aus dieser Werkzeugliste:\n" +
                       "\n".join(menu) +
                       "\nAntworte ausschliesslich als JSON nach diesem Schema: " + json.dumps(schema) +
@@ -1052,6 +1057,10 @@ class Agent:
                         a = {}
                 self.status("handelt", tool=fn["name"], waiting_on="")
                 res = self.call_tool(fn["name"], a)
+                if fn["name"] == "observe" or (fn["name"] == "act" and str(a.get("type", "")).lower() in ("observe", "beobachten")):
+                    self._observe_streak = min(3, getattr(self, "_observe_streak", 0) + 1)
+                else:
+                    self._observe_streak = 0
                 steps += 1
                 short = json.dumps(a, ensure_ascii=False)[:120]
                 verdict = (res.get("msg", "") if isinstance(res, dict) else "")[:100]
