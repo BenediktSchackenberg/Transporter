@@ -1154,6 +1154,10 @@ func reserve_for_project(project_id: String, items: Dictionary, mode: String = "
 		if not prop.is_empty():
 			prop.qty = int(prop.qty) + gap   # offenen Vorschlag aufstocken statt einen weiteren Tag auf die Freigabe zu warten
 			prop.crit = 3
+			# Ein Routinevorschlag wird jetzt Projektmaterial. Ohne diesen Bezug bleibt er
+			# trotz beschlossenem Bauvorhaben im Freigabestapel der Verwaltung liegen.
+			if str(prop.get("project", "")) == "":
+				prop.project = project_id
 			_log(prop, "um %d aufgestockt: Material für Projekt %s" % [gap, project_id])
 			continue
 		var o := _new_order(it, gap, "Material für Projekt %s fehlt" % project_id, project_id)

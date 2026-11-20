@@ -168,6 +168,7 @@ func tick() -> void:
 		if not c.is_active():
 			continue
 		_crew(c.id)
+		_auto_dispatch(c.id)
 	for l in lines.values():
 		if int(l.generation) != sim.company(int(l.owner)).generation or not sim.company(int(l.owner)).is_active():
 			l.active = false
@@ -196,6 +197,25 @@ func tick() -> void:
 				if result.ok:
 					say(cid, "Disposition", "Bestaetigter Unterauftrag %s: #%d uebernimmt %d Einheiten." % [k.id, v.id, q], k.id)
 				break
+
+
+## Der KI-Inhaber setzt die Regeln mit set_dispatch_policy. Die Disposition nimmt
+## danach nur bekannte, wirtschaftlich tragbare Kundenfracht selbststaendig an.
+## Material fuer eine eigene Baustelle hat Vorrang vor neuen Kundenfahrten.
+func _auto_dispatch(cid: int) -> void:
+	if not bool(dispatch_policy(cid).auto_accept) or sim.executor.active_contracts(cid) >= sim.company(cid).contract_capacity():
+		return
+	if sim.eko != null and not sim.eko.homes.waiting_goods(cid).is_empty():
+		return
+	for item in dispatch_opportunities(cid, 8, true):
+		var k: Contract = sim.contracts.get(str(item.contract_id))
+		var v: FleetVehicle = sim.vehicles.get(int(item.vehicle_id))
+		if k == null or v == null or str(k.order_ref) != "" or str(k.internal) != "" or not _free(v) or line_of(v.id) != "":
+			continue
+		var accepted: Dictionary = sim.executor._accept_contract(cid, k.id, v.id)
+		if accepted.ok and k.status in ["assigned", "in_transit"]:
+			say(cid, "Disposition", "Nach deinen Vorgaben: %s mit #%d angenommen (%s geschätzter Deckungsbeitrag)." % [k.id, v.id, Catalog.money(float(item.deckungsbeitrag_geschaetzt))], k.id)
+		return
 
 
 func _free(v: FleetVehicle) -> bool:

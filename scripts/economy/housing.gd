@@ -90,7 +90,29 @@ func _group_size(rng: RandomNumberGenerator) -> int:
 
 
 func vacant_units() -> Array:
-	return units.values().filter(func(u): return u.tenant == "")
+	return units.values().filter(func(u): return u.tenant == "" and habitable(u))
+
+
+## Erst nach der Abnahme aller vier Anschluesse darf eine neue Wohnung bezogen werden.
+## Fuer Altbauten ohne eigenes Grundstueck gilt der bisherige Bestandsschutz.
+func habitable(u: Dictionary) -> bool:
+	if sim == null or u.is_empty():
+		return false
+	var p: Dictionary = sim.parcels.of_building(int(u.get("building", -1)))
+	if p.is_empty():
+		return true
+	var service: Dictionary = p.get("erschliessung", {})
+	for part in ["strasse", "strom", "wasser", "abwasser"]:
+		if not bool(service.get(part, false)):
+			return false
+	var town: int = sim.towns.of_building(int(u.building))
+	if town >= 0 and sim.grid != null and not sim.grid.net.connected(town):
+		return false
+	if town >= 0 and sim.water != null and sim.water.breaks.has(str(town)):
+		return false
+	if town >= 0 and sim.water != null and float(sim.water.last.get(str(town), {}).get("fehl", 0.0)) > 0.01:
+		return false
+	return true
 
 
 func vacancy_rate() -> float:
@@ -127,7 +149,7 @@ func register_unit(building: int, area: float, owner: String, comfort: int = 60)
 func move_household(hid: String, unit_id: String) -> void:
 	var h: Dictionary = sim.households.homes.get(hid, {})
 	var u: Dictionary = units.get(unit_id, {})
-	if h.is_empty() or u.is_empty():
+	if h.is_empty() or u.is_empty() or not habitable(u):
 		return
 	var old: Dictionary = units.get(str(h.get("unit", "")), {})
 	if not old.is_empty() and old.tenant == hid:
@@ -141,7 +163,7 @@ func move_household(hid: String, unit_id: String) -> void:
 
 ## Faellige Miete: Selbstnutzer zahlen keine.
 func rent_due(u: Dictionary) -> float:
-	return 0.0 if u.is_empty() or u.owner == u.tenant or bool(u.get("owner_occupied", false)) else float(u.rent)
+	return 0.0 if u.is_empty() or not habitable(u) or u.owner == u.tenant or bool(u.get("owner_occupied", false)) else float(u.rent)
 
 
 func unit_of_household(hid: String) -> Dictionary:
@@ -420,12 +442,13 @@ func homeless_count() -> int:
 
 
 func summary() -> Dictionary:
-	var occupied := units.size() - vacant_units().size()
+	var occupied := units.values().filter(func(u): return u.tenant != "").size()
+	var unready := units.values().filter(func(u): return u.tenant == "" and not habitable(u)).size()
 	var rents := units.values().map(func(u): return float(u.rent))
 	var avg := 0.0
 	for r in rents:
 		avg += r
-	return {"einheiten": units.size(), "belegt": occupied, "leerstand": vacancy_rate(), "durchschnittsmiete": avg / maxf(1.0, float(rents.size())), "mietspiegel": index,
+	return {"einheiten": units.size(), "belegt": occupied, "ohne_anschluss": unready, "leerstand": vacancy_rate(), "durchschnittsmiete": avg / maxf(1.0, float(rents.size())), "mietspiegel": index,
 		"mieteinnahmen": stats.rent, "raeumungen": stats.evictions, "wohnungslos": homeless_count()}
 
 

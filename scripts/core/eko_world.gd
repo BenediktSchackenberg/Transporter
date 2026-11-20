@@ -737,6 +737,44 @@ func _estate_goal_sync(b: Dictionary) -> void:
 		_event(b, "Ziel „%s“: %d %% (fertig: %s)" % [str(g.ziel).left(60), pct, ", ".join(done.map(func(x): return x.art))])
 
 
+## Projektziele aus dem tatsächlichen Bauzustand ableiten. Auch ältere Freitextziele
+## mit einer Projekt-ID werden so nach dem Laden wieder mit der Welt abgeglichen.
+func _project_goal_sync(b: Dictionary) -> void:
+	var g: Dictionary = b.get("ziel", {})
+	if g.is_empty() or str(g.get("status", "")) != "aktiv" or sim.towns == null:
+		return
+	var pid := str(g.get("projekt", ""))
+	if pid == "":
+		var re := RegEx.new()
+		re.compile("(?:T[0-9]+)?P[0-9]+")
+		var found := re.search(str(g.get("ziel", "")))
+		if found == null:
+			return
+		pid = found.get_string()
+		g["projekt"] = pid
+	var prj: Dictionary = sim.towns.project(pid)
+	if prj.is_empty():
+		g.status = "aufgegeben"
+		g["notiz"] = "Projekt %s existiert nicht mehr; neues Stadtziel wählen." % pid
+		return
+	var state := str(prj.get("status", ""))
+	if state == "fertig":
+		g.status = "erreicht"
+		g.fortschritt = 100
+		g["stand_min"] = sim.game_min
+	elif state in ["abgelehnt", "abgebrochen"]:
+		g.status = "aufgegeben"
+		g["notiz"] = "Projekt %s wurde %s; neues Stadtziel wählen." % [pid, state]
+	else:
+		var real_progress := 0
+		var run: Dictionary = sim.construction.public.get(pid, {}) if sim.construction != null else {}
+		if not run.is_empty() and int(run.get("days", 0)) > 0:
+			real_progress = clampi(int(round(100.0 * (1.0 - float(run.get("days_left", run.days)) / float(run.days)))), 0, 95)
+		if real_progress > int(g.get("fortschritt", 0)):
+			g.fortschritt = real_progress
+			g["stand_min"] = sim.game_min
+
+
 const HOME_AKKU := 30.0   # darunter (oder nass/kalt) steht der Heimweg an erster Stelle (Partie 16.11.: Viktor arbeitete mit 14 % Akku, nass und kalt weiter)
 
 
@@ -800,6 +838,7 @@ func urgency(b: Dictionary) -> Dictionary:
 
 func next_steps(b: Dictionary) -> Array:
 	_estate_goal_sync(b)
+	_project_goal_sync(b)
 	var out: Array = []
 	var urgent_step := ""
 	var firm_step := ""
@@ -807,6 +846,7 @@ func next_steps(b: Dictionary) -> Array:
 	var goal_step := ""
 	var plan_step := ""
 	var home_step := ""   # 19.11.: Hausbau (Wildnis-Wachstum) wurde von Auftrag/Plan/Kontakt aus den ersten drei verdraengt
+	var civic_step := ""
 	var crisis := urgency(b)
 	if int(crisis.prioritaet) >= 2:
 		urgent_step = str(crisis.grund) + " – jetzt Lage und passende Firmenaktion prüfen."
@@ -823,6 +863,12 @@ func next_steps(b: Dictionary) -> Array:
 				out.append("Nach Hause (%s):%s Für weite Wege: Fahrt." % [why, hint])
 				urgent_step = str(out.back())
 	var cid := active_firm(b)
+	if int(b.get("amt", -1)) >= 0:
+		var district: Dictionary = sim.town_plan.next_district(int(b.amt), sim.housing.planning_aids().get("bedarf", 0) > 0)
+		if district.has("aktion"):
+			civic_step = "Stadt jetzt weiterbauen: %s Amt {aktion: %s}." % [str(district.text), JSON.stringify(district.aktion)]
+		elif district.has("warten"):
+			civic_step = "Stadtprojekt %s läuft. Prüfe Material und Bautrupp; plane in der Zwischenzeit Anlagen, Grün und Wohnen." % str(district.warten)
 	var offen: Dictionary = b.get("offen", {})
 	if not offen.is_empty():
 		if float(sim.game_min) - float(offen.min) > GameCalendar.days_to_min(1):
@@ -870,6 +916,12 @@ func next_steps(b: Dictionary) -> Array:
 			if step != "":
 				out.append(step)
 				firm_step = step
+			elif sim.wildnis and c.vehicle_ids.size() == 1 and not homes.open_sites(cid).is_empty():
+				for offer in sim.resources.available_offers():
+					if c.ledger.cash >= float(offer.price) + FIRM_RESERVE:
+						firm_step = "Dein einziger LKW ist mit dem Stadtbau beschäftigt. Prüfe, ob ein zweites Fahrzeug (%s, %s) für Kundenfracht lohnt: Firma {aktion: {action: \"buy_vehicle\", offer_id: \"%s\"}}. Danach Fahrer einstellen." % [offer.model, Catalog.money(float(offer.price)), offer.id]
+						out.append(firm_step)
+						break
 		var st := settle.next_step(b, cid)
 		if st != "":
 			out.append(st)
@@ -909,7 +961,7 @@ func next_steps(b: Dictionary) -> Array:
 	# Je ein akuter Bedarf, Firmenfortschritt und offene Antwort bleiben im knappen Kontext sichtbar.
 	# Weitere Hinweise behalten ihre alte Reihenfolge; aktive Ziele sind in der Beobachtung zusaetzlich separat enthalten.
 	var prioritized: Array = []
-	for s in [urgent_step, firm_step, home_step, pending_step, plan_step, hint, goal_step]:
+	for s in [urgent_step, firm_step, home_step, civic_step, pending_step, plan_step, hint, goal_step]:
 		if s != "" and s not in prioritized:
 			prioritized.append(s)
 	for s in out:
@@ -1259,7 +1311,7 @@ func _set_goal(b: Dictionary, data: Dictionary) -> Dictionary:
 	b["ziel"] = {"ziel": text, "warum": why, "teilziele": subs, "nutzen": str(data.get("nutzen", "")).left(120),
 		"ressourcen": str(data.get("ressourcen", "")).left(120), "erwartung": str(data.get("erwartung", "")).left(120),
 		"abbruch": str(data.get("abbruch", "")).left(120), "status": "aktiv", "fortschritt": 0, "seit": Catalog.game_minutes_to_text(sim.game_min),
-		"stand_min": sim.game_min}
+		"stand_min": sim.game_min, "projekt": str(data.get("projekt", ""))}
 	_event(b, "setzt sich ein Ziel: %s" % text)
 	sim.log_event("%s setzt sich ein Ziel: %s (%s)" % [b.name, text, why.left(80)], "info")
 	return {"ok": true, "msg": "Neues Ziel: %s" % text, "ziel": b.ziel}
@@ -1269,6 +1321,9 @@ func _goal_progress(b: Dictionary, data: Dictionary) -> Dictionary:
 	var g: Dictionary = b.get("ziel", {})
 	if g.is_empty():
 		return {"ok": false, "msg": "Du hast kein Ziel. Setze eines mit Ziel {ziel, warum, ...}."}
+	_project_goal_sync(b)
+	if str(g.get("projekt", "")) != "" and str(g.get("status", "")) == "aktiv" and data.has("fortschritt"):
+		return {"ok": false, "msg": "Projektziel %s: Der Fortschritt kommt aus dem tatsächlichen Bauzustand. Prüfe das Projekt im Amt." % str(g.projekt)}
 	if data.has("fortschritt"):
 		if clampi(int(data.fortschritt), 0, 100) > int(g.get("fortschritt", 0)):
 			g["stand_min"] = sim.game_min   # echter Fortschritt: Stillstandsuhr neu
@@ -1280,6 +1335,8 @@ func _goal_progress(b: Dictionary, data: Dictionary) -> Dictionary:
 	var st := str(data.get("status", g.status))
 	if st not in GOAL_STATES:
 		return {"ok": false, "msg": "status muss aktiv, erreicht oder aufgegeben sein."}
+	if st == "erreicht" and str(g.get("projekt", "")) != "" and str(sim.towns.project(str(g.projekt)).get("status", "")) != "fertig":
+		return {"ok": false, "msg": "Projekt %s ist noch nicht fertig; erst nach der Bauabnahme ist das Ziel erreicht." % str(g.projekt)}
 	if st != str(g.status):
 		g.status = st
 		_event(b, "Ziel %s: %s" % [st, g.ziel])

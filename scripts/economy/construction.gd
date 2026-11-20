@@ -1121,6 +1121,9 @@ func _public_day(day: int) -> void:
 			if str(connector.get("ref", "")) == "anschluss":
 				e.days_left = 2
 				e.days = 2
+			elif str(connector.get("kind", "")) == "erschliessung" and int(e.days_left) > 4:
+				e.days_left = 4
+				e.days = maxi(4, int(e.days) - (int(e.days_left) - 4))
 		if builders[e.builder].status != "aktiv":
 			continue
 		if not sim.towns.depot(Towns.town_of_id(str(e.project))).project_complete(str(e.project)):
@@ -1140,8 +1143,8 @@ const AUTO_TENDER_DAYS := 3   # beschlossenes Projekt ohne Ausschreibung: danach
 const HUB_ROAD_BUILD_MIN := 240.0   # erste Verbindung: sichtbare Strassenabschnitte ueber vier Spielstunden
 
 
-## Den ersten Anschluss nach Ankunft des Bautrupps Feld fuer Feld anlegen. Tagesprojekte erschienen bisher
-## bei 600-Sekunden-Tagen erst nach vielen Echtzeitminuten auf der Karte, obwohl der Trupp schon arbeitete.
+## Anschluss und Viertelstrassen nach Ankunft des Bautrupps Feld fuer Feld anlegen.
+## So sieht man die Stadt wachsen, waehrend das Projekt noch gebaut wird.
 func tick_public_connectors(now: float) -> void:
 	if not sim.wildnis:
 		return
@@ -1150,7 +1153,8 @@ func tick_public_connectors(now: float) -> void:
 			continue
 		var M: Mayor = sim.towns.mayor_of_project(str(e.project))
 		var prj: Dictionary = M.projects.get(str(e.project), {}) if M != null else {}
-		if str(prj.get("ref", "")) != "anschluss" or not prj.has("road_plan") or prj.road_plan.is_empty():
+		var road_kind := str(prj.get("ref", ""))
+		if road_kind not in ["anschluss", "viertel"] or not prj.has("road_plan") or prj.road_plan.is_empty():
 			continue
 		if builders[e.builder].status != "aktiv" or not sim.towns.depot(M.town).project_complete(str(e.project)) or not sim.crews.on_site("pub", str(e.project)):
 			continue
@@ -1158,13 +1162,14 @@ func tick_public_connectors(now: float) -> void:
 			e["road_start_min"] = now
 		var cells: Array = prj.road_plan
 		var placed := int(e.get("road_placed", 0))
-		var target := mini(cells.size(), int(floor((now - float(e.road_start_min)) / HUB_ROAD_BUILD_MIN * float(cells.size()))))
+		var duration := HUB_ROAD_BUILD_MIN if road_kind == "anschluss" else maxf(HUB_ROAD_BUILD_MIN, float(e.days) * float(GameCalendar.day_game_min))
+		var target := mini(cells.size(), int(floor((now - float(e.road_start_min)) / duration * float(cells.size()))))
 		if target > placed:
 			var section: Array = cells.slice(placed, target).map(func(a): return Vector2i(int(a[0]), int(a[1])))
 			sim.access._apply_cells(section)
 			prj["road_cells"] = cells.slice(0, target)
 			e["road_placed"] = target
-		if target >= cells.size():
+		if road_kind == "anschluss" and target >= cells.size():
 			_finish_public(e)
 
 

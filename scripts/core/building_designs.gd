@@ -71,7 +71,7 @@ static func shortlist(base: String, city_style: String, budget: float = INF) -> 
 
 ## Der Bautraeger bzw. der KI-Fallback waehlt reproduzierbar nach Stadtmarke,
 ## Kapital und Bedarf. Der Seed rotiert zwischen Silhouetten und Ausstattungen.
-static func pick(base: String, city_style: String, seed: int, budget: float = INF, demand: float = 0.5) -> Dictionary:
+static func pick(base: String, city_style: String, seed: int, budget: float = INF, demand: float = 0.5, recent: Array = []) -> Dictionary:
 	var pool := options(base, city_style)
 	if pool.is_empty():
 		pool = options(base)
@@ -86,7 +86,10 @@ static func pick(base: String, city_style: String, seed: int, budget: float = IN
 	var best := -INF
 	for d in affordable:
 		var variety := float(posmod(seed * 17 + int(str(d.id).right(3)) * 13, 101)) / 101.0
-		var score := variety * 0.32 + float(d.appeal) * 0.35 + float(d.comfort) / 100.0 * demand * 0.28 - (float(d.cost_factor) - 1.0) * (1.0 - demand) * 0.55
+		var score := variety * 0.55 + float(d.appeal) * 0.25 + float(d.comfort) / 100.0 * demand * 0.20 - (float(d.cost_factor) - 1.0) * (1.0 - demand) * 0.55
+		var last_use: int = recent.rfind(str(d.id))
+		if last_use >= 0:
+			score -= 0.8 + 0.25 * float(last_use + 1) / float(recent.size())
 		if score > best:
 			best = score
 			choice = d

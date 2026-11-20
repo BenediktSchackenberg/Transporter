@@ -897,6 +897,20 @@ class Agent:
                             tool=fn["name"], waiting_on=verdict if pending else "",
                             last_error=verdict if failed else "")
                 messages.append({"role": "tool", "tool_name": fn["name"], "tool_call_id": c.get("id", ""), "content": json.dumps(res, ensure_ascii=False)[:14000]})
+                if fn["name"] == "act" and getattr(self.args, "rolle", "") == "buergermeister":
+                    data = a.get("data", {}) if isinstance(a.get("data"), dict) else {}
+                    office = data.get("aktion", {}) if isinstance(data.get("aktion"), dict) else {}
+                    passive = str(a.get("type", "")) == "Rest" or (str(a.get("type", "")) == "Amt" and str(office.get("action", "")) in ("status", "overview"))
+                    self._passive_office = getattr(self, "_passive_office", 0) + 1 if passive else 0
+                    if self._passive_office >= 3:
+                        current = self.world.observe()
+                        steps_now = current.get("naechste_schritte", []) if isinstance(current, dict) else []
+                        office_now = current.get("mein_amt", {}) if isinstance(current, dict) else {}
+                        action = office_now.get("naechster_ausbauschritt", {}) if isinstance(office_now, dict) else {}
+                        messages.append({"role": "user", "content": "Du hast wiederholt nur geruht oder den Status gelesen. Die Stadt entwickelt sich dadurch nicht weiter. "
+                                         "Aktueller Ausbauschritt: %s. Deine nächsten Schritte: %s. Wähle eine konkrete Amtshandlung oder begründe eine andere Stadtentscheidung."
+                                         % (json.dumps(action, ensure_ascii=False)[:800], json.dumps(steps_now, ensure_ascii=False)[:1000])})
+                        self._passive_office = 0
                 # Schleifenbremse: dieselbe fehlgeschlagene Handlung dreimal hintereinander -> deutlicher Hinweis (Ralf fragte Greta 20-mal)
                 key = fn["name"] + json.dumps(a, sort_keys=True, ensure_ascii=False) if failed else ""
                 self._repeat = self._repeat + 1 if key and key == getattr(self, "_last_fail", "") else (1 if key else 0)

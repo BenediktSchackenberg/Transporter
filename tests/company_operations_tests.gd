@@ -101,6 +101,27 @@ static func run(t) -> void:
 	t.ok(v.pos == before, "auch beim Einparken bewegt sich ein Lkw nur mit Fahrer")
 
 
+static func auto_customer(t) -> void:
+	var s = fixture(t)
+	var k: Contract = parcel(s, "OPS_AUTO")
+	var v: FleetVehicle = s.company_vehicles(0)[0]
+	s.operations.dispatch_policies[0] = {"auto_accept": false, "min_margin": 0.0, "max_distance": 0, "cargo": [], "reserve": 0.0}
+	for i in 500:
+		s.step(0.2)
+		if s.driver_of(v) != null and v.state == "idle":
+			break
+	s.operations._auto_dispatch(0)
+	t.ok(k.status == "open", "ohne KI-Freigabe nimmt die Disposition keine Kundenfracht an")
+	s.operations.dispatch_policies[0].auto_accept = true
+	s.operations._auto_dispatch(0)
+	t.ok(k.status in ["assigned", "in_transit"], "KI-Freigabe disponiert bekannte Kundenfracht mit Fahrer")
+	for i in 5000:
+		if k.status == "delivered":
+			break
+		s.step(0.2)
+	t.ok(k.status == "delivered" and k.paid > 0.0, "automatisch angenommene Kundenfracht wird sichtbar gefahren und bezahlt")
+
+
 static func cooperation(t) -> void:
 	var s = fixture(t)
 	var k: Contract = parcel(s, "HELP1", 0)

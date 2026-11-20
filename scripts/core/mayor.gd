@@ -212,7 +212,7 @@ func _arrivals_town() -> void:
 	waiting += new_h
 	if waiting <= 0:
 		return
-	var free: Array = town_units().filter(func(u): return u.tenant == "")
+	var free: Array = town_units().filter(func(u): return u.tenant == "" and sim.housing.habitable(u))
 	free.sort_custom(func(a, b): return a.id < b.id)
 	var moving := mini(waiting, free.size())
 	for i in moving:

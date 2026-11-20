@@ -4966,6 +4966,16 @@ func test_city_depot() -> void:
 		complete = complete and it.min <= it.reorder and it.reorder <= it.target and it.target <= it.cap and it.crit >= 1 and it.unit != "" and CityGoods.ZONES.has(it.zone)
 	ok(complete, "Mindest-, Melde-, Ziel- und Kapazitätsbestand je Artikel stimmig")
 	ok(D.stock_of("schotter") == int(CityGoods.get_item("schotter").target) and ST.of_owner("P0").size() > 60, "Anfangsbestand (voller Zielbestand) im Eigentum der Stadt")
+	# Ein offener Routinevorschlag wird bei Projektbedarf sofort Projektmaterial.
+	var project_id := "P_TEST_MATERIAL"
+	s.mayor.projects[project_id] = {"id": project_id, "status": "beauftragt", "cost": 50000.0}
+	var routine: Dictionary = D._new_order("kabel", 1, "Test Routine")
+	D.orders[routine.id] = routine
+	D.reserve_for_project(project_id, {"kabel": D.stock_of("kabel") + 5})
+	ok(str(routine.project) == project_id and int(routine.qty) >= 5, "aufgestockter Routinevorschlag bekommt den Projektbezug")
+	D.orders.erase(routine.id)
+	D.release_project(project_id)
+	s.mayor.projects.erase(project_id)
 	ok(identity_ok(s), "Geld und Waren erhalten (Start)")
 	# Reservierung verhindert doppelte Verkaeufe
 	var free0: int = ST.available("holz", "T0", s.trader.bauhof)
@@ -5450,6 +5460,14 @@ func test_housing() -> void:
 		clash = clash or (tenants.has(p.home) and H.units[p.home].tenant != "B")
 	ok(not clash, "Keine Wohnung mit zwei Mietverträgen")
 	ok(H.units.values().all(func(u): return u.tenant != "" or not people.any(func(p): return p.home == u.id)), "Freie Wohnungen haben keine Bewohner")
+	var free_home: Dictionary = H.vacant_units()[0]
+	var home_plot: Dictionary = s.parcels.of_building(int(free_home.building))
+	var old_power: bool = bool(home_plot.erschliessung.strom)
+	home_plot.erschliessung.strom = false
+	ok(not H.habitable(free_home) and not H.vacant_units().any(func(u): return u.id == free_home.id), "Wohnung ohne Stromanschluss darf nicht neu bezogen werden")
+	ok(H.rent_due(free_home) == 0.0, "Versorgungsausfall stoppt die Mietforderung")
+	home_plot.erschliessung.strom = old_power
+	ok(H.habitable(free_home), "nach wiederhergestelltem Anschluss ist die Wohnung bezugsfertig")
 	# Miete fließt über V0 und bleibt im Geldkreislauf
 	var p0 := float(s.economy.accounts.P0)
 	run(s, 60.0 * 65.0)
@@ -5894,6 +5912,7 @@ func test_company_operations() -> void:
 	if suite == null or not suite.can_instantiate():
 		return
 	suite.run(self)
+	suite.auto_customer(self)
 	suite.cooperation(self)
 	suite.planning_limits(self)
 	suite.intentions(self)
@@ -8919,6 +8938,21 @@ func test_wildnis_found() -> void:
 	ok(int(s.towns.get_t(k).town_hall) == int(s.city.towns[k].get("town_hall", -2)), "Towns-Register kennt das Rathaus")
 	ok(E.blocks.size() == nb0, "Rohbau-Blöcke durch das Gebäude ersetzt")
 	ok(E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister wacht auf")
+	var goal_project := "P9876"
+	s.towns.mayor(k).projects[goal_project] = {"id": goal_project, "status": "beauftragt", "kind": "erschliessung"}
+	s.construction.public[goal_project] = {"project": goal_project, "days": 4, "days_left": 2, "status": "laufend"}
+	var goal_set: Dictionary = E.input(p0, "Ziel", {"ziel": "Projekt P9876 abschließen", "warum": "Stadt erschließen", "ersetzen": true})
+	E.next_steps(B)
+	ok(goal_set.ok and int(B.ziel.fortschritt) == 50, "Projektziel zeigt tatsächlichen Baufortschritt")
+	ok(not E.input(p0, "ZielStand", {"fortschritt": 95}).ok, "KI kann Projektfortschritt nicht frei behaupten")
+	s.towns.mayor(k).projects[goal_project].status = "fertig"
+	E.next_steps(B)
+	ok(str(B.ziel.status) == "erreicht" and int(B.ziel.fortschritt) == 100, "fertiges Stadtprojekt schließt das KI-Ziel")
+	s.construction.public.erase(goal_project)
+	s.towns.mayor(k).projects.erase(goal_project)
+	var first_design: Dictionary = BuildingDesigns.pick("einfamilienhaus", "gartenstadt", 5)
+	var other_design: Dictionary = BuildingDesigns.pick("einfamilienhaus", "gartenstadt", 5, INF, 0.5, [first_design.id])
+	ok(not first_design.is_empty() and str(first_design.id) != str(other_design.id), "aufeinanderfolgende Wohnhäuser wählen verschiedene Entwürfe")
 	ok(int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("haus_bauen"), "nach der Gründung wird das erste Wohnhaus dringend")
 	var ctr := Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1]))
 	var hint_day := GameCalendar.day_of(s.game_min)

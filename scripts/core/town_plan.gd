@@ -1002,11 +1002,13 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 	if p.is_empty():
 		return {}
 	var M = sim.towns.mayor(k) if sim.towns != null else null
+	var active_road := ""
 	if M != null:
 		for prj in M.projects.values():
-			if prj.has("road_plan") and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
-				return {"warten": prj.id, "text": "Straßennetz %s für Viertel %s läuft – erst fertigstellen." % [prj.id, prj.viertel]}
-	var repair := _repair_step(k, p)
+			if prj.has("road_plan") and str(prj.get("ref", "")) != "anschluss" and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+				active_road = str(prj.id)
+				break
+	var repair := _repair_step(k, p) if active_road == "" else {}
 	if not repair.is_empty():
 		return repair
 	var kern := Vector2(int(p.kern[0]), int(p.kern[1]))
@@ -1023,6 +1025,8 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 			best_s = sc
 			best = v
 	if best.is_empty():
+		if active_road != "":
+			return {"warten": active_road, "text": "Straßennetz %s läuft; Material, Bautrupp und übrige Stadtversorgung prüfen." % active_road}
 		var sites := expansion_sites(k)
 		if sites.is_empty():
 			return {}
@@ -1037,6 +1041,8 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 			return {"viertel": best.id, "text": "Für Viertel %s zuerst eine stimmige Komposition wählen; danach erschließen." % best.id,
 				"entwuerfe": designs, "aktion": {"action": "quartier_entwurf_waehlen", "viertel": best.id,
 					"entwurf": designs[0].id, "reason": "%s: %s" % [designs[0].titel, designs[0].grund]}}
+	if active_road != "":
+		return {"warten": active_road, "text": "Entwurf für Viertel %s steht bereit; Straßennetz %s läuft. Versorgung und Baustellen prüfen." % [best.id, active_road]}
 	return {"viertel": best.id, "text": "Als Nächstes Viertel %s (%s, %s) erschließen%s." % [best.id, best.text, best.zone, " – es fehlt Wohnraum" if housing_need and str(best.zone) == "wohnen" else ""],
 		"aktion": {"action": "viertel_erschliessen", "viertel": best.id, "reason": "Stadtplan: nächster Abschnitt"}}
 

@@ -108,7 +108,11 @@ func _plan_building(cid: int, typ: String, want: String, design_id: String = "")
 			style = str(sim.eko.conflict.strategy_for_town(k).get("form", ""))
 		if style == "":
 			style = "gartenstadt"
-		var choice: Dictionary = BuildingDesigns.pick(typ, style, _next + cid * 11, maxf(0.0, sim.company(cid).ledger.cash * 0.75), 0.65)
+		var recent: Array = []
+		for site in sites.values():
+			if int(site.cid) == cid and str(site.typ) == typ and str(site.get("design", "")) != "":
+				recent.append(str(site.design))
+		var choice: Dictionary = BuildingDesigns.pick(typ, style, _next + cid * 11, maxf(0.0, sim.company(cid).ledger.cash * 0.75), 0.65, recent.slice(-3))
 		if choice.is_empty():
 			return {"ok": false, "msg": "Für %s fehlt noch Baukapital. Günstigeren Entwurf wählen oder Mittel ansparen." % typ}
 		design_id = str(choice.get("id", ""))
