@@ -2385,6 +2385,10 @@ func _firm_action(b: Dictionary, data: Dictionary) -> Dictionary:
 	if bool(r.get("pending", false)):   # Figur geht erst hin: angenommen, aber noch nicht ausgefuehrt
 		r["status"] = "laeuft"
 		r["msg"] = str(r.get("msg", "")) + " Das Ergebnis kommt als Ereignis (deine_letzten_ereignisse), sobald die Figur dort ist."
+	elif cid >= 0 and not bool(r.get("ok", false)) and str(r.get("msg", "")).contains("ist beschäftigt"):
+		var economy := homes.business_hint(cid)
+		if economy != "":
+			r["msg"] = str(r.get("msg", "")) + " Der LKW erledigt gerade seinen Auftrag. In der Zwischenzeit: " + economy
 	return r
 
 
@@ -2971,8 +2975,9 @@ func _firm_overview(cid: int) -> Dictionary:
 		var d = sim.driver_of(v)
 		vs.append("#%d %s (%s%s%s)" % [v.id, v.model, v.state, ", Fahrer %s" % d.name if d != null else ", ohne Fahrer", ", Auftrag %s" % v.contract_id if str(v.contract_id) != "" else ""])
 	var step := _fleet_step(cid)
+	var economy := homes.business_hint(cid)
 	return {"ok": true, "uebersicht": true, "msg": "%s: Kasse %s, Personal %d, Fahrzeuge: %s.%s" % [c.company_name, Catalog.money(c.ledger.cash),
-		sim.personnel.employed(cid).size(), ", ".join(vs) if not vs.is_empty() else "keine", (" Nächster Schritt: " + step) if step != "" else ""]}
+		sim.personnel.employed(cid).size(), ", ".join(vs) if not vs.is_empty() else "keine", (" Nächster Schritt: " + step) if step != "" else ""] + ((" Wirtschaftsaufbau: " + economy) if economy != "" else "")}
 
 
 const OFFICE_PARAM_ALIASES := {"projekt": "project", "projekt_id": "project_id", "grundstuecke": "parcel_ids", "grundstücke": "parcel_ids",
