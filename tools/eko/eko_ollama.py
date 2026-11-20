@@ -48,6 +48,8 @@ SECTIONS = {"tatsache": "## Beobachtete Tatsachen", "vermutung": "## Vermutungen
             "technik": "## Erprobte Techniken", "fehlschlag": "## Fehlgeschlagene Ansätze",
             "strategie": "## Wiederholbar erfolgreiche Strategien", "korrektur": "## Korrekturen (widerlegte Annahmen)"}
 DIGEST = ("fehlschlag", "strategie", "korrektur")
+HISTORICAL_ID = re.compile(r"\b(?:T\d+P\d+|BS\d+|[PACWVB]\d+)\b|#\d+", re.I)
+HISTORICAL_COUNT = re.compile(r"\b\d[\d.,]*\s*(?:EUR|€|Lkw|Fahrzeuge|Mitarbeiter|MA|Aufträge)\b", re.I)
 ARRIVAL_MAX_S = 90          # wait bis=ankunft: so lange hoechstens auf die Ankunft warten (ohne Modellaufruf)
 # Nachschlagen (15.11.2026, Benedikt: "kann die KI das Internet befragen und sich Ideen holen?"): nur deutsche Wikipedia, nur lesen,
 # gekuerzt, gebremst, als Fremdtext markiert. Keine personenbezogenen Daten in der Anfrage (neutraler User-Agent).
@@ -419,6 +421,18 @@ def compact_obs(o, full=False):
     return o
 
 
+def general_memory(doc):
+    """Keep reusable lessons in the model context; old save IDs and balances remain on disk only."""
+    kept = []
+    for line in doc.splitlines():
+        if line.startswith("- ") and (HISTORICAL_ID.search(line) or HISTORICAL_COUNT.search(line)):
+            continue
+        if line.startswith("- ") and re.search(r"Rest\s*\{|Amt\s*\{.{0,100}?status", line, re.I):
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 class Agent:
     def __init__(self, args):
         self.args = args
@@ -596,7 +610,10 @@ class Agent:
                 return sorted(p.name for p in self.ws.iterdir())
             if name == "read_file":
                 p = self._path(a["name"])
-                text = p.read_text(encoding="utf-8")[:6000]
+                text = p.read_text(encoding="utf-8")
+                if p.name == "SEMANTIC_MEMORY.md":
+                    text = "Historische Notizen: Kennungen, Bestände und Zustände gelten nur aus der aktuellen Beobachtung.\n" + general_memory(text)
+                text = text[:6000]
                 # Leseschleife bremsen (17.11.: Greta las 23 min nur ihre Dateien, weil das Kuerzen des Verlaufs sie wieder "vergass"):
                 # dieselbe unveraenderte Datei innerhalb von REREAD_S nur als Kurzfassung
                 seen = self._reads.get(p.name)
@@ -648,7 +665,7 @@ class Agent:
     def digest(self):
         """Gezielt in den Kontext: Fehlschlaege, bewaehrte Strategien, Korrekturen und das aktuelle Ziel."""
         p = self.ws / "SEMANTIC_MEMORY.md"
-        doc = p.read_text(encoding="utf-8") if p.exists() else ""
+        doc = general_memory(p.read_text(encoding="utf-8")) if p.exists() else ""
         parts = []
         for k in DIGEST:
             head = SECTIONS[k]
@@ -660,7 +677,7 @@ class Agent:
         goal = o.get("mein_ziel", {}) if isinstance(o, dict) else {}
         if goal:
             parts.append("## Dein aktuelles Ziel\n%s (%s, %s %%) – warum: %s" % (goal.get("ziel"), goal.get("status"), goal.get("fortschritt"), goal.get("warum")))
-        return ("Erinnerung aus deinem Gedächtnis:\n" + "\n\n".join(parts)) if parts else ""
+        return ("Erinnerung aus deinem Gedächtnis (historische Erfahrungen; Kennungen, Bestände und Zustände nur aus observe verwenden):\n" + "\n\n".join(parts)) if parts else ""
 
     def model_tools(self):
         if getattr(self.args, "rolle", "") == "unternehmer":
