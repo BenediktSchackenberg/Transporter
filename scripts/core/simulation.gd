@@ -1940,4 +1940,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	var fixed_roads := s.nav.sync_roads()
 	if fixed_roads > 0:
 		s.log_event("Navigation: %d Straßenfelder nach dem Laden wieder befahrbar." % fixed_roads, "system")
+	# Marktquellen und Empfaenger sind abgeleitet, nicht gespeichert. Das erste setup()
+	# kann die spaeter replayten Stadtgebaeude und den Grosslagerhof noch nicht sehen.
+	s.market.refresh()
 	return s

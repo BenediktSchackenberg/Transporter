@@ -8938,6 +8938,10 @@ func test_wildnis_found() -> void:
 	ok(int(s.towns.get_t(k).town_hall) == int(s.city.towns[k].get("town_hall", -2)), "Towns-Register kennt das Rathaus")
 	ok(E.blocks.size() == nb0, "Rohbau-Blöcke durch das Gebäude ersetzt")
 	ok(E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister wacht auf")
+	s.market.refresh()
+	var market_sources := s.market.source_total
+	var loaded_city := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(market_sources > 0 and loaded_city.market.source_total == market_sources, "beim Laden werden neue Stadtgebäude wieder Absender bezahlter Fracht")
 	var goal_project := "P9876"
 	s.towns.mayor(k).projects[goal_project] = {"id": goal_project, "status": "beauftragt", "kind": "erschliessung"}
 	s.construction.public[goal_project] = {"project": goal_project, "days": 4, "days_left": 2, "status": "laufend"}
