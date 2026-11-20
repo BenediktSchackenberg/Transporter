@@ -99,7 +99,7 @@ func setup(s) -> void:
 		s.day_changed.connect(on_day)
 		s.month_changed.connect(on_month)
 		return
-	if town > 0:
+	if s.world_mode == "region" or town > 0:
 		_setup_town()
 		return
 	s.day_changed.connect(on_day)
@@ -134,7 +134,7 @@ func setup(s) -> void:
 	add_materials(MATERIAL_SEED, "Restposten der Stadt")
 
 
-## Weiterer Ort der Region (Auftrag 17): Zentrallager im eigenen Bauhof, Importe ueber den eigenen Hafen.
+## Jeder Ort der Region nutzt seinen eigenen Bauhof, auch Ort 0 neben dem gemeinsamen Grosslager.
 func _setup_town() -> void:
 	sim.day_changed.connect(on_day)
 	sim.month_changed.connect(on_month)
@@ -143,6 +143,36 @@ func _setup_town() -> void:
 	port = harbor().building if harbor().enabled else building
 	_seed_stock()
 	add_materials(MATERIAL_SEED, "Restposten der Stadt")
+
+
+## Alte Regionsspielstaende konnten das Lager von Ort 0 im gemeinsamen Grosslager speichern.
+## Nach dem Laden gehoeren Bestand, Reservierungen und laufende Lieferungen zum Bauhof der Stadt.
+func ensure_city_location() -> void:
+	if sim.world_mode != "region" or not sim.town_ready(town):
+		return
+	var local: int = int(sim.towns.get_t(town).get("bauhof", -1))
+	if local < 0 or sim.city.building(local).is_empty() or building == local:
+		return
+	var previous := building
+	building = local
+	if port == previous:
+		port = harbor().building if harbor().enabled else local
+	if previous >= 0 and not sim.city.building(previous).is_empty():
+		for lot in sim.stock.of_owner(owner()):
+			if int(lot.loc) == previous:
+				lot.loc = local
+		for res in sim.stock.reservations.values():
+			if str(res.owner) == owner() and int(res.loc) == previous:
+				res.loc = local
+		var old_road: Vector2i = sim.city.building(previous).road
+		var new_road: Vector2i = sim.city.building(local).road
+		for contract in sim.contracts.values():
+			if orders.has(str(contract.order_ref)) and int(contract.dropoff) == previous and contract.status not in ["delivered", "failed", "expired", "cancelled"]:
+				contract.dropoff = local
+				for vehicle in sim.vehicles.values():
+					if vehicle.state == "to_dropoff" and vehicle.goal == old_road and (str(vehicle.contract_id) == str(contract.id) or (vehicle.stops as Array).any(func(stop): return str(stop.get("contract_id", "")) == str(contract.id))):
+						vehicle.goal = new_road
+	sim.log_event("%s: Stadtlager am eigenen Bauhof eingerichtet statt am gemeinsamen Großlager." % sim.towns.name_of(town), "system")
 
 
 # ------------------------------------------------------------------ Baustoffe fuer Firmen (Auftrag 11, Hof-Imperium)

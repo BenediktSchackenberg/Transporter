@@ -117,6 +117,10 @@ func assign(name: String, near := Vector2i(-1, -1)) -> bool:
 	var busy := PackedByteArray()
 	busy.resize(n * n)
 	var wild: bool = _sim().wildnis and near.x >= 0
+	var hub_exclusion := Rect2i()
+	if wild and not C.hub.is_empty():
+		var hr: Array = C.hub.rect
+		hub_exclusion = Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3])).grow(16)
 	for p in _sim().parcels.items.values():
 		if str(p.state) in ["frei", "zur_entwicklung"] and str(p.zone) != "korridor":
 			continue   # freies Land und Entwicklungsreserve ausserhalb der Orte darf Stammsitz werden (wird reserviert); Privatland und Trassen nicht
@@ -133,6 +137,8 @@ func assign(name: String, near := Vector2i(-1, -1)) -> bool:
 	for y in range(4, n - SIDE - 4, 6 if near.x < 0 else 2):
 		for x in range(4, n - SIDE - 4, 6 if near.x < 0 else 2):
 			var r := Rect2i(x, y, SIDE, SIDE)
+			if wild and hub_exclusion.intersects(r):
+				continue   # Der Betriebshof einer neuen KI-Stadt steht nie auf dem gemeinsamen Grosslager.
 			if near.x >= 0 and (r.get_center() - near).length() > NEAR_MAX:
 				continue
 			if towns.any(func(t): return t.intersects(r)):

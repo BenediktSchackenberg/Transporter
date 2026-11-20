@@ -8800,6 +8800,9 @@ func test_wildnis_found() -> void:
 		return
 	var dep: Dictionary = s.city.building(int(s.company(cid).depots[0]))
 	ok(str(dep.name).contains("Betriebshof") and E.estates.estates.has(p0) and E.estates.covers(Vector2i(int(dep.x), int(dep.y))), "Betriebshof steht in der Basis")
+	var hr: Array = s.city.hub.rect
+	var hub_area := Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3]))
+	ok(not hub_area.grow(16).intersects(Rect2i(int(dep.x), int(dep.y), int(dep.w), int(dep.h))), "KI-Betriebshof steht außerhalb des gemeinsamen Großlagers")
 	ok(Vector2(E.estates.center_of(p0)).distance_to(Vector2(site)) <= EkoEstates.NEAR_MAX + 1.0, "Basis am gewählten Platz (%d Felder daneben)" % int(Vector2(E.estates.center_of(p0)).distance_to(Vector2(site))))
 	ok(not s.town_ready(k) and int(s.city.towns[k].get("town_hall", -1)) < 0, "noch keine Stadt (kein Bürgeramt)")
 	ok(s.towns.get_t(k).center == Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1])), "Towns-Register kennt die neue Mitte")
@@ -8841,15 +8844,36 @@ func test_wildnis_found() -> void:
 	B.akku = 100.0
 	E.homes.tick(60.0 * 30.0)
 	ok(hs.status == "fertig" and s.town_ready(k) and int(s.city.towns[k].town_hall) >= 0, "Bürgeramt fertig – die Stadt ist gegründet (%s)" % str(hs.get("blockiert", hs.status)))
+	var town_rect: Array = s.city.towns[k].rect
+	var town_area := Rect2i(int(town_rect[0]), int(town_rect[1]), int(town_rect[2]), int(town_rect[3]))
+	var city_depot: Dictionary = s.city.building(s.towns.depot(k).building)
+	ok(town_area.encloses(Rect2i(int(city_depot.x), int(city_depot.y), int(city_depot.w), int(city_depot.h))) and not hub_area.intersects(Rect2i(int(city_depot.x), int(city_depot.y), int(city_depot.w), int(city_depot.h))), "städtisches Baulager liegt in der gegründeten Stadt")
 	ok(int(s.towns.get_t(k).town_hall) == int(s.city.towns[k].get("town_hall", -2)), "Towns-Register kennt das Rathaus")
 	ok(E.blocks.size() == nb0, "Rohbau-Blöcke durch das Gebäude ersetzt")
 	ok(E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister wacht auf")
 	# Strasse selbst bauen
 	var ctr := Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1]))
-	var far := ctr + Vector2i(0, 18)
+	var far := Vector2i(-1, -1)
+	for dy in range(-20, 21):
+		if far.x >= 0:
+			break
+		for dx in range(-20, 21):
+			var road := ctr + Vector2i(dx, dy)
+			if not s.city.is_road(road) or s.city.town_of(road) != k:
+				continue
+			for direction in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+				var candidate: Vector2i = road + direction
+				if s.city.town_of(candidate) == k and E.settle._road_cell_ok(candidate) and not s.city.is_road(candidate):
+					far = candidate
+					break
+			if far.x >= 0:
+				break
+	ok(far.x >= 0, "freies Straßenfeld in der gegründeten Stadt gefunden")
+	if far.x < 0:
+		return
 	s.stock.add("kies", 200, "C%d" % cid, dep_id, "Test")
 	B.akku = 100.0   # nach dem Bau des Buergeramts ist der Akku leer (Test: ausgeruht)
-	var rb: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "strasse_bauen", "von": [ctr.x + 2, ctr.y + 13], "bis": [far.x, far.y]}})
+	var rb: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "strasse_bauen", "bis": [far.x, far.y]}})
 	ok(rb.ok, "Straßenbaustelle: %s" % str(rb.msg).left(100))
 	if rb.ok:
 		var rs: Dictionary = E.homes.sites[rb.baustelle]
@@ -8913,6 +8937,7 @@ func test_region_world() -> void:
 		ok(homes == range(n), "je Stadt genau ein Startunternehmer (Heimat %s)" % str(homes))
 		for k in n:
 			var own: Array = s.city.buildings.filter(func(b): return int(b.get("town", -1)) == k)
+			ok(s.towns.depot(k).building == T.get_t(k).bauhof, "%s: Stadtlager liegt am eigenen Bauhof" % T.name_of(k))
 			var counted := own.filter(func(b): return b.type != "plot" or int(b.get("parent", -1)) < 0).size()
 			var ctr: Vector2i = T.get_t(k).center
 			var reach := true
@@ -8922,6 +8947,24 @@ func test_region_world() -> void:
 				"%s: %d Startgebäude, Rathaus/Bauhof/Hafen/Flughafen vorhanden und erreichbar" % [T.name_of(k), counted])
 		ok(s.city.buildings.all(func(b): return not (b.type == "plot" and int(b.get("parent", -1)) < 0) or s.companies.any(func(c): return c.depots[0] == int(b.id))), "keine versteckten Startfirmen-Grundstücke")
 		ok(identity_ok(s), "Geld und Waren erhalten (%d Städte)" % n)
+		if n == 2:
+			var depot: CityDepot = T.depot(0)
+			var local := depot.building
+			var old: int = int(s.city.hub.buildings.hauptlager)
+			depot.building = old   # Spielstand vor der Korrektur: Stadtlager lag im Hauptlager.
+			depot.port = old
+			s.stock.add("ziegel", 3, depot.owner(), old, "Altbestand")
+			s.stock.reserve("test:stadtlager", "ziegel", 3, depot.owner(), old)
+			var delivery := Contract.new()
+			delivery.id = "test:lieferung"
+			delivery.order_ref = "test:auftrag"
+			delivery.dropoff = old
+			delivery.status = "open"
+			s.contracts[delivery.id] = delivery
+			depot.orders[delivery.order_ref] = {}
+			depot.ensure_city_location()
+			ok(depot.building == local and depot.port != old and s.stock.qty("ziegel", depot.owner(), old) == 0 and int(s.stock.reservations["test:stadtlager"].loc) == local and delivery.dropoff == local,
+				"alter Spielstand: Waren, Reservierung und Lieferung wechseln zum Stadtbauhof")
 	var a := CornerRegionGenerator.new(4)
 	var ca: CityData = a.generate(77, 512)
 	var b := CornerRegionGenerator.new(4)

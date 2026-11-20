@@ -1892,6 +1892,8 @@ static func from_dict(d: Dictionary) -> Simulation:
 	for cid in d.avatars:
 		var a: Avatar = s.avatars[int(cid)]
 		a.pos = Vector2(d.avatars[cid].x, d.avatars[cid].y)
+	for depot in s.towns.depots:
+		depot.ensure_city_location()
 	# Fahrzeuge auf ihr gespeichertes Ziel neu routen
 	for v in s.vehicles.values():
 		s.logistics.sync_view(v)

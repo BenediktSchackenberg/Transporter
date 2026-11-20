@@ -68,7 +68,7 @@ func setup(simulation) -> void:
 	sim = simulation
 	list = []
 	var cd: CityData = sim.city
-	if cd.towns.size() > 1:
+	if cd.towns.size() > 1 or (sim.world_mode == "region" and not cd.towns.is_empty()):
 		for t in cd.towns:
 			list.append({"id": int(t.id), "name": str(t.name), "center": Vector2i(int(t.center[0]), int(t.center[1])),
 				"rect": Rect2i(int(t.rect[0]), int(t.rect[1]), int(t.rect[2]), int(t.rect[3])), "town_hall": int(t.get("town_hall", -1)),

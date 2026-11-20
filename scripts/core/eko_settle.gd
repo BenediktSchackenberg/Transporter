@@ -260,9 +260,7 @@ func open_town(k: int, rect: Rect2i) -> bool:
 	var hall := _place("townhall", rect.position, rect.position + Vector2i(3, 3), "Bürgeramt %s" % nm)
 	if hall < 0:   # Partie 18.11.: Viktors Buergeramt hing bei 100 % ("passt nicht aufs Grundstueck") – freien Platz daneben suchen
 		hall = _place_near("townhall", rect.get_center(), 14, "Bürgeramt %s" % nm)
-	var bauhof := _place("freight_shed", rect.position + Vector2i(4, 0), rect.end - Vector2i(1, 1), "Städtischer Bauhof")
-	if bauhof < 0:
-		bauhof = _place_near("freight_shed", rect.get_center(), 18, "Städtischer Bauhof")
+	var bauhof := _place_city_bauhof(k, rect.get_center())
 	if hall < 0 or bauhof < 0:
 		return false
 	t["town_hall"] = hall
@@ -281,6 +279,7 @@ func open_town(k: int, rect: Rect2i) -> bool:
 		t["harbor"] = harbor
 		st["harbor"] = harbor
 	sim.towns.sync_from_city(k)
+	_seed_city_access(k, [bauhof, hall])
 	sim.town_plan.ensure(k, "gruendung")   # Auftrag 8: Profil vor den ersten regulaeren Bauplatzentscheidungen
 	_start_package(k)
 	_activate(k)
@@ -293,6 +292,60 @@ func open_town(k: int, rect: Rect2i) -> bool:
 			w._event(o, "Das Bürgeramt von %s steht – du bist jetzt Bürgermeister und ziehst ein." % nm)
 	sim.log_event("%s hat ein Bürgeramt – die Stadt ist gegründet." % nm, "good")
 	return true
+
+
+## Das städtische Baulager muss innerhalb des gewählten Siedlungsgebiets stehen.
+## Ein freier Platz am gemeinsamen Großlager ist auch als Ausweichstandort ausgeschlossen.
+func _place_city_bauhof(k: int, preferred: Vector2i) -> int:
+	var C: CityData = _sim().city
+	var t: Dictionary = C.towns[k]
+	var tr: Array = t.rect
+	var town_area := Rect2i(int(tr[0]), int(tr[1]), int(tr[2]), int(tr[3]))
+	var spec: Array = CityGenerator.TYPES["freight_shed"]
+	var size := Vector2i(int(spec[1]), int(spec[2]))
+	var hub_area := Rect2i()
+	if not C.hub.is_empty():
+		var hr: Array = C.hub.rect
+		hub_area = Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3])).grow(8)
+	for radius in range(0, maxi(town_area.size.x, town_area.size.y) + 2, 2):
+		for dy in range(-radius, radius + 1, 2):
+			for dx in range(-radius, radius + 1, 2):
+				if maxi(absi(dx), absi(dy)) != radius:
+					continue
+				var footprint := Rect2i(preferred + Vector2i(dx, dy) - size / 2, size)
+				if not town_area.encloses(footprint) or hub_area.intersects(footprint):
+					continue
+				var bd: Dictionary = _sim().events._add_building("freight_shed", footprint, "Städtischer Bauhof und Baulager %s" % str(t.name))
+				if not bd.is_empty():
+					return int(bd.id)
+	return -1
+
+
+## Eine kurze Zufahrt am Baulager ist der Anfang des eigenen Stadtnetzes.
+## Ohne sie koennte die KI in der Wildnis keine Strasse von ihrer Stadt aus weiterbauen.
+func _seed_city_access(k: int, buildings: Array) -> void:
+	var sim = _sim()
+	var C: CityData = sim.city
+	var tr: Array = C.towns[k].rect
+	var town_area := Rect2i(int(tr[0]), int(tr[1]), int(tr[2]), int(tr[3]))
+	for id in buildings:
+		var base: Vector2i = C.building(int(id)).road
+		if C.is_road(base):
+			return
+		for radius in range(0, 17):
+			for dy in range(-radius, radius + 1):
+				for dx in range(-radius, radius + 1):
+					if maxi(absi(dx), absi(dy)) != radius:
+						continue
+					var first := base + Vector2i(dx, dy)
+					for direction in [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]:
+						var cells: Array = [first, first + direction, first + direction * 2]
+						if cells.all(func(q): return town_area.has_point(q) and _road_cell_ok(q)):
+							sim.access._apply_cells(cells)
+							var st: Dictionary = sim.settlements[str(k)]
+							st["roads"] = (st.get("roads", []) as Array) + cells.map(func(q): return [q.x, q.y])
+							sim.log_event("%s: Zufahrt zum städtischen Baulager angelegt." % sim.towns.name_of(k), "good")
+							return
 
 
 ## Meer oder See? Ein Gewaesser zaehlt als Meer, wenn es den Kartenrand erreicht (oder sehr gross ist). Ergebnis je Wasserfeld gemerkt
