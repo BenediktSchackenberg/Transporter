@@ -8876,7 +8876,8 @@ func test_wildnis_found() -> void:
 	var old_public := str(public_pickup.contract)
 	s.contracts[old_stale].status = "expired"
 	s.contracts[old_public].exclusive_for = -1   # alter Spielstand: oeffentlich neu ausgeschrieben
-	var tr: Dictionary = E.input(p0, "LKW", {"ziel": "grosslager"})
+	var hub_center: Array = s.city.hub.center
+	var tr: Dictionary = E.input(p0, "LKW", {"ziel": [int(hub_center[0]), int(hub_center[1])]})
 	if tr.ok and str(tr.get("status", "")) == "laeuft" and not B.has("im_lkw"):   # erst zum LKW gehen
 		_run_until(s, func(): return B.has("im_lkw"), 600)
 	ok(str(stale.contract) != old_stale and str(public_pickup.contract) != old_public and s.contracts[old_public].status == "cancelled" and int(s.contracts[str(stale.contract)].exclusive_for) == cid,

@@ -952,6 +952,12 @@ func _truck(b: Dictionary, data: Dictionary) -> Dictionary:
 	b.erase("lkw_auftrag")
 	var c = sim.company(cid)
 	var ziel = data.get("ziel", "grosslager")
+	# Modelle nennen oft die Koordinate des Grosslagers statt seines Namens. Eine Fahrt auf dessen Hof
+	# soll dieselbe physische Warenannahme ausloesen wie LKW {ziel: "grosslager"}.
+	if ziel is Array and (ziel as Array).size() >= 2 and not sim.city.hub.is_empty():
+		var hr: Array = sim.city.hub.get("rect", [])
+		if hr.size() >= 4 and Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3])).grow(4).has_point(Vector2i(int(ziel[0]), int(ziel[1]))):
+			ziel = "grosslager"
 	if ziel is Array and (ziel as Array).size() >= 2:
 		var cell := Vector2i(int(ziel[0]), int(ziel[1]))
 		if not sim.route(v, cell, "erkunden"):
