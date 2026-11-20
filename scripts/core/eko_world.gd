@@ -3134,7 +3134,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	var civic: Dictionary = ind.get("stadtentwicklung", {})
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
-	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "stromtrassen": ind.get("stromtrassen", []),
+	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "verkehrsstandorte": ind.get("verkehrsstandorte", {}), "stromtrassen": ind.get("stromtrassen", []),
 		"kraftwerk_notfall": sim.plant.summary().get("notfall", {}),
 		"versorgungsleitungen": ind.get("versorgungsleitungen", []),
 		"versorgungsanlagen_standorte": ind.get("versorgungsanlagen_standorte", []),
@@ -3164,7 +3164,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	out["aktionen"] = "Amt {aktion: {action, ...}}: " + "; ".join(acts)
 	out["vorfaelle"] = sim.rivalry.incidents.slice(-8).map(func(i): return {"tag": GameCalendar.day_of(float(i.t)) + 1, "was": str(i.get("text", i.get("art", ""))).left(120)})
 	out["schiedsrichter"] = "Bei Sabotage, Blockaden oder unfairem Wettbewerb kannst du einschreiten: warn_company, order_inspection, mediate_rivalry."
-	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle Stadtteile, baue sie mit viertel_erschliessen aus und verschönere sie mit propose_project. Prüfe stromtrassen und beauftrage nötige Anschlüsse mit stromtrasse_bauen, bevor neue Betriebe Strom brauchen. Plane Wasserwerk, Hochbehälter und Kläranlage mit infra_ausbau vorausschauend. Bei Kraftwerksnotfall kraftwerk_notfall {massnahme: evakuieren|stabilisieren} erwägen. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)
+	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle Stadtteile, baue sie mit viertel_erschliessen aus und verschönere sie mit propose_project. Prüfe verkehrsstandorte: ein Hafen darf nur am Meer stehen, Flughafen und Bahnhof brauchen eigene Bauprojekte. Prüfe stromtrassen und beauftrage nötige Anschlüsse mit stromtrasse_bauen, bevor neue Betriebe Strom brauchen. Plane Wasserwerk, Hochbehälter und Kläranlage mit infra_ausbau vorausschauend. Bei Kraftwerksnotfall kraftwerk_notfall {massnahme: evakuieren|stabilisieren} erwägen. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)
 	return out
 
 

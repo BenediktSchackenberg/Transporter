@@ -6,6 +6,18 @@ extends RefCounted
 const MAX_ACTIONS := 4
 
 
+static func transport_action(day: int, budget: float, transport: Dictionary) -> Dictionary:
+	if day < 7 or budget <= 0.0:
+		return {}
+	for kind in ["hafen", "flughafen", "bahn"]:
+		var place: Dictionary = transport.get(kind, {})
+		if not place.is_empty() and not bool(place.get("gebaut", false)) and str(place.get("projekt", "")) == "" and not (place.get("standort", []) as Array).is_empty() \
+				and budget >= float(place.get("kosten", INF)) * 1.25:
+			return {"action": "build_harbor" if kind == "hafen" else ("build_airport" if kind == "flughafen" else "build_station"),
+				"reason": "%s am Standort %s errichten; neue Verkehrs- und Wirtschaftsverbindungen fuer die Stadt." % [kind.capitalize(), str(place.standort)]}
+	return {}
+
+
 static func decide(ind: Dictionary) -> Dictionary:
 	var actions: Array = []
 	var notes: Array = []
@@ -378,15 +390,9 @@ static func decide(ind: Dictionary) -> Dictionary:
 	var lage: Dictionary = ind.get("infrastruktur_lage", {})
 	if str(lage.get("bahn", "")).contains("Langsamfahrstelle") and actions.size() < MAX_ACTIONS:
 		actions.append({"action": "infra_ausbau", "anlage": "gleis", "reason": "Langsamfahrstelle an unserem Bahnhof: Gleis instand setzen lassen."})
-	var transport: Dictionary = ind.get("verkehrsstandorte", {})
-	if int(ind.buergermeister.tag) >= 7 and budget > 0.0:
-		for kind in ["hafen", "flughafen", "bahn"]:
-			var place: Dictionary = transport.get(kind, {})
-			if not place.is_empty() and not bool(place.get("gebaut", false)) and str(place.get("projekt", "")) == "" and not (place.get("standort", []) as Array).is_empty() \
-					and budget >= float(place.get("kosten", INF)) * 1.25:
-				actions.insert(mini(1, actions.size()), {"action": "build_harbor" if kind == "hafen" else ("build_airport" if kind == "flughafen" else "build_station"),
-					"reason": "%s am Standort %s errichten; neue Verkehrs- und Wirtschaftsverbindungen fuer die Stadt." % [kind.capitalize(), str(place.standort)]})
-				break
+	var strategic: Dictionary = transport_action(int(ind.buergermeister.tag), budget, ind.get("verkehrsstandorte", {}))
+	if not strategic.is_empty():
+		actions.insert(mini(1, actions.size()), strategic)
 	if actions.is_empty():
 		actions.append({"action": "wait"})
 	var summary := "Lage: %d wohnungssuchende Haushalte, Leerstand %.1f %%, Beschäftigung %.0f %%, %d Anträge zur Entscheidung. %s" % [waiting, float(housing.leerstand) * 100.0,

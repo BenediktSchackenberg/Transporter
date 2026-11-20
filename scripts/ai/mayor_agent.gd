@@ -36,6 +36,7 @@ var _applied := {}
 var _abandoned := {}
 var _fail := 0
 var _backoff_until := 0.0
+var _transport_day := -1
 
 
 func setup(simulation: Simulation, cfg: Dictionary, logger: ApiLog) -> void:
@@ -112,6 +113,12 @@ func _process_timed(delta: float) -> void:
 ## Eine Entscheidungsrunde: mit Modell (asynchron) oder per Regeln.
 func think() -> void:
 	if eko_managed:
+		var day := GameCalendar.day_of(sim.game_min)
+		if day != _transport_day:
+			_transport_day = day
+			var strategic: Dictionary = MayorBrain.transport_action(day, mayor().available_budget(), mayor().transport_indicators())
+			if not strategic.is_empty():
+				_apply(AgentController.parse_response(JSON.stringify({"summary": "Verkehrsstandort der Stadt geplant: %s." % str(strategic.reason), "actions": [strategic]})), "Strategische Verwaltung")
 		if sim.eko.office_idle_s(town) < 300.0:
 			status = "Wesen führt das Amt"
 			return   # das Wesen entscheidet selbst; die Verwaltung springt nur ein, wenn es fuenf Minuten nichts tut
