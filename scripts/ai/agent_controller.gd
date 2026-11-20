@@ -139,6 +139,12 @@ func _process_timed(delta: float) -> void:
 	_dispatch_tick()
 	_after_buy_tick()
 	if str(config.get("provider", "")) == "eko":   # Firma eines freien Wesens: es entscheidet selbst (EkoWorld), hier nur der Tagesbetrieb
+		var c: Company = sim.company(cid)
+		if c != null and c.is_active() and c.fuel_rule.is_empty() and c.fuel_cap >= 100.0 and c.fuel < minf(100.0, c.fuel_cap * 0.2) and not c.vehicle_ids.is_empty():
+			# Ein leerer Hoftank blockierte den einzigen LKW waehrend Qwen immer wieder eine Reparatur versuchte.
+			# Die Tankregel ist nur ein Dispositionsstandard; das Wesen kann sie spaeter aendern.
+			FuelPlanner.set_rule(sim, cid, minf(250.0, c.fuel_cap * 0.45), minf(500.0, c.fuel_cap * 0.7), "")
+			FuelPlanner.run_rules(sim)
 		return
 	if _inflight >= 0:
 		# Wachhund: falls der Adapter nie antwortet
