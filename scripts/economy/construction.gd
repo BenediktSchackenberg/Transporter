@@ -793,7 +793,7 @@ const RESALE_MARGIN := 1.10           # Region: Anleger kaufen fertige Bautraege
 const REGION_MATERIAL_FACTOR := 0.4   # Region: Hausbau braucht weniger Material je Phase (kleinere Lieferungen, Bauhof reicht laenger)
 const ADVANCE_SHARE := 0.5            # Region: davon zahlen sie die Haelfte schon bei Vertragsschluss an
 const SHOP_PER_RESIDENTS := 15        # Region: ein Laden je 15 Einwohner
-const WORKSHOP_PER_RESIDENTS := 25    # Region: eine Werkstatt/Lagerhalle im Gewerbegebiet je 25 Einwohner
+const WORKSHOP_PER_RESIDENTS := 20    # Auch kleine Gründungsstädte brauchen mindestens einen Gewerbebetrieb.
 const SHOP_DEFS := ["baeckerei_laden", "getraenkemarkt", "drogerie_laden", "supermarkt"]
 func _developer_town(town: int) -> void:
 	if sim.neubeginn and not (sim.wildnis and sim.town_ready(town) and sim.town_plan.has(town)):
@@ -898,10 +898,12 @@ func _commerce_project(town: int) -> bool:
 			if _developer_try(cands, def_id):
 				sim.log_event("%s: Der Bautraeger baut %s (%d Einwohner, %d Laeden)." % [sim.towns.name_of(town), d.label, pop, shops], "info")
 				return true
-	if workshops < pop / WORKSHOP_PER_RESIDENTS:
-		var cands2: Array = sim.parcels.search({"zone": "gewerbe", "min_area": 24, "utilities": "voll", "limit": 120, "town": town})
+	if workshops < maxi(1, ceili(float(pop) / float(WORKSHOP_PER_RESIDENTS))):
+		var cands2: Array = []
+		for zone in ["gewerbe", "industrie"]:
+			cands2 += sim.parcels.search({"zone": zone, "min_area": 24, "utilities": "voll", "limit": 120, "town": town})
 		if _developer_try(cands2, "lager_werkstatt"):
-			sim.log_event("%s: Der Bautraeger baut eine Werkstatt im Gewerbegebiet (%d Einwohner)." % [sim.towns.name_of(town), pop], "info")
+			sim.log_event("%s: Der Bautraeger baut eine Werkstatt im Gewerbe- oder Industriegebiet (%d Einwohner)." % [sim.towns.name_of(town), pop], "info")
 			return true
 	return false
 

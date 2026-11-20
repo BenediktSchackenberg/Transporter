@@ -39,7 +39,7 @@ const SCHEMA := {
 	"viertel_erschliessen": {"params": {"viertel": "string", "reason": "string"},
 		"desc": "Ein Viertel des Stadtplans (V1, V2, … siehe stadtplan.viertel) in einem Abschnitt erschließen: die freien städtischen Grundstücke dort bekommen die Zone des Viertels, Straße und Anschlüsse werden als Projekt beauftragt (Kosten aus dem Haushalt, Material, Baufirma). Danach entstehen dort Häuser, Läden oder städtische Bauten."},
 	"stadtteil_planen": {"params": {"mitte": "array", "zone": "string", "name": "string", "reason": "string"},
-		"desc": "Nach den bisherigen Vierteln einen neuen Stadtteil selbst entwerfen: mitte [x,y] aus obs.stadtplan_erweiterung, zone wohnen|mischgebiet|gewerbe|gruen, eigener Name und Grund. Für bebaute Viertel danach viertel_erschliessen; Grünflächen für Parkprojekte freihalten."},
+		"desc": "Nach den bisherigen Vierteln einen neuen Stadtteil selbst entwerfen: mitte [x,y] aus obs.stadtplan_erweiterung, zone wohnen|mischgebiet|gewerbe|industrie|gruen, eigener Name und Grund. Für bebaute Viertel danach viertel_erschliessen; Grünflächen für Parkprojekte freihalten."},
 	"quartier_entwurf_waehlen": {"params": {"viertel": "string", "entwurf": "string", "reason": "string"},
 		"desc": "Für ein eigenes, noch ungeplantes Viertel eine geprüfte Komposition aus obs.stadtplan_naechster_abschnitt.entwuerfe wählen. Die Wahl bestimmt Straßen, Platz und Quartierscharakter; danach viertel_erschliessen. Andere Städte entscheiden unabhängig."},
 	"plan_infrastructure": {"params": {"parcel_ids": "array", "parts": "array?", "reason": "string"},
@@ -188,7 +188,9 @@ func town_units() -> Array:
 ## freie Wohnungen des eigenen Gebiets. Wer keine Wohnung findet, wartet (Wohnungssuchende dieser Stadt).
 const REGION_ARRIVALS := 10.0  # Region: Zuzug je Monat das Zehnfache der Grundrate (Staedte sollen sichtbar wachsen; Zuzug ist der Taktgeber des Bautraegers)
 func _arrivals_town() -> void:
-	if sim.neubeginn:
+	if sim.wildnis and not sim.town_ready(town):
+		return   # Erst nach der Stadtgründung gibt es eine Zielstadt für Zuziehende.
+	if sim.neubeginn and not sim.wildnis:
 		return   # Neubeginn: Zuzug nur per Siedlerschiff (SeaTraffic)
 	var Z: Citizens = sim.citizens
 	var month := GameCalendar.month_of(sim.game_min)

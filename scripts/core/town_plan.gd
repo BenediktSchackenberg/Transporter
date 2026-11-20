@@ -372,8 +372,8 @@ func plan_district(k: int, a: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Wähle mitte: [x, y] aus stadtplan_erweiterung."}
 	var center := Vector2i(int(raw[0]), int(raw[1]))
 	var zone := str(a.get("zone", "wohnen"))
-	if zone not in ["wohnen", "mischgebiet", "gewerbe", "gruen"]:
-		return {"ok": false, "msg": "zone: wohnen | mischgebiet | gewerbe | gruen."}
+	if zone not in ["wohnen", "mischgebiet", "gewerbe", "industrie", "gruen"]:
+		return {"ok": false, "msg": "zone: wohnen | mischgebiet | gewerbe | industrie | gruen."}
 	if not expansion_sites(k).any(func(s): return int(s.feld[0]) == center.x and int(s.feld[1]) == center.y):
 		return {"ok": false, "msg": "Dieser Standort ist nicht mehr frei. Wähle einen der aktuellen Vorschläge aus stadtplan_erweiterung."}
 	var n: int = (p.viertel as Array).size() + 1
@@ -1030,10 +1030,11 @@ func next_district(k: int, housing_need: bool) -> Dictionary:
 		var sites := expansion_sites(k)
 		if sites.is_empty():
 			return {}
-		var zone := "wohnen" if housing_need else ("gruen" if (p.viertel as Array).size() % 4 == 0 else "mischgebiet")
+		var zones: Array = (p.viertel as Array).map(func(v): return str(v.zone))
+		var zone := "wohnen" if housing_need else ("gewerbe" if not zones.has("gewerbe") else ("industrie" if not zones.has("industrie") else ("gruen" if zones.size() % 5 == 0 else "mischgebiet")))
 		return {"text": "Neue Stadterweiterung planen: Standort und Nutzung anhand der freien Flächen wählen.",
 			"kandidaten": sites, "aktion": {"action": "stadtteil_planen", "mitte": sites[0].feld, "zone": zone,
-				"name": "Neues %sviertel" % ("Grün" if zone == "gruen" else "Wohn" if zone == "wohnen" else "Misch"),
+				"name": "Neues %sviertel" % ("Grün" if zone == "gruen" else "Wohn" if zone == "wohnen" else "Gewerbe" if zone == "gewerbe" else "Industrie" if zone == "industrie" else "Misch"),
 				"reason": "Freie Fläche mit Anschluss an den bestehenden Stadtkern"}}
 	if str(best.get("entwurf", "")) == "":
 		var designs := design_options(k, str(best.id))

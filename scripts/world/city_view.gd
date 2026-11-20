@@ -168,6 +168,7 @@ func build(simulation: Simulation) -> void:
 	decor_node.add_child(road_state)   # Schnee und Schlagloecher (Auftrag 20 Etappe 6), Bodenebene
 	road_state.setup(sim)
 	decor_node.add_child(highway_view)
+	highway_view.z_index = -9   # Asphalt liegt über dem Boden, aber hinter Bergflanken und Gebäuden.
 	highway_view.setup(sim)
 	decor_node.add_child(rail_view)
 	rail_view.setup(sim)

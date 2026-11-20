@@ -8883,6 +8883,10 @@ func test_wildnis_found() -> void:
 	ok(not hub_area.grow(16).intersects(Rect2i(int(dep.x), int(dep.y), int(dep.w), int(dep.h))), "KI-Betriebshof steht außerhalb des gemeinsamen Großlagers")
 	ok(Vector2(E.estates.center_of(p0)).distance_to(Vector2(site)) <= EkoEstates.NEAR_MAX + 1.0, "Basis am gewählten Platz (%d Felder daneben)" % int(Vector2(E.estates.center_of(p0)).distance_to(Vector2(site))))
 	ok(not s.town_ready(k) and int(s.city.towns[k].get("town_hall", -1)) < 0, "noch keine Stadt (kein Bürgeramt)")
+	var future_mayor: Mayor = s.towns.mayor(k)
+	future_mayor._arrival_acc = 1.1
+	future_mayor._arrivals_town()
+	ok(future_mayor.waiting == 0, "vor der Stadtgründung wartet noch niemand auf eine Wohnung")
 	ok(s.towns.get_t(k).center == Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1])), "Towns-Register kennt die neue Mitte")
 	ok((s.settlements[str(k)].plots as Array).size() >= 2, "Bauland um den Hof (%d Grundstücke)" % (s.settlements[str(k)].plots as Array).size())
 	ok(int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("buergeramt_bauen"), "gegründet ohne Bürgeramt: dringend mit Aktion")
@@ -8942,6 +8946,11 @@ func test_wildnis_found() -> void:
 	B.akku = 100.0
 	E.homes.tick(60.0 * 30.0)
 	ok(hs.status == "fertig" and s.town_ready(k) and int(s.city.towns[k].town_hall) >= 0, "Bürgeramt fertig – die Stadt ist gegründet (%s)" % str(hs.get("blockiert", hs.status)))
+	var found_mayor: Mayor = s.towns.mayor(k)
+	var before_arrivals := s.citizens.population_of(k) + found_mayor.waiting
+	found_mayor._arrival_acc = 1.1
+	found_mayor._arrivals_town()
+	ok(s.citizens.population_of(k) + found_mayor.waiting > before_arrivals, "Wildnis-Stadt erhält Zuzug über Land, auch ohne Siedlerschiff")
 	var town_rect: Array = s.city.towns[k].rect
 	var town_area := Rect2i(int(town_rect[0]), int(town_rect[1]), int(town_rect[2]), int(town_rect[3]))
 	var city_depot: Dictionary = s.city.building(s.towns.depot(k).building)
@@ -15378,6 +15387,10 @@ func test_parcel_ids_and_districts() -> void:
 	ok(not resaved.touched.has("G999999") and resaved.touched.has(a), "veraltete Grundstücks-ID wird beim Speichern übersprungen")
 	ok(str(Q.parcel(a).owner) == Towns.owner_of(1) and str(Q.parcel(a).state) == "im_bau", "Zustand und Eigentum bleiben beim richtigen Grundstück")
 	ok(str(Q.parcel(c).zone) == "gewerbe" and str(Q.at_cell(r1.position).id) == a, "Zellen zeigen auf die richtige Nummer")
+	var industrial_sites: Array = s.town_plan.expansion_sites(0)
+	if not industrial_sites.is_empty():
+		var industrial: Dictionary = s.town_plan.plan_district(0, {"mitte": industrial_sites[0].feld, "zone": "industrie", "name": "Industriepark"})
+		ok(industrial.ok and str((s.town_plan.of(0).viertel as Array)[-1].zone) == "industrie", "Bürgermeister kann ein eigenes Industriequartier planen")
 	# Viertel erschliessen: echtes Projekt mit Kosten, Umwidmung nach Plan
 	var M: Mayor = s.towns.mayor(0)
 	var vs: Array = (s.town_plan.of(0).viertel as Array).filter(func(v): return str(v.zone) != "gruen")
