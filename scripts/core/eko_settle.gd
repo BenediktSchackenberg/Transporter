@@ -939,7 +939,7 @@ func request_transport(k: int, kind: String, reason: String) -> Dictionary:
 	if M.available_budget() < cost:
 		return {"ok": false, "msg": "%s braucht %s frei verfuegbare Stadtkasse." % [kind.capitalize(), Catalog.money(cost)]}
 	var materials := {"betonfertigteil": 22, "schotter": 24, "verbindung": 8} if kind == "hafen" else {"betonfertigteil": 55, "schotter": 40, "verbindung": 15}
-	var days := 4 + int(ceil(float(site.road.size()) / 45.0)) if kind == "hafen" else 6 + int(ceil(float(site.road.size()) / 45.0))
+	var days := 3 if kind == "hafen" else 4
 	var prj: Dictionary = M.add_works_project(project_kind, "standort", cost, days, materials, reason)
 	prj["site"] = site.duplicate(true)
 	prj["ref"] = "transportzufahrt"

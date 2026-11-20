@@ -1123,6 +1123,11 @@ func _public_day(day: int) -> void:
 			if str(connector.get("ref", "")) == "anschluss":
 				e.days_left = 2
 				e.days = 2
+			elif str(connector.get("kind", "")) in ["hafenbau", "flughafenbau"]:
+				var transport_days := 3 if str(connector.kind) == "hafenbau" else 4
+				if int(e.days_left) > transport_days:
+					e.days_left = transport_days
+					e.days = transport_days
 			elif str(connector.get("kind", "")) == "erschliessung" and int(e.days_left) > 4:
 				e.days_left = 4
 				e.days = maxi(4, int(e.days) - (int(e.days_left) - 4))
@@ -1164,7 +1169,7 @@ func tick_public_connectors(now: float) -> void:
 			e["road_start_min"] = now
 		var cells: Array = prj.road_plan
 		var placed := int(e.get("road_placed", 0))
-		var duration := HUB_ROAD_BUILD_MIN if road_kind == "anschluss" else maxf(HUB_ROAD_BUILD_MIN, float(e.days) * float(GameCalendar.day_game_min))
+		var duration := HUB_ROAD_BUILD_MIN if road_kind == "anschluss" else (maxf(HUB_ROAD_BUILD_MIN, float(GameCalendar.day_game_min) * 0.75) if road_kind == "transportzufahrt" else maxf(HUB_ROAD_BUILD_MIN, float(e.days) * float(GameCalendar.day_game_min)))
 		var target := mini(cells.size(), int(floor((now - float(e.road_start_min)) / duration * float(cells.size()))))
 		if target > placed:
 			var section: Array = cells.slice(placed, target).map(func(a): return Vector2i(int(a[0]), int(a[1])))
