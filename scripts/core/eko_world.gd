@@ -920,13 +920,17 @@ func urgency(b: Dictionary) -> Dictionary:
 			if str(growth.get("stufe", "")) == "wohnraum" and int(growth.get("wohnungen", 0)) > 0:
 				var gaps: Array = growth.get("fehlende_anschluesse", [])
 				var power_pending: bool = sim.grid.net.planned.values().any(func(p): return str(p.get("b", "")) == "U%d" % office_town)
-				if "kraftwerksstrom" in gaps and not power_pending and not sim.grid.net.option_brief(office_town).is_empty():
-					return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber ohne Kraftwerksstrom nicht bewohnbar. Wähle selbst eine geprüfte Option aus mein_amt.stromtrassen und nutze mayor_action {action: stromtrasse_bauen, params: {option: Kennung, reason: Grund}}; danach das Ergebnis prüfen."}
+				var power_options: Array = sim.grid.net.option_brief(office_town)
+				if "kraftwerksstrom" in gaps and not power_pending and not power_options.is_empty():
+					var power_ids: Array = power_options.map(func(o): return str(o.id))
+					return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber ohne Kraftwerksstrom nicht bewohnbar. Gültige Stromtrassen-IDs: %s. Wähle selbst eine Variante aus mein_amt.stromtrassen und nutze mayor_action {action: stromtrasse_bauen, params: {option: gewählte ID, reason: Grund}}; danach das Ergebnis prüfen." % ", ".join(power_ids)}
 				for art in ["wasser", "abwasser"]:
 					var key: String = "frischwassernetz" if art == "wasser" else "kanalnetz"
 					var pending: bool = sim.water.main_projects.values().any(func(p): return int(p.get("town", -1)) == office_town and str(p.get("art", "")) == art)
-					if key in gaps and not pending and not sim.water.main_options(office_town, art).is_empty():
-						return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber das %s erreicht sie nicht. Wähle selbst eine geprüfte Option aus mein_amt.versorgungsleitungen und nutze mayor_action {action: versorgungsleitung_bauen, params: {option: Kennung, reason: Grund}}." % ("Frischwassernetz" if art == "wasser" else "Kanalnetz")}
+					var line_options: Array = sim.water.main_options(office_town, art)
+					if key in gaps and not pending and not line_options.is_empty():
+						var line_ids: Array = line_options.map(func(o): return str(o.id))
+						return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber das %s erreicht sie nicht. Gültige Leitungs-IDs: %s. Wähle selbst eine Variante aus mein_amt.versorgungsleitungen und nutze mayor_action {action: versorgungsleitung_bauen, params: {option: gewählte ID, reason: Grund}}." % [("Frischwassernetz" if art == "wasser" else "Kanalnetz"), ", ".join(line_ids)]}
 		return {"prioritaet": 0, "grund": ""}
 	var best := {"prioritaet": 0, "grund": ""}
 	var home_k: int = sim.company(cid).home_town

@@ -889,6 +889,10 @@ class Agent:
                 params = {}
             params = {**{k: v for k, v in arguments.items() if k not in ("action", "params")}, **params}
             arguments = {"action": arguments["action"], "params": params}
+            valid_actions = next(t["parameters"]["properties"]["action"]["enum"]
+                                 for t in available if t["name"] == "mayor_action")
+            if arguments["action"] not in valid_actions:
+                raise ModelGlitch("Ollama-JSON-Antwort mit unbekannter Amtshandlung %s" % str(arguments["action"])[:80])
         if name == "append_memory" and "entry" not in arguments and arguments:
             arguments = {"entry": arguments}
         parameters = next(t["parameters"] for t in available if t["name"] == name)
