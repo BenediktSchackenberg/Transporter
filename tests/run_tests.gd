@@ -9034,6 +9034,7 @@ func test_wildnis_found() -> void:
 	ok(work_offer.status == "open" and work_v.stops.is_empty(), "Gruender-LKW faehrt vor dem ersten fertigen Wohnhaus keine Kundenfracht")
 	loaded_city.housing.register_unit(int(loaded_city.city.towns[k].town_hall), 65.0, Housing.LANDLORD)
 	loaded_city.operations.dispatch_policies.erase(cid)
+	ok(not bool(loaded_city.eko.firm_obs(work_b).dispositionsvorgaben.gruender_lkw_freigegeben), "KI sieht, dass die Standardvorgabe ihren Gruender-LKW noch nicht freigibt")
 	ok(loaded_city.eko.next_steps(work_b).any(func(step): return str(step).contains("set_dispatch_policy")), "nach erstem Wohnhaus sieht die KI die Entscheidung fuer den Gruender-LKW")
 	loaded_city.operations.run(cid, "set_dispatch_policy", {"auto_accept": true, "min_margin": 0, "max_distance": 0, "reserve": 0})
 	loaded_city.operations._auto_dispatch(cid)

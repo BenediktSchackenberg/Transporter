@@ -2791,7 +2791,11 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var o := ObservationBuilder.build(sim, cid, [], 0.0, 10.0)
 	var me: Dictionary = o.ich
 	var models: Dictionary = o.fahrzeugmodelle
-	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "reputation": me.reputation,
+	var dispatch_view: Dictionary = sim.operations.dispatch_policy(cid)
+	dispatch_view["von_dir_gesetzt"] = sim.operations.dispatch_policies.has(cid)
+	dispatch_view["gruender_lkw_freigegeben"] = sim.operations.dispatch_policies.has(cid) and bool(dispatch_view.auto_accept) \
+		and sim.town_ready(sim.company(cid).home_town) and sim.housing.units.values().any(func(u): return sim.towns.of_building(int(u.building)) == sim.company(cid).home_town)
+	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "lieferungen": sim.company(cid).stats.completed, "reputation": me.reputation,
 		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),
 		"grosslager": {"feld": sim.city.hub.get("center", []), "abholen": "hub_buy liefert per Materialhubschrauber; ältere Abholaufträge: call_material_heli {ref: H...}",
 			"wartende_baustoffe": homes.waiting_goods(cid), "hubschrauber": sim.material_heli.obs(cid), "hinweis": "Das Großlager ist nicht dein Betriebshof. Der eigene Chinook bringt gekaufte Baustoffe zum Hof; Lagerpersonal belädt ihn am Hauptlager."},
@@ -2801,7 +2805,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"standortangebote": sim.sites.offers(sim.companies[cid].home_town, "einfamilienhaus") if sim.wildnis and sim.town_plan.has(sim.companies[cid].home_town) else [],
 		"gewerbestandorte": sim.sites.offers(sim.companies[cid].home_town, "buerogebaeude", 2) if sim.wildnis and sim.town_plan.has(sim.companies[cid].home_town) else [],
 		"unternehmensplan": sim.plans.summary(cid) if sim.get("plans") != null else {},
-		"dispositionsvorgaben": sim.operations.dispatch_policy(cid),
+		"dispositionsvorgaben": dispatch_view,
 		"transportchancen": sim.operations.dispatch_opportunities(cid, 4),
 		"entscheidungsfolgen": _decision_outcomes(b, cid),
 		"hinweis_fahrzeug": _no_vehicle_hint(cid),

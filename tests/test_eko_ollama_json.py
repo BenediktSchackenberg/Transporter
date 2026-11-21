@@ -30,7 +30,7 @@ class JsonToolFallbackTest(unittest.TestCase):
     def test_contract_choice_uses_fresh_visible_ids(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="unternehmer")
-        agent._opening_foundation = agent._opening_hall = agent._opening_home = False
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
         agent._passive_streak = 0
         sent = []
         agent.world = SimpleNamespace(
@@ -44,11 +44,30 @@ class JsonToolFallbackTest(unittest.TestCase):
         self.assertFalse(agent.call_tool("contract_choice", {"candidate": 2})["ok"])
         self.assertEqual(len(sent), 1)
 
+    def test_first_freight_stops_repeated_plan_reviews(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="unternehmer")
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
+        agent.world = SimpleNamespace(act=lambda *_: self.fail("Plan darf keine Weltaktion ausloesen"))
+        agent.observation_status({"ok": True, "meine_firma": {
+            "siedlung": {"betriebshof": True, "buergeramt": True, "fertige_wohnhaeuser": 1},
+            "lieferungen": 0, "meine_auftraege": [], "transportchancen": [{"contract_id": "A42", "vehicle_id": 1}],
+            "dispositionsvorgaben": {"von_dir_gesetzt": False}}})
+        self.assertTrue(agent._opening_freight)
+        self.assertNotIn("company_plan", [tool["name"] for tool in agent.model_tools()])
+        self.assertFalse(agent.call_tool("review_company_plan", {})["ok"])
+        self.assertFalse(agent.call_tool("act", {"type": "Firma", "data": {"aktion": {"action": "set_plan"}}})["ok"])
+        agent.observation_status({"ok": True, "meine_firma": {
+            "siedlung": {"betriebshof": True, "buergeramt": True, "fertige_wohnhaeuser": 1},
+            "lieferungen": 1, "meine_auftraege": [], "transportchancen": [],
+            "dispositionsvorgaben": {"von_dir_gesetzt": True}}})
+        self.assertFalse(agent._opening_freight)
+
     def test_invalid_native_tool_call_uses_structured_json_and_stays_there(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="unternehmer", anbieter="ollama", model="local-test",
                                      ollama="http://127.0.0.1:11435", ctx=16384, think=False, name="Greta")
-        agent._opening_foundation = agent._opening_hall = agent._opening_home = False
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
         agent._passive_streak = 0
         agent.urgency = 0
         agent.log = io.StringIO()
@@ -77,7 +96,7 @@ class JsonToolFallbackTest(unittest.TestCase):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
                                      ctx=16384, name="Viktor")
-        agent._opening_foundation = agent._opening_hall = agent._opening_home = False
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
         agent._passive_streak = 0
         agent.urgency = 0
         with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
@@ -89,7 +108,7 @@ class JsonToolFallbackTest(unittest.TestCase):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
                                      ctx=16384, name="Viktor")
-        agent._opening_foundation = agent._opening_hall = agent._opening_home = False
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
         agent._passive_streak = 0
         agent.urgency = 0
         agent._observe_streak = 2

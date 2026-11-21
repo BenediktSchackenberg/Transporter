@@ -477,6 +477,7 @@ class Agent:
         self._opening_foundation = False
         self._opening_hall = False
         self._opening_home = False
+        self._opening_freight = False
         self._passive_streak = 0
         self.dir = Path(args.root) / args.name
         self.ws = self.dir / "workspace"
@@ -519,6 +520,15 @@ class Agent:
             self._opening_hall = bool(settlement["betriebshof"]) and not bool(settlement.get("buergeramt", False))
         self._opening_home = (bool(settlement.get("betriebshof")) and bool(settlement.get("buergeramt"))
                               and int(settlement.get("fertige_wohnhaeuser", 0)) == 0) if isinstance(settlement, dict) else False
+        contracts = firm.get("meine_auftraege") or [] if isinstance(firm, dict) else []
+        chances = firm.get("transportchancen") or [] if isinstance(firm, dict) else []
+        policy = firm.get("dispositionsvorgaben") or {} if isinstance(firm, dict) else {}
+        self._opening_freight = (getattr(self.args, "rolle", "") == "unternehmer" and not self._opening_home
+                                 and bool(settlement.get("betriebshof")) and bool(settlement.get("buergeramt"))
+                                 and int(settlement.get("fertige_wohnhaeuser", 0)) > 0
+                                 and int(firm.get("lieferungen", 0)) == 0
+                                 and not any(k.get("status") in ("accepted", "assigned", "in_transit", "loading") for k in contracts if isinstance(k, dict))
+                                 and (bool(chances) or not bool(policy.get("von_dir_gesetzt", False)))) if isinstance(settlement, dict) and isinstance(firm, dict) else False
         steps = observation.get("naechste_schritte") or []
         goal = observation.get("mein_ziel") or {}
         urgent = observation.get("dringlichkeit") or {}
@@ -647,6 +657,8 @@ class Agent:
                 if isinstance(result, dict):
                     result["gewaehlt"] = {"contract_id": kid, "vehicle_id": vid, "deckungsbeitrag_geschaetzt": choice.get("deckungsbeitrag_geschaetzt")}
                 return result
+            if self._opening_freight and name in ("company_plan", "review_company_plan"):
+                return {"ok": False, "msg": "Erste Kundenlieferung fehlt noch. Waehle jetzt einen aktuellen Auftrag mit contract_choice oder entscheide ueber dispatch_policy; danach kannst du den Plan pruefen."}
             if name == "mayor_action":
                 if getattr(self.args, "rolle", "") != "buergermeister":
                     return {"ok": False, "msg": "Nur Buergermeister koennen mayor_action nutzen."}
@@ -691,6 +703,11 @@ class Agent:
                 action = data.get("aktion") or {} if isinstance(data, dict) else {}
                 if isinstance(action, dict) and str(action.get("action", "")) in ("accept_contract", "collect_contracts", "set_dispatch_policy"):
                     return {"ok": False, "msg": "Bürgeramt und erstes Wohnhaus haben jetzt Vorrang. Beende zuerst die Baukette aus dringlichkeit.grund."}
+            if name == "act" and self._opening_freight and str(a.get("type", "")) == "Firma":
+                data = a.get("data") or {}
+                action = data.get("aktion") or {} if isinstance(data, dict) else {}
+                if isinstance(action, dict) and str(action.get("action", "")) in ("set_plan", "review_plan"):
+                    return {"ok": False, "msg": "Planungsrunde ohne Lieferung: waehle contract_choice oder dispatch_policy fuer die erste Kundenfracht."}
             if name == "company_plan":
                 steps = a.get("schritte", [])
                 if not isinstance(steps, list) or not steps or not all(isinstance(s, str) for s in steps):
@@ -863,6 +880,8 @@ class Agent:
             return [tool for tool in TOOLS if tool["name"] in ("observe", "founding_choice", "act", "wait")]
         if self._opening_hall or self._opening_home:
             return [tool for tool in TOOLS if tool["name"] in ("observe", "act", "wait")]
+        if self._opening_freight:
+            return [tool for tool in TOOLS if tool["name"] not in ("company_plan", "review_company_plan")]
         if getattr(self.args, "rolle", "") == "unternehmer":
             return TOOLS
         return TOOLS[:-len(COMPANY_TOOLS)]
@@ -914,6 +933,8 @@ class Agent:
                        "Flug abwarten und mit Bauen {baustelle:ID} arbeiten. Keine Kundenfracht.\n" if self._opening_hall else "") +
                       ("Erstes Wohnhaus fehlt: baue und versorge jetzt ein Wohnhaus. Keine Kundenfracht, bis der Ort wachsen kann.\n"
                        if self._opening_home else "") +
+                      ("Erste Lieferung fehlt: waehle jetzt contract_choice aus meine_firma.transportchancen oder setze mit dispatch_policy eigene Grenzen fuer die Disposition. Keine weitere Planungsrunde vor der ersten Lieferung.\n"
+                       if self._opening_freight else "") +
                       "Waehle genau eine konkrete naechste Handlung aus dieser Werkzeugliste:\n" +
                       "\n".join(menu) +
                       "\nAntworte ausschliesslich als JSON nach diesem Schema: " + json.dumps(schema) +

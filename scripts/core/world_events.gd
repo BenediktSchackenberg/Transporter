@@ -223,10 +223,14 @@ func note_breakdown(v: FleetVehicle, reason: String) -> void:
 	if _active(key):
 		return
 	var cause := "Wartungsrückstand (Fahrzeugzustand %d %%)" % int(v.condition) if v.condition < 60.0 else "Verschleiß im Betrieb"
-	if sim.wx.is_cold() or sim.wx.is_hot() or sim.wx.is_icy():
-		cause += " bei Extremwetter (%s)" % sim.wx.cur.text
-	if reason == "sabotiert":
+	if reason == "Unfall":
+		cause = "Zusammenstoß im Verkehr"
+	elif reason == "Tank leer":
+		cause = "Treibstoffmangel"
+	elif reason == "sabotiert":
 		cause = "Sabotage"
+	elif sim.wx.is_cold() or sim.wx.is_hot() or sim.wx.is_icy():
+		cause += " bei Extremwetter (%s)" % sim.wx.cur.text
 	var e := _make(key, "fahrzeugausfall", cause, "%s ausgefallen" % v.display_name(), 1, 150.0, 0.0,
 		{"conditions": cause, "places": [Catalog.DISTRICTS[sim.city.district_of(v.tile())]], "effects": ["Fahrzeug steht, Auftrag verzögert", "Mechaniker oder Abschleppdienst nötig"],
 		"sources": ["Fahrzeugmeldung an die Disposition"], "end": "Fahrzeug repariert oder abgeschleppt", "end_key": "fahrzeug:%d" % v.id,
