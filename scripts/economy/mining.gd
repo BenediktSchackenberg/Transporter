@@ -165,19 +165,29 @@ func on_month() -> void:
 # ------------------------------------------------------------------ Naechster Schritt (KI)
 ## Je Rohstoff der naechste Schritt fuer die Firma: erkunden | abbauantrag | warten | zufahrt | gruenden, mit Grundstueck und Kosten.
 func next_step(cid: int, kind: String) -> Dictionary:
+	var sites: Array = site_options(cid, kind, 1)
+	return sites[0] if not sites.is_empty() else {}
+
+
+## Vergleichbare Standorte statt nur des groessten Vorkommens: geschaetzter Rohstoffwert,
+## Kaufpreis, echte Zufahrtskosten und die Entfernung zur eigenen Stadt zaehlen zusammen.
+## Bereits begonnene Erkundungen und Genehmigungen behalten Vorrang.
+func site_options(cid: int, kind: String, limit: int = 2) -> Array:
 	if sim.prod._deposits.is_empty():
 		sim.prod.deposit_of("x")
-	var best := {}
-	var best_rank := -1
-	var best_score := -1.0
+	var sites: Array = []
+	var home: int = int(sim.company(cid).home_town)
 	for pid in sim.prod._deposits:
 		var d: Dictionary = sim.prod.deposit_of(pid)
 		var p: Dictionary = sim.parcels.parcel(pid)
-		if str(d.art) != kind or int(d.menge) <= 0 or p.is_empty() or not Towns.is_public(str(p.owner)):
+		var free_land: bool = str(p.get("state", "")) == "frei" or (str(p.get("state", "")) == "privat_gehalten" and str(p.get("use", "")) == "berg")
+		if str(d.art) != kind or int(d.menge) <= 0 or p.is_empty() or not Towns.is_public(str(p.owner)) or not free_land:
 			continue
 		var pm: Dictionary = permits.get(pid, {})
 		if not pm.is_empty() and int(pm.cid) != cid and pm.status in ["antrag", "genehmigt"]:
 			continue   # gehoert einem anderen
+		if drillings.has(pid) and int(drillings[pid].cid) != cid:
+			continue   # waehrend die Konkurrenz bohrt einen eigenen Standort verfolgen
 		if not pm.is_empty() and pm.status == "abgelehnt" and int(pm.cid) == cid:
 			continue
 		var road: bool = bool(sim.parcels.utilities_of(p).strasse)
@@ -201,30 +211,45 @@ func next_step(cid: int, kind: String) -> Dictionary:
 			rank = 1
 		if step == "zufahrt" and sim.access.jobs.values().any(func(j): return j.parcel == pid and j.status in ["antrag", "im_bau"]):
 			step = "warten"
+		var access_cost := 0
+		var access_days := 0
+		if not road:
+			var pl: Dictionary = sim.access.plan(pid)
+			if not bool(pl.get("ok", false)):
+				continue
+			access_cost = int(pl.get("kosten", 0))
+			access_days = int(pl.get("tage", 0))
 		var e := estimate(pid)
-		var score := float(e.get("menge", e.get("menge_geschaetzt", 0))) * float(e.get("qualitaet", e.get("qualitaet_geschaetzt", 0.5))) * (1.0 if road else 0.6)
-		if rank > best_rank or (rank == best_rank and score > best_score):
-			best_rank = rank
-			best_score = score
-			best = {"grundstueck": pid, "schritt": step, "lagerstaette": e, "strasse": road}
-	if best.is_empty():
-		return {}
-	match str(best.schritt):
-		"erkunden":
-			best["kosten"] = int(EXPLORE_COST)
-		"zufahrt":
-			var pl: Dictionary = sim.access.plan(str(best.grundstueck))
-			best["kosten"] = int(pl.get("kosten", 0)) if pl.get("ok", false) else -1
-	return best
+		var town: int = sim.towns.of_parcel(pid) if sim.towns.is_region() else 0
+		var amount: float = float(e.get("menge", e.get("menge_geschaetzt", 0)))
+		var quality: float = float(e.get("qualitaet", e.get("qualitaet_geschaetzt", 0.5)))
+		var gross: float = amount * quality * float(Production.art(kind).get("basispreis", 5.0))
+		var score: float = gross * (1.15 if town == home else 0.85) - float(p.price) - float(access_cost)
+		var site := {"grundstueck": pid, "schritt": step, "lagerstaette": e, "strasse": road,
+			"stadt": sim.towns.name_of(town), "heimatstadt": town == home, "kaufpreis": int(p.price),
+			"zufahrt_kosten": access_cost, "zufahrt_tage": access_days, "rohstoffwert_geschaetzt": int(gross),
+			"_rank": rank, "_score": score}
+		match step:
+			"erkunden":
+				site["kosten"] = int(EXPLORE_COST)
+			"zufahrt":
+				site["kosten"] = access_cost
+		sites.append(site)
+	sites.sort_custom(func(a, b): return int(a._rank) > int(b._rank) if int(a._rank) != int(b._rank) else float(a._score) > float(b._score))
+	for site in sites:
+		site.erase("_rank")
+		site.erase("_score")
+	return sites.slice(0, maxi(1, limit))
 
 
 ## Beobachtung der Unternehmer: naechster Schritt je Rohstoff.
 func steps_for(cid: int) -> Dictionary:
 	var out := {}
 	for k in Production.ALL_DEPOSIT_KINDS:
-		var s := next_step(cid, k)
-		if s.is_empty():
+		var sites: Array = site_options(cid, k, 2)
+		if sites.is_empty():
 			continue
+		var s: Dictionary = sites[0]
 		# knapp fuer die Beobachtung (Tokenbudget): erkundete Werte stehen in produktion_markt, Schaetzung nur vor der Bohrung
 		var e := {"schritt": s.schritt, "grundstueck": s.get("grundstueck", "")}
 		if s.has("kosten"):
@@ -233,8 +258,54 @@ func steps_for(cid: int) -> Dictionary:
 			e["schaetzung"] = {"menge": s.lagerstaette.get("menge_geschaetzt", 0), "qualitaet": s.lagerstaette.get("qualitaet_geschaetzt", 0)}
 		if s.has("grund"):
 			e["grund"] = s.grund
+		e["stadt"] = s.stadt
+		e["heimatstadt"] = s.heimatstadt
+		e["kaufpreis"] = s.kaufpreis
+		e["zufahrt_kosten"] = s.zufahrt_kosten
+		e["zufahrt_tage"] = s.zufahrt_tage
+		e["rohstoffwert_geschaetzt"] = s.rohstoffwert_geschaetzt
+		if sites.size() > 1:
+			var other: Dictionary = sites[1]
+			e["alternative"] = {"grundstueck": other.grundstueck, "stadt": other.stadt, "heimatstadt": other.heimatstadt,
+				"schritt": other.schritt, "kaufpreis": other.kaufpreis, "zufahrt_kosten": other.zufahrt_kosten,
+				"rohstoffwert_geschaetzt": other.rohstoffwert_geschaetzt}
 		out[k] = e
 	return out
+
+
+## Wirtschaftliche Signale fuer eine eigene Bergbaustrategie. Die KI waehlt Rohstoff,
+## Zeitpunkt und Standort selbst anhand der konkreten Optionen in steps_for().
+func strategic_context(cid: int) -> Dictionary:
+	var buyers := {}
+	var own := {}
+	for b in sim.biz.items.values():
+		if b.status == "geschlossen":
+			continue
+		var spec: Dictionary = Businesses.branches().get(str(b.branch), {})
+		for item in spec.get("rezept", {}).get("ein", {}):
+			if item in Production.ALL_DEPOSIT_KINDS:
+				buyers[item] = int(buyers.get(item, 0)) + 1
+		if int(b.owner) == cid and spec.has("abbau"):
+			var kind := str(b.get("deposit", {}).get("art", ""))
+			own[kind] = int(own.get(kind, 0)) + 1
+	# Der Bauhof kauft lokal Rohmaterial fuer Strassen, Beton und Baustellen.
+	buyers["rohmaterial"] = int(buyers.get("rohmaterial", 0)) + 1
+	if sim.hub != null and sim.hub.enabled:
+		buyers["naturstein"] = int(buyers.get("naturstein", 0)) + 1
+	var imports := {}
+	for item in Production.ALL_DEPOSIT_KINDS:
+		var n := int(sim.prod.stats.imported.get(item, 0))
+		if n > 0:
+			imports[item] = n
+	var building: int = sim.construction.projects.values().filter(func(p): return p.status in ["angebote", "erschliessung", "im_bau"]).size()
+	if sim.eko != null:
+		building += sim.eko.homes.sites.values().filter(func(s): return str(s.status) not in ["fertig", "abgebrochen", "zerstoert"]).size()
+	return {"aktive_bauvorhaben": building, "lokale_abnehmer": buyers, "bisher_importiert": imports,
+		"bauhof_rohmaterial": {"bestand": sim.trader.stock_of("rohmaterial"), "ziel": int(Trader.MATERIALS.rohmaterial.target)},
+		"eigene_foerderbetriebe": own, "netzlast_prozent": int(float(sim.grid.summary().auslastung) * 100.0),
+		"kernkraftwerk_geladen_mwh": int(sim.plant.loaded_mwh), "kernkraftwerk_brennelemente_lager": sim.plant.fuel_elements(),
+		"hinweis": "Baustoffe, Energieversorgung und lokale Abnehmer mit Kaufpreis, Zufahrt und Personal vergleichen. " +
+			"Erst Probebohrung und Abbaurecht, dann Zufahrt und Gründung; ein Rohstoff ohne Abnehmer kann lange im Lager liegen."}
 
 
 # ------------------------------------------------------------------ Buergermeister

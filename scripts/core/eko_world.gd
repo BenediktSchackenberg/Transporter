@@ -2972,6 +2972,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"branchen_zum_gruenden": _branch_menu(o.get("verfuegbare_branchen", [])),
 		"chancen": (o.get("chancen", []) as Array).slice(0, 6),
 		"bergbau": o.get("bergbau", []),
+		"bergbau_lage": o.get("bergbau_lage", {}),
 		"energiekette": {"lage": o.get("energie", {}), "betriebe_region": {"kohlekraftwerke": o.get("produktion_markt", {}).get("kohlekraftwerke", 0), "kohlebergwerke": o.get("produktion_markt", {}).get("kohlebergwerke", 0), "uranbergwerke": o.get("produktion_markt", {}).get("uranbergwerke", 0), "brennelementwerke": o.get("produktion_markt", {}).get("brennelementwerke", 0)},
 			"hinweis": "Kohle: Lagerstätte erkunden, Abbaurecht, Bergwerk, sichtbare Fracht zum Kohlekraftwerk. Uran: Uranbergwerk, Brennelementwerk, Spezialtransport zum Kernkraftwerk. Ein Angriff auf das gemeinsame Kraftwerk trifft alle Städte."},
 		"tunnel": sim.tunnels.summary(sim.companies[cid].home_town),
@@ -2988,7 +2989,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 			"poach_customer {customer_id} | report_rival {target} | block_road {target} | attempt_sabotage {target, kind: depot_disruption|smear_campaign} | " +
 			"attempt_vehicle_sabotage {worker_id, vehicle_id} | buy_security {level} | set_insurance {active} | offer_trade/propose_cooperation (siehe Spielregeln) | " +
 			"auftrag_an_wesen {art: botengang|mauer, lohn} (Hilfsjob für freie Wesen wie Lumo) | " +
-			"found_business {branche, stadt?} (Betrieb gründen: Werk, Grube, Laden …, siehe branchen_zum_gruenden) | assign_staff {worker_id, business_id} | " +
+			"found_business {branche, rohstoff?, grundstueck?, stadt?} (Betrieb gründen: Werk, Grube, Laden …, siehe branchen_zum_gruenden und bergbau) | assign_staff {worker_id, business_id} | " +
 			"upgrade_business {business_id} | set_business_price {business_id, item, price} | set_hotel_price {business_id, price} | set_venue_price {business_id, price} | buy_it_service {leistung, business_id?} | " +
 			"create_transport_line {name, cargo, vehicle_ids, pickup_id?, dropoff_id?, via_depot?} | book_air_cargo {item, menge, standort, stadt} | explore_deposit {grundstueck} | request_mining {grundstueck} | " +
 			"hub_sell {item, qty} (Ware ans Großlager) | close_business {business_id}}"}

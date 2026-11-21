@@ -1396,16 +1396,28 @@ static func landfill(sim: Simulation) -> String:
 ## Berg mit Lagerstaette bzw. Bergwerk (Klick auf den Berg): Vorkommen, Abbau, Betreiber, Foerderung, Halde, Lage.
 static func mountain(sim: Simulation, pid: String) -> String:
 	var P: Production = sim.prod
-	var dep := P.deposit_of(pid)
+	var dep := sim.mining.estimate(pid)
 	var ex := P.excavated(pid)
 	var p: Dictionary = sim.parcels.parcel(pid)
 	var item := str(dep.get("art", ""))
 	var start := int(P.terrain.get(pid, {}).get("start", 0))
 	var txt := "[b]Lagerstätte[/b] %s · Grundstück %s (%d Felder)\n" % [Production.item_name(item), pid, int(p.get("area", 0))]
-	txt += "Restvorrat %d von %d Einheiten · Qualität %.0f %% · abgebaut %.1f %%\n" % [int(dep.get("menge", 0)), start, float(dep.get("qualitaet", 0.0)) * 100.0, float(ex.get("anteil", 0.0)) * 100.0]
+	if bool(dep.get("erkundet", false)):
+		txt += "Restvorrat %d von %d Einheiten · Qualität %.0f %% · abgebaut %.1f %%\n" % [int(dep.get("menge", 0)), start, float(dep.get("qualitaet", 0.0)) * 100.0, float(ex.get("anteil", 0.0)) * 100.0]
+	else:
+		txt += "Vermutet: etwa %d Einheiten · geschätzte Qualität %.0f %% (Probebohrung klärt den Vorrat)\n" % [int(dep.get("menge_geschaetzt", 0)), float(dep.get("qualitaet_geschaetzt", 0.0)) * 100.0]
 	var mb := P.mine_on(pid)
 	if mb.is_empty():
-		txt += "\n[color=#9aa3ad]Noch kein Bergwerk. Kaufpreis des Grundstücks %s. Abbau über die Unternehmer-Aktion found_business (branche bergwerk, rohstoff %s); Abbau nur auf eigenem Grund.[/color]\n" % [Catalog.money(float(p.get("price", 0.0))), item]
+		var branch := "uranbergwerk" if item == "uranerz" else ("kiesgrube" if item in ["kies", "sand"] else ("lehmgrube" if item == "lehm" else ("bohrinsel" if item == "rohoel" else "bergwerk")))
+		var next := "explore_deposit (Probebohrung)" if not bool(dep.get("erkundet", false)) else "request_mining (Abbaurecht)"
+		var permit: Dictionary = sim.mining.permits.get(pid, {})
+		if sim.mining.drillings.has(pid):
+			next = "Probebohrung läuft"
+		elif str(permit.get("status", "")) == "antrag":
+			next = "Abbauantrag beim Bürgermeister"
+		elif str(permit.get("status", "")) == "genehmigt":
+			next = "Zufahrt bauen, falls nötig; dann found_business"
+		txt += "\n[color=#9aa3ad]Noch kein Förderbetrieb. Grundstück %s · Kaufpreis %s · nächster Schritt: %s. Passende Branche: %s, Rohstoff: %s.[/color]\n" % [pid, Catalog.money(float(p.get("price", 0.0))), next, branch, item]
 		return txt
 	var c = sim.company(int(mb.owner))
 	var d := P.detail(mb)

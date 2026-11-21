@@ -35,9 +35,13 @@ func _initialize() -> void:
 	RuleBrain._production(obs, obs.ich, 1000000.0, 10000.0, "wachstum", [], [], decisions, [])
 	_check(decisions.any(func(a): return str(a.action) in ["explore_deposit", "request_mining", "build_access"] or (str(a.action) == "found_business" and str(a.get("rohstoff", "")) == "kohle")), "Ein Erzbergwerk blockiert den Kohleabbau nicht")
 	obs.betriebe.pop_back()
+	obs.energie.auslastung = 0.1
+	obs.produktion_markt.kohlebergwerke = 1
+	obs.bergbau_lage.kernkraftwerk_geladen_mwh = 80
+	obs.energie.brennelemente = 1
 	decisions.clear()
-	RuleBrain._production(obs, obs.ich, 1000000.0, 10000.0, "risikospieler", [], [], decisions, [])
-	_check(obs.bergbau.has("uranerz") and decisions.any(func(a): return str(a.action) in ["explore_deposit", "request_mining", "build_access"] or (str(a.action) == "found_business" and str(a.branche) == "uranbergwerk")), "Unternehmer-KI verfolgt Uranlagerstaette")
+	RuleBrain._production(obs, obs.ich, 1000000.0, 10000.0, "kostenoptimierer", [], [], decisions, [])
+	_check(obs.bergbau.has("uranerz") and decisions.any(func(a): return str(a.action) in ["explore_deposit", "request_mining", "build_access"] or (str(a.action) == "found_business" and str(a.branche) == "uranbergwerk")), "Unternehmer-KI verfolgt bei Brennstoffbedarf auch ohne Risikospieler-Profil die Uranlagerstaette")
 	var source := int(sim.trader.bauhof)
 	var fuel_before := sim.plant.fuel_elements()
 	sim.biz.items["ENERGY_TEST"] = {"id": "ENERGY_TEST", "branch": "brennelementwerk", "status": "aktiv", "owner": 0,

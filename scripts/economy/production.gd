@@ -642,10 +642,10 @@ func excavated(pid: String) -> Dictionary:
 	return {"anteil": f, "grube": pit}
 
 
-## Bergwerk auf einer Parzelle (oder leeres Dictionary).
+## Foerderbetrieb auf einer Parzelle (oder leeres Dictionary), auch Uran- und Tagebau.
 func mine_on(pid: String) -> Dictionary:
 	for b in sim.biz.items.values():
-		if b.branch == "bergwerk" and str(b.get("parcel", "")) == pid and b.status not in ["geschlossen"]:
+		if str(b.get("parcel", "")) == pid and b.status not in ["geschlossen"] and Businesses.branches().get(str(b.branch), {}).has("abbau"):
 			return b
 	return {}
 

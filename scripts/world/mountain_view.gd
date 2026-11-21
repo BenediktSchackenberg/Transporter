@@ -407,10 +407,13 @@ class MountainNode extends Node2D:
 		var bob := sin(t * 8.0 + float(i)) if working else 0.0
 		draw_set_transform(pos, 0.0, Vector2(MountainView.MAN, MountainView.MAN))
 		pos = Vector2.ZERO
-		draw_rect(Rect2(pos + Vector2(-2, -9 + bob), Vector2(5, 7)), Color("f28c28") if i % 2 == 0 else Color("3e7cb1"))
+		var suit := Color("e6d86c") if art == "uranerz" else (Color("f28c28") if i % 2 == 0 else Color("3e7cb1"))
+		draw_rect(Rect2(pos + Vector2(-2, -9 + bob), Vector2(5, 7)), suit)
 		draw_rect(Rect2(pos + Vector2(-2, -2), Vector2(5, 2)), Color("2f343c"))
-		draw_rect(Rect2(pos + Vector2(-2, -13 + bob), Vector2(5, 4)), Color("e0b48a"))
+		draw_rect(Rect2(pos + Vector2(-2, -13 + bob), Vector2(5, 4)), Color("b9d4cc") if art == "uranerz" else Color("e0b48a"))
 		draw_rect(Rect2(pos + Vector2(-3, -15 + bob), Vector2(7, 2)), Color("f2c14e"))
+		if art == "uranerz":
+			draw_rect(Rect2(pos + Vector2(-3, -12 + bob), Vector2(7, 2)), Color("426867"))   # Atemschutz und Visier
 		draw_circle(pos + Vector2(1, -14 + bob), 1.2, Color(1.0, 0.95, 0.6, 0.9))   # Grubenlampe
 		if working and i % 3 != 2:
 			var swing := sin(t * 6.0 + float(i) * 1.7)
@@ -437,7 +440,7 @@ class MountainNode extends Node2D:
 		var base0 := _s(_cell_center(rig_cell))
 		var spin := t * 3.0 if working else 0.0
 		var S := 1.5
-		if art in ["eisenerz", "kohle"]:
+		if art in ["eisenerz", "kohle", "uranerz"]:
 			draw_line(base0 + Vector2(12, -92) * S, _s(_cell_center(face)) + Vector2(0, -_level(face) * MountainView.STEP - 6), Color(0.15, 0.15, 0.15, 0.7), 1.5)   # Foerderseil
 		else:
 			var a0 := base0 + Vector2(0, -30) * S
@@ -449,7 +452,7 @@ class MountainNode extends Node2D:
 					draw_circle(a0.lerp(b0, u0) + Vector2(0, -3), 3.0, MountainView.ORE.get(art, MountainView.ROCK))
 		draw_set_transform(base0, 0.0, Vector2(S, S))
 		var base := Vector2.ZERO
-		if art in ["eisenerz", "kohle"]:
+		if art in ["eisenerz", "kohle", "uranerz"]:
 			# Foerdergeruest mit Seilrad
 			var top := base + Vector2(0, -92)
 			draw_line(base + Vector2(-18, 0), top, Color("7a3b2e"), 4.0)
@@ -464,6 +467,10 @@ class MountainNode extends Node2D:
 			draw_rect(Rect2(base + Vector2(-22, -22), Vector2(44, 4)), Color("5f574d"))
 			draw_rect(Rect2(top + Vector2(-2, -28), Vector2(2, 16)), Color("dddddd"))   # Fahne des Betreibers
 			draw_rect(Rect2(top + Vector2(0, -28), Vector2(14, 8)), color)
+			if art == "uranerz":
+				draw_rect(Rect2(base + Vector2(-17, -17), Vector2(34, 15)), Color("d9cb6a"))   # geschuetzter Förderbereich
+				draw_rect(Rect2(base + Vector2(-17, -17), Vector2(34, 15)), Color("37372f"), false, 1.0)
+				draw_string(ThemeDB.fallback_font, base + Vector2(-14, -6), "URAN", HORIZONTAL_ALIGNMENT_LEFT, 30.0, 8, Color("292b25"))
 		else:
 			# Brecher mit Foerderband zur Halde
 			draw_rect(Rect2(base + Vector2(-18, -26), Vector2(36, 26)), Color("b1a58d"))

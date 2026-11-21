@@ -540,6 +540,12 @@ class Agent:
                          "Betrieb Vorrang vor einem weiteren Wohnhaus. Wenn ein fertiger Betrieb blockiert ist, "
                          "behebe zuerst die sichtbaren Blockaden bei Personal, Rohstoffen oder Versorgung und pruefe "
                          "echte Produktion, bevor du weitere Betriebe gruendest.")
+            lines.append("Pruefe regelmaessig meine_firma.bergbau_lage und bergbau: Vergleiche mehrere Lagerstaetten nach "
+                         "Abnehmern, geschaetztem Wert, Kaufpreis, Zufahrtskosten und Lage zu deiner Stadt. "
+                         "Wenn Bergbau zu deinem Plan passt, handle die Kette selbst: explore_deposit, request_mining, "
+                         "build_access falls noetig, found_business mit branche, rohstoff und grundstueck, dann Personal "
+                         "und echte Lieferungen. Ein Bergwerk ohne Absatz ist keine Einnahme. Kohle und Uran koennen "
+                         "langfristige Energieziele sein; entscheide Zeitpunkt und Umfang anhand deiner Stadt und Kasse.")
             lines.append("In der Wildnis entscheidest du selbst, ob und wann du erkundest, transportierst, handelst, baust oder eine Stadt gründest. "
                          "Beachte die Folgen: Ohne Bürgeramt gibt es keinen regulären Zuzug; ohne Wohnungen können keine neuen Haushalte einziehen. "
                          "Ein selbst gefahrenes Fahrzeug kann während einer Kundenfahrt nicht gleichzeitig Baumaterial holen. "

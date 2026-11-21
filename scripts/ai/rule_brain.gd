@@ -546,7 +546,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	if mk.is_empty():
 		return
 	var own: Array = obs.get("betriebe", []).filter(func(b): return b.branche in PROD_BRANCHES)
-	var own_core: Array = own.filter(func(b): return b.branche not in ENERGY_BRANCHES)
+	var own_core: Array = own.filter(func(b): return b.branche not in ENERGY_BRANCHES and b.branche != "bergwerk")
 	var own_ids: Array = own.map(func(b): return b.id)
 	# Preisregel (hoechstens alle 3 Tage): liegt Ware ohne Absatz, Preis senken (nicht unter 75 % des Basispreises, darunter deckt er
 	# Zutaten und Fracht nicht); verkauft sich taeglich mindestens der halbe Bestand, vorsichtig erhoehen (bis 150 %).
@@ -612,19 +612,26 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	var focus := str(me.get("fokus", ""))
 	var focus_open: bool = focus != "" and not own.any(func(b): return b.branche == focus)
 	var energy: Dictionary = obs.get("energie", {})
+	var mining: Dictionary = obs.get("bergbau", {})
+	var mining_lage: Dictionary = obs.get("bergbau_lage", {})
 	var day: int = GameCalendar.day_of(float(obs.get("spielminute", 0.0)))
 	var energy_branch := ""
 	var rohstoff := ""
-	if day >= 5 and int(mk.get("kohlekraftwerke", 0)) == 0 and (float(energy.get("auslastung", 0.0)) >= 0.82 or int(energy.get("abgeschaltete_betriebe", 0)) > 0) and personality in ["wachstum", "kostenoptimierer"]:
+	if day >= 5 and int(mk.get("kohlekraftwerke", 0)) == 0 and (float(energy.get("auslastung", 0.0)) >= 0.55 or int(energy.get("abgeschaltete_betriebe", 0)) > 0) and personality in ["wachstum", "kostenoptimierer"]:
 		energy_branch = "kohlekraftwerk"
-	elif day >= 10 and int(mk.get("kohlekraftwerke", 0)) > 0 and int(mk.get("kohlebergwerke", 0)) == 0 and obs.get("bergbau", {}).has("kohle") and personality in ["wachstum", "kostenoptimierer"]:
+	elif day >= 10 and int(mk.get("kohlebergwerke", 0)) == 0 and mining.has("kohle") and (int(mk.get("kohlekraftwerke", 0)) > 0 or float(energy.get("auslastung", 0.0)) >= 0.35) and personality in ["wachstum", "kostenoptimierer"]:
 		energy_branch = "bergwerk"
 		rohstoff = "kohle"
-	elif day >= 15 and int(mk.get("uranbergwerke", 0)) == 0 and obs.get("bergbau", {}).has("uranerz") and personality == "risikospieler":
+	elif day >= 15 and int(mk.get("uranbergwerke", 0)) == 0 and mining.has("uranerz") and (int(mining_lage.get("kernkraftwerk_geladen_mwh", 250)) < 100 or int(energy.get("brennelemente", 2)) <= 1):
 		energy_branch = "uranbergwerk"
 		rohstoff = "uranerz"
-	elif day >= 18 and int(mk.get("uranbergwerke", 0)) > 0 and int(mk.get("brennelementwerke", 0)) == 0 and personality in ["netzwerker", "wachstum"]:
+	elif day >= 18 and int(mk.get("uranbergwerke", 0)) > 0 and int(mk.get("brennelementwerke", 0)) == 0:
 		energy_branch = "brennelementwerk"
+	elif day >= 12 and cash > 100000.0 and not own.any(func(b): return b.branche == "bergwerk") and int(mining_lage.get("aktive_bauvorhaben", 0)) > 0:
+		# Material fuer wachsende Staedte: erste Grube nach tatsaechlicher Bautätigkeit, nicht als fester Startschritt.
+		rohstoff = "rohmaterial" if mining.has("rohmaterial") else ("naturstein" if mining.has("naturstein") else "")
+		if rohstoff != "":
+			energy_branch = "bergwerk"
 	if (own_core.size() >= int(PROD_MAX.get(personality, 1)) and not focus_open and energy_branch == "") or "found_business" in planned:
 		return
 	# Abgestimmt: zuerst die Vorstufe, auf die ein bestehender Betrieb wartet; Muehle erst mit Feld, Schlachthof erst mit Tierhaltung
@@ -682,11 +689,13 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	if branch in mk.get("zu_wenig_kundschaft", []):
 		return   # Theke traegt sich bei der Bevoelkerung nicht (Retail.counter_viable)
 	# Lagerstaette ohne Strassenanschluss (Kuestenort): erst die Zufahrt bauen lassen, dann gruenden
+	var mine_site := ""
 	if branch in ["bergwerk", "uranbergwerk"] and obs.has("bergbau"):
 		# Bergwerk-Story: Probebohrung -> Abbauantrag -> Zufahrt -> Gruendung (der Bautrupp baut das Bergwerk)
 		var st: Dictionary = obs.bergbau.get(rohstoff, {})
 		if st.is_empty() or str(st.schritt) == "warten":
 			return
+		mine_site = str(st.grundstueck)
 		var why := "%s wird gebraucht (Lagerstätte %s)" % [Production.item_name(rohstoff), st.grundstueck]
 		match str(st.schritt):
 			"erkunden":
@@ -720,7 +729,10 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	if not _invest(cost, buffer * (2.0 if personality == "kostenoptimierer" else 1.0) + PROD_RESERVE, cash, me, personality, actions, reasons):
 		return
 	var why := "Energiekette: %s fehlt; Netzlast %d %% und Versorgung braucht Brennstoff oder Erzeugung." % [Businesses.branches()[branch].label, int(float(energy.get("auslastung", 0.0)) * 100.0)] if branch in ENERGY_BRANCHES or rohstoff in ["uranerz", "kohle"] else "Kettenstufe fehlt in der Stadt (Bäckereien %d, Mühlen %d, Felder %d)" % [int(mk.baeckereien), int(mk.muehlen), int(mk.felder)]
-	actions.append({"action": "found_business", "branche": branch, "rohstoff": rohstoff, "reason": why})
+	var founding := {"action": "found_business", "branche": branch, "rohstoff": rohstoff, "reason": why}
+	if mine_site != "":
+		founding["grundstueck"] = mine_site
+	actions.append(founding)
 	planned.append("found_business")
 	reasons.append("gründe %s, weil diese Stufe der regionalen Produktion fehlt" % Businesses.branches()[branch].label)
 
