@@ -1049,9 +1049,13 @@ class Agent:
 
     def say(self, text):
         line = time.strftime("%H:%M:%S ") + text
-        print("%s [%s] %s" % (line[:9], self.args.name, text), flush=True)   # im Schwarm-Fenster: wer spricht
         self.log.write(line + "\n")
         self.log.flush()
+        emit = getattr(self.args, "console_event", None)
+        if emit:
+            emit(self.args.name, text)
+        else:
+            print("%s [%s] %s" % (line[:9], self.args.name, text), flush=True)
 
     def trim(self, messages, hard=False):
         """Aelteste Schritte verwerfen (nach Anzahl und Textlaenge), ohne ein Werkzeugergebnis von seinem Aufruf zu trennen."""

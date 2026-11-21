@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eko_ollama  # noqa: E402
+from eko_console import ConsoleUI  # noqa: E402
 
 TOKEN_FILE = Path(os.environ.get("APPDATA", "")) / "Godot" / "app_userdata" / "Pixel Transport Rivals" / "eko_betreiber.txt"
 STATUS_FILE = TOKEN_FILE.with_name("eko_schwarm_status.json")   # entspricht Godot user://eko_schwarm_status.json
@@ -33,7 +34,7 @@ def beings(base):
         return json.loads(r.read().decode("utf-8"))
 
 
-def run_agent(info, args, publish):
+def run_agent(info, args, publish, emit):
     a = argparse.Namespace(**vars(args))
     a.name = info["name"]
     a.art = info.get("art", "mensch")
@@ -46,6 +47,7 @@ def run_agent(info, args, publish):
         a.model = profile["model"]
     a.strategy = profile.get("strategy", "")
     a.status_callback = publish
+    a.console_event = emit
     publish(a.name, "konfiguriert", model=a.model)
     agent = None
     while True:   # wie eko_ollama.main: nichts beendet ein Wesen dauerhaft
@@ -108,6 +110,13 @@ def main():
     status_lock = threading.Lock()
     stop_status = threading.Event()
 
+    def status_snapshot():
+        with status_lock:
+            return {name: dict(entry) for name, entry in statuses.items()}
+
+    console = ConsoleUI(args.root, status_snapshot)
+    console.start()
+
     def publish(name, state, **fields):
         with status_lock:
             entry = statuses.setdefault(name, {"calls": 0})
@@ -123,6 +132,7 @@ def main():
                       for name, entry in statuses.items()}
         model = eko_ollama.IONOS_MODEL if args.anbieter == "ionos" and (args.model.startswith("hf.co/") or args.model.startswith("gpt-oss")) else args.model
         snapshot = {"updated_at": time.time(), "provider": args.anbieter, "model": model, "pid": os.getpid(),
+                    "console_interactive": console.interactive,
                     "configuration_error": ("Umgebungsvariable %s fehlt" % args.key_env) if args.anbieter == "ionos" and not os.environ.get(args.key_env) else "",
                     "agents": agents}
         STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -134,13 +144,14 @@ def main():
         while not stop_status.is_set():
             try:
                 write_status()
+                console.chatter()
             except OSError as e:
                 print("⚠ Schwarmstatus konnte nicht geschrieben werden: %s" % e, flush=True)
             stop_status.wait(2)
 
     writer = threading.Thread(target=status_writer, daemon=True, name="Schwarmstatus")
     writer.start()
-    print("Eko-Schwarm: Welt %s, Modell %s" % (base, args.model), flush=True)
+    console.event("System", "Welt %s, Modell %s" % (base, args.model))
     try:
         while True:
             try:
@@ -156,13 +167,13 @@ def main():
                         continue   # begrenzte manuelle Sitzung nicht automatisch wiederholen
                     if old is not None:
                         publish(name, "neustart", last_error="Agentenfaden endete unerwartet")
-                    t = threading.Thread(target=run_agent, args=(info, args, publish), daemon=True, name=name)
+                    t = threading.Thread(target=run_agent, args=(info, args, publish, console.event), daemon=True, name=name)
                     with status_lock:
                         running[name] = t
                     publish(name, "startet", waiting_on="Anmeldung an der Welt")
                     t.start()
-                    print("▶ %s (%s, Seele %s%s) startet" % (name, info["rolle"], info.get("seele") or "neutral",
-                                                           ", " + info["firma"] if info.get("firma") else ""), flush=True)
+                    console.event(name, "startet (%s, Seele %s%s)" % (info["rolle"], info.get("seele") or "neutral",
+                                                                       ", " + info["firma"] if info.get("firma") else ""))
                     time.sleep(3)   # zeitversetzt, damit nicht alle gleichzeitig das Modell anfragen
             except Exception as e:
                 print("⚠ Welt nicht erreichbar: %s" % e, flush=True)

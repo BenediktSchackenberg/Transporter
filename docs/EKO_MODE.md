@@ -27,6 +27,12 @@ Claude-Disponent und Regel-Rivalendialoge sind in diesem Modus aus; die Spieler-
 Es läuft immer nur ein Schwarm je Welt (Sperre über Port 9790): ein zweiter Start – von Hand, über den Welt-Wächter oder nach einem
 Neustart der Welt – beendet sich selbst. `--ohne-schwarm` verhindert den automatischen Start (z. B. für Claude Code je Wesen).
 
+Die Schwarm-Konsole zeigt ASCII-Roboter mit laufenden Statuskommentaren. Diese Kommentare stammen aus dem Agentenstatus;
+echte Modellantworten und Aktionen stehen weiterhin im Sitzungslog. Im Konsolenfenster öffnen `1` die zehn wichtigsten
+KI-Ereignisse der Partie, `2` die letzten Logzeilen, `3` den Status aller Wesen und `H` die Hilfe. Der sichtbare
+`[B/Enter] ZURUECK`-Knopf führt mit `B`, `Enter`, `Esc` oder `Backspace` zur Startanzeige zurück. Die Tasten wirken nur,
+wenn das Konsolenfenster den Fokus hat.
+
 Der neue **Transportstart** gibt jeder Firma genau einen Lkw, einen Fahrer und eine Lagerkraft. Unternehmer können Aufträge,
 Personal, Fuhrpark, Büro, Betriebe und Grundstücke weiter selbst entwickeln. Lieferungen zeigen Ware, Menge und Ziel am fahrenden
 Lkw. Reisegruppen nutzen auf der Straße oder nach der Landung sichtbare Busse; ihr Hotel-Check-in erfolgt erst nach Ankunft.
