@@ -192,7 +192,7 @@ TOOLS = [
                     "why": {"type": "string"}}, "required": ["candidate"]}},
     {"name": "mayor_action", "description": "Nur fuer Buergermeister: eine eigene Stadtentscheidung mit einer Aktion aus mein_amt.aktionen ausfuehren. Vergleiche Bedarf, laufende Projekte, freie Kapazitaet und Entwuerfe. Verwende gueltige IDs und Parameter aus der Beobachtung.",
      "parameters": {"type": "object", "properties": {
-         "action": {"type": "string", "enum": ["viertel_erschliessen", "quartier_entwurf_waehlen", "quartier_trasse_planen", "stadtteil_planen", "grosslager_anschluss_bauen", "plan_infrastructure", "designate_quarter", "offer_parcels", "decide_application", "propose_project", "set_vision", "kommunal_bauen", "fahrzeug_entwerfen", "build_harbor", "build_airport", "build_station", "build_bridge", "build_tunnel", "expand_harbor", "expand_airport", "expand_power", "expand_depot", "repair_road", "stromtrasse_bauen", "versorgungsleitung_bauen", "infra_ausbau"]},
+         "action": {"type": "string", "description": "Aktionsname aus mein_amt.aktionen; die Spielwelt prueft Berechtigung und Voraussetzungen."},
          "params": {"type": "object", "description": "Parameter der Amtshandlung aus mein_amt.aktionen; z. B. {viertel: V7, reason: Arbeitsplaetze}."}},
          "required": ["action", "params"]}},
     {"name": "wait", "description": "Warte einige Sekunden – mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist, oder mit "
@@ -560,6 +560,8 @@ class Agent:
                          "ohne Kraftwerksstrom, Frischwasser oder Kanal unbewohnbar sind, behandle diese Netze als dringenden Engpass; "
                          "waehle selbst eine gepruefte Bauvariante aus mein_amt. Wenn ein Bauprojekt wartet, lies seinen konkreten "
                          "Material- oder Bautrupp-Blocker, behebe ihn oder entscheide ueber einen ergaenzenden Ausbauschritt. "
+                         "Wenn bauprogramm.offen die Kapazitaet erreicht, genehmige passende stadtlager.vorschlaege mit "
+                         "approve_procurement oder warte auf Material, Bautrupps und Abschluss; neue Baustellen werden abgelehnt. "
                          "Amt status dient nur zur Klaerung einer neuen Lage; wiederholtes "
                          "Amt status und Rest ohne Zustandsaenderung sind keine Stadtentwicklung. Rest nur bei wirklichem Energiemangel. "
                          "Ein fertiges, abgebrochenes oder nicht existentes Projekt ist kein aktuelles Ziel mehr. "
@@ -889,10 +891,6 @@ class Agent:
                 params = {}
             params = {**{k: v for k, v in arguments.items() if k not in ("action", "params")}, **params}
             arguments = {"action": arguments["action"], "params": params}
-            valid_actions = next(t["parameters"]["properties"]["action"]["enum"]
-                                 for t in available if t["name"] == "mayor_action")
-            if arguments["action"] not in valid_actions:
-                raise ModelGlitch("Ollama-JSON-Antwort mit unbekannter Amtshandlung %s" % str(arguments["action"])[:80])
         if name == "append_memory" and "entry" not in arguments and arguments:
             arguments = {"entry": arguments}
         parameters = next(t["parameters"] for t in available if t["name"] == name)

@@ -117,6 +117,25 @@ class JsonToolFallbackTest(unittest.TestCase):
         self.assertEqual(result["tool_calls"][0]["function"]["arguments"],
                          {"action": "stromtrasse_bauen", "params": {"option": "ST1", "reason": "Wohnungen anschliessen"}})
 
+    def test_mayor_can_approve_procurement_outside_old_shortlist(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="buergermeister", model="local-test", ollama="http://127.0.0.1:11435",
+                                     ctx=16384, name="Markus")
+        agent._passive_streak = 0
+        agent.urgency = 0
+        agent.log = io.StringIO()
+        sent = []
+        agent.world = SimpleNamespace(act=lambda typ, data: sent.append((typ, data)) or {"ok": True},
+                                      observe=lambda: {"ok": True, "mein_amt": {}})
+        with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
+                {"message": {"content": '{"tool":"mayor_action","arguments":{"action":"approve_procurement",'
+                                        '"params":{"order_id":"B7","reason":"Baustoffe liefern"}}}'}})):
+            chosen = agent.chat_json_tool([{"role": "user", "content": "Beschaffe Material"}])
+        args = chosen["tool_calls"][0]["function"]["arguments"]
+        self.assertTrue(agent.call_tool("mayor_action", args)["ok"])
+        self.assertEqual(sent, [("Amt", {"aktion": {"action": "approve_procurement", "order_id": "B7",
+                                                   "reason": "Baustoffe liefern"}})])
+
     def test_json_mode_survives_invalid_model_response(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="buergermeister", anbieter="ollama", model="local-test",

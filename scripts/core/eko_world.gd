@@ -918,6 +918,14 @@ func urgency(b: Dictionary) -> Dictionary:
 		if sim.wildnis and office_town >= 0 and sim.town_ready(office_town):
 			var growth: Dictionary = city_growth_status(office_town)
 			if str(growth.get("stufe", "")) == "wohnraum" and int(growth.get("wohnungen", 0)) > 0:
+				var board: Dictionary = _public_build_board(office_town)
+				if not bool(board.get("neues_bauprojekt_moeglich", true)):
+					var depot_summary: Dictionary = sim.towns.mayor(office_town).stadtlager_indicators()
+					var proposals: Array = depot_summary.get("vorschlaege", [])
+					if not proposals.is_empty():
+						var order_ids: Array = proposals.map(func(o): return str(o.id))
+						return {"prioritaet": 2, "grund": "%d von %d Bauplätzen sind belegt. Prüfe die Beschaffungsvorschläge des Stadtlagers %s und entscheide selbst mit mayor_action {action: approve_procurement, params: {order_id: gewählte ID, reason: Grund}}; danach laufende Baustellen beobachten." % [int(board.offen), int(board.kapazitaet), ", ".join(order_ids)]}
+					return {"prioritaet": 1, "grund": "%d von %d Bauplätzen sind belegt. Weitere Netze erst nach Abschluss laufender Projekte beauftragen; beobachte Materiallieferungen und Bautrupps." % [int(board.offen), int(board.kapazitaet)]}
 				var gaps: Array = growth.get("fehlende_anschluesse", [])
 				var power_pending: bool = sim.grid.net.planned.values().any(func(p): return str(p.get("b", "")) == "U%d" % office_town)
 				var power_options: Array = sim.grid.net.option_brief(office_town)
@@ -3451,9 +3459,13 @@ func office_obs(b: Dictionary) -> Dictionary:
 	var civic: Dictionary = ind.get("stadtentwicklung", {})
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
+	var depot_info: Dictionary = ind.get("stadtlager", {})
 	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "verkehrsstandorte": ind.get("verkehrsstandorte", {}), "stromtrassen": ind.get("stromtrassen", []),
 		"kraftwerk_notfall": sim.plant.summary().get("notfall", {}),
 		"bau_blockaden": _public_build_blockers(k), "bauprogramm": _public_build_board(k),
+		"stadtlager": {"vorschlaege": depot_info.get("vorschlaege", []), "blockaden": depot_info.get("blockaden", []),
+			"bestellungen_offen": depot_info.get("bestellungen_offen", 0), "rueckstau_wareneingang_einheiten": depot_info.get("rueckstau_wareneingang_einheiten", 0),
+			"personal_gesamt": depot_info.get("personal_gesamt", 0)},
 		"versorgungsleitungen": ind.get("versorgungsleitungen", []),
 		"versorgungsanlagen_standorte": ind.get("versorgungsanlagen_standorte", []),
 		"naechster_ausbauschritt": next_step, "stadtplan_naechster_abschnitt": next_step, "stadtplan_erweiterung": ind.get("stadtplan_erweiterung", []),
