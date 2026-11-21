@@ -825,6 +825,25 @@ func _project_goal_sync(b: Dictionary) -> void:
 			g["stand_min"] = sim.game_min
 
 
+## Ein Wesen kann nur seine zugewiesene Wildnisstadt gruenden. Alte Modellziele
+## fuer einen zweiten Gruendungsort duerfen es nach dem Laden nicht weglocken.
+func _is_founding_goal(text: String) -> bool:
+	var low := text.to_lower()
+	return low.contains("gründ") or low.contains("gruend") or low.contains("gründen") or low.contains("betriebshof gründen")
+
+
+func _founding_goal_sync(b: Dictionary) -> void:
+	var g: Dictionary = b.get("ziel", {})
+	if g.is_empty() or str(g.get("status", "")) != "aktiv" or not _is_founding_goal(str(g.get("ziel", ""))):
+		return
+	var cid := active_firm(b)
+	if cid < 0 or not sim.wildnis or not settle.founded(sim.companies[cid].home_town):
+		return
+	g.status = "aufgegeben"
+	g["notiz"] = "Die zugewiesene Stadt %s ist bereits gegründet; neues Ausbauziel wählen." % sim.towns.name_of(sim.companies[cid].home_town)
+	_event(b, "verwirft altes Gründungsziel und kümmert sich um %s" % sim.towns.name_of(sim.companies[cid].home_town))
+
+
 const HOME_AKKU := 30.0   # darunter (oder nass/kalt) steht der Heimweg an erster Stelle (Partie 16.11.: Viktor arbeitete mit 14 % Akku, nass und kalt weiter)
 
 
@@ -889,6 +908,7 @@ func urgency(b: Dictionary) -> Dictionary:
 func next_steps(b: Dictionary) -> Array:
 	_estate_goal_sync(b)
 	_project_goal_sync(b)
+	_founding_goal_sync(b)
 	var out: Array = []
 	var urgent_step := ""
 	var firm_step := ""
@@ -1357,6 +1377,9 @@ func _set_goal(b: Dictionary, data: Dictionary) -> Dictionary:
 	var why := str(data.get("warum", "")).strip_edges().left(200)
 	if text == "" or why == "":
 		return {"ok": false, "msg": "Ziel braucht ziel und warum (Begründung)."}
+	var cid := active_firm(b)
+	if cid >= 0 and sim.wildnis and settle.founded(sim.companies[cid].home_town) and _is_founding_goal(text):
+		return {"ok": false, "msg": "Du hast bereits die Stadt %s gegründet. Baue und versorge sie weiter, statt eine zweite Stadt zu gründen." % sim.towns.name_of(sim.companies[cid].home_town)}
 	var cur: Dictionary = b.get("ziel", {})
 	if str(cur.get("status", "")) == "aktiv" and not bool(data.get("ersetzen", false)):
 		return {"ok": false, "msg": "Du verfolgst schon das Ziel „%s“. Melde Fortschritt mit ZielStand oder ersetze es bewusst mit ersetzen: true." % cur.ziel}

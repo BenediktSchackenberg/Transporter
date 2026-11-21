@@ -8972,6 +8972,11 @@ func test_wildnis_found() -> void:
 	var essential: Array = s.municipal.facilities.values().filter(func(f): return int(f.town) == k and str(f.code) in ["WW-01", "WT-01", "KA-01"])
 	ok(essential.size() >= 2, "Gruendungsstadt erhaelt sofort Bauplaetze fuer die Grundversorgung (%s)" % str(essential.map(func(f): return f.code)))
 	ok(s.towns.mayor(k).hub_blocked() == "", "Materialhubschrauber oeffnet die Bauvergabe vor der Landstrasse")
+	ok(not E.input(p0, "Ziel", {"ziel": "Zweite Stadt am Meer gründen", "warum": "Neues Land"}).ok, "nach der Stadtgründung wird kein zweiter Gründungsauftrag angenommen")
+	B["ziel"] = {"ziel": "Neue Stadt am Meer gründen", "status": "aktiv", "fortschritt": 0}
+	E.next_steps(B)
+	ok(str(B.ziel.status) == "aufgegeben", "altes Ziel für einen zweiten Gründungsort wird nach dem Laden verworfen")
+	B.erase("ziel")
 	var found_mayor: Mayor = s.towns.mayor(k)
 	found_mayor.waiting = 0
 	found_mayor._arrival_acc = 0.0
