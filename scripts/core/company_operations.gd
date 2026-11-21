@@ -205,6 +205,8 @@ func tick() -> void:
 func _auto_dispatch(cid: int) -> void:
 	if not bool(dispatch_policy(cid).auto_accept) or sim.executor.active_contracts(cid) >= sim.company(cid).contract_capacity():
 		return
+	if sim.wildnis and sim.eko != null and not sim.town_ready(sim.company(cid).home_town):
+		return   # Der einzige Gruender-LKW bleibt fuer Standortsuche, Buergeramt und ersten Hausbau frei.
 	if sim.eko != null:
 		var waiting: Dictionary = sim.eko.homes.waiting_goods(cid)
 		if not waiting.is_empty():
@@ -219,6 +221,8 @@ func _auto_dispatch(cid: int) -> void:
 		var v: FleetVehicle = sim.vehicles.get(int(item.vehicle_id))
 		if k == null or v == null or str(k.order_ref) != "" or str(k.internal) != "" or not _free(v) or line_of(v.id) != "":
 			continue
+		if sim.wildnis and sim.eko != null and sim.driver_of(v) != null and sim.driver_of(v).role == "owner":
+			continue   # Der KI-Inhaber entscheidet selbst, wann er sein eigenes Fahrzeug fuer Fracht nutzt.
 		var accepted: Dictionary = sim.executor._accept_contract(cid, k.id, v.id)
 		if accepted.ok and k.status in ["assigned", "in_transit"]:
 			say(cid, "Disposition", "Nach deinen Vorgaben: %s mit #%d angenommen (%s geschätzter Deckungsbeitrag)." % [k.id, v.id, Catalog.money(float(item.deckungsbeitrag_geschaetzt))], k.id)

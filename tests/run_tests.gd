@@ -8566,6 +8566,16 @@ func test_wildnis_start() -> void:
 	var end_min := s.game_min + GameCalendar.days_to_min(2)
 	while s.game_min < end_min:
 		s.step(1.0)
+	ok(s.vehicles.values().all(func(v): return v.state == "idle" and str(v.contract_id) == ""),
+		"Gruender-LKW bleiben auch nach zwei Tagen fuer Stadtgruendung frei")
+	s.eko.auto_estates = true
+	var founders: Array = s.eko.adopt_players(4)
+	for cid in founders.size():
+		var actor: Dictionary = s.eko.beings[str(founders[cid])]
+		var truck: FleetVehicle = s.eko.own_truck(cid)
+		var options: Array = s.eko.settle.obs(actor, cid).get("beste_plaetze_in_der_naehe", [])
+		ok(not options.is_empty() and options.all(func(sc): return s.eko.settle.score_at(Vector2i(int(sc.feld[0]), int(sc.feld[1]))).ok and not s.offroad_path(truck.tile(), Vector2i(int(sc.feld[0]), int(sc.feld[1]))).is_empty()),
+			"KI %d sieht nur echte, erreichbare Gruendungsplaetze (%d)" % [cid, options.size()])
 	ok(absf(s.economy.conservation_error()) < 1.0, "zwei Tage ohne Absturz, Geldbuch stimmt")
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.wildnis and s2.city.buildings.size() == s.city.buildings.size(), "Wildnis speichern und laden")
@@ -8959,7 +8969,15 @@ func test_wildnis_found() -> void:
 	B.akku = 100.0
 	E.homes.tick(60.0 * 30.0)
 	ok(hs.status == "fertig" and s.town_ready(k) and int(s.city.towns[k].town_hall) >= 0, "Bürgeramt fertig – die Stadt ist gegründet (%s)" % str(hs.get("blockiert", hs.status)))
+	var essential: Array = s.municipal.facilities.values().filter(func(f): return int(f.town) == k and str(f.code) in ["WW-01", "WT-01", "KA-01"])
+	ok(essential.size() >= 2, "Gruendungsstadt erhaelt sofort Bauplaetze fuer die Grundversorgung (%s)" % str(essential.map(func(f): return f.code)))
+	ok(s.towns.mayor(k).hub_blocked() == "", "Materialhubschrauber oeffnet die Bauvergabe vor der Landstrasse")
 	var found_mayor: Mayor = s.towns.mayor(k)
+	found_mayor.waiting = 0
+	found_mayor._arrival_acc = 0.0
+	var pioneer_before := s.citizens.population_of(k)
+	found_mayor._arrivals_town()
+	ok(found_mayor.waiting == 1 and s.citizens.population_of(k) == pioneer_before, "erste Pionierfamilie wartet auf eine bewohnbare Wohnung, auch wenn der Gründer schon als Einwohner zählt")
 	var before_arrivals := s.citizens.population_of(k) + found_mayor.waiting
 	found_mayor._arrival_acc = 1.1
 	found_mayor._arrivals_town()
@@ -8998,7 +9016,7 @@ func test_wildnis_found() -> void:
 	var ctr := Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1]))
 	var hint_day := GameCalendar.day_of(s.game_min)
 	E.settle._link_cache[k] = {"day": hint_day, "verbunden": false, "von": [ctr.x, ctr.y], "bis": [ctr.x + 8, ctr.y], "felder": 8}
-	ok(E.homes.next_step(cid).contains("Straße bauen"), "ohne kommunalen Auftrag wird eine fehlende Straße vorgeschlagen")
+	ok(not E.homes.next_step(cid).contains("ohne Strasse liefert niemand"), "Materialhubschrauber erlaubt Stadtaufbau ohne Landweg")
 	s.towns.mayor(k).projects["P_HINT"] = {"id": "P_HINT", "ref": "anschluss", "status": "beauftragt"}
 	ok(not E.homes.next_step(cid).contains("Straße bauen"), "kommunaler Straßenauftrag beendet widersprüchlichen KI-Hinweis")
 	s.towns.mayor(k).projects.erase("P_HINT")

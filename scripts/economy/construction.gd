@@ -1191,6 +1191,8 @@ func tick_public_connectors(now: float) -> void:
 
 
 func _tender_public(M: Mayor, day: int) -> void:
+	if sim.wildnis and not sim.town_ready(M.town):
+		return
 	var D: CityDepot = sim.towns.depot(M.town)
 	for prj in M.projects.values():
 		if prj.status == "beschlossen" and day - int(prj.get("tender", {}).get("opened_day", prj.get("day", day))) >= AUTO_TENDER_DAYS:

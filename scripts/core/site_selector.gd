@@ -43,7 +43,7 @@ func setup(simulation) -> void:
 ## Nutzungsart aus einer Bezeichnung (kommunale Dienste, Vorlagen): laute Betriebe abseits der Wohnhaeuser.
 static func art_of(label: String) -> String:
 	var l := label.to_lower()
-	for w in ["abfall", "klär", "klaer", "bauhof", "werkstatt", "fahrzeugwerk", "werk ", "fabrik", "kfz", "recycling", "deponie", "müll", "muell", "wasserwerk", "kraftwerk", "lager", "betriebshof", "strassenmeisterei", "straßenmeisterei"]:
+	for w in ["abfall", "klär", "klaer", "bauhof", "werkstatt", "fahrzeugwerk", "werk ", "fabrik", "kfz", "recycling", "deponie", "müll", "muell", "wasserwerk", "hochbehälter", "kraftwerk", "lager", "betriebshof", "strassenmeisterei", "straßenmeisterei"]:
 		if l.contains(w):
 			return "laerm"
 	for w in ["hotel", "pension", "kurhaus", "strandbad"]:
@@ -139,6 +139,8 @@ func rank(k: int, req: Dictionary) -> Dictionary:
 			out.gruen += 1
 			continue   # Gruenzug, Aussicht, Uferweg des Stadtplans bleiben frei
 		var fit := _fit(pr, w, h)
+		if fit.size.x == 0 and bool(req.get("allow_no_road", false)):
+			fit = _fit(pr, w, h, false)
 		if fit.size.x == 0:
 			if _fit(pr, w, h, false).size.x > 0:
 				out.ohne_strasse.append(str(p.id))

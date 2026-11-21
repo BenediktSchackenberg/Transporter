@@ -742,13 +742,13 @@ func next_step(cid: int) -> String:
 			# 19.11.: qwen3.5:9b kaufte die fuenf Materialien des Buergeramts nie einzeln – ein Schritt kauft alles Fehlende
 			return "Baustelle %s braucht Material (%s): alles auf einmal kaufen – Firma {aktion: {action: \"hub_buy\", baustelle: \"%s\"}}. Der Materialhubschrauber bringt es zum Hof." % [
 				s.id, ", ".join(m.keys().map(func(x): return "%d %s" % [m[x], x])), s.id]
-	# 5) Strasse zum Grosslager, Gewerbe, Wohnraum. Der staedtische Anschluss ist bereits ein eigener Bauauftrag.
-	# Eine parallel empfohlene Firmenstrasse scheitert an dessen reservierter Trasse und lenkt vom ersten Haus ab.
+	# 5) Fehlender Landweg: mit Materialhubschrauber haben die ersten Haeuser und Betriebe Vorrang.
+	# Ohne Flugversorgung muss die Firma selbst eine Strasse bauen.
 	if sim.wildnis and sim.town_ready(k) and not open.any(func(s): return s.typ == "strasse"):
 		var link: Dictionary = w.settle.road_link(k)
 		var city_connector: bool = sim.towns.mayor(k).projects.values().any(func(p): return str(p.get("ref", "")) == "anschluss" and str(p.status) not in ["fertig", "abgelehnt", "abgebrochen"])
-		if not city_connector and not bool(link.get("verbunden", true)) and link.has("von"):
-			return ("Deine Stadt hat keine Straße zum Großlager – ohne Straße liefert niemand Waren (Stadtlager, Kunden, Siedler). Straße bauen, Stück für Stück " +
+		if not city_connector and not bool(link.get("verbunden", true)) and link.has("von") and not sim.material_heli.has_heli(cid):
+			return ("Deine Stadt hat keine Straße zum Großlager und keinen Materialflug. Straße bauen, Stück für Stück " +
 				"(je Baustelle bis %d Felder, noch ~%d): Firma {aktion: {action: \"strasse_bauen\", von: %s, bis: %s}} – dann Kies holen und Bauen.") % [
 				EkoSettle.ROAD_MAX, int(link.felder), str(link.von), str(link.bis)]
 	var biz_hint := business_hint(cid)

@@ -215,6 +215,11 @@ func _arrivals_town() -> void:
 	var new_h := int(_arrival_acc)
 	_arrival_acc -= float(new_h)
 	waiting += new_h
+	# Der Gruender zaehlt bereits als Einwohner, obwohl noch keine Familie dort wohnt.
+	# Seine Grundrate liefert erst nach vielen Tagen einen Haushalt. Eine erste
+	# Pionierfamilie wartet auf ein tatsaechlich erschlossenes, bewohnbares Haus.
+	if sim.wildnis and waiting == 0 and not town_units().any(func(u): return str(u.tenant) != ""):
+		waiting = 1
 	if waiting <= 0:
 		return
 	var free: Array = town_units().filter(func(u): return u.tenant == "" and sim.housing.habitable(u))
@@ -647,6 +652,8 @@ func _rezone_cluster(zone: String, used: Dictionary) -> Dictionary:
 ## config/residents.json "zuzug_je_monat" (Anteil der Haushalte, Standard 0,04).
 func on_day(_day: int) -> void:
 	if sim.wildnis:
+		if not sim.town_ready(town):
+			return   # Erst der Unternehmer gruendet die Stadt und baut ihr Buergeramt.
 		hub_connection()
 	if _region():
 		_arrivals_town()
@@ -753,6 +760,13 @@ func hub_blocked() -> String:
 		return ""
 	if bool(sim.eko.settle.road_link(town).get("verbunden", true)):
 		return ""
+	# Jede KI hat einen Materialhubschrauber am Grosslager. Der kann Baustoffe sichtbar
+	# zum bereits gegruendeten Stadtlager bringen, auch wenn der Landweg noch fehlt.
+	var depot: CityDepot = sim.towns.depot(town)
+	if depot.building >= 0 and sim.material_heli != null:
+		for c in sim.companies:
+			if c.home_town == town and sim.material_heli.has_heli(c.id):
+				return ""
 	var run: Array = projects.values().filter(func(p): return str(p.get("ref", "")) == "anschluss" and str(p.status) not in ["fertig", "abgelehnt", "abgebrochen"])
 	return "Erst der Straßenanschluss ans Großlager: ohne ihn bekommt das Stadtlager kein Material, neue Bauprojekte würden nur warten. %s" % (
 		("Er läuft als %s – danach wieder planen." % run[0].id) if not run.is_empty() else "Das Bauamt beschließt ihn selbst.")
@@ -761,6 +775,8 @@ func hub_blocked() -> String:
 func execute(action: Dictionary) -> Dictionary:
 	var a := ActionExecutor.normalize(action)
 	var act := str(a.get("action", a.get("type", "")))
+	if sim.wildnis and not sim.town_ready(town) and act != "wait":
+		return {"ok": false, "msg": "Die Stadt %s existiert noch nicht. Zuerst muss ihr KI-Unternehmer den Betriebshof und das Bürgeramt bauen." % town_label()}
 	var err := ActionExecutor.validate_against(SCHEMA, act, a)
 	if err == "":
 		a["action"] = act

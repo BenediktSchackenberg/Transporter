@@ -111,6 +111,66 @@ func center_of(name: String) -> Vector2i:
 ## zu Fuss mit einem Ort verbunden. Reihenfolge nach Seed, damit jede Partie andere Lagen hat.
 ## Wildnis: Basis am gewaehlten Platz (naechster passender Platz, hoechstens NEAR_MAX Felder entfernt).
 const NEAR_MAX := 20.0
+
+var _wild_busy := PackedByteArray()
+var _wild_busy_key := ""
+
+
+## Dieselbe Parzellenbelegung wie bei assign(), aber nur einmal je Kartenstand aufbauen.
+## Die Standortempfehlung prueft damit die wirkliche 24x24-Basis, bevor ein Wesen losfaehrt.
+func _busy_mask(wild: bool) -> PackedByteArray:
+	var C = _sim().city
+	var key := "%d:%d:%d:%d:%d" % [GameCalendar.day_of(_sim().game_min), C.buildings.size(), estates.size(), _sim().parcels.items.size(), hash(_sim().parcels.touched)]
+	if wild and _wild_busy_key == key and _wild_busy.size() == C.size * C.size:
+		return _wild_busy
+	var busy := PackedByteArray()
+	busy.resize(C.size * C.size)
+	for p in _sim().parcels.items.values():
+		if str(p.state) in ["frei", "zur_entwicklung"] and str(p.zone) != "korridor":
+			continue
+		if wild and int(p.get("building", -1)) < 0 and not str(p.owner).begins_with("C") and not _sim().prod._deposits.has(str(p.id)):
+			continue
+		for y in range(int(p.rect[1]), int(p.rect[1]) + int(p.rect[3])):
+			for x in range(int(p.rect[0]), int(p.rect[0]) + int(p.rect[2])):
+				if x >= 0 and y >= 0 and x < C.size and y < C.size:
+					busy[y * C.size + x] = 1
+	if wild:
+		_wild_busy = busy
+		_wild_busy_key = key
+	return busy
+
+
+## Lesende Vorpruefung mit denselben Grenzen, Parzellen und Gelaendetoleranzen wie assign().
+## Keine Reservierung und kein Gebaeude wird dabei angelegt.
+func can_assign_near(near: Vector2i, busy: PackedByteArray = PackedByteArray()) -> bool:
+	var C = _sim().city
+	if busy.is_empty():
+		busy = _busy_mask(true)
+	var hub_exclusion := Rect2i()
+	if not C.hub.is_empty():
+		var hr: Array = C.hub.rect
+		hub_exclusion = Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3])).grow(16)
+	var towns: Array = C.towns.filter(func(t): return bool(t.get("siedlung", false))).map(func(t): return Rect2i(int(t.rect[0]), int(t.rect[1]), int(t.rect[2]), int(t.rect[3])).grow(12))
+	towns = towns.filter(func(t): return not t.has_point(near))
+	var min_x := maxi(4, near.x - SIDE / 2 - int(NEAR_MAX))
+	var min_y := maxi(4, near.y - SIDE / 2 - int(NEAR_MAX))
+	if min_x % 2 != 0: min_x += 1
+	if min_y % 2 != 0: min_y += 1
+	var max_x := mini(C.size - SIDE - 5, near.x - SIDE / 2 + int(NEAR_MAX))
+	var max_y := mini(C.size - SIDE - 5, near.y - SIDE / 2 + int(NEAR_MAX))
+	for y in range(min_y, max_y + 1, 2):
+		for x in range(min_x, max_x + 1, 2):
+			var r := Rect2i(x, y, SIDE, SIDE)
+			if (r.get_center() - near).length() > NEAR_MAX or hub_exclusion.intersects(r):
+				continue
+			if towns.any(func(t): return t.intersects(r)) or estates.values().any(func(e): return Rect2i(int(e.rect[0]), int(e.rect[1]), SIDE, SIDE).grow(8).intersects(r)):
+				continue
+			var rough := SIDE * SIDE / 4
+			if _block_reason(r, busy, rough, rough) != "" and _block_reason(r, busy, rough + SIDE * SIDE / 10, rough) != "":
+				continue
+			if not _hut_site(r).is_empty():
+				return true
+	return false
 func assign_near(name: String, ctr: Vector2i) -> bool:
 	return assign(name, ctr)
 
@@ -120,22 +180,12 @@ func assign(name: String, near := Vector2i(-1, -1)) -> bool:
 		return true
 	var C = _sim().city
 	var n: int = C.size
-	var busy := PackedByteArray()
-	busy.resize(n * n)
 	var wild: bool = _sim().wildnis and near.x >= 0
+	var busy := _busy_mask(wild)
 	var hub_exclusion := Rect2i()
 	if wild and not C.hub.is_empty():
 		var hr: Array = C.hub.rect
 		hub_exclusion = Rect2i(int(hr[0]), int(hr[1]), int(hr[2]), int(hr[3])).grow(16)
-	for p in _sim().parcels.items.values():
-		if str(p.state) in ["frei", "zur_entwicklung"] and str(p.zone) != "korridor":
-			continue   # freies Land und Entwicklungsreserve ausserhalb der Orte darf Stammsitz werden (wird reserviert); Privatland und Trassen nicht
-		if wild and int(p.get("building", -1)) < 0 and not str(p.owner).begins_with("C") 				and not _sim().prod._deposits.has(str(p.id)):
-			continue   # Wildnis: noch niemand besitzt das Land (17.11.: Basis fand 20 Felder um den Platz nur "Privatland" der Kartenerzeugung)
-		for y in range(int(p.rect[1]), int(p.rect[1]) + int(p.rect[3])):
-			for x in range(int(p.rect[0]), int(p.rect[0]) + int(p.rect[2])):
-				if x >= 0 and y >= 0 and x < n and y < n:
-					busy[y * n + x] = 1
 	var towns: Array = C.towns.filter(func(t): return not _sim().wildnis or bool(t.get("siedlung", false))).map(func(t): return Rect2i(int(t.rect[0]), int(t.rect[1]), int(t.rect[2]), int(t.rect[3])).grow(12))
 	if near.x >= 0:   # Wildnis: die Basis entsteht am gewaehlten Platz (17.11.: Liorfurt rutschte 50 Felder weg)
 		towns = towns.filter(func(t): return not t.has_point(near))
@@ -161,6 +211,7 @@ func assign(name: String, near := Vector2i(-1, -1)) -> bool:
 	for pass_i in 2:   # zweiter Durchgang: einzelne Huegelfelder erlaubt (hoechstens 10 %)
 		var rough := SIDE * SIDE / 4 if near.x >= 0 else 0   # Wildnis: Wasser und Huegel in der Basis sind natuerlicher Schutz
 		if _try(name, cands, busy, stat, (0 if pass_i == 0 else SIDE * SIDE / 10) + rough, rough):
+			_wild_busy_key = ""
 			return true
 	last_failure = stat
 	return false

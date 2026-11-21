@@ -42,7 +42,7 @@ DAY_STEPS = 150            # Schlaf-Zyklus wie bei Eko: nach so vielen Schritten
 NIGHT_STEPS = 8            # so viele Schritte bleiben, um das Gedaechtnis zu schreiben
 EVENING = ("Dein Tag geht zu Ende. Schreib jetzt das Wichtigste auf: Erlebnisse mit append_memory, geprüftes Wissen und gute "
            "Abläufe in SEMANTIC_MEMORY.md, deine Pläne für morgen. Gleich schläfst du, danach weißt du nur noch, was in deinen Dateien steht.")
-MORNING = "Ein neuer Tag beginnt. Lies zuerst deine Dateien (list_files, read_file), dann schau dich um (observe)."
+MORNING = "Ein neuer Tag beginnt. Dein Gedächtnis steht unten; beobachte die aktuelle Lage und handle."
 # Wissen in SEMANTIC_MEMORY.md, getrennt nach Art (Werkzeug learn); Fehlschlaege und Bewaehrtes kommen in jede neue Sitzung
 SECTIONS = {"tatsache": "## Beobachtete Tatsachen", "vermutung": "## Vermutungen (noch nicht geprüft)",
             "technik": "## Erprobte Techniken", "fehlschlag": "## Fehlgeschlagene Ansätze",
@@ -187,6 +187,9 @@ TOOLS = [
          "data": {"type": "object", "description": "Parameter der Handlung, z. B. {\"tile\": [30, 12], \"warum\": \"Hafen erkunden\"}. "
                   "warum (kurz) ist bei jeder Handlung erlaubt und wird im Spiel angezeigt. Die Antwort hat status: laeuft, abgeschlossen, gescheitert oder doppelt."}},
          "required": ["type", "data"]}},
+    {"name": "founding_choice", "description": "Wildnis: Waehle selbst einen der geprueften, mit dem LKW erreichbaren Gruendungsplaetze aus meine_firma.siedlung.beste_plaetze_in_der_naehe. Der Charakter faehrt hin und gruendet dort.",
+     "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 2},
+                    "why": {"type": "string"}}, "required": ["candidate"]}},
     {"name": "mayor_action", "description": "Nur fuer Buergermeister: eine konkrete Stadtentscheidung aus mein_amt.naechster_ausbauschritt oder mein_amt.aktionen ausfuehren. Verwende exakte IDs und Parameter aus der aktuellen Beobachtung. Liefert danach Bau- und Wirtschaftsstand zur Erfolgskontrolle.",
      "parameters": {"type": "object", "properties": {
          "action": {"type": "string", "enum": ["viertel_erschliessen", "quartier_entwurf_waehlen", "stadtteil_planen", "plan_infrastructure", "designate_quarter", "offer_parcels", "decide_application", "propose_project", "set_vision", "kommunal_bauen", "fahrzeug_entwerfen", "build_harbor", "build_airport", "build_station", "build_bridge", "build_tunnel", "expand_harbor", "expand_airport", "expand_power", "expand_depot", "repair_road", "stromtrasse_bauen", "versorgungsleitung_bauen", "infra_ausbau"]},
@@ -388,6 +391,21 @@ def compact_obs(o, full=False):
     if not isinstance(o, dict) or not o.get("ok", False) or full:
         return o
     o = dict(o)
+    founding = o.get("meine_firma", {}).get("siedlung", {}) if isinstance(o.get("meine_firma"), dict) else {}
+    if isinstance(founding, dict) and founding.get("betriebshof") is False:
+        f = o["meine_firma"]
+        o["meine_firma"] = {k: f.get(k) for k in ("firma", "bargeld", "siedlung", "fahrzeuge", "grosslager")}
+        for k in ("bloecke_in_der_naehe", "gebaeude_in_der_naehe", "quellen", "material_preise", "lebensziel", "koerper", "gefahren"):
+            o.pop(k, None)
+        o["hinweis_kurzfassung"] = "Vor der Stadtgründung: wähle einen der geprüften Plätze, fahre mit LKW dorthin und gründe vor Ort."
+        return o
+    if isinstance(founding, dict) and founding.get("betriebshof") and not founding.get("buergeramt"):
+        f = o["meine_firma"]
+        o["meine_firma"] = {k: f.get(k) for k in ("firma", "bargeld", "siedlung", "baustellen", "grosslager", "fahrzeuge")}
+        for k in ("bloecke_in_der_naehe", "quellen", "material_preise", "koerper", "gefahren"):
+            o.pop(k, None)
+        o["hinweis_kurzfassung"] = "Der Betriebshof steht. Jetzt Bürgeramt fertigbauen: Materialflug abwarten, dann Bauen an der Baustelle."
+        return o
     blocks = o.get("bloecke_in_der_naehe", [])
     if len(blocks) > 12:
         mats = {}
@@ -453,6 +471,11 @@ class Agent:
         self.args = args
         self._repeat = 0
         self._last_fail = ""
+        self._ollama_json_mode = getattr(args, "anbieter", "ollama") == "ollama" and "Qwen3.8" in args.model
+        self._opening_foundation = False
+        self._opening_hall = False
+        self._opening_home = False
+        self._passive_streak = 0
         self.dir = Path(args.root) / args.name
         self.ws = self.dir / "workspace"
         self._reads = {}   # Datei -> (Lesezeit, Aenderungszeit), Bremse gegen Leseschleifen
@@ -487,6 +510,13 @@ class Agent:
     def observation_status(self, observation):
         if not isinstance(observation, dict) or not observation.get("ok"):
             return
+        firm = observation.get("meine_firma", {})
+        settlement = firm.get("siedlung", {}) if isinstance(firm, dict) else {}
+        if isinstance(settlement, dict) and "betriebshof" in settlement:
+            self._opening_foundation = settlement["betriebshof"] is False
+            self._opening_hall = bool(settlement["betriebshof"]) and not bool(settlement.get("buergeramt", False))
+        self._opening_home = (bool(settlement.get("betriebshof")) and bool(settlement.get("buergeramt"))
+                              and int(settlement.get("fertige_wohnhaeuser", 0)) == 0) if isinstance(settlement, dict) else False
         steps = observation.get("naechste_schritte") or []
         goal = observation.get("mein_ziel") or {}
         urgent = observation.get("dringlichkeit") or {}
@@ -510,6 +540,9 @@ class Agent:
                      "was in deiner Nähe gesagt wird, steht in observe unter gehoert. Du handelst nur über deine Werkzeuge: observe, act, wait, "
                      "list_files, read_file, write_file, append_memory. Antworte kurz; denke in Taten.")
         lines.append("\nBeschreibung deiner Welt:\n" + self.world.api_md().split("## Endpunkte")[0])
+        soul = self.ws / "SOUL.md"
+        if soul.exists():
+            lines.append("Deine eigene Seele und Persönlichkeit:\n" + soul.read_text(encoding="utf-8")[:2000])
         if getattr(self.args, "rolle", "") == "unternehmer":
             lines.append("Du fuehrst ein Unternehmen. Lies bei observe immer grundziel, mein_ziel, meine_firma und naechste_schritte. "
                          "Halte mindestens ein wirtschaftliches Vorhaben aktiv: Auftrag gewinnen, passenden Fahrer und Lkw "
@@ -530,6 +563,11 @@ class Agent:
                          "Betrieb Vorrang vor einem weiteren Wohnhaus. Wenn ein fertiger Betrieb blockiert ist, "
                          "behebe zuerst die sichtbaren Blockaden bei Personal, Rohstoffen oder Versorgung und pruefe "
                          "echte Produktion, bevor du weitere Betriebe gruendest.")
+            lines.append("In der Wildnis haben Stadtgründung, Bürgeramt und erstes Wohnhaus Vorrang. "
+                         "Solange Bürgeramt oder erstes Wohnhaus fehlen, nimm keine Kundenfracht an und schicke deinen einzigen LKW nicht in die Disposition. "
+                         "Achte auf dringlichkeit.grund und naechste_schritte; Material für offene Baustellen kommt mit deinem Materialhubschrauber.")
+            lines.append("Jede Unternehmer-KI gründet genau eine eigene Stadt. Wenn in meine_firma.siedlung bereits betriebshof=true steht, "
+                         "ist die Gründung erledigt: baue und versorge diese Stadt weiter. Setze kein neues Gründungsziel an einem anderen Ort.")
             lines.append("Erkunde die Umgebung deiner Stadt und vergleiche vor Neubauten mehrere Standortangebote. "
                          "Waehle bei build_home und build_commercial selbst eine konkrete Vorlagen-ID (entwurf) und "
                          "ein passendes Grundstueck; begruende die Wahl in deinem Plan oder Gedächtnis mit Kosten, "
@@ -555,6 +593,41 @@ class Agent:
 
     def call_tool(self, name, a):
         try:
+            if name == "founding_choice":
+                o = self.world.observe()
+                firm = o.get("meine_firma") or {} if isinstance(o, dict) else {}
+                settlement = firm.get("siedlung") or {} if isinstance(firm, dict) else {}
+                choices = settlement.get("beste_plaetze_in_der_naehe") or [] if isinstance(settlement, dict) else []
+                index = int(a.get("candidate", -1))
+                if settlement.get("betriebshof") is not False:
+                    return {"ok": False, "msg": "Dieser Gründungsplatz ist nicht mehr verfügbar. Beobachte die aktuelle Lage und wähle einen neuen Kandidaten."}
+                selected = getattr(self, "_founding_target", None)
+                if selected is None:
+                    if index < 0 or index >= len(choices):
+                        return {"ok": False, "msg": "Dieser Gründungsplatz ist nicht mehr verfügbar. Beobachte die aktuelle Lage und wähle einen neuen Kandidaten."}
+                    selected = choices[index]
+                    self._founding_target = selected
+                target = selected.get("feld", []) if isinstance(selected, dict) else []
+                here = o.get("du", {}).get("feld", [])
+                if len(target) < 2 or len(here) < 2:
+                    return {"ok": False, "msg": "Standortdaten fehlen; beobachte erneut."}
+                if o.get("du", {}).get("unterwegs"):
+                    return {"ok": True, "status": "laeuft", "msg": "Du bist noch unterwegs. Warte bis zur Ankunft, dann wähle den Standort erneut."}
+                at_site = max(abs(int(target[0]) - int(here[0])), abs(int(target[1]) - int(here[1]))) <= 3
+                action = "Siedlung" if at_site else "LKW"
+                result = self.world.act(action, {"feld" if at_site else "ziel": target})
+                if isinstance(result, dict):
+                    followup = result.pop("beobachtung", {})
+                    if isinstance(followup, dict) and followup.get("ok"):
+                        self.observation_status(followup)
+                        result["du"] = followup.get("du")
+                    result["standort"] = {"feld": target, "punkte": selected.get("punkte"), "gruende": selected.get("gruende"),
+                                          "entscheidung": str(a.get("why", ""))[:160]}
+                    if result.get("ok") is False and (at_site or "Dorthin kommt" in str(result.get("msg", ""))):
+                        self._founding_target = None
+                    elif at_site and result.get("ok"):
+                        self._founding_target = None
+                return result
             if name == "mayor_action":
                 if getattr(self.args, "rolle", "") != "buergermeister":
                     return {"ok": False, "msg": "Nur Buergermeister koennen mayor_action nutzen."}
@@ -582,6 +655,23 @@ class Agent:
                     if status_again or energy >= 50.0:
                         return {"ok": False, "msg": "Wiederholte Statusabfrage oder Pause ohne Stadtentscheidung. Nutze die aktuelle Lage und waehle eine konkrete Amtshandlung.",
                                 "naechste_schritte": current.get("naechste_schritte", [])[:3] if isinstance(current, dict) else []}
+            if name == "act" and self._opening_foundation and str(a.get("type", "")) in ("LKW", "Siedlung"):
+                data = a.get("data") or {}
+                target = data.get("ziel" if a["type"] == "LKW" else "feld", []) if isinstance(data, dict) else []
+                if isinstance(target, list) and len(target) >= 2:
+                    o = self.world.observe()
+                    firm = o.get("meine_firma") or {} if isinstance(o, dict) else {}
+                    settlement = firm.get("siedlung") or {} if isinstance(firm, dict) else {}
+                    candidates = settlement.get("beste_plaetze_in_der_naehe") or [] if isinstance(settlement, dict) else []
+                    valid = [p.get("feld") for p in candidates if isinstance(p, dict)]
+                    if valid and target not in valid:
+                        return {"ok": False, "msg": "Dieser Ort ist nicht in der geprueften, erreichbaren Auswahl. Waehle founding_choice mit candidate 0, 1 oder 2.",
+                                "gepruefte_plaetze": valid}
+            if name == "act" and (self._opening_hall or self._opening_home) and str(a.get("type", "")) == "Firma":
+                data = a.get("data") or {}
+                action = data.get("aktion") or {} if isinstance(data, dict) else {}
+                if isinstance(action, dict) and str(action.get("action", "")) in ("accept_contract", "collect_contracts", "set_dispatch_policy"):
+                    return {"ok": False, "msg": "Bürgeramt und erstes Wohnhaus haben jetzt Vorrang. Beende zuerst die Baukette aus dringlichkeit.grund."}
             if name == "company_plan":
                 steps = a.get("schritte", [])
                 if not isinstance(steps, list) or not steps or not all(isinstance(s, str) for s in steps):
@@ -626,14 +716,26 @@ class Agent:
                 return r
             if name == "wait":
                 if a.get("bis") == "ankunft":   # deterministisch warten, kein Modellaufruf je Schritt
+                    def still_travelling(o):
+                        if not isinstance(o, dict) or not o.get("ok"):
+                            return False
+                        if o.get("du", {}).get("unterwegs"):
+                            return True
+                        if self._opening_foundation:
+                            firm = o.get("meine_firma") or {}
+                            for vehicle in firm.get("fahrzeuge", []) if isinstance(firm, dict) else []:
+                                status = str(vehicle.get("status", "")).lower() if isinstance(vehicle, dict) else ""
+                                if any(s in status for s in ("panne", "tank leer", "werkstatt", "reparatur")):
+                                    return True
+                        return False
                     t0 = time.time()
                     while time.time() - t0 < ARRIVAL_MAX_S:
                         o = self.world.observe()
-                        if not isinstance(o, dict) or not o.get("ok") or not o.get("du", {}).get("unterwegs"):
+                        if not still_travelling(o):
                             break
                         time.sleep(1.5)
                     o = compact_obs(self.world.observe())
-                    arrived = isinstance(o, dict) and not o.get("du", {}).get("unterwegs", False)
+                    arrived = isinstance(o, dict) and o.get("ok") and not still_travelling(o)
                     return {"ok": arrived, "status": "abgeschlossen" if arrived else "laeuft", "gewartet_s": round(time.time() - t0),
                             "msg": "angekommen" if arrived else "noch unterwegs", "lage": o}
                 if a.get("bis") == "antwort":   # bis jemand dich anspricht (Zaehler du.nachrichten der Welt), ohne Modellaufruf
@@ -738,6 +840,10 @@ class Agent:
         return ("Erinnerung aus deinem Gedächtnis (historische Erfahrungen; Kennungen, Bestände und Zustände nur aus observe verwenden):\n" + "\n\n".join(parts)) if parts else ""
 
     def model_tools(self):
+        if self._opening_foundation:
+            return [tool for tool in TOOLS if tool["name"] in ("observe", "founding_choice", "act", "wait")]
+        if self._opening_hall or self._opening_home:
+            return [tool for tool in TOOLS if tool["name"] in ("observe", "act", "wait")]
         if getattr(self.args, "rolle", "") == "unternehmer":
             return TOOLS
         return TOOLS[:-len(COMPANY_TOOLS)]
@@ -745,16 +851,21 @@ class Agent:
     def chat_json_tool(self, messages):
         """Ollamas JSON-Modus umgeht den fehleranfaelligen nativen Tool-Parser lokaler Modelle."""
         available = self.model_tools()
-        observed_enough = getattr(self, "_observe_streak", 0) >= 2
+        observed_enough = getattr(self, "_observe_streak", 0) >= 2 or self._passive_streak >= 3
         if observed_enough:
-            available = [tool for tool in available if tool["name"] not in ("observe", "list_files", "read_file")]
+            available = [tool for tool in available if tool["name"] not in
+                         ("observe", "list_files", "read_file", "write_file", "append_memory", "learn")]
         names = {tool["name"] for tool in available}
         menu = []
         for tool in available:
             params = tool["parameters"]
             fields = [key + ("" if key in params.get("required", []) else "?")
                       for key in params.get("properties", {})]
-            purpose = ("Weltaktion mit type und data; z.B. LKW, Siedlung, Firma, Amt, MoveTo oder Rest"
+            purpose = ("Weltaktion mit type und data; Bürgeramt: Firma {aktion:{action:buergeramt_bauen oder hub_buy}}, Bauen {baustelle:BS...}, Rest"
+                       if self._opening_hall and tool["name"] == "act" else
+                       "Weltaktion mit type und data; vor der Gründung: LKW {ziel:[x,y]}, am Platz Siedlung {feld:[x,y]}"
+                       if self._opening_foundation and tool["name"] == "act" else
+                       "Weltaktion mit type und data; z.B. LKW, Siedlung, Firma, Amt, MoveTo oder Rest"
                        if tool["name"] == "act" else tool["description"][:150])
             menu.append("%s(%s): %s" % (tool["name"], ", ".join(fields), purpose))
         # Ohne deklarierte native Tools auch den bisherigen Verlauf als reinen Dialog senden.
@@ -774,8 +885,16 @@ class Agent:
             "tool": {"type": "string", "enum": sorted(names)}, "arguments": {"type": "object"}},
             "required": ["tool", "arguments"]}
         plain.append({"role": "user", "content":
-                      ("Du hast die Lage bereits zweimal hintereinander beobachtet. Nutze die letzte Beobachtung "
+                      ("Du hast die Lage bereits mehrfach beobachtet. Nutze die letzte Beobachtung "
                        "und waehle jetzt eine Weltaktion oder einen sinnvollen Warteschritt.\n" if observed_enough else "") +
+                      ("Gründungsphase: Vergleiche die geprüften Plätze in meine_firma.siedlung.beste_plaetze_in_der_naehe und "
+                       "wähle mit founding_choice candidate=0, 1 oder 2. Dieses Werkzeug fährt hin oder gründet vor Ort. "
+                       "Während der Fahrt wait bis=ankunft; act nur für Rest bei Energiemangel oder wenn kein Gründungsplatz erreichbar ist.\n"
+                       if self._opening_foundation else "") +
+                      ("Bürgeramtphase: handle nur an der dringenden Baustelle. Material per hub_buy {baustelle:ID} bestellen, "
+                       "Flug abwarten und mit Bauen {baustelle:ID} arbeiten. Keine Kundenfracht.\n" if self._opening_hall else "") +
+                      ("Erstes Wohnhaus fehlt: baue und versorge jetzt ein Wohnhaus. Keine Kundenfracht, bis der Ort wachsen kann.\n"
+                       if self._opening_home else "") +
                       "Waehle genau eine konkrete naechste Handlung aus dieser Werkzeugliste:\n" +
                       "\n".join(menu) +
                       "\nAntworte ausschliesslich als JSON nach diesem Schema: " + json.dumps(schema) +
@@ -797,10 +916,21 @@ class Agent:
         arguments = chosen.get("arguments") if isinstance(chosen, dict) else None
         if name not in names or not isinstance(arguments, dict):
             raise ModelGlitch("Ollama-JSON-Antwort ohne gueltiges Werkzeug: %s" % str(name)[:80])
+        if name == "act" and "data" not in arguments:
+            if "type" in arguments:
+                arguments = {"type": arguments["type"], "data": {k: v for k, v in arguments.items() if k != "type"}}
+            elif len(arguments) == 1:
+                action, data = next(iter(arguments.items()))
+                if isinstance(data, dict):
+                    arguments = {"type": action, "data": data}
+        if name == "append_memory" and "entry" not in arguments and arguments:
+            arguments = {"entry": arguments}
         parameters = next(t["parameters"] for t in available if t["name"] == name)
         arguments = {key: value for key, value in arguments.items() if key in parameters.get("properties", {})}
         required = parameters.get("required", [])
         if any(key not in arguments for key in required):
+            self.log.write(time.strftime("%H:%M:%S ") + "Ollama-JSON unvollständig: " + json.dumps(chosen, ensure_ascii=False)[:350] + "\n")
+            self.log.flush()
             raise ModelGlitch("Ollama-JSON-Antwort fuer %s ohne Pflichtparameter" % name)
         return {"content": "", "tool_calls": [{"function": {"name": name, "arguments": arguments}}]}
 
@@ -967,7 +1097,10 @@ class Agent:
         self.world.join(self.args.art)
         self.status("bereit")
         system = {"role": "system", "content": self.system_prompt()}
-        messages = [{"role": "user", "content": "Beginne. Lies zuerst deine Dateien (list_files, read_file). " + self.digest()}]
+        first = compact_obs(self.world.observe())
+        self.observation_status(first)
+        messages = [{"role": "user", "content": "Beginne mit einer konkreten Handlung. Deine Erinnerung steht hier; Dateien brauchst du erst nach einer neuen Erfahrung zu lesen. "
+                     + self.digest() + "\nAktuelle Lage: " + json.dumps(first, ensure_ascii=False)[:11000]}]
         steps = 0
         day_start = 0
         evening = False
@@ -1061,6 +1194,11 @@ class Agent:
                     self._observe_streak = min(3, getattr(self, "_observe_streak", 0) + 1)
                 else:
                     self._observe_streak = 0
+                passive = fn["name"] in ("observe", "list_files", "read_file", "write_file", "append_memory", "learn")
+                passive = passive or (fn["name"] == "act" and str(a.get("type", "")).lower() in ("observe", "beobachten"))
+                passive = passive or (fn["name"] == "wait" and isinstance(res, dict)
+                                      and float(res.get("gewartet_s", 0)) < 5.0)
+                self._passive_streak = min(4, self._passive_streak + 1) if passive else 0
                 steps += 1
                 short = json.dumps(a, ensure_ascii=False)[:120]
                 verdict = (res.get("msg", "") if isinstance(res, dict) else "")[:100]

@@ -58,7 +58,7 @@ func _deposits() -> Array:
 
 ## Bewertung eines Platzes fuer Betriebshof und Basis: {ok, punkte, gruende, grund (wenn nicht ok), hafen, schutz}.
 ## Schutz: Anteil Wasser und Huegel im Ring 6-14 Felder um die Mitte.
-func score_at(cell: Vector2i) -> Dictionary:
+func score_at(cell: Vector2i, verify_base: bool = true) -> Dictionary:
 	var sim = _sim()
 	var C: CityData = sim.city
 	var out := {"feld": [cell.x, cell.y], "ok": false, "punkte": 0, "gruende": []}
@@ -110,6 +110,9 @@ func score_at(cell: Vector2i) -> Dictionary:
 	if flat < 0.6:
 		out["grund"] = "zu wenig freie, ebene Fläche (%d %%)" % int(flat * 100.0)
 		return out
+	if verify_base and not w.estates.can_assign_near(cell):
+		out["grund"] = "keine freie 24 × 24-Basis in höchstens 20 Feldern Abstand (Wasser, Berg, Straße, Gebäude oder fremdes Grundstück)"
+		return out
 	var pts := 20.0 + 30.0 * (flat - 0.6) / 0.4
 	out.gruende.append("Fläche frei und eben %d %%" % int(flat * 100.0))
 	var schutz := float(guard) / float(maxi(1, ring))
@@ -145,22 +148,31 @@ func score_at(cell: Vector2i) -> Dictionary:
 ## Nur Plaetze, die der Gelaende-LKW von cell aus erreicht (Partie 18.11.: Amira bekam zweimal einen unerreichbaren Platz empfohlen).
 func best_near(cell: Vector2i, radius: int = 70, n: int = 3) -> Array:
 	var key := "%d,%d,%d" % [cell.x / 8, cell.y / 8, radius]
+	var busy: PackedByteArray = w.estates._busy_mask(true)
+	var map_key: String = w.estates._wild_busy_key
 	var hit: Dictionary = _best_cache.get(key, {})
-	if not hit.is_empty() and float(_sim().game_min) - float(hit.t) < 120.0:
+	if not hit.is_empty() and str(hit.get("map", "")) == map_key and float(_sim().game_min) - float(hit.t) < 120.0:
 		return (hit.r as Array).slice(0, n)
 	if _best_cache.size() > 64:
 		_best_cache.clear()
 	var cands: Array = []
 	for dy in range(-radius, radius + 1, 10):
 		for dx in range(-radius, radius + 1, 10):
-			var sc := score_at(cell + Vector2i(dx, dy))
+			var sc := score_at(cell + Vector2i(dx, dy), false)
 			if sc.ok:
 				cands.append(sc)
 	cands.sort_custom(func(a, b): return int(a.punkte) > int(b.punkte))
+	var verified: Array = []
 	for sc in cands:
+		var site := Vector2i(int(sc.feld[0]), int(sc.feld[1]))
+		if not w.estates.can_assign_near(site, busy):
+			continue
 		sc["entfernung"] = maxi(absi(int(sc.feld[0]) - cell.x), absi(int(sc.feld[1]) - cell.y))
-	_best_cache[key] = {"t": float(_sim().game_min), "r": cands.slice(0, 5)}
-	return cands.slice(0, n)
+		verified.append(sc)
+		if verified.size() >= 5:
+			break
+	_best_cache[key] = {"t": float(_sim().game_min), "map": map_key, "r": verified}
+	return verified.slice(0, n)
 
 
 ## Bester Platz, den der Gelaende-LKW von cell aus erreicht (Partie 18.11.: Amira bekam unerreichbare Plaetze empfohlen).
@@ -168,11 +180,12 @@ func best_near(cell: Vector2i, radius: int = 70, n: int = 3) -> Array:
 var _reach_memo := {}
 
 
-func reachable_best(cell: Vector2i, radius: int = 70) -> Dictionary:
+func reachable_near(cell: Vector2i, radius: int = 70, n: int = 3) -> Array:
 	var sim = _sim()
 	if _reach_memo.size() > 400:
 		_reach_memo.clear()
 	var checks := 0
+	var out: Array = []
 	for sc in best_near(cell, radius, 5):
 		var f := Vector2i(int(sc.feld[0]), int(sc.feld[1]))
 		var mk := "%d,%d>%d,%d" % [cell.x / 8, cell.y / 8, f.x, f.y]
@@ -181,11 +194,20 @@ func reachable_best(cell: Vector2i, radius: int = 70) -> Dictionary:
 			if checks >= 3:
 				break
 			checks += 1
-			hit = {"t": float(sim.game_min), "ok": not sim.offroad_path(cell, f).is_empty()}
+			var route: Array = sim.offroad_path(cell, f)
+			var end: Vector2i = route[-1] if not route.is_empty() else Vector2i(-999, -999)
+			hit = {"t": float(sim.game_min), "ok": not route.is_empty() and maxi(absi(end.x - f.x), absi(end.y - f.y)) <= ON_SITE}
 			_reach_memo[mk] = hit
 		if bool(hit.ok):
-			return sc
-	return {}
+			out.append(sc)
+			if out.size() >= n:
+				break
+	return out
+
+
+func reachable_best(cell: Vector2i, radius: int = 70) -> Dictionary:
+	var found: Array = reachable_near(cell, radius, 1)
+	return found[0] if not found.is_empty() else {}
 
 
 ## Gruendung durch das Wesen b mit Firma cid am Feld cell: Betriebshof und Basis (Stammsitz) entstehen hier; das Land ringsum wird
@@ -210,7 +232,7 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 	if c.ledger.cash < FOUND_COST:
 		return {"ok": false, "msg": "Vermessung und Platz kosten %s, die Firma hat %s." % [Catalog.money(FOUND_COST), Catalog.money(c.ledger.cash)]}
 	if not w.estates.assign_near(str(b.name), cell):
-		return {"ok": false, "msg": "Für deine Basis (24 × 24 Felder) ist hier kein freier Platz – etwas versetzt versuchen."}
+		return {"ok": false, "msg": "Für deine Basis (24 × 24 Felder) ist hier kein freier Platz – %s" % _suggest(here)}
 	var ctr: Vector2i = w.estates.center_of(str(b.name))
 	var yard := -1
 	var yard_field := Rect2i()
@@ -302,6 +324,8 @@ func open_town(k: int, rect: Rect2i) -> bool:
 	_start_package(k)
 	_activate(k)
 	sim.towns.depot(k).activate(bauhof)
+	sim.municipal.ensure_kit()
+	sim.municipal.ensure_regional()
 	sim.events.buildings_added.emit([hall, bauhof] + ([harbor] if harbor >= 0 else []))
 	for n in w.beings:
 		var o: Dictionary = w.beings[n]
@@ -1142,10 +1166,11 @@ func obs(b: Dictionary, cid: int) -> Dictionary:
 	var k: int = sim.companies[cid].home_town
 	if founded(k):
 		return {"betriebshof": true, "stadt": sim.towns.name_of(k), "mitte": sim.city.towns[k].center, "buergeramt": sim.town_ready(k),
-			"baugrundstuecke": (sim.settlements.get(str(k), {}).get("plots", []) as Array).size()}
+			"baugrundstuecke": (sim.settlements.get(str(k), {}).get("plots", []) as Array).size(),
+			"fertige_wohnhaeuser": sim.housing.units.values().filter(func(u): return sim.towns.of_building(int(u.building)) == k).size()}
 	var here: Vector2i = w.tile_of(b)
 	return {"betriebshof": false, "hinweis": "Noch kein Betriebshof. Erkunde das Land (mit deinem Gelände-LKW: LKW {ziel: [x, y]}, oder MoveTo) und eröffne am besten Platz: Siedlung {feld: [x, y]}.",
-		"hier": score_at(here), "beste_plaetze_in_der_naehe": best_near(here)}
+		"hier": score_at(here), "beste_plaetze_in_der_naehe": reachable_near(here)}
 
 
 func next_step(b: Dictionary, cid: int) -> String:

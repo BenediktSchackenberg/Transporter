@@ -64,7 +64,7 @@ const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe,
 const GRUNDZIEL_FIRMA := "Baue ein dauerhaft erfolgreiches Transportunternehmen auf: Fahrer einstellen, reale Auftraege abholen und zustellen, Gewinne in Fuhrpark, Betriebshof und Buero investieren und weitere Staedte bedienen."
 # Benedikt 18.11.: "Ziel pro KI ist, dass die Stadt waechst, mehr Einwohner kommen, die Wirtschaft in Schwung kommt"
 const GRUNDZIEL_WILDNIS := ("Wildnis – dein Ziel: deine Stadt wächst, immer mehr Einwohner ziehen zu, die Wirtschaft kommt in Schwung. Weg dorthin: sicheren Platz suchen, " +
-	"Betriebshof und Basis eröffnen, Bürgeramt bauen (dann gibt es die Stadt), Straße zum Großlager (ohne Straße liefert niemand), Häuser für Siedler, " +
+	"Betriebshof und Basis eröffnen, Bürgeramt bauen (dann gibt es die Stadt), Häuser für Siedler und eine Straße zum Großlager planen; bis dahin bringt der Materialhubschrauber Baustoffe zum Stadtlager, " +
 	"erste Betriebe (Arbeitsplätze, Umsatz), danach Fahrer und Fuhrpark erweitern und mehrere Städte bedienen. Material holst du selbst mit deinem LKW; Tagelöhner helfen beim Bauen. Transportaufträge gibt es erst, wenn Städte entstehen.")
 const GRUNDZIEL_AMT := "Entwickle deine Stadt dauerhaft nach eigener Idee: zusammenhängende Straßen, Wohnraum, Arbeit, Versorgung und schöne öffentliche Orte. Wähle neue Stadtteile selbst, erschließe sie, prüfe das Ergebnis und verbessere weiter. Dein Zuhause ist dein Rathaus."
 const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
@@ -836,7 +836,7 @@ func urgency(b: Dictionary) -> Dictionary:
 	var home_k: int = sim.company(cid).home_town
 	if sim.wildnis and home_k >= 0 and settle.founded(home_k) and not sim.town_ready(home_k) 			and not homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) == "buergeramt"):
 		# 19.11.: qwen3.5:9b lief drei Spieltage herum statt das Buergeramt anzulegen – ohne es waechst nichts
-		return {"prioritaet": 2, "grund": "Deine Siedlung hat noch kein Bürgeramt (ohne es keine Stadt, keine Siedler, keine Lieferungen): Firma {aktion: {action: \"buergeramt_bauen\"}}"}
+		return {"prioritaet": 2, "grund": "Deine Siedlung hat noch kein Bürgeramt (ohne es gibt es keine Stadt und keinen regulären Zuzug): Firma {aktion: {action: \"buergeramt_bauen\"}}"}
 	if sim.wildnis and home_k >= 0 and not sim.town_ready(home_k):
 		for st in homes.sites.values():   # 19.11.: Buergeramt wartete 20 Minuten auf Material, keiner kaufte
 			if int(st.cid) == cid and str(st.typ) == "buergeramt" and str(st.status) == "material":
@@ -943,6 +943,9 @@ func next_steps(b: Dictionary) -> Array:
 	if wild_build:
 		# Wildnis, noch ohne Angestellte (17.11.: Greta und Viktor sammelten Transportauftraege statt zu gruenden): erst gruenden, dann bauen
 		var st0 := settle.next_step(b, cid)
+		var founder_truck := own_truck(cid)
+		if st0 != "" and founder_truck != null and founder_truck.state in ["broken", "to_workshop", "repairing"]:
+			st0 = "Dein Gruender-LKW #%d ist %s. Warte auf Abschleppen und Reparatur (wait {bis: \"ankunft\"}); danach fahre zum geprueften Gruendungsplatz. Keine neue Fracht annehmen." % [founder_truck.id, founder_truck.status_text()]
 		if st0 == "":
 			st0 = homes.next_step(cid)
 		if st0 != "":
@@ -1047,6 +1050,8 @@ func _truck(b: Dictionary, data: Dictionary) -> Dictionary:
 	if v == null:
 		return {"ok": false, "msg": "Kein Fahrzeug, das du selbst fährst."}
 	if _truck_busy(v):
+		if v.state in ["broken", "to_workshop", "repairing"]:
+			return {"ok": false, "msg": "Dein LKW #%d ist %s. Er wird automatisch abgeschleppt und repariert; warte auf Einsatzbereitschaft, dann entscheide neu." % [v.id, v.status_text()]}
 		return {"ok": false, "msg": "Dein LKW ist gerade unterwegs (%s)." % v.state}
 	var here := tile_of(b)
 	if maxi(absi(here.x - v.tile().x), absi(here.y - v.tile().y)) > 3:

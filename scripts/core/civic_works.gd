@@ -338,7 +338,7 @@ func housing_reserve(k: int) -> float:
 	return 0.0
 
 
-func _find_site(k: int, w: int, h: int, district: String = "", label: String = "") -> Dictionary:
+func _find_site(k: int, w: int, h: int, district: String = "", label: String = "", allow_no_road: bool = false) -> Dictionary:
 	var C: CityData = sim.city
 	if int(sim.towns.get_t(k).get("town_hall", -1)) < 0:
 		return {}   # Wildnis: Ort noch nicht gegruendet
@@ -347,12 +347,12 @@ func _find_site(k: int, w: int, h: int, district: String = "", label: String = "
 		var d := district.to_lower()
 		if d.contains("rand") or d.contains("außen") or d.contains("aussen"):
 			art = "laerm" if art == "oeffentlich" else art
-		var ch: Dictionary = sim.sites.choose(k, {"w": w, "h": h, "art": art, "district": district, "label": label if label != "" else "Bau %d×%d" % [w, h],
+		var ch: Dictionary = sim.sites.choose(k, {"w": w, "h": h, "art": art, "district": district, "allow_no_road": allow_no_road, "label": label if label != "" else "Bau %d×%d" % [w, h],
 			"zones": ["mischgebiet", "oeffentlich", "wohnen", "gewerbe"] if art != "laerm" else ["gewerbe", "industrie", "mischgebiet"]})
 		if ch.ok:
 			return {"rect": ch.rect, "parcel": ch.parcel, "begruendung": ch.begruendung}
 		if art == "laerm":   # kein Gewerbeplatz: notfalls wie bisher (Mischgebiet/Wohnen am Rand), aber bewertet
-			ch = sim.sites.choose(k, {"w": w, "h": h, "art": art, "label": label, "zones": ["mischgebiet", "oeffentlich", "gewerbe"]})   # nie ins Wohngebiet (18.11.: Fahrzeugwerk im Wohnviertel)
+			ch = sim.sites.choose(k, {"w": w, "h": h, "art": art, "label": label, "allow_no_road": allow_no_road, "zones": ["mischgebiet", "oeffentlich", "gewerbe"]})   # nie ins Wohngebiet (18.11.: Fahrzeugwerk im Wohnviertel)
 			if ch.ok:
 				return {"rect": ch.rect, "parcel": ch.parcel, "begruendung": ch.begruendung}
 		return {}
@@ -443,7 +443,7 @@ func _cells_free(r: Rect2i) -> bool:
 	for y in range(r.position.y, r.end.y):
 		for x in range(r.position.x, r.end.x):
 			var q := Vector2i(x, y)
-			if not C.inside(q) or C.building_at[C.idx(q)] != -1 or C.g(q) in [CityData.G.ROAD, CityData.G.WATER, CityData.G.RAIL, CityData.G.QUAY, CityData.G.RUNWAY]:
+			if not C.inside(q) or C.building_at[C.idx(q)] != -1 or C.g(q) in [CityData.G.ROAD, CityData.G.WATER, CityData.G.RAIL, CityData.G.QUAY, CityData.G.RUNWAY] or (not C.height.is_empty() and C.height[C.idx(q)] > 0):
 				return false
 			if sim.access != null and sim.access.reserved(q):
 				return false

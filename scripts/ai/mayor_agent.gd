@@ -112,6 +112,9 @@ func _process_timed(delta: float) -> void:
 
 ## Eine Entscheidungsrunde: mit Modell (asynchron) oder per Regeln.
 func think() -> void:
+	if sim.wildnis and not sim.town_ready(town):
+		status = "Wartet auf die Stadtgründung"
+		return
 	if eko_managed:
 		var day := GameCalendar.day_of(sim.game_min)
 		if day != _transport_day:

@@ -458,7 +458,10 @@ func _share_regional(f: Dictionary) -> void:
 func _place(k: int, code: String, district: String = "") -> Dictionary:
 	var bt: String = TYPES[code].building
 	var info: Array = CityGenerator.TYPES[bt]
-	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]), district, str(TYPES[code].label))
+	var air_supplied_start: bool = sim.wildnis and code in ["WW-01", "WT-01", "KA-01"]
+	var site: Dictionary = sim.civic._find_site(k, int(info[1]), int(info[2]), district, str(TYPES[code].label), air_supplied_start)
+	if site.is_empty() and air_supplied_start:
+		site = _foundation_utility_site(k, int(info[1]), int(info[2]), code)
 	if site.is_empty():
 		sim.log_event("%s: kein Bauplatz für %s gefunden." % [sim.towns.name_of(k), TYPES[code].label], "warn")
 		return {}
@@ -475,6 +478,60 @@ func _place(k: int, code: String, district: String = "") -> Dictionary:
 	var f := register(k, code, int(b.id))
 	sim.events.buildings_added.emit([b.id])
 	return f
+
+
+## Junge Wildnis-Staedte haben anfangs oft nur Wohnparzellen und drei Strassenfelder.
+## Fuer die lebenswichtigen Werke wird dann ein freies Randgrundstueck ausgewiesen;
+## die spaetere Viertelerschliessung kann dessen Zufahrt an das Stadtnetz anschliessen.
+func _foundation_utility_site(k: int, width: int, height: int, code: String) -> Dictionary:
+	var C: CityData = sim.city
+	var town_area: Rect2i = sim.towns.get_t(k).rect
+	var center: Vector2i = town_area.get_center()
+	var ranked: Array = []
+	for y in range(town_area.position.y - 8, town_area.end.y + 8, 3):
+		for x in range(town_area.position.x - 8, town_area.end.x + 8, 3):
+			var plot := Rect2i(x, y, maxi(8, width + 3), maxi(7, height + 3))
+			if not C.inside(plot.position) or not C.inside(plot.end - Vector2i.ONE) or C.town_of(plot.get_center()) != k:
+				continue
+			var dist := Vector2(plot.get_center()).distance_to(Vector2(center))
+			if dist < 16.0 or dist > 48.0 or not sim.eko.settle._plot_free(plot):
+				continue
+			if sim.town_plan.has(k) and sim.town_plan.zone_at(k, plot.get_center()) == "gruen":
+				continue
+			var private_land := false
+			for py in range(plot.position.y, plot.end.y):
+				for px in range(plot.position.x, plot.end.x):
+					var p: Dictionary = sim.parcels.at_cell(Vector2i(px, py))
+					if not p.is_empty() and (str(p.state) not in ["frei", "zur_entwicklung"] or (not Towns.is_public(str(p.owner)) and str(p.owner) != "")):
+						private_land = true
+						break
+				if private_land: break
+			if private_land:
+				continue
+			var homes_near := 0
+			for b in C.buildings:
+				if str(b.type) in ["house", "semi", "villa", "apartment", "highrise"] and Vector2(plot.get_center()).distance_to(Vector2(int(b.x) + int(b.w) / 2, int(b.y) + int(b.h) / 2)) < 16.0:
+					homes_near += 1
+			if homes_near > 0:
+				continue
+			var preferred := Vector2(center)
+			if sim.town_plan.has(k):
+				for v in sim.town_plan.of(k).get("viertel", []):
+					if str(v.zone) in ["gewerbe", "industrie"]:
+						preferred = Vector2(float(v.mitte[0]), float(v.mitte[1]))
+						break
+			var score := Vector2(plot.get_center()).distance_to(preferred) + dist * 0.15
+			if code == "KA-01":
+				score -= dist * 0.4   # Klaeranlage weiter vom Wohnkern entfernt
+			ranked.append({"rect": plot, "score": score})
+	ranked.sort_custom(func(a, b): return float(a.score) < float(b.score))
+	if ranked.is_empty():
+		return {}
+	var chosen: Rect2i = ranked[0].rect
+	var pid: String = sim.parcels.carve(chosen, "gewerbe", Towns.owner_of(k))
+	var footprint := Rect2i(chosen.position + Vector2i(1, 1), Vector2i(width, height))
+	sim.log_event("%s weist ein Randgrundstück für %s aus (%s)." % [sim.towns.name_of(k), str(TYPES[code].label), pid], "info")
+	return {"rect": [footprint.position.x, footprint.position.y, width, height], "parcel": pid}
 
 
 # ------------------------------------------------------------------ Tag: Personal, Fahrer, Kosten
