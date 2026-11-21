@@ -1354,6 +1354,8 @@ func _hold_for(cid: int, k, takt_min: float) -> void:
 
 func _fleet_step(cid: int, takt_min := 0.0) -> String:
 	var c = sim.company(cid)
+	if sim.wildnis and not sim.town_ready(c.home_town):
+		return ""   # Ohne Stadt gibt es noch keine Kundenaufträge; die Lage zeigt stattdessen freie Gründungsplätze.
 	var now: float = sim.game_min
 	var coming := {}   # Fahrer unterwegs zum Fahrzeug (Aufgabe fahren erteilt, vehicle_id erst bei Ankunft) – nicht erneut einsetzen lassen
 	for w in sim.personnel.employed(cid):
