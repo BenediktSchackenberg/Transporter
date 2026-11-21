@@ -3561,14 +3561,17 @@ func to_dict() -> Dictionary:
 		bl.append([p.x, p.y, p.z, blocks[p]])
 	var bs: Array = []
 	for b in beings.values():
-		bs.append({"name": b.name, "art": b.art, "x": b.mover.pos.x, "y": b.mover.pos.y, "held": b.held, "events": b.events,
+		var saved: Dictionary = {"name": b.name, "art": b.art, "x": b.mover.pos.x, "y": b.mover.pos.y, "held": b.held, "events": b.events,
 			"geld": float(b.get("geld", 0.0)), "job": str(b.get("job", "")), "grundstueck": str(b.get("grundstueck", "")),
 			"done_jobs": int(b.get("done_jobs", 0)), "firma": int(b.get("firma", -1)), "zuhause": str(b.get("zuhause", "")),
 			"akku": float(b.get("akku", 100.0)), "nass": float(b.get("nass", 0.0)), "kalt": float(b.get("kalt", 0.0)),
 			"amt": int(b.get("amt", -1)), "seele": str(b.get("seele", "")), "orte": b.get("orte", {}), "besucht": b.get("besucht", {}),
 			"ziel": b.get("ziel", {}), "ziele_alt": b.get("ziele_alt", []), "gesundheit": float(b.get("gesundheit", 100.0)), "waffen": b.get("waffen", []),
 			"vergehen": int(b.get("vergehen", 0)), "out_left": float(b.get("out_left", 0.0)), "custody_left": float(b.get("custody_left", 0.0)),
-			"startkapital": bool(b.get("startkapital", false))})
+			"startkapital": bool(b.get("startkapital", false))}
+		if b.has("fracht_auftrag"):
+			saved["fracht_auftrag"] = b.fracht_auftrag
+		bs.append(saved)
 	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict(), "estates": estates.to_dict(), "homes": homes.to_dict(), "conflict": conflict.to_dict(),
 		"towns_funded": towns_funded}
 
@@ -3588,6 +3591,8 @@ func from_dict(d: Dictionary) -> void:
 		for k in ["geld", "job", "grundstueck", "done_jobs", "firma", "zuhause", "akku", "nass", "kalt", "amt", "seele", "orte", "besucht", "ziel", "ziele_alt", "gesundheit", "waffen", "vergehen", "out_left", "custody_left", "startkapital"]:
 			if e.has(k):
 				b[k] = e[k]
+		if e.get("fracht_auftrag", {}) is Dictionary and not (e.get("fracht_auftrag", {}) as Dictionary).is_empty():
+			b["fracht_auftrag"] = e.fracht_auftrag
 	chat = d.get("chat", [])
 	jobs = d.get("jobs", {})
 	_next_job = int(d.get("next_job", 1))

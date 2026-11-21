@@ -9055,6 +9055,11 @@ func test_wildnis_found() -> void:
 		(manual_b.mover as Mover).set_path([] as Array[Vector2i])
 		var chosen_freight: Dictionary = manual_city.eko.input(str(manual_b.name), "Firma", {"aktion": {"action": "accept_contract", "contract_id": manual_offer.id, "vehicle_id": manual_v.id}})
 		ok(chosen_freight.ok and bool(chosen_freight.get("pending", false)) and manual_offer.status == "open" and manual_v.stops.is_empty(), "direkt gewaehlte Fracht wartet auf den sichtbaren Fussweg zum LKW: %s" % str(chosen_freight).left(180))
+		manual_city = Simulation.from_dict(JSON.parse_string(JSON.stringify(manual_city.to_dict())))
+		manual_v = manual_city.eko.own_truck(cid)
+		manual_b = manual_city.eko.beings[manual_city.eko.firm_being(cid)]
+		manual_offer = manual_city.contracts[wildnis_offer.id]
+		ok(manual_b.has("fracht_auftrag") and manual_offer.status == "open", "vorgemerkter Fussweg und Auftrag bleiben beim Speichern erhalten")
 		for _walk in 40:
 			(manual_b.mover as Mover).advance(0.5, 1.0)
 			manual_city.eko._body_tick()
