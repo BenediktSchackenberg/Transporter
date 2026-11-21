@@ -9036,6 +9036,32 @@ func test_wildnis_found() -> void:
 	loaded_city.operations.dispatch_policies.erase(cid)
 	ok(not bool(loaded_city.eko.firm_obs(work_b).dispositionsvorgaben.gruender_lkw_freigegeben), "KI sieht, dass die Standardvorgabe ihren Gruender-LKW noch nicht freigibt")
 	ok(loaded_city.eko.next_steps(work_b).any(func(step): return str(step).contains("set_dispatch_policy")), "nach erstem Wohnhaus sieht die KI die Entscheidung fuer den Gruender-LKW")
+	var manual_city := Simulation.from_dict(JSON.parse_string(JSON.stringify(loaded_city.to_dict())))
+	var manual_v: FleetVehicle = manual_city.eko.own_truck(cid)
+	var manual_b: Dictionary = manual_city.eko.beings[manual_city.eko.firm_being(cid)]
+	var manual_offer: Contract = manual_city.contracts[wildnis_offer.id]
+	var far_on_foot := Vector2i(-1, -1)
+	for dy in range(-8, 9):
+		for dx in range(-8, 9):
+			var candidate: Vector2i = manual_v.tile() + Vector2i(dx, dy)
+			if maxi(absi(dx), absi(dy)) >= 5 and manual_city.nav.walk_reachable(candidate, manual_v.tile()):
+				far_on_foot = candidate
+				break
+		if far_on_foot.x >= 0:
+			break
+	if far_on_foot.x >= 0:
+		manual_b.akku = 100.0
+		manual_b.mover.pos = manual_city.city.tile_center(far_on_foot)
+		(manual_b.mover as Mover).set_path([] as Array[Vector2i])
+		var chosen_freight: Dictionary = manual_city.eko.input(str(manual_b.name), "Firma", {"aktion": {"action": "accept_contract", "contract_id": manual_offer.id, "vehicle_id": manual_v.id}})
+		ok(chosen_freight.ok and bool(chosen_freight.get("pending", false)) and manual_offer.status == "open" and manual_v.stops.is_empty(), "direkt gewaehlte Fracht wartet auf den sichtbaren Fussweg zum LKW: %s" % str(chosen_freight).left(180))
+		for _walk in 40:
+			(manual_b.mover as Mover).advance(0.5, 1.0)
+			manual_city.eko._body_tick()
+			if manual_offer.status == "assigned":
+				break
+		ok(manual_offer.status == "assigned" and maxi(absi(manual_city.eko.tile_of(manual_b).x - manual_v.tile().x), absi(manual_city.eko.tile_of(manual_b).y - manual_v.tile().y)) <= 3,
+			"nach Ankunft am LKW wird die vorgemerkte Fracht wirklich disponiert (%s, %s)" % [manual_offer.status, manual_city.eko.tile_of(manual_b)])
 	loaded_city.operations.run(cid, "set_dispatch_policy", {"auto_accept": true, "min_margin": 0, "max_distance": 0, "reserve": 0})
 	loaded_city.operations._auto_dispatch(cid)
 	ok(work_offer.status == "assigned" and work_v.stops.size() >= 2, "KI-Disposition teilt nach dem ersten Wohnhaus dem Inhaber einen echten Auftrag zu")

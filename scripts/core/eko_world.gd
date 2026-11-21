@@ -1251,6 +1251,8 @@ func _body_tick() -> void:
 				(b.mover as Mover).pos = tv.pos
 			continue
 		if v != null and _truck_busy(v) and v.state not in ["broken", "repairing", "to_workshop"]:
+			if b.has("fracht_auftrag"):
+				b.erase("fracht_auftrag")
 			b["im_lkw"] = v.id   # der Inhaber faehrt selbst: wer den LKW losschickt, sitzt drin
 			(b.mover as Mover).pos = v.pos
 			_event(b, "Du steigst in deinen LKW und fährst selbst.")
@@ -1266,6 +1268,23 @@ func _body_tick() -> void:
 				mover.set_path(exit_path)
 				_event(b, "Du verlaesst das Gebaeude und gehst wieder nach draussen.")
 				continue
+		if b.has("fracht_auftrag") and mover.arrived() and v != null:
+			var pending: Dictionary = b.fracht_auftrag
+			var here: Vector2i = tile_of(b)
+			if maxi(absi(here.x - v.tile().x), absi(here.y - v.tile().y)) <= 3:
+				b.erase("fracht_auftrag")
+				sim.executor.eko_call = true
+				var result: Dictionary = sim.executor.execute(cid, pending, "", "api")
+				sim.executor.eko_call = false
+				_event(b, "Firma: %s → %s" % [str(pending.get("action", "")), str(result.get("msg", "")).left(100)])
+			else:
+				var route: Array[Vector2i] = sim.nav.walk_path(here, v.tile())
+				if route.is_empty() or maxi(absi(route[-1].x - v.tile().x), absi(route[-1].y - v.tile().y)) > 3:
+					b.erase("fracht_auftrag")
+					_event(b, "Der Weg zum LKW ist nicht frei; der gewaehlte Auftrag wurde nicht angenommen.")
+				else:
+					mover.set_path(route)
+			continue
 		if b.has("lkw_auftrag") and (b.mover as Mover).arrived() and v != null:
 			var r := _truck(b, b.lkw_auftrag)
 			if not bool(r.get("ok", false)):
@@ -2527,6 +2546,29 @@ func _firm_action_inner(b: Dictionary, data: Dictionary) -> Dictionary:
 	if str(a.action) in ["collect_contracts", "accept_contract"] and not own_hub and sim.wildnis and not range(sim.towns.count()).any(func(k): return sim.town_ready(k)):
 		var hint := homes.next_step(cid) if settle.founded(sim.companies[cid].home_town) else settle.next_step(b, cid)
 		return {"ok": false, "msg": "In der Wildnis gibt es noch keine Kunden und keine Transportaufträge – erst wenn eine Stadt ein Bürgeramt hat. Jetzt: %s" % hint}
+	if str(a.action) == "accept_contract" and sim.wildnis and not b.has("im_lkw") and not b.has("baut"):
+		var own_v: FleetVehicle = own_truck(cid)
+		var vid: int = int(a.get("vehicle_id", -1))
+		var chosen: Contract = sim.contracts.get(str(a.get("contract_id", "")))
+		if own_v != null and vid == own_v.id and own_v.state == "idle" and chosen != null and chosen.status == "open" and sim.company(cid).known.has(chosen.id):
+			var here: Vector2i = tile_of(b)
+			var truck: Vector2i = own_v.tile()
+			if maxi(absi(here.x - truck.x), absi(here.y - truck.y)) > 3:
+				var start: Vector2i = here if sim._walk_free(here) else sim._free_near(here, 3)
+				var route: Array[Vector2i] = sim.nav.walk_path(start, truck) if start.x >= 0 else [] as Array[Vector2i]
+				if route.is_empty() or maxi(absi(route[-1].x - truck.x), absi(route[-1].y - truck.y)) > 3:
+					return {"ok": false, "msg": "Du erreichst deinen LKW zu Fuss nicht; waehle erst einen freien Standort oder setze einen anderen Fahrer ein."}
+				var mover: Mover = b.mover
+				if start != here:
+					var exit_path: Array[Vector2i] = [here, start]
+					mover.set_path(exit_path)
+				else:
+					mover.set_path(route)
+				b["fracht_auftrag"] = a.duplicate(true)
+				chosen.held_for = cid
+				chosen.held_until = minf(chosen.deadline - 30.0, maxf(chosen.offer_until, sim.game_min + 360.0))
+				_event(b, "Du gehst zum LKW #%d, um den gewaehlten Auftrag %s zu fahren." % [vid, chosen.id])
+				return {"ok": true, "pending": true, "msg": "Du gehst sichtbar zu deinem LKW #%d; Auftrag %s ist bis zu deiner Ankunft vorgemerkt." % [vid, chosen.id]}
 	if str(a.action) == "buergeramt_bauen":   # Wildnis: Buergeramt selbst bauen – danach gibt es die Stadt
 		return homes.plan_town_hall(cid, a)
 	if str(a.action) == "haus_bauen":   # Neubeginn (Etappe B): Wohnhaus selbst bauen
