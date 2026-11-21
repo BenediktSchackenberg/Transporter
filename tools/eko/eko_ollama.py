@@ -454,6 +454,13 @@ def general_memory(doc):
     return "\n".join(kept)
 
 
+def passive_wait_result(result):
+    """Auch langes Warten ohne Antwort zaehlt als Leerlauf."""
+    if not isinstance(result, dict):
+        return False
+    return float(result.get("gewartet_s", 0)) < 5.0 or "keine antwort" in str(result.get("msg", "")).casefold()
+
+
 class Agent:
     def __init__(self, args):
         self.args = args
@@ -839,13 +846,26 @@ class Agent:
             return TOOLS
         return TOOLS[:-len(COMPANY_TOOLS)]
 
+    def available_tools(self):
+        """Nach wiederholtem Leerlauf muss das Wesen eine Weltaktion wählen.
+
+        Der Agent entscheidet weiterhin selbst, welche Aktion sinnvoll ist. Nur
+        erneute Statusabfragen und ergebnisloses Warten fallen vorübergehend weg.
+        """
+        available = self.model_tools()
+        idle = self._passive_streak >= 3
+        if getattr(self, "_observe_streak", 0) >= 2 or idle:
+            blocked = {"observe", "list_files", "read_file", "write_file", "append_memory", "learn"}
+            if idle:
+                blocked.add("wait")
+            available = [tool for tool in available if tool["name"] not in blocked]
+        return available
+
     def chat_json_tool(self, messages):
         """Ollamas JSON-Modus umgeht den fehleranfaelligen nativen Tool-Parser lokaler Modelle."""
-        available = self.model_tools()
-        observed_enough = getattr(self, "_observe_streak", 0) >= 2 or self._passive_streak >= 3
-        if observed_enough:
-            available = [tool for tool in available if tool["name"] not in
-                         ("observe", "list_files", "read_file", "write_file", "append_memory", "learn")]
+        idle = self._passive_streak >= 3
+        observed_enough = getattr(self, "_observe_streak", 0) >= 2 or idle
+        available = self.available_tools()
         names = {tool["name"] for tool in available}
         menu = []
         for tool in available:
@@ -873,7 +893,8 @@ class Agent:
             "required": ["tool", "arguments"]}
         plain.append({"role": "user", "content":
                       ("Du hast die Lage bereits mehrfach beobachtet. Nutze die letzte Beobachtung "
-                       "und waehle jetzt eine Weltaktion oder einen sinnvollen Warteschritt.\n" if observed_enough else "") +
+                       + ("und waehle jetzt eine konkrete Weltaktion.\n" if idle else
+                          "und waehle jetzt eine Weltaktion oder einen sinnvollen Warteschritt.\n") if observed_enough else "") +
                       "Wähle nach deinem eigenen Ziel eine Handlung. Die Welt nennt Folgen und Voraussetzungen, aber keine Pflichtreihenfolge.\n" +
                       "Waehle genau eine konkrete naechste Handlung aus dieser Werkzeugliste:\n" +
                       "\n".join(menu) +
@@ -1188,8 +1209,7 @@ class Agent:
                     self._observe_streak = 0
                 passive = fn["name"] in ("observe", "list_files", "read_file", "write_file", "append_memory", "learn")
                 passive = passive or (fn["name"] == "act" and str(a.get("type", "")).lower() in ("observe", "beobachten"))
-                passive = passive or (fn["name"] == "wait" and isinstance(res, dict)
-                                      and float(res.get("gewartet_s", 0)) < 5.0)
+                passive = passive or (fn["name"] == "wait" and passive_wait_result(res))
                 self._passive_streak = min(4, self._passive_streak + 1) if passive else 0
                 steps += 1
                 short = json.dumps(a, ensure_ascii=False)[:120]
