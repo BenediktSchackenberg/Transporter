@@ -556,8 +556,11 @@ class Agent:
         elif getattr(self.args, "rolle", "") == "buergermeister":
             lines.append("Du leitest eine wachsende Stadt. Vergleiche in observe mein_amt die verfügbaren Flächen, Bauvorhaben, Engpässe und Alternativen. "
                          "Entscheide aktiv ueber Viertel, Strassen, Strom, Wasser, Abwasser, Wohnungen, Gewerbe und Stadtbild. "
-                         "Wenn ein Bauprojekt wartet, lies seinen konkreten Material- oder Bautrupp-Blocker und entscheide ueber "
-                         "einen anderen machbaren Ausbauschritt. Amt status dient nur zur Klaerung einer neuen Lage; wiederholtes "
+                         "Miss Wachstum an bewohnbaren Wohnungen, tatsaechlichem Zuzug und aktiven Betrieben. Solange Wohnungen "
+                         "ohne Kraftwerksstrom, Frischwasser oder Kanal unbewohnbar sind, behandle diese Netze als dringenden Engpass; "
+                         "waehle selbst eine gepruefte Bauvariante aus mein_amt. Wenn ein Bauprojekt wartet, lies seinen konkreten "
+                         "Material- oder Bautrupp-Blocker, behebe ihn oder entscheide ueber einen ergaenzenden Ausbauschritt. "
+                         "Amt status dient nur zur Klaerung einer neuen Lage; wiederholtes "
                          "Amt status und Rest ohne Zustandsaenderung sind keine Stadtentwicklung. Rest nur bei wirklichem Energiemangel. "
                          "Ein fertiges, abgebrochenes oder nicht existentes Projekt ist kein aktuelles Ziel mehr. "
                          "Alte Notizen, die eine Status-Schleife empfehlen, sind durch diese Regel ueberholt. "
@@ -1071,7 +1074,7 @@ class Agent:
                 self._reads = {}   # frische Sitzung: Dateien duerfen neu gelesen werden
                 self.say("☀ Neuer Tag – frische Sitzung, Gedächtnis aus den Dateien")
             messages = self.trim(messages)
-            if getattr(self.args, "rolle", "") == "unternehmer" and time.monotonic() - getattr(self, "_urgent_poll_at", 0.0) >= 20:
+            if getattr(self.args, "rolle", "") in ("unternehmer", "buergermeister") and time.monotonic() - getattr(self, "_urgent_poll_at", 0.0) >= 20:
                 self._urgent_poll_at = time.monotonic()
                 situation = self.world.observe()
                 if isinstance(situation, dict) and situation.get("ok"):
@@ -1081,7 +1084,11 @@ class Agent:
                     # Dringende Bau- und Lieferketten koennen mehrere Modellaufrufe dauern. Den aktuellen
                     # naechsten Schritt regelmaessig wiederholen, damit alte Plaene ihn nicht verdraengen.
                     if self.urgency >= 2 and (reason != getattr(self, "_last_urgent_reason", "") or time.monotonic() - getattr(self, "_urgent_said_at", 0.0) >= 45):
-                        messages.append({"role": "user", "content": "Aktuelle dringende Aufgabe: %s. Handle als naechstes an dieser Aufgabe; beginne kein neues Bauprojekt, solange das erste Wohnhaus wartet." % reason})
+                        if getattr(self.args, "rolle", "") == "buergermeister":
+                            reminder = "Aktueller dringender Engpass deiner Stadt: %s. Entscheide jetzt ueber eine gueltige Massnahme aus mein_amt. Waehle Standort und Variante selbst; pruefe danach, ob Wohnungen bewohnbar werden." % reason
+                        else:
+                            reminder = "Aktuelle dringende Aufgabe: %s. Handle als naechstes an dieser Aufgabe; beginne kein neues Bauprojekt, solange das erste Wohnhaus wartet." % reason
+                        messages.append({"role": "user", "content": reminder})
                         self._urgent_said_at = time.monotonic()
                     self._last_urgent_reason = reason
             started = time.monotonic()
