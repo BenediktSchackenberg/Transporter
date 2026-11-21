@@ -10680,6 +10680,14 @@ func test_ambient_view() -> void:
 	var cv := CityView.new()
 	root.add_child(cv)
 	cv.build(s)
+	var mountain_regions: Array = cv.mountain_view._regions
+	if mountain_regions.size() > 1:
+		var first_region: MountainView.MountainNode = mountain_regions[0]
+		var target: Vector2 = first_region.position + first_region.screen_box.get_center()
+		cv.mountain_view.cull_to(Rect2(target - Vector2(200.0, 200.0), Vector2(400.0, 400.0)))
+		var visible_regions: int = mountain_regions.filter(func(n): return n.visible).size()
+		ok(first_region.visible and visible_regions < mountain_regions.size(),
+			"Bergmassive außerhalb der Kamera bleiben unsichtbar (%d von %d sichtbar)" % [visible_regions, mountain_regions.size()])
 	var A: AmbientView = cv.ambient_view
 	var kinds := {}
 	for sp in A._spots:

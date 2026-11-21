@@ -35,6 +35,7 @@ func setup(simulation: Simulation, city_view) -> void:
 		n.view = self
 		n.pid = pid
 		n.configure()
+		n.visible = false   # Erst die Kamera entscheidet, welche Bergknoten gezeichnet werden.
 		add_child(n)
 		_nodes[pid] = n
 	_build_regions()
@@ -60,6 +61,7 @@ func _build_regions() -> void:
 		var n := RegionNode.new()
 		n.view = self
 		n.setup_region(tiles[key], "massiv_%d_%d" % [key.x, key.y])
+		n.visible = false   # Sonst zeichnet das erste Bild alle Massive der Karte auf einmal.
 		add_child(n)
 		_regions.append(n)
 
@@ -92,17 +94,26 @@ func update_view(delta: float) -> void:
 	var refresh := _t >= 0.5
 	if refresh:
 		_t = 0.0
-	var cam := get_viewport().get_camera_2d()
+	var viewport := get_viewport()
+	var cam := viewport.get_camera_2d() if viewport != null else null
 	var view := Rect2()
 	if cam != null:
 		var size := get_viewport_rect().size / cam.zoom
 		view = Rect2(cam.get_screen_center_position() - size * 0.5, size).grow(400.0)
+		cull_to(view)
 	for n in _nodes.values():
 		if refresh:
 			n.refresh()
-		if n.active and view.has_point(n.position):
+		if n.active and n.visible:
 			n.t = _clock
 			n.queue_redraw()
+
+
+func cull_to(view: Rect2) -> void:
+	for n in _regions:
+		n.visible = view.intersects(Rect2(n.position + n.screen_box.position, n.screen_box.size))
+	for n in _nodes.values():
+		n.visible = view.intersects(Rect2(n.position + n.screen_box.position, n.screen_box.size))
 
 
 ## Berg unter dem Mauszeiger (Weltposition) -> Parzelle oder "".
@@ -145,6 +156,11 @@ class RegionNode extends MountainNode:
 		origin = Vector2(rect.end) * 32.0
 		center_world = (Vector2(rect.position) + Vector2(rect.size) * 0.5) * 32.0
 		position = Iso.to_screen(origin)
+		var top := 0.0
+		for c in cells:
+			top = maxf(top, float(cells[c]))
+		update_screen_box(top)
+		sort_cells()
 		active = false
 		queue_redraw()
 
@@ -160,6 +176,7 @@ class MountainNode extends Node2D:
 	var view
 	var pid := ""
 	var cells := {}
+	var ordered_cells: Array[Vector2i] = []
 	var rect := Rect2i()
 	var origin := Vector2.ZERO          # Weltpunkt (Pixel) der vorderen Ecke: Bezug fuer Tiefensortierung
 	var center_world := Vector2.ZERO
@@ -192,11 +209,21 @@ class MountainNode extends Node2D:
 		var top := 0.0
 		for c in cells:
 			top = maxf(top, float(cells[c]))
+		update_screen_box(top)
+		sort_cells()
+		refresh()
+
+	func update_screen_box(top: float) -> void:
 		var a := _s(Vector2(rect.position) * 32.0)
 		var b := _s(Vector2(rect.end.x, rect.position.y) * 32.0)
 		var d := _s(Vector2(rect.position.x, rect.end.y) * 32.0)
 		screen_box = Rect2(Vector2(d.x, a.y - top * MountainView.STEP - 40.0), Vector2(b.x - d.x, -a.y + top * MountainView.STEP + 40.0))
-		refresh()
+
+	func sort_cells() -> void:
+		ordered_cells.clear()
+		for c in cells:
+			ordered_cells.append(c)
+		ordered_cells.sort_custom(func(a, b): return a.x + a.y < b.x + b.y)
 
 	func _s(w: Vector2) -> Vector2:
 		return Iso.to_screen(w) - Iso.to_screen(origin)
@@ -242,8 +269,12 @@ class MountainNode extends Node2D:
 
 	func _draw() -> void:
 		ProcTimer.sub("zeichnen: mountain_view.MountainNode")   # Haenger-Suche 18.11.: welche Ebene zeichnet gerade
+		if not active:
+			for c in ordered_cells:
+				_draw_cell(c)
+			return
 		var items: Array = []
-		for c in cells:
+		for c in ordered_cells:
 			items.append([float(c.x + c.y) + 1.0, 0, c])
 		if active:
 			for i in mini(staff, 8):
