@@ -1143,7 +1143,7 @@ func _public_day(day: int) -> void:
 			elif str(connector.get("kind", "")) == "erschliessung" and int(e.days_left) > 4:
 				e.days_left = 4
 				e.days = maxi(4, int(e.days) - (int(e.days_left) - 4))
-			elif str(connector.get("kind", "")) in ["wasserausbau", "trasse", "versorgungsleitung"] and sim.town_ready(town) and sim.citizens.population_of(town) < 12 and int(e.days_left) > 2:
+			elif str(connector.get("kind", "")) in ["wasserausbau", "trasse", "versorgungsleitung"] and sim.town_ready(town) and int(sim.eko.city_growth_status(town).get("bewohnbar", 0)) < 3 and int(e.days_left) > 2:
 				# Die erste Versorgung neuer Staedte kommt als gemeinsamer Bauauftrag mit
 				# Zusatztrupp. Material, Anfahrt und sichtbare Bauarbeit bleiben erforderlich.
 				e.days_left = 2
