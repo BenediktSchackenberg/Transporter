@@ -8856,10 +8856,10 @@ func test_wildnis_found() -> void:
 	ok(v != null and v.model == "gelaende_lkw" and s.companies[cid].fuel >= 1000.0, "Start mit vollem Gelände-LKW, den der Inhaber fährt")
 	ok(not E.settle.founded(k) and not E.estates.estates.has(p0) and float(B.geld) == 0.0, "vor der Gründung: kein Hof, keine Basis, kein Privatgeld")
 	ok(not E.beings_info().any(func(x): return x.rolle == "buergermeister"), "Bürgermeister schlafen, solange es ihre Stadt nicht gibt")
-	ok(s.market.spawn(s.game_min) == null and str(E.observe(p0).grundziel).begins_with("Wildnis"), "ohne Stadt keine Transportaufträge; Grundziel Wildnis")
+	ok(s.market.spawn(s.game_min) == null and str(E.observe(p0).grundziel).contains("Erkunde die Welt"), "ohne Stadt noch keine Transportaufträge; freies Grundziel")
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "collect_contracts"}}).ok, "Aufträge sammeln ohne Stadt abgelehnt")
 	ok(not E.input(p0, "Firma", {"aktion": {"action": "haus_bauen", "typ": "einfamilienhaus"}}).ok, "Hausbau erst nach der Gründung")
-	ok(str(E.next_steps(B)[0]).contains("LKW {ziel") or str(E.next_steps(B)[0]).contains("Siedlung {feld"), "vor der Gründung zuerst Platz suchen (%s)" % str(E.next_steps(B)[0]).left(60))
+	ok(E.firm_obs(B).siedlung.has("beste_plaetze_in_der_naehe"), "Gründungsplätze sind als Wahlmöglichkeiten in der Firmenlage sichtbar")
 	ok(not E.next_steps(B).any(func(x): return str(x).contains("collect_contracts")), "kein Auftragssammeln vor der Gründung")
 	B.mover.pos = v.pos + Vector2(32.0 * 6, 0)
 	ok(E.home_hint(B).contains("LKW"), "Heimweg-Hinweis nennt den nahen LKW als Ladeplatz (%s)" % E.home_hint(B).left(60))
@@ -8919,7 +8919,7 @@ func test_wildnis_found() -> void:
 	ok(future_mayor.waiting == 0, "vor der Stadtgründung wartet noch niemand auf eine Wohnung")
 	ok(s.towns.get_t(k).center == Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1])), "Towns-Register kennt die neue Mitte")
 	ok((s.settlements[str(k)].plots as Array).size() >= 2, "Bauland um den Hof (%d Grundstücke)" % (s.settlements[str(k)].plots as Array).size())
-	ok(int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("buergeramt_bauen"), "gegründet ohne Bürgeramt: dringend mit Aktion")
+	ok(int(E.urgency(B).prioritaet) == 1 and str(E.urgency(B).grund).contains("Bürgeramt"), "ohne Bürgeramt: Zuzugsfolge sichtbar, Entscheidung frei")
 	# Buergeramt: Material kaufen, selbst abholen, selbst bauen
 	var ba: Dictionary = E.input(p0, "Firma", {"aktion": {"action": "buergeramt_bauen"}})
 	ok(ba.ok, "Bürgeramt geplant: %s" % str(ba.msg).left(100))
@@ -9030,12 +9030,12 @@ func test_wildnis_found() -> void:
 	work_offer.offer_until = loaded_city.game_min + 1000.0
 	work_offer.deadline = loaded_city.game_min + 5000.0
 	loaded_city.operations.run(cid, "set_dispatch_policy", {"auto_accept": true, "min_margin": 0, "max_distance": 0, "reserve": 0})
-	loaded_city.operations._auto_dispatch(cid)
-	ok(work_offer.status == "open" and work_v.stops.is_empty(), "Gruender-LKW faehrt vor dem ersten fertigen Wohnhaus keine Kundenfracht")
+	ok(bool(loaded_city.eko.firm_obs(work_b).dispositionsvorgaben.gruender_lkw_freigegeben), "ausdrückliche Disposition gilt auch vor dem ersten Wohnhaus")
 	loaded_city.housing.register_unit(int(loaded_city.city.towns[k].town_hall), 65.0, Housing.LANDLORD)
 	loaded_city.operations.dispatch_policies.erase(cid)
 	ok(not bool(loaded_city.eko.firm_obs(work_b).dispositionsvorgaben.gruender_lkw_freigegeben), "KI sieht, dass die Standardvorgabe ihren Gruender-LKW noch nicht freigibt")
-	ok(loaded_city.eko.next_steps(work_b).any(func(step): return str(step).contains("set_dispatch_policy")), "nach erstem Wohnhaus sieht die KI die Entscheidung fuer den Gruender-LKW")
+	ok(loaded_city.operations.run(cid, "set_dispatch_policy", {"auto_accept": true, "min_margin": 0, "max_distance": 0, "reserve": 0}).ok
+		and bool(loaded_city.eko.firm_obs(work_b).dispositionsvorgaben.gruender_lkw_freigegeben), "Unternehmer kann den Gründer-LKW selbst für Kundenfracht freigeben")
 	var manual_city := Simulation.from_dict(JSON.parse_string(JSON.stringify(loaded_city.to_dict())))
 	var manual_v: FleetVehicle = manual_city.eko.own_truck(cid)
 	var manual_b: Dictionary = manual_city.eko.beings[manual_city.eko.firm_being(cid)]
@@ -9085,7 +9085,7 @@ func test_wildnis_found() -> void:
 	var first_design: Dictionary = BuildingDesigns.pick("einfamilienhaus", "gartenstadt", 5)
 	var other_design: Dictionary = BuildingDesigns.pick("einfamilienhaus", "gartenstadt", 5, INF, 0.5, [first_design.id])
 	ok(not first_design.is_empty() and str(first_design.id) != str(other_design.id), "aufeinanderfolgende Wohnhäuser wählen verschiedene Entwürfe")
-	ok(int(E.urgency(B).prioritaet) == 2 and str(E.urgency(B).grund).contains("haus_bauen"), "nach der Gründung wird das erste Wohnhaus dringend")
+	ok(int(E.urgency(B).prioritaet) == 1 and str(E.urgency(B).grund).contains("Wohnhaus"), "fehlendes Wohnhaus zeigt Zuzugsfolge ohne Bauzwang")
 	var ctr := Vector2i(int(s.city.towns[k].center[0]), int(s.city.towns[k].center[1]))
 	var hint_day := GameCalendar.day_of(s.game_min)
 	E.settle._link_cache[k] = {"day": hint_day, "verbunden": false, "von": [ctr.x, ctr.y], "bis": [ctr.x + 8, ctr.y], "felder": 8}
@@ -15154,6 +15154,9 @@ func test_eko_office_and_goals() -> void:
 	var plain: Dictionary = E.input(m, "Amt", {"aktion": "status"})
 	ok(plain.ok and bool(plain.get("uebersicht", false)), "einfaches Amtswort status wird ohne JSON-Fehler als Lage gelesen")
 	ok(E.office_obs(E.beings[m]).has("bau_blockaden"), "Amtslage nennt blockierte Bauprojekte getrennt")
+	var office: Dictionary = E.office_obs(E.beings[m])
+	ok(office.has("bauprogramm") and office.has("stadtplan_optionen") and not office.naechster_ausbauschritt.has("aktion"),
+		"Amtslage zeigt Baukapazität und mehrere Optionen ohne feste nächste Aktion")
 	var M: Mayor = s.towns.mayor(0)
 	var prj := {"id": "TST1", "status": "beauftragt", "builder": "", "cost": 1000.0}
 	M.projects["TST1"] = prj
@@ -15528,6 +15531,33 @@ func test_town_plan() -> void:
 	ok(pool.size() > 0 and pool.size() < (CityGenerator.TYPES["house"][0] as Array).size(), "Wohnhäuser nur aus der Gestaltungsfamilie der Stadt (%d Varianten)" % pool.size())
 	ok(pool.all(func(v): return TownPlan._suffix(str(v)) in p0.palette), "alle Varianten aus der Palette")
 	ok(not P.brief(0).is_empty() and str(P.brief(0).leitbild) != "", "Kurzfassung für die KI")
+	var custom_road := false
+	for district in P.of(0).viertel:
+		if str(district.status) != "entwurf" or str(district.zone) == "gruen":
+			continue
+		var center := Vector2i(int(district.mitte[0]), int(district.mitte[1]))
+		for direction in [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]:
+			var first: Vector2i = center - direction * 2
+			var last: Vector2i = center + direction * 2
+			if not P._road_ok(first, 0) or not P._road_ok(last, 0):
+				continue
+			var result: Dictionary = P.choose_route(0, {"viertel": district.id, "punkte": [[first.x, first.y], [last.x, last.y]], "reason": "Eigene Marktstraße"})
+			if result.get("ok", false):
+				var street: Dictionary = P.street_plan(0, str(district.id))
+				custom_road = not (street.cells as Array).is_empty() and (street.cells as Array).all(func(cell): return P._road_ok(cell, 0))
+				break
+		if custom_road:
+			break
+	ok(custom_road, "eigene Straßentrasse wird als baubares und kollisionsfreies Projekt geplant")
+	var M: Mayor = s.towns.mayor(0)
+	var capacity := maxi(3, int(ceil(float(s.crews.crews.size()) * 0.6 / float(maxi(1, s.towns.count())))))
+	for i in capacity:
+		M.projects["WIP_TEST_%d" % i] = {"id": "WIP_TEST_%d" % i, "status": "laufend", "kind": "erschliessung"}
+	s.wildnis = true
+	s.city.towns[0]["gegruendet"] = true
+	var denied: Dictionary = M.execute({"action": "kommunal_bauen", "typ": "FW-01", "reason": "Test"})
+	ok(not denied.ok and str(denied.msg).contains("Kapazität") and M.execute({"action": "remember", "inhalt": "Laufende Baustellen prüfen"}).ok,
+		"ausgelastete Stadt stoppt neue Bauten, lässt Amtsentscheidungen weiter zu")
 
 
 ## Auftrag 8 Stadtplanung, Etappe 3: gemeinsame Standortpruefung – gueltig, begruendet, Alternativen, Laerm abseits, atomar reserviert.

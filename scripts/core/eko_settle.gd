@@ -308,12 +308,8 @@ func open_town(k: int, rect: Rect2i) -> bool:
 	st["gegruendet"] = true
 	sim.settlements[str(k)] = st
 	var ctr := Vector2i(int(t.center[0]), int(t.center[1]))
+	# Hafen, Flughafen und Bahnhof sind strategische Entscheidungen des Bürgermeisters.
 	var harbor := -1
-	if _water_near(ctr, 12) >= 12:
-		harbor = _harbor_at(ctr, nm)
-	if harbor >= 0:
-		t["harbor"] = harbor
-		st["harbor"] = harbor
 	sim.towns.sync_from_city(k)
 	_seed_city_access(k, [bauhof, hall])
 	connect_founding_yard(k)
@@ -321,7 +317,6 @@ func open_town(k: int, rect: Rect2i) -> bool:
 	sim.grid.net.reanchor_town(k)
 	sim.water.reanchor_town(k)
 	sim.town_plan.ensure(k, "gruendung")   # Auftrag 8: Profil vor den ersten regulaeren Bauplatzentscheidungen
-	_start_package(k)
 	_activate(k)
 	sim.towns.depot(k).activate(bauhof)
 	sim.municipal.ensure_kit()
@@ -837,25 +832,6 @@ func _road_cell_ok(q: Vector2i) -> bool:
 
 
 ## Gebaeude im Rechteck zwischen a und b (beliebige Ecken); -1 wenn nichts passt.
-## Startpaket der Gruendung (Benedikt 18.11.): die Stadt beschliesst sofort das Strassennetz ihres Kerns nach Grundform (mit Platz),
-## als Erschliessungsprojekt aus dem Startbudget (Baufirma, Material, Bauzeit) – der Kern wartet nicht auf den Buergermeister.
-func _start_package(k: int) -> void:
-	var sim = _sim()
-	var M: Mayor = sim.towns.mayor(k)
-	if M == null:
-		return
-	for v in sim.town_plan.of(k).get("viertel", []):
-		if str(v.rolle) == "kern":
-			var options: Array = sim.town_plan.design_options(k, str(v.id))
-			if not options.is_empty():
-				sim.town_plan.choose_design(k, {"viertel": str(v.id), "entwurf": str(options[0].id),
-					"reason": "Gründungsentwurf passend zu Gelände und Stadtmarke"})
-			var r: Dictionary = M._district_streets(v, "Startpaket der Gründung")
-			if bool(r.get("ok", false)):
-				sim.log_event("%s: Startpaket – %s" % [sim.towns.name_of(k), str(r.msg).left(200)], "good")
-			return
-
-
 ## Darf hier der Stadtkern (Buergeramt) der Stadt k entstehen? Nah am eigenen Betriebshof, weit weg von anderen Staedten und vom
 ## Grosslager (Benedikt 18.11.: Liorufers Buergeramt stand mitten in Birkenklippe). "" = ja, sonst der Grund.
 func hall_site_problem(k: int, cell: Vector2i) -> String:

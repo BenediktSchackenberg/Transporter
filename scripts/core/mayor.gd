@@ -39,9 +39,13 @@ const SCHEMA := {
 	"viertel_erschliessen": {"params": {"viertel": "string", "reason": "string"},
 		"desc": "Ein Viertel des Stadtplans (V1, V2, … siehe stadtplan.viertel) in einem Abschnitt erschließen: die freien städtischen Grundstücke dort bekommen die Zone des Viertels, Straße und Anschlüsse werden als Projekt beauftragt (Kosten aus dem Haushalt, Material, Baufirma). Danach entstehen dort Häuser, Läden oder städtische Bauten."},
 	"stadtteil_planen": {"params": {"mitte": "array", "zone": "string", "name": "string", "reason": "string"},
-		"desc": "Nach den bisherigen Vierteln einen neuen Stadtteil selbst entwerfen: mitte [x,y] aus obs.stadtplan_erweiterung, zone wohnen|mischgebiet|gewerbe|industrie|gruen, eigener Name und Grund. Für bebaute Viertel danach viertel_erschliessen; Grünflächen für Parkprojekte freihalten."},
+		"desc": "Einen neuen Stadtteil selbst entwerfen: mitte [x,y] an einem beliebigen geeigneten Standort der eigenen Stadt; stadtplan_erweiterung zeigt nur Vorschläge. zone wohnen|mischgebiet|gewerbe|industrie|gruen, eigener Name und Grund. Die Engine prüft Fläche und Straßenanschluss."},
 	"quartier_entwurf_waehlen": {"params": {"viertel": "string", "entwurf": "string", "reason": "string"},
-		"desc": "Für ein eigenes, noch ungeplantes Viertel eine geprüfte Komposition aus obs.stadtplan_naechster_abschnitt.entwuerfe wählen. Die Wahl bestimmt Straßen, Platz und Quartierscharakter; danach viertel_erschliessen. Andere Städte entscheiden unabhängig."},
+		"desc": "Für ein eigenes Viertel einen der geprüften Entwürfe wählen. Die Wahl bestimmt Straßen, Platz und Quartierscharakter. Alternativ mit quartier_trasse_planen eine eigene Straßenführung zeichnen."},
+	"quartier_trasse_planen": {"params": {"viertel": "string", "punkte": "array", "reason": "string"},
+		"desc": "Eigene Straßenführung für ein noch ungeplantes Viertel: 2 bis 8 Wegpunkte [x,y] im Viertel wählen. Die Engine verbindet sie nur über freien, bebaubaren Boden mit dem Rathausnetz und meldet Kosten/Blockaden; danach viertel_erschliessen."},
+	"grosslager_anschluss_bauen": {"params": {"reason": "string"},
+		"desc": "Die eigene Wildnis-Stadt auf Wunsch ans Großlager-Straßennetz anschließen. Die Engine berechnet eine befahrbare Trasse um Wasser, Berge und fremde Grundstücke; Material, Bautrupp und Kosten gelten wie bei jedem Straßenprojekt."},
 	"plan_infrastructure": {"params": {"parcel_ids": "array", "parts": "array?", "reason": "string"},
 		"desc": "Erschließung (strasse, strom, wasser, abwasser; Standard: alle fehlenden) für städtische Grundstücke planen. Kosten werden aus dem Haushalt reserviert; über 30 000 EUR Ratsbeschluss."},
 	"prioritize_road": {"params": {"corridor_id": "string", "priority": "int", "reason": "string"},
@@ -654,7 +658,6 @@ func on_day(_day: int) -> void:
 	if sim.wildnis:
 		if not sim.town_ready(town):
 			return   # Erst der Unternehmer gruendet die Stadt und baut ihr Buergeramt.
-		hub_connection()
 	if _region():
 		_arrivals_town()
 		return
@@ -781,8 +784,16 @@ func execute(action: Dictionary) -> Dictionary:
 	if err == "":
 		a["action"] = act
 		err = foreign_target(a)   # Region: keine Entscheidungen im Gebiet einer anderen Stadt
-	if err == "" and act in HUB_FIRST_ACTIONS:
+	if err == "" and act in HUB_FIRST_ACTIONS and not sim.wildnis:
 		err = hub_blocked()
+	if err == "" and sim.wildnis and act in ["viertel_erschliessen", "plan_infrastructure", "kommunal_bauen", "infra_ausbau", "stromtrasse_bauen", "versorgungsleitung_bauen", "propose_project", "build_harbor", "build_airport", "build_station", "build_bridge", "build_tunnel", "expand_harbor", "expand_airport", "expand_power", "expand_depot", "grosslager_anschluss_bauen"]:
+		var open_projects := 0
+		for project in projects.values():
+			if str(project.get("status", "")) not in ["fertig", "abgelehnt", "abgebrochen"]:
+				open_projects += 1
+		var capacity := maxi(3, int(ceil(float(sim.crews.crews.size()) * 0.6 / float(maxi(1, sim.towns.count())))))
+		if open_projects >= capacity:
+			err = "%d offene Bauprojekte bei einer Kapazität von %d. Erst Material, Bautrupps und Fertigstellung der laufenden Projekte klären; Verwaltungs- und Planungsentscheidungen bleiben möglich." % [open_projects, capacity]
 	var res: Dictionary
 	if err != "":
 		res = {"ok": false, "msg": err}
@@ -835,6 +846,12 @@ func execute(action: Dictionary) -> Dictionary:
 				res = sim.town_plan.plan_district(town, a) if sim.town_plan != null else {"ok": false, "msg": "Kein Stadtplan."}
 			"quartier_entwurf_waehlen":
 				res = sim.town_plan.choose_design(town, a) if sim.town_plan != null else {"ok": false, "msg": "Kein Stadtplan."}
+			"quartier_trasse_planen":
+				res = sim.town_plan.choose_route(town, a) if sim.town_plan != null else {"ok": false, "msg": "Kein Stadtplan."}
+			"grosslager_anschluss_bauen":
+				res = hub_connection() if sim.wildnis else {"ok": false, "msg": "Kein Wildnis-Anschluss nötig."}
+				if res.is_empty():
+					res = {"ok": false, "msg": "Die Stadt ist bereits angebunden oder es gibt derzeit keine befahrbare Trasse. Prüfe die Karte und mögliche Tunnel."}
 			"plan_infrastructure":
 				res = _plan_infrastructure(a)
 			"prioritize_road":

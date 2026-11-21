@@ -63,9 +63,7 @@ const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.0
 const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
 const GRUNDZIEL_FIRMA := "Baue ein dauerhaft erfolgreiches Transportunternehmen auf: Fahrer einstellen, reale Auftraege abholen und zustellen, Gewinne in Fuhrpark, Betriebshof und Buero investieren und weitere Staedte bedienen."
 # Benedikt 18.11.: "Ziel pro KI ist, dass die Stadt waechst, mehr Einwohner kommen, die Wirtschaft in Schwung kommt"
-const GRUNDZIEL_WILDNIS := ("Wildnis – dein Ziel: deine Stadt wächst, immer mehr Einwohner ziehen zu, die Wirtschaft kommt in Schwung. Weg dorthin: sicheren Platz suchen, " +
-	"Betriebshof und Basis eröffnen, Bürgeramt bauen (dann gibt es die Stadt), Häuser für Siedler und eine Straße zum Großlager planen; bis dahin bringt der Materialhubschrauber Baustoffe zum Stadtlager, " +
-	"erste Betriebe (Arbeitsplätze, Umsatz), danach Fahrer und Fuhrpark erweitern und mehrere Städte bedienen. Material holst du selbst mit deinem LKW; Tagelöhner helfen beim Bauen. Transportaufträge gibt es erst, wenn Städte entstehen.")
+const GRUNDZIEL_WILDNIS := "Du bestimmst, was aus deiner Firma und deiner Umgebung wird. Erkunde die Welt, setze eigene Ziele und entscheide über Handel, Transport, Siedlung, Stadtbild, Zusammenarbeit oder Schutz. Bewohner brauchen Wohnungen und Arbeit; Bauprojekte brauchen Geld, Material und Zeit. Beobachte die Folgen und ändere deine Strategie, wenn sie nicht funktioniert."
 const GRUNDZIEL_AMT := "Entwickle deine Stadt dauerhaft nach eigener Idee: zusammenhängende Straßen, Wohnraum, Arbeit, Versorgung und schöne öffentliche Orte. Wähle neue Stadtteile selbst, erschließe sie, prüfe das Ergebnis und verbessere weiter. Dein Zuhause ist dein Rathaus."
 const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
 var towns_funded := {}              # "k" -> true
@@ -855,7 +853,7 @@ func urgency(b: Dictionary) -> Dictionary:
 	var home_k: int = sim.company(cid).home_town
 	if sim.wildnis and home_k >= 0 and settle.founded(home_k) and not sim.town_ready(home_k) 			and not homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) == "buergeramt"):
 		# 19.11.: qwen3.5:9b lief drei Spieltage herum statt das Buergeramt anzulegen – ohne es waechst nichts
-		return {"prioritaet": 2, "grund": "Deine Siedlung hat noch kein Bürgeramt (ohne es gibt es keine Stadt und keinen regulären Zuzug): Firma {aktion: {action: \"buergeramt_bauen\"}}"}
+		return {"prioritaet": 1, "grund": "Deine Siedlung hat noch kein Bürgeramt. Ohne Bürgeramt gibt es keinen regulären Zuzug; du entscheidest, wann du es baust."}
 	if sim.wildnis and home_k >= 0 and not sim.town_ready(home_k):
 		for st in homes.sites.values():   # 19.11.: Buergeramt wartete 20 Minuten auf Material, keiner kaufte
 			if int(st.cid) == cid and str(st.typ) == "buergeramt" and str(st.status) == "material":
@@ -888,7 +886,7 @@ func urgency(b: Dictionary) -> Dictionary:
 		var housing_types := ["einfamilienhaus", "doppelhaus", "mehrfamilienhaus", "stadtvilla", "hochhaus"]
 		var housing_started: bool = homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) in housing_types and str(st.status) != "abgelehnt")
 		if not housing_started:
-			return {"prioritaet": 2, "grund": "Deine Stadt hat noch kein Wohnhaus und kann nicht wachsen. Entscheide jetzt Typ und Entwurf: Firma {aktion: {action: \"haus_bauen\", typ: \"einfamilienhaus\"}} (oder einen anderen Wohnentwurf)."}
+			return {"prioritaet": 1, "grund": "Deine Stadt hat noch kein Wohnhaus. Neue Haushalte können erst mit freien Wohnungen einziehen; Typ, Entwurf und Zeitpunkt wählst du."}
 	for k in sim.contracts.values():
 		if k.owner != cid or k.status not in ["accepted", "assigned", "loading", "in_transit"]:
 			continue
@@ -940,7 +938,7 @@ func next_steps(b: Dictionary) -> Array:
 		else:
 			var district: Dictionary = sim.town_plan.next_district(int(b.amt), sim.housing.planning_aids().get("bedarf", 0) > 0, _town_jobs_need(int(b.amt)))
 			if district.has("aktion"):
-				civic_step = "%sStadt jetzt weiterbauen: %s Amt {aktion: %s}." % ["Arbeitsplätze zuerst: " if _town_jobs_need(int(b.amt)) else "", str(district.text), JSON.stringify(district.aktion)]
+				civic_step = "Eine mögliche Stadterweiterung: %s. Vergleiche auch andere Viertel, Versorgung, Gewerbe und laufende Projekte; du bestimmst das Vorhaben." % str(district.text)
 			elif district.has("warten"):
 				var blockers: Array = _public_build_blockers(int(b.amt))
 				civic_step = "Stadtprojekt %s läuft. Blockaden: %s. Prüfe Material und Bautrupp; plane in der Zwischenzeit erschlossene Gewerbeflächen und Versorgung." % [str(district.warten), JSON.stringify(blockers.slice(0, 2))]
@@ -959,20 +957,7 @@ func next_steps(b: Dictionary) -> Array:
 					o.id, sim.company(int(o.from)).player_name, sim.social.describe(o).left(100), o.id])
 				pending_step = str(out.back())
 				break
-	var wild_build: bool = sim.wildnis and cid >= 0 and sim.personnel.employed(cid).all(func(x): return x.role == "owner") \
-		and not sim.housing.units.values().any(func(u): return sim.towns.of_building(int(u.building)) == sim.company(cid).home_town)
-	if wild_build:
-		# Wildnis, noch ohne Angestellte (17.11.: Greta und Viktor sammelten Transportauftraege statt zu gruenden): erst gruenden, dann bauen
-		var st0 := settle.next_step(b, cid)
-		var founder_truck := own_truck(cid)
-		if st0 != "" and founder_truck != null and founder_truck.state in ["broken", "to_workshop", "repairing"]:
-			st0 = "Dein Gruender-LKW #%d ist %s. Warte auf Abschleppen und Reparatur (wait {bis: \"ankunft\"}); danach fahre zum geprueften Gruendungsplatz. Keine neue Fracht annehmen." % [founder_truck.id, founder_truck.status_text()]
-		if st0 == "":
-			st0 = homes.next_step(cid)
-		if st0 != "":
-			out.append(st0)
-			firm_step = st0
-	if cid >= 0 and not wild_build:
+	if cid >= 0:
 		var plan: Dictionary = sim.plans.summary(cid)
 		if str(plan.get("status", "")) in ["kein Plan", "neu_planen"]:
 			plan_step = "Firmenplan mit Ziel, Schritten, Horizont und Kennzahl festlegen oder neu planen (set_plan)."
@@ -1385,7 +1370,7 @@ func _fleet_step(cid: int, takt_min := 0.0) -> String:
 		if v.state != "idle" or not v.queue.is_empty() or str(v.contract_id) != "":
 			continue
 		if sim.wildnis and sim.driver_of(v) != null and sim.driver_of(v).role == "owner" and not sim.operations.dispatch_policies.has(cid):
-			return "Dein Gruender-LKW #%d ist frei. Nach dem ersten Wohnhaus kannst du entscheiden, ob er Kundenfracht fahren soll: Firma {aktion: {action: \"set_dispatch_policy\", auto_accept: true, min_margin: 50, max_distance: 120, reserve: 5000}}. Die Disposition holt dich dann sichtbar zum LKW und nimmt nur passende, bekannte Auftraege an." % v.id
+			return "Dein Gründer-LKW #%d ist frei. Du kannst eigene Fracht annehmen oder eine Dispositionsrichtlinie setzen; damit ist er zeitweise für Bau und Erkundung nicht verfügbar." % v.id
 		var best = null
 		var best_s := -1.0
 		for k in sim.market.open_contracts():
@@ -2835,8 +2820,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var models: Dictionary = o.fahrzeugmodelle
 	var dispatch_view: Dictionary = sim.operations.dispatch_policy(cid)
 	dispatch_view["von_dir_gesetzt"] = sim.operations.dispatch_policies.has(cid)
-	dispatch_view["gruender_lkw_freigegeben"] = sim.operations.dispatch_policies.has(cid) and bool(dispatch_view.auto_accept) \
-		and sim.town_ready(sim.company(cid).home_town) and sim.housing.units.values().any(func(u): return sim.towns.of_building(int(u.building)) == sim.company(cid).home_town)
+	dispatch_view["gruender_lkw_freigegeben"] = sim.operations.dispatch_policies.has(cid) and bool(dispatch_view.auto_accept)
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "lieferungen": sim.company(cid).stats.completed, "reputation": me.reputation,
 		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),
 		"grosslager": {"feld": sim.city.hub.get("center", []), "abholen": "hub_buy liefert per Materialhubschrauber; ältere Abholaufträge: call_material_heli {ref: H...}",
@@ -3102,6 +3086,30 @@ func _public_build_blockers(k: int) -> Array:
 	return out.slice(0, 8)
 
 
+func _public_build_board(k: int) -> Dictionary:
+	var M: Mayor = sim.towns.mayors[k]
+	var active := 0
+	var blocked := 0
+	var projects: Array = []
+	for prj in M.projects.values():
+		if str(prj.get("status", "")) in ["fertig", "abgelehnt", "abgebrochen"]:
+			continue
+		active += 1
+		var work: Dictionary = sim.construction.public.get(str(prj.id), {})
+		var waiting := str(work.get("waiting", ""))
+		if waiting != "":
+			blocked += 1
+		projects.append({"id": str(prj.id), "art": str(prj.get("kind", "")), "status": str(prj.status),
+			"resttage": int(work.get("days_left", prj.get("days", 0))), "wartet_auf": waiting})
+	var free_crews := 0
+	for crew in sim.crews.crews.values():
+		if str(crew.get("state", "")) == "frei":
+			free_crews += 1
+	var limit := maxi(3, int(ceil(float(sim.crews.crews.size()) * 0.6 / float(maxi(1, sim.towns.count())))))
+	return {"offen": active, "blockiert": blocked, "kapazitaet": limit, "bautrupps_frei_region": free_crews,
+		"neues_bauprojekt_moeglich": active < limit, "projekte": projects.slice(0, 12)}
+
+
 func _office_overview(k: int) -> Dictionary:
 	var M: Mayor = sim.towns.mayors[k]
 	var apps: Array = []
@@ -3109,13 +3117,8 @@ func _office_overview(k: int) -> Dictionary:
 		if app.status == "zur_entscheidung" and M._mine(str(app.parcel)):
 			apps.append(str(app.id))
 	var fin: Dictionary = M._assess_financing({})
-	# Auftrag 8 / Partie 18.11.: beide Buergermeister fragten minutenlang nur die Lage ab – der naechste Schritt des Stadtplans gehoert dazu
 	var nd: Dictionary = sim.town_plan.next_district(k, int(M.waiting) > 0, _town_jobs_need(k)) if sim.town_plan != null else {}
-	var plan_txt := ""
-	if nd.has("aktion"):
-		plan_txt = " STADTPLAN: %s Dafür: Amt {aktion: %s}." % [str(nd.text), JSON.stringify(nd.aktion)]
-	elif nd.has("warten"):
-		plan_txt = " STADTPLAN: %s" % str(nd.text)
+	var plan_txt := " STADTPLAN: %s" % str(nd.get("text", "")) if not nd.is_empty() else ""
 	return {"ok": true, "uebersicht": true, "msg": "Lage %s: %s Anträge zur Entscheidung: %s.%s Handeln mit Amt {aktion: {action: ...}} – neue Einrichtungen mit kommunal_bauen {typ}." % [
 		sim.towns.name_of(k), str(fin.msg), ", ".join(apps) if not apps.is_empty() else "keine", plan_txt]}
 
@@ -3211,7 +3214,7 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 		var code := str(a.get("typ", ""))
 		var wanted := str(a.grundstueck)
 		if not sim.services.utility_sites(k).any(func(site): return str(site.typ) == code and str(site.grundstueck) == wanted):
-			a.erase("grundstueck")   # veraltete Standort-ID: Bauamt waehlt den aktuell besten gueltigen Standort
+			return {"ok": false, "msg": "Grundstück %s ist für %s nicht mehr gültig. Wähle selbst einen aktuellen Standort aus versorgungsanlagen_standorte." % [wanted, code]}
 	# Wiederholungsbremse (Partie 18.11.: Polizeiwache dreimal in zwei Minuten, jedes Mal "kein Grundstueck mit Strasse")
 	var key := "%s|%s" % [a.action, str(a.get("typ", a.get("viertel", a.get("parcel_ids", ""))))]
 	var day := GameCalendar.day_of(sim.game_min)
@@ -3236,7 +3239,7 @@ func _plan_wait_text(k: int) -> String:
 			return " Das Straßennetz %s (Viertel %s) ist %s – danach gibt es dort Grundstücke mit Straße." % [prj.id, str(prj.get("viertel", "Anschluss")),
 				("in %d Tagen fertig%s" % [int(e.days_left), (" (" + str(e.waiting) + ")") if str(e.get("waiting", "")) != "" else ""]) if not e.is_empty() else str(prj.status)]
 	var nd: Dictionary = sim.town_plan.next_district(k, int(M.waiting) > 0) if sim.town_plan != null else {}
-	return (" Bauland entsteht mit: Amt {aktion: %s}." % JSON.stringify(nd.aktion)) if nd.has("aktion") else ""
+	return (" Bauland braucht eine beauftragte Erschließung; prüfe freie Viertel und laufende Projekte.") if nd.has("aktion") else ""
 
 
 ## Amtshandlungen tolerant lesen (Partie 16.11.: priority als Wort, anlage "klaeanlage" oder "polizeiwache" bei infra_ausbau).
@@ -3340,15 +3343,17 @@ func office_obs(b: Dictionary) -> Dictionary:
 	if k < 0:
 		return {}
 	var ind: Dictionary = sim.towns.mayors[k].indicators()
+	var next_step: Dictionary = ind.get("stadtplan_naechster_abschnitt", {}).duplicate(true)
+	next_step.erase("aktion")
 	var civic: Dictionary = ind.get("stadtentwicklung", {})
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
 	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "verkehrsstandorte": ind.get("verkehrsstandorte", {}), "stromtrassen": ind.get("stromtrassen", []),
 		"kraftwerk_notfall": sim.plant.summary().get("notfall", {}),
-		"bau_blockaden": _public_build_blockers(k),
+		"bau_blockaden": _public_build_blockers(k), "bauprogramm": _public_build_board(k),
 		"versorgungsleitungen": ind.get("versorgungsleitungen", []),
 		"versorgungsanlagen_standorte": ind.get("versorgungsanlagen_standorte", []),
-		"naechster_ausbauschritt": ind.get("stadtplan_naechster_abschnitt", {}), "stadtplan_erweiterung": ind.get("stadtplan_erweiterung", []),
+		"naechster_ausbauschritt": next_step, "stadtplan_naechster_abschnitt": next_step, "stadtplan_erweiterung": ind.get("stadtplan_erweiterung", []),
 		"stadtentwicklung": {"vision": civic.get("vision", ""), "bedarf": civic.get("bedarf", {}), "eigene_anlagen": civic.get("eigene_anlagen", []),
 			"vorgemerkte_ideen": civic.get("vorgemerkte_ideen", []), "bauvorlagen": civic.get("bauvorlagen", {}).keys()},
 		"verteidigung": arms.defense_obs(k),
@@ -3362,7 +3367,12 @@ func office_obs(b: Dictionary) -> Dictionary:
 		"gewerbe_frei_mit_strasse": zones.get("gewerbe", {}).get("frei_mit_strasse", 0), "industrie_frei_mit_strasse": zones.get("industrie", {}).get("frei_mit_strasse", 0),
 		"arbeitsplatzbedarf": _town_jobs_need(k),
 		"hinweis": "Bei hoher Arbeitslosigkeit zuerst erschlossene Gewerbe- und Industriegrundstuecke sowie Anschluesse schaffen. Unternehmer gruenden dort Betriebe. Prestigeprojekte erst nach einer tragfaehigen Arbeitsplatzbasis."}
-	out["naechster_ausbauschritt"] = sim.town_plan.next_district(k, sim.housing.planning_aids().get("bedarf", 0) > 0, _town_jobs_need(k))
+	var options: Array = []
+	for district in sim.town_plan.of(k).get("viertel", []):
+		if str(district.status) == "entwurf" and str(district.zone) != "gruen":
+			options.append({"viertel": str(district.id), "zone": str(district.zone), "mitte": district.mitte,
+				"entwuerfe": sim.town_plan.design_options(k, str(district.id)).slice(0, 4)})
+	out["stadtplan_optionen"] = options.slice(0, 8)
 	var size := 0
 	var skipped: Array = []
 	for key in keys:
@@ -3382,7 +3392,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 	out["aktionen"] = "Amt {aktion: {action, ...}}: " + "; ".join(acts)
 	out["vorfaelle"] = sim.rivalry.incidents.slice(-8).map(func(i): return {"tag": GameCalendar.day_of(float(i.t)) + 1, "was": str(i.get("text", i.get("art", ""))).left(120)})
 	out["schiedsrichter"] = "Bei Sabotage, Blockaden oder unfairem Wettbewerb kannst du einschreiten: warn_company, order_inspection, mediate_rivalry."
-	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Bei hoher Arbeitslosigkeit Gewerbeviertel und Industrie vor Prestigeprojekten erschließen. Wähle Stadtteile, baue sie mit viertel_erschliessen aus und verschönere sie mit propose_project. Prüfe bau_blockaden statt blind dieselbe Aktion zu wiederholen. Ein Hafen darf nur am Meer stehen; Flughafen und Bahnhof brauchen eigene Bauprojekte. Plane Strom, Wasser und Abwasser vorausschauend. Bei Kraftwerksnotfall kraftwerk_notfall {massnahme: evakuieren|stabilisieren} erwägen. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)
+	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle selbst zwischen Wohnen, Arbeit, Versorgung, Verkehr und Stadtbild. stadtplan_optionen sind Vorschläge; eigene Standorte und Straßentrassen sind möglich. Prüfe bauprogramm und bau_blockaden vor neuen Baustellen. Hafen nur am Meer. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)
 	return out
 
 

@@ -374,8 +374,9 @@ func plan_district(k: int, a: Dictionary) -> Dictionary:
 	var zone := str(a.get("zone", "wohnen"))
 	if zone not in ["wohnen", "mischgebiet", "gewerbe", "industrie", "gruen"]:
 		return {"ok": false, "msg": "zone: wohnen | mischgebiet | gewerbe | industrie | gruen."}
-	if not expansion_sites(k).any(func(s): return int(s.feld[0]) == center.x and int(s.feld[1]) == center.y):
-		return {"ok": false, "msg": "Dieser Standort ist nicht mehr frei. Wähle einen der aktuellen Vorschläge aus stadtplan_erweiterung."}
+	var kern := Vector2i(int(p.kern[0]), int(p.kern[1]))
+	if not _expansion_spot_ok(k, center, kern, p):
+		return {"ok": false, "msg": "Dieser Standort ist belegt, ungeeignet oder gehört zum Einflussbereich einer anderen Stadt. Wähle einen freien Standort."}
 	var n: int = (p.viertel as Array).size() + 1
 	var text := str(a.get("name", "Neues Viertel")).strip_edges().left(60)
 	var v := {"id": "V%d" % n, "rolle": "erweiterung", "zone": zone, "mitte": [center.x, center.y], "radius": 7 if zone != "gruen" else 5,
@@ -584,7 +585,8 @@ func brief(k: int) -> Dictionary:
 	return {"grundform": p.label, "stadtmarke": p.get("marke", {}), "leitbild": FORMS[p.form].text, "freiraum": p.freiraum, "wirtschaft": p.wirtschaft,
 		"grundstuecke": "%dx%d" % [int(p.block[0]), int(p.block[1])], "hoehen_kern_mitte_rand": p.hoehen,
 		"viertel": (p.viertel as Array).map(func(v): return {"id": v.id, "rolle": v.rolle, "zone": v.zone, "mitte": v.mitte,
-			"geschosse_max": v.geschosse, "zweck": v.text, "status": v.status, "entwurf": str(v.get("entwurf", ""))}),
+			"geschosse_max": v.geschosse, "zweck": v.text, "status": v.status, "entwurf": str(v.get("entwurf", "")),
+			"eigene_trasse": v.get("trasse", [])}),
 		"letzte_standortwahl": (p.get("entscheidungen", []) as Array).slice(-3).map(func(e): return str(e.begruendung).left(220))}
 
 
@@ -698,11 +700,88 @@ func choose_design(k: int, a: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Entwurf '%s' für %s nicht verfügbar. Gültige IDs jetzt: %s. Verwende exakt eine davon mit viertel: '%s'." % [
 			id, vid, ", ".join(ids), vid], "gueltige_entwuerfe": ids}
 	v["entwurf"] = id
+	v.erase("trasse")
 	v["entwurf_grund"] = str(a.get("reason", "")).left(180)
 	v["entwurf_punkte"] = int(choice.punkte)
 	_design_cache.clear()
 	revise(k, "Viertel %s: %s gewählt (%d Punkte). %s" % [vid, choice.titel, int(choice.punkte), str(v.entwurf_grund)])
 	return {"ok": true, "msg": "%s erhält den Entwurf %s: %s. Als Nächstes viertel_erschliessen." % [vid, choice.titel, choice.idee]}
+
+
+## Die Bürgermeister-KI darf statt einer Komposition eigene Wegpunkte zeichnen.
+## Wegsuche, Grundstücksrechte und Kosten bleiben vollständig bei der Engine.
+func choose_route(k: int, a: Dictionary) -> Dictionary:
+	var vid := str(a.get("viertel", "")).to_upper()
+	var v: Dictionary = {}
+	for item in of(k).get("viertel", []):
+		if str(item.id) == vid:
+			v = item
+	if v.is_empty() or str(v.status) != "entwurf" or str(v.zone) == "gruen":
+		return {"ok": false, "msg": "Dieses Viertel ist nicht mehr als Bauentwurf verfügbar."}
+	var raw = a.get("punkte", [])
+	if not (raw is Array) or raw.size() < 2 or raw.size() > 8:
+		return {"ok": false, "msg": "Wähle 2 bis 8 Wegpunkte [x,y] im Viertel."}
+	var center := Vector2i(int(v.mitte[0]), int(v.mitte[1]))
+	var radius := int(v.radius) + 8
+	var points: Array[Vector2i] = []
+	for item in raw:
+		if not (item is Array) or item.size() != 2 or not (item[0] is int or item[0] is float) or not (item[1] is int or item[1] is float):
+			return {"ok": false, "msg": "Jeder Wegpunkt muss genau zwei Zahlen enthalten."}
+		var cell := Vector2i(int(item[0]), int(item[1]))
+		if maxi(absi(cell.x - center.x), absi(cell.y - center.y)) > radius or not _road_ok(cell, k):
+			return {"ok": false, "msg": "Wegpunkt %s liegt außerhalb des Viertels oder auf einem Hindernis/fremden Grundstück." % str(item)}
+		points.append(cell)
+	var route := _custom_route(k, points, center, radius)
+	if route.is_empty():
+		return {"ok": false, "msg": "Diese Wegpunkte lassen sich ohne Berg, Wasser oder Gebäude nicht verbinden. Wähle andere Punkte."}
+	var old_route = v.get("trasse", [])
+	var old_design := str(v.get("entwurf", ""))
+	v["trasse"] = raw.duplicate(true)
+	v["entwurf"] = "frei"
+	var built: Dictionary = street_plan(k, vid)
+	if (built.cells as Array).is_empty():
+		if old_route.is_empty():
+			v.erase("trasse")
+		else:
+			v["trasse"] = old_route
+		v["entwurf"] = old_design
+		return {"ok": false, "msg": "Die Trasse erreicht das Rathausnetz nicht. Wähle Punkte näher an einer vorhandenen Straße."}
+	v["entwurf_grund"] = str(a.get("reason", "")).left(180)
+	revise(k, "Viertel %s: eigene Straßenführung mit %d Wegpunkten gewählt. %s" % [vid, points.size(), str(v.entwurf_grund)])
+	return {"ok": true, "msg": "Eigene Trasse für %s: %d Wegpunkte, %d neue Straßenfelder, ungefähr %s. Mit viertel_erschliessen als echtes Bauprojekt beauftragen." % [
+		vid, points.size(), (built.cells as Array).size(), Catalog.money(float((built.cells as Array).size()) * 320.0)], "strassenfelder": (built.cells as Array).size()}
+
+
+func _custom_route(k: int, points: Array[Vector2i], center: Vector2i, radius: int) -> Array:
+	var route: Array = []
+	for i in range(1, points.size()):
+		var from: Vector2i = points[i - 1]
+		var to: Vector2i = points[i]
+		var previous := {from: from}
+		var todo: Array[Vector2i] = [from]
+		var cursor := 0
+		while cursor < todo.size() and cursor < 5000 and not previous.has(to):
+			var here: Vector2i = todo[cursor]
+			cursor += 1
+			for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+				var next: Vector2i = here + d
+				if previous.has(next) or maxi(absi(next.x - center.x), absi(next.y - center.y)) > radius or not _road_ok(next, k):
+					continue
+				previous[next] = here
+				todo.append(next)
+		if not previous.has(to):
+			return []
+		var segment: Array = [to]
+		var back: Vector2i = to
+		while back != from:
+			back = previous[back]
+			segment.push_front(back)
+		if segment.size() > maxi(12, (absi(to.x - from.x) + absi(to.y - from.y)) * 3):
+			return []
+		for cell in segment:
+			if cell not in route:
+				route.append(cell)
+	return route
 
 
 func _design_layout(id: String, c: Vector2i, r: int, a: Vector2i, q: Vector2i) -> Dictionary:
@@ -833,7 +912,13 @@ func street_plan(k: int, vid: String) -> Dictionary:
 	var text := ""
 	var form := str(p.form)
 	var selected := str(v.get("entwurf", ""))
-	if QUARTER_DESIGNS.has(selected):
+	if selected == "frei" and v.has("trasse"):
+		var points: Array[Vector2i] = []
+		for item in v.trasse:
+			points.append(Vector2i(int(item[0]), int(item[1])))
+		want = _custom_route(k, points, c, r + 8)
+		text = "Eigene Straßenführung mit %d Wegpunkten" % points.size()
+	elif QUARTER_DESIGNS.has(selected):
 		var layout: Dictionary = _design_layout(selected, c, r, a, q)
 		want = layout.cells
 		platz = layout.platz

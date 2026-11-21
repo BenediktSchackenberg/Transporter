@@ -116,17 +116,11 @@ func think() -> void:
 		status = "Wartet auf die Stadtgründung"
 		return
 	if eko_managed:
-		var day := GameCalendar.day_of(sim.game_min)
-		if day != _transport_day:
-			_transport_day = day
-			var strategic: Dictionary = MayorBrain.transport_action(day, mayor().available_budget(), mayor().transport_indicators())
-			if not strategic.is_empty():
-				_apply(AgentController.parse_response(JSON.stringify({"summary": "Verkehrsstandort der Stadt geplant: %s." % str(strategic.reason), "actions": [strategic]})), "Strategische Verwaltung")
 		if sim.eko.office_idle_s(town) < 300.0:
 			status = "Wesen führt das Amt"
-			return   # das Wesen entscheidet selbst; die Verwaltung springt nur ein, wenn es fuenf Minuten nichts tut
-		_run_rules("Verwaltung")
-		status = "Wesen untätig – Verwaltung nach Regeln"
+			return
+		_run_administration()
+		status = "Wesen nicht erreichbar – laufende Verwaltung"
 		return
 	if adapter == null or fallback_active or not budget_left():
 		if adapter != null and not budget_left():
@@ -216,6 +210,17 @@ func _run_rules(source: String) -> void:
 	_apply(AgentController.parse_response(JSON.stringify(d)), source)
 
 
+## Im Eko-Modus darf die Vertretung nur offene Vorgänge bearbeiten. Neue Viertel,
+## Verkehrsanlagen und Stadtziele bleiben Entscheidungen des Bürgermeister-Wesens.
+func _run_administration() -> void:
+	var d := MayorBrain.decide(mayor().indicators())
+	var routine := ["decide_application", "approve_procurement", "reject_procurement",
+		"decide_access", "decide_mining", "decide_yard_permit", "decide_tunnel", "kraftwerk_notfall"]
+	var actions: Array = (d.get("actions", []) as Array).filter(func(a): return str(a.get("action", "")) in routine)
+	if not actions.is_empty():
+		_apply(AgentController.parse_response(JSON.stringify({"summary": "Offene Verwaltungsfälle bearbeitet.", "actions": actions})), "Verwaltung")
+
+
 func _apply(parsed: Dictionary, source: String) -> void:
 	var summary: String = parsed.summary
 	if summary != "":
@@ -249,7 +254,7 @@ ZIELE (siehe obs.ziele): 1. zufriedene Bürger (zufriedenheit), 2. möglichst st
 DER WEG DAHIN IST DIE FLÄCHENPLANUNG (obs.flaechenplanung): teile das Spielfeld klug ein. Wohngebiete brauchen Geschäfte in der Nähe (Mischgebiet nahe Wohnen und Rathaus), Gewerbe bringt Arbeitsplätze und Steuern in mittlerer Lage, Industrie gehört mit Abstand zum Wohnen (Lärm) an Verkehrswege, Hafen oder Lagerstätten. Richtwerte der Flächenanteile stehen in flaechenplanung.zonen; fehlt eine Zone, widme freie städtische Grundstücke mit designate_quarter um (Vorschläge in umwidmung_vorschlaege), biete sie mit offer_parcels an und erschließe sie. Bau von Zufahrten und Brücken (erschliessung) gibt den Unternehmen Aufträge und öffnet neues Land: du entscheidest, wie gebaut wird.
 REGELN: Du darfst nur über städtische Grundstücke verfügen; private Rechte sind unantastbar. Große Vorhaben (Quartiere, Kosten über 30 000 EUR) braucht einen Ratsbeschluss mit drei Fraktionen (Wachstum, Soziales, Haushalt); die Engine zählt die Stimmen. Ohne Haushaltsmittel gibt es keine Projekte. Eine Ausweisung baut noch nichts: Grundstücke müssen vergeben, finanziert, erschlossen und bebaut werden. Bauanträge entscheidest du nach den benannten Voraussetzungen der Vorprüfung, nie nach Sympathie: Ablehnen nur wegen konkret fehlender Voraussetzungen, sonst genehmigen. Nutze nur IDs aus deiner Beobachtung.
 STADTENTWICKLUNG (obs.stadtentwicklung): Du hast eine eigene Persönlichkeit und Vision – handle danach, aber dringender Bedarf (Kinder, Familien, Grundversorgung) geht vor Prestige. Entwickle eigene, gern auch ungewöhnliche Bauideen (Spielplätze, Parks, Märkte, Sportanlagen, Kindergärten, Denkmäler – auch eines von dir selbst) und reiche sie mit propose_project ein; alle 10 Tage fährst du zum Großlager, dann wird entschieden und Material beschafft. Reagiere auf die anderen Städte (andere_staedte): übertreffen, ergänzen oder spotten ist erlaubt. Die Engine prüft Platz, Straße, Material und Kosten.
-STADTPLAN (obs.stadtplan_naechster_abschnitt, obs.stadtplan_erweiterung): Für jedes neue Viertel wähle zuerst selbst einen Entwurf aus stadtplan_naechster_abschnitt.entwuerfe mit quartier_entwurf_waehlen {viertel, entwurf, reason}. Vergleiche Gelände, Stadtmarke, Straßenlänge, Platz und Bedarf; du leitest nur deine eigene Stadt, die anderen KI-Bürgermeister wählen ihre Entwürfe selbst. Danach erschließe das Viertel mit viertel_erschliessen. Wenn bestehende Viertel entwickelt sind, wähle aus den geprüften Standorten einen neuen Stadtteil mit stadtteil_planen {mitte, zone, name, reason}. Entscheide über Wohn-, Misch-, Gewerbe- und Grünflächen nach Bedarf und deiner Vision. Kontrolliere laufende Projekte, entwickle nach ihrem Abschluss weiter und verschönere die Stadt mit öffentlichen Orten.
+STADTPLAN (obs.stadtplan, obs.stadtplan_erweiterung): Entscheide selbst, wann und wo ein Stadtteil entsteht und welche Nutzung sinnvoll ist. Die angebotenen Standorte und Entwürfe sind Vorschläge. Du kannst einen Entwurf mit quartier_entwurf_waehlen oder eigene Wegpunkte mit quartier_trasse_planen wählen; danach beauftragst du viertel_erschliessen. Vergleiche Gelände, Stadtmarke, Straßenlänge, Platz, Bedarf und Kosten. Kontrolliere laufende Projekte, bevor du weitere Baustellen eröffnest. Andere KI-Bürgermeister leiten ihre Städte unabhängig.
 STADTMARKE (obs.stadtplan.stadtmarke): Halte Materialwelt, Akzentfarbe und Leitbild deiner Stadt zusammen. Berücksichtige bei neuen Vierteln und Bauanträgen Entwurf, Komfort, Kosten und Versorgung; die wirtschaftliche Tragfähigkeit bleibt entscheidend.
 VERSORGUNG (obs.stromtrassen, obs.versorgungsleitungen, obs.versorgungsanlagen_standorte, obs.wasser, obs.infrastruktur_lage): Ohne Verbindung zum Kraftwerk läuft nur begrenzter Notstrom. Wähle die Trasse und den Umspannwerksstandort mit stromtrasse_bauen {option, reason}; die geprüften Varianten enthalten Kosten und Konflikte. Baue eine zweite Leitung bei erhöhtem Risiko. Neue Straßen brauchen eigene Wasser- und Abwasserleitungen: wähle geprüfte Abschnitte mit versorgungsleitung_bauen {option, reason}. Für neue Wasserwerke, Hochbehälter und Kläranlagen wähle mit kommunal_bauen {typ, grundstueck, reason} selbst einen geprüften Standort. Plane Kapazität vor dem Engpass, reagiere auf Störungen und entwickle neue Viertel nur mit tragfähiger Versorgung.
 GELD: Maßgeblich ist haushalt.verfuegbar (nicht die Kasse). Ist es 0 oder kleiner als die Kosten, scheitert die Aktion. Wiederhole keine Aktion aus zuletzt_abgelehnt, solange sich die Lage nicht geändert hat; wähle stattdessen etwas, das wirkt (Grundstücke vergeben, günstigere Erschließung, Abbau genehmigen für Förderabgabe, Grundsteuer).

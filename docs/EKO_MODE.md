@@ -1,5 +1,13 @@
 # Eko-Modus: freie Wesen ohne Ziel
 
+## Freie Stadtentwicklung (21.11.2026)
+
+In der voreingestellten Wildnis-Partie gründen die Unternehmer ihre Städte selbst. Mit der Gründung entstehen Bürgeramt, Bauhof und eine kurze örtliche Zufahrt. Ein Hafen, das Kernstraßennetz und der Anschluss zum Großlager sind eigenständige Entscheidungen des Bürgermeister-Wesens. Der Großlager-Anschluss ist für den Materialtransport per Lkw nützlich; der Materialhubschrauber bleibt eine Alternative. Die Stadt muss Geld, Material, Bautrupps und Bauzeit einplanen.
+
+`mein_amt` zeigt alle Entwurfsviertel, Standortvorschläge, laufende Bauprojekte, Blockaden und die regionale Zahl freier Bautrupps. Vorschläge sind keine Befehle: `stadtteil_planen` akzeptiert jeden geeigneten Standort im eigenen Einflussbereich, `quartier_trasse_planen` eigene Wegpunkte. Die Engine prüft freie Fläche, Eigentum, Wasser, Berge, Straßenanschluss und Kosten. Neue öffentliche Bauprojekte werden bei ausgelasteter Kapazität zurückgewiesen, bis laufende Vorhaben vorankommen. Die Verwaltung bearbeitet weiter Genehmigungen und Beschaffungen; neue strategische Bauziele wählt das Bürgermeister-Wesen.
+
+Unternehmer erhalten von Ollama keine erzwungene Folge „Betriebshof → Bürgeramt → erstes Wohnhaus → erste Fracht“ mehr. Sie sehen Voraussetzungen und Folgen und können Stadtgründung, Handel, Transport und Ausbau selbst gewichten. Die klassische Region-Partie nutzt weiterhin ihre vorhandenen Startstädte und Regelbürgermeister; ältere Abschnitte dieses Dokuments und `docs/CITY_PLANNING.md` beschreiben teils diesen Modus oder historische Implementierungsschritte.
+
 Stand 15.11.2026. Idee nach „Is this machine playing?“ (MIT, machineplaying.org) und der Engine Clawblox (MIT, github.com/nacloos/clawblox).
 Übernommen wurden die Ideen, nicht der Code (Clawblox ist eine eigene Rust/Luau-Engine):
 

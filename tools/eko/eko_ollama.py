@@ -190,9 +190,9 @@ TOOLS = [
     {"name": "founding_choice", "description": "Wildnis: Waehle selbst einen der geprueften, mit dem LKW erreichbaren Gruendungsplaetze aus meine_firma.siedlung.beste_plaetze_in_der_naehe. Der Charakter faehrt hin und gruendet dort.",
      "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 2},
                     "why": {"type": "string"}}, "required": ["candidate"]}},
-    {"name": "mayor_action", "description": "Nur fuer Buergermeister: eine konkrete Stadtentscheidung aus mein_amt.naechster_ausbauschritt oder mein_amt.aktionen ausfuehren. Verwende exakte IDs und Parameter aus der aktuellen Beobachtung. Liefert danach Bau- und Wirtschaftsstand zur Erfolgskontrolle.",
+    {"name": "mayor_action", "description": "Nur fuer Buergermeister: eine eigene Stadtentscheidung mit einer Aktion aus mein_amt.aktionen ausfuehren. Vergleiche Bedarf, laufende Projekte, freie Kapazitaet und Entwuerfe. Verwende gueltige IDs und Parameter aus der Beobachtung.",
      "parameters": {"type": "object", "properties": {
-         "action": {"type": "string", "enum": ["viertel_erschliessen", "quartier_entwurf_waehlen", "stadtteil_planen", "plan_infrastructure", "designate_quarter", "offer_parcels", "decide_application", "propose_project", "set_vision", "kommunal_bauen", "fahrzeug_entwerfen", "build_harbor", "build_airport", "build_station", "build_bridge", "build_tunnel", "expand_harbor", "expand_airport", "expand_power", "expand_depot", "repair_road", "stromtrasse_bauen", "versorgungsleitung_bauen", "infra_ausbau"]},
+         "action": {"type": "string", "enum": ["viertel_erschliessen", "quartier_entwurf_waehlen", "quartier_trasse_planen", "stadtteil_planen", "grosslager_anschluss_bauen", "plan_infrastructure", "designate_quarter", "offer_parcels", "decide_application", "propose_project", "set_vision", "kommunal_bauen", "fahrzeug_entwerfen", "build_harbor", "build_airport", "build_station", "build_bridge", "build_tunnel", "expand_harbor", "expand_airport", "expand_power", "expand_depot", "repair_road", "stromtrasse_bauen", "versorgungsleitung_bauen", "infra_ausbau"]},
          "params": {"type": "object", "description": "Parameter der Amtshandlung aus mein_amt.aktionen; z. B. {viertel: V7, reason: Arbeitsplaetze}."}},
          "required": ["action", "params"]}},
     {"name": "wait", "description": "Warte einige Sekunden – mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist, oder mit "
@@ -393,21 +393,6 @@ def compact_obs(o, full=False):
     if not isinstance(o, dict) or not o.get("ok", False) or full:
         return o
     o = dict(o)
-    founding = o.get("meine_firma", {}).get("siedlung", {}) if isinstance(o.get("meine_firma"), dict) else {}
-    if isinstance(founding, dict) and founding.get("betriebshof") is False:
-        f = o["meine_firma"]
-        o["meine_firma"] = {k: f.get(k) for k in ("firma", "bargeld", "siedlung", "fahrzeuge", "grosslager")}
-        for k in ("bloecke_in_der_naehe", "gebaeude_in_der_naehe", "quellen", "material_preise", "lebensziel", "koerper", "gefahren"):
-            o.pop(k, None)
-        o["hinweis_kurzfassung"] = "Vor der Stadtgründung: wähle einen der geprüften Plätze, fahre mit LKW dorthin und gründe vor Ort."
-        return o
-    if isinstance(founding, dict) and founding.get("betriebshof") and not founding.get("buergeramt"):
-        f = o["meine_firma"]
-        o["meine_firma"] = {k: f.get(k) for k in ("firma", "bargeld", "siedlung", "baustellen", "grosslager", "fahrzeuge")}
-        for k in ("bloecke_in_der_naehe", "quellen", "material_preise", "koerper", "gefahren"):
-            o.pop(k, None)
-        o["hinweis_kurzfassung"] = "Der Betriebshof steht. Jetzt Bürgeramt fertigbauen: Materialflug abwarten, dann Bauen an der Baustelle."
-        return o
     blocks = o.get("bloecke_in_der_naehe", [])
     if len(blocks) > 12:
         mats = {}
@@ -474,10 +459,6 @@ class Agent:
         self._repeat = 0
         self._last_fail = ""
         self._ollama_json_mode = getattr(args, "anbieter", "ollama") == "ollama" and "Qwen3.8" in args.model
-        self._opening_foundation = False
-        self._opening_hall = False
-        self._opening_home = False
-        self._opening_freight = False
         self._passive_streak = 0
         self.dir = Path(args.root) / args.name
         self.ws = self.dir / "workspace"
@@ -513,22 +494,6 @@ class Agent:
     def observation_status(self, observation):
         if not isinstance(observation, dict) or not observation.get("ok"):
             return
-        firm = observation.get("meine_firma", {})
-        settlement = firm.get("siedlung", {}) if isinstance(firm, dict) else {}
-        if isinstance(settlement, dict) and "betriebshof" in settlement:
-            self._opening_foundation = settlement["betriebshof"] is False
-            self._opening_hall = bool(settlement["betriebshof"]) and not bool(settlement.get("buergeramt", False))
-        self._opening_home = (bool(settlement.get("betriebshof")) and bool(settlement.get("buergeramt"))
-                              and int(settlement.get("fertige_wohnhaeuser", 0)) == 0) if isinstance(settlement, dict) else False
-        contracts = firm.get("meine_auftraege") or [] if isinstance(firm, dict) else []
-        chances = firm.get("transportchancen") or [] if isinstance(firm, dict) else []
-        policy = firm.get("dispositionsvorgaben") or {} if isinstance(firm, dict) else {}
-        self._opening_freight = (getattr(self.args, "rolle", "") == "unternehmer" and not self._opening_home
-                                 and bool(settlement.get("betriebshof")) and bool(settlement.get("buergeramt"))
-                                 and int(settlement.get("fertige_wohnhaeuser", 0)) > 0
-                                 and int(firm.get("lieferungen", 0)) == 0
-                                 and not any(k.get("status") in ("accepted", "assigned", "in_transit", "loading") for k in contracts if isinstance(k, dict))
-                                 and (bool(chances) or not bool(policy.get("von_dir_gesetzt", False)))) if isinstance(settlement, dict) and isinstance(firm, dict) else False
         steps = observation.get("naechste_schritte") or []
         goal = observation.get("mein_ziel") or {}
         urgent = observation.get("dringlichkeit") or {}
@@ -575,9 +540,10 @@ class Agent:
                          "Betrieb Vorrang vor einem weiteren Wohnhaus. Wenn ein fertiger Betrieb blockiert ist, "
                          "behebe zuerst die sichtbaren Blockaden bei Personal, Rohstoffen oder Versorgung und pruefe "
                          "echte Produktion, bevor du weitere Betriebe gruendest.")
-            lines.append("In der Wildnis haben Stadtgründung, Bürgeramt und erstes Wohnhaus Vorrang. "
-                         "Solange Bürgeramt oder erstes Wohnhaus fehlen, nimm keine Kundenfracht an und schicke deinen einzigen LKW nicht in die Disposition. "
-                         "Achte auf dringlichkeit.grund und naechste_schritte; Material für offene Baustellen kommt mit deinem Materialhubschrauber.")
+            lines.append("In der Wildnis entscheidest du selbst, ob und wann du erkundest, transportierst, handelst, baust oder eine Stadt gründest. "
+                         "Beachte die Folgen: Ohne Bürgeramt gibt es keinen regulären Zuzug; ohne Wohnungen können keine neuen Haushalte einziehen. "
+                         "Ein selbst gefahrenes Fahrzeug kann während einer Kundenfahrt nicht gleichzeitig Baumaterial holen. "
+                         "naechste_schritte sind unverbindliche Hinweise, keine Befehle. Material für Baustellen kann dein Materialhubschrauber liefern.")
             lines.append("Jede Unternehmer-KI gründet genau eine eigene Stadt. Wenn in meine_firma.siedlung bereits betriebshof=true steht, "
                          "ist die Gründung erledigt: baue und versorge diese Stadt weiter. Setze kein neues Gründungsziel an einem anderen Ort.")
             lines.append("Erkunde die Umgebung deiner Stadt und vergleiche vor Neubauten mehrere Standortangebote. "
@@ -588,7 +554,7 @@ class Agent:
             if getattr(self.args, "strategy", ""):
                 lines.append("Deine eigene Unternehmensstrategie: " + self.args.strategy[:400])
         elif getattr(self.args, "rolle", "") == "buergermeister":
-            lines.append("Du leitest eine wachsende Stadt. Lies in observe mein_amt.naechster_ausbauschritt und naechste_schritte. "
+            lines.append("Du leitest eine wachsende Stadt. Vergleiche in observe mein_amt die verfügbaren Flächen, Bauvorhaben, Engpässe und Alternativen. "
                          "Entscheide aktiv ueber Viertel, Strassen, Strom, Wasser, Abwasser, Wohnungen, Gewerbe und Stadtbild. "
                          "Wenn ein Bauprojekt wartet, lies seinen konkreten Material- oder Bautrupp-Blocker und entscheide ueber "
                          "einen anderen machbaren Ausbauschritt. Amt status dient nur zur Klaerung einer neuen Lage; wiederholtes "
@@ -596,10 +562,10 @@ class Agent:
                          "Ein fertiges, abgebrochenes oder nicht existentes Projekt ist kein aktuelles Ziel mehr. "
                          "Alte Notizen, die eine Status-Schleife empfehlen, sind durch diese Regel ueberholt. "
                          "Frieden, Handel und schoene Stadtviertel sind vollwertige strategische Entscheidungen.")
-            lines.append("Nutze fuer konkrete Bauentscheidungen das direkte Werkzeug mayor_action mit action und params aus "
-                         "mein_amt.naechster_ausbauschritt. Lies nach jedem Versuch nachkontrolle: nur ok=true und ein "
-                         "fortschreitendes Projekt zaehlen. Wenn arbeitslos hoch ist, erschliesse zuerst Gewerbe- und "
-                         "Industrieviertel mit Strasse und Versorgung; Prestige kann warten. Wiederhole eine fehlgeschlagene "
+            lines.append("Nutze fuer eigene Bauentscheidungen mayor_action mit action und params aus mein_amt. "
+                         "Waehle selbst Ziel, Viertel, Verlauf der Strassen und Reihenfolge; Bauvorlagen sind Moeglichkeiten. "
+                         "Pruefe nach jedem Versuch die Wirkung. Halte die Zahl offener Baustellen an Material, Kasse und Bautrupps angepasst. "
+                         "Wiederhole eine fehlgeschlagene "
                          "infra_ausbau-Aktion erst, wenn sich Standort oder Anlagenzustand geaendert hat.")
         return "\n".join(lines)
 
@@ -645,8 +611,6 @@ class Agent:
                 firm = o.get("meine_firma") or {} if isinstance(o, dict) else {}
                 choices = firm.get("transportchancen") or [] if isinstance(firm, dict) else []
                 index = int(a.get("candidate", -1))
-                if self._opening_foundation or self._opening_hall or self._opening_home:
-                    return {"ok": False, "msg": "Zuerst Stadt und erstes Wohnhaus fertigstellen."}
                 if index < 0 or index >= len(choices) or not isinstance(choices[index], dict):
                     return {"ok": False, "msg": "Diese Transportchance ist nicht mehr aktuell. Beobachte erneut und waehle eine Nummer aus transportchancen."}
                 choice = choices[index]
@@ -657,8 +621,6 @@ class Agent:
                 if isinstance(result, dict):
                     result["gewaehlt"] = {"contract_id": kid, "vehicle_id": vid, "deckungsbeitrag_geschaetzt": choice.get("deckungsbeitrag_geschaetzt")}
                 return result
-            if self._opening_freight and name in ("company_plan", "review_company_plan"):
-                return {"ok": False, "msg": "Erste Kundenlieferung fehlt noch. Waehle jetzt einen aktuellen Auftrag mit contract_choice oder entscheide ueber dispatch_policy; danach kannst du den Plan pruefen."}
             if name == "mayor_action":
                 if getattr(self.args, "rolle", "") != "buergermeister":
                     return {"ok": False, "msg": "Nur Buergermeister koennen mayor_action nutzen."}
@@ -686,28 +648,6 @@ class Agent:
                     if status_again or energy >= 50.0:
                         return {"ok": False, "msg": "Wiederholte Statusabfrage oder Pause ohne Stadtentscheidung. Nutze die aktuelle Lage und waehle eine konkrete Amtshandlung.",
                                 "naechste_schritte": current.get("naechste_schritte", [])[:3] if isinstance(current, dict) else []}
-            if name == "act" and self._opening_foundation and str(a.get("type", "")) in ("LKW", "Siedlung"):
-                data = a.get("data") or {}
-                target = data.get("ziel" if a["type"] == "LKW" else "feld", []) if isinstance(data, dict) else []
-                if isinstance(target, list) and len(target) >= 2:
-                    o = self.world.observe()
-                    firm = o.get("meine_firma") or {} if isinstance(o, dict) else {}
-                    settlement = firm.get("siedlung") or {} if isinstance(firm, dict) else {}
-                    candidates = settlement.get("beste_plaetze_in_der_naehe") or [] if isinstance(settlement, dict) else []
-                    valid = [p.get("feld") for p in candidates if isinstance(p, dict)]
-                    if valid and target not in valid:
-                        return {"ok": False, "msg": "Dieser Ort ist nicht in der geprueften, erreichbaren Auswahl. Waehle founding_choice mit candidate 0, 1 oder 2.",
-                                "gepruefte_plaetze": valid}
-            if name == "act" and (self._opening_hall or self._opening_home) and str(a.get("type", "")) == "Firma":
-                data = a.get("data") or {}
-                action = data.get("aktion") or {} if isinstance(data, dict) else {}
-                if isinstance(action, dict) and str(action.get("action", "")) in ("accept_contract", "collect_contracts", "set_dispatch_policy"):
-                    return {"ok": False, "msg": "Bürgeramt und erstes Wohnhaus haben jetzt Vorrang. Beende zuerst die Baukette aus dringlichkeit.grund."}
-            if name == "act" and self._opening_freight and str(a.get("type", "")) == "Firma":
-                data = a.get("data") or {}
-                action = data.get("aktion") or {} if isinstance(data, dict) else {}
-                if isinstance(action, dict) and str(action.get("action", "")) in ("set_plan", "review_plan"):
-                    return {"ok": False, "msg": "Planungsrunde ohne Lieferung: waehle contract_choice oder dispatch_policy fuer die erste Kundenfracht."}
             if name == "company_plan":
                 steps = a.get("schritte", [])
                 if not isinstance(steps, list) or not steps or not all(isinstance(s, str) for s in steps):
@@ -757,12 +697,6 @@ class Agent:
                             return False
                         if o.get("du", {}).get("unterwegs"):
                             return True
-                        if self._opening_foundation:
-                            firm = o.get("meine_firma") or {}
-                            for vehicle in firm.get("fahrzeuge", []) if isinstance(firm, dict) else []:
-                                status = str(vehicle.get("status", "")).lower() if isinstance(vehicle, dict) else ""
-                                if any(s in status for s in ("panne", "tank leer", "werkstatt", "reparatur")):
-                                    return True
                         return False
                     t0 = time.time()
                     while time.time() - t0 < ARRIVAL_MAX_S:
@@ -876,12 +810,6 @@ class Agent:
         return ("Erinnerung aus deinem Gedächtnis (historische Erfahrungen; Kennungen, Bestände und Zustände nur aus observe verwenden):\n" + "\n\n".join(parts)) if parts else ""
 
     def model_tools(self):
-        if self._opening_foundation:
-            return [tool for tool in TOOLS if tool["name"] in ("observe", "founding_choice", "act", "wait")]
-        if self._opening_hall or self._opening_home:
-            return [tool for tool in TOOLS if tool["name"] in ("observe", "act", "wait")]
-        if self._opening_freight:
-            return [tool for tool in TOOLS if tool["name"] not in ("company_plan", "review_company_plan")]
         if getattr(self.args, "rolle", "") == "unternehmer":
             return TOOLS
         return TOOLS[:-len(COMPANY_TOOLS)]
@@ -899,11 +827,7 @@ class Agent:
             params = tool["parameters"]
             fields = [key + ("" if key in params.get("required", []) else "?")
                       for key in params.get("properties", {})]
-            purpose = ("Weltaktion mit type und data; Bürgeramt: Firma {aktion:{action:buergeramt_bauen oder hub_buy}}, Bauen {baustelle:BS...}, Rest"
-                       if self._opening_hall and tool["name"] == "act" else
-                       "Weltaktion mit type und data; vor der Gründung: LKW {ziel:[x,y]}, am Platz Siedlung {feld:[x,y]}"
-                       if self._opening_foundation and tool["name"] == "act" else
-                       "Weltaktion mit type und data; z.B. LKW, Siedlung, Firma, Amt, MoveTo oder Rest"
+            purpose = ("Weltaktion mit type und data; z.B. LKW, Siedlung, Firma, Amt, MoveTo oder Rest"
                        if tool["name"] == "act" else tool["description"][:150])
             menu.append("%s(%s): %s" % (tool["name"], ", ".join(fields), purpose))
         # Ohne deklarierte native Tools auch den bisherigen Verlauf als reinen Dialog senden.
@@ -925,16 +849,7 @@ class Agent:
         plain.append({"role": "user", "content":
                       ("Du hast die Lage bereits mehrfach beobachtet. Nutze die letzte Beobachtung "
                        "und waehle jetzt eine Weltaktion oder einen sinnvollen Warteschritt.\n" if observed_enough else "") +
-                      ("Gründungsphase: Vergleiche die geprüften Plätze in meine_firma.siedlung.beste_plaetze_in_der_naehe und "
-                       "wähle mit founding_choice candidate=0, 1 oder 2. Dieses Werkzeug fährt hin oder gründet vor Ort. "
-                       "Während der Fahrt wait bis=ankunft; act nur für Rest bei Energiemangel oder wenn kein Gründungsplatz erreichbar ist.\n"
-                       if self._opening_foundation else "") +
-                      ("Bürgeramtphase: handle nur an der dringenden Baustelle. Material per hub_buy {baustelle:ID} bestellen, "
-                       "Flug abwarten und mit Bauen {baustelle:ID} arbeiten. Keine Kundenfracht.\n" if self._opening_hall else "") +
-                      ("Erstes Wohnhaus fehlt: baue und versorge jetzt ein Wohnhaus. Keine Kundenfracht, bis der Ort wachsen kann.\n"
-                       if self._opening_home else "") +
-                      ("Erste Lieferung fehlt: waehle jetzt contract_choice aus meine_firma.transportchancen oder setze mit dispatch_policy eigene Grenzen fuer die Disposition. Keine weitere Planungsrunde vor der ersten Lieferung.\n"
-                       if self._opening_freight else "") +
+                      "Wähle nach deinem eigenen Ziel eine Handlung. Die Welt nennt Folgen und Voraussetzungen, aber keine Pflichtreihenfolge.\n" +
                       "Waehle genau eine konkrete naechste Handlung aus dieser Werkzeugliste:\n" +
                       "\n".join(menu) +
                       "\nAntworte ausschliesslich als JSON nach diesem Schema: " + json.dumps(schema) +
@@ -1256,9 +1171,9 @@ class Agent:
                 messages.append({"role": "tool", "tool_name": fn["name"], "tool_call_id": c.get("id", ""), "content": json.dumps(res, ensure_ascii=False)[:14000]})
                 if fn["name"] == "mayor_action" and failed:
                     check = res.get("nachkontrolle", {}) if isinstance(res, dict) else {}
-                    messages.append({"role": "user", "content": "Diese Amtshandlung wurde abgelehnt: %s. Aktueller Ausbauschritt: %s. "
-                                     "Waehle eine andere gueltige Stadtentscheidung; wiederhole den gleichen Aufruf nicht ohne Lageaenderung."
-                                     % (verdict, json.dumps(check.get("naechster_ausbauschritt", {}), ensure_ascii=False)[:700])})
+                    messages.append({"role": "user", "content": "Diese Amtshandlung wurde abgelehnt: %s. Pruefe Bauprogramm, Blockaden und andere Moeglichkeiten. "
+                                     "Waehle selbst eine gueltige Stadtentscheidung; wiederhole den gleichen Aufruf nicht ohne Lageaenderung."
+                                     % verdict})
                 if fn["name"] == "act" and getattr(self.args, "rolle", "") == "buergermeister":
                     data = a.get("data", {}) if isinstance(a.get("data"), dict) else {}
                     office = data.get("aktion", {}) if isinstance(data.get("aktion"), dict) else {}
@@ -1271,10 +1186,9 @@ class Agent:
                         current = self.world.observe()
                         steps_now = current.get("naechste_schritte", []) if isinstance(current, dict) else []
                         office_now = current.get("mein_amt", {}) if isinstance(current, dict) else {}
-                        action = office_now.get("naechster_ausbauschritt", {}) if isinstance(office_now, dict) else {}
                         messages.append({"role": "user", "content": "Du hast wiederholt nur geruht oder den Status gelesen. Die Stadt entwickelt sich dadurch nicht weiter. "
-                                         "Aktueller Ausbauschritt: %s. Deine nächsten Schritte: %s. Wähle eine konkrete Amtshandlung oder begründe eine andere Stadtentscheidung."
-                                         % (json.dumps(action, ensure_ascii=False)[:800], json.dumps(steps_now, ensure_ascii=False)[:1000])})
+                                         "Pruefe Bedarf und laufende Bauvorhaben: %s. Deine Optionen: %s. Wähle und begründe eine konkrete Amtshandlung."
+                                         % (json.dumps(office_now.get("bauprogramm", {}), ensure_ascii=False)[:800], json.dumps(steps_now, ensure_ascii=False)[:1000])})
                 # Schleifenbremse: dieselbe fehlgeschlagene Handlung dreimal hintereinander -> deutlicher Hinweis (Ralf fragte Greta 20-mal)
                 key = fn["name"] + json.dumps(a, sort_keys=True, ensure_ascii=False) if failed else ""
                 self._repeat = self._repeat + 1 if key and key == getattr(self, "_last_fail", "") else (1 if key else 0)

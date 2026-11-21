@@ -201,21 +201,10 @@ func tick() -> void:
 
 ## Der KI-Inhaber setzt die Regeln mit set_dispatch_policy. Die Disposition nimmt
 ## danach nur bekannte, wirtschaftlich tragbare Kundenfracht selbststaendig an.
-## Material fuer eine eigene Baustelle hat Vorrang vor neuen Kundenfahrten.
+## Der Inhaber bestimmt per Richtlinie, ob der eigene LKW automatisch Fracht übernimmt.
 func _auto_dispatch(cid: int) -> void:
 	if not bool(dispatch_policy(cid).auto_accept) or sim.executor.active_contracts(cid) >= sim.company(cid).contract_capacity():
 		return
-	if sim.wildnis and sim.eko != null and not sim.town_ready(sim.company(cid).home_town):
-		return   # Der einzige Gruender-LKW bleibt fuer Standortsuche, Buergeramt und ersten Hausbau frei.
-	if sim.eko != null:
-		var waiting: Dictionary = sim.eko.homes.waiting_goods(cid)
-		if not waiting.is_empty():
-			for site in sim.eko.homes.open_sites(cid):
-				if str(site.status) != "material":
-					continue
-				for item in sim.eko.homes.missing(site):
-					if waiting.has(item):
-						return
 	for item in dispatch_opportunities(cid, 8, true):
 		var k: Contract = sim.contracts.get(str(item.contract_id))
 		var v: FleetVehicle = sim.vehicles.get(int(item.vehicle_id))
@@ -229,15 +218,11 @@ func _auto_dispatch(cid: int) -> void:
 		return
 
 
-## Der Gruender-LKW bleibt bis zum ersten fertigen Wohnhaus frei. Danach darf die
-## Disposition ihn nur nach einer ausdruecklich gesetzten KI-Vorgabe nutzen.
+## Die Disposition nutzt den Gruender-LKW nur nach einer ausdruecklichen KI-Vorgabe.
 ## Der Inhaber geht zuerst sichtbar zum geparkten LKW; erst dort wird Fracht
 ## angenommen, damit _body_tick ihn nicht quer ueber die Karte teleportiert.
 func _owner_ready_for_dispatch(cid: int, v: FleetVehicle) -> bool:
 	if not dispatch_policies.has(cid) or not bool(dispatch_policy(cid).auto_accept):
-		return false
-	var town: int = sim.company(cid).home_town
-	if not sim.town_ready(town) or not sim.housing.units.values().any(func(u): return sim.towns.of_building(int(u.building)) == town):
 		return false
 	var name: String = sim.eko.firm_being(cid)
 	var b: Dictionary = sim.eko.beings.get(name, {})

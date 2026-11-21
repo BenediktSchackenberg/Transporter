@@ -44,24 +44,23 @@ class JsonToolFallbackTest(unittest.TestCase):
         self.assertFalse(agent.call_tool("contract_choice", {"candidate": 2})["ok"])
         self.assertEqual(len(sent), 1)
 
-    def test_first_freight_stops_repeated_plan_reviews(self):
+    def test_founding_does_not_force_first_freight_or_hide_company_planning(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="unternehmer")
-        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
-        agent.world = SimpleNamespace(act=lambda *_: self.fail("Plan darf keine Weltaktion ausloesen"))
+        sent = []
+        agent.world = SimpleNamespace(act=lambda typ, data: sent.append((typ, data)) or {"ok": True})
         agent.observation_status({"ok": True, "meine_firma": {
             "siedlung": {"betriebshof": True, "buergeramt": True, "fertige_wohnhaeuser": 1},
             "lieferungen": 0, "meine_auftraege": [], "transportchancen": [{"contract_id": "A42", "vehicle_id": 1}],
             "dispositionsvorgaben": {"von_dir_gesetzt": False}}})
-        self.assertTrue(agent._opening_freight)
-        self.assertNotIn("company_plan", [tool["name"] for tool in agent.model_tools()])
-        self.assertFalse(agent.call_tool("review_company_plan", {})["ok"])
-        self.assertFalse(agent.call_tool("act", {"type": "Firma", "data": {"aktion": {"action": "set_plan"}}})["ok"])
+        self.assertIn("company_plan", [tool["name"] for tool in agent.model_tools()])
+        self.assertTrue(agent.call_tool("company_plan", {"ziel": "Stadtbaustoffe liefern", "schritte": ["Auftrag wählen"]})["ok"])
+        self.assertEqual(sent[0][1]["aktion"]["action"], "set_plan")
         agent.observation_status({"ok": True, "meine_firma": {
             "siedlung": {"betriebshof": True, "buergeramt": True, "fertige_wohnhaeuser": 1},
             "lieferungen": 1, "meine_auftraege": [], "transportchancen": [],
             "dispositionsvorgaben": {"von_dir_gesetzt": True}}})
-        self.assertFalse(agent._opening_freight)
+        self.assertIn("company_plan", [tool["name"] for tool in agent.model_tools()])
 
     def test_invalid_native_tool_call_uses_structured_json_and_stays_there(self):
         agent = object.__new__(eko_ollama.Agent)
