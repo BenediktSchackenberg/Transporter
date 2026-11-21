@@ -1143,9 +1143,11 @@ func _public_day(day: int) -> void:
 			elif str(connector.get("kind", "")) == "erschliessung" and int(e.days_left) > 4:
 				e.days_left = 4
 				e.days = maxi(4, int(e.days) - (int(e.days_left) - 4))
-			elif str(connector.get("kind", "")) in ["wasserausbau", "trasse"] and sim.town_ready(town) and sim.citizens.population_of(town) < 12 and int(e.days_left) > 6:
-				e.days_left = 6
-				e.days = mini(int(e.days), 6)
+			elif str(connector.get("kind", "")) in ["wasserausbau", "trasse", "versorgungsleitung"] and sim.town_ready(town) and sim.citizens.population_of(town) < 12 and int(e.days_left) > 2:
+				# Die erste Versorgung neuer Staedte kommt als gemeinsamer Bauauftrag mit
+				# Zusatztrupp. Material, Anfahrt und sichtbare Bauarbeit bleiben erforderlich.
+				e.days_left = 2
+				e.days = mini(int(e.days), 2)
 		if builders[e.builder].status != "aktiv":
 			continue
 		var depot: CityDepot = sim.towns.depot(Towns.town_of_id(str(e.project)))
