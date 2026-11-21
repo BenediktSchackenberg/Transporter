@@ -881,6 +881,14 @@ class Agent:
                 action, data = next(iter(arguments.items()))
                 if isinstance(data, dict):
                     arguments = {"type": action, "data": data}
+        if name == "mayor_action" and "action" in arguments:
+            # Lokale Modelle geben die Parameter oft direkt neben action aus. Die konkrete
+            # Entscheidung bleibt erhalten; nur die Werkzeughuelle wird normalisiert.
+            params = arguments.get("params")
+            if not isinstance(params, dict):
+                params = {}
+            params = {**{k: v for k, v in arguments.items() if k not in ("action", "params")}, **params}
+            arguments = {"action": arguments["action"], "params": params}
         if name == "append_memory" and "entry" not in arguments and arguments:
             arguments = {"entry": arguments}
         parameters = next(t["parameters"] for t in available if t["name"] == name)
@@ -900,11 +908,7 @@ class Agent:
         if messages and messages[-1]["role"] == "tool":
             messages = messages + [{"role": "user", "content": "Nutze das letzte Werkzeugergebnis und handle mit dem nächsten sinnvollen Schritt."}]
         if getattr(self, "_ollama_json_mode", False):
-            try:
-                return self.chat_json_tool(messages)
-            except ModelGlitch:
-                self._ollama_json_mode = False
-                raise
+            return self.chat_json_tool(messages)
         think = self.args.think
         if "gpt-oss" in str(self.args.model):   # gpt-oss denkt immer; Stufe statt an/aus (low: schnell, --think: medium)
             think = "medium" if self.args.think is True else "low"

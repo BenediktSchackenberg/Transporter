@@ -103,6 +103,38 @@ class JsonToolFallbackTest(unittest.TestCase):
             result = agent.chat_json_tool([{"role": "user", "content": "Beobachte"}])
         self.assertEqual(result["tool_calls"][0]["function"]["arguments"], {})
 
+    def test_mayor_action_accepts_flat_model_parameters(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="buergermeister", model="local-test", ollama="http://127.0.0.1:11435",
+                                     ctx=16384, name="Ingrid")
+        agent._passive_streak = 0
+        agent.urgency = 2
+        agent.log = io.StringIO()
+        with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
+                {"message": {"content": '{"tool":"mayor_action","arguments":{"action":"stromtrasse_bauen",'
+                                        '"option":"ST1","reason":"Wohnungen anschliessen"}}'}})):
+            result = agent.chat_json_tool([{"role": "user", "content": "Versorge die Stadt"}])
+        self.assertEqual(result["tool_calls"][0]["function"]["arguments"],
+                         {"action": "stromtrasse_bauen", "params": {"option": "ST1", "reason": "Wohnungen anschliessen"}})
+
+    def test_json_mode_survives_invalid_model_response(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="buergermeister", anbieter="ollama", model="local-test",
+                                     ollama="http://127.0.0.1:11435", ctx=16384, think=False, name="Ingrid")
+        agent._passive_streak = 0
+        agent.urgency = 2
+        agent.log = io.StringIO()
+        agent._ollama_json_mode = True
+        responses = iter([Response({"message": {"content": '{"tool":"mayor_action","arguments":{}}'}}),
+                          Response({"message": {"content": '{"tool":"mayor_action","arguments":'
+                                                           '{"action":"stromtrasse_bauen","option":"ST1"}}'}})])
+        with patch.object(eko_ollama.urllib.request, "urlopen", side_effect=lambda *_args, **_kwargs: next(responses)):
+            with self.assertRaises(eko_ollama.ModelGlitch):
+                agent.chat([{"role": "user", "content": "Verbinde die Stadt"}])
+            result = agent.chat([{"role": "user", "content": "Versuche es erneut"}])
+        self.assertTrue(agent._ollama_json_mode)
+        self.assertEqual(result["tool_calls"][0]["function"]["arguments"]["params"]["option"], "ST1")
+
     def test_repeated_observation_requires_next_step(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",

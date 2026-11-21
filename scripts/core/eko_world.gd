@@ -921,12 +921,12 @@ func urgency(b: Dictionary) -> Dictionary:
 				var gaps: Array = growth.get("fehlende_anschluesse", [])
 				var power_pending: bool = sim.grid.net.planned.values().any(func(p): return str(p.get("b", "")) == "U%d" % office_town)
 				if "kraftwerksstrom" in gaps and not power_pending and not sim.grid.net.option_brief(office_town).is_empty():
-					return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber ohne Kraftwerksstrom nicht bewohnbar. Wähle selbst eine geprüfte Option aus mein_amt.stromtrassen und beauftrage stromtrasse_bauen {option, reason}; danach das Ergebnis prüfen."}
+					return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber ohne Kraftwerksstrom nicht bewohnbar. Wähle selbst eine geprüfte Option aus mein_amt.stromtrassen und nutze mayor_action {action: stromtrasse_bauen, params: {option: Kennung, reason: Grund}}; danach das Ergebnis prüfen."}
 				for art in ["wasser", "abwasser"]:
 					var key: String = "frischwassernetz" if art == "wasser" else "kanalnetz"
 					var pending: bool = sim.water.main_projects.values().any(func(p): return int(p.get("town", -1)) == office_town and str(p.get("art", "")) == art)
 					if key in gaps and not pending and not sim.water.main_options(office_town, art).is_empty():
-						return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber das %s erreicht sie nicht. Wähle selbst eine geprüfte Option aus mein_amt.versorgungsleitungen und beauftrage versorgungsleitung_bauen {option, reason}." % ("Frischwassernetz" if art == "wasser" else "Kanalnetz")}
+						return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber das %s erreicht sie nicht. Wähle selbst eine geprüfte Option aus mein_amt.versorgungsleitungen und nutze mayor_action {action: versorgungsleitung_bauen, params: {option: Kennung, reason: Grund}}." % ("Frischwassernetz" if art == "wasser" else "Kanalnetz")}
 		return {"prioritaet": 0, "grund": ""}
 	var best := {"prioritaet": 0, "grund": ""}
 	var home_k: int = sim.company(cid).home_town
@@ -1018,9 +1018,9 @@ func next_steps(b: Dictionary) -> Array:
 			growth_step = "Stadtwachstum %s: %s" % [str(growth.get("stadt", "")), str(growth.get("hinweis", ""))]
 			var gaps: Array = growth.get("fehlende_anschluesse", [])
 			if int(b.get("amt", -1)) >= 0 and "kraftwerksstrom" in gaps:
-				growth_step += " Wähle eine Option aus mein_amt.stromtrassen und beauftrage stromtrasse_bauen {option, reason}."
+				growth_step += " Wähle eine Option aus mein_amt.stromtrassen und nutze mayor_action {action: stromtrasse_bauen, params: {option: Kennung, reason: Grund}}."
 			if int(b.get("amt", -1)) >= 0 and ("frischwassernetz" in gaps or "kanalnetz" in gaps):
-				growth_step += " Prüfe mein_amt.versorgungsleitungen und beauftrage passende Varianten mit versorgungsleitung_bauen {option, reason}."
+				growth_step += " Prüfe mein_amt.versorgungsleitungen und nutze mayor_action {action: versorgungsleitung_bauen, params: {option: Kennung, reason: Grund}}."
 			elif cid >= 0 and ("kraftwerksstrom" in gaps or "frischwassernetz" in gaps or "kanalnetz" in gaps):
 				growth_step += " Sprich mit dem Bürgermeister über die fehlenden Netze; du kannst parallel erschlossene Bauplätze und Betriebe planen."
 	if int(b.get("amt", -1)) >= 0:
