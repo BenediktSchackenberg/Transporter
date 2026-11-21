@@ -136,6 +136,19 @@ class JsonToolFallbackTest(unittest.TestCase):
         self.assertEqual(sent, [("Amt", {"aktion": {"action": "approve_procurement", "order_id": "B7",
                                                    "reason": "Baustoffe liefern"}})])
 
+    def test_failed_procurement_shows_real_order_ids(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="buergermeister")
+        agent._passive_streak = 0
+        agent.world = SimpleNamespace(
+            act=lambda _typ, _data: {"ok": False, "msg": "Vorschlag P13 ist nicht offen."},
+            observe=lambda: {"ok": True, "mein_amt": {"stadtlager": {"vorschlaege": [
+                {"id": "B6", "projekt": "P15"}, {"id": "B7", "projekt": "P15"}]}}})
+        result = agent.call_tool("mayor_action", {"action": "approve_procurement",
+                                                  "params": {"order_id": "P13", "reason": "Material"}})
+        self.assertFalse(result["ok"])
+        self.assertIn("B6, B7", result["msg"])
+
     def test_json_mode_survives_invalid_model_response(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="buergermeister", anbieter="ollama", model="local-test",

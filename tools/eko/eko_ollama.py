@@ -637,9 +637,14 @@ class Agent:
                 current = compact_obs(self.world.observe())
                 office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
                 if isinstance(result, dict):
+                    proposals = office.get("stadtlager", {}).get("vorschlaege", []) if isinstance(office, dict) else []
+                    if action in ("approve_procurement", "reject_procurement") and result.get("ok") is False:
+                        ids = [str(p.get("id")) for p in proposals if isinstance(p, dict) and p.get("id")]
+                        result["msg"] = str(result.get("msg", "")) + (" Offene Bestell-IDs: " + ", ".join(ids) if ids else " Keine offenen Bestellvorschlaege.")
                     result["nachkontrolle"] = {"naechster_ausbauschritt": office.get("naechster_ausbauschritt", {}),
                                                "wirtschaftsaufbau": office.get("wirtschaftsaufbau", {}),
-                                               "bau_blockaden": office.get("bau_blockaden", [])[:4]}
+                                               "bau_blockaden": office.get("bau_blockaden", [])[:4],
+                                               "stadtlager_vorschlaege": proposals[:8]}
                 return result
             if name == "act" and getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_passive_office", 0) >= 3:
                 typ = str(a.get("type", ""))
