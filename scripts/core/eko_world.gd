@@ -64,7 +64,7 @@ const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe,
 const GRUNDZIEL_FIRMA := "Baue ein dauerhaft erfolgreiches Transportunternehmen auf: Fahrer einstellen, reale Auftraege abholen und zustellen, Gewinne in Fuhrpark, Betriebshof und Buero investieren und weitere Staedte bedienen."
 # Benedikt 18.11.: "Ziel pro KI ist, dass die Stadt waechst, mehr Einwohner kommen, die Wirtschaft in Schwung kommt"
 const GRUNDZIEL_WILDNIS := "Entwickle aus deiner selbst gewählten Siedlung eine bewohnte, wirtschaftende Stadt. Entscheide frei über Standort, Baustil, Reihenfolge, Handel, Transport und Zusammenarbeit. Prüfe nach jedem Bau, ob Wohnungen tatsächlich bewohnbar sind und Menschen zuziehen; beseitige Hindernisse, bevor du weitere Vorhaben beginnst. Gewinne aus Transport und Gewerbe finanzieren dein Wachstum."
-const GRUNDZIEL_AMT := "Entwickle deine Stadt dauerhaft nach eigener Idee: zusammenhängende Straßen, Wohnraum, Arbeit, Versorgung und schöne öffentliche Orte. Wähle neue Stadtteile selbst, erschließe sie, prüfe das Ergebnis und verbessere weiter. Dein Zuhause ist dein Rathaus."
+const GRUNDZIEL_AMT := "Entwickle deine Stadt dauerhaft nach eigener Idee. Miss den Erfolg zuerst an tatsächlich bewohnbaren Wohnungen und zugezogenen Menschen, dann an aktiven Betrieben und Lebensqualität. Wähle Straßen, Stromtrassen, Wasserleitungen, Gebäude und Stadtbild selbst; prüfe nach jedem Bau, ob die Anschlüsse die Häuser wirklich erreichen. Dein Zuhause ist dein Rathaus."
 const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
 var towns_funded := {}              # "k" -> true
 var _no_estate := false             # beim Laden und fuer Buergermeister keinen Stammsitz vergeben
@@ -914,6 +914,19 @@ func city_growth_status(town: int) -> Dictionary:
 func urgency(b: Dictionary) -> Dictionary:
 	var cid := active_firm(b)
 	if cid < 0:
+		var office_town: int = int(b.get("amt", -1))
+		if sim.wildnis and office_town >= 0 and sim.town_ready(office_town):
+			var growth: Dictionary = city_growth_status(office_town)
+			if str(growth.get("stufe", "")) == "wohnraum" and int(growth.get("wohnungen", 0)) > 0:
+				var gaps: Array = growth.get("fehlende_anschluesse", [])
+				var power_pending: bool = sim.grid.net.planned.values().any(func(p): return str(p.get("b", "")) == "U%d" % office_town)
+				if "kraftwerksstrom" in gaps and not power_pending and not sim.grid.net.option_brief(office_town).is_empty():
+					return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber ohne Kraftwerksstrom nicht bewohnbar. Wähle selbst eine geprüfte Option aus mein_amt.stromtrassen und beauftrage stromtrasse_bauen {option, reason}; danach das Ergebnis prüfen."}
+				for art in ["wasser", "abwasser"]:
+					var key: String = "frischwassernetz" if art == "wasser" else "kanalnetz"
+					var pending: bool = sim.water.main_projects.values().any(func(p): return int(p.get("town", -1)) == office_town and str(p.get("art", "")) == art)
+					if key in gaps and not pending and not sim.water.main_options(office_town, art).is_empty():
+						return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber das %s erreicht sie nicht. Wähle selbst eine geprüfte Option aus mein_amt.versorgungsleitungen und beauftrage versorgungsleitung_bauen {option, reason}." % ("Frischwassernetz" if art == "wasser" else "Kanalnetz")}
 		return {"prioritaet": 0, "grund": ""}
 	var best := {"prioritaet": 0, "grund": ""}
 	var home_k: int = sim.company(cid).home_town
