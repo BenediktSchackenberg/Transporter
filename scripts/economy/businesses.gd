@@ -345,4 +345,9 @@ func from_dict(d: Dictionary) -> void:
 	for b in items.values():
 		b.owner = int(b.owner)
 		b.site = int(b.site)
+		# Alte Spielstaende enthalten Bergwerke mit 0 kW. Beim Laden gilt der
+		# aktuelle Strombedarf auch fuer bereits gegruendete Foerderbetriebe.
+		var spec: Dictionary = branches().get(str(b.branch), {})
+		if spec.has("abbau"):
+			b.energy_kw = float(spec.get("strom_kw", 0.0))
 	_next = int(d.get("next", 1))

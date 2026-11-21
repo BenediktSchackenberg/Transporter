@@ -702,7 +702,6 @@ func _mine_day(b: Dictionary, spec: Dictionary) -> void:
 	b["today"] = 0
 	if staff < int(spec.personal_min):
 		return
-	sim.company(int(b.owner)).ledger.book("supplies", -float(A.get("diesel_tag", 0.0)), true, "Diesel %s" % b.id, sim.game_min, "S0", b.id)
 	if float(b.energy_kw) > 0.0 and not sim.grid.supplied.has(b.id):
 		return
 	var left: int = int(deposit_of(str(b.parcel)).get("menge", 0))
@@ -714,6 +713,7 @@ func _mine_day(b: Dictionary, spec: Dictionary) -> void:
 	if q <= 0:
 		sim.biz.block(b.id, "material", "Lager voll: %s wird nicht abgeholt" % item_name(item))
 		return
+	sim.company(int(b.owner)).ledger.book("supplies", -float(A.get("diesel_tag", 0.0)), true, "Diesel %s" % b.id, sim.game_min, "S0", b.id)
 	sim.biz.unblock(b.id, "material")
 	mined[str(b.parcel)] = int(mined.get(str(b.parcel), 0)) + q
 	sim.stock.add(item, q, acct, site, "Förderung %s" % b.id, sim.game_min)

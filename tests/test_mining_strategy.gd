@@ -26,10 +26,13 @@ func _initialize() -> void:
 	_check(planned_actions.any(func(a): return str(a.action) == "explore_deposit" and str(a.get("grundstueck", "")) != ""), "Ersatz-KI beginnt bei Bautätigkeit die Rohstofferkundung")
 	var coal: Array = sim.mining.site_options(0, "kohle", 2)
 	_check(not coal.is_empty(), "Kohlevorkommen werden trotz reservierter Bergparzellen angeboten")
+	for branch in ["bergwerk", "kiesgrube", "lehmgrube", "bohrinsel", "uranbergwerk"]:
+		_check(float(Businesses.branches()[branch].strom_kw) > 0.0, "%s braucht Netzstrom fuer die Foerderung" % branch)
 	if not coal.is_empty():
 		var site: Dictionary = coal[0]
 		_check(bool(site.strasse) or (int(site.zufahrt_kosten) > 0 and bool(sim.access.plan(str(site.grundstueck)).ok)), "Standort besitzt oder bekommt eine befahrbare Zufahrt")
 		_check(int(site.kaufpreis) > 0 and int(site.rohstoffwert_geschaetzt) > 0, "KI sieht Kaufpreis und geschaetzten Rohstoffwert")
+		_check(int(site.strombedarf_kw) == 20 and site.has("ortsnetz_nach_zufahrt") and site.has("kraftwerksanschluss"), "KI sieht Strombedarf und Netzanschluss des Bergwerks")
 		var pid := str(site.grundstueck)
 		_check(bool(sim.mining.explore(0, pid).ok), "Firma beginnt Probebohrung")
 		_check(str(sim.mining.next_step(1, "kohle").get("grundstueck", "")) != pid, "Konkurrentin wartet nicht auf die fremde Probebohrung")
@@ -39,6 +42,27 @@ func _initialize() -> void:
 		_check(bool(sim.mining.decide(pid, true, 0.08, "genehmigt", "Bauamt").ok), "Bauamt erteilt Abbaurecht")
 		_check(str(sim.mining.next_step(0, "kohle").get("grundstueck", "")) == pid, "Firma setzt das genehmigte Vorhaben fort")
 		_check(str(sim.mining.next_step(1, "kohle").get("grundstueck", "")) != pid, "Konkurrentin erhält keine fremde Abbaulizenz als Standort")
+		var mine: Dictionary = sim.biz.create(0, "bergwerk", sim.trader.bauhof)
+		mine["parcel"] = pid
+		mine["deposit"] = {"art": "kohle", "qualitaet": 1.0}
+		for i in 2:
+			var worker := Worker.new()
+			worker.id = "MINE_TEST_%d" % i
+			worker.employer = 0
+			worker.business = str(mine.id)
+			sim.personnel.workers[worker.id] = worker
+		var mined_before := int(sim.prod.mined.get(pid, 0))
+		var cash_before := sim.company(0).ledger.cash
+		sim.grid.supplied.erase(mine.id)
+		sim.prod._mine_day(mine, Businesses.branches().bergwerk)
+		_check(int(sim.prod.mined.get(pid, 0)) == mined_before and is_equal_approx(sim.company(0).ledger.cash, cash_before), "Ohne Strom keine Foerderung und keine Dieselrechnung")
+		sim.grid.supplied[mine.id] = true
+		sim.prod._mine_day(mine, Businesses.branches().bergwerk)
+		_check(int(sim.prod.mined.get(pid, 0)) > mined_before, "Mit Strom und Personal foerdert das Bergwerk")
+		var old_biz := sim.biz.to_dict()
+		old_biz.items[mine.id].energy_kw = 0.0
+		sim.biz.from_dict(old_biz)
+		_check(float(sim.biz.get_b(str(mine.id)).energy_kw) == 20.0, "Alter Spielstand erhaelt den Strombedarf fuer vorhandene Bergwerke")
 	var uranium: Array = sim.mining.site_options(0, "uranerz", 1)
 	_check(not uranium.is_empty(), "Uranvorkommen ist als Option sichtbar")
 	if not uranium.is_empty():

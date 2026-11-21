@@ -294,13 +294,13 @@
   },
   "bergwerk": {
     "label": "Bergwerk/Steinbruch",
-    "beschreibung": "Fördert aus einer Lagerstätte auf eigenem (gekauftem) Grund: Eisenerz, Kohle, Kalkstein oder Kies/Sand. Der Vorrat nimmt ab; erschöpfte Lagerstätten liefern nichts mehr. Geräte laufen mit Diesel (kein Netzanschluss nötig, Betriebskosten je Tag).",
+    "beschreibung": "Fördert aus einer Lagerstätte auf eigenem (gekauftem) Grund: Eisenerz, Kohle, Kalkstein, Rohmaterial, Naturstein oder Kupfererz. Der Vorrat nimmt ab; erschöpfte Lagerstätten liefern nichts mehr. Fördergerüst und Brecher brauchen Strom aus dem Ortsnetz; Fahrzeuge verbrauchen zusätzlich Diesel.",
     "standort": "vorkommen",
     "gebaeude": "construction",
     "gruendungskosten": 0,
     "ausstattung": 30000,
     "abschreibung_tag": 0.002,
-    "strom_kw": 0.0,
+    "strom_kw": 20.0,
     "personal_min": 2,
     "rollen": [
       "foerdern"
@@ -632,7 +632,7 @@
     "gruendungskosten": 0,
     "ausstattung": 14000,
     "abschreibung_tag": 0.002,
-    "strom_kw": 0.0,
+    "strom_kw": 12.0,
     "personal_min": 2,
     "rollen": [
       "baggern"
@@ -655,7 +655,7 @@
     "gruendungskosten": 0,
     "ausstattung": 9000,
     "abschreibung_tag": 0.002,
-    "strom_kw": 0.0,
+    "strom_kw": 8.0,
     "personal_min": 1,
     "rollen": [
       "graben"
@@ -877,7 +877,7 @@
     "gruendungskosten": 0,
     "ausstattung": 120000,
     "abschreibung_tag": 0.002,
-    "strom_kw": 0.0,
+    "strom_kw": 40.0,
     "personal_min": 3,
     "rollen": [
       "bohren",

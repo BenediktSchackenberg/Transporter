@@ -541,7 +541,9 @@ class Agent:
                          "behebe zuerst die sichtbaren Blockaden bei Personal, Rohstoffen oder Versorgung und pruefe "
                          "echte Produktion, bevor du weitere Betriebe gruendest.")
             lines.append("Pruefe regelmaessig meine_firma.bergbau_lage und bergbau: Vergleiche mehrere Lagerstaetten nach "
-                         "Abnehmern, geschaetztem Wert, Kaufpreis, Zufahrtskosten und Lage zu deiner Stadt. "
+                         "Abnehmern, geschaetztem Wert, Kaufpreis, Zufahrtskosten, Strombedarf und Lage zu deiner Stadt. "
+                         "Ein Foerderbetrieb braucht Strom: ortsnetz_nach_zufahrt zeigt den lokalen Anschluss, "
+                         "kraftwerksanschluss die Hochspannungstrasse. Ohne Versorgung steht der Abbau still. "
                          "Wenn Bergbau zu deinem Plan passt, handle die Kette selbst: explore_deposit, request_mining, "
                          "build_access falls noetig, found_business mit branche, rohstoff und grundstueck, dann Personal "
                          "und echte Lieferungen. Ein Bergwerk ohne Absatz ist keine Einnahme. Kohle und Uran koennen "

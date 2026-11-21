@@ -191,6 +191,8 @@ func site_options(cid: int, kind: String, limit: int = 2) -> Array:
 		if not pm.is_empty() and pm.status == "abgelehnt" and int(pm.cid) == cid:
 			continue
 		var road: bool = bool(sim.parcels.utilities_of(p).strasse)
+		var town: int = sim.towns.of_parcel(pid) if sim.towns.is_region() else 0
+		var local_power: Dictionary = sim.grid.net.local_roads(town)
 		var step := "erkunden"
 		var rank := 0
 		if not enabled:
@@ -213,21 +215,37 @@ func site_options(cid: int, kind: String, limit: int = 2) -> Array:
 			step = "warten"
 		var access_cost := 0
 		var access_days := 0
+		var power_after_access := false
 		if not road:
 			var pl: Dictionary = sim.access.plan(pid)
 			if not bool(pl.get("ok", false)):
 				continue
 			access_cost = int(pl.get("kosten", 0))
 			access_days = int(pl.get("tage", 0))
+			var cells: Array = pl.get("cells", [])
+			if not cells.is_empty():
+				var near: Vector2i = cells.back()
+				for direction in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+					if local_power.has(near + direction):
+						power_after_access = true
+						break
+		else:
+			var rect := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3])).grow(2)
+			for cell in local_power:
+				if rect.has_point(cell):
+					power_after_access = true
+					break
 		var e := estimate(pid)
-		var town: int = sim.towns.of_parcel(pid) if sim.towns.is_region() else 0
 		var amount: float = float(e.get("menge", e.get("menge_geschaetzt", 0)))
 		var quality: float = float(e.get("qualitaet", e.get("qualitaet_geschaetzt", 0.5)))
 		var gross: float = amount * quality * float(Production.art(kind).get("basispreis", 5.0))
-		var score: float = gross * (1.15 if town == home else 0.85) - float(p.price) - float(access_cost)
+		var score: float = gross * (1.15 if town == home else 0.85) - float(p.price) - float(access_cost) - (50000.0 if not power_after_access else 0.0)
+		var branch := "uranbergwerk" if kind == "uranerz" else ("kiesgrube" if kind in ["kies", "sand"] else ("lehmgrube" if kind == "lehm" else ("bohrinsel" if kind == "rohoel" else "bergwerk")))
 		var site := {"grundstueck": pid, "schritt": step, "lagerstaette": e, "strasse": road,
 			"stadt": sim.towns.name_of(town), "heimatstadt": town == home, "kaufpreis": int(p.price),
 			"zufahrt_kosten": access_cost, "zufahrt_tage": access_days, "rohstoffwert_geschaetzt": int(gross),
+			"strombedarf_kw": int(Businesses.branches().get(branch, {}).get("strom_kw", 0)),
+			"ortsnetz_nach_zufahrt": power_after_access, "kraftwerksanschluss": sim.grid.net.connected(town),
 			"_rank": rank, "_score": score}
 		match step:
 			"erkunden":
@@ -235,7 +253,12 @@ func site_options(cid: int, kind: String, limit: int = 2) -> Array:
 			"zufahrt":
 				site["kosten"] = access_cost
 		sites.append(site)
-	sites.sort_custom(func(a, b): return int(a._rank) > int(b._rank) if int(a._rank) != int(b._rank) else float(a._score) > float(b._score))
+	sites.sort_custom(func(a, b):
+		if int(a._rank) != int(b._rank):
+			return int(a._rank) > int(b._rank)
+		if bool(a.ortsnetz_nach_zufahrt) != bool(b.ortsnetz_nach_zufahrt):
+			return bool(a.ortsnetz_nach_zufahrt)
+		return float(a._score) > float(b._score))
 	for site in sites:
 		site.erase("_rank")
 		site.erase("_score")
@@ -264,11 +287,15 @@ func steps_for(cid: int) -> Dictionary:
 		e["zufahrt_kosten"] = s.zufahrt_kosten
 		e["zufahrt_tage"] = s.zufahrt_tage
 		e["rohstoffwert_geschaetzt"] = s.rohstoffwert_geschaetzt
+		e["strombedarf_kw"] = s.strombedarf_kw
+		e["ortsnetz_nach_zufahrt"] = s.ortsnetz_nach_zufahrt
+		e["kraftwerksanschluss"] = s.kraftwerksanschluss
 		if sites.size() > 1:
 			var other: Dictionary = sites[1]
 			e["alternative"] = {"grundstueck": other.grundstueck, "stadt": other.stadt, "heimatstadt": other.heimatstadt,
 				"schritt": other.schritt, "kaufpreis": other.kaufpreis, "zufahrt_kosten": other.zufahrt_kosten,
-				"rohstoffwert_geschaetzt": other.rohstoffwert_geschaetzt}
+				"rohstoffwert_geschaetzt": other.rohstoffwert_geschaetzt, "ortsnetz_nach_zufahrt": other.ortsnetz_nach_zufahrt,
+				"kraftwerksanschluss": other.kraftwerksanschluss}
 		out[k] = e
 	return out
 

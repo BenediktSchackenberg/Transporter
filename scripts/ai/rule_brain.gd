@@ -695,6 +695,8 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		var st: Dictionary = obs.bergbau.get(rohstoff, {})
 		if st.is_empty() or str(st.schritt) == "warten":
 			return
+		if not bool(st.get("ortsnetz_nach_zufahrt", true)):
+			return   # Ohne erreichbares Ortsnetz waere eine neue Grube nicht betriebsfaehig.
 		mine_site = str(st.grundstueck)
 		var why := "%s wird gebraucht (Lagerstätte %s)" % [Production.item_name(rohstoff), st.grundstueck]
 		match str(st.schritt):
