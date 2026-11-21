@@ -61,10 +61,10 @@ var _homes_min := -1.0
 var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
 const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.000 EUR Privatgeld (Einlage von aussen X0 -> Y0)
 const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
-const GRUNDZIEL_FIRMA := "Baue ein dauerhaft erfolgreiches Transportunternehmen auf: Fahrer einstellen, reale Auftraege abholen und zustellen, Gewinne in Fuhrpark, Betriebshof und Buero investieren und weitere Staedte bedienen."
+const GRUNDZIEL_FIRMA := "Erwirtschafte langfristig moeglichst hohen echten Nettogewinn bei ausreichender Liquiditaet. Erweitere rentable Betriebe, Lieferketten und Marktanteile, pruefe Kosten und schuetzte deine Leute und Anlagen. Entscheide selbst ueber Handel, Frieden oder Krieg; eine Offensive braucht einen wirtschaftlichen und strategischen Grund."
 # Benedikt 18.11.: "Ziel pro KI ist, dass die Stadt waechst, mehr Einwohner kommen, die Wirtschaft in Schwung kommt"
-const GRUNDZIEL_WILDNIS := "Entwickle aus deiner selbst gewählten Siedlung eine bewohnte, wirtschaftende Stadt. Entscheide frei über Standort, Baustil, Reihenfolge, Handel, Transport und Zusammenarbeit. Prüfe nach jedem Bau, ob Wohnungen tatsächlich bewohnbar sind und Menschen zuziehen; beseitige Hindernisse, bevor du weitere Vorhaben beginnst. Gewinne aus Transport und Gewerbe finanzieren dein Wachstum."
-const GRUNDZIEL_AMT := "Entwickle deine Stadt dauerhaft nach eigener Idee. Miss den Erfolg zuerst an tatsächlich bewohnbaren Wohnungen und zugezogenen Menschen, dann an aktiven Betrieben und Lebensqualität. Wähle Straßen, Stromtrassen, Wasserleitungen, Gebäude und Stadtbild selbst; prüfe nach jedem Bau, ob die Anschlüsse die Häuser wirklich erreichen. Dein Zuhause ist dein Rathaus."
+const GRUNDZIEL_WILDNIS := "Entwickle aus deiner selbst gewählten Siedlung eine bewohnte, wirtschaftende Stadt und ein profitables Unternehmen. Strebe langfristig hohen echten Nettogewinn, Liquiditaet und Marktanteile an; erweitere nur tragfaehige Betriebe und schuetze Stadt, Menschen und Infrastruktur. Entscheide frei ueber Standort, Baustil, Handel, Frieden oder Krieg. Pruefe nach jedem Bau, ob Wohnungen bewohnbar sind, Menschen zuziehen und die Investition wirkt."
+const GRUNDZIEL_AMT := "Entwickle deine Stadt dauerhaft nach eigener Idee. Miss den Erfolg an bewohnbaren Wohnungen, zugezogenen Menschen, aktiven Betrieben und Lebensqualität bei soliden Finanzen. Waehle Strassen, Stromtrassen, Wasserleitungen, Gebaeude und Stadtbild selbst; pruefe, ob die Anschluesse die Haeuser erreichen. Schuetze Bewohner und kritische Anlagen bei Angriffen und Katastrophen. Dein Zuhause ist dein Rathaus."
 const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
 var towns_funded := {}              # "k" -> true
 var _no_estate := false             # beim Laden und fuer Buergermeister keinen Stammsitz vergeben
@@ -915,6 +915,8 @@ func urgency(b: Dictionary) -> Dictionary:
 	var cid := active_firm(b)
 	if cid < 0:
 		var office_town: int = int(b.get("amt", -1))
+		if office_town >= 0 and conflict.assaults.values().any(func(a): return int(a.stadt) == office_town):
+			return {"prioritaet": 2, "grund": "Bewaffneter Angriff auf deine Stadt: pruefe mein_amt.bedrohung und verteidigung. Entscheide sofort ueber einen Wachturm, Stadtmauer oder Wiederaufbau mit mayor_action; Kosten und Bauzeit stehen in der Amtslage."}
 		if sim.wildnis and office_town >= 0 and sim.town_ready(office_town):
 			var growth: Dictionary = city_growth_status(office_town)
 			if str(growth.get("stufe", "")) == "wohnraum" and int(growth.get("wohnungen", 0)) > 0:
@@ -942,6 +944,8 @@ func urgency(b: Dictionary) -> Dictionary:
 		return {"prioritaet": 0, "grund": ""}
 	var best := {"prioritaet": 0, "grund": ""}
 	var home_k: int = sim.company(cid).home_town
+	if conflict.assaults.values().any(func(a): return int(a.target) == cid):
+		return {"prioritaet": 2, "grund": "Bewaffneter Angriff auf deine Stadt: pruefe meine_firma.stadtpolitik_und_konflikt, mobilisiere freie Mitarbeiter und Waffen zur Verteidigung, sichere wichtige Gebaeude und sprich mit dem Buergermeister ueber Schutzbauten. Frieden erlaubt Selbstverteidigung."}
 	if sim.wildnis and home_k >= 0 and settle.founded(home_k) and not sim.town_ready(home_k) 			and not homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) == "buergeramt"):
 		# 19.11.: qwen3.5:9b lief drei Spieltage herum statt das Buergeramt anzulegen – ohne es waechst nichts
 		return {"prioritaet": 2, "grund": "Deine Siedlung hat noch kein Bürgeramt. Ohne Bürgeramt gibt es keinen regulären Zuzug; wähle selbst einen passenden Bauplatz und beginne den Bau."}
@@ -991,6 +995,15 @@ func urgency(b: Dictionary) -> Dictionary:
 			return {"prioritaet": 2, "grund": "LKW #%d mit Auftrag ausgefallen" % v.id}
 	if sim.company(cid).ledger.cash < float(sim.operations.dispatch_policy(cid).reserve) and int(best.prioritaet) == 0:
 		best = {"prioritaet": 1, "grund": "Firmenkasse unter Dispositionsreserve"}
+	if int(best.prioritaet) == 0:
+		for rival in sim.companies:
+			if rival.id != cid and rival.is_active() and sim.rivalry.get_tension(cid, rival.id) >= Rivalry.STAGES[3] and sim.company(cid).security_level == 0:
+				best = {"prioritaet": 1, "grund": "Hohe Rivalitaet mit %s: Sabotage- und Blockaderisiko pruefen. Entscheide ueber Wachschutz, Versicherung, Schlichtung oder Kooperation anhand von Kosten und Gefahr." % rival.company_name}
+				break
+	if int(best.prioritaet) == 0 and GameCalendar.day_of(sim.game_min) >= 10:
+		var week: Dictionary = sim.finance.company_period(cid, 7)
+		if float(week.get("ergebnis", 0.0)) < -500.0:
+			best = {"prioritaet": 1, "grund": "Die letzten 7 Spieltage brachten Verlust. Pruefe meine_firma.finanzlage und entscheide, welche Kosten, Preise oder Betriebe du aenderst und welche Expansion sich trotzdem lohnt."}
 	return best
 
 
@@ -1009,7 +1022,7 @@ func next_steps(b: Dictionary) -> Array:
 	var growth_step := ""
 	var crisis := urgency(b)
 	if int(crisis.prioritaet) >= 2:
-		urgent_step = str(crisis.grund) + " – jetzt Lage und passende Firmenaktion prüfen."
+		urgent_step = str(crisis.grund) + " – jetzt Lage und passende Aktion prüfen."
 		out.append(urgent_step)
 	var akku := float(b.get("akku", 100.0))
 	if float(b.get("rest_left", 0.0)) <= 0.0 and (akku < HOME_AKKU or float(b.get("nass", 0.0)) > 60.0 or float(b.get("kalt", 0.0)) > 60.0):
@@ -2931,6 +2944,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	dispatch_view["von_dir_gesetzt"] = sim.operations.dispatch_policies.has(cid)
 	dispatch_view["gruender_lkw_freigegeben"] = sim.operations.dispatch_policies.has(cid) and bool(dispatch_view.auto_accept)
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "lieferungen": sim.company(cid).stats.completed, "reputation": me.reputation,
+		"finanzlage": {"letzte_7_tage": sim.finance.company_period(cid, 7), "letzte_30_tage": sim.finance.company_period(cid, 30)},
 		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),
 		"grosslager": {"feld": sim.city.hub.get("center", []), "abholen": "hub_buy liefert per Materialhubschrauber; ältere Abholaufträge: call_material_heli {ref: H...}",
 			"wartende_baustoffe": homes.waiting_goods(cid), "hubschrauber": sim.material_heli.obs(cid), "hinweis": "Das Großlager ist nicht dein Betriebshof. Der eigene Chinook bringt gekaufte Baustoffe zum Hof; Lagerpersonal belädt ihn am Hauptlager."},

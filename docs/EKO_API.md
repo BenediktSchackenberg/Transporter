@@ -109,6 +109,8 @@ laufende Angriffe, Wachtürme und eine akute Bedrohung. `mein_amt.gruenderstrate
 Gründers weiter. Die gewählte Stadtform prägt den Stadtplan ab Fertigstellung des Bürgeramts. Ein bestehender Stadtplan wird
 durch spätere Strategiewechsel nicht umgebaut.
 
+Die Unternehmer sehen außerdem `meine_firma.finanzlage` für die letzten 7 und 30 Spieltage mit Umsatz, Kosten und echtem Ergebnis. Bei Verlusten oder hoher Rivalität weist `dringlichkeit` auf eine neue Entscheidung hin. Sobald ein bewaffneter Angriff beginnt, versucht die bedrohte Firma sofort freie Beschäftigte und verfügbare Waffen als Stadtwache einzusetzen; bei Bedarf wirbt sie freie Bewerber an. Unternehmer und Bürgermeister erhalten einen dringenden Alarm. Eine friedliche Haltung bleibt bei der Selbstverteidigung bestehen.
+
 - `Firma {aktion: {action: "set_city_strategy", form: "gartenstadt", wirtschaft: "Versorgung", haltung: "frieden", rival: -1, begruendung: "..."}}`
   entscheidet über Stadtbild und die Beziehung zu Rivalen. Die Haltungen sind `frieden`, `verteidigung` und `krieg`.
   Friedliche Kooperation ist dauerhaft möglich; keine KI wird zum Angriff gezwungen. Auch eine friedliche Firma wehrt einen

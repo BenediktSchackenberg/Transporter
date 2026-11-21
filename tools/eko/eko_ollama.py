@@ -414,7 +414,8 @@ def compact_obs(o, full=False):
             f["bergbau"] = "%d Lagerstätten – Details mit observe {voll: true}" % len(f["bergbau"]) if f["bergbau"] else []
         if isinstance(f.get("konkurrenz"), dict):
             k = f["konkurrenz"]
-            f["konkurrenz"] = {"rivalitaet": (k.get("rivalitaet") or [])[:2], "deine_verstoesse": k.get("deine_verstoesse", 0)}
+            f["konkurrenz"] = {"rivalitaet": (k.get("rivalitaet") or [])[:2], "sicherheitsstufe": k.get("sicherheitsstufe", 0),
+                               "versicherung": k.get("versicherung", False), "deine_verstoesse": k.get("deine_verstoesse", 0)}
         # Baukoordinaten und der laufende Plan sind die Kerndaten fuer eigenstaendige Investitionen.
         # Nur die ausfuehrlichen Planschritte kuerzen, statt die Strategie ganz zu verbergen.
         plan = f.get("unternehmensplan")
@@ -522,6 +523,9 @@ class Agent:
             lines.append("Deine eigene Seele und Persönlichkeit:\n" + soul.read_text(encoding="utf-8")[:2000])
         if getattr(self.args, "rolle", "") == "unternehmer":
             lines.append("Du fuehrst ein Unternehmen. Lies bei observe immer grundziel, mein_ziel, meine_firma und naechste_schritte. "
+                         "Dein langfristiges Ziel ist moeglichst hoher echter Nettogewinn bei gesunder Kasse und wachsendem Marktanteil. "
+                         "Vergleiche die Finanzlage der letzten 7 und 30 Spieltage, die groessten Kosten und das Ergebnis neuer Investitionen. "
+                         "Steigt der Umsatz bei sinkendem Gewinn, behebe die Kostentreiber oder schliesse unrentable Bereiche. "
                          "Halte mindestens ein wirtschaftliches Vorhaben aktiv: Auftrag gewinnen, passenden Fahrer und Lkw "
                          "einsetzen, Ware wirklich liefern, Zahlung und Kosten pruefen, dann gezielt in Personal, Fuhrpark "
                          "oder Betrieb investieren. Nach jeder Firmenhandlung pruefe Ergebnis und Folgezustand; "
@@ -531,7 +535,9 @@ class Agent:
                          "Vermeide wiederholte Beobachtungen ohne Entscheidung.")
             lines.append("Nutze die direkten Werkzeuge company_plan, review_company_plan, dispatch_policy, contract_choice, buy_vehicle, "
                          "hire_worker, found_business, assign_business_staff, repair_vehicle und city_strategy. Krieg ist optional: Frieden, Handel und Kooperation koennen dauerhaft bestehen. "
-                         "Bei Bedrohung mobilize_worker nutzen; bewaffnete Angriffe brauchen eine eigene Waffenschmiede, fertige Waffen und order_assault. "
+                         "Bei einem Angriff hat Selbstschutz Vorrang: eigene Truppen, verfuegbare Waffen und Stadtverteidigung pruefen, mobilize_worker nutzen und den Buergermeister auf Wachtuerme oder Mauern hinweisen. Auch in Haltung frieden darfst du dich verteidigen. "
+                         "Bewaffnete Angriffe brauchen eine eigene Waffenschmiede, fertige Waffen und order_assault; waehle sie nur, wenn du Nutzen und Verlustrisiko begruenden kannst. "
+                         "Steigt die Rivalitaet vor einem Angriff, pruefe Wachschutz, Versicherung, Schlichtung und Kooperation gegen ihre laufenden Kosten. "
                          "Die Firmenbeobachtung zeigt transportchancen mit geschaetztem Deckungsbeitrag, "
                          "entscheidungsfolgen und dringlichkeit. Gib der Routine klare Grenzen und pruefe deinen Plan taeglich.")
             lines.append("Wenn observe.meine_firma.wirtschaftsaufbau einen konkreten Standort und found_business nennt, "
@@ -576,6 +582,7 @@ class Agent:
                          "Alte Notizen, die eine Status-Schleife empfehlen, sind durch diese Regel ueberholt. "
                          "Frieden, Handel und schoene Stadtviertel sind vollwertige strategische Entscheidungen.")
             lines.append("Nutze fuer eigene Bauentscheidungen mayor_action mit action und params aus mein_amt. "
+                         "Bei mein_amt.bedrohung entscheide sofort ueber Wachturm, Stadtmauer und Wiederaufbau; sieh auf Bauzeit und freie Stadtkasse. "
                          "Waehle selbst Ziel, Viertel, Verlauf der Strassen und Reihenfolge; Bauvorlagen sind Moeglichkeiten. "
                          "Pruefe nach jedem Versuch die Wirkung. Halte die Zahl offener Baustellen an Material, Kasse und Bautrupps angepasst. "
                          "Wiederhole eine fehlgeschlagene "

@@ -179,11 +179,50 @@ func _assault(cid: int, target: int, asset: String) -> Dictionary:
 		return {"ok": false, "msg": "Kein Fußweg zur gegnerischen Stadt. Prüfe Straßen und Stadtmauern."}
 	assaults[str(cid)] = {"target": target, "stadt": enemy.home_town, "ziel": [approach.x, approach.y], "asset": asset, "status": "anruecken", "seit": w.sim.game_min}
 	w.sim.log_event("%s rückt mit %d Bewaffneten gegen %s vor. %s kann Wachen mobilisieren und Mauern oder Wachtürme bauen." % [own.company_name, sent, w.sim.towns.name_of(enemy.home_town), enemy.company_name], "bad", cid)
+	_emergency_defense(target, sent)
 	for b in w.beings.values():
 		if int(b.get("firma", -1)) == target or int(b.get("amt", -1)) == enemy.home_town:
 			w._event(b, "Alarm: %s greift deine Stadt an!" % own.company_name)
 	w.changed.emit()
 	return {"ok": true, "msg": "%d Bewaffnete marschieren sichtbar auf %s zu. Der Gegner wurde alarmiert." % [sent, enemy.company_name]}
+
+
+## Der Angriffsalarm erreicht die Stadt vor dem Gefecht. Freie Beschaeftigte
+## schuetzen sofort Rathaus und Betriebshof; Waffen aus dem eigenen Arsenal
+## werden zuerst ausgegeben. Auch eine friedliche Firma darf sich verteidigen.
+func _emergency_defense(cid: int, attackers: int) -> void:
+	var defending: int = troops.values().filter(func(t): return int(t.cid) == cid and str(t.mode) == "schutz").size()
+	var needed: int = mini(3, maxi(2, attackers)) - defending
+	if needed <= 0:
+		return
+	var candidates: Array = w.sim.personnel.employed(cid).filter(func(worker): return worker.role == "worker" and worker.vehicle_id < 0 and not troops.has(worker.id))
+	if candidates.size() < needed:
+		for applicant in w.sim.personnel.available():
+			if candidates.size() >= needed or w.sim.company(cid).ledger.cash < applicant.hire_fee + EQUIP_COST + EkoWorld.FIRM_RESERVE:
+				break
+			if applicant.role != "worker":
+				continue
+			w.sim.personnel.hire(cid, applicant)
+			candidates.append(applicant)
+	var home: Vector2i = w.sim.towns.list[w.sim.company(cid).home_town].center
+	for worker in candidates:
+		if needed <= 0:
+			break
+		var weapon := ""
+		for item in w.arms.arsenal.get(str(cid), []):
+			var design: Dictionary = w.arms.designs.get(str(item.design), {})
+			if str(design.get("typ", "")) in ["nahkampf", "fernkampf"]:
+				weapon = str(item.design)
+				break
+		var raised: Dictionary = _mobilize(cid, str(worker.id), weapon)
+		if not bool(raised.get("ok", false)) and weapon != "":
+			raised = _mobilize(cid, str(worker.id), "")
+		if not bool(raised.get("ok", false)):
+			continue
+		var path: Array[Vector2i] = w.sim.nav.walk_path(worker.tile(), home)
+		if not path.is_empty():
+			worker.set_path(path)
+		needed -= 1
 
 
 func _approach(center: Vector2i, start: Vector2i, radii: Array = [29, 35, 42, 48]) -> Vector2i:
@@ -294,17 +333,10 @@ func _tick_assault(cid: int, dt: float) -> void:
 			return
 	a.status = "gefecht"
 	var k: int = int(a.stadt)
-	var defense: Array = troops.keys().filter(func(id): return int(troops[id].cid) == target)
+	var defense: Array = troops.keys().filter(func(id): return int(troops[id].cid) == target and str(troops[id].mode) == "schutz")
 	if defense.is_empty(): # Auch eine friedliche Firma darf sich gegen einen Angriff schuetzen.
-		for worker in w.sim.personnel.employed(target):
-			if worker.role == "worker" and worker.vehicle_id < 0 and not troops.has(worker.id):
-				var raised: Dictionary = _mobilize(target, worker.id, "")
-				if bool(raised.get("ok", false)):
-					var guard_path: Array[Vector2i] = w.sim.nav.walk_path(worker.tile(), Vector2i(int(a.ziel[0]), int(a.ziel[1])))
-					if not guard_path.is_empty():
-						worker.set_path(guard_path)
-					break
-		defense = troops.keys().filter(func(id): return int(troops[id].cid) == target)
+		_emergency_defense(target, arrived.size())
+		defense = troops.keys().filter(func(id): return int(troops[id].cid) == target and str(troops[id].mode) == "schutz")
 	var towers: int = w.arms.towers.filter(func(t): return int(t.stadt) == k).size()
 	var wall: bool = _wall_intact(k)
 	for id in arrived:
