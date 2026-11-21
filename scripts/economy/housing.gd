@@ -108,6 +108,9 @@ func habitable(u: Dictionary) -> bool:
 	var town: int = sim.towns.of_building(int(u.building))
 	if town >= 0 and sim.grid != null and not sim.grid.net.connected(town):
 		return false
+	if sim.wildnis and town >= 0 and sim.water != null:
+		if not sim.water.building_on_net(town, int(u.building)) or not sim.water.building_on_sewer(town, int(u.building)):
+			return false
 	if town >= 0 and sim.water != null and sim.water.breaks.has(str(town)):
 		return false
 	if town >= 0 and sim.water != null and float(sim.water.last.get(str(town), {}).get("fehl", 0.0)) > 0.01:

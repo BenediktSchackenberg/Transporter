@@ -314,7 +314,7 @@ func _footprint_in(r: Rect2i, size: Vector2i) -> Rect2i:
 			for y in range(cand.position.y, cand.end.y):
 				for x in range(cand.position.x, cand.end.x):
 					var q := Vector2i(x, y)
-					if c.building_at[c.idx(q)] != -1 or c.g(q) in [CityData.G.ROAD, CityData.G.WATER, CityData.G.RAIL]:
+					if c.building_at[c.idx(q)] != -1 or c.g(q) in [CityData.G.ROAD, CityData.G.WATER, CityData.G.RAIL, CityData.G.RUNWAY] or (sim.access != null and sim.access.reserved(q)):
 						free = false
 			if not free:
 				continue

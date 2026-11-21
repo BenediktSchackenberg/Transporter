@@ -63,7 +63,7 @@ const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.0
 const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
 const GRUNDZIEL_FIRMA := "Baue ein dauerhaft erfolgreiches Transportunternehmen auf: Fahrer einstellen, reale Auftraege abholen und zustellen, Gewinne in Fuhrpark, Betriebshof und Buero investieren und weitere Staedte bedienen."
 # Benedikt 18.11.: "Ziel pro KI ist, dass die Stadt waechst, mehr Einwohner kommen, die Wirtschaft in Schwung kommt"
-const GRUNDZIEL_WILDNIS := "Du bestimmst, was aus deiner Firma und deiner Umgebung wird. Erkunde die Welt, setze eigene Ziele und entscheide über Handel, Transport, Siedlung, Stadtbild, Zusammenarbeit oder Schutz. Bewohner brauchen Wohnungen und Arbeit; Bauprojekte brauchen Geld, Material und Zeit. Beobachte die Folgen und ändere deine Strategie, wenn sie nicht funktioniert."
+const GRUNDZIEL_WILDNIS := "Entwickle aus deiner selbst gewählten Siedlung eine bewohnte, wirtschaftende Stadt. Entscheide frei über Standort, Baustil, Reihenfolge, Handel, Transport und Zusammenarbeit. Prüfe nach jedem Bau, ob Wohnungen tatsächlich bewohnbar sind und Menschen zuziehen; beseitige Hindernisse, bevor du weitere Vorhaben beginnst. Gewinne aus Transport und Gewerbe finanzieren dein Wachstum."
 const GRUNDZIEL_AMT := "Entwickle deine Stadt dauerhaft nach eigener Idee: zusammenhängende Straßen, Wohnraum, Arbeit, Versorgung und schöne öffentliche Orte. Wähle neue Stadtteile selbst, erschließe sie, prüfe das Ergebnis und verbessere weiter. Dein Zuhause ist dein Rathaus."
 const TOWN_START_CAPITAL := 5000000.0   # Benedikt 15.11.: jede Stadt startet mit 5.000.000 EUR (Einlage von aussen X0 -> Stadtkasse)
 var towns_funded := {}              # "k" -> true
@@ -845,6 +845,72 @@ func _founding_goal_sync(b: Dictionary) -> void:
 const HOME_AKKU := 30.0   # darunter (oder nass/kalt) steht der Heimweg an erster Stelle (Partie 16.11.: Viktor arbeitete mit 14 % Akku, nass und kalt weiter)
 
 
+## Messbarer Stadtzustand fuer Unternehmer und Buergermeister. Der Agent waehlt
+## Standort, Gebaeude und Reihenfolge selbst; nur die tatsaechlichen Engpaesse
+## kommen aus der Simulation statt aus einer festen Baufolge.
+func city_growth_status(town: int) -> Dictionary:
+	if town < 0 or town >= sim.towns.count():
+		return {}
+	var founded: bool = settle.founded(town)
+	var ready: bool = sim.town_ready(town)
+	var population: int = sim.citizens.population_of(town)
+	var waiting: int = sim.towns.mayor(town).waiting if ready else 0
+	var units := 0
+	var habitable := 0
+	var missing := {}
+	for unit in sim.housing.units.values():
+		if sim.towns.of_building(int(unit.building)) != town:
+			continue
+		units += 1
+		if sim.housing.habitable(unit):
+			habitable += 1
+		else:
+			var parcel: Dictionary = sim.parcels.of_building(int(unit.building))
+			var service: Dictionary = parcel.get("erschliessung", {})
+			for part in ["strasse", "strom", "wasser", "abwasser"]:
+				if not bool(service.get(part, false)):
+					missing[part] = true
+			if not sim.grid.net.connected(town):
+				missing["kraftwerksstrom"] = true
+			if not sim.water.building_on_net(town, int(unit.building)):
+				missing["frischwassernetz"] = true
+			if not sim.water.building_on_sewer(town, int(unit.building)):
+				missing["kanalnetz"] = true
+	var building_projects: Array = []
+	for project in sim.construction.projects.values():
+		if str(project.status) in Construction.ACTIVE_STATES and sim.towns.of_parcel(str(project.parcel)) == town:
+			building_projects.append(str(project.id) + " (" + str(project.status) + ")")
+	var stage := "wachstum"
+	var hint := ""
+	if not founded:
+		stage = "standortwahl"
+		hint = "Wähle selbst einen geeigneten Platz und gründe deine Siedlung. Ohne Siedlung gibt es keinen Stadtbau."
+	elif not ready:
+		stage = "buergeramt"
+		hint = "Die Siedlung braucht ein fertiges Bürgeramt, bevor Bürgermeister, Versorgung und Zuzug starten. Prüfe vorhandene Baustellen und ihre Hindernisse."
+	elif habitable == 0:
+		stage = "wohnraum"
+		if units > 0:
+			hint = "Es gibt %d Wohneinheiten, aber keine ist bewohnbar. Fehlende Anschlüsse: %s. Ein weiteres unversorgtes Haus bringt keinen Zuzug." % [units, ", ".join(missing.keys()) if not missing.is_empty() else "Wasserstörung"]
+			if missing.has("kraftwerksstrom"):
+				hint += " Die Stadtverwaltung muss eine geprüfte Stromtrasse vom Kraftwerk wählen und bauen lassen."
+			if missing.has("frischwassernetz") or missing.has("kanalnetz"):
+				hint += " Frischwasser- und Kanalnetz müssen die Wohnhäuser tatsächlich erreichen."
+		elif not building_projects.is_empty():
+			hint = "Noch keine bewohnbare Wohnung. Laufende Bauvorhaben: %s. Prüfe Baufortschritt, Anschlüsse und Blockaden bis zur Übergabe; plane parallel passende Arbeitsplätze." % ", ".join(building_projects.slice(0, 3))
+		else:
+			hint = "Noch keine bewohnbare Wohnung und kein laufendes Bauvorhaben. Wähle selbst ein geeignetes Grundstück und einen Wohnentwurf; sichere Straße, Strom, Frischwasser und Abwasser."
+	elif population == 0:
+		stage = "zuzug"
+		hint = "%d bewohnbare Wohnungen sind frei, aber noch niemand ist zugezogen. Prüfe Zuzug, Arbeitsplätze und Versorgungsqualität, bevor du viele neue Viertel planst." % habitable
+	elif population < 12 or waiting > 0:
+		stage = "ausbau"
+		hint = "%d Einwohner, %d bewohnbare Wohnungen, %d wartende Haushalte. Vergleiche Wohnungsbedarf, Gewerbe, Anschlüsse und laufende Projekte; wähle den nächsten Ausbau selbst." % [population, habitable, waiting]
+	return {"stufe": stage, "stadt": sim.towns.name_of(town), "gegruendet": founded, "buergeramt": ready,
+		"einwohner": population, "wohnungen": units, "bewohnbar": habitable, "wohnungssuchende": waiting,
+		"fehlende_anschluesse": missing.keys(), "bauvorhaben": building_projects, "hinweis": hint}
+
+
 func urgency(b: Dictionary) -> Dictionary:
 	var cid := active_firm(b)
 	if cid < 0:
@@ -853,7 +919,7 @@ func urgency(b: Dictionary) -> Dictionary:
 	var home_k: int = sim.company(cid).home_town
 	if sim.wildnis and home_k >= 0 and settle.founded(home_k) and not sim.town_ready(home_k) 			and not homes.sites.values().any(func(st): return int(st.cid) == cid and str(st.typ) == "buergeramt"):
 		# 19.11.: qwen3.5:9b lief drei Spieltage herum statt das Buergeramt anzulegen – ohne es waechst nichts
-		return {"prioritaet": 1, "grund": "Deine Siedlung hat noch kein Bürgeramt. Ohne Bürgeramt gibt es keinen regulären Zuzug; du entscheidest, wann du es baust."}
+		return {"prioritaet": 2, "grund": "Deine Siedlung hat noch kein Bürgeramt. Ohne Bürgeramt gibt es keinen regulären Zuzug; wähle selbst einen passenden Bauplatz und beginne den Bau."}
 	if sim.wildnis and home_k >= 0 and not sim.town_ready(home_k):
 		for st in homes.sites.values():   # 19.11.: Buergeramt wartete 20 Minuten auf Material, keiner kaufte
 			if int(st.cid) == cid and str(st.typ) == "buergeramt" and str(st.status) == "material":
@@ -915,6 +981,7 @@ func next_steps(b: Dictionary) -> Array:
 	var plan_step := ""
 	var home_step := ""   # 19.11.: Hausbau (Wildnis-Wachstum) wurde von Auftrag/Plan/Kontakt aus den ersten drei verdraengt
 	var civic_step := ""
+	var growth_step := ""
 	var crisis := urgency(b)
 	if int(crisis.prioritaet) >= 2:
 		urgent_step = str(crisis.grund) + " – jetzt Lage und passende Firmenaktion prüfen."
@@ -931,6 +998,18 @@ func next_steps(b: Dictionary) -> Array:
 				out.append("Nach Hause (%s):%s Für weite Wege: Fahrt." % [why, hint])
 				urgent_step = str(out.back())
 	var cid := active_firm(b)
+	var growth_town: int = int(b.get("amt", -1)) if int(b.get("amt", -1)) >= 0 else (sim.company(cid).home_town if cid >= 0 else -1)
+	if sim.wildnis and growth_town >= 0:
+		var growth: Dictionary = city_growth_status(growth_town)
+		if str(growth.get("stufe", "")) in ["standortwahl", "buergeramt", "wohnraum", "zuzug", "ausbau"]:
+			growth_step = "Stadtwachstum %s: %s" % [str(growth.get("stadt", "")), str(growth.get("hinweis", ""))]
+			var gaps: Array = growth.get("fehlende_anschluesse", [])
+			if int(b.get("amt", -1)) >= 0 and "kraftwerksstrom" in gaps:
+				growth_step += " Wähle eine Option aus mein_amt.stromtrassen und beauftrage stromtrasse_bauen {option, reason}."
+			if int(b.get("amt", -1)) >= 0 and ("frischwassernetz" in gaps or "kanalnetz" in gaps):
+				growth_step += " Prüfe mein_amt.versorgungsleitungen und beauftrage passende Varianten mit versorgungsleitung_bauen {option, reason}."
+			elif cid >= 0 and ("kraftwerksstrom" in gaps or "frischwassernetz" in gaps or "kanalnetz" in gaps):
+				growth_step += " Sprich mit dem Bürgermeister über die fehlenden Netze; du kannst parallel erschlossene Bauplätze und Betriebe planen."
 	if int(b.get("amt", -1)) >= 0:
 		var depot: CityDepot = sim.towns.depot(int(b.amt))
 		if depot.backlog_units() > maxi(100, depot.dock_capacity() * 2) and depot.roster().size() < 3:
@@ -1025,7 +1104,7 @@ func next_steps(b: Dictionary) -> Array:
 	# Je ein akuter Bedarf, Firmenfortschritt und offene Antwort bleiben im knappen Kontext sichtbar.
 	# Weitere Hinweise behalten ihre alte Reihenfolge; aktive Ziele sind in der Beobachtung zusaetzlich separat enthalten.
 	var prioritized: Array = []
-	for s in [urgent_step, firm_step, home_step, civic_step, pending_step, plan_step, hint, goal_step]:
+	for s in [urgent_step, growth_step, home_step, civic_step, firm_step, pending_step, plan_step, hint, goal_step]:
 		if s != "" and s not in prioritized:
 			prioritized.append(s)
 	for s in out:
@@ -1836,6 +1915,7 @@ func observe(name: String) -> Dictionary:
 			"traegt": b.held, "tragkraft": CARRY, "am_bauhof": _at_source(b), "nachrichten": int(b.get("inbox", 0))},
 		"naechste_schritte": next_steps(b),
 		"dringlichkeit": urgency(b),
+		"stadtwachstum": city_growth_status(int(b.get("amt", -1)) if int(b.get("amt", -1)) >= 0 else (sim.company(active_firm(b)).home_town if active_firm(b) >= 0 else -1)) if sim.wildnis else {},
 		"zeit": Catalog.game_minutes_to_text(sim.game_min), "wetter": sim.wx.headline(),
 		"karte": {"mitte": [t.x, t.y], "radius": VIEW_RADIUS, "zeilen": rows,
 			"legende": "@ du, . freier Boden, = Strasse, # Gebaeude, ~ Wasser, h begehbarer Hang/Hochebene am Berg, ^ unbegehbar (Baum, Fels, Grat), 1-9/+ hoechste Blockschicht auf dem Feld"},

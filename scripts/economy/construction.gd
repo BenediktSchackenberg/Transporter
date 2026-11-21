@@ -183,8 +183,11 @@ func _company_credit(client: String, shortfall: float) -> bool:
 
 
 ## Bauvorhaben aus einer genehmigten Genehmigung anlegen und Angebote einholen.
-func _region_days(days: int) -> int:
-	return maxi(1, int(ceil(float(days) * REGION_BUILD_FACTOR))) if sim.towns.is_region() and days > 0 else days
+func _region_days(days: int, town: int) -> int:
+	if not sim.towns.is_region() or days <= 0:
+		return days
+	var founding: bool = sim.wildnis and sim.town_ready(town) and sim.citizens.population_of(town) < 12
+	return maxi(1, int(ceil(float(days) * (FOUNDING_BUILD_FACTOR if founding else REGION_BUILD_FACTOR))))
 
 
 func start_project(app_id: String) -> Dictionary:
@@ -199,7 +202,7 @@ func start_project(app_id: String) -> Dictionary:
 	var costs: Dictionary = res.costs
 	var base := float(costs.bau)
 	var pr := {"id": "BP%d" % _next, "client": a.applicant, "parcel": a.parcel, "app": a.id, "def": a.def, "design": str(a.get("design", "")), "floors": int(a.floors), "status": "angebote",
-		"base": base, "build_days": _region_days(int(res.days.bau)), "dev_days": _region_days(int(res.days.erschliessung)), "missing": res.missing.duplicate(), "dev_cost": float(costs.erschliessung),
+		"base": base, "build_days": _region_days(int(res.days.bau), sim.towns.of_parcel(str(a.parcel))), "dev_days": _region_days(int(res.days.erschliessung), sim.towns.of_parcel(str(a.parcel))), "missing": res.missing.duplicate(), "dev_cost": float(costs.erschliessung),
 		"levy": float(costs.erschliessungsbeitrag), "offers": [], "builder": "", "price": 0.0, "reserved": 0.0, "paid": 0.0, "temp_access": false,
 		"phase": 0, "progress": 0.0, "mats": {}, "blockers": [], "defects": 0, "units": [], "history": [], "lost_days": {}, "start": -1, "end_planned": -1, "end": -1,
 		"dev_progress": 0.0, "paid_phases": 0}
@@ -461,9 +464,10 @@ func on_day(day: int) -> void:
 				_day_inspection(pr, day)
 	# Material, das kein Transportunternehmen bringt, holt der Bautrupp selbst (BuildCrews)
 	_public_day(day)
-	if sim.towns.is_region() and day % DEV_TICK_DAYS == 0:
+	if sim.towns.is_region():
 		for k in sim.towns.count():
-			_developer_town(k)
+			if day % DEV_TICK_DAYS == 0 or (sim.wildnis and sim.town_ready(k) and sim.citizens.population_of(k) < 12):
+				_developer_town(k)
 	_works_day(day)
 	_jobs_day(day)
 	_household_day()
@@ -477,15 +481,19 @@ func _day_site(pr: Dictionary, day: int) -> void:
 		pr.blockers.append(_crew_blocker(pr))
 		return
 	if not pr.temp_access:
-		if float(sim.economy.accounts.K0) >= 0.0 and _pay(pr, Planning.TEMP_ACCESS_COST, "Baustellenzufahrt"):
-			pr.temp_access = true
+		if float(sim.economy.accounts.K0) < 0.0 or not _pay(pr, Planning.TEMP_ACCESS_COST, "Baustellenzufahrt"):
+			pr.blockers.append("Baustellenzufahrt nicht bezahlt.")
+			return
+		pr.temp_access = true
 	if pr.status == "erschliessung":
 		pr.dev_progress += 1.0
 		if pr.dev_progress >= float(pr.dev_days):
+			if not _pay(pr, float(pr.dev_cost), "Erschließung"):
+				pr.blockers.append("Erschließung nicht bezahlt.")
+				return
 			var parcel: Dictionary = sim.parcels.parcel(pr.parcel)
 			for part in pr.missing:
 				parcel.erschliessung[part] = true
-			_pay(pr, float(pr.dev_cost), "Erschließung")
 			sim.parcels.touch(pr.parcel)
 			pr.status = "im_bau"
 			pr.missing = []
@@ -599,27 +607,29 @@ func _day_inspection(pr: Dictionary, day: int) -> void:
 
 
 func _hand_over(pr: Dictionary, day: int) -> void:
-	var rest := maxf(0.0, float(pr.price) - float(pr.get("paid_price", 0.0)))   # Schlusszahlung = Restforderung (kein Rundungsrest)
+	# Aeltere laufende Vorhaben enthalten bereits bezahlte Abschlaege in `paid`,
+	# aber nicht immer in `paid_price`. Die Erschliessung und die provisorische
+	# Zufahrt gehoeren nicht zum Baupreis und werden deshalb abgezogen.
+	var infrastructure_paid := (Planning.TEMP_ACCESS_COST if bool(pr.get("temp_access", false)) else 0.0) + float(pr.get("dev_cost", 0.0))
+	var contract_paid: float = clampf(maxf(float(pr.get("paid_price", 0.0)), float(pr.get("paid", 0.0)) - infrastructure_paid), 0.0, float(pr.price))
+	pr.paid_price = contract_paid
+	var rest := maxf(0.0, float(pr.price) - contract_paid)
+	if float(pr.reserved) + 0.5 < rest and available_funds(str(pr.client)) + 0.5 >= rest - float(pr.reserved):
+		var extra := rest - float(pr.reserved)
+		_reserve(str(pr.client), extra)
+		pr.reserved = float(pr.reserved) + extra
 	if not _pay(pr, rest, "Schlusszahlung"):
 		pr.blockers = ["Schlusszahlung nicht möglich."]
 		return
+	pr.paid_price = float(pr.price)
 	var parcel: Dictionary = sim.parcels.parcel(pr.parcel)
 	var d: Dictionary = Planning.DEFS[pr.def]
 	var design: Dictionary = BuildingDesigns.design(str(pr.get("design", "")))
 	var label := str(design.get("label", d.label))
-	var w := int(d.w)
-	var h := int(d.h)
-	if w > int(parcel.rect[2]) or h > int(parcel.rect[3]):
-		var t := w
-		w = h
-		h = t
-	var r := Rect2i(int(parcel.rect[0]) + (int(parcel.rect[2]) - w) / 2, int(parcel.rect[1]) + (int(parcel.rect[3]) - h) / 2, w, h)
-	var b: Dictionary = sim.events._add_building(str(d.sprite), r, "%s (%s)" % [label, pr.id], {}, str(design.get("sprite", "")))
+	var lot := Rect2i(int(parcel.rect[0]), int(parcel.rect[1]), int(parcel.rect[2]), int(parcel.rect[3]))
+	var b: Dictionary = sim.events._add_building(str(d.sprite), lot, "%s (%s)" % [label, pr.id], {}, str(design.get("sprite", "")))
 	if b.is_empty():
-		var shifted := Rect2i(int(parcel.rect[0]), int(parcel.rect[1]), w, h)
-		b = sim.events._add_building(str(d.sprite), shifted, "%s (%s)" % [label, pr.id], {}, str(design.get("sprite", "")))
-	if b.is_empty():
-		pr.blockers = ["Gebäude kann nicht übergeben werden (kein Straßenzugang an der Parzelle)."]
+		pr.blockers = ["Gebäude kann nicht übergeben werden (kein freier Bauplatz auf der Parzelle)."]
 		return
 	if str(pr.client).begins_with("C"):
 		b["owner"] = str(pr.client)
@@ -789,6 +799,7 @@ func _developer_month() -> void:
 const DEV_TICK_DAYS := 2
 const DEV_STEPS := 3                  # so viele Schritte (Antrag stellen / Bau beginnen) je Stadt und Pruefung
 const REGION_BUILD_FACTOR := 0.5      # Region: Bauzeit und Erschliessungszeit je Vorhaben halbiert (sichtbares Wachstum)
+const FOUNDING_BUILD_FACTOR := 0.35   # erste bewohnbare Haeuser schneller, danach normales Bautempo
 const RESALE_MARGIN := 1.10           # Region: Anleger kaufen fertige Bautraeger-Haeuser (Preis + 10 %), D0 baut damit weiter
 const REGION_MATERIAL_FACTOR := 0.4   # Region: Hausbau braucht weniger Material je Phase (kleinere Lieferungen, Bauhof reicht laenger)
 const ADVANCE_SHARE := 0.5            # Region: davon zahlen sie die Haelfte schon bei Vertragsschluss an
@@ -1120,6 +1131,7 @@ func _public_day(day: int) -> void:
 		if sim.wildnis and int(e.days_left) > 2:
 			var M: Mayor = sim.towns.mayor_of_project(str(e.project))
 			var connector: Dictionary = M.projects.get(str(e.project), {}) if M != null else {}
+			var town: int = Towns.town_of_id(str(e.project))
 			if str(connector.get("ref", "")) == "anschluss":
 				e.days_left = 2
 				e.days = 2
@@ -1131,6 +1143,9 @@ func _public_day(day: int) -> void:
 			elif str(connector.get("kind", "")) == "erschliessung" and int(e.days_left) > 4:
 				e.days_left = 4
 				e.days = maxi(4, int(e.days) - (int(e.days_left) - 4))
+			elif str(connector.get("kind", "")) in ["wasserausbau", "trasse"] and sim.town_ready(town) and sim.citizens.population_of(town) < 12 and int(e.days_left) > 6:
+				e.days_left = 6
+				e.days = mini(int(e.days), 6)
 		if builders[e.builder].status != "aktiv":
 			continue
 		var depot: CityDepot = sim.towns.depot(Towns.town_of_id(str(e.project)))
@@ -1399,6 +1414,10 @@ func add_company_works(cid: int, biz: Dictionary, building: int, kind: String, p
 	w.builder_name = str(o.name)
 	w.days = int(o.days)
 	w.days_left = int(o.days)
+	var town: int = sim.towns.of_building(building)
+	if sim.wildnis and kind == "betrieb" and sim.town_ready(town) and sim.citizens.population_of(town) < 12:
+		w.days = maxi(3, int(ceil(float(w.days) * 0.5)))
+		w.days_left = int(w.days)
 	w.start = int(o.start)
 	works[w.id] = w
 	sim.activity.add("unternehmen", cid, "bau", "Bauauftrag %s: %s" % [w.id, sim.biz.get_b(biz.id).name], "an %s" % w.builder_name, sim.city.building(building).road)
