@@ -3325,7 +3325,15 @@ func _office_action(b: Dictionary, data: Dictionary) -> Dictionary:
 		if not sim.services.utility_sites(k).any(func(site): return str(site.typ) == code and str(site.grundstueck) == wanted):
 			return {"ok": false, "msg": "Grundstück %s ist für %s nicht mehr gültig. Wähle selbst einen aktuellen Standort aus versorgungsanlagen_standorte." % [wanted, code]}
 	# Wiederholungsbremse (Partie 18.11.: Polizeiwache dreimal in zwei Minuten, jedes Mal "kein Grundstueck mit Strasse")
-	var key := "%s|%s" % [a.action, str(a.get("typ", a.get("viertel", a.get("parcel_ids", ""))))]
+	# Dieselbe Aktion mit einer anderen Bestell-ID, Trassenoption oder einem anderen Standort
+	# ist ein neuer Versuch. Nur die Begruendung darf die Sperre nicht umgehen.
+	var fields: Array = a.keys()
+	fields.sort()
+	var key_parts: Array = []
+	for field in fields:
+		if str(field) not in ["reason", "warum"]:
+			key_parts.append("%s=%s" % [str(field), JSON.stringify(a[field])])
+	var key: String = "|".join(key_parts)
 	var day := GameCalendar.day_of(sim.game_min)
 	var fails: Dictionary = b.get("amt_fehl", {})
 	var fe: Array = fails.get(key, [-1, 0])
