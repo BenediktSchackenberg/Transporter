@@ -228,6 +228,8 @@ COMPANY_TOOLS = [
         "cargo": {"type": "array", "items": {"type": "string"}}, "reserve": {"type": "number"}}}},
     {"name": "accept_contract", "description": "Bekannten Transportauftrag mit eigenem LKW annehmen.", "parameters": {"type": "object", "properties": {
         "contract_id": {"type": "string"}, "vehicle_id": {"type": "integer"}}, "required": ["contract_id", "vehicle_id"]}},
+    {"name": "contract_choice", "description": "Waehle einen aktuell machbaren Auftrag aus meine_firma.transportchancen per Nummer 0 bis 3. Auftrag und eigenes Fahrzeug werden unmittelbar vor der Annahme frisch aus der Welt gelesen; keine Auftrags-ID erfinden.",
+     "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 3}}, "required": ["candidate"]}},
     {"name": "buy_vehicle", "description": "LKW aus meine_firma.fahrzeugangebote kaufen.", "parameters": {"type": "object", "properties": {
         "offer_id": {"type": "string"}}, "required": ["offer_id"]}},
     {"name": "hire_worker", "description": "Bewerber aus meine_firma.bewerber einstellen.", "parameters": {"type": "object", "properties": {
@@ -552,7 +554,7 @@ class Agent:
                          "pruefe dringende Lieferungen und Liquiditaet. Ein freier Lkw und ein bezahlter machbarer Kundenauftrag "
                          "sollen eine echte Lieferung ergeben: nimm den Auftrag selbst an oder aktiviere die Regel-Disposition. "
                          "Vermeide wiederholte Beobachtungen ohne Entscheidung.")
-            lines.append("Nutze die direkten Werkzeuge company_plan, review_company_plan, dispatch_policy, accept_contract, buy_vehicle, "
+            lines.append("Nutze die direkten Werkzeuge company_plan, review_company_plan, dispatch_policy, contract_choice, buy_vehicle, "
                          "hire_worker, found_business, assign_business_staff, repair_vehicle und city_strategy. Krieg ist optional: Frieden, Handel und Kooperation koennen dauerhaft bestehen. "
                          "Bei Bedrohung mobilize_worker nutzen; bewaffnete Angriffe brauchen eine eigene Waffenschmiede, fertige Waffen und order_assault. "
                          "Die Firmenbeobachtung zeigt transportchancen mit geschaetztem Deckungsbeitrag, "
@@ -627,6 +629,23 @@ class Agent:
                         self._founding_target = None
                     elif at_site and result.get("ok"):
                         self._founding_target = None
+                return result
+            if name == "contract_choice":
+                o = self.world.observe()
+                firm = o.get("meine_firma") or {} if isinstance(o, dict) else {}
+                choices = firm.get("transportchancen") or [] if isinstance(firm, dict) else []
+                index = int(a.get("candidate", -1))
+                if self._opening_foundation or self._opening_hall or self._opening_home:
+                    return {"ok": False, "msg": "Zuerst Stadt und erstes Wohnhaus fertigstellen."}
+                if index < 0 or index >= len(choices) or not isinstance(choices[index], dict):
+                    return {"ok": False, "msg": "Diese Transportchance ist nicht mehr aktuell. Beobachte erneut und waehle eine Nummer aus transportchancen."}
+                choice = choices[index]
+                kid, vid = choice.get("contract_id"), choice.get("vehicle_id")
+                if not isinstance(kid, str) or not isinstance(vid, int):
+                    return {"ok": False, "msg": "Transportchance ohne gueltigen Auftrag oder LKW; beobachte erneut."}
+                result = self.call_tool("act", {"type": "Firma", "data": {"aktion": {"action": "accept_contract", "contract_id": kid, "vehicle_id": vid}}})
+                if isinstance(result, dict):
+                    result["gewaehlt"] = {"contract_id": kid, "vehicle_id": vid, "deckungsbeitrag_geschaetzt": choice.get("deckungsbeitrag_geschaetzt")}
                 return result
             if name == "mayor_action":
                 if getattr(self.args, "rolle", "") != "buergermeister":

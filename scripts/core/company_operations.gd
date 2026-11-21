@@ -221,12 +221,43 @@ func _auto_dispatch(cid: int) -> void:
 		var v: FleetVehicle = sim.vehicles.get(int(item.vehicle_id))
 		if k == null or v == null or str(k.order_ref) != "" or str(k.internal) != "" or not _free(v) or line_of(v.id) != "":
 			continue
-		if sim.wildnis and sim.eko != null and sim.driver_of(v) != null and sim.driver_of(v).role == "owner":
-			continue   # Der KI-Inhaber entscheidet selbst, wann er sein eigenes Fahrzeug fuer Fracht nutzt.
+		if sim.wildnis and sim.eko != null and sim.driver_of(v) != null and sim.driver_of(v).role == "owner" and not _owner_ready_for_dispatch(cid, v):
+			continue
 		var accepted: Dictionary = sim.executor._accept_contract(cid, k.id, v.id)
 		if accepted.ok and k.status in ["assigned", "in_transit"]:
 			say(cid, "Disposition", "Nach deinen Vorgaben: %s mit #%d angenommen (%s geschätzter Deckungsbeitrag)." % [k.id, v.id, Catalog.money(float(item.deckungsbeitrag_geschaetzt))], k.id)
 		return
+
+
+## Der Gruender-LKW bleibt bis zum ersten fertigen Wohnhaus frei. Danach darf die
+## Disposition ihn nur nach einer ausdruecklich gesetzten KI-Vorgabe nutzen.
+## Der Inhaber geht zuerst sichtbar zum geparkten LKW; erst dort wird Fracht
+## angenommen, damit _body_tick ihn nicht quer ueber die Karte teleportiert.
+func _owner_ready_for_dispatch(cid: int, v: FleetVehicle) -> bool:
+	if not dispatch_policies.has(cid) or not bool(dispatch_policy(cid).auto_accept):
+		return false
+	var town: int = sim.company(cid).home_town
+	if not sim.town_ready(town) or not sim.housing.units.values().any(func(u): return sim.towns.of_building(int(u.building)) == town):
+		return false
+	var name: String = sim.eko.firm_being(cid)
+	var b: Dictionary = sim.eko.beings.get(name, {})
+	if b.is_empty() or b.has("im_lkw") or b.has("baut") or b.has("lkw_auftrag"):
+		return false
+	var mover: Mover = b.mover
+	if not mover.arrived():
+		return false
+	var here: Vector2i = sim.eko.tile_of(b)
+	var truck: Vector2i = v.tile()
+	if not sim._walk_free(here):
+		return false   # Die Figurenroutine fuehrt das Wesen zuerst sichtbar aus dem Gebaeude.
+	if maxi(absi(here.x - truck.x), absi(here.y - truck.y)) <= 3:
+		return true
+	var route: Array[Vector2i] = sim.nav.walk_path(here, truck)
+	if route.is_empty() or maxi(absi(route[-1].x - truck.x), absi(route[-1].y - truck.y)) > 3:
+		return false
+	mover.set_path(route)
+	sim.eko._event(b, "Deine Disposition ruft dich zum LKW #%d fuer einen passenden Kundenauftrag." % v.id)
+	return false
 
 
 func _free(v: FleetVehicle) -> bool:

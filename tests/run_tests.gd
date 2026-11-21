@@ -9002,6 +9002,42 @@ func test_wildnis_found() -> void:
 	ok(s.company(cid).known.has(wildnis_offer.id), "lokale Firma erhaelt Kundenanfrage aus der eigenen Nachbarschaft ohne Jobboersenfahrt")
 	var loaded_city := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(market_sources > 0 and loaded_city.market.source_total == market_sources, "beim Laden werden neue Stadtgebäude wieder Absender bezahlter Fracht")
+	# Gruender-LKW: erst Stadt und erstes Wohnhaus, dann nach KI-Entscheidung fuer die Disposition.
+	var work_v: FleetVehicle = loaded_city.eko.own_truck(cid)
+	var work_b: Dictionary = loaded_city.eko.beings[loaded_city.eko.firm_being(cid)]
+	var work_offer: Contract = loaded_city.contracts[wildnis_offer.id]
+	work_v.state = "idle"
+	work_v.set_path([] as Array[Vector2i])
+	var shed: Dictionary = loaded_city.city.building(int(city_depot.id))
+	var trapped := Vector2i(-1, -1)
+	for yy in range(int(shed.y), int(shed.y) + int(shed.h)):
+		for xx in range(int(shed.x), int(shed.x) + int(shed.w)):
+			if not loaded_city._walk_free(Vector2i(xx, yy)):
+				trapped = Vector2i(xx, yy)
+				break
+		if trapped.x >= 0:
+			break
+	if trapped.x >= 0:
+		work_b.mover.pos = loaded_city.city.tile_center(trapped)
+		(work_b.mover as Mover).set_path([] as Array[Vector2i])
+		loaded_city.eko._body_tick()
+		ok((work_b.mover as Mover).path.size() == 2 and loaded_city._walk_free((work_b.mover as Mover).goal), "nach dem Bau tritt eine eingeschlossene Figur sichtbar aus dem Stadtlager")
+		(work_b.mover as Mover).advance(5.0, 1.0)
+		ok(loaded_city._walk_free(loaded_city.eko.tile_of(work_b)), "Figur steht nach dem Hinausgehen wieder auf einem freien Feld")
+	work_b.mover.pos = work_v.pos
+	(work_b.mover as Mover).set_path([] as Array[Vector2i])
+	work_offer.reward = maxf(work_offer.reward, 2000.0)
+	work_offer.offer_until = loaded_city.game_min + 1000.0
+	work_offer.deadline = loaded_city.game_min + 5000.0
+	loaded_city.operations.run(cid, "set_dispatch_policy", {"auto_accept": true, "min_margin": 0, "max_distance": 0, "reserve": 0})
+	loaded_city.operations._auto_dispatch(cid)
+	ok(work_offer.status == "open" and work_v.stops.is_empty(), "Gruender-LKW faehrt vor dem ersten fertigen Wohnhaus keine Kundenfracht")
+	loaded_city.housing.register_unit(int(loaded_city.city.towns[k].town_hall), 65.0, Housing.LANDLORD)
+	loaded_city.operations.dispatch_policies.erase(cid)
+	ok(loaded_city.eko.next_steps(work_b).any(func(step): return str(step).contains("set_dispatch_policy")), "nach erstem Wohnhaus sieht die KI die Entscheidung fuer den Gruender-LKW")
+	loaded_city.operations.run(cid, "set_dispatch_policy", {"auto_accept": true, "min_margin": 0, "max_distance": 0, "reserve": 0})
+	loaded_city.operations._auto_dispatch(cid)
+	ok(work_offer.status == "assigned" and work_v.stops.size() >= 2, "KI-Disposition teilt nach dem ersten Wohnhaus dem Inhaber einen echten Auftrag zu")
 	var goal_project := "P9876"
 	s.towns.mayor(k).projects[goal_project] = {"id": goal_project, "status": "beauftragt", "kind": "erschliessung"}
 	s.construction.public[goal_project] = {"project": goal_project, "days": 4, "days_left": 2, "status": "laufend"}

@@ -959,7 +959,8 @@ func next_steps(b: Dictionary) -> Array:
 					o.id, sim.company(int(o.from)).player_name, sim.social.describe(o).left(100), o.id])
 				pending_step = str(out.back())
 				break
-	var wild_build: bool = sim.wildnis and cid >= 0 and sim.personnel.employed(cid).all(func(x): return x.role == "owner")
+	var wild_build: bool = sim.wildnis and cid >= 0 and sim.personnel.employed(cid).all(func(x): return x.role == "owner") \
+		and not sim.housing.units.values().any(func(u): return sim.towns.of_building(int(u.building)) == sim.company(cid).home_town)
 	if wild_build:
 		# Wildnis, noch ohne Angestellte (17.11.: Greta und Viktor sammelten Transportauftraege statt zu gruenden): erst gruenden, dann bauen
 		var st0 := settle.next_step(b, cid)
@@ -1254,6 +1255,17 @@ func _body_tick() -> void:
 			(b.mover as Mover).pos = v.pos
 			_event(b, "Du steigst in deinen LKW und fährst selbst.")
 			continue
+		# Ein nachtraeglich errichteter Bauhof kann die stehende Figur umschliessen.
+		# Sie tritt ueber den kurzen Innenweg wieder hinaus, bevor eine neue Route geplant wird.
+		var mover: Mover = b.mover
+		if mover.arrived() and not sim._walk_free(tile_of(b)) and not b.has("baut"):
+			var here: Vector2i = tile_of(b)
+			var door: Vector2i = sim._free_near(here, 3)
+			if door.x >= 0:
+				var exit_path: Array[Vector2i] = [here, door]
+				mover.set_path(exit_path)
+				_event(b, "Du verlaesst das Gebaeude und gehst wieder nach draussen.")
+				continue
 		if b.has("lkw_auftrag") and (b.mover as Mover).arrived() and v != null:
 			var r := _truck(b, b.lkw_auftrag)
 			if not bool(r.get("ok", false)):
@@ -1353,6 +1365,8 @@ func _fleet_step(cid: int, takt_min := 0.0) -> String:
 	for v in sim.company_vehicles(cid):
 		if v.state != "idle" or not v.queue.is_empty() or str(v.contract_id) != "":
 			continue
+		if sim.wildnis and sim.driver_of(v) != null and sim.driver_of(v).role == "owner" and not sim.operations.dispatch_policies.has(cid):
+			return "Dein Gruender-LKW #%d ist frei. Nach dem ersten Wohnhaus kannst du entscheiden, ob er Kundenfracht fahren soll: Firma {aktion: {action: \"set_dispatch_policy\", auto_accept: true, min_margin: 50, max_distance: 120, reserve: 5000}}. Die Disposition holt dich dann sichtbar zum LKW und nimmt nur passende, bekannte Auftraege an." % v.id
 		var best = null
 		var best_s := -1.0
 		for k in sim.market.open_contracts():

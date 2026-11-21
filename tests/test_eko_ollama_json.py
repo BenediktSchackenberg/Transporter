@@ -27,10 +27,29 @@ class Response:
 
 
 class JsonToolFallbackTest(unittest.TestCase):
+    def test_contract_choice_uses_fresh_visible_ids(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="unternehmer")
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = False
+        agent._passive_streak = 0
+        sent = []
+        agent.world = SimpleNamespace(
+            observe=lambda: {"meine_firma": {"transportchancen": [{"contract_id": "A581", "vehicle_id": 2,
+                                                                    "deckungsbeitrag_geschaetzt": 927}]}},
+            act=lambda typ, data: sent.append((typ, data)) or {"ok": True, "msg": "angenommen"})
+        result = agent.call_tool("contract_choice", {"candidate": 0})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["gewaehlt"]["contract_id"], "A581")
+        self.assertEqual(sent, [("Firma", {"aktion": {"action": "accept_contract", "contract_id": "A581", "vehicle_id": 2}})])
+        self.assertFalse(agent.call_tool("contract_choice", {"candidate": 2})["ok"])
+        self.assertEqual(len(sent), 1)
+
     def test_invalid_native_tool_call_uses_structured_json_and_stays_there(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="unternehmer", anbieter="ollama", model="local-test",
                                      ollama="http://127.0.0.1:11435", ctx=16384, think=False, name="Greta")
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = False
+        agent._passive_streak = 0
         agent.urgency = 0
         agent.log = io.StringIO()
         requests = []
@@ -58,6 +77,8 @@ class JsonToolFallbackTest(unittest.TestCase):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
                                      ctx=16384, name="Viktor")
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = False
+        agent._passive_streak = 0
         agent.urgency = 0
         with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
                 {"message": {"content": '{"tool":"observe","arguments":{"felder":["voll"]}}'}})):
@@ -68,6 +89,8 @@ class JsonToolFallbackTest(unittest.TestCase):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
                                      ctx=16384, name="Viktor")
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = False
+        agent._passive_streak = 0
         agent.urgency = 0
         agent._observe_streak = 2
         requests = []
