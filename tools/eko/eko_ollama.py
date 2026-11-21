@@ -461,6 +461,24 @@ def passive_wait_result(result):
     return float(result.get("gewartet_s", 0)) < 5.0 or "keine antwort" in str(result.get("msg", "")).casefold()
 
 
+def changed_world(name, args, result):
+    """Planpruefungen und Statusaufrufe sind noch keine Spielhandlung."""
+    if not isinstance(result, dict) or result.get("ok") is False:
+        return False
+    if name == "founding_choice":
+        return True
+    if name == "mayor_action":
+        return str(args.get("action", "")).lower() not in ("", "wait", "status", "overview")
+    if name == "act":
+        kind = str(args.get("type", "")).lower()
+        if kind in ("", "observe", "beobachten", "status"):
+            return False
+        data = args.get("data", {}) if isinstance(args.get("data"), dict) else {}
+        action = data.get("aktion", {}) if isinstance(data.get("aktion"), dict) else {}
+        return not (kind in ("firma", "amt") and str(action.get("action", "")).lower() in ("", "wait", "status", "overview"))
+    return False
+
+
 class Agent:
     def __init__(self, args):
         self.args = args
@@ -468,6 +486,7 @@ class Agent:
         self._last_fail = ""
         self._ollama_json_mode = getattr(args, "anbieter", "ollama") == "ollama" and "Qwen3.8" in args.model
         self._passive_streak = 0
+        self._nonworld_streak = 0
         self.dir = Path(args.root) / args.name
         self.ws = self.dir / "workspace"
         self._reads = {}   # Datei -> (Lesezeit, Aenderungszeit), Bremse gegen Leseschleifen
@@ -853,6 +872,9 @@ class Agent:
         erneute Statusabfragen und ergebnisloses Warten fallen vorübergehend weg.
         """
         available = self.model_tools()
+        if getattr(self, "_nonworld_streak", 0) >= 5:
+            allowed = {"act", "mayor_action"} if getattr(self.args, "rolle", "") == "buergermeister" else {"act"}
+            return [tool for tool in available if tool["name"] in allowed]
         idle = self._passive_streak >= 3
         if getattr(self, "_observe_streak", 0) >= 2 or idle:
             blocked = {"observe", "list_files", "read_file", "write_file", "append_memory", "learn"}
@@ -863,8 +885,9 @@ class Agent:
 
     def chat_json_tool(self, messages):
         """Ollamas JSON-Modus umgeht den fehleranfaelligen nativen Tool-Parser lokaler Modelle."""
+        forced_action = getattr(self, "_nonworld_streak", 0) >= 5
         idle = self._passive_streak >= 3
-        observed_enough = getattr(self, "_observe_streak", 0) >= 2 or idle
+        observed_enough = getattr(self, "_observe_streak", 0) >= 2 or idle or forced_action
         available = self.available_tools()
         names = {tool["name"] for tool in available}
         menu = []
@@ -892,9 +915,11 @@ class Agent:
             "tool": {"type": "string", "enum": sorted(names)}, "arguments": {"type": "object"}},
             "required": ["tool", "arguments"]}
         plain.append({"role": "user", "content":
-                      ("Du hast die Lage bereits mehrfach beobachtet. Nutze die letzte Beobachtung "
-                       + ("und waehle jetzt eine konkrete Weltaktion.\n" if idle else
-                          "und waehle jetzt eine Weltaktion oder einen sinnvollen Warteschritt.\n") if observed_enough else "") +
+                      ("Du hast seit mehreren Werkzeugaufrufen keine wirksame Spielhandlung ausgefuehrt. "
+                       "Nutze die letzte Beobachtung und waehle jetzt selbst eine konkrete Weltaktion.\n" if forced_action else
+                       ("Du hast die Lage bereits mehrfach beobachtet. Nutze die letzte Beobachtung "
+                        + ("und waehle jetzt eine konkrete Weltaktion.\n" if idle else
+                           "und waehle jetzt eine Weltaktion oder einen sinnvollen Warteschritt.\n") if observed_enough else "")) +
                       "Wähle nach deinem eigenen Ziel eine Handlung. Die Welt nennt Folgen und Voraussetzungen, aber keine Pflichtreihenfolge.\n" +
                       "Waehle genau eine konkrete naechste Handlung aus dieser Werkzeugliste:\n" +
                       "\n".join(menu) +
@@ -1217,6 +1242,7 @@ class Agent:
                 self.say("→ %s %s %s" % (fn["name"], short, ("· " + verdict) if verdict else ""))
                 pending = isinstance(res, dict) and (res.get("pending") or res.get("status") == "laeuft")
                 failed = isinstance(res, dict) and res.get("ok") is False
+                self._nonworld_streak = 0 if changed_world(fn["name"], a, res) else min(8, self._nonworld_streak + 1)
                 self.status("wartet" if pending else ("fehler" if failed else "bereit"), last_tool_at=time.time(),
                             tool=fn["name"], waiting_on=verdict if pending else "",
                             last_error=verdict if failed else "")
