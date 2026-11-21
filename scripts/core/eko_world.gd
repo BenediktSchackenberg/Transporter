@@ -1012,7 +1012,9 @@ func next_steps(b: Dictionary) -> Array:
 				growth_step += " Sprich mit dem Bürgermeister über die fehlenden Netze; du kannst parallel erschlossene Bauplätze und Betriebe planen."
 	if int(b.get("amt", -1)) >= 0:
 		var depot: CityDepot = sim.towns.depot(int(b.amt))
-		if depot.backlog_units() > maxi(100, depot.dock_capacity() * 2) and depot.roster().size() < 3:
+		if depot.backlog_units() > 0 and depot.roster().is_empty():
+			civic_step = "Stadtlager: %d angelieferte Baustoffe können ohne Lagerpersonal nicht geprüft und eingelagert werden. Entscheide über die erste Lagerkraft: Amt {aktion: {action: \"expand_depot\", kind: \"staff\", reason: \"Baumaterial für laufende Stadtprojekte einlagern\"}}. Das Stadtlager ist keine Versorgungsanlage für infra_ausbau." % depot.backlog_units()
+		elif depot.backlog_units() > maxi(100, depot.dock_capacity() * 2) and depot.roster().size() < 3:
 			civic_step = "Im Stadtlager warten %d Baustoffe auf Prüfung, nur %d Lagerkräfte arbeiten dort. Entscheide über eine weitere Stelle: Amt {aktion: {action: \"expand_depot\", kind: \"staff\", reason: \"Baustoffe für Stadtprojekte schneller einlagern\"}}." % [depot.backlog_units(), depot.roster().size()]
 		else:
 			var district: Dictionary = sim.town_plan.next_district(int(b.amt), sim.housing.planning_aids().get("bedarf", 0) > 0, _town_jobs_need(int(b.amt)))
@@ -3385,6 +3387,8 @@ static func normalize_office(a: Dictionary) -> String:
 				return "decision muss genehmigen, bedingungen, ablehnen oder rueckfrage sein (nicht „%s“)." % str(a.get("decision", ""))
 		"infra_ausbau":
 			var want := str(a.get("anlage", ""))
+			if _plain(want) in ["stadtlager", "lager", "bauhof"]:
+				return "Das Stadtlager ist keine Versorgungsanlage. Für Personal am Wareneingang nutze Amt {aktion: {action: \"expand_depot\", kind: \"staff\", reason: \"Angelieferte Baustoffe einlagern\"}}; fehlende Projektware bestellt das Bauamt automatisch."
 			var hit := _best(want, INFRA_PLANTS)
 			if hit != "":
 				a["anlage"] = hit
