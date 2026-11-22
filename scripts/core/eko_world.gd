@@ -954,6 +954,8 @@ func urgency(b: Dictionary) -> Dictionary:
 					if key in gaps and not pending and not line_options.is_empty():
 						var line_ids: Array = line_options.map(func(o): return str(o.id))
 						return {"prioritaet": 2, "grund": "Wohnungen sind fertig, aber das %s erreicht sie nicht. Gültige Leitungs-IDs: %s. Wähle selbst eine Variante aus mein_amt.versorgungsleitungen und nutze mayor_action {action: versorgungsleitung_bauen, params: {option: gewählte ID, reason: Grund}}." % [("Frischwassernetz" if art == "wasser" else "Kanalnetz"), ", ".join(line_ids)]}
+					if key in gaps and not pending and line_options.is_empty():
+						return {"prioritaet": 1, "grund": "Wohnungen fehlen %s, aber derzeit erreicht keine wirksame Leitungstrasse diese Gebäude. Prüfe in mein_amt.stadtwachstum.betroffene_haeuser die Straßenfelder und entscheide über einen Straßenanschluss oder eine zusätzliche Versorgungsanlage mit Druckzone; baue keine wirkungslose Stichleitung." % key}
 		return {"prioritaet": 0, "grund": ""}
 	var best := {"prioritaet": 0, "grund": ""}
 	var home_k: int = sim.company(cid).home_town

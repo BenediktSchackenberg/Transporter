@@ -272,9 +272,12 @@ func main_options(k: int, art: String) -> Array:
 		return []
 	var C: CityData = sim.city
 	var built: Dictionary = main_cells(k, art)
-	var needed := _main_to_unserved_buildings(k, art, built)
+	var target_result: Dictionary = _main_to_unserved_buildings(k, art, built)
+	var needed: Array = target_result.options
 	if not needed.is_empty():
 		return needed
+	if int(target_result.targets) > 0:
+		return []   # ohne durchgehende Straße ist eine weitere Leitung keine wirksame Bauoption
 	var starts: Array = []
 	for key in built:
 		var xy := str(key).split(":")
@@ -316,8 +319,15 @@ func main_options(k: int, art: String) -> Array:
 
 ## Bevor weitere freie Straßen versorgt werden, bietet das Bauamt konkrete Wege zu unversorgten
 ## Wohnungen und Betrieben an. Die KI wählt weiterhin selbst zwischen den geprüften Trassen.
-func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Array:
+func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Dictionary:
 	var C: CityData = sim.city
+	var sources: Dictionary = built.duplicate()
+	var pressure: Dictionary = {}
+	if art == "wasser":
+		pressure = compute_net(k)
+		sources.clear()
+		for cell in pressure:
+			sources[_cell_key(cell)] = true
 	var targets := {}
 	for unit in sim.housing.units.values():
 		var bid := int(unit.building)
@@ -326,7 +336,7 @@ func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Arra
 		var b: Dictionary = C.building(bid)
 		if not b.is_empty():
 			var road := Vector2i(b.road)
-			if C.is_road(road) and not built.has(_cell_key(road)):
+			if C.is_road(road) and not sources.has(_cell_key(road)):
 				targets[road] = int(targets.get(road, 0)) + 2
 	for item in sim.biz.items.values():
 		var bid := int(item.get("site", -1))
@@ -335,13 +345,13 @@ func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Arra
 		var b: Dictionary = C.building(bid)
 		if not b.is_empty():
 			var road := Vector2i(b.road)
-			if C.is_road(road) and not built.has(_cell_key(road)):
+			if C.is_road(road) and not sources.has(_cell_key(road)):
 				targets[road] = int(targets.get(road, 0)) + 3
 	if targets.is_empty():
-		return []
+		return {"options": [], "targets": 0}
 	var queue: Array[Vector2i] = []
 	var parent := {}
-	for key in built:
+	for key in sources:
 		var xy := str(key).split(":")
 		var source := Vector2i(int(xy[0]), int(xy[1]))
 		if C.is_road(source) and C.town_of(source) == k and not parent.has(source):
@@ -362,15 +372,27 @@ func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Arra
 			continue
 		var path: Array[Vector2i] = []
 		var cursor: Vector2i = target
-		while not built.has(_cell_key(cursor)) and path.size() < 100:
+		while not sources.has(_cell_key(cursor)) and path.size() < 100:
 			path.push_front(cursor)
 			var previous: Vector2i = parent[cursor]
 			if previous == cursor:
 				break
 			cursor = previous
-		if path.is_empty() or not built.has(_cell_key(cursor)):
+		if path.is_empty() or not sources.has(_cell_key(cursor)):
 			continue
-		var cells: Array = path.slice(0, 48)
+		var cells: Array = path.slice(0, 48).filter(func(q): return not built.has(_cell_key(q)))
+		if cells.is_empty():
+			continue
+		if art == "wasser":
+			# Auch eine baubare Trasse hilft nicht, wenn sie ausserhalb der Druckzone endet.
+			# Die Vorschau veraendert nur voruebergehend die verlegten Leitungsfelder.
+			for q in cells:
+				built[_cell_key(q)] = true
+			var projected: Dictionary = compute_net(k)
+			for q in cells:
+				built.erase(_cell_key(q))
+			if projected.size() <= pressure.size():
+				continue
 		var cost := snappedf(float(cells.size()) * (130.0 if art == "wasser" else 170.0), 10.0)
 		options.append({"id": "%s:%d:%d" % [art, target.x, target.y], "art": art,
 			"von": [cells[0].x, cells[0].y], "ziel": [target.x, target.y],
@@ -378,7 +400,7 @@ func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Arra
 			"kosten": cost, "tage": maxi(2, ceili(float(cells.size()) / 8.0)),
 			"cells": cells.map(func(q): return [q.x, q.y])})
 	options.sort_custom(func(a, b): return int(a.gebaeude_nahe) * 100 - int(a.felder) > int(b.gebaeude_nahe) * 100 - int(b.felder))
-	return options.slice(0, 3)
+	return {"options": options.slice(0, 3), "targets": targets.size()}
 
 
 func main_brief(k: int) -> Array:
