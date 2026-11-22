@@ -747,6 +747,12 @@ class Agent:
                          "infra_ausbau-Aktion erst, wenn sich Standort oder Anlagenzustand geaendert hat.")
         return "\n".join(lines)
 
+    def reject_mayor_preflight(self, key, state, result):
+        self._mayor_failed_count = self._mayor_failed_count + 1 if key == self._mayor_failed_key else 1
+        self._mayor_failed_key = key
+        self._mayor_invalid_state = state
+        return result
+
     def call_tool(self, name, a):
         try:
             if name == "founding_choice":
@@ -853,13 +859,13 @@ class Agent:
                                     "build_harbor", "build_airport", "build_station"}
                 board = office.get("bauprogramm") or {}
                 if action in building_actions and board.get("neues_bauprojekt_moeglich") is False:
-                    return {"ok": False, "msg": "Baukapazitaet belegt: zuerst laufende Projekte und Material pruefen. Neue Bauauftraege sind derzeit nicht moeglich.",
-                            "bauprogramm": board}
+                    return self.reject_mayor_preflight(key, state, {"ok": False, "msg": "Baukapazitaet belegt: zuerst laufende Projekte und Material pruefen. Neue Bauauftraege sind derzeit nicht moeglich.",
+                            "bauprogramm": board})
                 if action == "infra_ausbau":
                     need = (office.get("versorgungsanlagen_ausbau") or {}).get(str(params.get("anlage", "")))
                     if isinstance(need, dict) and not need.get("ok"):
-                        return {"ok": False, "msg": need.get("msg", "Dieser Kapazitaetsausbau ist nicht wirksam."),
-                                "versorgungsleitungen": (office.get("versorgungsleitungen") or [])[:3]}
+                        return self.reject_mayor_preflight(key, state, {"ok": False, "msg": need.get("msg", "Dieser Kapazitaetsausbau ist nicht wirksam."),
+                                "versorgungsleitungen": (office.get("versorgungsleitungen") or [])[:3]})
                 current_ids = {"approve_procurement": ("stadtlager", "vorschlaege", "order_id"),
                                "versorgungsleitung_bauen": (None, "versorgungsleitungen", "option"),
                                "stromtrasse_bauen": (None, "stromtrassen", "option")}
@@ -867,14 +873,14 @@ class Agent:
                     section, field, param = current_ids[action]
                     entries = (office.get(section) or {}).get(field, []) if section else office.get(field, [])
                     if isinstance(entries, list) and str(params.get(param)) not in {str(x.get("id")) for x in entries if isinstance(x, dict)}:
-                        return {"ok": False, "msg": "Diese Kennung ist nicht mehr offen. Beobachte aktuelle Optionen und waehle eine neue Entscheidung.",
-                                "gueltige_optionen": entries[:5]}
+                        return self.reject_mayor_preflight(key, state, {"ok": False, "msg": "Diese Kennung ist nicht mehr offen. Beobachte aktuelle Optionen und waehle eine neue Entscheidung.",
+                                "gueltige_optionen": entries[:5]})
                     matching = next((x for x in entries if isinstance(x, dict) and str(x.get("id")) == str(params.get(param))), {})
                     budget = float((office.get("haushalt") or {}).get("verfuegbar", 0))
                     funded = action == "approve_procurement" and matching.get("projekt")
                     cost = float(matching.get("geschaetzte_kosten" if action == "approve_procurement" else "kosten", 0))
                     if matching and not funded and cost > budget:
-                        return {"ok": False, "msg": "Diese Entscheidung kostet mindestens %.0f EUR, aber nur %.0f EUR sind frei. Pruefe kreditangebot oder Einnahmen." % (cost, budget)}
+                        return self.reject_mayor_preflight(key, state, {"ok": False, "msg": "Diese Entscheidung kostet mindestens %.0f EUR, aber nur %.0f EUR sind frei. Pruefe kreditangebot oder Einnahmen." % (cost, budget)})
                 result = self.call_tool("act", {"type": "Amt", "data": {"aktion": {**params, "action": action}}})
                 if isinstance(result, dict) and result.get("ok") is False:
                     self._mayor_failed_count = self._mayor_failed_count + 1 if key == self._mayor_failed_key else 1

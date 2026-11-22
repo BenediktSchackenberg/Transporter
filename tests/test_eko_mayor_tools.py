@@ -139,6 +139,25 @@ class MayorToolTests(unittest.TestCase):
         self.assertEqual(mayor_action_key("infra_ausbau", {"anlage": "hochbehaelter", "reason": "A"}),
                          mayor_action_key("infra_ausbau", {"anlage": "hochbehaelter", "reason": "B", "grundstueck": "G133"}))
 
+    def test_unaffordable_line_preflight_counts_toward_repeat_guard(self):
+        class BrokeWorld(FakeWorld):
+            def observe(self):
+                data = super().observe()
+                office = data["mein_amt"]
+                office["haushalt"] = {"verfuegbar": 0}
+                office["kreditangebot"] = {"ok": True, "vorschlag": 620000}
+                office["bauprogramm"]["neues_bauprojekt_moeglich"] = True
+                office["versorgungsleitungen"][0]["kosten"] = 1040
+                return data
+        world = BrokeWorld()
+        agent = agent_with(world)
+        for reason in ("A", "B"):
+            result = agent.call_tool("mayor_action", {"action": "versorgungsleitung_bauen",
+                                                      "params": {"option": "wasser:4:5", "reason": reason}})
+            self.assertFalse(result["ok"])
+        self.assertEqual(agent._mayor_failed_count, 2)
+        self.assertEqual(world.actions, [])
+
     def test_failed_mayor_waits_until_relevant_world_state_changes(self):
         class StateWorld:
             open = False
