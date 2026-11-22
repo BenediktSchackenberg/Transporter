@@ -272,6 +272,9 @@ func main_options(k: int, art: String) -> Array:
 		return []
 	var C: CityData = sim.city
 	var built: Dictionary = main_cells(k, art)
+	var needed := _main_to_unserved_buildings(k, art, built)
+	if not needed.is_empty():
+		return needed
 	var starts: Array = []
 	for key in built:
 		var xy := str(key).split(":")
@@ -311,12 +314,79 @@ func main_options(k: int, art: String) -> Array:
 	return options.slice(0, 3)
 
 
+## Bevor weitere freie Straßen versorgt werden, bietet das Bauamt konkrete Wege zu unversorgten
+## Wohnungen und Betrieben an. Die KI wählt weiterhin selbst zwischen den geprüften Trassen.
+func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Array:
+	var C: CityData = sim.city
+	var targets := {}
+	for unit in sim.housing.units.values():
+		var bid := int(unit.building)
+		if sim.towns.of_building(bid) != k:
+			continue
+		var b: Dictionary = C.building(bid)
+		if not b.is_empty():
+			var road := Vector2i(b.road)
+			if C.is_road(road) and not built.has(_cell_key(road)):
+				targets[road] = int(targets.get(road, 0)) + 2
+	for item in sim.biz.items.values():
+		var bid := int(item.get("site", -1))
+		if bid < 0 or sim.towns.of_building(bid) != k or str(item.get("status", "")) == "geschlossen":
+			continue
+		var b: Dictionary = C.building(bid)
+		if not b.is_empty():
+			var road := Vector2i(b.road)
+			if C.is_road(road) and not built.has(_cell_key(road)):
+				targets[road] = int(targets.get(road, 0)) + 3
+	if targets.is_empty():
+		return []
+	var queue: Array[Vector2i] = []
+	var parent := {}
+	for key in built:
+		var xy := str(key).split(":")
+		var source := Vector2i(int(xy[0]), int(xy[1]))
+		if C.is_road(source) and C.town_of(source) == k and not parent.has(source):
+			parent[source] = source
+			queue.append(source)
+	var index := 0
+	while index < queue.size() and queue.size() < 6000:
+		var here: Vector2i = queue[index]
+		index += 1
+		for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+			var next: Vector2i = here + d
+			if not parent.has(next) and C.is_road(next) and C.town_of(next) == k:
+				parent[next] = here
+				queue.append(next)
+	var options: Array = []
+	for target in targets:
+		if not parent.has(target):
+			continue
+		var path: Array[Vector2i] = []
+		var cursor: Vector2i = target
+		while not built.has(_cell_key(cursor)) and path.size() < 100:
+			path.push_front(cursor)
+			var previous: Vector2i = parent[cursor]
+			if previous == cursor:
+				break
+			cursor = previous
+		if path.is_empty() or not built.has(_cell_key(cursor)):
+			continue
+		var cells: Array = path.slice(0, 48)
+		var cost := snappedf(float(cells.size()) * (130.0 if art == "wasser" else 170.0), 10.0)
+		options.append({"id": "%s:%d:%d" % [art, target.x, target.y], "art": art,
+			"von": [cells[0].x, cells[0].y], "ziel": [target.x, target.y],
+			"felder": cells.size(), "gebaeude_nahe": int(targets[target]),
+			"kosten": cost, "tage": maxi(2, ceili(float(cells.size()) / 8.0)),
+			"cells": cells.map(func(q): return [q.x, q.y])})
+	options.sort_custom(func(a, b): return int(a.gebaeude_nahe) * 100 - int(a.felder) > int(b.gebaeude_nahe) * 100 - int(b.felder))
+	return options.slice(0, 3)
+
+
 func main_brief(k: int) -> Array:
 	var out: Array = []
 	for art in ["wasser", "abwasser"]:
 		for o in main_options(k, art):
 			out.append({"id": o.id, "art": art, "von": o.von, "felder": o.felder, "gebaeude_nahe": o.gebaeude_nahe,
-				"kosten": o.kosten, "tage": o.tage})
+				"ziel": o.get("ziel", []), "kosten": o.kosten, "tage": o.tage})
 	return out
 
 

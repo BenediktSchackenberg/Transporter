@@ -786,7 +786,7 @@ func execute(action: Dictionary) -> Dictionary:
 		err = foreign_target(a)   # Region: keine Entscheidungen im Gebiet einer anderen Stadt
 	if err == "" and act in HUB_FIRST_ACTIONS and not sim.wildnis:
 		err = hub_blocked()
-	if err == "" and sim.wildnis and act in ["viertel_erschliessen", "plan_infrastructure", "kommunal_bauen", "infra_ausbau", "stromtrasse_bauen", "versorgungsleitung_bauen", "propose_project", "build_harbor", "build_airport", "build_station", "build_bridge", "build_tunnel", "expand_harbor", "expand_airport", "expand_power", "expand_depot", "grosslager_anschluss_bauen"]:
+	if err == "" and sim.wildnis and act in ["viertel_erschliessen", "plan_infrastructure", "kommunal_bauen", "infra_ausbau", "stromtrasse_bauen", "versorgungsleitung_bauen", "propose_project", "build_harbor", "build_airport", "build_station", "build_bridge", "build_tunnel", "expand_harbor", "expand_airport", "expand_power", "grosslager_anschluss_bauen"]:
 		var open_projects := 0
 		for project in projects.values():
 			if str(project.get("status", "")) not in ["fertig", "abgelehnt", "abgebrochen"]:
@@ -794,6 +794,8 @@ func execute(action: Dictionary) -> Dictionary:
 		var capacity := maxi(3, int(ceil(float(sim.crews.crews.size()) * 0.6 / float(maxi(1, sim.towns.count())))))
 		if open_projects >= capacity:
 			err = "%d offene Bauprojekte bei einer Kapazität von %d. Erst Material, Bautrupps und Fertigstellung der laufenden Projekte klären; Verwaltungs- und Planungsentscheidungen bleiben möglich." % [open_projects, capacity]
+		elif sim.towns.depot(town).backlog_units() > 0 and sim.towns.depot(town).roster().is_empty():
+			err = "Stadtlager: angelieferte Baustoffe koennen ohne Personal nicht eingelagert werden. Entscheide ueber expand_depot mit kind staff oder klaere die Lagerblockade; neue Bauauftraege wuerden nur mehr Material stauen."
 	var res: Dictionary
 	if err != "":
 		res = {"ok": false, "msg": err}

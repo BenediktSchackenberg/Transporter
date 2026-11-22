@@ -680,6 +680,7 @@ func _update_vehicle(v: FleetVehicle, dt: float) -> void:
 	_trip_why = ""
 	_trip_speed = 0.0
 	_update_vehicle_inner(v, dt)
+	_watch_workshop_trip(v, dt)
 	if not v.stops.is_empty() or not v.load.is_empty():
 		_trip_note(v, _trip_why if _trip_why != "" else v.state, dt * Catalog.GAME_MIN_PER_SIM_SEC)
 
@@ -688,6 +689,35 @@ func _update_vehicle(v: FleetVehicle, dt: float) -> void:
 var _trip_why := ""
 var _trip_speed := 0.0
 var trip_log: Array = []      # abgeschlossene Auftraege mit Messung; GameSession schreibt sie ins Partie-Log (type "trip")
+var _workshop_progress := {}  # Lkw-ID -> letzte Position, Stillstand und Neuplanungsversuch (nur Laufzeit)
+
+
+## Werkstattfahrten duerfen nicht dauerhaft in einer Kollision oder an einer Schranke verharren.
+## Nach einem echten Neuplanungsversuch kommt ein Mechaniker zum stehenden Lkw; kein Durchfahren und kein Teleport.
+func _watch_workshop_trip(v: FleetVehicle, dt: float) -> void:
+	if v.state != "to_workshop":
+		_workshop_progress.erase(v.id)
+		return
+	var progress: Dictionary = _workshop_progress.get(v.id, {"pos": v.pos, "still": 0.0, "rerouted": false})
+	if v.pos.distance_to(Vector2(progress.pos)) > 1.0:
+		progress = {"pos": v.pos, "still": 0.0, "rerouted": false}
+	else:
+		progress.still = float(progress.still) + dt
+	if float(progress.still) >= 8.0 and not bool(progress.rerouted):
+		progress.rerouted = true
+		var blocker: Mover = collisions.last_blocker
+		var changed := _evade(v, blocker) if blocker != null and v.lane == 0.0 else route(v, v.goal)
+		log_event("Werkstattfahrt Lkw #%d: %s; Ausweichroute %s." % [v.id, _trip_why if _trip_why != "" else "kein Fortschritt", "gefunden" if changed else "nicht gefunden"], "warn", v.owner)
+	if float(progress.still) >= 25.0:
+		v.path.clear()
+		v.state = "repairing"
+		v.timer = Catalog.REPAIR_MIN
+		v.wait_time = 0.0
+		log_event("Werkstattfahrt Lkw #%d blockiert: mobiler Reparaturdienst arbeitet am Standort %s." % [v.id, v.tile()], "warn", v.owner)
+		notify(v.owner, "%s: mobiler Reparaturdienst ist eingetroffen." % v.display_name())
+		_workshop_progress.erase(v.id)
+		return
+	_workshop_progress[v.id] = progress
 
 func _trip_note(v: FleetVehicle, key: String, mins: float) -> void:
 	var ids := {}
@@ -1246,8 +1276,9 @@ func light_green(cell: Vector2i, horizontal: bool) -> bool:
 
 
 ## Gelaende-Lkw weicht einem Fahrzeug aus: dessen Felder kurz sperren und neu planen.
-func _evade(v: FleetVehicle, o: Mover) -> void:
-	v.wait_time = 0.0
+func _evade(v: FleetVehicle, o: Mover) -> bool:
+	if o == null:
+		return false
 	var cells: Array[Vector2i] = [o.tile(), o.next_tile()]
 	var was: Array = []
 	for c in cells:
@@ -1257,8 +1288,11 @@ func _evade(v: FleetVehicle, o: Mover) -> void:
 	var p := offroad_path(v.tile(), v.goal)
 	for e in was:
 		nav.walk.set_point_solid(e[0], e[1])
-	if not p.is_empty():
+	if not p.is_empty() and p != v.path:
 		v.set_path(p)
+		v.wait_time = 0.0
+		return true
+	return false
 
 
 ## Rammen: dem Ziel folgen, bei Beruehrung (Collisions) bzw. am Gebaeude den Stoss ausfuehren.
@@ -1290,7 +1324,7 @@ func _rebuild_hash() -> void:
 		_hash_add(m)
 		_desc[m] = "ein Auto"
 	for v in vehicles.values():
-		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "loading", "unloading", "broken", "to_dispatch", "erkunden"] or not v.arrived():
+		if v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "loading", "unloading", "broken", "repairing", "to_dispatch", "erkunden"] or not v.arrived():
 			_hash_add(v)
 			_desc[v] = "%s (%s)" % [v.display_name(), companies[v.owner].company_name] if v.owner >= 0 and v.owner < companies.size() else v.display_name()
 	if fleet != null:

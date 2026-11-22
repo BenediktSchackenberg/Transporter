@@ -195,6 +195,8 @@ TOOLS = [
          "action": {"type": "string", "description": "Aktionsname aus mein_amt.aktionen; die Spielwelt prueft Berechtigung und Voraussetzungen."},
          "params": {"type": "object", "description": "Parameter der Amtshandlung aus mein_amt.aktionen; z. B. {viertel: V7, reason: Arbeitsplaetze}."}},
          "required": ["action", "params"]}},
+    {"name": "mayor_choice", "description": "Nur fuer Buergermeister: waehle selbst eine gepruefte aktuelle Stadtoption aus mein_amt.entscheidungsoptionen per Nummer. Aktion und gueltige Kennung werden vor der Ausfuehrung erneut gelesen.",
+     "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 9}}, "required": ["candidate"]}},
     {"name": "wait", "description": "Warte einige Sekunden – mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist, oder mit "
      "bis: \"antwort\", bis dich jemand anspricht oder anruft (höchstens 90 s, ohne dass du dazwischen nachdenken musst). Danach bekommst du deine Lage.",
      "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}, "bis": {"type": "string", "enum": ["ankunft", "antwort"]}}}},
@@ -427,6 +429,7 @@ def compact_obs(o, full=False):
     amt = o.get("mein_amt")
     if isinstance(amt, dict) and amt:
         amt = dict(amt)
+        amt["entscheidungsoptionen"] = mayor_choices(amt)
         for k in ("entwicklungsvorschlaege", "entscheidungen_zuletzt"):
             if isinstance(amt.get(k), list):
                 amt[k] = amt[k][:3]
@@ -440,6 +443,35 @@ def compact_obs(o, full=False):
         o["erkundung"] = e
     o["hinweis_kurzfassung"] = "Gekürzte Lage. Alles ausführlich: observe {voll: true}."
     return o
+
+
+def mayor_choices(office):
+    """Aktuelle, bereits in der Welt gepruefte Optionen. Die Auswahl trifft das Modell."""
+    if not isinstance(office, dict):
+        return []
+    result = []
+    depot = office.get("stadtlager") or {}
+    if depot.get("rueckstau_wareneingang_einheiten", 0) and not depot.get("personal_gesamt", 0):
+        result.append({"action": "expand_depot", "params": {"kind": "staff", "reason": "Angelieferte Projektware einlagern"},
+                       "nutzen": "Wareneingang und blockierte Bauprojekte"})
+    for proposal in (depot.get("vorschlaege") or [])[:2]:
+        if isinstance(proposal, dict) and proposal.get("id"):
+            result.append({"action": "approve_procurement", "params": {"order_id": proposal["id"], "reason": "Projektmaterial beschaffen"},
+                           "nutzen": proposal.get("reason", "Materialbedarf")})
+    for line in (office.get("versorgungsleitungen") or [])[:3]:
+        if isinstance(line, dict) and line.get("id"):
+            result.append({"action": "versorgungsleitung_bauen", "params": {"option": line["id"], "reason": "Gebaeude ans Netz anschliessen"},
+                           "nutzen": "%s: %s Gebaeudepunkte, %s EUR" % (line.get("art", "Leitung"), line.get("gebaeude_nahe", 0), line.get("kosten", "?"))})
+    for line in (office.get("stromtrassen") or [])[:2]:
+        if isinstance(line, dict) and line.get("id"):
+            result.append({"action": "stromtrasse_bauen", "params": {"option": line["id"], "reason": "Stromversorgung der Stadt"},
+                           "nutzen": "Stromtrasse %s" % line["id"]})
+    if (office.get("bauprogramm") or {}).get("neues_bauprojekt_moeglich", True):
+        for district in (office.get("stadtplan_optionen") or [])[:2]:
+            if isinstance(district, dict) and district.get("viertel"):
+                result.append({"action": "viertel_erschliessen", "params": {"viertel": district["viertel"], "reason": "Wohn- und Arbeitsflaechen erschliessen"},
+                               "nutzen": "%s %s" % (district.get("zone", "Viertel"), district["viertel"])})
+    return [{"candidate": i, **choice} for i, choice in enumerate(result[:10])]
 
 
 def general_memory(doc):
@@ -467,8 +499,9 @@ def changed_world(name, args, result):
         return False
     if name == "founding_choice":
         return True
-    if name == "mayor_action":
-        return str(args.get("action", "")).lower() not in ("", "wait", "status", "overview")
+    if name in ("mayor_action", "mayor_choice"):
+        choice = result.get("gewaehlt", {}) if name == "mayor_choice" else args
+        return str(choice.get("action", "")).lower() not in ("", "wait", "status", "overview")
     if name == "act":
         kind = str(args.get("type", "")).lower()
         if kind in ("", "observe", "beobachten", "status"):
@@ -484,6 +517,10 @@ class Agent:
         self.args = args
         self._repeat = 0
         self._last_fail = ""
+        self._passive_office = 0
+        self._mayor_failed_key = ""
+        self._mayor_failed_count = 0
+        self._mayor_invalid_streak = 0
         self._ollama_json_mode = getattr(args, "anbieter", "ollama") == "ollama" and "Qwen3.8" in args.model
         self._passive_streak = 0
         self._nonworld_streak = 0
@@ -607,7 +644,8 @@ class Agent:
                          "Ein fertiges, abgebrochenes oder nicht existentes Projekt ist kein aktuelles Ziel mehr. "
                          "Alte Notizen, die eine Status-Schleife empfehlen, sind durch diese Regel ueberholt. "
                          "Frieden, Handel und schoene Stadtviertel sind vollwertige strategische Entscheidungen.")
-            lines.append("Nutze fuer eigene Bauentscheidungen mayor_action mit action und params aus mein_amt. "
+            lines.append("Waehle bei passenden Angeboten mit mayor_choice eine Nummer aus mein_amt.entscheidungsoptionen; ")
+            lines.append("fuer eigene Bauideen nutze mayor_action mit action und params aus mein_amt.aktionen_wichtig. "
                          "Bei mein_amt.bedrohung entscheide sofort ueber Wachturm, Stadtmauer und Wiederaufbau; sieh auf Bauzeit und freie Stadtkasse. "
                          "Waehle selbst Ziel, Viertel, Verlauf der Strassen und Reihenfolge; Bauvorlagen sind Moeglichkeiten. "
                          "Pruefe nach jedem Versuch die Wirkung. Halte die Zahl offener Baustellen an Material, Kasse und Bautrupps angepasst. "
@@ -670,11 +708,37 @@ class Agent:
             if name == "mayor_action":
                 if getattr(self.args, "rolle", "") != "buergermeister":
                     return {"ok": False, "msg": "Nur Buergermeister koennen mayor_action nutzen."}
-                action = str(a.get("action", ""))
+                action = str(a.get("action", "")).strip()
                 params = a.get("params", {})
                 if not action or not isinstance(params, dict):
                     return {"ok": False, "msg": "action und params aus mein_amt.aktionen angeben."}
-                result = self.call_tool("act", {"type": "Amt", "data": {"aktion": {"action": action, **params}}})
+                required = {
+                    "infra_ausbau": ("anlage",), "stromtrasse_bauen": ("option",),
+                    "versorgungsleitung_bauen": ("option",), "approve_procurement": ("order_id",),
+                    "reject_procurement": ("order_id",), "expand_depot": ("kind",),
+                    "kommunal_bauen": ("typ",), "viertel_erschliessen": ("viertel",),
+                }
+                missing = [key for key in required.get(action, ()) if not str(params.get(key, "")).strip()]
+                key = json.dumps([action, params], sort_keys=True, ensure_ascii=False)
+                if missing or (key == self._mayor_failed_key and self._mayor_failed_count >= 2):
+                    current = compact_obs(self.world.observe())
+                    office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
+                    choices = {"stromtrasse_bauen": office.get("stromtrassen", []),
+                               "versorgungsleitung_bauen": office.get("versorgungsleitungen", []),
+                               "approve_procurement": office.get("stadtlager", {}).get("vorschlaege", []),
+                               "viertel_erschliessen": office.get("stadtplan_optionen", [])}
+                    reason = ("Pflichtparameter fehlen: " + ", ".join(missing)) if missing else "Dieselbe abgelehnte Handlung wurde bereits zweimal versucht"
+                    return {"ok": False, "msg": reason + ". Waehle selbst eine gueltige andere Amtshandlung oder eine aktuelle ID; wiederhole den Aufruf nicht unveraendert.",
+                            "erforderlich": list(required.get(action, ())), "gueltige_optionen": choices.get(action, [])[:5],
+                            "stadtwachstum": current.get("stadtwachstum", {}) if isinstance(current, dict) else {},
+                            "bau_blockaden": office.get("bau_blockaden", [])[:4]}
+                result = self.call_tool("act", {"type": "Amt", "data": {"aktion": {**params, "action": action}}})
+                if isinstance(result, dict) and result.get("ok") is False:
+                    self._mayor_failed_count = self._mayor_failed_count + 1 if key == self._mayor_failed_key else 1
+                    self._mayor_failed_key = key
+                else:
+                    self._mayor_failed_key = ""
+                    self._mayor_failed_count = 0
                 current = compact_obs(self.world.observe())
                 office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
                 if isinstance(result, dict):
@@ -686,6 +750,21 @@ class Agent:
                                                "wirtschaftsaufbau": office.get("wirtschaftsaufbau", {}),
                                                "bau_blockaden": office.get("bau_blockaden", [])[:4],
                                                "stadtlager_vorschlaege": proposals[:8]}
+                return result
+            if name == "mayor_choice":
+                if getattr(self.args, "rolle", "") != "buergermeister":
+                    return {"ok": False, "msg": "Nur Buergermeister koennen mayor_choice nutzen."}
+                current = compact_obs(self.world.observe())
+                office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
+                choices = mayor_choices(office)
+                index = a.get("candidate", -1)
+                if not isinstance(index, int) or index < 0 or index >= len(choices):
+                    return {"ok": False, "msg": "Diese Stadtoption ist nicht mehr aktuell. Beobachte erneut und waehle eine Nummer aus mein_amt.entscheidungsoptionen.",
+                            "entscheidungsoptionen": choices}
+                choice = choices[index]
+                result = self.call_tool("mayor_action", {"action": choice["action"], "params": choice["params"]})
+                if isinstance(result, dict):
+                    result["gewaehlt"] = choice
                 return result
             if name == "act" and getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_passive_office", 0) >= 3:
                 typ = str(a.get("type", ""))
@@ -872,8 +951,13 @@ class Agent:
         erneute Statusabfragen und ergebnisloses Warten fallen vorübergehend weg.
         """
         available = self.model_tools()
+        if getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_mayor_invalid_streak", 0) >= 2:
+            current = compact_obs(self.world.observe())
+            office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
+            if mayor_choices(office):
+                return [tool for tool in available if tool["name"] == "mayor_choice"]
         if getattr(self, "_nonworld_streak", 0) >= 5:
-            allowed = {"act", "mayor_action"} if getattr(self.args, "rolle", "") == "buergermeister" else {"act"}
+            allowed = {"act", "mayor_action", "mayor_choice"} if getattr(self.args, "rolle", "") == "buergermeister" else {"act"}
             return [tool for tool in available if tool["name"] in allowed]
         idle = self._passive_streak >= 3
         if getattr(self, "_observe_streak", 0) >= 2 or idle:
@@ -1246,13 +1330,14 @@ class Agent:
                 self.status("wartet" if pending else ("fehler" if failed else "bereit"), last_tool_at=time.time(),
                             tool=fn["name"], waiting_on=verdict if pending else "",
                             last_error=verdict if failed else "")
-                if fn["name"] == "mayor_action":
+                if fn["name"] in ("mayor_action", "mayor_choice"):
+                    self._mayor_invalid_streak = min(4, getattr(self, "_mayor_invalid_streak", 0) + 1) if failed else 0
                     self._mayor_ok = getattr(self, "_mayor_ok", 0) + (0 if failed else 1)
                     self._mayor_fail = getattr(self, "_mayor_fail", 0) + (1 if failed else 0)
                     self.status("fehler" if failed else "bereit", city_actions_ok=self._mayor_ok,
                                 city_actions_failed=self._mayor_fail)
                 messages.append({"role": "tool", "tool_name": fn["name"], "tool_call_id": c.get("id", ""), "content": json.dumps(res, ensure_ascii=False)[:14000]})
-                if fn["name"] == "mayor_action" and failed:
+                if fn["name"] in ("mayor_action", "mayor_choice") and failed:
                     check = res.get("nachkontrolle", {}) if isinstance(res, dict) else {}
                     messages.append({"role": "user", "content": "Diese Amtshandlung wurde abgelehnt: %s. Pruefe Bauprogramm, Blockaden und andere Moeglichkeiten. "
                                      "Waehle selbst eine gueltige Stadtentscheidung; wiederhole den gleichen Aufruf nicht ohne Lageaenderung."

@@ -37,6 +37,7 @@ func on_day(day: int) -> void:
 	if sim.towns != null:
 		for k in sim.towns.count():
 			var M: Mayor = sim.towns.mayor(k)
+			var progress: Dictionary = town_progress(k)
 			var acct := Towns.account_of(k)
 			var cash := float(sim.economy.accounts.get(acct, 0.0))
 			var out := float(sim.economy.outflow.get(acct, 0.0))
@@ -54,7 +55,9 @@ func on_day(day: int) -> void:
 			_push(towns, k, {"day": day, "kasse": snappedf(cash, 0.01), "verfuegbar": snappedf(M.available_budget(), 0.01),
 				"einnahmen": snappedf(maxf(0.0, income), 0.01), "ausgaben": snappedf(maxf(0.0, spent), 0.01), "einwohner": sim.citizens.population_of(k),
 				"zustimmung": snappedf(M.approval, 0.1), "arbeitslos": sim.citizens.unemployed_of(k), "investiert": snappedf(invest, 1.0),
-				"projekte_laufend": running, "gebunden": snappedf(M.commitments, 1.0)})
+				"projekte_laufend": running, "gebunden": snappedf(M.commitments, 1.0), "bewohnbar": progress.bewohnbar,
+				"betriebe_aktiv": progress.betriebe_aktiv, "betriebe_blockiert": progress.betriebe_blockiert,
+				"einsatzbereite_lkw": progress.einsatzbereite_lkw, "lieferungen": progress.lieferungen})
 	var delivered := 0
 	for c in sim.companies:
 		delivered += int(c.stats.completed)
@@ -65,6 +68,33 @@ func on_day(day: int) -> void:
 		"importe": float(sim.hub.stats.import) if sim.hub != null and sim.hub.enabled else 0.0})
 	if world.size() > KEEP_DAYS:
 		world.pop_front()
+
+
+func town_progress(k: int) -> Dictionary:
+	var habitable := 0
+	for unit in sim.housing.units.values():
+		if sim.towns.of_building(int(unit.building)) == k and sim.housing.habitable(unit):
+			habitable += 1
+	var active_businesses := 0
+	var blocked_businesses := 0
+	for business in sim.biz.items.values():
+		if sim.towns.of_building(int(business.get("site", -1))) != k:
+			continue
+		if str(business.get("status", "")) == "aktiv":
+			active_businesses += 1
+		elif str(business.get("status", "")) == "blockiert":
+			blocked_businesses += 1
+	var ready_trucks := 0
+	var deliveries := 0
+	for company in sim.companies:
+		if company.home_town != k:
+			continue
+		deliveries += int(company.stats.completed)
+		for vehicle in sim.company_vehicles(company.id):
+			if vehicle.state not in ["broken", "to_workshop", "repairing"]:
+				ready_trucks += 1
+	return {"bewohnbar": habitable, "betriebe_aktiv": active_businesses, "betriebe_blockiert": blocked_businesses,
+		"einsatzbereite_lkw": ready_trucks, "lieferungen": deliveries}
 
 
 func _push(store: Dictionary, key: int, snap: Dictionary) -> void:

@@ -1107,6 +1107,14 @@ func show_town(k: int) -> void:
 	grid.columns = 3
 	b.add_child(grid)
 	_kpi(grid, "Einwohner", str(sim.citizens.population_of(k)), "", FinanceHistory.trend(sim.finance.town_series(k, "einwohner")), C_INFO)
+	var growth: Dictionary = sim.eko.city_growth_status(k)
+	_kpi(grid, "Bewohnbare Wohnungen", "%d / %d" % [int(growth.get("bewohnbar", 0)), int(growth.get("wohnungen", 0))],
+		", ".join(growth.get("fehlende_anschluesse", [])), FinanceHistory.trend(sim.finance.town_series(k, "bewohnbar")), C_OK if int(growth.get("bewohnbar", 0)) > 0 else C_BAD)
+	var progress: Dictionary = sim.finance.town_progress(k)
+	_kpi(grid, "Betriebe aktiv / blockiert", "%d / %d" % [int(progress.betriebe_aktiv), int(progress.betriebe_blockiert)],
+		"pro Spieltag erfasst", FinanceHistory.trend(sim.finance.town_series(k, "betriebe_aktiv")), C_OK if int(progress.betriebe_blockiert) == 0 else C_WARN)
+	_kpi(grid, "Einsatzbereite Lkw", str(int(progress.einsatzbereite_lkw)),
+		"Lieferungen gesamt %d" % int(progress.lieferungen), FinanceHistory.trend(sim.finance.town_series(k, "lieferungen")), C_INFO)
 	_kpi(grid, "Zustimmung", "%.0f %%" % M.approval, "", FinanceHistory.trend(sim.finance.town_series(k, "zustimmung")), C_OK if M.approval >= 50 else C_WARN)
 	_kpi(grid, "Arbeitslos", str(sim.citizens.unemployed_of(k)), "Beschäftigung %d %%" % int(sim.citizens.employment_rate_of(k) * 100.0), 0, C_WARN)
 	_kpi(grid, "Kasse", Catalog.money(M.cash()), "verfügbar %s" % Catalog.money(M.available_budget()), FinanceHistory.trend(sim.finance.town_series(k, "kasse")), C_INFO)

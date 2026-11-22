@@ -858,6 +858,7 @@ func city_growth_status(town: int) -> Dictionary:
 	var units := 0
 	var habitable := 0
 	var missing := {}
+	var affected := {}
 	for unit in sim.housing.units.values():
 		if sim.towns.of_building(int(unit.building)) != town:
 			continue
@@ -865,17 +866,26 @@ func city_growth_status(town: int) -> Dictionary:
 		if sim.housing.habitable(unit):
 			habitable += 1
 		else:
+			var gaps: Array = []
 			var parcel: Dictionary = sim.parcels.of_building(int(unit.building))
 			var service: Dictionary = parcel.get("erschliessung", {})
 			for part in ["strasse", "strom", "wasser", "abwasser"]:
 				if not bool(service.get(part, false)):
 					missing[part] = true
+					gaps.append(part)
 			if not sim.grid.net.connected(town):
 				missing["kraftwerksstrom"] = true
+				gaps.append("kraftwerksstrom")
 			if not sim.water.building_on_net(town, int(unit.building)):
 				missing["frischwassernetz"] = true
+				gaps.append("frischwassernetz")
 			if not sim.water.building_on_sewer(town, int(unit.building)):
 				missing["kanalnetz"] = true
+				gaps.append("kanalnetz")
+			var bid := int(unit.building)
+			if not affected.has(bid):
+				var building: Dictionary = sim.city.building(bid)
+				affected[bid] = {"gebaeude": bid, "strassenfeld": building.get("road", Vector2i.ZERO), "fehlt": gaps}
 	var building_projects: Array = []
 	for project in sim.construction.projects.values():
 		if str(project.status) in Construction.ACTIVE_STATES and sim.towns.of_parcel(str(project.parcel)) == town:
@@ -908,7 +918,8 @@ func city_growth_status(town: int) -> Dictionary:
 		hint = "%d Einwohner, %d bewohnbare Wohnungen, %d wartende Haushalte. Vergleiche Wohnungsbedarf, Gewerbe, Anschlüsse und laufende Projekte; wähle den nächsten Ausbau selbst." % [population, habitable, waiting]
 	return {"stufe": stage, "stadt": sim.towns.name_of(town), "gegruendet": founded, "buergeramt": ready,
 		"einwohner": population, "wohnungen": units, "bewohnbar": habitable, "wohnungssuchende": waiting,
-		"fehlende_anschluesse": missing.keys(), "bauvorhaben": building_projects, "hinweis": hint}
+		"fehlende_anschluesse": missing.keys(), "betroffene_haeuser": affected.values().slice(0, 12),
+		"bauvorhaben": building_projects, "hinweis": hint}
 
 
 func urgency(b: Dictionary) -> Dictionary:
@@ -921,6 +932,8 @@ func urgency(b: Dictionary) -> Dictionary:
 			var growth: Dictionary = city_growth_status(office_town)
 			if str(growth.get("stufe", "")) == "wohnraum" and int(growth.get("wohnungen", 0)) > 0:
 				var board: Dictionary = _public_build_board(office_town)
+				if bool(board.get("wareneingang_ohne_personal", false)):
+					return {"prioritaet": 2, "grund": "Angelieferte Baustoffe blockieren das Stadtlager ohne Personal. Entscheide selbst ueber expand_depot mit kind staff oder waehle die entsprechende Nummer aus mein_amt.entscheidungsoptionen; danach die Anschlussarbeiten erneut pruefen."}
 				if not bool(board.get("neues_bauprojekt_moeglich", true)):
 					var depot_summary: Dictionary = sim.towns.mayor(office_town).stadtlager_indicators()
 					var proposals: Array = depot_summary.get("vorschlaege", [])
@@ -3230,8 +3243,11 @@ func _public_build_board(k: int) -> Dictionary:
 		if str(crew.get("state", "")) == "frei":
 			free_crews += 1
 	var limit := maxi(3, int(ceil(float(sim.crews.crews.size()) * 0.6 / float(maxi(1, sim.towns.count())))))
+	var depot: CityDepot = sim.towns.depot(k)
+	var intake_blocked: bool = depot.backlog_units() > 0 and depot.roster().is_empty()
 	return {"offen": active, "blockiert": blocked, "kapazitaet": limit, "bautrupps_frei_region": free_crews,
-		"neues_bauprojekt_moeglich": active < limit, "projekte": projects.slice(0, 12)}
+		"neues_bauprojekt_moeglich": active < limit and not intake_blocked,
+		"wareneingang_ohne_personal": intake_blocked, "projekte": projects.slice(0, 12)}
 
 
 func _office_overview(k: int) -> Dictionary:
@@ -3483,9 +3499,15 @@ func office_obs(b: Dictionary) -> Dictionary:
 	var keys: Array = ind.keys()
 	keys.sort_custom(func(x, y): return JSON.stringify(ind[x]).length() < JSON.stringify(ind[y]).length())
 	var depot_info: Dictionary = ind.get("stadtlager", {})
+	var blocked_businesses: Array = []
+	for item in sim.biz.items.values():
+		if str(item.get("status", "")) == "blockiert" and sim.towns.of_building(int(item.get("site", -1))) == k:
+			blocked_businesses.append({"betrieb": str(item.get("id", "")), "name": str(item.get("name", "")),
+				"gebaeude": int(item.get("site", -1)), "blockaden": item.get("blockers", [])})
 	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "verkehrsstandorte": ind.get("verkehrsstandorte", {}), "stromtrassen": ind.get("stromtrassen", []),
 		"kraftwerk_notfall": sim.plant.summary().get("notfall", {}),
 		"bau_blockaden": _public_build_blockers(k), "bauprogramm": _public_build_board(k),
+		"stadtwachstum": city_growth_status(k), "blockierte_betriebe": blocked_businesses.slice(0, 8),
 		"stadtlager": {"vorschlaege": depot_info.get("vorschlaege", []), "blockaden": depot_info.get("blockaden", []),
 			"bestellungen_offen": depot_info.get("bestellungen_offen", 0), "rueckstau_wareneingang_einheiten": depot_info.get("rueckstau_wareneingang_einheiten", 0),
 			"personal_gesamt": depot_info.get("personal_gesamt", 0)},
@@ -3528,6 +3550,9 @@ func office_obs(b: Dictionary) -> Dictionary:
 	for name in Mayor.SCHEMA:
 		acts.append("%s(%s)" % [name, ", ".join(Mayor.SCHEMA[name].params.keys())])
 	out["aktionen"] = "Amt {aktion: {action, ...}}: " + "; ".join(acts)
+	out["aktionen_wichtig"] = {"expand_depot": Mayor.SCHEMA.expand_depot.params, "approve_procurement": Mayor.SCHEMA.approve_procurement.params,
+		"stromtrasse_bauen": Mayor.SCHEMA.stromtrasse_bauen.params, "versorgungsleitung_bauen": Mayor.SCHEMA.versorgungsleitung_bauen.params,
+		"infra_ausbau": Mayor.SCHEMA.infra_ausbau.params, "viertel_erschliessen": Mayor.SCHEMA.viertel_erschliessen.params}
 	out["vorfaelle"] = sim.rivalry.incidents.slice(-8).map(func(i): return {"tag": GameCalendar.day_of(float(i.t)) + 1, "was": str(i.get("text", i.get("art", ""))).left(120)})
 	out["schiedsrichter"] = "Bei Sabotage, Blockaden oder unfairem Wettbewerb kannst du einschreiten: warn_company, order_inspection, mediate_rivalry."
 	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle selbst zwischen Wohnen, Arbeit, Versorgung, Verkehr und Stadtbild. stadtplan_optionen sind Vorschläge; eigene Standorte und Straßentrassen sind möglich. Prüfe bauprogramm und bau_blockaden vor neuen Baustellen. Hafen nur am Meer. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)

@@ -36,16 +36,9 @@ func setup(simulation) -> void:
 ## Muss m warten? hash: Feld -> [Mover] (Simulation._hash).
 func blocked(m: Mover, hash: Dictionary) -> bool:
 	last_blocker = null
-	if m.arrived() or m.pass_until > sim.sim_time:
+	if m.arrived():
 		return false
-	var hit := _blocked(m, hash)
-	if hit and m.wait_time > JAM_S and last_blocker != null and last_blocker.wait_time > JAM_S and m.get_instance_id() < last_blocker.get_instance_id():
-		m.pass_until = sim.sim_time + 3.0   # gegenseitige Blockade: der mit der kleineren Kennung loest sie kurz auf (kein Unfall)
-		return false
-	if hit and m.wait_time > STUCK_S:
-		m.pass_until = sim.sim_time + 4.0   # Notaufloesung: Hindernis bewegt sich nie (Partie 18.11.: Gretas Lkw stand 720 Spielminuten am Grosslager)
-		return false
-	return hit
+	return _blocked(m, hash)
 
 
 func _blocked(m: Mover, hash: Dictionary) -> bool:
@@ -69,9 +62,9 @@ func _blocked(m: Mover, hash: Dictionary) -> bool:
 			var side := absf(rel.cross(m.heading))
 			var d := m.heading.dot(o.heading)
 			var standing: bool = o.arrived() or _is_wreck(o)
-			if standing and not _is_wreck(o) and (o.tile() == m.goal or nt == m.goal):
+			if standing and not _is_wreck(o) and not _roadside_repair(o) and (o.tile() == m.goal or nt == m.goal):
 				continue   # Stellplatz/Rampe am eigenen Ziel: dort duerfen mehrere stehen
-			if standing and m.wait_time > OVERTAKE_S:
+			if standing and not _roadside_repair(o) and m.wait_time > OVERTAKE_S:
 				continue   # an stehendem Fahrzeug/Unfallwagen vorbeifahren (18.11.: Liefer-Lkw wartete ewig hinter einem ladenden Lkw)
 			if standing or d >= 0.5:   # Vordermann oder stehendes Hindernis in der eigenen Spur
 				if along < FOLLOW and side < LANE:
@@ -109,9 +102,9 @@ func _step_hits(m: Mover, hash: Dictionary) -> bool:
 			if o == m or seen.has(o):
 				continue
 			seen[o] = true
-			if o.arrived() and not _is_wreck(o) and (o.tile() == m.goal or npt == m.goal):
+			if o.arrived() and not _is_wreck(o) and not _roadside_repair(o) and (o.tile() == m.goal or npt == m.goal):
 				continue
-			if (o.arrived() or _is_wreck(o)) and m.wait_time > OVERTAKE_S:
+			if (o.arrived() or _is_wreck(o)) and not _roadside_repair(o) and m.wait_time > OVERTAKE_S:
 				continue   # Ueberholen eines stehenden Fahrzeugs
 			var dn := np.distance_to(o.pos)
 			if dn < CRASH + 1.0 and dn < m.pos.distance_to(o.pos) and (o.arrived() or _is_wreck(o) or m.get_instance_id() > o.get_instance_id()):
@@ -131,6 +124,10 @@ func _around(a: Vector2i, b: Vector2i) -> Array:
 
 func _is_wreck(o) -> bool:
 	return o.wreck_until > sim.sim_time
+
+
+func _roadside_repair(o: Mover) -> bool:
+	return o is FleetVehicle and o.state == "repairing" and o.path.is_empty()
 
 
 ## Nach der Bewegung: Beruehrungen sind Unfaelle (oder ein gewolltes Rammen).

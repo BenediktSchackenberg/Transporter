@@ -46,6 +46,7 @@ func _initialize() -> void:
 	test_names.append("test_wildnis_log_fixes")
 	test_names.append("test_wildnis_hub_supply")
 	test_names.append("test_collisions")
+	test_names.append("test_workshop_stall_recovery")
 	test_names.append("test_wildnis_helpers")
 	test_names.append("test_town_plan")
 	test_names.append("test_site_selector")
@@ -15681,3 +15682,17 @@ func test_parcel_ids_and_districts() -> void:
 		d2 = JSON.parse_string(JSON.stringify(s.to_dict()))
 		var s3 := Simulation.from_dict(d2)
 		ok(cells.all(func(q): return s3.city.is_road(q) and not s3.nav.road.is_point_solid(q)), "Straßen nach dem Laden vorhanden und befahrbar")
+
+
+func test_workshop_stall_recovery() -> void:
+	var s := new_sim(2, 96)
+	var v: FleetVehicle = s.vehicles.values()[0]
+	var start := v.pos
+	var cell := v.tile()
+	v.set_path([cell, cell + Vector2i.RIGHT])
+	v.state = "to_workshop"
+	v.speed = 0.0   # Werkstattfahrt ohne jeden Positionsfortschritt, auch nach einer neuen Route
+	for i in 26:
+		s.step(1.0)
+	ok(v.state == "repairing", "blockierte Werkstattfahrt bekommt nach Neuplanung eine Reparatur vor Ort")
+	ok(v.pos == start, "Reparatur verschiebt den Lkw nicht durch Hindernisse")
