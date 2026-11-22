@@ -250,6 +250,24 @@ class MayorToolTests(unittest.TestCase):
         self.assertIn("mayor_action", [t["name"] for t in agent.available_tools()])
         self.assertEqual(agent._mayor_invalid_streak, 0)
 
+    def test_repeated_observation_leads_to_project_wait_or_decision(self):
+        class BusyWorld:
+            threat = False
+            def observe(self):
+                return {"ok": True, "mein_amt": {"bedrohung": self.threat,
+                        "bauprogramm": {"neues_bauprojekt_moeglich": False,
+                                        "projekte": [{"id": "P1", "status": "laufend"}]},
+                        "stadtlager": {"vorschlaege": []}}}
+        world = BusyWorld()
+        agent = agent_with(world)
+        agent._observe_streak = 2
+        self.assertEqual([t["name"] for t in agent.available_tools()], ["wait"])
+        agent._observe_streak = 0
+        agent._nonworld_streak = 5
+        self.assertEqual([t["name"] for t in agent.available_tools()], ["wait"])
+        world.threat = True
+        self.assertEqual([t["name"] for t in agent.available_tools()], ["mayor_action"])
+
     def test_completed_utility_effect_reopens_mayor_decisions(self):
         class EffectWorld:
             effect = []
@@ -281,6 +299,21 @@ class MayorToolTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["status"], "abgeschlossen")
         self.assertNotEqual(before, mayor_project_signature(result["lage"]["mein_amt"]))
+
+    def test_busy_mayor_wait_defaults_to_project_change(self):
+        class ProjectWorld:
+            status = "bestellt"
+            def observe(self):
+                return {"ok": True, "mein_amt": {"bauprogramm": {
+                        "neues_bauprojekt_moeglich": False,
+                        "projekte": [{"id": "P1", "status": "laufend"}]},
+                        "stadtlager": {"laufende_bestellungen": [{"id": "B1", "status": self.status}]}}}
+        world = ProjectWorld()
+        agent = agent_with(world)
+        with patch("tools.eko.eko_ollama.time.sleep", side_effect=lambda _s: setattr(world, "status", "angeliefert")):
+            result = agent.call_tool("wait", {})
+        self.assertEqual(result["status"], "abgeschlossen")
+        self.assertEqual(result["bestellungen"][0]["status"], "angeliefert")
 
     def test_company_choice_rechecks_vehicle_offer_and_executes_investment(self):
         class CompanyWorld(FakeWorld):

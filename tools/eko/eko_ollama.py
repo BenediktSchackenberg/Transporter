@@ -1193,8 +1193,11 @@ class Agent:
                     r["du"] = obs.get("du")
                 return r
             if name == "wait":
-                if getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_mayor_invalid_streak", 0) >= 2 and not a.get("bis"):
-                    a = {**a, "bis": "projekt"}
+                if getattr(self.args, "rolle", "") == "buergermeister" and not a.get("bis"):
+                    office = compact_obs(self.world.observe()).get("mein_amt", {})
+                    board = office.get("bauprogramm") or {}
+                    if getattr(self, "_mayor_invalid_streak", 0) >= 2 or (board.get("neues_bauprojekt_moeglich") is False and board.get("projekte")):
+                        a = {**a, "bis": "projekt"}
                 if a.get("bis") == "projekt":
                     if getattr(self.args, "rolle", "") != "buergermeister":
                         return {"ok": False, "msg": "Auf Stadtprojekte koennen nur Buergermeister warten."}
@@ -1361,7 +1364,11 @@ class Agent:
                 available = [tool for tool in available if tool["name"] != "mining_choice"]
             if not growth_choices(current_firm, current_growth):
                 available = [tool for tool in available if tool["name"] != "growth_choice"]
-        if getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_mayor_invalid_streak", 0) >= 2:
+        mayor_forced = (getattr(self, "_mayor_invalid_streak", 0) >= 2 or
+                        getattr(self, "_observe_streak", 0) >= 2 or
+                        getattr(self, "_passive_streak", 0) >= 3 or
+                        getattr(self, "_nonworld_streak", 0) >= 5)
+        if getattr(self.args, "rolle", "") == "buergermeister" and mayor_forced:
             current = compact_obs(self.world.observe())
             office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
             state = mayor_state_signature(office)
@@ -1371,7 +1378,7 @@ class Agent:
                 self._mayor_failed_count = 0
                 self._mayor_invalid_state = ""
             elif office.get("bedrohung"):
-                return [tool for tool in available if tool["name"] in ("mayor_action", "observe")]
+                return [tool for tool in available if tool["name"] == "mayor_action"]
             elif mayor_choices(office):
                 return [tool for tool in available if tool["name"] == "mayor_choice"]
             else:
