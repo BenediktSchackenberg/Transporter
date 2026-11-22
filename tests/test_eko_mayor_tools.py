@@ -90,6 +90,17 @@ class MayorToolTests(unittest.TestCase):
         self.assertEqual([c["action"] for c in offered], ["request_credit"])
         self.assertEqual(offered[0]["params"]["betrag"], 125000)
 
+    def test_single_mayor_option_accepts_missing_candidate(self):
+        class CreditWorld(FakeWorld):
+            def observe(self):
+                return {"ok": True, "mein_amt": {"haushalt": {"verfuegbar": 0},
+                        "kreditangebot": {"ok": True, "vorschlag": 125000}}}
+        world = CreditWorld()
+        result = agent_with(world).call_tool("mayor_choice", {})
+        self.assertTrue(result["ok"])
+        self.assertEqual(world.actions[0][1]["aktion"]["action"], "request_credit")
+        self.assertEqual(world.actions[0][1]["aktion"]["betrag"], 125000)
+
     def test_full_observation_keeps_checked_choices(self):
         observation = {"ok": True, "mein_amt": {"haushalt": {"verfuegbar": 0},
                        "kreditangebot": {"ok": True, "vorschlag": 620000}},

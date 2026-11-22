@@ -195,8 +195,8 @@ TOOLS = [
          "action": {"type": "string", "description": "Aktionsname aus mein_amt.aktionen; die Spielwelt prueft Berechtigung und Voraussetzungen."},
          "params": {"type": "object", "description": "Parameter der Amtshandlung aus mein_amt.aktionen; z. B. {viertel: V7, reason: Arbeitsplaetze}."}},
          "required": ["action", "params"]}},
-    {"name": "mayor_choice", "description": "Nur fuer Buergermeister: waehle selbst eine gepruefte aktuelle Stadtoption aus mein_amt.entscheidungsoptionen per Nummer. Aktion und gueltige Kennung werden vor der Ausfuehrung erneut gelesen.",
-     "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 13}}, "required": ["candidate"]}},
+    {"name": "mayor_choice", "description": "Nur fuer Buergermeister: waehle selbst eine gepruefte aktuelle Stadtoption aus mein_amt.entscheidungsoptionen per Nummer. Ist genau eine Option verfuegbar, darf candidate entfallen. Aktion und Kennung werden vor der Ausfuehrung erneut gelesen.",
+     "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 13}}}},
     {"name": "wait", "description": "Warte einige Sekunden – mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist, oder mit "
      "bis: \"antwort\", bis dich jemand anspricht oder anruft (höchstens 90 s, ohne dass du dazwischen nachdenken musst). Danach bekommst du deine Lage.",
      "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}, "bis": {"type": "string", "enum": ["ankunft", "antwort"]}}}},
@@ -830,7 +830,7 @@ class Agent:
                     "infra_ausbau": ("anlage",), "stromtrasse_bauen": ("option",),
                     "versorgungsleitung_bauen": ("option",), "approve_procurement": ("order_id",),
                     "reject_procurement": ("order_id",), "expand_depot": ("kind",),
-                    "kommunal_bauen": ("typ",), "viertel_erschliessen": ("viertel",),
+                    "kommunal_bauen": ("typ",), "viertel_erschliessen": ("viertel",), "request_credit": ("betrag",),
                 }
                 missing = [key for key in required.get(action, ()) if not str(params.get(key, "")).strip()]
                 if action == "expand_depot" and params.get("kind") and params["kind"] not in ("staff", "ramp", "forklift"):
@@ -908,7 +908,7 @@ class Agent:
                 current = compact_obs(self.world.observe())
                 office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
                 choices = mayor_choices(office)
-                index = a.get("candidate", -1)
+                index = a.get("candidate", 0 if len(choices) == 1 else -1)
                 if not isinstance(index, int) or index < 0 or index >= len(choices):
                     return {"ok": False, "msg": "Diese Stadtoption ist nicht mehr aktuell. Beobachte erneut und waehle eine Nummer aus mein_amt.entscheidungsoptionen.",
                             "entscheidungsoptionen": choices}
