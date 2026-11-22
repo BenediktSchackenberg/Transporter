@@ -205,10 +205,12 @@ class MayorToolTests(unittest.TestCase):
                 super().__init__()
                 self.cash = 80000
                 self.building = False
+                self.tower = False
 
             def observe(self):
                 return {"ok": True, "meine_firma": {"firma": "Test", "bargeld": self.cash},
                         "mein_stammsitz": {"bauten": [{"art": "huette", "status": "fertig"}] +
+                                                 ([{"art": "turm", "status": "fertig"}] if self.tower else []) +
                                                  ([{"art": "garten", "status": "im_bau"}] if self.building else []),
                                             "ausbauoptionen": [{"art": "garten", "feld": 3, "material": "boden", "hoehe": 2,
                                                                 "kosten": 12000, "zweck": "Garten"},
@@ -227,6 +229,10 @@ class MayorToolTests(unittest.TestCase):
         world.building = True
         self.assertEqual(estate_choices(world.observe()["mein_stammsitz"], world.observe()["meine_firma"]), [])
         self.assertFalse(agent.call_tool("estate_choice", {"candidate": 0})["ok"])
+        world.building = False
+        world.tower = True
+        agent._nonworld_streak = 5
+        self.assertEqual([tool["name"] for tool in agent.available_tools()], ["estate_choice"])
 
 
 if __name__ == "__main__":

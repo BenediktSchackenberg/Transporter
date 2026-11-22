@@ -1172,7 +1172,8 @@ class Agent:
                 firm = current.get("meine_firma", {}) if isinstance(current, dict) else {}
                 estate = current.get("mein_stammsitz", {}) if isinstance(current, dict) else {}
                 if isinstance(estate, dict) and estate.get("entscheidungsoptionen") and not any(
-                        isinstance(b, dict) and b.get("art") != "huette" for b in estate.get("bauten", [])):
+                        isinstance(b, dict) and b.get("art") in ("schloss", "burg", "festung")
+                        for b in estate.get("bauten", [])):
                     return [tool for tool in available if tool["name"] == "estate_choice"]
                 if company_choices(firm):
                     return [tool for tool in available if tool["name"] in ("company_choice", "estate_choice")]
