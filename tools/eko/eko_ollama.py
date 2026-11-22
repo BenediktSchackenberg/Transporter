@@ -196,7 +196,7 @@ TOOLS = [
          "params": {"type": "object", "description": "Parameter der Amtshandlung aus mein_amt.aktionen; z. B. {viertel: V7, reason: Arbeitsplaetze}."}},
          "required": ["action", "params"]}},
     {"name": "mayor_choice", "description": "Nur fuer Buergermeister: waehle selbst eine gepruefte aktuelle Stadtoption aus mein_amt.entscheidungsoptionen per Nummer. Aktion und gueltige Kennung werden vor der Ausfuehrung erneut gelesen.",
-     "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 9}}, "required": ["candidate"]}},
+     "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 13}}, "required": ["candidate"]}},
     {"name": "wait", "description": "Warte einige Sekunden – mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist, oder mit "
      "bis: \"antwort\", bis dich jemand anspricht oder anruft (höchstens 90 s, ohne dass du dazwischen nachdenken musst). Danach bekommst du deine Lage.",
      "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}, "bis": {"type": "string", "enum": ["ankunft", "antwort"]}}}},
@@ -220,6 +220,8 @@ TOOLS = [
 
 # Kleine, typisierte Unternehmerwerkzeuge reduzieren verschachtelte JSON-Fehler lokaler Modelle.
 COMPANY_TOOLS = [
+    {"name": "company_choice", "description": "Waehle selbst eine aktuell bezahlbare Firmeninvestition aus meine_firma.entscheidungsoptionen. Fahrzeugangebot oder gepruefter Gewerbestandort wird vor dem Auftrag neu gelesen.",
+     "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 7}}, "required": ["candidate"]}},
     {"name": "company_plan", "description": "Messbaren Firmenplan mit Frist und Schritten setzen.", "parameters": {"type": "object", "properties": {
         "ziel": {"type": "string"}, "schritte": {"type": "array", "items": {"type": "string"}}, "horizont_tage": {"type": "integer"},
         "kennzahl": {"type": "string", "enum": ["lieferungen", "gewinn", "umsatz", "fahrzeuge", "bargeld"]},
@@ -406,7 +408,7 @@ def compact_obs(o, full=False):
     f = o.get("meine_firma")
     if isinstance(f, dict) and f.get("firma"):
         f = dict(f)
-        for k, n in (("markt", 3), ("fahrzeugangebote", 3), ("bewerber", 3), ("personal", 6), ("meine_auftraege", 5), ("chancen", 2), ("letzte_ergebnisse", 3)):
+        for k, n in (("markt", 3), ("fahrzeugangebote", 4), ("bewerber", 3), ("personal", 6), ("meine_auftraege", 5), ("chancen", 2), ("letzte_ergebnisse", 3)):
             if isinstance(f.get(k), list):
                 f[k] = f[k][:n]
         if isinstance(f.get("branchen_zum_gruenden"), list):
@@ -426,6 +428,7 @@ def compact_obs(o, full=False):
             plan["schritte"] = [s for s in plan["schritte"] if s.get("status") != "erledigt"][:5]
             f["unternehmensplan"] = plan
         o["meine_firma"] = f
+        f["entscheidungsoptionen"] = company_choices(f)
     amt = o.get("mein_amt")
     if isinstance(amt, dict) and amt:
         amt = dict(amt)
@@ -458,27 +461,88 @@ def mayor_choices(office):
         if isinstance(proposal, dict) and proposal.get("id"):
             result.append({"action": "approve_procurement", "params": {"order_id": proposal["id"], "reason": "Projektmaterial beschaffen"},
                            "nutzen": proposal.get("reason", "Materialbedarf")})
-    can_build = (office.get("bauprogramm") or {}).get("neues_bauprojekt_moeglich", True)
+    board = office.get("bauprogramm") or {}
+    can_build = board.get("neues_bauprojekt_moeglich", True)
+    budget = (office.get("haushalt") or {}).get("verfuegbar", float("inf"))
     if can_build:
         for line in (office.get("versorgungsleitungen") or [])[:3]:
-            if isinstance(line, dict) and line.get("id"):
+            if isinstance(line, dict) and line.get("id") and float(line.get("kosten", 0)) <= budget:
                 result.append({"action": "versorgungsleitung_bauen", "params": {"option": line["id"], "reason": "Gebaeude ans Netz anschliessen"},
-                               "nutzen": "%s: %s Gebaeudepunkte, %s EUR" % (line.get("art", "Leitung"), line.get("gebaeude_nahe", 0), line.get("kosten", "?"))})
+                               "nutzen": "%s: %s Wohnungen und %s Betriebe neu am Netz, %s EUR" % (line.get("art", "Leitung"), line.get("wohnungen_neu_am_netz", 0), line.get("betriebe_neu_am_netz", 0), line.get("kosten", "?"))})
         for line in (office.get("stromtrassen") or [])[:2]:
-            if isinstance(line, dict) and line.get("id"):
+            if isinstance(line, dict) and line.get("id") and float(line.get("kosten", 0)) <= budget:
                 result.append({"action": "stromtrasse_bauen", "params": {"option": line["id"], "reason": "Stromversorgung der Stadt"},
                                "nutzen": "Stromtrasse %s" % line["id"]})
-        active_districts = {project.get("viertel") for project in (office.get("bauprogramm", {}).get("projekte") or [])
+        for plant, state in (office.get("versorgungsanlagen_ausbau") or {}).items():
+            if isinstance(state, dict) and state.get("ok"):
+                result.append({"action": "infra_ausbau", "params": {"anlage": plant, "reason": "Gemessene Auslastung der Anlage"},
+                               "nutzen": state.get("msg", "Kapazitaetsengpass")})
+        for kind, action in (("hafen", "build_harbor"), ("flughafen", "build_airport"), ("bahn", "build_station")):
+            site = (office.get("verkehrsstandorte") or {}).get(kind) or {}
+            if site and not site.get("gebaut") and not site.get("projekt") and (kind == "bahn" or site.get("standort")) \
+                    and float(site.get("kosten", 0)) <= budget:
+                result.append({"action": action, "params": {"reason": "Stadt und Wirtschaft regional anbinden"},
+                               "nutzen": "%s: Standort %s, %s EUR" % (kind, site.get("standort", []), site.get("kosten", "?"))})
+        active_districts = {project.get("viertel") for project in (board.get("projekte") or [])
                             if isinstance(project, dict) and project.get("viertel")}
+        road_running = any(project.get("art") == "erschliessung" for project in (board.get("projekte") or []) if isinstance(project, dict))
         districts_added = 0
-        for district in (office.get("stadtplan_optionen") or []):
+        for district in ([] if road_running else (office.get("stadtplan_optionen") or [])):
             if isinstance(district, dict) and district.get("viertel") and district["viertel"] not in active_districts:
                 result.append({"action": "viertel_erschliessen", "params": {"viertel": district["viertel"], "reason": "Wohn- und Arbeitsflaechen erschliessen"},
                                "nutzen": "%s %s" % (district.get("zone", "Viertel"), district["viertel"])})
                 districts_added += 1
                 if districts_added >= 2:
                     break
-    return [{"candidate": i, **choice} for i, choice in enumerate(result[:10])]
+    return [{"candidate": i, **choice} for i, choice in enumerate(result[:14])]
+
+
+def company_choices(firm):
+    """Reale, finanzierte Expansion; das Modell waehlt die Investition selbst."""
+    if not isinstance(firm, dict):
+        return []
+    cash = float(firm.get("bargeld", 0) or 0)
+    vehicles = firm.get("fahrzeuge") or []
+    deliveries = int(firm.get("lieferungen", 0) or 0)
+    fleet_goal = min(3, 1 + deliveries // 12)
+    result = []
+    if len(vehicles) < fleet_goal:
+        for offer in (firm.get("fahrzeugangebote") or [])[:4]:
+            if isinstance(offer, dict) and offer.get("id") and cash >= float(offer.get("preis", float("inf"))) + 50000:
+                result.append({"action": "buy_vehicle", "params": {"offer_id": offer["id"]},
+                               "nutzen": "%s, %s EUR; %s Lieferungen mit %s LKW" % (offer.get("modell"), offer.get("preis"), deliveries, len(vehicles))})
+    for option in (firm.get("wirtschaftsoptionen") or [])[:4]:
+        if isinstance(option, dict) and option.get("branche") and option.get("grundstueck") \
+                and cash >= float(option.get("kosten", float("inf"))) + 50000:
+            result.append({"action": "found_business", "params": {"branche": option["branche"],
+                           "grundstueck": option["grundstueck"], "stadt": option.get("stadt")},
+                           "nutzen": "%s auf %s, %s EUR, %s Arbeitsplaetze" % (option.get("name", option["branche"]),
+                                     option["grundstueck"], option.get("kosten"), option.get("personal_min", 1))})
+    return [{"candidate": i, **choice} for i, choice in enumerate(result[:8])]
+
+
+def mayor_state_signature(office):
+    """Nur Veraenderungen, die eine abgelehnte Stadtentscheidung erneut sinnvoll machen."""
+    board = office.get("bauprogramm") or {}
+    state = {
+        "projects": sorted((p.get("id"), p.get("status")) for p in board.get("projekte", []) if isinstance(p, dict)),
+        "capacity": board.get("neues_bauprojekt_moeglich"),
+        "orders": sorted(p.get("id") for p in (office.get("stadtlager") or {}).get("vorschlaege", []) if isinstance(p, dict) and p.get("id")),
+        "lines": sorted(p.get("id") for p in office.get("versorgungsleitungen", []) if isinstance(p, dict) and p.get("id")),
+        "power": sorted(p.get("id") for p in office.get("stromtrassen", []) if isinstance(p, dict) and p.get("id")),
+        "plants": {k: bool(v.get("ok")) for k, v in (office.get("versorgungsanlagen_ausbau") or {}).items() if isinstance(v, dict)},
+        "housing": (office.get("stadtwachstum") or {}).get("bewohnbar"),
+        "sites": office.get("verkehrsstandorte") or {},
+    }
+    return json.dumps(state, sort_keys=True, ensure_ascii=False)
+
+
+def mayor_action_key(action, params):
+    fields = {"infra_ausbau": ("anlage",), "approve_procurement": ("order_id",),
+              "versorgungsleitung_bauen": ("option",), "stromtrasse_bauen": ("option",),
+              "viertel_erschliessen": ("viertel",), "stadtteil_planen": ("grundstueck", "zone")}
+    relevant = {k: params.get(k) for k in fields[action]} if action in fields else {k: v for k, v in params.items() if k not in ("reason", "warum", "begruendung")}
+    return json.dumps([action, relevant], sort_keys=True, ensure_ascii=False)
 
 
 def general_memory(doc):
@@ -506,6 +570,8 @@ def changed_world(name, args, result):
         return False
     if name == "founding_choice":
         return True
+    if name == "company_choice":
+        return True
     if name in ("mayor_action", "mayor_choice"):
         choice = result.get("gewaehlt", {}) if name == "mayor_choice" else args
         return str(choice.get("action", "")).lower() not in ("", "wait", "status", "overview")
@@ -528,6 +594,7 @@ class Agent:
         self._mayor_failed_key = ""
         self._mayor_failed_count = 0
         self._mayor_invalid_streak = 0
+        self._mayor_invalid_state = ""
         self._ollama_json_mode = getattr(args, "anbieter", "ollama") == "ollama" and "Qwen3.8" in args.model
         self._passive_streak = 0
         self._nonworld_streak = 0
@@ -603,15 +670,15 @@ class Agent:
                          "pruefe dringende Lieferungen und Liquiditaet. Ein freier Lkw und ein bezahlter machbarer Kundenauftrag "
                          "sollen eine echte Lieferung ergeben: nimm den Auftrag selbst an oder aktiviere die Regel-Disposition. "
                          "Vermeide wiederholte Beobachtungen ohne Entscheidung.")
-            lines.append("Nutze die direkten Werkzeuge company_plan, review_company_plan, dispatch_policy, contract_choice, buy_vehicle, "
+            lines.append("Nutze company_choice fuer eine selbst gewaehlte, gepruefte Investition aus meine_firma.entscheidungsoptionen sowie die direkten Werkzeuge company_plan, review_company_plan, dispatch_policy, contract_choice, buy_vehicle, "
                          "hire_worker, found_business, assign_business_staff, repair_vehicle und city_strategy. Krieg ist optional: Frieden, Handel und Kooperation koennen dauerhaft bestehen. "
                          "Bei einem Angriff hat Selbstschutz Vorrang: eigene Truppen, verfuegbare Waffen und Stadtverteidigung pruefen, mobilize_worker nutzen und den Buergermeister auf Wachtuerme oder Mauern hinweisen. Auch in Haltung frieden darfst du dich verteidigen. "
                          "Bewaffnete Angriffe brauchen eine eigene Waffenschmiede, fertige Waffen und order_assault; waehle sie nur, wenn du Nutzen und Verlustrisiko begruenden kannst. "
                          "Steigt die Rivalitaet vor einem Angriff, pruefe Wachschutz, Versicherung, Schlichtung und Kooperation gegen ihre laufenden Kosten. "
                          "Die Firmenbeobachtung zeigt transportchancen mit geschaetztem Deckungsbeitrag, "
                          "entscheidungsfolgen und dringlichkeit. Gib der Routine klare Grenzen und pruefe deinen Plan taeglich.")
-            lines.append("Wenn observe.meine_firma.wirtschaftsaufbau einen konkreten Standort und found_business nennt, "
-                         "gruende dort nach dringenden Lieferungen einen Betrieb. Pruefe danach Baufortschritt, stelle "
+            lines.append("Vergleiche meine_firma.wirtschaftsoptionen nach Branche, Standort, Kosten und Arbeitsplaetzen. "
+                         "Gruende einen Betrieb, wenn der Standort zu deinem Plan passt. Pruefe danach Baufortschritt, stelle "
                          "Personal ein und ordne es dem Betrieb zu. Bei Arbeitslosen ohne offene Stellen hat ein neuer "
                          "Betrieb Vorrang vor einem weiteren Wohnhaus. Wenn ein fertiger Betrieb blockiert ist, "
                          "behebe zuerst die sichtbaren Blockaden bei Personal, Rohstoffen oder Versorgung und pruefe "
@@ -643,13 +710,15 @@ class Agent:
                          "Miss Wachstum an bewohnbaren Wohnungen, tatsaechlichem Zuzug und aktiven Betrieben. Solange Wohnungen "
                          "ohne Kraftwerksstrom, Frischwasser oder Kanal unbewohnbar sind, behandle diese Netze als dringenden Engpass; "
                          "waehle selbst eine gepruefte Bauvariante aus mein_amt. Wenn ein Bauprojekt wartet, lies seinen konkreten "
-                         "Material- oder Bautrupp-Blocker, behebe ihn oder entscheide ueber einen ergaenzenden Ausbauschritt. "
+                         "Material- oder Bautrupp-Blocker und behebe ihn. Wasserleistung und Leitungsanschluss sind verschiedene Dinge: "
+                         "infra_ausbau vergroessert nur eine vorhandene Anlage und hilft nur, wenn versorgungsanlagen_ausbau die Auslastung bestaetigt. "
                          "Wenn bauprogramm.offen die Kapazitaet erreicht, genehmige passende stadtlager.vorschlaege mit "
                          "approve_procurement oder warte auf Material, Bautrupps und Abschluss; neue Baustellen werden abgelehnt. "
                          "Amt status dient nur zur Klaerung einer neuen Lage; wiederholtes "
                          "Amt status und Rest ohne Zustandsaenderung sind keine Stadtentwicklung. Rest nur bei wirklichem Energiemangel. "
                          "Ein fertiges, abgebrochenes oder nicht existentes Projekt ist kein aktuelles Ziel mehr. "
                          "Alte Notizen, die eine Status-Schleife empfehlen, sind durch diese Regel ueberholt. "
+                         "Vergleiche bei freier Baukapazitaet auch gepruefte Hafen-, Flughafen- und Bahnstandorte. "
                          "Frieden, Handel und schoene Stadtviertel sind vollwertige strategische Entscheidungen.")
             lines.append("Waehle bei passenden Angeboten mit mayor_choice eine Nummer aus mein_amt.entscheidungsoptionen; ")
             lines.append("fuer eigene Bauideen nutze mayor_action mit action und params aus mein_amt.aktionen_wichtig. "
@@ -712,6 +781,20 @@ class Agent:
                 if isinstance(result, dict):
                     result["gewaehlt"] = {"contract_id": kid, "vehicle_id": vid, "deckungsbeitrag_geschaetzt": choice.get("deckungsbeitrag_geschaetzt")}
                 return result
+            if name == "company_choice":
+                if getattr(self.args, "rolle", "") != "unternehmer":
+                    return {"ok": False, "msg": "Nur Unternehmer koennen Firmeninvestitionen waehlen."}
+                current = compact_obs(self.world.observe())
+                firm = current.get("meine_firma", {}) if isinstance(current, dict) else {}
+                choices = company_choices(firm)
+                index = a.get("candidate", -1)
+                if not isinstance(index, int) or index < 0 or index >= len(choices):
+                    return {"ok": False, "msg": "Investitionsoption nicht mehr aktuell. Beobachte erneut.", "entscheidungsoptionen": choices}
+                choice = choices[index]
+                result = self.call_tool(choice["action"], choice["params"])
+                if isinstance(result, dict):
+                    result["gewaehlt"] = choice
+                return result
             if name == "mayor_action":
                 if getattr(self.args, "rolle", "") != "buergermeister":
                     return {"ok": False, "msg": "Nur Buergermeister koennen mayor_action nutzen."}
@@ -728,10 +811,16 @@ class Agent:
                 missing = [key for key in required.get(action, ()) if not str(params.get(key, "")).strip()]
                 if action == "expand_depot" and params.get("kind") and params["kind"] not in ("staff", "ramp", "forklift"):
                     missing.append("kind=staff|ramp|forklift")
-                key = json.dumps([action, params], sort_keys=True, ensure_ascii=False)
+                current = compact_obs(self.world.observe())
+                office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
+                state = mayor_state_signature(office)
+                if getattr(self, "_mayor_invalid_state", "") and state != self._mayor_invalid_state:
+                    self._mayor_failed_key = ""
+                    self._mayor_failed_count = 0
+                    self._mayor_invalid_streak = 0
+                    self._mayor_invalid_state = ""
+                key = mayor_action_key(action, params)
                 if missing or (key == self._mayor_failed_key and self._mayor_failed_count >= 2):
-                    current = compact_obs(self.world.observe())
-                    office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
                     choices = {"stromtrasse_bauen": office.get("stromtrassen", []),
                                "versorgungsleitung_bauen": office.get("versorgungsleitungen", []),
                                "approve_procurement": office.get("stadtlager", {}).get("vorschlaege", []),
@@ -741,13 +830,36 @@ class Agent:
                             "erforderlich": list(required.get(action, ())), "gueltige_optionen": choices.get(action, [])[:5],
                             "stadtwachstum": current.get("stadtwachstum", {}) if isinstance(current, dict) else {},
                             "bau_blockaden": office.get("bau_blockaden", [])[:4]}
+                building_actions = {"infra_ausbau", "stromtrasse_bauen", "versorgungsleitung_bauen", "viertel_erschliessen",
+                                    "plan_infrastructure", "kommunal_bauen", "propose_project",
+                                    "build_harbor", "build_airport", "build_station"}
+                board = office.get("bauprogramm") or {}
+                if action in building_actions and board.get("neues_bauprojekt_moeglich") is False:
+                    return {"ok": False, "msg": "Baukapazitaet belegt: zuerst laufende Projekte und Material pruefen. Neue Bauauftraege sind derzeit nicht moeglich.",
+                            "bauprogramm": board}
+                if action == "infra_ausbau":
+                    need = (office.get("versorgungsanlagen_ausbau") or {}).get(str(params.get("anlage", "")))
+                    if isinstance(need, dict) and not need.get("ok"):
+                        return {"ok": False, "msg": need.get("msg", "Dieser Kapazitaetsausbau ist nicht wirksam."),
+                                "versorgungsleitungen": (office.get("versorgungsleitungen") or [])[:3]}
+                current_ids = {"approve_procurement": ("stadtlager", "vorschlaege", "order_id"),
+                               "versorgungsleitung_bauen": (None, "versorgungsleitungen", "option"),
+                               "stromtrasse_bauen": (None, "stromtrassen", "option")}
+                if action in current_ids:
+                    section, field, param = current_ids[action]
+                    entries = (office.get(section) or {}).get(field, []) if section else office.get(field, [])
+                    if isinstance(entries, list) and str(params.get(param)) not in {str(x.get("id")) for x in entries if isinstance(x, dict)}:
+                        return {"ok": False, "msg": "Diese Kennung ist nicht mehr offen. Beobachte aktuelle Optionen und waehle eine neue Entscheidung.",
+                                "gueltige_optionen": entries[:5]}
                 result = self.call_tool("act", {"type": "Amt", "data": {"aktion": {**params, "action": action}}})
                 if isinstance(result, dict) and result.get("ok") is False:
                     self._mayor_failed_count = self._mayor_failed_count + 1 if key == self._mayor_failed_key else 1
                     self._mayor_failed_key = key
+                    self._mayor_invalid_state = state
                 else:
                     self._mayor_failed_key = ""
                     self._mayor_failed_count = 0
+                    self._mayor_invalid_state = ""
                 current = compact_obs(self.world.observe())
                 office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
                 if isinstance(result, dict):
@@ -963,10 +1075,23 @@ class Agent:
         if getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_mayor_invalid_streak", 0) >= 2:
             current = compact_obs(self.world.observe())
             office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
-            if mayor_choices(office):
+            state = mayor_state_signature(office)
+            if getattr(self, "_mayor_invalid_state", "") and state != self._mayor_invalid_state:
+                self._mayor_invalid_streak = 0
+                self._mayor_failed_key = ""
+                self._mayor_failed_count = 0
+                self._mayor_invalid_state = ""
+            elif mayor_choices(office):
                 return [tool for tool in available if tool["name"] == "mayor_choice"]
+            else:
+                return [tool for tool in available if tool["name"] == "wait"]
         if getattr(self, "_nonworld_streak", 0) >= 5:
-            allowed = {"act", "mayor_action", "mayor_choice"} if getattr(self.args, "rolle", "") == "buergermeister" else {"act"}
+            if getattr(self.args, "rolle", "") == "unternehmer":
+                current = compact_obs(self.world.observe())
+                firm = current.get("meine_firma", {}) if isinstance(current, dict) else {}
+                if company_choices(firm):
+                    return [tool for tool in available if tool["name"] == "company_choice"]
+            allowed = {"act", "mayor_action", "mayor_choice"} if getattr(self.args, "rolle", "") == "buergermeister" else {"act", "contract_choice"}
             return [tool for tool in available if tool["name"] in allowed]
         idle = self._passive_streak >= 3
         if getattr(self, "_observe_streak", 0) >= 2 or idle:
@@ -1341,6 +1466,9 @@ class Agent:
                             last_error=verdict if failed else "")
                 if fn["name"] in ("mayor_action", "mayor_choice"):
                     self._mayor_invalid_streak = min(4, getattr(self, "_mayor_invalid_streak", 0) + 1) if failed else 0
+                    if failed and not getattr(self, "_mayor_invalid_state", ""):
+                        fresh = compact_obs(self.world.observe())
+                        self._mayor_invalid_state = mayor_state_signature(fresh.get("mein_amt", {}) if isinstance(fresh, dict) else {})
                     self._mayor_ok = getattr(self, "_mayor_ok", 0) + (0 if failed else 1)
                     self._mayor_fail = getattr(self, "_mayor_fail", 0) + (1 if failed else 0)
                     self.status("fehler" if failed else "bereit", city_actions_ok=self._mayor_ok,

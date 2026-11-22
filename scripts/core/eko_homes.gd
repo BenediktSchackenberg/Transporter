@@ -603,21 +603,47 @@ func business_hint(cid: int) -> String:
 			return "Betrieb %s (%s) ist blockiert: %s. Behebe erst Einkaufskette oder Stadtversorgung, bevor du den nächsten Betrieb gründest; prüfe danach, ob der Betrieb wirklich produziert." % [b.name, b.id, "; ".join(blockers.map(func(x): return str(x.text)))]
 	if owned.any(func(b): return str(b.status) == "im_bau"):
 		return "Ein neuer Betrieb wird gebaut. Prüfe Baufortschritt und bereite Personal vor; danach weitere Gewerbe- und Industriebetriebe planen."
+	var options: Array = business_options(cid, 3)
+	if not options.is_empty():
+		var best: Dictionary = options[0]
+		return "In %s wohnen %d Menschen. Vergleiche die geprueften wirtschaftsoptionen und gruende bei passender Strategie einen Betrieb auf %s: Firma {aktion: {action: \"found_business\", branche: \"%s\", stadt: %d, grundstueck: \"%s\"}}. Danach Personal einstellen und dem Betrieb zuordnen." % [
+			sim.towns.name_of(k), sim.citizens.population_of(k), str(best.grundstueck), str(best.branche), k, str(best.grundstueck)]
+	return "In %s fehlt ein befahrbares freies Gewerbe- oder Industriegrundstueck fuer einen neuen Betrieb. Bitte den Buergermeister um ein erschlossenes Wirtschaftsviertel; bis dahin weiter liefern und Wohnraum schaffen." % sim.towns.name_of(k)
+
+
+## Die KI bekommt mehrere echte Branchen-/Standortpaare statt einer festgelegten Baufolge.
+## Bereits blockierte Betriebe werden erst versorgt, bevor weitere Arbeitsplaetze entstehen.
+func business_options(cid: int, limit: int = 3) -> Array:
+	var sim = _sim()
+	var k: int = sim.companies[cid].home_town
+	if not sim.wildnis or not sim.town_ready(k) or sim.citizens.population_of(k) <= 0:
+		return []
+	var owned: Array = sim.biz.of(cid).filter(func(b): return str(b.branch) != "transport")
+	if owned.any(func(b): return str(b.status) in ["blockiert", "im_bau"] or (str(b.status) in Businesses.RUNNING and sim.biz.staff_of(str(b.id)).size() < int(Businesses.branches().get(str(b.branch), {}).get("personal_min", 1)))):
+		return []
 	var target: int = mini(6, maxi(1, int(ceil(float(sim.citizens.population_of(k)) / 12.0))))
 	if owned.size() >= target:
-		return ""
+		return []
+	var out: Array = []
 	var c = sim.company(cid)
 	for branch in ["baeckerei", "moebelwerk", "muehle", "brauerei", "schreinerei", "betonwerk"]:
 		if owned.any(func(b): return str(b.branch) == branch):
 			continue
 		var spec: Dictionary = Businesses.branches().get(branch, {})
-		if c.ledger.cash < float(spec.get("ausstattung", 0.0)) + 10000.0 or not bool(sim.retail.counter_viable(branch).get("ok", false)):
+		var cost := float(spec.get("ausstattung", 0.0))
+		if c.ledger.cash < cost + 10000.0 or not bool(sim.retail.counter_viable(branch).get("ok", false)):
 			continue
-		var hints: Array = sim.prod.site_hints(branch, 1, k)
-		if not hints.is_empty():
-			return "In %s wohnen %d Menschen. Gruende einen Betrieb mit echten Arbeitsplaetzen auf dem geprueften Standort %s: Firma {aktion: {action: \"found_business\", branche: \"%s\", stadt: %d, grundstueck: \"%s\"}}. Danach Personal einstellen und dem Betrieb zuordnen." % [
-				sim.towns.name_of(k), sim.citizens.population_of(k), str(hints[0].grundstueck), branch, k, str(hints[0].grundstueck)]
-	return "In %s fehlt ein befahrbares freies Gewerbe- oder Industriegrundstueck fuer einen neuen Betrieb. Bitte den Buergermeister um ein erschlossenes Wirtschaftsviertel; bis dahin weiter liefern und Wohnraum schaffen." % sim.towns.name_of(k)
+		for hint in sim.prod.site_hints_cached(branch, 1, k):
+			var parcel: Dictionary = sim.parcels.parcel(str(hint.grundstueck))
+			if parcel.is_empty() or str(parcel.get("state", "")) not in ["frei", "zur_entwicklung"]:
+				continue
+			out.append({"branche": branch, "name": spec.get("label", branch), "grundstueck": str(hint.grundstueck),
+				"stadt": k, "kosten": cost, "zutaten_je_charge": hint.get("zutaten_je_charge", 0.0),
+				"personal_min": int(spec.get("personal_min", 1))})
+			break
+		if out.size() >= limit:
+			break
+	return out
 
 
 # ------------------------------------------------------------------ Beobachtung und naechste Schritte

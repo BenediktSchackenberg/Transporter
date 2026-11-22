@@ -13444,6 +13444,8 @@ func test_infra_chain() -> void:
 	var M: Mayor = s.towns.mayor(k)
 	for kk in 4:
 		s.economy.transfer("X0", Towns.account_of(kk), 500000.0)
+	ok(not M.execute({"action": "infra_ausbau", "anlage": "wasserwerk", "reason": "Ohne Bedarf"}).ok, "ohne Kapazitaetsengpass kein teurer Wasserwerksausbau")
+	s.water.last[str(k)].bedarf = float(s.water.works_of(k).capacity)
 	var r: Dictionary = M.execute({"action": "infra_ausbau", "anlage": "wasserwerk", "reason": "Test"})
 	ok(r.ok and s.water.expansions.values().has(str(s.water.works_of(k).id)), "Bürgermeister lässt das Wasserwerk ausbauen (%s)" % str(r.get("msg", r.get("ref", ""))))
 	ok(not M.execute({"action": "infra_ausbau", "anlage": "wasserwerk", "reason": "Test"}).ok, "nicht doppelt")

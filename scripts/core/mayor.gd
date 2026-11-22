@@ -11,7 +11,7 @@ const SCHEMA := {
 	"kommunal_fahrzeug": {"params": {"einrichtung": "string", "fahrzeug": "string", "reason": "string"},
 		"desc": "Fahrzeug für eine Einrichtung kaufen (einrichtung = ID M<n>, fahrzeug HLF 20|DLK 23|RTW|NEF|Kipper|Streuwagen|Linienbus|Wertstoffwagen)."},
 	"infra_ausbau": {"params": {"anlage": "string", "reason": "string"},
-		"desc": "Versorgung vorausschauend ausbauen (obs.infrastruktur_lage, obs.wasser, obs.bahn): anlage wasserwerk | hochbehaelter | klaeranlage (Leistung ×1,5, 40 % der Neubaukosten, Baufirma, 12 Tage; Kläranlage teilen sich die Städte) oder gleis (Instandsetzung des schlechtesten Abschnitts an deiner Stadt, Land 75 %)."},
+		"desc": "Nur bei echtem Kapazitätsengpass eine bestehende Anlage vergrößern: wasserwerk | hochbehaelter | klaeranlage. Kein neuer Standort und keine größere Druckzone; dafür kommunal_bauen beziehungsweise versorgungsleitung_bauen wählen. gleis repariert die Bahnlinie."},
 	"stromtrasse_bauen": {"params": {"option": "string", "reason": "string"},
 		"desc": "Eine geprüfte Hochspannungstrasse aus obs.stromtrassen wählen. Die KI bestimmt Trasse und Standort des Umspannwerks; Material, Baufirma, Bauzeit und Kosten sind real. Nach Fertigstellung erhält die Stadt Kraftwerksstrom. Ein zweiter Weg schützt vor Ausfällen."},
 	"versorgungsleitung_bauen": {"params": {"option": "string", "reason": "string"},

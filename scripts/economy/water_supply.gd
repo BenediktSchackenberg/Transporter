@@ -383,6 +383,8 @@ func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Dict
 		var cells: Array = path.slice(0, 48).filter(func(q): return not built.has(_cell_key(q)))
 		if cells.is_empty():
 			continue
+		var before: Dictionary = pressure if art == "wasser" else built
+		var after: Dictionary = built.duplicate()
 		if art == "wasser":
 			# Auch eine baubare Trasse hilft nicht, wenn sie ausserhalb der Druckzone endet.
 			# Die Vorschau veraendert nur voruebergehend die verlegten Leitungsfelder.
@@ -393,13 +395,39 @@ func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Dict
 				built.erase(_cell_key(q))
 			if projected.size() <= pressure.size():
 				continue
+			after = projected
+		else:
+			for q in cells:
+				after[_cell_key(q)] = true
+		var homes_connected := 0
+		var businesses_connected := 0
+		for unit in sim.housing.units.values():
+			var b: Dictionary = C.building(int(unit.building))
+			if b.is_empty() or sim.towns.of_building(int(unit.building)) != k:
+				continue
+			var road: Vector2i = Vector2i(b.road)
+			var key: Variant = road if art == "wasser" else _cell_key(road)
+			if after.has(key) and not before.has(key):
+				homes_connected += 1
+		for item in sim.biz.items.values():
+			var bid := int(item.get("site", -1))
+			if bid < 0 or sim.towns.of_building(bid) != k or str(item.get("branch", "")) == "transport" or str(item.get("status", "")) == "geschlossen":
+				continue
+			var b: Dictionary = C.building(bid)
+			if b.is_empty():
+				continue
+			var road: Vector2i = Vector2i(b.road)
+			var key: Variant = road if art == "wasser" else _cell_key(road)
+			if after.has(key) and not before.has(key):
+				businesses_connected += 1
 		var cost := snappedf(float(cells.size()) * (130.0 if art == "wasser" else 170.0), 10.0)
 		options.append({"id": "%s:%d:%d" % [art, target.x, target.y], "art": art,
 			"von": [cells[0].x, cells[0].y], "ziel": [target.x, target.y],
 			"felder": cells.size(), "gebaeude_nahe": int(targets[target]),
+			"wohnungen_neu_am_netz": homes_connected, "betriebe_neu_am_netz": businesses_connected,
 			"kosten": cost, "tage": maxi(2, ceili(float(cells.size()) / 8.0)),
 			"cells": cells.map(func(q): return [q.x, q.y])})
-	options.sort_custom(func(a, b): return int(a.gebaeude_nahe) * 100 - int(a.felder) > int(b.gebaeude_nahe) * 100 - int(b.felder))
+	options.sort_custom(func(a, b): return int(a.wohnungen_neu_am_netz) * 1000 + int(a.betriebe_neu_am_netz) * 700 + int(a.gebaeude_nahe) * 10 - int(a.felder) * 2 > int(b.wohnungen_neu_am_netz) * 1000 + int(b.betriebe_neu_am_netz) * 700 + int(b.gebaeude_nahe) * 10 - int(b.felder) * 2)
 	return {"options": options.slice(0, 3), "targets": targets.size()}
 
 
@@ -408,6 +436,7 @@ func main_brief(k: int) -> Array:
 	for art in ["wasser", "abwasser"]:
 		for o in main_options(k, art):
 			out.append({"id": o.id, "art": art, "von": o.von, "felder": o.felder, "gebaeude_nahe": o.gebaeude_nahe,
+				"wohnungen_neu_am_netz": o.get("wohnungen_neu_am_netz", 0), "betriebe_neu_am_netz": o.get("betriebe_neu_am_netz", 0),
 				"ziel": o.get("ziel", []), "kosten": o.kosten, "tage": o.tage})
 	return out
 
@@ -867,6 +896,9 @@ func fire_water_factor(k: int) -> float:
 
 ## Buergermeister-Aktion infra_ausbau: Wasserwerk, Hochbehaelter oder Klaeranlage vorzeitig ausbauen.
 func mayor_expand(k: int, anlage: String) -> Dictionary:
+	var need: Dictionary = expansion_need(k, anlage)
+	if not bool(need.get("ok", false)):
+		return need
 	var f := {}
 	match anlage:
 		"wasserwerk":
@@ -880,6 +912,37 @@ func mayor_expand(k: int, anlage: String) -> Dictionary:
 		var code: String = str({"wasserwerk": "WW-01", "hochbehaelter": "WT-01", "klaeranlage": "KA-01"}.get(anlage, ""))
 		return {"ok": false, "msg": "Keine Anlage %s in dieser Stadt – ausbauen geht erst, wenn es eine gibt. Neu bauen: Amt {aktion: {action: \"kommunal_bauen\", typ: \"%s\"}}." % [anlage, code] if code != "" else "Keine Anlage %s in dieser Stadt." % anlage}
 	return expand(f, k if anlage != "klaeranlage" else int(f.town))
+
+
+## Kapazitaet und Anschlussreichweite sind verschiedene Probleme. Ein weiterer Ausbau
+## derselben Anlage erzeugt weder eine neue Einspeisestelle noch fehlende Leitungen.
+func expansion_need(k: int, anlage: String) -> Dictionary:
+	var f := {}
+	var demand := 0.0
+	match anlage:
+		"wasserwerk":
+			f = works_of(k)
+			demand = float(last.get(str(k), {}).get("bedarf", 0.0))
+		"hochbehaelter":
+			var tanks: Array = tanks_of(k)
+			f = tanks[0] if not tanks.is_empty() else {}
+			demand = float(last.get(str(k), {}).get("bedarf", 0.0))
+		"klaeranlage":
+			f = plant()
+			demand = float(plant_last.get("zulauf", 0.0))
+		_:
+			return {"ok": false, "msg": "Unbekannte Versorgungsanlage."}
+	if f.is_empty():
+		return {"ok": false, "msg": "Keine bestehende Anlage zum Ausbauen. Ein Neubau braucht kommunal_bauen und einen geprüften Standort."}
+	if expansions.values().has(str(f.id)):
+		return {"ok": false, "msg": "Ausbau %s läuft bereits. Prüfe laufende Bauprojekte und Wasserleitungen." % str(f.name)}
+	var capacity: float = tank_capacity(k) if anlage == "hochbehaelter" else float(f.capacity)
+	var limit: float = demand if anlage == "hochbehaelter" else demand / EXPAND_RATIO
+	if demand <= 0.0 or capacity >= limit:
+		return {"ok": false, "msg": "%s hat genügend Kapazität (%.1f m³ bei %.1f m³ Bedarf). Fehlende Anschlüsse brauchen wirksame Leitungen oder eine neue Anlage an einem geprüften Standort; ein Kapazitätsausbau vergrößert die Druckzone nicht." % [str(f.name), capacity, demand],
+			"kapazitaet": capacity, "bedarf": demand}
+	return {"ok": true, "anlage": anlage, "kapazitaet": capacity, "bedarf": demand,
+		"msg": "Ausbau von %s ist wegen Auslastung möglich." % str(f.name)}
 
 
 ## Kurzfassung fuer die Beobachtung eines Buergermeisters.

@@ -882,6 +882,12 @@ func city_growth_status(town: int) -> Dictionary:
 			if not sim.water.building_on_sewer(town, int(unit.building)):
 				missing["kanalnetz"] = true
 				gaps.append("kanalnetz")
+			if sim.water.breaks.has(str(town)):
+				missing["rohrbruch"] = true
+				gaps.append("rohrbruch")
+			if float(sim.water.last.get(str(town), {}).get("fehl", 0.0)) > 0.01:
+				missing["wasserknappheit"] = true
+				gaps.append("wasserknappheit")
 			var bid := int(unit.building)
 			if not affected.has(bid):
 				var building: Dictionary = sim.city.building(bid)
@@ -906,6 +912,8 @@ func city_growth_status(town: int) -> Dictionary:
 				hint += " Die Stadtverwaltung muss eine geprüfte Stromtrasse vom Kraftwerk wählen und bauen lassen."
 			if missing.has("frischwassernetz") or missing.has("kanalnetz"):
 				hint += " Frischwasser- und Kanalnetz müssen die Wohnhäuser tatsächlich erreichen."
+			if missing.has("rohrbruch") or missing.has("wasserknappheit"):
+				hint += " Zusätzlich ist die laufende Wasserversorgung gestört; prüfe Rohrbruch und Förderleistung, bevor du neue Häuser einplanst."
 		elif not building_projects.is_empty():
 			hint = "Noch keine bewohnbare Wohnung. Laufende Bauvorhaben: %s. Prüfe Baufortschritt, Anschlüsse und Blockaden bis zur Übergabe; plane parallel passende Arbeitsplätze." % ", ".join(building_projects.slice(0, 3))
 		else:
@@ -931,6 +939,8 @@ func urgency(b: Dictionary) -> Dictionary:
 		if sim.wildnis and office_town >= 0 and sim.town_ready(office_town):
 			var growth: Dictionary = city_growth_status(office_town)
 			if str(growth.get("stufe", "")) == "wohnraum" and int(growth.get("wohnungen", 0)) > 0:
+				if "rohrbruch" in growth.get("fehlende_anschluesse", []):
+					return {"prioritaet": 1, "grund": "Rohrbruch macht angeschlossene Wohnungen vorübergehend unbewohnbar. Der Wassertrupp ist zuständig; prüfe seinen Einsatz und laufende Projekte. Ein weiterer Kapazitätsausbau repariert keine Leitung."}
 				var board: Dictionary = _public_build_board(office_town)
 				if bool(board.get("wareneingang_ohne_personal", false)):
 					return {"prioritaet": 2, "grund": "Angelieferte Baustoffe blockieren das Stadtlager ohne Personal. Entscheide selbst ueber expand_depot mit kind staff oder waehle die entsprechende Nummer aus mein_amt.entscheidungsoptionen; danach die Anschlussarbeiten erneut pruefen."}
@@ -2998,6 +3008,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 		"hofbau": (o.get("betriebshof", {}) as Dictionary).get("bauvorschlaege_xy_rot", {}),
 		"betriebe": o.get("betriebe", []),
 		"wirtschaftsaufbau": homes.business_hint(cid),
+		"wirtschaftsoptionen": homes.business_options(cid, 3),
 		"branchen_zum_gruenden": _branch_menu(o.get("verfuegbare_branchen", [])),
 		"chancen": (o.get("chancen", []) as Array).slice(0, 6),
 		"bergbau": o.get("bergbau", []),
@@ -3507,7 +3518,12 @@ func office_obs(b: Dictionary) -> Dictionary:
 		if str(item.get("status", "")) == "blockiert" and sim.towns.of_building(int(item.get("site", -1))) == k:
 			blocked_businesses.append({"betrieb": str(item.get("id", "")), "name": str(item.get("name", "")),
 				"gebaeude": int(item.get("site", -1)), "blockaden": item.get("blockers", [])})
+	var expansion_options := {}
+	for art in ["wasserwerk", "hochbehaelter", "klaeranlage"]:
+		expansion_options[art] = sim.water.expansion_need(k, art)
 	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "verkehrsstandorte": ind.get("verkehrsstandorte", {}), "stromtrassen": ind.get("stromtrassen", []),
+		"haushalt": ind.get("haushalt", {}),
+		"versorgungsanlagen_ausbau": expansion_options,
 		"kraftwerk_notfall": sim.plant.summary().get("notfall", {}),
 		"bau_blockaden": _public_build_blockers(k), "bauprogramm": _public_build_board(k),
 		"stadtwachstum": city_growth_status(k), "blockierte_betriebe": blocked_businesses.slice(0, 8),

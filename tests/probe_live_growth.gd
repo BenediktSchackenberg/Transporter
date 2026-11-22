@@ -27,6 +27,8 @@ func _initialize() -> void:
 		if args.has("--details"):
 			print("  Haeuser ohne Anschluss: %s" % str(growth.get("betroffene_haeuser", [])))
 			print("  Wasserquellen: %s; Wasserstandorte: %s" % [str(s.water.sources_of(k)), str(s.towns.mayor(k).indicators().get("versorgungsanlagen_standorte", [])).left(900)])
+			print("  Ausbaupruefung: %s" % str([s.water.expansion_need(k, "wasserwerk"), s.water.expansion_need(k, "hochbehaelter"), s.water.expansion_need(k, "klaeranlage")]).left(650))
+			print("  Verkehrsstandorte: %s" % str(s.towns.mayor(k).transport_indicators()).left(850))
 		print("  Stadtlager: %d Mitarbeiter, %d Einheiten am Wareneingang, %d Bestellungen" % [depot.roster().size(),
 			depot.backlog_units(), depot.open_orders().size()])
 		print("  Stahl: Bestand %d, Projektreserven %s" % [depot.stock_of("stahl"), str(depot.project_res.keys().slice(-4))])
@@ -44,8 +46,9 @@ func _initialize() -> void:
 		for art in ["wasser", "abwasser"]:
 			for option in s.water.main_options(k, art):
 				if str(option.art) == art:
-					print("  %s: %s Felder %d, Ziel %s, Gebaeudepunkte %d" % [art, option.id,
-						int(option.felder), str(option.get("ziel", [])), int(option.gebaeude_nahe)])
+					print("  %s: %s Felder %d, Ziel %s, Gebaeudepunkte %d, Wohnungen +%d, Betriebe +%d" % [art, option.id,
+						int(option.felder), str(option.get("ziel", [])), int(option.gebaeude_nahe),
+						int(option.get("wohnungen_neu_am_netz", 0)), int(option.get("betriebe_neu_am_netz", 0))])
 					if args.has("--details") and art == "wasser":
 						var before: Dictionary = s.water.compute_net(k)
 						var built: Dictionary = s.water.main_cells(k, art)
@@ -61,4 +64,12 @@ func _initialize() -> void:
 								if after.has(road) and not before.has(road):
 									newly_connected += 1
 						print("    Vorschau: Drucknetz +%d Felder, %d Wohneinheiten neu angeschlossen" % [after.size() - before.size(), newly_connected])
+	if args.has("--details"):
+		for name in s.eko.beings:
+			var being: Dictionary = s.eko.beings[name]
+			if int(being.get("firma", -1)) >= 0:
+				var firm: Dictionary = s.eko.firm_obs(being)
+				print("FIRMA %s: %d EUR, %d Lieferungen, %d LKW; Wirtschaftsoptionen %s; Fahrzeuge %s" % [
+					name, int(firm.get("bargeld", 0)), int(firm.get("lieferungen", 0)), (firm.get("fahrzeuge", []) as Array).size(),
+					str(firm.get("wirtschaftsoptionen", [])).left(500), str(firm.get("fahrzeugangebote", [])).left(850)])
 	quit()
