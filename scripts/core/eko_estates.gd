@@ -58,6 +58,44 @@ const SUGGEST := [["mauer", 0], ["turm", 0], ["schloss", 4], ["garten", 3], ["tu
 var _cost_cache := {}
 
 
+## Fertige, bezahlbare Entwurfsalternativen fuer die Entscheidung der KI.
+## Die Kosten werden je Standort einmal berechnet; im Beobachtungstakt wird kein Bauplan neu erzeugt.
+func decision_options(name: String) -> Array:
+	if not estates.has(name):
+		return []
+	var e: Dictionary = estates[name]
+	var choices := [["mauer", 0, "stein", 4], ["zaun", 0, "stahl", 2],
+		["schloss", 4, "stein", 2], ["burg", 4, "stein", 2], ["festung", 4, "beton", 2],
+		["turm", 0, "stein", 2], ["turm", 2, "stein", 2],
+		["garten", 3, "boden", 2], ["garten", 5, "boden", 2]]
+	var out: Array = []
+	for choice in choices:
+		var art: String = choice[0]
+		var field: int = choice[1]
+		if (e.bauten as Array).any(func(x): return x.art == art and (int(x.feld) == field or art in ["mauer", "zaun"])):
+			continue
+		if art in ["mauer", "zaun"] and (e.bauten as Array).any(func(x): return x.art in ["mauer", "zaun"]):
+			continue
+		if art in ["schloss", "burg", "festung"] and (e.bauten as Array).any(func(x): return int(x.feld) == 4 and x.art in ["schloss", "burg", "festung"]):
+			continue
+		var R := rect_of(name)
+		var key := "%s/%d/%d/%s/%d/%d" % [name, R.position.x, R.position.y, art, field, int(choice[3])]
+		if not _cost_cache.has(key):
+			var blocks := _template(name, art, field, choice[2], choice[3])
+			if _blocks_on_water(blocks):
+				_cost_cache[key] = -1.0
+			else:
+				var cost := 0.0
+				for bl in blocks:
+					cost += float(EkoWorld.PRICES.get(str(bl[3]), 3.0)) + LABOR
+				_cost_cache[key] = snappedf(cost, 1.0)
+		var cost: float = float(_cost_cache[key])
+		if cost >= 0.0:
+			out.append({"art": art, "feld": field, "material": choice[2], "hoehe": choice[3], "kosten": cost,
+				"zweck": ARTEN[art]})
+	return out
+
+
 func suggestion(name: String) -> Dictionary:
 	if not estates.has(name):
 		return {}
@@ -316,6 +354,10 @@ func order(b: Dictionary, data: Dictionary) -> Dictionary:
 	var e: Dictionary = estates[name]
 	if (e.bauten as Array).any(func(x): return x.art == art and (int(x.feld) == f or art in ["mauer", "zaun"])):
 		return {"ok": false, "msg": "Dieses Bauwerk gibt es dort schon."}
+	if art in ["mauer", "zaun"] and (e.bauten as Array).any(func(x): return x.art in ["mauer", "zaun"]):
+		return {"ok": false, "msg": "Das Anwesen hat bereits eine Umfriedung."}
+	if art in ["burg", "festung", "schloss"] and (e.bauten as Array).any(func(x): return int(x.feld) == 4 and x.art in ["burg", "festung", "schloss"]):
+		return {"ok": false, "msg": "Auf dem mittleren Bauplatz steht bereits ein Hauptgebäude."}
 	var mat := str(data.get("material", {"mauer": "stein", "zaun": "stahl", "festung": "beton", "schloss": "stein", "burg": "stein", "turm": "stein", "garten": "boden"}[art]))
 	if not EkoWorld.PRICES.has(mat):
 		return {"ok": false, "msg": "Unbekanntes Material %s." % mat}
@@ -342,7 +384,7 @@ func order(b: Dictionary, data: Dictionary) -> Dictionary:
 	_next += 1
 	w._event(b, "lässt auf seinem Stammsitz bauen: %s" % art)
 	_sim().log_event("%s lässt auf dem Stammsitz bauen: %s (%d Blöcke, %s)." % [name, art, blocks.size(), Catalog.money(cost)], "info")
-	return {"ok": true, "status": "laeuft", "msg": "%s beauftragt: %d Blöcke %s, %s, fertig in etwa %d s." % [art, blocks.size(), mat, Catalog.money(cost), int(blocks.size() / BUILD_RATE)]}
+	return {"ok": true, "status": "laeuft", "msg": "%s beauftragt: %d Blöcke %s, %s, Bautrupp benötigt etwa %d s." % [art, blocks.size(), mat, Catalog.money(cost), int(blocks.size() / (BUILD_RATE * (0.5 if _sim().wildnis else 1.0)))]}
 
 
 ## Starthuette (Feld 7, suedlich des Bauplatzes): Holzhaus mit Tuer, Dach, Bett und Ladestation, sofort fertig. Damit ist das Wesen
@@ -575,9 +617,9 @@ func tick(dt: float) -> void:
 	_plans_tick(dt)
 	for name in estates:
 		var hands := 1.0
-		if _sim().wildnis:   # Benedikt 17.11.: die KI baut selbst – nur waehrend sie an der Basis arbeitet (Bauen {baustelle: "stammsitz"})
+		if _sim().wildnis:   # Der im Auftrag bezahlte Bautrupp arbeitet auch, wenn der Besitzer unterwegs ist.
 			var o: Dictionary = w.beings.get(name, {})
-			hands = 1.0 if str(o.get("baut", "")) == "stammsitz" and not o.has("im_lkw") and covers(w.tile_of(o)) else 0.0
+			hands = 1.0 if str(o.get("baut", "")) == "stammsitz" and not o.has("im_lkw") and covers(w.tile_of(o)) else 0.5
 		for s in estates[name].bauten:
 			if s.status != "im_bau":
 				continue
@@ -714,6 +756,7 @@ func obs(b: Dictionary) -> Dictionary:
 		"mauerluecken": breaches(name) if not (e.wall_tiles as Array).is_empty() else 0, "geschuetzt_drinnen": sheltered(b, Vector2i(-999, -999)),
 		"zu_hause": at_home(b),
 		"bauwerke": ARTEN, "bauen": "Bauwerk {art, feld 0-8 (4 = Bauplatz), material?, hoehe?, zahlung?: \"firma\"} – Preis je Block nach material_preise; Tor {offen: true|false}",
+		"ausbauoptionen": decision_options(name),
 		"eigener_entwurf": "Bauplan {titel, ort: stammsitz|grundstueck, feld?, schichten: [[Zeilen der untersten Schicht], ...], legende?, zahlung?} – baue genau so, wie du es dir ausdenkst (bis 32 x 32 Blöcke je Feld)"}
 
 

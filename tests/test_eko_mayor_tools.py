@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 
-from tools.eko.eko_ollama import Agent, changed_world, compact_obs, company_choices, mayor_action_key, mayor_choices, mayor_state_signature
+from tools.eko.eko_ollama import Agent, changed_world, compact_obs, company_choices, estate_choices, mayor_action_key, mayor_choices, mayor_state_signature
 
 
 class FakeWorld:
@@ -198,6 +198,35 @@ class MayorToolTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(world.actions[0][1]["aktion"]["offer_id"], "F10")
         self.assertTrue(changed_world("company_choice", {"candidate": 0}, result))
+
+    def test_estate_choice_uses_firm_cash_and_current_design(self):
+        class EstateWorld(FakeWorld):
+            def __init__(self):
+                super().__init__()
+                self.cash = 80000
+                self.building = False
+
+            def observe(self):
+                return {"ok": True, "meine_firma": {"firma": "Test", "bargeld": self.cash},
+                        "mein_stammsitz": {"bauten": [{"art": "huette", "status": "fertig"}] +
+                                                 ([{"art": "garten", "status": "im_bau"}] if self.building else []),
+                                            "ausbauoptionen": [{"art": "garten", "feld": 3, "material": "boden", "hoehe": 2,
+                                                                "kosten": 12000, "zweck": "Garten"},
+                                                               {"art": "schloss", "feld": 4, "material": "stein", "hoehe": 2,
+                                                                "kosten": 90000, "zweck": "Schloss"}]}}
+
+        world = EstateWorld()
+        agent = agent_with(world, "unternehmer")
+        choices = compact_obs(world.observe())["mein_stammsitz"]["entscheidungsoptionen"]
+        self.assertEqual([c["art"] for c in choices], ["garten"])
+        result = agent.call_tool("estate_choice", {"candidate": 0})
+        self.assertTrue(result["ok"])
+        self.assertEqual(world.actions, [("Bauwerk", {"art": "garten", "feld": 3, "material": "boden", "hoehe": 2,
+                                                "zahlung": "firma"})])
+        self.assertTrue(changed_world("estate_choice", {"candidate": 0}, result))
+        world.building = True
+        self.assertEqual(estate_choices(world.observe()["mein_stammsitz"], world.observe()["meine_firma"]), [])
+        self.assertFalse(agent.call_tool("estate_choice", {"candidate": 0})["ok"])
 
 
 if __name__ == "__main__":

@@ -220,6 +220,8 @@ TOOLS = [
 
 # Kleine, typisierte Unternehmerwerkzeuge reduzieren verschachtelte JSON-Fehler lokaler Modelle.
 COMPANY_TOOLS = [
+    {"name": "estate_choice", "description": "Waehle einen selbst bestimmten Stammsitz-Ausbau aus mein_stammsitz.entscheidungsoptionen. Kosten, Standort und Firmenkasse werden vor dem Auftrag erneut geprueft.",
+     "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 8}}, "required": ["candidate"]}},
     {"name": "company_choice", "description": "Waehle selbst eine aktuell bezahlbare Firmeninvestition aus meine_firma.entscheidungsoptionen. Fahrzeugangebot oder gepruefter Gewerbestandort wird vor dem Auftrag neu gelesen.",
      "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 7}}, "required": ["candidate"]}},
     {"name": "company_plan", "description": "Messbaren Firmenplan mit Frist und Schritten setzen.", "parameters": {"type": "object", "properties": {
@@ -397,6 +399,13 @@ def compact_obs(o, full=False):
     if not isinstance(o, dict) or not o.get("ok", False):
         return o
     o = dict(o)
+    estate = o.get("mein_stammsitz")
+    if isinstance(estate, dict) and estate:
+        estate = dict(estate)
+        estate["entscheidungsoptionen"] = estate_choices(estate, o.get("meine_firma"))
+        if not full:
+            estate.pop("ausbauoptionen", None)
+        o["mein_stammsitz"] = estate
     if full:
         for field, selector in (("meine_firma", company_choices), ("mein_amt", mayor_choices)):
             section = o.get(field)
@@ -512,6 +521,29 @@ def mayor_choices(office):
     return [{"candidate": i, **choice} for i, choice in enumerate(result[:14])]
 
 
+def estate_choices(estate, firm):
+    """Nur real vorhandene, aus Firmenmitteln finanzierbare Stammsitz-Entwuerfe."""
+    if not isinstance(estate, dict) or not isinstance(firm, dict) or not firm.get("firma"):
+        return []
+    if any(isinstance(b, dict) and b.get("status") == "im_bau" for b in estate.get("bauten", [])):
+        return []
+    cash = float(firm.get("bargeld", 0) or 0)
+    result = []
+    for option in estate.get("ausbauoptionen", []):
+        if not isinstance(option, dict):
+            continue
+        cost = float(option.get("kosten", float("inf")))
+        if cash < cost + 5000:
+            continue
+        result.append({"candidate": len(result), "art": option["art"], "feld": option["feld"],
+                       "kosten": cost, "zweck": option.get("zweck", ""),
+                       "params": {"art": option["art"], "feld": option["feld"],
+                                  "material": option["material"], "hoehe": option["hoehe"], "zahlung": "firma"}})
+        if len(result) >= 9:
+            break
+    return result
+
+
 def company_choices(firm):
     """Reale, finanzierte Expansion; das Modell waehlt die Investition selbst."""
     if not isinstance(firm, dict):
@@ -586,6 +618,8 @@ def changed_world(name, args, result):
     if name == "founding_choice":
         return True
     if name == "company_choice":
+        return True
+    if name == "estate_choice":
         return True
     if name in ("mayor_action", "mayor_choice"):
         choice = result.get("gewaehlt", {}) if name == "mayor_choice" else args
@@ -692,6 +726,9 @@ class Agent:
                          "Steigt die Rivalitaet vor einem Angriff, pruefe Wachschutz, Versicherung, Schlichtung und Kooperation gegen ihre laufenden Kosten. "
                          "Die Firmenbeobachtung zeigt transportchancen mit geschaetztem Deckungsbeitrag, "
                          "entscheidungsfolgen und dringlichkeit. Gib der Routine klare Grenzen und pruefe deinen Plan taeglich.")
+            lines.append("Baue auch deinen Stammsitz aus. Vergleiche mein_stammsitz.entscheidungsoptionen nach Zweck, Form und Preis und waehle mit estate_choice selbst einen Entwurf. "
+                         "Der Stammsitz wird aus der Firmenkasse bezahlt; privates Geld brauchst du dafuer nicht. "
+                         "Nach dem Auftrag baut der bezahlte Bautrupp weiter, auch wenn du die Stadt erkundest. Warte mit dem naechsten Stammsitz-Auftrag, bis der aktuelle Bau fertig ist.")
             lines.append("Vergleiche meine_firma.wirtschaftsoptionen nach Branche, Standort, Kosten und Arbeitsplaetzen. "
                          "Gruende einen Betrieb, wenn der Standort zu deinem Plan passt. Pruefe danach Baufortschritt, stelle "
                          "Personal ein und ordne es dem Betrieb zu. Bei Arbeitslosen ohne offene Stellen hat ein neuer "
@@ -816,6 +853,20 @@ class Agent:
                     return {"ok": False, "msg": "Investitionsoption nicht mehr aktuell. Beobachte erneut.", "entscheidungsoptionen": choices}
                 choice = choices[index]
                 result = self.call_tool(choice["action"], choice["params"])
+                if isinstance(result, dict):
+                    result["gewaehlt"] = choice
+                return result
+            if name == "estate_choice":
+                if getattr(self.args, "rolle", "") != "unternehmer":
+                    return {"ok": False, "msg": "Nur Unternehmer koennen den Stammsitz ausbauen."}
+                current = compact_obs(self.world.observe())
+                estate = current.get("mein_stammsitz", {}) if isinstance(current, dict) else {}
+                choices = estate.get("entscheidungsoptionen", []) if isinstance(estate, dict) else []
+                index = a.get("candidate", -1)
+                if not isinstance(index, int) or index < 0 or index >= len(choices):
+                    return {"ok": False, "msg": "Ausbauoption nicht mehr aktuell. Beobachte erneut.", "entscheidungsoptionen": choices}
+                choice = choices[index]
+                result = self.call_tool("act", {"type": "Bauwerk", "data": choice["params"]})
                 if isinstance(result, dict):
                     result["gewaehlt"] = choice
                 return result
@@ -1119,8 +1170,14 @@ class Agent:
             if getattr(self.args, "rolle", "") == "unternehmer":
                 current = compact_obs(self.world.observe())
                 firm = current.get("meine_firma", {}) if isinstance(current, dict) else {}
+                estate = current.get("mein_stammsitz", {}) if isinstance(current, dict) else {}
+                if isinstance(estate, dict) and estate.get("entscheidungsoptionen") and not any(
+                        isinstance(b, dict) and b.get("art") != "huette" for b in estate.get("bauten", [])):
+                    return [tool for tool in available if tool["name"] == "estate_choice"]
                 if company_choices(firm):
-                    return [tool for tool in available if tool["name"] == "company_choice"]
+                    return [tool for tool in available if tool["name"] in ("company_choice", "estate_choice")]
+                if isinstance(estate, dict) and estate.get("entscheidungsoptionen"):
+                    return [tool for tool in available if tool["name"] == "estate_choice"]
             allowed = {"act", "mayor_action", "mayor_choice"} if getattr(self.args, "rolle", "") == "buergermeister" else {"act", "contract_choice"}
             return [tool for tool in available if tool["name"] in allowed]
         idle = self._passive_streak >= 3

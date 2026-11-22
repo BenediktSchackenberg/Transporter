@@ -15285,13 +15285,22 @@ func test_eko_estates() -> void:
 	ok(E.estates.estates.has("Mia") and not E.estates.rect_of("Mia").grow(8).intersects(R), "Mia hat einen eigenen Stammsitz mit Abstand (%s)" % str(E.estates.last_failure))
 	s.economy.transfer("X0", "Y0", 60000.0)
 	V.geld = 60000.0
+	var options: Array = E.estates.decision_options("Viktor")
+	ok(options.any(func(x): return x.art == "mauer") and options.any(func(x): return x.art == "schloss") and options.any(func(x): return x.art == "garten"),
+		"KI kann zwischen mehreren Stammsitz-Entwuerfen mit Kosten waehlen")
 	ok(not E.input("Viktor", "Bauwerk", {"art": "pyramide"}).ok, "unbekanntes Bauwerk abgelehnt")
 	var rm: Dictionary = E.input("Viktor", "Bauwerk", {"art": "mauer", "hoehe": 4})
 	ok(rm.ok and float(V.geld) < 60000.0, "Mauer beauftragt: %s" % str(rm.msg))
+	ok(not E.estates.decision_options("Viktor").any(func(x): return x.art in ["mauer", "zaun"]), "zweite Umfriedung nicht angeboten")
 	ok(E.input("Viktor", "Bauwerk", {"art": "schloss"}).ok, "Schloss beauftragt")
+	ok(not E.input("Viktor", "Bauwerk", {"art": "burg"}).ok, "kein zweites Hauptgebaeude auf dem Bauplatz")
 	ok(E.input("Viktor", "Bauwerk", {"art": "turm", "feld": 0}).ok, "Turm beauftragt")
+	s.wildnis = true
+	E.estates.tick(1.0)
+	ok(int(E.estates.estates.Viktor.bauten[1].placed) > 0, "bezahlter Bautrupp baut in der Wildnis auch ohne KI-Figur vor Ort")
 	for i in 400:
 		E.estates.tick(5.0)
+	s.wildnis = false
 	var est: Dictionary = E.estates.estates.Viktor
 	ok(est.bauten.all(func(x): return x.status == "fertig"), "alle Bauwerke fertig")
 	var wall_t: Array = est.wall_tiles[0]
