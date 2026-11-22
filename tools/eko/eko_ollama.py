@@ -1044,6 +1044,10 @@ class Agent:
                             "bauprogramm": board})
                 if action == "infra_ausbau":
                     need = (office.get("versorgungsanlagen_ausbau") or {}).get(str(params.get("anlage", "")))
+                    if not isinstance(need, dict):
+                        return self.reject_mayor_preflight(key, state, {"ok": False,
+                                "msg": "Unbekannte Versorgungsanlage. Waehle wasserwerk, hochbehaelter oder klaeranlage; Projekt-IDs sind hier ungueltig.",
+                                "gueltige_anlagen": list((office.get("versorgungsanlagen_ausbau") or {}).keys())})
                     if isinstance(need, dict) and not need.get("ok"):
                         return self.reject_mayor_preflight(key, state, {"ok": False, "msg": need.get("msg", "Dieser Kapazitaetsausbau ist nicht wirksam."),
                                 "versorgungsleitungen": (office.get("versorgungsleitungen") or [])[:3]})
@@ -1053,9 +1057,10 @@ class Agent:
                 if action in current_ids:
                     section, field, param = current_ids[action]
                     entries = (office.get(section) or {}).get(field, []) if section else office.get(field, [])
-                    if isinstance(entries, list) and entries and str(params.get(param)) not in {str(x.get("id")) for x in entries if isinstance(x, dict)}:
+                    known_menu = (section in office) if section else (field in office)
+                    if known_menu and isinstance(entries, list) and str(params.get(param)) not in {str(x.get("id")) for x in entries if isinstance(x, dict)}:
                         ids = ", ".join(str(x.get("id")) for x in entries if isinstance(x, dict) and x.get("id"))
-                        return self.reject_mayor_preflight(key, state, {"ok": False, "msg": "Diese Kennung ist nicht mehr offen. Offene IDs: %s. Waehle eine neue Entscheidung." % ids,
+                        return self.reject_mayor_preflight(key, state, {"ok": False, "msg": "Diese Kennung ist nicht mehr offen. %s Waehle eine neue Entscheidung." % (("Offene IDs: " + ids + ".") if ids else "Es gibt derzeit keine offenen IDs."),
                                 "gueltige_optionen": entries[:5]})
                     matching = next((x for x in entries if isinstance(x, dict) and str(x.get("id")) == str(params.get(param))), {})
                     budget = float((office.get("haushalt") or {}).get("verfuegbar", 0))
@@ -1063,7 +1068,11 @@ class Agent:
                     cost = float(matching.get("geschaetzte_kosten" if action == "approve_procurement" else "kosten", 0))
                     if matching and not funded and cost > budget:
                         return self.reject_mayor_preflight(key, state, {"ok": False, "msg": "Diese Entscheidung kostet mindestens %.0f EUR, aber nur %.0f EUR sind frei. Pruefe kreditangebot oder Einnahmen." % (cost, budget)})
-                result = self.call_tool("act", {"type": "Amt", "data": {"aktion": {**params, "action": action}}})
+                self._mayor_forwarding = True
+                try:
+                    result = self.call_tool("act", {"type": "Amt", "data": {"aktion": {**params, "action": action}}})
+                finally:
+                    self._mayor_forwarding = False
                 if isinstance(result, dict) and result.get("ok") is False:
                     self._mayor_failed_count = getattr(self, "_mayor_failed_count", 0) + 1 if key == getattr(self, "_mayor_failed_key", "") else 1
                     self._mayor_failed_key = key
@@ -1144,6 +1153,12 @@ class Agent:
                     only = next(iter(data))
                     if only.lower() == str(a.get("type", "")).lower() and isinstance(data[only], dict):
                         data = data[only]
+                if getattr(self.args, "rolle", "") == "buergermeister" and str(a.get("type", "")).lower() == "amt" and \
+                        not getattr(self, "_mayor_forwarding", False) and isinstance(data, dict):
+                    office_action = data.get("aktion", {}) if isinstance(data.get("aktion"), dict) else {}
+                    if str(office_action.get("action", "")) not in ("", "wait", "status", "overview"):
+                        return self.call_tool("mayor_action", {"action": office_action["action"],
+                                                              "params": {k: v for k, v in office_action.items() if k != "action"}})
                 r = self.world.act(str(a.get("type", "")), data if isinstance(data, dict) else {})
                 if str(a.get("type", "")) == "Rest" and isinstance(r, dict) and r.get("ok"):
                     time.sleep(20)   # die Pause wirklich abwarten (das Modell schickte sonst alle 2 s erneut Rest)
@@ -1699,7 +1714,10 @@ class Agent:
                 self.status("wartet" if pending else ("fehler" if failed else "bereit"), last_tool_at=time.time(),
                             tool=fn["name"], waiting_on=verdict if pending else "",
                             last_error=verdict if failed else "")
-                if fn["name"] in ("mayor_action", "mayor_choice"):
+                direct_mayor_action = fn["name"] == "act" and str(a.get("type", "")).lower() == "amt" and \
+                    isinstance(a.get("data"), dict) and isinstance(a["data"].get("aktion"), dict) and \
+                    str(a["data"]["aktion"].get("action", "")) not in ("", "wait", "status", "overview")
+                if fn["name"] in ("mayor_action", "mayor_choice") or direct_mayor_action:
                     self._mayor_invalid_streak = min(4, getattr(self, "_mayor_invalid_streak", 0) + 1) if failed else 0
                     if failed and not getattr(self, "_mayor_invalid_state", ""):
                         fresh = compact_obs(self.world.observe())

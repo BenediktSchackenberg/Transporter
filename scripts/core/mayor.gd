@@ -311,7 +311,8 @@ func plan_airport(strategy: String) -> Dictionary:
 	airport_target_cost = EkoSettle.AIRPORT_BUILD_COST + (site.get("road", []) as Array).size() * 180.0
 	airport_financing_mode = strategy
 	_refresh_airport_reservation()
-	return {"ok": true, "msg": "Flughafenplan %s: %s geschaetzt, %s reserviert, %s fehlen im freien Flughafenbudget. Bauzeitpunkt selbst waehlen." % [strategy, Catalog.money(airport_target_cost), Catalog.money(airport_reservation), Catalog.money(maxf(0.0, airport_target_cost - airport_budget()))]}
+	var priority := " Erst bewohnbare Wohnungen und Versorgung schaffen; bis dahin werden keine Mittel gebunden und kein Flughafenkredit angeboten." if airport_reservation <= 0.0 and int(sim.eko.city_growth_status(town).get("bewohnbar", 0)) == 0 else ""
+	return {"ok": true, "msg": "Flughafenplan %s gespeichert: %s geschaetzt, %s reserviert, %s fehlen im freien Flughafenbudget. Bauzeitpunkt selbst waehlen.%s" % [strategy, Catalog.money(airport_target_cost), Catalog.money(airport_reservation), Catalog.money(maxf(0.0, airport_target_cost - airport_budget())), priority]}
 
 
 func airport_plan_committed() -> void:

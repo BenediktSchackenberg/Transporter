@@ -71,6 +71,29 @@ class MayorToolTests(unittest.TestCase):
         self.assertNotIn("contract_choice", names)
         self.assertIn("act", names)
 
+    def test_direct_mayor_action_uses_the_same_fresh_id_check(self):
+        world = FakeWorld()
+        world.observe = lambda: {"ok": True, "mein_amt": {"stadtlager": {"vorschlaege":
+                                [{"id": "B7", "projekt": "P1"}]}, "bauprogramm": {"neues_bauprojekt_moeglich": True}}}
+        agent = agent_with(world)
+        stale = {"type": "Amt", "data": {"aktion": {"action": "approve_procurement", "order_id": "B6"}}}
+        self.assertFalse(agent.call_tool("act", stale)["ok"])
+        self.assertFalse(world.actions)
+        valid = {"type": "Amt", "data": {"aktion": {"action": "approve_procurement", "order_id": "B7"}}}
+        self.assertTrue(agent.call_tool("act", valid)["ok"])
+        self.assertEqual(len(world.actions), 1)
+
+    def test_project_id_cannot_be_used_as_infrastructure_plant(self):
+        world = FakeWorld()
+        world.observe = lambda: {"ok": True, "mein_amt": {"versorgungsanlagen_ausbau": {
+            "wasserwerk": {"ok": False}, "hochbehaelter": {"ok": False}, "klaeranlage": {"ok": False}}}}
+        agent = agent_with(world)
+        result = agent.call_tool("act", {"type": "Amt", "data": {"aktion":
+                                 {"action": "infra_ausbau", "anlage": "P50", "reason": "Druckzone"}}})
+        self.assertFalse(result["ok"])
+        self.assertIn("Projekt-IDs", result["msg"])
+        self.assertFalse(world.actions)
+
     def test_unfunded_airport_gets_two_financing_choices(self):
         office = {"haushalt": {"verfuegbar": 30000, "flughafenbudget": 30000}, "verkehrsstandorte": {
             "flughafen": {"standort": [100, 200], "kosten": 150000, "gebaut": False, "projekt": "",
