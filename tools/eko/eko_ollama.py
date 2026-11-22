@@ -1353,8 +1353,10 @@ class Agent:
         current_firm = {}
         current_growth = {}
         current_estate = {}
+        current_du = {}
         if getattr(self.args, "rolle", "") == "unternehmer" and hasattr(self, "world"):
             current = compact_obs(self.world.observe())
+            current_du = current.get("du", {}) if isinstance(current, dict) else {}
             current_firm = current.get("meine_firma", {}) if isinstance(current, dict) else {}
             current_growth = current.get("stadtwachstum", {}) if isinstance(current, dict) else {}
             current_estate = current.get("mein_stammsitz", {}) if isinstance(current, dict) else {}
@@ -1390,6 +1392,8 @@ class Agent:
                 return [tool for tool in available if tool["name"] in names]
         if getattr(self, "_nonworld_streak", 0) >= 5:
             if getattr(self.args, "rolle", "") == "unternehmer":
+                if current_du.get("unterwegs"):
+                    return [tool for tool in available if tool["name"] == "wait"]
                 firm = current_firm
                 estate = current_estate
                 if isinstance(estate, dict) and estate.get("entscheidungsoptionen") and not any(
@@ -1468,8 +1472,26 @@ class Agent:
             raise ModelGlitch("Ollama-JSON-Antwort ungueltig: %s" % str(e)) from e
         name = chosen.get("tool") if isinstance(chosen, dict) else None
         arguments = chosen.get("arguments") if isinstance(chosen, dict) else None
+        if name == "act" and "wait" in names and isinstance(arguments, dict):
+            nested_wait = arguments.get("data") if isinstance(arguments.get("data"), dict) else {}
+            if str(arguments.get("type", "")).lower() in ("wait", "warten"):
+                name = "wait"
+                arguments = {key: nested_wait[key] for key in ("bis", "seconds") if key in nested_wait}
+            elif "type" not in arguments and (arguments.get("bis") or nested_wait.get("bis")):
+                # Qwen waehlt gelegentlich act, schreibt aber die Parameter von wait.
+                # Den klaren Warteschritt ausfuehren statt denselben Modellfehler
+                # mit wachsender Pause immer wieder zu generieren.
+                name = "wait"
+                source = arguments if arguments.get("bis") else nested_wait
+                arguments = {key: source[key] for key in ("bis", "seconds") if key in source}
         if name not in names or not isinstance(arguments, dict):
             raise ModelGlitch("Ollama-JSON-Antwort ohne gueltiges Werkzeug: %s" % str(name)[:80])
+        if name == "act" and "type" not in arguments:
+            data = arguments.get("data")
+            if isinstance(data, dict) and (isinstance(data.get("aktion"), dict) or data.get("action")):
+                role = getattr(self.args, "rolle", "")
+                if role in ("unternehmer", "buergermeister"):
+                    arguments = {**arguments, "type": "Amt" if role == "buergermeister" else "Firma"}
         if name == "act" and "data" not in arguments:
             if "type" in arguments:
                 arguments = {"type": arguments["type"], "data": {k: v for k, v in arguments.items() if k != "type"}}

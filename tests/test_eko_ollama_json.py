@@ -202,6 +202,39 @@ class JsonToolFallbackTest(unittest.TestCase):
         self.assertNotIn("observe", requests[0]["format"]["properties"]["tool"]["enum"])
         self.assertEqual(result["tool_calls"][0]["function"]["name"], "wait")
 
+    def test_act_with_wait_arguments_uses_wait_instead_of_retrying(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
+                                     ctx=16384, name="Greta")
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
+        agent._passive_streak = 0
+        agent._nonworld_streak = 5
+        agent.urgency = 0
+        agent.world = SimpleNamespace(observe=lambda: {"ok": True, "du": {"unterwegs": True},
+                                                      "meine_firma": {"transportchancen": []}})
+        agent.log = io.StringIO()
+        self.assertEqual([tool["name"] for tool in agent.available_tools()], ["wait"])
+        with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
+                {"message": {"content": '{"tool":"act","arguments":{"bis":"ankunft"}}'}})):
+            result = agent.chat_json_tool([{"role": "user", "content": "Warte auf Ankunft"}])
+        self.assertEqual(result["tool_calls"][0]["function"],
+                         {"name": "wait", "arguments": {"bis": "ankunft"}})
+
+    def test_act_without_type_uses_company_action_from_data(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
+                                     ctx=16384, name="Viktor")
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
+        agent._passive_streak = 0
+        agent.urgency = 0
+        agent.log = io.StringIO()
+        with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
+                {"message": {"content": '{"tool":"act","arguments":{"data":{'
+                                         '"aktion":{"action":"collect_contracts"}}}}'}})):
+            result = agent.chat_json_tool([{"role": "user", "content": "Suche Auftraege"}])
+        self.assertEqual(result["tool_calls"][0]["function"]["arguments"],
+                         {"type": "Firma", "data": {"aktion": {"action": "collect_contracts"}}})
+
 
 if __name__ == "__main__":
     unittest.main()
