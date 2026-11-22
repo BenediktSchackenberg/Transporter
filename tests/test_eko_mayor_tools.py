@@ -67,6 +67,14 @@ class MayorToolTests(unittest.TestCase):
         offered = [c["params"]["viertel"] for c in mayor_choices(office) if c["action"] == "viertel_erschliessen"]
         self.assertEqual(offered, ["V2"])
 
+    def test_full_build_board_only_offers_actions_without_new_project(self):
+        office = {"bauprogramm": {"neues_bauprojekt_moeglich": False},
+                  "stadtlager": {"vorschlaege": [{"id": "ORDER-1"}]},
+                  "versorgungsleitungen": [{"id": "wasser:4:5"}],
+                  "stromtrassen": [{"id": "strom:1"}],
+                  "stadtplan_optionen": [{"viertel": "V3"}]}
+        self.assertEqual([c["action"] for c in mayor_choices(office)], ["approve_procurement"])
+
 
 if __name__ == "__main__":
     unittest.main()

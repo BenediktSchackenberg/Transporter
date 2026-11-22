@@ -458,15 +458,16 @@ def mayor_choices(office):
         if isinstance(proposal, dict) and proposal.get("id"):
             result.append({"action": "approve_procurement", "params": {"order_id": proposal["id"], "reason": "Projektmaterial beschaffen"},
                            "nutzen": proposal.get("reason", "Materialbedarf")})
-    for line in (office.get("versorgungsleitungen") or [])[:3]:
-        if isinstance(line, dict) and line.get("id"):
-            result.append({"action": "versorgungsleitung_bauen", "params": {"option": line["id"], "reason": "Gebaeude ans Netz anschliessen"},
-                           "nutzen": "%s: %s Gebaeudepunkte, %s EUR" % (line.get("art", "Leitung"), line.get("gebaeude_nahe", 0), line.get("kosten", "?"))})
-    for line in (office.get("stromtrassen") or [])[:2]:
-        if isinstance(line, dict) and line.get("id"):
-            result.append({"action": "stromtrasse_bauen", "params": {"option": line["id"], "reason": "Stromversorgung der Stadt"},
-                           "nutzen": "Stromtrasse %s" % line["id"]})
-    if (office.get("bauprogramm") or {}).get("neues_bauprojekt_moeglich", True):
+    can_build = (office.get("bauprogramm") or {}).get("neues_bauprojekt_moeglich", True)
+    if can_build:
+        for line in (office.get("versorgungsleitungen") or [])[:3]:
+            if isinstance(line, dict) and line.get("id"):
+                result.append({"action": "versorgungsleitung_bauen", "params": {"option": line["id"], "reason": "Gebaeude ans Netz anschliessen"},
+                               "nutzen": "%s: %s Gebaeudepunkte, %s EUR" % (line.get("art", "Leitung"), line.get("gebaeude_nahe", 0), line.get("kosten", "?"))})
+        for line in (office.get("stromtrassen") or [])[:2]:
+            if isinstance(line, dict) and line.get("id"):
+                result.append({"action": "stromtrasse_bauen", "params": {"option": line["id"], "reason": "Stromversorgung der Stadt"},
+                               "nutzen": "Stromtrasse %s" % line["id"]})
         active_districts = {project.get("viertel") for project in (office.get("bauprogramm", {}).get("projekte") or [])
                             if isinstance(project, dict) and project.get("viertel")}
         districts_added = 0
