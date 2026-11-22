@@ -58,6 +58,7 @@ var estates := EkoEstates.new()     # Stammsitz je KI-Spieler (Benedikt 15.11.20
 var homes := EkoHomes.new()         # Neubeginn: Wohnhaeuser der KI-Firmen (Benedikt 17.11.2026)
 var settle := EkoSettle.new()       # Wildnis: Standortwahl und Gruendung der Siedlung (Benedikt 17.11.2026)
 var _homes_min := -1.0
+var progress_history: Array = []
 var auto_estates := false           # Spiel: neue Wesen (keine Buergermeister) bekommen beim Beitritt einen Stammsitz
 const START_CAPITAL := 150000.0     # Benedikt 15.11.: jede KI startet mit 150.000 EUR Privatgeld (Einlage von aussen X0 -> Y0)
 const GRUNDZIEL := "Baue deinen Stammsitz zu deiner Basis aus – Form, Größe, Stil und Schutz entscheidest du selbst (Bauwerk, Bauplan)."
@@ -114,10 +115,10 @@ func setup(simulation) -> void:
 	sim.visit_completed.connect(_on_visit_completed)
 	sim.day_changed.connect(_economy_watch)
 
-## Rueckfallebene fuer lange Partien: der KI-Unternehmer erhaelt einen lokalen Betrieb,
-## wenn trotz Einwohnern und Arbeitslosen noch keiner entstanden ist. Modellentscheidungen
-## haben bis Tag 30 Vorrang; die Regel nutzt nur gepruefte, bezahlbare Standorte.
+## Laufende Betriebe erhalten bei Personalmangel betriebliche Unterstuetzung.
+## Neue Branchen, Standorte und Bergwerke waehlt der KI-Unternehmer selbst.
 func _economy_watch(day: int) -> void:
+	_progress_daily(day)
 	if day < 30 or not sim.wildnis or not auto_estates:
 		return
 	for c in sim.companies:
@@ -128,21 +129,6 @@ func _economy_watch(day: int) -> void:
 		var town: int = c.home_town
 		if not sim.town_ready(town):
 			continue
-		var owned: Array = sim.biz.of(cid).filter(func(b): return str(b.branch) != "transport")
-		if owned.is_empty() and sim.citizens.population_of(town) >= 20 and sim.citizens.unemployed_of(town) >= 8:
-			for branch in ["baeckerei", "moebelwerk", "muehle", "brauerei"]:
-				var spec: Dictionary = Businesses.branches().get(branch, {})
-				if c.ledger.cash < float(spec.get("ausstattung", 0.0)) + 20000.0 or not bool(sim.retail.counter_viable(branch).get("ok", false)):
-					continue
-				var sites: Array = sim.prod.site_hints(branch, 1, town)
-				if sites.is_empty():
-					continue
-				var site := str(sites[0].grundstueck)
-				var result: Dictionary = sim.biz.found(cid, branch, "KI-Wirtschaftsleitung: Arbeitsplätze für %s" % sim.towns.name_of(town), {"stadt": town, "grundstueck": site})
-				if bool(result.get("ok", false)):
-					_event(beings[name], "Wirtschaftsleitung gründet %s auf %s: %s" % [branch, site, str(result.msg).left(120)])
-					sim.log_event("KI-Wirtschaftsleitung %s gründet %s auf %s für %s (%d Arbeitslose)." % [c.company_name, spec.label, site, sim.towns.name_of(town), sim.citizens.unemployed_of(town)], "ai", cid)
-					break
 		# Ein fertiges Werk ohne Personal laeuft nicht. Die Wirtschaftsleitung besetzt es,
 		# wenn der Agent waehrend der gesamten Bauzeit niemanden zugeordnet hat.
 		for b in sim.biz.of(cid):
@@ -162,6 +148,49 @@ func _economy_watch(day: int) -> void:
 				if bool(assigned.get("ok", false)):
 					_event(beings[name], "Wirtschaftsleitung besetzt %s mit %s." % [b.name, worker.name])
 					sim.log_event("KI-Wirtschaftsleitung %s besetzt %s mit %s." % [c.company_name, b.name, worker.name], "ai", cid)
+
+
+func _progress_daily(day: int) -> void:
+	if not sim.wildnis:
+		return
+	for town in range(sim.towns.count()):
+		if not sim.town_ready(town):
+			continue
+		var units := 0
+		for unit in sim.housing.units.values():
+			if sim.towns.of_building(int(unit.building)) == town:
+				units += 1
+		var businesses := 0
+		var mines := 0
+		for business in sim.biz.items.values():
+			if str(business.branch) == "transport" or str(business.status) == "geschlossen" or sim.towns.of_building(int(business.site)) != town:
+				continue
+			businesses += 1
+			if str(business.branch) in ["bergwerk", "uranbergwerk", "kiesgrube", "lehmgrube", "bohrinsel"]:
+				mines += 1
+		var previous := {}
+		for i in range(progress_history.size() - 1, -1, -1):
+			var old: Dictionary = progress_history[i]
+			if int(old.get("stadt_id", -1)) == town:
+				previous = old
+				break
+		var mayor: Mayor = sim.towns.mayor(town)
+		var rejected := mayor.decisions.filter(func(d): return int(d.get("day", -1)) == day - 1 and not bool(d.get("ok", false))).size()
+		var entry := {"tag": day, "stadt_id": town, "stadt": sim.towns.name_of(town),
+			"wohnungen": units, "einwohner": sim.citizens.population_of(town), "betriebe": businesses,
+			"bergwerke": mines, "flughafen": sim.towns.airport(town).enabled,
+			"abgelehnte_amtsaktionen": rejected}
+		var deltas := {}
+		for field in ["wohnungen", "einwohner", "betriebe", "bergwerke"]:
+			deltas[field] = int(entry[field]) - int(previous.get(field, entry[field]))
+		entry["veraenderung"] = deltas
+		var stalled := int(previous.get("stillstand_tage", 0)) + 1 if deltas.values().all(func(value): return int(value) <= 0) and not previous.is_empty() else 0
+		entry["stillstand_tage"] = stalled
+		entry["neuplanung"] = "Pruefe die konkreten Bau-, Versorgungs- und Investitionsoptionen erneut; waehle selbst einen anderen wirksamen Schritt." if stalled >= 3 else ""
+		progress_history.append(entry)
+		if progress_history.size() > 120:
+			progress_history = progress_history.slice(-120)
+		sim.log_event("Tagesbericht %s: %d Wohnungen, %d Einwohner, %d Betriebe, %d Bergwerke; Flughafen %s; %d abgelehnte Amtsaktionen.%s" % [entry.stadt, deltas.wohnungen, deltas.einwohner, deltas.betriebe, deltas.bergwerke, "ja" if entry.flughafen else "nein", rejected, " Seit %d Tagen kein Wachstum: neue Optionen pruefen." % stalled if stalled >= 3 and stalled % 3 == 0 else ""], "ai")
 
 
 ## Ergebnis einer Firmen-Handlung, die erst vor Ort ausgefuehrt wurde, an das Wesen der Firma melden (vorher sah es nur "Figur geht zu ...").
@@ -1984,6 +2013,7 @@ func observe(name: String) -> Dictionary:
 		"naechste_schritte": next_steps(b),
 		"dringlichkeit": urgency(b),
 		"stadtwachstum": city_growth_status(int(b.get("amt", -1)) if int(b.get("amt", -1)) >= 0 else (sim.company(active_firm(b)).home_town if active_firm(b) >= 0 else -1)) if sim.wildnis else {},
+		"fortschritt": progress_history.slice(-4),
 		"zeit": Catalog.game_minutes_to_text(sim.game_min), "wetter": sim.wx.headline(),
 		"karte": {"mitte": [t.x, t.y], "radius": VIEW_RADIUS, "zeilen": rows,
 			"legende": "@ du, . freier Boden, = Strasse, # Gebaeude, ~ Wasser, h begehbarer Hang/Hochebene am Berg, ^ unbegehbar (Baum, Fels, Grat), 1-9/+ hoechste Blockschicht auf dem Feld"},
@@ -2949,6 +2979,16 @@ func _home_design_options(town: int) -> Array:
 	return out
 
 
+func _home_site_options(town: int) -> Dictionary:
+	var out := {}
+	if not sim.wildnis or not sim.town_plan.has(town):
+		return out
+	for kind in EkoHomes.HOMES:
+		if sim.tiers.unlocked(kind):
+			out[kind] = sim.sites.offers(town, kind, 2)
+	return out
+
+
 func _commercial_design_options(town: int) -> Array:
 	var style := _design_style(town)
 	var out: Array = []
@@ -2978,6 +3018,7 @@ func firm_obs(b: Dictionary) -> Dictionary:
 			"wartende_baustoffe": homes.waiting_goods(cid), "hubschrauber": sim.material_heli.obs(cid), "hinweis": "Das Großlager ist nicht dein Betriebshof. Der eigene Chinook bringt gekaufte Baustoffe zum Hof; Lagerpersonal belädt ihn am Hauptlager."},
 		"stadtmarke": sim.town_plan.brief(sim.companies[cid].home_town).get("stadtmarke", {}) if sim.town_plan != null and sim.town_plan.has(sim.companies[cid].home_town) else {},
 		"bauentwuerfe": _home_design_options(sim.companies[cid].home_town),
+		"wohnstandorte": _home_site_options(sim.companies[cid].home_town),
 		"gewerbeentwuerfe": _commercial_design_options(sim.companies[cid].home_town),
 		"standortangebote": sim.sites.offers(sim.companies[cid].home_town, "einfamilienhaus") if sim.wildnis and sim.town_plan.has(sim.companies[cid].home_town) else [],
 		"gewerbestandorte": sim.sites.offers(sim.companies[cid].home_town, "buerogebaeude", 2) if sim.wildnis and sim.town_plan.has(sim.companies[cid].home_town) else [],
@@ -3770,7 +3811,7 @@ func to_dict() -> Dictionary:
 			saved["fracht_auftrag"] = b.fracht_auftrag
 		bs.append(saved)
 	return {"blocks": bl, "beings": bs, "chat": chat, "jobs": jobs, "next_job": _next_job, "houses": houses, "arms": arms.to_dict(), "estates": estates.to_dict(), "homes": homes.to_dict(), "conflict": conflict.to_dict(),
-		"towns_funded": towns_funded}
+		"towns_funded": towns_funded, "progress_history": progress_history}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -3795,6 +3836,7 @@ func from_dict(d: Dictionary) -> void:
 	_next_job = int(d.get("next_job", 1))
 	_no_estate = false
 	towns_funded = d.get("towns_funded", {})
+	progress_history = d.get("progress_history", [])
 	houses = d.get("houses", {})
 	arms.from_dict(d.get("arms", {}))
 	estates.from_dict(d.get("estates", {}))

@@ -91,6 +91,7 @@ const SCHEMA := {
 	"expand_airport": {"params": {"reason": "string"},
 		"desc": "Flughafen eine Stufe ausbauen (obs.flughafen.ausbau: Ziel, Plaetze, Fracht je Flug, Kosten, Tage): Stadtprojekt, eine Baufirma baut mit Material aus dem Stadtlager. Danach mehr Passagiere und mehr Frachtplatz je Flug, hoechere Abfertigungsgebuhr. Sinnvoll, wenn obs.flughafen.rueckstau_fluege ueber 1 liegt (Luftfracht wartet auf mehrere Fluege)."},
 	"build_airport": {"params": {"reason": "string"}, "desc": "Einmalig einen Flughafen auf freiem ebenem Land mit Zufahrt bauen; Standort aus obs.verkehrsstandorte.flughafen."},
+	"plan_airport": {"params": {"strategie": "string", "reason": "string"}, "desc": "Flughafen am geprueften Standort finanzieren: strategie sparen oder kredit. Der Plan reserviert wachsende freie Mittel; ein Kredit ist nur im Rahmen des Kreditangebots moeglich. Die KI waehlt den Zeitpunkt des Baus selbst."},
 	"build_station": {"params": {"reason": "string"}, "desc": "Einmalig einen Bahnhof an der gegruendeten Stadt bauen. Nach dem zweiten Bahnhof verbindet die Regionalbahn die Staedte mit Personen- und Gueterzug."},
 	"warn_company": {"params": {"firma": "int", "reason": "string"},
 		"desc": "Firma öffentlich verwarnen (nur wenn sie in den letzten 7 Tagen eskaliert hat, siehe obs.rivalitaet.verursacher): Ruf −2, für 10 Tage kostet jede weitere Eskalation zusätzlich Ruf."},
@@ -274,7 +275,49 @@ func town_label() -> String:
 
 
 func available_budget() -> float:
+	return maxf(0.0, airport_budget() - airport_reservation)
+
+
+func airport_budget() -> float:
 	return maxf(0.0, cash() - reserve_cash() - commitments)
+
+
+var airport_goal := false
+var airport_target_cost := 0.0
+var airport_reservation := 0.0
+var airport_financing_mode := "sparen"
+
+
+func _refresh_airport_reservation() -> void:
+	var basic_services: bool = sim.eko != null and int(sim.eko.city_growth_status(town).get("bewohnbar", 0)) > 0
+	if airport_goal and not airport().enabled and basic_services:
+		airport_reservation = minf(airport_target_cost, maxf(0.0, airport_budget() - 30000.0))
+	else:
+		airport_reservation = 0.0
+
+
+func plan_airport(strategy: String) -> Dictionary:
+	if strategy not in ["sparen", "kredit"]:
+		return {"ok": false, "msg": "Strategie muss sparen oder kredit sein."}
+	if airport().enabled:
+		return {"ok": false, "msg": "Der Flughafen steht bereits."}
+	for project in projects.values():
+		if str(project.kind) == "flughafenbau" and str(project.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			return {"ok": false, "msg": "Der Flughafen wird bereits gebaut."}
+	var site: Dictionary = sim.eko.settle.transport_site(town, "flughafen")
+	if site.is_empty():
+		return {"ok": false, "msg": "Kein freies ebenes Flugfeld mit Zufahrt gefunden."}
+	airport_goal = true
+	airport_target_cost = EkoSettle.AIRPORT_BUILD_COST + (site.get("road", []) as Array).size() * 180.0
+	airport_financing_mode = strategy
+	_refresh_airport_reservation()
+	return {"ok": true, "msg": "Flughafenplan %s: %s geschaetzt, %s reserviert, %s fehlen im freien Flughafenbudget. Bauzeitpunkt selbst waehlen." % [strategy, Catalog.money(airport_target_cost), Catalog.money(airport_reservation), Catalog.money(maxf(0.0, airport_target_cost - airport_budget()))]}
+
+
+func airport_plan_committed() -> void:
+	airport_goal = false
+	airport_target_cost = 0.0
+	airport_reservation = 0.0
 
 
 ## Mindestreserve nach Ortsgroesse: 20 000 EUR + 80 EUR je Einwohner, hoechstens RESERVE_CASH (die grosse Stadt bleibt bei 100 000).
@@ -313,35 +356,45 @@ func credit_offer() -> Dictionary:
 	var gap := maxf(0.0, reserve_cash() + commitments - cash())
 	var minimum := maxf(CREDIT_MIN, gap + 20000.0)
 	var emergency_topup := credit_debt > 0.0 and available_budget() < 1000.0
-	var allowed: bool = sim.wildnis and sim.town_ready(town) and unserved > 0 and available_budget() < 25000.0 \
-		and room >= minimum and (_today() - credit_last_day >= 15 or emergency_topup)
-	var suggested := floorf(minf(room, maxf(CREDIT_MIN, gap + minf(100000.0, 50000.0 + float(units) * 3000.0))) / 1000.0) * 1000.0
+	var cooldown_ok: bool = _today() - credit_last_day >= 15 or emergency_topup
+	var infrastructure: bool = unserved > 0 and available_budget() < 25000.0
+	var airport_gap := maxf(0.0, airport_target_cost - airport_budget())
+	var airport_finance: bool = airport_goal and airport_financing_mode == "kredit" and unserved == 0 and airport_gap >= CREDIT_MIN and sim.citizens.population_of(town) > 0 and not sim.eko.settle.transport_site(town, "flughafen").is_empty()
+	if airport_finance and not infrastructure:
+		minimum = maxf(CREDIT_MIN, airport_gap)
+	var allowed: bool = sim.wildnis and sim.town_ready(town) and (infrastructure or airport_finance) \
+		and room >= minimum and cooldown_ok
+	var suggested := minf(room, ceilf(maxf(minimum, gap + minf(100000.0, 50000.0 + float(units) * 3000.0)) / 1000.0) * 1000.0)
+	if airport_finance and not infrastructure:
+		suggested = minf(room, ceilf(airport_gap / 1000.0) * 1000.0)
 	return {"ok": allowed, "vorschlag": suggested if allowed else 0.0, "minimal": snappedf(minimum, 1.0) if allowed else 0.0, "maximal": room if allowed else 0.0,
 		"schuld": snappedf(credit_debt, 1.0), "zins_pro_monat": CREDIT_RATE_MONTH,
 		"rueckzahlung": "20 % des freien monatlichen Ueberschusses nach Projektreservierungen und Mindestreserve",
-		"grund": "Nur bei unversorgten Wohnungen und knapper Baukasse; fruehestens 15 Tage nach dem letzten Kredit oder als Nachfinanzierung, wenn weiterhin weniger als 1.000 EUR frei sind."}
+		"zweck": "Flughafen" if airport_finance and not infrastructure else "Wohnungsanschluesse",
+		"grund": "Kredit fuer unversorgte Wohnungen oder einen von der KI geplanten Flughafen; fruehestens 15 Tage nach dem letzten Kredit, mit Schuldengrenze und Zins."}
 
 
 func request_credit(amount: float) -> Dictionary:
 	var offer: Dictionary = credit_offer()
 	if not bool(offer.ok):
-		return {"ok": false, "msg": "Derzeit kein Infrastrukturkredit verfuegbar. Pruefe kreditangebot, laufende Projekte und die Stadtkasse."}
+		return {"ok": false, "msg": "Derzeit kein Stadtinvestitionskredit verfuegbar. Pruefe kreditangebot, laufende Projekte und die Stadtkasse."}
 	if amount < float(offer.minimal) or amount > float(offer.maximal) or not is_finite(amount):
-		return {"ok": false, "msg": "Kreditbetrag muss zwischen %s und %s liegen, damit nach Reservierungen und Mindestreserve Geld fuer Anschluesse frei wird. Fuer diese Anschlussluecke sind %s vorgeschlagen; du kannst einen anderen gueltigen Betrag waehlen." % [Catalog.money(float(offer.minimal)), Catalog.money(float(offer.maximal)), Catalog.money(float(offer.vorschlag))]}
+		return {"ok": false, "msg": "Kreditbetrag muss zwischen %s und %s liegen. Vorgeschlagen sind %s fuer %s." % [Catalog.money(float(offer.minimal)), Catalog.money(float(offer.maximal)), Catalog.money(float(offer.vorschlag)), str(offer.zweck)]}
 	amount = snappedf(amount, 1.0)
 	sim.economy.transfer("X0", acct(), amount)
 	credit_debt += amount
 	credit_total += amount
 	credit_last_day = _today()
-	sim.log_event("%s nimmt einen Infrastrukturkredit von %s auf (Schuld %s); der Buergermeister waehlt die Bauprojekte." % [town_label(), Catalog.money(amount), Catalog.money(credit_debt)], "info")
-	return {"ok": true, "msg": "Infrastrukturkredit %s ausgezahlt. Frei verfuegbar: %s; Schuld %s. Entscheide jetzt ueber wirksame Anschluesse." % [Catalog.money(amount), Catalog.money(available_budget()), Catalog.money(credit_debt)]}
+	_refresh_airport_reservation()
+	sim.log_event("%s nimmt einen Stadtinvestitionskredit von %s fuer %s auf (Schuld %s); der Buergermeister waehlt das Projekt." % [town_label(), Catalog.money(amount), str(offer.zweck), Catalog.money(credit_debt)], "info")
+	return {"ok": true, "msg": "Kredit %s fuer %s ausgezahlt. Frei verfuegbar: %s; Flughafenbudget: %s; Schuld %s." % [Catalog.money(amount), str(offer.zweck), Catalog.money(available_budget()), Catalog.money(airport_budget()), Catalog.money(credit_debt)]}
 
 
 func _service_credit() -> void:
 	if credit_debt <= 0.0:
 		return
 	credit_debt = snappedf(credit_debt * (1.0 + CREDIT_RATE_MONTH), 0.01)
-	var surplus := maxf(0.0, cash() - reserve_cash() - commitments)
+	var surplus := available_budget()
 	var payment := minf(credit_debt, snappedf(surplus * CREDIT_REPAY_SHARE, 0.01))
 	if payment > 0.0:
 		sim.economy.transfer(acct(), "X0", payment)
@@ -371,6 +424,10 @@ func transport_indicators() -> Dictionary:
 		out[kind] = {"gebaut": built, "projekt": pending, "standort": site.get("site", []), "strassenfelder": (site.get("road", []) as Array).size(),
 			"kosten": (EkoSettle.HARBOR_BUILD_COST if kind == "hafen" else EkoSettle.AIRPORT_BUILD_COST) + (site.get("road", []) as Array).size() * 180 if not site.is_empty() else 0,
 			"grund": "kein freier Meereshafen mit Zufahrt" if kind == "hafen" and site.is_empty() and not built else ("kein freies ebenes Flugfeld mit Zufahrt" if site.is_empty() and not built else "")}
+		if kind == "flughafen":
+			out[kind]["finanzplan"] = {"aktiv": airport_goal, "strategie": airport_financing_mode, "zielkosten": int(airport_target_cost),
+				"reserviert": int(airport_reservation), "flughafenbudget": int(airport_budget()),
+				"fehlbetrag": int(maxf(0.0, float(out[kind].kosten) - airport_budget()))}
 	var st: Dictionary = sim.rail.station_of(town) if sim.rail != null else {}
 	var center: Vector2i = sim.towns.get_t(town).center
 	var sr: Array = st.get("rect", [])
@@ -451,6 +508,7 @@ func indicators() -> Dictionary:
 		"versorgung": {"freie_stadtgrundstuecke": free_n, "davon_voll_erschlossen": served,
 			"anteil_voll_erschlossen": snappedf(float(served) / maxf(1.0, float(free_n)), 0.01)},
 		"haushalt": {"kasse": snappedf(cash(), 1.0), "reserviert": snappedf(commitments, 1.0), "verfuegbar": snappedf(available_budget(), 1.0),
+			"flughafenreserve": snappedf(airport_reservation, 1.0), "flughafenbudget": snappedf(airport_budget(), 1.0),
 			"steuern_gesamt": snappedf(sim.public_sector.tax_total + sim.public_sector.social_total + sim.public_sector.corporate_total, 1.0),
 			"defizit": cash() < reserve_cash(), "mindestreserve": int(reserve_cash()), "landeszuweisung_monat": int(grant_last),
 			"hinweis": "verfuegbar = Kasse - Mindestreserve - reserviert. Ist verfuegbar 0, scheitert jede Ausgabe: dann Grundstücke verkaufen (offer_parcels), Grundsteuer anpassen oder warten."},
@@ -721,6 +779,7 @@ func on_day(_day: int) -> void:
 	if sim.wildnis:
 		if not sim.town_ready(town):
 			return   # Erst der Unternehmer gruendet die Stadt und baut ihr Buergeramt.
+	_refresh_airport_reservation()
 	if _region():
 		_arrivals_town()
 		return
@@ -747,6 +806,7 @@ func on_month(month: int) -> void:
 	if pop_history.size() > 36:
 		pop_history.pop_front()
 	_state_grant()
+	_refresh_airport_reservation()
 	_service_credit()
 	var c := _counts()
 	growth_history.append({"monat": month, "wohnhaeuser": c[0], "geschaefte": c[1], "steuern": _taxes()})
@@ -972,6 +1032,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = airport().expand("Bürgermeister %s" % name)
 			"build_airport":
 				res = sim.eko.settle.request_transport(town, "flughafen", str(a.get("reason", "Neuer Flughafen")))
+			"plan_airport":
+				res = plan_airport(str(a.get("strategie", "")))
 			"build_station":
 				res = sim.rail.request_station(town, str(a.get("reason", "Neuer Bahnhof")))
 			"build_bridge":
@@ -1741,6 +1803,7 @@ func to_dict() -> Dictionary:
 	return {"name": name, "party": party, "term_start_day": term_start_day, "approval": approval, "stock_units": stock_units, "waiting": waiting, "plans": plans,
 		"projects": projects, "decisions": decisions, "notes": notes, "commitments": commitments, "elections": elections, "pop_history": pop_history, "grants_total": grants_total, "grant_last": grant_last, "growth_history": growth_history,
 		"credit_debt": credit_debt, "credit_total": credit_total, "credit_repaid": credit_repaid, "credit_last_day": credit_last_day,
+		"airport_goal": airport_goal, "airport_target_cost": airport_target_cost, "airport_reservation": airport_reservation, "airport_financing_mode": airport_financing_mode,
 		"town": town, "next": [_next_plan, _next_project, _next_dec], "marketing": [marketing_boost, marketing_until], "arrival_acc": _arrival_acc}
 
 
@@ -1771,6 +1834,10 @@ func from_dict(d: Dictionary) -> void:
 	credit_total = float(d.get("credit_total", 0.0))
 	credit_repaid = float(d.get("credit_repaid", 0.0))
 	credit_last_day = int(d.get("credit_last_day", -999))
+	airport_goal = bool(d.get("airport_goal", false))
+	airport_target_cost = float(d.get("airport_target_cost", 0.0))
+	airport_reservation = float(d.get("airport_reservation", 0.0))
+	airport_financing_mode = str(d.get("airport_financing_mode", "sparen"))
 	growth_history = d.get("growth_history", [])
 	_arrival_acc = float(d.get("arrival_acc", 0.0))
 	var mk: Array = d.get("marketing", [0.0, -1])

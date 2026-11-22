@@ -1016,11 +1016,13 @@ func request_transport(k: int, kind: String, reason: String) -> Dictionary:
 	if site.is_empty():
 		return {"ok": false, "msg": "Kein freier, anschliessbarer %sstandort gefunden%s." % [kind, " am Meer" if kind == "hafen" else " auf ebenem Land"]}
 	var cost := (HARBOR_BUILD_COST if kind == "hafen" else AIRPORT_BUILD_COST) + float(site.road.size()) * 180.0
-	if M.available_budget() < cost:
+	if (M.airport_budget() if kind == "flughafen" else M.available_budget()) < cost:
 		return {"ok": false, "msg": "%s braucht %s frei verfuegbare Stadtkasse." % [kind.capitalize(), Catalog.money(cost)]}
 	var materials := {"betonfertigteil": 22, "schotter": 24, "verbindung": 8} if kind == "hafen" else {"betonfertigteil": 55, "schotter": 40, "verbindung": 15}
 	var days := 3 if kind == "hafen" else 4
 	var prj: Dictionary = M.add_works_project(project_kind, "standort", cost, days, materials, reason)
+	if kind == "flughafen":
+		M.airport_plan_committed()
 	prj["site"] = site.duplicate(true)
 	prj["ref"] = "transportzufahrt"
 	prj["road_plan"] = site.road.duplicate(true)

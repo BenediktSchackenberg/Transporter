@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 
-from tools.eko.eko_ollama import Agent, changed_world, compact_obs, company_choices, estate_choices, mayor_action_key, mayor_choices, mayor_state_signature
+from tools.eko.eko_ollama import Agent, changed_world, compact_obs, company_choices, estate_choices, growth_choices, mayor_action_key, mayor_choices, mayor_state_signature, mining_choices
 
 
 class FakeWorld:
@@ -39,6 +39,48 @@ def agent_with(world, role="buergermeister"):
 
 
 class MayorToolTests(unittest.TestCase):
+    def test_mining_choices_follow_real_deposit_steps(self):
+        firm = {"bargeld": 250000, "bergbau": {"kohle": {"schritt": "erkunden", "grundstueck": "G20", "kosten": 6000,
+                "rohstoffwert_geschaetzt": 220000, "alternative": {"schritt": "abbauantrag", "grundstueck": "G21"}},
+                "uranerz": {"schritt": "gruenden", "grundstueck": "G30", "kaufpreis": 80000,
+                             "strombedarf_kw": 50, "kraftwerksanschluss": True}}}
+        choices = mining_choices(firm)
+        self.assertEqual([(c["action"], c["standort"]) for c in choices],
+                         [("explore_deposit", "G20"), ("request_mining", "G21"), ("found_business", "G30")])
+        self.assertEqual(choices[2]["params"]["branche"], "uranbergwerk")
+        world = FakeWorld()
+        world.observe = lambda: {"ok": True, "meine_firma": {"firma": "Test", **firm}}
+        agent = agent_with(world, "unternehmer")
+        self.assertTrue(agent.call_tool("mining_choice", {"candidate": 2})["ok"])
+        self.assertEqual(world.actions[0][1]["aktion"]["rohstoff"], "uranerz")
+
+    def test_growth_requires_demand_and_habitable_homes(self):
+        firm = {"bargeld": 300000, "bauentwuerfe": [{"id": "design_w_001", "typ": "einfamilienhaus", "kosten": 85000,
+                    "komfort": 70}], "wohnstandorte": {"einfamilienhaus": [{"grundstueck": "G7", "preis": 25000,
+                    "bewertung": 0.8, "erschliessung": "Straße liegt am Grundstück"}]}}
+        self.assertEqual(growth_choices(firm, {"wohnungen": 4, "bewohnbar": 0, "wohnungssuchende": 3}), [])
+        self.assertEqual(growth_choices(firm, {"wohnungen": 4, "bewohnbar": 4, "wohnungssuchende": 0}), [])
+        choice = growth_choices(firm, {"wohnungen": 4, "bewohnbar": 4, "wohnungssuchende": 3})[0]
+        self.assertEqual(choice["params"], {"typ": "einfamilienhaus", "entwurf": "design_w_001", "grundstueck": "G7"})
+
+    def test_empty_transport_chances_are_removed_from_tool_menu(self):
+        world = FakeWorld()
+        world.observe = lambda: {"ok": True, "meine_firma": {"firma": "Test", "transportchancen": []}}
+        agent = agent_with(world, "unternehmer")
+        names = {tool["name"] for tool in agent.available_tools()}
+        self.assertNotIn("contract_choice", names)
+        self.assertIn("act", names)
+
+    def test_unfunded_airport_gets_two_financing_choices(self):
+        office = {"haushalt": {"verfuegbar": 30000, "flughafenbudget": 30000}, "verkehrsstandorte": {
+            "flughafen": {"standort": [100, 200], "kosten": 150000, "gebaut": False, "projekt": "",
+                          "finanzplan": {"aktiv": False, "fehlbetrag": 120000}}}}
+        choices = mayor_choices(office)
+        self.assertEqual([c["params"]["strategie"] for c in choices if c["action"] == "plan_airport"],
+                         ["sparen", "kredit"])
+        office["verkehrsstandorte"]["flughafen"]["finanzplan"]["aktiv"] = True
+        self.assertFalse(any(c["action"] == "plan_airport" for c in mayor_choices(office)))
+
     def test_invalid_infrastructure_does_not_reach_world(self):
         world = FakeWorld()
         result = agent_with(world).call_tool("mayor_action", {"action": "infra_ausbau", "params": {}})

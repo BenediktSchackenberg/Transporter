@@ -273,6 +273,7 @@ func steps_for(cid: int) -> Dictionary:
 		if sites.is_empty():
 			continue
 		var s: Dictionary = sites[0]
+		var branch := "uranbergwerk" if k == "uranerz" else ("kiesgrube" if k in ["kies", "sand"] else ("lehmgrube" if k == "lehm" else ("bohrinsel" if k == "rohoel" else "bergwerk")))
 		# knapp fuer die Beobachtung (Tokenbudget): erkundete Werte stehen in produktion_markt, Schaetzung nur vor der Bohrung
 		var e := {"schritt": s.schritt, "grundstueck": s.get("grundstueck", "")}
 		if s.has("kosten"):
@@ -284,6 +285,7 @@ func steps_for(cid: int) -> Dictionary:
 		e["stadt"] = s.stadt
 		e["heimatstadt"] = s.heimatstadt
 		e["kaufpreis"] = s.kaufpreis
+		e["gruendungskosten"] = int(Businesses.branches().get(branch, {}).get("ausstattung", 0))
 		e["zufahrt_kosten"] = s.zufahrt_kosten
 		e["zufahrt_tage"] = s.zufahrt_tage
 		e["rohstoffwert_geschaetzt"] = s.rohstoffwert_geschaetzt
@@ -293,7 +295,7 @@ func steps_for(cid: int) -> Dictionary:
 		if sites.size() > 1:
 			var other: Dictionary = sites[1]
 			e["alternative"] = {"grundstueck": other.grundstueck, "stadt": other.stadt, "heimatstadt": other.heimatstadt,
-				"schritt": other.schritt, "kaufpreis": other.kaufpreis, "zufahrt_kosten": other.zufahrt_kosten,
+				"schritt": other.schritt, "kosten": other.get("kosten", 0), "kaufpreis": other.kaufpreis, "gruendungskosten": e.gruendungskosten, "zufahrt_kosten": other.zufahrt_kosten,
 				"rohstoffwert_geschaetzt": other.rohstoffwert_geschaetzt, "ortsnetz_nach_zufahrt": other.ortsnetz_nach_zufahrt,
 				"kraftwerksanschluss": other.kraftwerksanschluss}
 		out[k] = e
