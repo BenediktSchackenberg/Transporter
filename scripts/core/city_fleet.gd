@@ -57,6 +57,17 @@ func _free_neighbor(site: Vector2i) -> Vector2i:
 	return site
 
 
+## Bautrupps stellen das Fahrzeug neben der Fahrbahn ab. Ein Wagen, der auf dem
+## einzigen offenen Nachbarfeld stehen bleibt, zwang den Verkehr bisher zum
+## Ueberholen auf derselben Spur und verursachte die Leitungsbau-Unfaelle.
+func _work_shoulder(road: Vector2i) -> Vector2i:
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var q: Vector2i = road + d
+		if sim.city.walkable(q) and not sim.city.is_road(q) and sim.city.g(q) != CityData.G.WATER and sim.city.building_at[sim.city.idx(q)] < 0:
+			return q
+	return Vector2i(-1, -1)
+
+
 func _spawn(kind: String, start: Vector2i, site: Vector2i, until: float, back: Vector2i, label: String, strict := false) -> Dictionary:
 	var m := Mover.new()
 	m.speed = 1.3 if kind == "stadtlkw" else (1.1 if kind == "zulieferer" else SPEED)
@@ -124,7 +135,11 @@ func send_crew(site: Vector2i, until: float, label: String) -> void:
 	if vehicles.filter(func(v): return v.kind == "bautrupp").size() >= MAX_CREWS:
 		return
 	var home := depot_road()
-	_spawn("bautrupp", home, site, until, home, label)
+	var crew: Dictionary = _spawn("bautrupp", home, site, until, home, label)
+	if crew.is_empty():
+		return
+	crew["park_road"] = _free_neighbor(site)
+	crew["shoulder"] = _work_shoulder(Vector2i(crew.park_road))
 	stats.bautrupps += 1
 
 
@@ -291,13 +306,28 @@ func update(dt: float) -> void:
 				if v.kind == "umzug":
 					v.phase = "abladen"
 					v.until = now + GameCalendar.days_to_min(UNLOAD_DAYS)
+				elif v.kind == "bautrupp" and Vector2i(v.get("shoulder", Vector2i(-1, -1))).x >= 0:
+					v.phase = "einparken"
+					m.lane = 0.0
+					m.set_path([m.tile(), Vector2i(v.shoulder)] as Array[Vector2i])
 				else:
 					v.phase = "arbeit"
+			"einparken":
+				v.phase = "arbeit"
 			"arbeit", "abladen":
 				if now >= float(v.until):
-					v.phase = "rueckfahrt"
-					if not sim.route(m, v.back):
-						vehicles.erase(v)
+					if v.kind == "bautrupp" and Vector2i(v.get("shoulder", Vector2i(-1, -1))).x >= 0:
+						v.phase = "ausparken"
+						m.set_path([m.tile(), Vector2i(v.park_road)] as Array[Vector2i])
+					else:
+						v.phase = "rueckfahrt"
+						if not sim.route(m, v.back):
+							vehicles.erase(v)
+			"ausparken":
+				v.phase = "rueckfahrt"
+				m.lane = 7.0
+				if not sim.route(m, v.back):
+					vehicles.erase(v)
 			"rueckfahrt":
 				vehicles.erase(v)
 

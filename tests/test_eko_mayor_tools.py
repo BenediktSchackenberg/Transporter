@@ -243,8 +243,23 @@ class MayorToolTests(unittest.TestCase):
         agent = agent_with(world)
         agent._mayor_invalid_streak = 2
         agent._mayor_invalid_state = mayor_state_signature(world.observe()["mein_amt"])
-        self.assertEqual([t["name"] for t in agent.available_tools()], ["mayor_action", "wait"])
+        self.assertEqual([t["name"] for t in agent.available_tools()], ["observe", "wait"])
         world.open = True
+        self.assertIn("mayor_action", [t["name"] for t in agent.available_tools()])
+        self.assertEqual(agent._mayor_invalid_streak, 0)
+
+    def test_completed_utility_effect_reopens_mayor_decisions(self):
+        class EffectWorld:
+            effect = []
+            def observe(self):
+                return {"ok": True, "mein_amt": {"bauprogramm": {"neues_bauprojekt_moeglich": True, "projekte": []},
+                        "versorgungswirkung": self.effect}}
+        world = EffectWorld()
+        agent = agent_with(world)
+        agent._mayor_invalid_streak = 2
+        agent._mayor_invalid_state = mayor_state_signature(world.observe()["mein_amt"])
+        self.assertEqual([t["name"] for t in agent.available_tools()], ["observe", "wait"])
+        world.effect = [{"projekt": "P50", "wohnungen_mehr": 4, "betriebe_mehr": 1}]
         self.assertIn("mayor_action", [t["name"] for t in agent.available_tools()])
         self.assertEqual(agent._mayor_invalid_streak, 0)
 

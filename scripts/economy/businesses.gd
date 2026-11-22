@@ -95,7 +95,12 @@ func block(id: String, key: String, text: String) -> void:
 	if b.is_empty():
 		return
 	var blk: Array = b.blockers
-	if not blk.any(func(x): return x.key == key):
+	var existing: int = blk.find_custom(func(x): return x.key == key)
+	if existing >= 0:
+		# Der Zustand kann sich ändern, während die Blockade bestehen bleibt (z. B. Rohrbruch repariert,
+		# aber die Leitung erreicht das Grundstück weiterhin nicht). Die sichtbare Ursache muss aktuell sein.
+		blk[existing]["text"] = text
+	else:
 		blk.append({"key": key, "text": text, "since": sim.game_min})
 	if b.status == "aktiv":
 		set_status(id, "blockiert", text)

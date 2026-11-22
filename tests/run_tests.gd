@@ -1483,10 +1483,12 @@ func test_city_fleet() -> void:
 	ok(F.vehicles.size() == 1 and F.vehicles[0].kind == "bautrupp" and F.vehicles[0].phase == "anfahrt", "ein Bautrupp je Baustelle fährt los")
 	var v: Dictionary = F.vehicles[0]
 	var t := 0
-	while v.phase == "anfahrt" and t < 4000:
+	while v.phase in ["anfahrt", "einparken"] and t < 4000:
 		s.step(0.1)
 		t += 1
-	ok(v.phase == "arbeit" and v.mover.tile().distance_to(site) <= 1.5, "Bautrupp kommt an der Baustelle an und arbeitet (%d Schritte)" % t)
+	ok(v.phase == "arbeit" and v.mover.tile().distance_to(site) <= 2.5, "Bautrupp kommt an der Baustelle an und arbeitet (%d Schritte)" % t)
+	if Vector2i(v.get("shoulder", Vector2i(-1, -1))).x >= 0:
+		ok(not s.city.is_road(v.mover.tile()), "Bautrupp parkt neben der Fahrbahn")
 	ok(F.crews_at_work().size() == 1, "arbeitender Trupp ist für die Baustellenanzeige sichtbar")
 	while F.vehicles.has(v) and t < 12000:
 		s.step(0.1)
@@ -1548,6 +1550,8 @@ func test_business_core() -> void:
 	# Blockade mit konkretem Grund
 	s.biz.block(bid, "strom", "Kein Strom: Netz ausgelastet")
 	ok(s.biz.get_b(bid).status == "blockiert" and s.biz.summary_of(0)[0].blockaden == ["Kein Strom: Netz ausgelastet"], "Blockade setzt Status und nennt den Grund")
+	s.biz.block(bid, "strom", "Kein Strom: Leitung unterbrochen")
+	ok(s.biz.summary_of(0)[0].blockaden == ["Kein Strom: Leitung unterbrochen"], "bestehende Blockade zeigt den aktuellen Grund")
 	s.biz.unblock(bid, "strom")
 	ok(s.biz.get_b(bid).status == "aktiv", "Blockade aufgehoben: wieder aktiv")
 	var row: Dictionary = s.biz.summary_of(0)[0]

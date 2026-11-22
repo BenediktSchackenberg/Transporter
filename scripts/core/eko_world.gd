@@ -157,15 +157,21 @@ func _progress_daily(day: int) -> void:
 		if not sim.town_ready(town):
 			continue
 		var units := 0
+		var habitable := 0
 		for unit in sim.housing.units.values():
 			if sim.towns.of_building(int(unit.building)) == town:
 				units += 1
+				if sim.housing.habitable(unit):
+					habitable += 1
 		var businesses := 0
+		var active_businesses := 0
 		var mines := 0
 		for business in sim.biz.items.values():
 			if str(business.branch) == "transport" or str(business.status) == "geschlossen" or sim.towns.of_building(int(business.site)) != town:
 				continue
 			businesses += 1
+			if str(business.status) == "aktiv":
+				active_businesses += 1
 			if str(business.branch) in ["bergwerk", "uranbergwerk", "kiesgrube", "lehmgrube", "bohrinsel"]:
 				mines += 1
 		var previous := {}
@@ -177,20 +183,21 @@ func _progress_daily(day: int) -> void:
 		var mayor: Mayor = sim.towns.mayor(town)
 		var rejected := mayor.decisions.filter(func(d): return int(d.get("day", -1)) == day - 1 and not bool(d.get("ok", false))).size()
 		var entry := {"tag": day, "stadt_id": town, "stadt": sim.towns.name_of(town),
-			"wohnungen": units, "einwohner": sim.citizens.population_of(town), "betriebe": businesses,
+			"wohnungen": units, "bewohnbar": habitable, "einwohner": sim.citizens.population_of(town),
+			"betriebe": businesses, "aktive_betriebe": active_businesses,
 			"bergwerke": mines, "flughafen": sim.towns.airport(town).enabled,
 			"abgelehnte_amtsaktionen": rejected}
 		var deltas := {}
-		for field in ["wohnungen", "einwohner", "betriebe", "bergwerke"]:
+		for field in ["wohnungen", "bewohnbar", "einwohner", "betriebe", "aktive_betriebe", "bergwerke"]:
 			deltas[field] = int(entry[field]) - int(previous.get(field, entry[field]))
 		entry["veraenderung"] = deltas
 		var stalled := int(previous.get("stillstand_tage", 0)) + 1 if deltas.values().all(func(value): return int(value) <= 0) and not previous.is_empty() else 0
 		entry["stillstand_tage"] = stalled
-		entry["neuplanung"] = "Pruefe die konkreten Bau-, Versorgungs- und Investitionsoptionen erneut; waehle selbst einen anderen wirksamen Schritt." if stalled >= 3 else ""
+		entry["neuplanung"] = "Pruefe die gemessene versorgungswirkung und waehle selbst den naechsten Engpass: Anschluesse und aktive Betriebe, danach Bergbau oder Flughafen bei tragfaehigem Haushalt." if stalled >= 3 else ""
 		progress_history.append(entry)
 		if progress_history.size() > 120:
 			progress_history = progress_history.slice(-120)
-		sim.log_event("Tagesbericht %s: %d Wohnungen, %d Einwohner, %d Betriebe, %d Bergwerke; Flughafen %s; %d abgelehnte Amtsaktionen.%s" % [entry.stadt, deltas.wohnungen, deltas.einwohner, deltas.betriebe, deltas.bergwerke, "ja" if entry.flughafen else "nein", rejected, " Seit %d Tagen kein Wachstum: neue Optionen pruefen." % stalled if stalled >= 3 and stalled % 3 == 0 else ""], "ai")
+		sim.log_event("Tagesbericht %s: %+d Wohnungen (%+d bewohnbar), %+d Einwohner, %+d Betriebe (%+d aktiv), %+d Bergwerke; Flughafen %s; %d abgelehnte Amtsaktionen.%s" % [entry.stadt, int(deltas.wohnungen), int(deltas.bewohnbar), int(deltas.einwohner), int(deltas.betriebe), int(deltas.aktive_betriebe), int(deltas.bergwerke), "ja" if entry.flughafen else "nein", rejected, " Seit %d Tagen kein Wachstum: neue Optionen pruefen." % stalled if stalled >= 3 and stalled % 3 == 0 else ""], "ai")
 
 
 ## Ergebnis einer Firmen-Handlung, die erst vor Ort ausgefuehrt wurde, an das Wesen der Firma melden (vorher sah es nur "Figur geht zu ...").
@@ -3576,6 +3583,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 			"bestellungen_offen": depot_info.get("bestellungen_offen", 0), "rueckstau_wareneingang_einheiten": depot_info.get("rueckstau_wareneingang_einheiten", 0),
 			"personal_gesamt": depot_info.get("personal_gesamt", 0)},
 		"versorgungsleitungen": ind.get("versorgungsleitungen", []),
+		"versorgungswirkung": sim.water.main_effects.filter(func(r): return int(r.get("stadt_id", -1)) == k).slice(-4),
 		"versorgungsanlagen_standorte": ind.get("versorgungsanlagen_standorte", []),
 		"naechster_ausbauschritt": next_step, "stadtplan_naechster_abschnitt": next_step, "stadtplan_erweiterung": ind.get("stadtplan_erweiterung", []),
 		"stadtentwicklung": {"vision": civic.get("vision", ""), "bedarf": civic.get("bedarf", {}), "eigene_anlagen": civic.get("eigene_anlagen", []),

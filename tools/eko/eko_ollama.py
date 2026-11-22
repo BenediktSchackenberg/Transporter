@@ -677,6 +677,11 @@ def mayor_state_signature(office):
     state = {
         "capacity": board.get("neues_bauprojekt_moeglich"),
         "plants": {k: bool(v.get("ok")) for k, v in (office.get("versorgungsanlagen_ausbau") or {}).items() if isinstance(v, dict)},
+        "projects": [(p.get("id"), p.get("status"), p.get("phase")) for p in (board.get("projekte") or []) if isinstance(p, dict)],
+        "water_options": [p.get("id") for p in (office.get("versorgungsleitungen") or []) if isinstance(p, dict)],
+        "power_options": [p.get("id") for p in (office.get("stromtrassen") or []) if isinstance(p, dict)],
+        "effects": [(p.get("projekt"), p.get("wohnungen_mehr"), p.get("betriebe_mehr"))
+                    for p in (office.get("versorgungswirkung") or []) if isinstance(p, dict)],
     }
     return json.dumps(state, sort_keys=True, ensure_ascii=False)
 
@@ -887,6 +892,10 @@ class Agent:
                          "Ein fertiges, abgebrochenes oder nicht existentes Projekt ist kein aktuelles Ziel mehr. "
                          "Alte Notizen, die eine Status-Schleife empfehlen, sind durch diese Regel ueberholt. "
                          "Vergleiche bei freier Baukapazitaet auch gepruefte Hafen-, Flughafen- und Bahnstandorte. "
+                         "Nach einer fertigen Leitung lies mein_amt.versorgungswirkung: tatsaechlich zusaetzlich bewohnbare "
+                         "Wohnungen und aktive Betriebe. Wenn die Wirkung null ist, identifiziere den verbliebenen "
+                         "Engpass und plane neu. Nach tragfaehiger Grundversorgung pruefe Flughafen und "
+                         "Bergbau-Anbindung als Investition, sofern Standort und Haushalt es erlauben. "
                          "Frieden, Handel und schoene Stadtviertel sind vollwertige strategische Entscheidungen.")
             lines.append("Waehle bei passenden Angeboten mit mayor_choice eine Nummer aus mein_amt.entscheidungsoptionen; ")
             lines.append("fuer eigene Bauideen nutze mayor_action mit action und params aus mein_amt.aktionen_wichtig. "
@@ -1322,10 +1331,14 @@ class Agent:
                 self._mayor_failed_key = ""
                 self._mayor_failed_count = 0
                 self._mayor_invalid_state = ""
+            elif office.get("bedrohung"):
+                return [tool for tool in available if tool["name"] in ("mayor_action", "observe")]
             elif mayor_choices(office):
                 return [tool for tool in available if tool["name"] == "mayor_choice"]
             else:
-                return [tool for tool in available if tool["name"] in ("mayor_action", "wait")]
+                # Kein aktuelles Angebot: nach zwei abgelehnten Bauideen bis zu einer
+                # echten Lageaenderung warten, statt denselben Ausbau erneut zu senden.
+                return [tool for tool in available if tool["name"] in ("observe", "wait")]
         if getattr(self, "_nonworld_streak", 0) >= 5:
             if getattr(self.args, "rolle", "") == "unternehmer":
                 firm = current_firm

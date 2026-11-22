@@ -67,6 +67,8 @@ var tight := {}        # Einrichtungs-ID -> Tage in Folge ueber EXPAND_RATIO
 var expansions := {}   # Projekt-ID -> Einrichtungs-ID
 var mains := {"wasser": {}, "abwasser": {}}  # Ort -> verlegte Leitungsfelder; bestehende Startstrassen sind grundversorgt
 var main_projects := {}  # Bauprojekt -> {town, art, cells}
+var pending_main_effects: Array = []
+var main_effects: Array = []
 var stats := {"rohrbrueche": 0, "reparaturen": 0, "ausbauten": 0}
 var rng := RandomNumberGenerator.new()
 var _net := {}         # Stadt -> {Vector2i: true} Strassenfelder mit Leitungsdruck (abgeleitet, taeglich neu)
@@ -465,6 +467,8 @@ func on_main_done(prj: Dictionary) -> void:
 	if p.is_empty():
 		return
 	main_projects.erase(str(prj.id))
+	pending_main_effects.append({"projekt": str(prj.id), "town": int(p.town), "art": str(p.art),
+		"vorher": _service_effect(int(p.town))})
 	var built: Dictionary = main_cells(int(p.town), str(p.art))
 	for a in p.cells:
 		built[_cell_key(Vector2i(int(a[0]), int(a[1])))] = true
@@ -472,15 +476,51 @@ func on_main_done(prj: Dictionary) -> void:
 	sim.log_event("%s: %sleitung fertig – %d Straßenfelder versorgt." % [sim.towns.name_of(int(p.town)), str(p.art).capitalize(), p.cells.size()], "good")
 
 
+## Gemessene Wirkung einer fertigen Leitung am naechsten Versorgungstag. Die Zahlen zeigen
+## tatsaechlich bewohnbare Wohnungen und Betriebszustand, nicht bloss verlegte Strassenfelder.
+func _service_effect(k: int) -> Dictionary:
+	var homes := 0
+	for unit in sim.housing.units.values():
+		if sim.towns.of_building(int(unit.building)) == k and sim.housing.habitable(unit):
+			homes += 1
+	var active := 0
+	var blocked := 0
+	for business in sim.biz.items.values():
+		if str(business.get("branch", "")) == "transport" or sim.towns.of_building(int(business.get("site", -1))) != k:
+			continue
+		if str(business.get("status", "")) == "aktiv":
+			active += 1
+		elif str(business.get("status", "")) == "blockiert":
+			blocked += 1
+	return {"bewohnbar": homes, "aktive_betriebe": active, "blockierte_betriebe": blocked}
+
+
+func _measure_main_effects() -> void:
+	for pending in pending_main_effects:
+		var after: Dictionary = _service_effect(int(pending.town))
+		var before: Dictionary = pending.vorher
+		var report := {"projekt": str(pending.projekt), "stadt_id": int(pending.town), "art": str(pending.art),
+			"spielminute": sim.game_min, "bewohnbar_vorher": int(before.bewohnbar),
+			"bewohnbar_nachher": int(after.bewohnbar), "aktive_betriebe_vorher": int(before.aktive_betriebe),
+			"aktive_betriebe_nachher": int(after.aktive_betriebe), "blockierte_betriebe_nachher": int(after.blockierte_betriebe)}
+		report["wohnungen_mehr"] = int(after.bewohnbar) - int(before.bewohnbar)
+		report["betriebe_mehr"] = int(after.aktive_betriebe) - int(before.aktive_betriebe)
+		main_effects.append(report)
+		if main_effects.size() > 24:
+			main_effects.pop_front()
+		sim.log_event("%s: Anschlusswirkung %s – %+d bewohnbare Wohnungen, %+d aktive Betriebe; %d Betriebe weiter blockiert. KI prüft den nächsten Engpass." % [sim.towns.name_of(int(pending.town)), str(pending.projekt), int(report.wohnungen_mehr), int(report.betriebe_mehr), int(report.blockierte_betriebe_nachher)], "ai")
+	pending_main_effects.clear()
+
+
 ## Strassenfelder mit Leitungsdruck: Breitensuche ueber die Strassen der Stadt ab allen Einspeisepunkten, hoechstens ZONE_RANGE
 ## Felder weit; eine Bruchstelle sperrt das Netz dahinter.
-func compute_net(k: int) -> Dictionary:
+func compute_net(k: int, ignore_break: bool = false) -> Dictionary:
 	var src := sources_of(k)
 	var net := {}
 	if src.is_empty():
 		return net
 	var built: Dictionary = main_cells(k, "wasser")
-	var br: Dictionary = breaks.get(str(k), {})
+	var br: Dictionary = {} if ignore_break else breaks.get(str(k), {})
 	var shut := {}   # Rohrbruch: Schieber sperren den Strassenabschnitt um die Bruchstelle (BREAK_SPAN Felder in jede Richtung)
 	if not br.is_empty():
 		var bq: Array = [Vector2i(int(br.cell[0]), int(br.cell[1]))]
@@ -587,6 +627,7 @@ func on_day(_day: int) -> void:
 		_supply_town(k, biz_by_town.get(k, []), float(shares.get(k, 1.0)), float(sewer_shares.get(k, 1.0)))
 	_treat()
 	_check_expansion()
+	_measure_main_effects()
 
 
 func _supply_town(k: int, businesses: Array, hh_share: float = 1.0, sewer_share: float = 1.0) -> void:
@@ -625,12 +666,20 @@ func _supply_town(k: int, businesses: Array, hh_share: float = 1.0, sewer_share:
 			continue
 		var m3 := biz_need(b)
 		need_b += m3
+		# Beide Anschlussgründe täglich unabhängig aktualisieren; ein alter Wasserfehler darf
+		# keinen überholten Kanalgrund im Betriebsstatus stehen lassen.
+		if building_on_sewer(k, int(b.site)):
+			sim.biz.unblock(b.id, "abwasser")
+		else:
+			sim.biz.block(b.id, "abwasser", "Kein Kanalanschluss: Abwasserleitung zur Kläranlage fehlt")
 		if not connected(b):
 			sim.biz.block(b.id, "wasser", "Kein Wasseranschluss: Grundstück nicht erschlossen")
 			continue
 		if not building_on_net(k, int(b.site)):
 			off += 1
-			sim.biz.block(b.id, "wasser", "Keine Wasserleitung: %s" % ("Rohrbruch im Netz" if breaks.has(str(k)) else "außerhalb der Druckzone"))
+			var road: Vector2i = Vector2i(sim.city.building(int(b.site)).get("road", Vector2i.ZERO))
+			var break_caused: bool = breaks.has(str(k)) and compute_net(k, true).has(road)
+			sim.biz.block(b.id, "wasser", "Keine Wasserleitung: %s" % ("Rohrbruch im Netz" if break_caused else "außerhalb der Druckzone"))
 			continue
 		if not building_on_sewer(k, int(b.site)):
 			off += 1
@@ -960,7 +1009,8 @@ func mayor_view(k: int) -> Dictionary:
 func to_dict() -> Dictionary:
 	return {"tariff": tariff, "by_town": by_town, "month": month, "last": last, "storage": storage, "breaks": breaks, "sewage_tariff": sewage_tariff,
 		"sewage": sewage, "sewage_month": sewage_month, "plant_month": plant_month, "plant_last": plant_last, "tight": tight, "expansions": expansions,
-		"stats": stats, "mains": mains, "main_projects": main_projects}
+		"stats": stats, "mains": mains, "main_projects": main_projects,
+		"pending_main_effects": pending_main_effects, "main_effects": main_effects}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -983,6 +1033,8 @@ func from_dict(d: Dictionary) -> void:
 	if not mains.has("abwasser"):
 		mains["abwasser"] = {}
 	main_projects = d.get("main_projects", {})
+	pending_main_effects = d.get("pending_main_effects", [])
+	main_effects = d.get("main_effects", [])
 	var st0: Dictionary = stats.duplicate()
 	st0.merge(d.get("stats", {}), true)
 	stats = st0
