@@ -1428,6 +1428,13 @@ class Agent:
                 action, data = next(iter(arguments.items()))
                 if isinstance(data, dict):
                     arguments = {"type": action, "data": data}
+        if name == "mayor_action" and "action" not in arguments:
+            # Qwen verpackt die Amtsaktion gelegentlich wie ein act-Werkzeug unter
+            # "aktion". Inhalt als Amtsentscheidung pruefen statt als Modellfehler
+            # erneut zu generieren (spart einen teuren Ollama-Zyklus).
+            nested = arguments.get("aktion")
+            if isinstance(nested, dict) and nested.get("action"):
+                arguments = nested
         if name == "mayor_action" and "action" in arguments:
             # Lokale Modelle geben die Parameter oft direkt neben action aus. Die konkrete
             # Entscheidung bleibt erhalten; nur die Werkzeughuelle wird normalisiert.

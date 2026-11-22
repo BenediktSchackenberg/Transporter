@@ -117,6 +117,22 @@ class JsonToolFallbackTest(unittest.TestCase):
         self.assertEqual(result["tool_calls"][0]["function"]["arguments"],
                          {"action": "stromtrasse_bauen", "params": {"option": "ST1", "reason": "Wohnungen anschliessen"}})
 
+    def test_mayor_action_accepts_nested_aktion_from_local_model(self):
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="buergermeister", model="local-test", ollama="http://127.0.0.1:11435",
+                                     ctx=16384, name="Ingrid")
+        agent._passive_streak = 0
+        agent.urgency = 2
+        agent.log = io.StringIO()
+        with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
+                {"message": {"content": '{"tool":"mayor_action","arguments":{"aktion":{'
+                                        '"action":"versorgungsleitung_bauen","option":"wasser:4:5",'
+                                        '"reason":"Wohnungen anschliessen"}}}'}})):
+            result = agent.chat_json_tool([{"role": "user", "content": "Versorge die Stadt"}])
+        self.assertEqual(result["tool_calls"][0]["function"]["arguments"],
+                         {"action": "versorgungsleitung_bauen",
+                          "params": {"option": "wasser:4:5", "reason": "Wohnungen anschliessen"}})
+
     def test_mayor_can_approve_procurement_outside_old_shortlist(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="buergermeister", model="local-test", ollama="http://127.0.0.1:11435",
