@@ -15374,6 +15374,15 @@ func test_eko_water() -> void:
 	var tower_tile := Vector2i(int(tower[0][0]) / EkoWorld.PER_TILE, int(tower[0][1]) / EkoWorld.PER_TILE)
 	s.city.ground[s.city.idx(tower_tile)] = CityData.G.WATER
 	ok(not E2.estates.order(E2.beings.Viktor, {"art": "turm", "feld": 0}).ok, "Bauwerk auf Wasser abgelehnt")
+	# Wasser und Kanal können am selben Tag fertig werden: Wirkung nur einmal je Stadt zählen.
+	var effect_before: Dictionary = s.water._service_effect(0)
+	s.water.pending_main_effects = [
+		{"projekt": "P-W", "town": 0, "art": "wasser", "vorher": effect_before},
+		{"projekt": "P-K", "town": 0, "art": "abwasser", "vorher": effect_before}]
+	s.water._measure_main_effects()
+	ok(s.water.main_effects.size() == 1 and str(s.water.main_effects[0].projekt).contains("P-W")
+		and str(s.water.main_effects[0].projekt).contains("P-K") and s.water.pending_main_effects.is_empty(),
+		"gleichzeitige Leitungsabschlüsse erhalten einen gemeinsamen Wirkungsbericht")
 
 
 func test_material_heli() -> void:

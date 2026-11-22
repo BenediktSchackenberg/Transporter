@@ -496,10 +496,19 @@ func _service_effect(k: int) -> Dictionary:
 
 
 func _measure_main_effects() -> void:
+	var batches := {}
 	for pending in pending_main_effects:
-		var after: Dictionary = _service_effect(int(pending.town))
-		var before: Dictionary = pending.vorher
-		var report := {"projekt": str(pending.projekt), "stadt_id": int(pending.town), "art": str(pending.art),
+		var key: String = str(pending.town)
+		if not batches.has(key):
+			batches[key] = {"town": int(pending.town), "vorher": pending.vorher,
+				"projekte": [], "arten": []}
+		batches[key].projekte.append(str(pending.projekt))
+		if str(pending.art) not in batches[key].arten:
+			batches[key].arten.append(str(pending.art))
+	for batch in batches.values():
+		var after: Dictionary = _service_effect(int(batch.town))
+		var before: Dictionary = batch.vorher
+		var report := {"projekt": ", ".join(batch.projekte), "stadt_id": int(batch.town), "art": ", ".join(batch.arten),
 			"spielminute": sim.game_min, "bewohnbar_vorher": int(before.bewohnbar),
 			"bewohnbar_nachher": int(after.bewohnbar), "aktive_betriebe_vorher": int(before.aktive_betriebe),
 			"aktive_betriebe_nachher": int(after.aktive_betriebe), "blockierte_betriebe_nachher": int(after.blockierte_betriebe)}
@@ -508,7 +517,7 @@ func _measure_main_effects() -> void:
 		main_effects.append(report)
 		if main_effects.size() > 24:
 			main_effects.pop_front()
-		sim.log_event("%s: Anschlusswirkung %s – %+d bewohnbare Wohnungen, %+d aktive Betriebe; %d Betriebe weiter blockiert. KI prüft den nächsten Engpass." % [sim.towns.name_of(int(pending.town)), str(pending.projekt), int(report.wohnungen_mehr), int(report.betriebe_mehr), int(report.blockierte_betriebe_nachher)], "ai")
+		sim.log_event("%s: Anschlusswirkung %s – %+d bewohnbare Wohnungen, %+d aktive Betriebe; %d Betriebe weiter blockiert. KI prüft den nächsten Engpass." % [sim.towns.name_of(int(batch.town)), str(report.projekt), int(report.wohnungen_mehr), int(report.betriebe_mehr), int(report.blockierte_betriebe_nachher)], "ai")
 	pending_main_effects.clear()
 
 
