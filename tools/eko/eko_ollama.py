@@ -394,9 +394,17 @@ def compact_obs(o, full=False):
     """Beobachtung fuer das lokale Modell kuerzen (16.11.2026: eine Unternehmer-Beobachtung hatte ~28.000 Zeichen, davon >50 %
     Firmenballast; jeder Zug dauerte mit Qwen 27B 2-19 s). Die Welt liefert weiter alles; mit observe {voll: true} sieht das Wesen
     die ungekuerzte Fassung. Gekuerzt: Bloecke (Zusammenfassung), Firmen-Nebenteile, Amtsdetails, bekannte Orte."""
-    if not isinstance(o, dict) or not o.get("ok", False) or full:
+    if not isinstance(o, dict) or not o.get("ok", False):
         return o
     o = dict(o)
+    if full:
+        for field, selector in (("meine_firma", company_choices), ("mein_amt", mayor_choices)):
+            section = o.get(field)
+            if isinstance(section, dict) and section:
+                section = dict(section)
+                section["entscheidungsoptionen"] = selector(section)
+                o[field] = section
+        return o
     blocks = o.get("bloecke_in_der_naehe", [])
     if len(blocks) > 12:
         mats = {}

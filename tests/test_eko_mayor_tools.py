@@ -90,6 +90,15 @@ class MayorToolTests(unittest.TestCase):
         self.assertEqual([c["action"] for c in offered], ["request_credit"])
         self.assertEqual(offered[0]["params"]["betrag"], 125000)
 
+    def test_full_observation_keeps_checked_choices(self):
+        observation = {"ok": True, "mein_amt": {"haushalt": {"verfuegbar": 0},
+                       "kreditangebot": {"ok": True, "vorschlag": 620000}},
+                       "meine_firma": {"bargeld": 200000, "lieferungen": 24, "fahrzeuge": [{"id": 1}],
+                       "fahrzeugangebote": [{"id": "F2", "modell": "truck", "preis": 30000}]}}
+        full = compact_obs(observation, full=True)
+        self.assertEqual(full["mein_amt"]["entscheidungsoptionen"][0]["action"], "request_credit")
+        self.assertEqual(full["meine_firma"]["entscheidungsoptionen"][0]["action"], "buy_vehicle")
+
     def test_running_road_project_hides_other_districts_but_keeps_harbor(self):
         office = {"bauprogramm": {"neues_bauprojekt_moeglich": True, "projekte": [{"art": "erschliessung", "viertel": "V1"}]},
                   "stadtplan_optionen": [{"viertel": "V2"}], "haushalt": {"verfuegbar": 500000},

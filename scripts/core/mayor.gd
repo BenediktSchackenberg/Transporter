@@ -310,11 +310,12 @@ func credit_offer() -> Dictionary:
 			if gap:
 				unserved += 1
 	var room := maxf(0.0, CREDIT_LIMIT - credit_debt)
-	var allowed: bool = sim.wildnis and sim.town_ready(town) and unserved > 0 and available_budget() < 25000.0 \
-		and room >= CREDIT_MIN and _today() - credit_last_day >= 15
 	var gap := maxf(0.0, reserve_cash() + commitments - cash())
+	var minimum := maxf(CREDIT_MIN, gap + 20000.0)
+	var allowed: bool = sim.wildnis and sim.town_ready(town) and unserved > 0 and available_budget() < 25000.0 \
+		and room >= minimum and _today() - credit_last_day >= 15
 	var suggested := floorf(minf(room, maxf(CREDIT_MIN, gap + minf(100000.0, 50000.0 + float(units) * 3000.0))) / 1000.0) * 1000.0
-	return {"ok": allowed, "vorschlag": suggested if allowed else 0.0, "maximal": room if allowed else 0.0,
+	return {"ok": allowed, "vorschlag": suggested if allowed else 0.0, "minimal": snappedf(minimum, 1.0) if allowed else 0.0, "maximal": room if allowed else 0.0,
 		"schuld": snappedf(credit_debt, 1.0), "zins_pro_monat": CREDIT_RATE_MONTH,
 		"rueckzahlung": "20 % des freien monatlichen Ueberschusses nach Projektreservierungen und Mindestreserve",
 		"grund": "Nur fuer eine gegruendete Stadt mit Wohnraum und knapper Baukasse; fruehestens 15 Tage nach dem letzten Kredit."}
@@ -324,8 +325,8 @@ func request_credit(amount: float) -> Dictionary:
 	var offer: Dictionary = credit_offer()
 	if not bool(offer.ok):
 		return {"ok": false, "msg": "Derzeit kein Infrastrukturkredit verfuegbar. Pruefe kreditangebot, laufende Projekte und die Stadtkasse."}
-	if amount < CREDIT_MIN or amount > float(offer.maximal) or not is_finite(amount):
-		return {"ok": false, "msg": "Kreditbetrag muss zwischen %s und %s liegen." % [Catalog.money(CREDIT_MIN), Catalog.money(float(offer.maximal))]}
+	if amount < float(offer.minimal) or amount > float(offer.maximal) or not is_finite(amount):
+		return {"ok": false, "msg": "Kreditbetrag muss zwischen %s und %s liegen, damit nach Reservierungen und Mindestreserve Geld fuer Anschluesse frei wird. Fuer diese Anschlussluecke sind %s vorgeschlagen; du kannst einen anderen gueltigen Betrag waehlen." % [Catalog.money(float(offer.minimal)), Catalog.money(float(offer.maximal)), Catalog.money(float(offer.vorschlag))]}
 	amount = snappedf(amount, 1.0)
 	sim.economy.transfer("X0", acct(), amount)
 	credit_debt += amount

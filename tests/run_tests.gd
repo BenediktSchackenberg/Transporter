@@ -3145,15 +3145,17 @@ func test_mayor_credit() -> void:
 	if balance > 1000.0:
 		s.economy.transfer(M.acct(), "X0", balance - 1000.0)
 	var offer: Dictionary = M.credit_offer()
-	ok(bool(offer.ok) and float(offer.vorschlag) >= Mayor.CREDIT_MIN, "knappe Stadtkasse erhaelt begrenztes Kreditangebot")
+	ok(bool(offer.ok) and float(offer.vorschlag) >= float(offer.minimal), "knappe Stadtkasse erhaelt begrenztes Kreditangebot")
 	var before := M.cash()
-	var issued: Dictionary = M.execute({"action": "request_credit", "betrag": 50000.0, "reason": "Wohnungen versorgen"})
-	ok(bool(issued.ok) and is_equal_approx(M.cash() - before, 50000.0) and is_equal_approx(M.credit_debt, 50000.0), "Buergermeister entscheidet Kredit; Auszahlung und Schuld stimmen")
-	ok(not M.credit_offer().ok and not M.execute({"action": "request_credit", "betrag": 50000.0, "reason": "sofort erneut"}).ok, "Kredit nicht sofort wiederholbar")
+	ok(not M.execute({"action": "request_credit", "betrag": 5000.0, "reason": "zu wenig"}).ok, "Kredit unter Finanzierungsluecke wird abgelehnt")
+	var amount: float = float(offer.vorschlag)
+	var issued: Dictionary = M.execute({"action": "request_credit", "betrag": amount, "reason": "Wohnungen versorgen"})
+	ok(bool(issued.ok) and is_equal_approx(M.cash() - before, amount) and is_equal_approx(M.credit_debt, amount), "Buergermeister entscheidet Kredit; Auszahlung und Schuld stimmen")
+	ok(not M.credit_offer().ok and not M.execute({"action": "request_credit", "betrag": amount, "reason": "sofort erneut"}).ok, "Kredit nicht sofort wiederholbar")
 	var saved: Dictionary = M.to_dict()
 	M.credit_debt = 0.0
 	M.from_dict(saved)
-	ok(is_equal_approx(M.credit_debt, 50000.0), "Kreditschuld uebersteht Speichern und Laden")
+	ok(is_equal_approx(M.credit_debt, amount), "Kreditschuld uebersteht Speichern und Laden")
 	s.economy.transfer("X0", M.acct(), M.reserve_cash() + 50000.0)
 	var debt_before := M.credit_debt
 	M._service_credit()
