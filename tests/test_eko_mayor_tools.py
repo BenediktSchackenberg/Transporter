@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 
-from tools.eko.eko_ollama import Agent, changed_world, compact_obs
+from tools.eko.eko_ollama import Agent, changed_world, compact_obs, mayor_choices
 
 
 class FakeWorld:
@@ -60,6 +60,12 @@ class MayorToolTests(unittest.TestCase):
             result = agent.call_tool("mayor_action", args)
         self.assertFalse(result["ok"])
         self.assertEqual(len(world.actions), 2)
+
+    def test_district_with_running_project_is_not_offered_again(self):
+        office = {"bauprogramm": {"neues_bauprojekt_moeglich": True, "projekte": [{"viertel": "V1"}]},
+                  "stadtplan_optionen": [{"viertel": "V1", "zone": "wohnen"}, {"viertel": "V2", "zone": "gewerbe"}]}
+        offered = [c["params"]["viertel"] for c in mayor_choices(office) if c["action"] == "viertel_erschliessen"]
+        self.assertEqual(offered, ["V2"])
 
 
 if __name__ == "__main__":

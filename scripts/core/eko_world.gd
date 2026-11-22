@@ -3237,6 +3237,7 @@ func _public_build_board(k: int) -> Dictionary:
 		if waiting != "":
 			blocked += 1
 		projects.append({"id": str(prj.id), "art": str(prj.get("kind", "")), "status": str(prj.status),
+			"viertel": str(prj.get("viertel", "")),
 			"resttage": int(work.get("days_left", prj.get("days", 0))), "wartet_auf": waiting})
 	var free_crews := 0
 	for crew in sim.crews.crews.values():

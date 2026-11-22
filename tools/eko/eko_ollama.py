@@ -467,10 +467,16 @@ def mayor_choices(office):
             result.append({"action": "stromtrasse_bauen", "params": {"option": line["id"], "reason": "Stromversorgung der Stadt"},
                            "nutzen": "Stromtrasse %s" % line["id"]})
     if (office.get("bauprogramm") or {}).get("neues_bauprojekt_moeglich", True):
-        for district in (office.get("stadtplan_optionen") or [])[:2]:
-            if isinstance(district, dict) and district.get("viertel"):
+        active_districts = {project.get("viertel") for project in (office.get("bauprogramm", {}).get("projekte") or [])
+                            if isinstance(project, dict) and project.get("viertel")}
+        districts_added = 0
+        for district in (office.get("stadtplan_optionen") or []):
+            if isinstance(district, dict) and district.get("viertel") and district["viertel"] not in active_districts:
                 result.append({"action": "viertel_erschliessen", "params": {"viertel": district["viertel"], "reason": "Wohn- und Arbeitsflaechen erschliessen"},
                                "nutzen": "%s %s" % (district.get("zone", "Viertel"), district["viertel"])})
+                districts_added += 1
+                if districts_added >= 2:
+                    break
     return [{"candidate": i, **choice} for i, choice in enumerate(result[:10])]
 
 
@@ -719,6 +725,8 @@ class Agent:
                     "kommunal_bauen": ("typ",), "viertel_erschliessen": ("viertel",),
                 }
                 missing = [key for key in required.get(action, ()) if not str(params.get(key, "")).strip()]
+                if action == "expand_depot" and params.get("kind") and params["kind"] not in ("staff", "ramp", "forklift"):
+                    missing.append("kind=staff|ramp|forklift")
                 key = json.dumps([action, params], sort_keys=True, ensure_ascii=False)
                 if missing or (key == self._mayor_failed_key and self._mayor_failed_count >= 2):
                     current = compact_obs(self.world.observe())
