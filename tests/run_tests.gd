@@ -3160,6 +3160,13 @@ func test_mayor_credit() -> void:
 	var debt_before := M.credit_debt
 	M._service_credit()
 	ok(M.credit_debt < debt_before and M.credit_repaid > 0.0, "Monatsueberschuss tilgt Kredit samt Zins")
+	var cash_now := M.cash()
+	if cash_now > 500.0:
+		s.economy.transfer(M.acct(), "X0", cash_now - 500.0)
+	var topup: Dictionary = M.credit_offer()
+	ok(bool(topup.ok) and float(topup.minimal) > Mayor.CREDIT_MIN, "unwirksamer Altkredit kann trotz Frist wirksam nachfinanziert werden")
+	var topped: Dictionary = M.execute({"action": "request_credit", "betrag": float(topup.vorschlag), "reason": "Anschlussluecke decken"})
+	ok(bool(topped.ok) and M.available_budget() >= 20000.0, "Nachfinanzierung schafft tatsaechlich Baubudget")
 	ok(identity_ok(s), "Geld bleibt bei Kredit und Tilgung erhalten")
 
 

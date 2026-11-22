@@ -312,13 +312,14 @@ func credit_offer() -> Dictionary:
 	var room := maxf(0.0, CREDIT_LIMIT - credit_debt)
 	var gap := maxf(0.0, reserve_cash() + commitments - cash())
 	var minimum := maxf(CREDIT_MIN, gap + 20000.0)
+	var emergency_topup := credit_debt > 0.0 and available_budget() < 1000.0
 	var allowed: bool = sim.wildnis and sim.town_ready(town) and unserved > 0 and available_budget() < 25000.0 \
-		and room >= minimum and _today() - credit_last_day >= 15
+		and room >= minimum and (_today() - credit_last_day >= 15 or emergency_topup)
 	var suggested := floorf(minf(room, maxf(CREDIT_MIN, gap + minf(100000.0, 50000.0 + float(units) * 3000.0))) / 1000.0) * 1000.0
 	return {"ok": allowed, "vorschlag": suggested if allowed else 0.0, "minimal": snappedf(minimum, 1.0) if allowed else 0.0, "maximal": room if allowed else 0.0,
 		"schuld": snappedf(credit_debt, 1.0), "zins_pro_monat": CREDIT_RATE_MONTH,
 		"rueckzahlung": "20 % des freien monatlichen Ueberschusses nach Projektreservierungen und Mindestreserve",
-		"grund": "Nur fuer eine gegruendete Stadt mit Wohnraum und knapper Baukasse; fruehestens 15 Tage nach dem letzten Kredit."}
+		"grund": "Nur bei unversorgten Wohnungen und knapper Baukasse; fruehestens 15 Tage nach dem letzten Kredit oder als Nachfinanzierung, wenn weiterhin weniger als 1.000 EUR frei sind."}
 
 
 func request_credit(amount: float) -> Dictionary:
