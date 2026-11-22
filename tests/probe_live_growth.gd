@@ -25,6 +25,16 @@ func _initialize() -> void:
 		print("STADT %s: %s Wohnungen %d/%d, fehlend %s" % [s.towns.name_of(k), growth.stufe,
 			int(growth.bewohnbar), int(growth.wohnungen), str(growth.fehlende_anschluesse)])
 		if args.has("--details"):
+			var mayor_being: Dictionary = {}
+			for being in s.eko.beings.values():
+				if int(being.get("amt", -1)) == k:
+					mayor_being = being
+					break
+			if not mayor_being.is_empty():
+				var office: Dictionary = s.eko.office_obs(mayor_being)
+				print("  Amtsbudget: %s; Kreditangebot: %s; Bau frei: %s; Bestellungen: %s" % [str(office.get("haushalt", {})), str(office.get("kreditangebot", {})),
+					str(office.get("bauprogramm", {}).get("neues_bauprojekt_moeglich", "?")),
+					str(office.get("stadtlager", {}).get("vorschlaege", [])).left(500)])
 			print("  Haeuser ohne Anschluss: %s" % str(growth.get("betroffene_haeuser", [])))
 			print("  Wasserquellen: %s; Wasserstandorte: %s" % [str(s.water.sources_of(k)), str(s.towns.mayor(k).indicators().get("versorgungsanlagen_standorte", [])).left(900)])
 			print("  Ausbaupruefung: %s" % str([s.water.expansion_need(k, "wasserwerk"), s.water.expansion_need(k, "hochbehaelter"), s.water.expansion_need(k, "klaeranlage")]).left(650))

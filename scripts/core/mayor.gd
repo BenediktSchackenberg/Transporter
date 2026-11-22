@@ -59,6 +59,8 @@ const SCHEMA := {
 		"desc": "Verkehrsmaßnahme auf einem wiederkehrenden Engpass (obs.verkehr.engpaesse mit wiederkehrend=true): kind ampel (Kreuzung, 12 000 EUR, 2 Tage), ladezone (Strecke neben einem Gebäude, 8 000 EUR, 3 Tage, Haltebucht für Lieferfahrzeuge, +1 Kapazität) oder ausbau (Straßenabschnitt, 40 000 EUR, 6 Tage, währenddessen eine Spur weniger). Ein einzelner Stau rechtfertigt keinen Ausbau."},
 	"reject_procurement": {"params": {"order_id": "string", "reason": "string"}, "desc": "Beschaffungsvorschlag ablehnen (Begründung nötig, z. B. Budget oder kein Bedarf)."},
 	"assess_financing": {"params": {"project_id": "string?"}, "desc": "Finanzierungsbedarf und Status eines Projekts bewerten (nur Auskunft); ohne project_id: Kasse und alle offenen Projekte."},
+	"request_credit": {"params": {"betrag": "number", "reason": "string"},
+		"desc": "Begrenzten Infrastrukturkredit bei fehlendem Budget fuer unbewohnbare Wohnhaeuser aufnehmen. Betrag und Schuldengrenze aus obs.kreditangebot; Zinsen und Tilgung werden monatlich aus Ueberschuessen bezahlt."},
 	"set_property_tax": {"params": {"satz_prozent": "number", "reason": "string"},
 		"desc": "Grundsteuersatz in Prozent des Immobilienwerts je Jahr festlegen (0,2–3,0; je Beschluss höchstens ±0,5 Punkte). Alle Bürger-Eigentümer zahlen ihn an die Stadtkasse; siehe obs.bevoelkerungsmodell."},
 	"hire_staff": {"params": {"abteilung": "string", "anzahl": "int", "reason": "string"},
@@ -285,6 +287,64 @@ const GRANT_BASE := 14000.0
 const GRANT_UNTIL := 500
 var grants_total := 0.0
 var grant_last := 0.0
+const CREDIT_LIMIT := 750000.0
+const CREDIT_MIN := 20000.0
+const CREDIT_RATE_MONTH := 0.003
+const CREDIT_REPAY_SHARE := 0.2
+var credit_debt := 0.0
+var credit_total := 0.0
+var credit_repaid := 0.0
+var credit_last_day := -999
+
+
+func credit_offer() -> Dictionary:
+	var units := 0
+	var unserved := 0
+	for unit in sim.housing.units.values():
+		if sim.towns.of_building(int(unit.building)) == town:
+			units += 1
+			var parcel: Dictionary = sim.parcels.of_building(int(unit.building))
+			var utility: Dictionary = parcel.get("erschliessung", {})
+			var gap := not parcel.is_empty() and ["strasse", "strom", "wasser", "abwasser"].any(func(part): return not bool(utility.get(part, false)))
+			gap = gap or not sim.grid.net.connected(town) or not sim.water.building_on_net(town, int(unit.building)) or not sim.water.building_on_sewer(town, int(unit.building))
+			if gap:
+				unserved += 1
+	var room := maxf(0.0, CREDIT_LIMIT - credit_debt)
+	var allowed: bool = sim.wildnis and sim.town_ready(town) and unserved > 0 and available_budget() < 25000.0 \
+		and room >= CREDIT_MIN and _today() - credit_last_day >= 15
+	var gap := maxf(0.0, reserve_cash() + commitments - cash())
+	var suggested := floorf(minf(room, maxf(CREDIT_MIN, gap + minf(100000.0, 50000.0 + float(units) * 3000.0))) / 1000.0) * 1000.0
+	return {"ok": allowed, "vorschlag": suggested if allowed else 0.0, "maximal": room if allowed else 0.0,
+		"schuld": snappedf(credit_debt, 1.0), "zins_pro_monat": CREDIT_RATE_MONTH,
+		"rueckzahlung": "20 % des freien monatlichen Ueberschusses nach Projektreservierungen und Mindestreserve",
+		"grund": "Nur fuer eine gegruendete Stadt mit Wohnraum und knapper Baukasse; fruehestens 15 Tage nach dem letzten Kredit."}
+
+
+func request_credit(amount: float) -> Dictionary:
+	var offer: Dictionary = credit_offer()
+	if not bool(offer.ok):
+		return {"ok": false, "msg": "Derzeit kein Infrastrukturkredit verfuegbar. Pruefe kreditangebot, laufende Projekte und die Stadtkasse."}
+	if amount < CREDIT_MIN or amount > float(offer.maximal) or not is_finite(amount):
+		return {"ok": false, "msg": "Kreditbetrag muss zwischen %s und %s liegen." % [Catalog.money(CREDIT_MIN), Catalog.money(float(offer.maximal))]}
+	amount = snappedf(amount, 1.0)
+	sim.economy.transfer("X0", acct(), amount)
+	credit_debt += amount
+	credit_total += amount
+	credit_last_day = _today()
+	sim.log_event("%s nimmt einen Infrastrukturkredit von %s auf (Schuld %s); der Buergermeister waehlt die Bauprojekte." % [town_label(), Catalog.money(amount), Catalog.money(credit_debt)], "info")
+	return {"ok": true, "msg": "Infrastrukturkredit %s ausgezahlt. Frei verfuegbar: %s; Schuld %s. Entscheide jetzt ueber wirksame Anschluesse." % [Catalog.money(amount), Catalog.money(available_budget()), Catalog.money(credit_debt)]}
+
+
+func _service_credit() -> void:
+	if credit_debt <= 0.0:
+		return
+	credit_debt = snappedf(credit_debt * (1.0 + CREDIT_RATE_MONTH), 0.01)
+	var surplus := maxf(0.0, cash() - reserve_cash() - commitments)
+	var payment := minf(credit_debt, snappedf(surplus * CREDIT_REPAY_SHARE, 0.01))
+	if payment > 0.0:
+		sim.economy.transfer(acct(), "X0", payment)
+		credit_debt = maxf(0.0, credit_debt - payment)
+		credit_repaid += payment
 func _state_grant() -> void:
 	var pop: int = sim.citizens.population_of(town)
 	grant_last = 0.0
@@ -392,6 +452,7 @@ func indicators() -> Dictionary:
 			"steuern_gesamt": snappedf(sim.public_sector.tax_total + sim.public_sector.social_total + sim.public_sector.corporate_total, 1.0),
 			"defizit": cash() < reserve_cash(), "mindestreserve": int(reserve_cash()), "landeszuweisung_monat": int(grant_last),
 			"hinweis": "verfuegbar = Kasse - Mindestreserve - reserviert. Ist verfuegbar 0, scheitert jede Ausgabe: dann Grundstücke verkaufen (offer_parcels), Grundsteuer anpassen oder warten."},
+		"kreditangebot": credit_offer(),
 		"bauantraege": {"warteschlange": sim.permits.queue().size(), "zur_entscheidung": queue_ids, "zur_entscheidung_details": pending, "kapazitaet_je_tag": snappedf(sim.permits.capacity(), 0.1)},
 		"plaene": plans.values().map(func(p): return {"id": p.id, "name": p.name, "status": p.status, "grundstuecke": p.parcels.size(), "zone": p.zone, "tag": int(p.get("day", 0)),
 			"ratsbegruendung": str(p.get("vote", "")).left(200) if p.status == "abgelehnt" else "",
@@ -471,7 +532,7 @@ func stadtlager_indicators() -> Dictionary:
 	for o in D.orders.values():
 		if o.status == "vorschlag":
 			var q := D.quote(o.item, int(o.qty), int(o.crit))
-			props.append({"id": o.id, "artikel": CityGoods.get_item(o.item).name, "menge": o.qty, "kritikalitaet": o.crit, "grund": o.reason, "geschaetzte_kosten": snappedf(float(q[0].total) if not q.is_empty() else 0.0, 1.0),
+			props.append({"id": o.id, "artikel": CityGoods.get_item(o.item).name, "menge": o.qty, "kritikalitaet": o.crit, "grund": o.reason, "geschaetzte_kosten": snappedf(float(q[0].total) + D._freight(o.item, int(o.qty), int(q[0].loc)) if not q.is_empty() else 0.0, 1.0),
 				"anbieter": q[0].name if not q.is_empty() else "", "tage_offen": _today() - int(o.day), "entscheidung": o.get("decision", ""),
 				"projekt": str(o.get("project", ""))})
 	# Material laufender Projekte zuerst: der Buergermeister hat pro Runde nur wenige Aktionen, und jedes offene
@@ -684,6 +745,7 @@ func on_month(month: int) -> void:
 	if pop_history.size() > 36:
 		pop_history.pop_front()
 	_state_grant()
+	_service_credit()
 	var c := _counts()
 	growth_history.append({"monat": month, "wohnhaeuser": c[0], "geschaefte": c[1], "steuern": _taxes()})
 	if growth_history.size() > 36:
@@ -870,6 +932,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = depot().reject(str(a.order_id), "Bürgermeister %s" % name, str(a.get("reason", "")))
 			"assess_financing":
 				res = _assess_financing(a)
+			"request_credit":
+				res = request_credit(float(a.betrag))
 			"decide_application":
 				res = _decide_application(a)
 			"set_property_tax":
@@ -1674,6 +1738,7 @@ func _today() -> int:
 func to_dict() -> Dictionary:
 	return {"name": name, "party": party, "term_start_day": term_start_day, "approval": approval, "stock_units": stock_units, "waiting": waiting, "plans": plans,
 		"projects": projects, "decisions": decisions, "notes": notes, "commitments": commitments, "elections": elections, "pop_history": pop_history, "grants_total": grants_total, "grant_last": grant_last, "growth_history": growth_history,
+		"credit_debt": credit_debt, "credit_total": credit_total, "credit_repaid": credit_repaid, "credit_last_day": credit_last_day,
 		"town": town, "next": [_next_plan, _next_project, _next_dec], "marketing": [marketing_boost, marketing_until], "arrival_acc": _arrival_acc}
 
 
@@ -1700,6 +1765,10 @@ func from_dict(d: Dictionary) -> void:
 	pop_history = d.get("pop_history", pop_history)
 	grants_total = float(d.get("grants_total", 0.0))
 	grant_last = float(d.get("grant_last", 0.0))
+	credit_debt = float(d.get("credit_debt", 0.0))
+	credit_total = float(d.get("credit_total", 0.0))
+	credit_repaid = float(d.get("credit_repaid", 0.0))
+	credit_last_day = int(d.get("credit_last_day", -999))
 	growth_history = d.get("growth_history", [])
 	_arrival_acc = float(d.get("arrival_acc", 0.0))
 	var mk: Array = d.get("marketing", [0.0, -1])

@@ -453,17 +453,24 @@ def mayor_choices(office):
     if not isinstance(office, dict):
         return []
     result = []
+    credit = office.get("kreditangebot") or {}
+    if credit.get("ok") and float(credit.get("vorschlag", 0)) >= 20000:
+        result.append({"action": "request_credit", "params": {"betrag": credit["vorschlag"],
+                       "reason": "Bewohnbare Wohnungen durch wirksame Anschluesse ermoeglichen"},
+                       "nutzen": "Finanziert lebenswichtige Anschluesse; Schuld %s EUR, Zins %s pro Monat" %
+                       (credit.get("schuld", 0), credit.get("zins_pro_monat", 0))})
     depot = office.get("stadtlager") or {}
     if depot.get("rueckstau_wareneingang_einheiten", 0) and not depot.get("personal_gesamt", 0):
         result.append({"action": "expand_depot", "params": {"kind": "staff", "reason": "Angelieferte Projektware einlagern"},
                        "nutzen": "Wareneingang und blockierte Bauprojekte"})
+    budget = float((office.get("haushalt") or {}).get("verfuegbar", 0))
     for proposal in (depot.get("vorschlaege") or [])[:2]:
-        if isinstance(proposal, dict) and proposal.get("id"):
+        if isinstance(proposal, dict) and proposal.get("id") and (proposal.get("projekt") or
+                0 < float(proposal.get("geschaetzte_kosten", 0)) <= budget):
             result.append({"action": "approve_procurement", "params": {"order_id": proposal["id"], "reason": "Projektmaterial beschaffen"},
                            "nutzen": proposal.get("reason", "Materialbedarf")})
     board = office.get("bauprogramm") or {}
     can_build = board.get("neues_bauprojekt_moeglich", True)
-    budget = (office.get("haushalt") or {}).get("verfuegbar", float("inf"))
     if can_build:
         for line in (office.get("versorgungsleitungen") or [])[:3]:
             if isinstance(line, dict) and line.get("id") and float(line.get("kosten", 0)) <= budget:
@@ -474,7 +481,7 @@ def mayor_choices(office):
                 result.append({"action": "stromtrasse_bauen", "params": {"option": line["id"], "reason": "Stromversorgung der Stadt"},
                                "nutzen": "Stromtrasse %s" % line["id"]})
         for plant, state in (office.get("versorgungsanlagen_ausbau") or {}).items():
-            if isinstance(state, dict) and state.get("ok"):
+            if isinstance(state, dict) and state.get("ok") and float(state.get("kosten", float("inf"))) <= budget:
                 result.append({"action": "infra_ausbau", "params": {"anlage": plant, "reason": "Gemessene Auslastung der Anlage"},
                                "nutzen": state.get("msg", "Kapazitaetsengpass")})
         for kind, action in (("hafen", "build_harbor"), ("flughafen", "build_airport"), ("bahn", "build_station")):
@@ -487,7 +494,7 @@ def mayor_choices(office):
                             if isinstance(project, dict) and project.get("viertel")}
         road_running = any(project.get("art") == "erschliessung" for project in (board.get("projekte") or []) if isinstance(project, dict))
         districts_added = 0
-        for district in ([] if road_running else (office.get("stadtplan_optionen") or [])):
+        for district in ([] if road_running or budget <= 0 else (office.get("stadtplan_optionen") or [])):
             if isinstance(district, dict) and district.get("viertel") and district["viertel"] not in active_districts:
                 result.append({"action": "viertel_erschliessen", "params": {"viertel": district["viertel"], "reason": "Wohn- und Arbeitsflaechen erschliessen"},
                                "nutzen": "%s %s" % (district.get("zone", "Viertel"), district["viertel"])})
@@ -714,6 +721,9 @@ class Agent:
                          "infra_ausbau vergroessert nur eine vorhandene Anlage und hilft nur, wenn versorgungsanlagen_ausbau die Auslastung bestaetigt. "
                          "Wenn bauprogramm.offen die Kapazitaet erreicht, genehmige passende stadtlager.vorschlaege mit "
                          "approve_procurement oder warte auf Material, Bautrupps und Abschluss; neue Baustellen werden abgelehnt. "
+                         "Bei verfuegbar 0 EUR waehle keine unbezahlbare Bestellung oder Leitung. Das optionale kreditangebot finanziert "
+                         "dringende Anschluesse, verursacht aber Zinsen und wird aus spaeteren Ueberschuessen getilgt; entscheide "
+                         "selbst ueber Betrag und Zweck. "
                          "Amt status dient nur zur Klaerung einer neuen Lage; wiederholtes "
                          "Amt status und Rest ohne Zustandsaenderung sind keine Stadtentwicklung. Rest nur bei wirklichem Energiemangel. "
                          "Ein fertiges, abgebrochenes oder nicht existentes Projekt ist kein aktuelles Ziel mehr. "
@@ -851,6 +861,12 @@ class Agent:
                     if isinstance(entries, list) and str(params.get(param)) not in {str(x.get("id")) for x in entries if isinstance(x, dict)}:
                         return {"ok": False, "msg": "Diese Kennung ist nicht mehr offen. Beobachte aktuelle Optionen und waehle eine neue Entscheidung.",
                                 "gueltige_optionen": entries[:5]}
+                    matching = next((x for x in entries if isinstance(x, dict) and str(x.get("id")) == str(params.get(param))), {})
+                    budget = float((office.get("haushalt") or {}).get("verfuegbar", 0))
+                    funded = action == "approve_procurement" and matching.get("projekt")
+                    cost = float(matching.get("geschaetzte_kosten" if action == "approve_procurement" else "kosten", 0))
+                    if matching and not funded and cost > budget:
+                        return {"ok": False, "msg": "Diese Entscheidung kostet mindestens %.0f EUR, aber nur %.0f EUR sind frei. Pruefe kreditangebot oder Einnahmen." % (cost, budget)}
                 result = self.call_tool("act", {"type": "Amt", "data": {"aktion": {**params, "action": action}}})
                 if isinstance(result, dict) and result.get("ok") is False:
                     self._mayor_failed_count = self._mayor_failed_count + 1 if key == self._mayor_failed_key else 1
@@ -1084,7 +1100,7 @@ class Agent:
             elif mayor_choices(office):
                 return [tool for tool in available if tool["name"] == "mayor_choice"]
             else:
-                return [tool for tool in available if tool["name"] == "wait"]
+                return [tool for tool in available if tool["name"] in ("mayor_action", "wait")]
         if getattr(self, "_nonworld_streak", 0) >= 5:
             if getattr(self.args, "rolle", "") == "unternehmer":
                 current = compact_obs(self.world.observe())

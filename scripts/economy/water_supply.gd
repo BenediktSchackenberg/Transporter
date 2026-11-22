@@ -941,7 +941,8 @@ func expansion_need(k: int, anlage: String) -> Dictionary:
 	if demand <= 0.0 or capacity >= limit:
 		return {"ok": false, "msg": "%s hat genügend Kapazität (%.1f m³ bei %.1f m³ Bedarf). Fehlende Anschlüsse brauchen wirksame Leitungen oder eine neue Anlage an einem geprüften Standort; ein Kapazitätsausbau vergrößert die Druckzone nicht." % [str(f.name), capacity, demand],
 			"kapazitaet": capacity, "bedarf": demand}
-	return {"ok": true, "anlage": anlage, "kapazitaet": capacity, "bedarf": demand,
+	var cost := snappedf(float(Municipal.TYPES[str(f.code)].cost) * EXPAND_SHARE, 1000.0)
+	return {"ok": true, "anlage": anlage, "kapazitaet": capacity, "bedarf": demand, "kosten": cost,
 		"msg": "Ausbau von %s ist wegen Auslastung möglich." % str(f.name)}
 
 

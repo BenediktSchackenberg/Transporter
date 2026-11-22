@@ -67,17 +67,28 @@ class MayorToolTests(unittest.TestCase):
 
     def test_district_with_running_project_is_not_offered_again(self):
         office = {"bauprogramm": {"neues_bauprojekt_moeglich": True, "projekte": [{"viertel": "V1"}]},
+                  "haushalt": {"verfuegbar": 20000},
                   "stadtplan_optionen": [{"viertel": "V1", "zone": "wohnen"}, {"viertel": "V2", "zone": "gewerbe"}]}
         offered = [c["params"]["viertel"] for c in mayor_choices(office) if c["action"] == "viertel_erschliessen"]
         self.assertEqual(offered, ["V2"])
 
     def test_full_build_board_only_offers_actions_without_new_project(self):
-        office = {"bauprogramm": {"neues_bauprojekt_moeglich": False},
-                  "stadtlager": {"vorschlaege": [{"id": "ORDER-1"}]},
+        office = {"bauprogramm": {"neues_bauprojekt_moeglich": False}, "haushalt": {"verfuegbar": 2000},
+                  "stadtlager": {"vorschlaege": [{"id": "ORDER-1", "geschaetzte_kosten": 300}]},
                   "versorgungsleitungen": [{"id": "wasser:4:5"}],
                   "stromtrassen": [{"id": "strom:1"}],
                   "stadtplan_optionen": [{"viertel": "V3"}]}
         self.assertEqual([c["action"] for c in mayor_choices(office)], ["approve_procurement"])
+
+    def test_empty_budget_offers_credit_instead_of_unaffordable_orders(self):
+        office = {"bauprogramm": {"neues_bauprojekt_moeglich": True}, "haushalt": {"verfuegbar": 0},
+                  "kreditangebot": {"ok": True, "vorschlag": 125000, "schuld": 0, "zins_pro_monat": 0.003},
+                  "stadtlager": {"vorschlaege": [{"id": "B18", "geschaetzte_kosten": 333}]},
+                  "versorgungsleitungen": [{"id": "wasser:4:5", "kosten": 1040}],
+                  "stadtplan_optionen": [{"viertel": "V2"}]}
+        offered = mayor_choices(office)
+        self.assertEqual([c["action"] for c in offered], ["request_credit"])
+        self.assertEqual(offered[0]["params"]["betrag"], 125000)
 
     def test_running_road_project_hides_other_districts_but_keeps_harbor(self):
         office = {"bauprogramm": {"neues_bauprojekt_moeglich": True, "projekte": [{"art": "erschliessung", "viertel": "V1"}]},
@@ -90,11 +101,11 @@ class MayorToolTests(unittest.TestCase):
     def test_transport_sites_remain_visible_among_many_utility_choices(self):
         office = {"bauprogramm": {"neues_bauprojekt_moeglich": True, "projekte": []},
                   "haushalt": {"verfuegbar": 500000},
-                  "stadtlager": {"vorschlaege": [{"id": "O1"}, {"id": "O2"}]},
+                  "stadtlager": {"vorschlaege": [{"id": "O1", "geschaetzte_kosten": 100}, {"id": "O2", "geschaetzte_kosten": 100}]},
                   "versorgungsleitungen": [{"id": "wasser:1", "kosten": 200}, {"id": "wasser:2", "kosten": 200},
                                              {"id": "abwasser:3", "kosten": 200}],
                   "stromtrassen": [{"id": "strom:1", "kosten": 200}, {"id": "strom:2", "kosten": 200}],
-                  "versorgungsanlagen_ausbau": {"wasserwerk": {"ok": True}, "klaeranlage": {"ok": True}},
+                  "versorgungsanlagen_ausbau": {"wasserwerk": {"ok": True, "kosten": 1000}, "klaeranlage": {"ok": True, "kosten": 1000}},
                   "stadtplan_optionen": [{"viertel": "V1"}, {"viertel": "V2"}],
                   "verkehrsstandorte": {"hafen": {"standort": [10, 20], "kosten": 100000},
                                         "flughafen": {"standort": [20, 20], "kosten": 120000},
@@ -128,7 +139,7 @@ class MayorToolTests(unittest.TestCase):
         agent = agent_with(world)
         agent._mayor_invalid_streak = 2
         agent._mayor_invalid_state = mayor_state_signature(world.observe()["mein_amt"])
-        self.assertEqual([t["name"] for t in agent.available_tools()], ["wait"])
+        self.assertEqual([t["name"] for t in agent.available_tools()], ["mayor_action", "wait"])
         world.open = True
         self.assertIn("mayor_action", [t["name"] for t in agent.available_tools()])
         self.assertEqual(agent._mayor_invalid_streak, 0)

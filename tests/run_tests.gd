@@ -54,6 +54,7 @@ func _initialize() -> void:
 	test_names.append("test_eko_build_plan")
 	test_names.append("test_eko_start_capital_and_home")
 	test_names.append("test_eko_taxi")
+	test_names.append("test_mayor_credit")
 	var args := OS.get_cmdline_user_args()
 	if args.size() == 1 and str(args[0]).begins_with("--only="):
 		var requested := str(args[0]).trim_prefix("--only=")
@@ -3124,6 +3125,40 @@ func test_yard_empire_core() -> void:
 	var s2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
 	ok(s2.yard.records.size() == Y.records.size() and s2.yard.factors.has("stellplatz"), "Investitionsakten und Faktoren nach dem Laden")
 	ok(identity_ok(s), "Geld erhalten")
+
+
+func test_mayor_credit() -> void:
+	var s := region_sim(2)
+	var M: Mayor = s.towns.mayor(0)
+	s.wildnis = true
+	s.city.towns[0]["gegruendet"] = true
+	var home_count := 0
+	for unit in s.housing.units.values():
+		if s.towns.of_building(int(unit.building)) == 0:
+			home_count += 1
+			var plot: Dictionary = s.parcels.of_building(int(unit.building))
+			if not plot.is_empty():
+				plot.erschliessung["wasser"] = false
+				s.parcels.touch(str(plot.id))
+	ok(home_count > 0, "Stadt besitzt Wohnraum fuer Infrastrukturkredit")
+	var balance := M.cash()
+	if balance > 1000.0:
+		s.economy.transfer(M.acct(), "X0", balance - 1000.0)
+	var offer: Dictionary = M.credit_offer()
+	ok(bool(offer.ok) and float(offer.vorschlag) >= Mayor.CREDIT_MIN, "knappe Stadtkasse erhaelt begrenztes Kreditangebot")
+	var before := M.cash()
+	var issued: Dictionary = M.execute({"action": "request_credit", "betrag": 50000.0, "reason": "Wohnungen versorgen"})
+	ok(bool(issued.ok) and is_equal_approx(M.cash() - before, 50000.0) and is_equal_approx(M.credit_debt, 50000.0), "Buergermeister entscheidet Kredit; Auszahlung und Schuld stimmen")
+	ok(not M.credit_offer().ok and not M.execute({"action": "request_credit", "betrag": 50000.0, "reason": "sofort erneut"}).ok, "Kredit nicht sofort wiederholbar")
+	var saved: Dictionary = M.to_dict()
+	M.credit_debt = 0.0
+	M.from_dict(saved)
+	ok(is_equal_approx(M.credit_debt, 50000.0), "Kreditschuld uebersteht Speichern und Laden")
+	s.economy.transfer("X0", M.acct(), M.reserve_cash() + 50000.0)
+	var debt_before := M.credit_debt
+	M._service_credit()
+	ok(M.credit_debt < debt_before and M.credit_repaid > 0.0, "Monatsueberschuss tilgt Kredit samt Zins")
+	ok(identity_ok(s), "Geld bleibt bei Kredit und Tilgung erhalten")
 
 
 func test_yard_specializations() -> void:
