@@ -15289,7 +15289,9 @@ func test_eko_estates() -> void:
 	ok(options.any(func(x): return x.art == "mauer") and options.any(func(x): return x.art == "schloss") and options.any(func(x): return x.art == "garten"),
 		"KI kann zwischen mehreren Stammsitz-Entwuerfen mit Kosten waehlen")
 	ok(not E.input("Viktor", "Bauwerk", {"art": "pyramide"}).ok, "unbekanntes Bauwerk abgelehnt")
+	V["im_lkw"] = 0
 	var rm: Dictionary = E.input("Viktor", "Bauwerk", {"art": "mauer", "hoehe": 4})
+	V.erase("im_lkw")
 	ok(rm.ok and float(V.geld) < 60000.0, "Mauer beauftragt: %s" % str(rm.msg))
 	ok(not E.estates.decision_options("Viktor").any(func(x): return x.art in ["mauer", "zaun"]), "zweite Umfriedung nicht angeboten")
 	ok(E.input("Viktor", "Bauwerk", {"art": "schloss"}).ok, "Schloss beauftragt")

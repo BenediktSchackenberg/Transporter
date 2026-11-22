@@ -494,8 +494,8 @@ func input(name: String, type: String, data: Dictionary, from_plan := false) -> 
 				type = "Rest"   # 19.11.: Petra/Thomas {type: act, data: {warum: "schlafen gehen" / "Akku laden"}}
 	if arms.is_out(b) and type not in ["Inspect"]:
 		return {"ok": false, "status": "gescheitert", "msg": arms.out_msg(b)}
-	if b.has("im_lkw") and type in ["MoveTo", "Pickup", "Place", "Bauwerk", "Bauen", "Attack", "Fahrt", "Siedlung", "LKW", "MoveIn", "Rammen"]:
-		return {"ok": false, "msg": "Du sitzt im LKW und fährst noch – warte, bis du ankommst (wait bis: \"ankunft\"). Denken, Reden und Firma gehen auch unterwegs."}
+	if b.has("im_lkw") and type in ["MoveTo", "Pickup", "Place", "Bauen", "Attack", "Fahrt", "Siedlung", "LKW", "MoveIn", "Rammen"]:
+		return {"ok": false, "msg": "Du sitzt im LKW und fährst noch – warte, bis du ankommst (wait bis: \"ankunft\"). Denken, Reden, Firma und Bauwerk-Aufträge gehen auch unterwegs."}
 	if type in ["MoveTo", "Fahrt", "LKW", "Pickup", "Stop", "Siedlung"] and b.has("baut"):
 		b.erase("baut")   # wer weggeht, baut nicht mehr
 	if not from_plan and type in ["MoveTo", "Stop", "Pickup", "Place", "Ablauf"] and not (b.get("ablauf", []) as Array).is_empty():
