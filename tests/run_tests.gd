@@ -1480,10 +1480,10 @@ func test_city_fleet() -> void:
 	s.nav.add_roadwork(site, until)
 	F.send_crew(site, until, "Test")
 	F.send_crew(site, until, "Test")
-	ok(F.vehicles.size() == 1 and F.vehicles[0].kind == "bautrupp" and F.vehicles[0].phase == "anfahrt", "ein Bautrupp je Baustelle fährt los")
+	ok(F.vehicles.size() == 1 and F.vehicles[0].kind == "bautrupp" and F.vehicles[0].phase == "bereit", "ein Bautrupp je Baustelle wartet am Bauhof auf freie Ausfahrt")
 	var v: Dictionary = F.vehicles[0]
 	var t := 0
-	while v.phase in ["anfahrt", "einparken"] and t < 4000:
+	while v.phase in ["bereit", "anfahrt", "einparken"] and t < 4000:
 		s.step(0.1)
 		t += 1
 	ok(v.phase == "arbeit" and v.mover.tile().distance_to(site) <= 2.5, "Bautrupp kommt an der Baustelle an und arbeitet (%d Schritte)" % t)
@@ -1519,6 +1519,30 @@ func test_city_fleet() -> void:
 	for d in 30:
 		m.mayor.on_day(d)
 	ok(m.mayor.waiting >= 1, "ohne freie Wohnungen wächst die Zahl der Wohnungssuchenden (%d nach 30 Tagen)" % m.mayor.waiting)
+	# Mehrere gleichzeitige Trupps verlassen denselben Bauhof versetzt und fahren
+	# ohne Startkollision mit NPC-Verkehr zu verschiedenen Einsatzorten.
+	var busy := new_sim(2)
+	var sites: Array[Vector2i] = []
+	for q in busy.city.intersections:
+		if sites.all(func(p): return p.distance_to(q) > 8.0):
+			sites.append(q)
+		if sites.size() == 3:
+			break
+	for i in sites.size():
+		busy.nav.add_roadwork(sites[i], busy.game_min + 400.0)
+		busy.fleet.send_crew(sites[i], busy.game_min + 400.0, "Testtrupp %d" % i)
+	ok(busy.fleet.vehicles.filter(func(x): return x.kind == "bautrupp" and x.phase == "bereit").size() == sites.size(),
+		"mehrere Bautrupps starten in der Bauhof-Wartespur")
+	busy.step(0.1)
+	ok(busy.fleet.vehicles.filter(func(x): return x.kind == "bautrupp" and x.phase == "anfahrt").size() <= 1,
+		"hoechstens ein Bautrupp faedelt gleichzeitig vom Bauhof ein")
+	var crew_crashes := {}
+	for _i in 1200:
+		busy.step(0.1)
+		for accident in busy.collisions.log:
+			if str(accident.text).contains("Testtrupp"):
+				crew_crashes[JSON.stringify(accident)] = true
+	ok(crew_crashes.is_empty(), "Bautrupps stossen auf An- und Abfahrt nicht zusammen (%d Unfaelle)" % crew_crashes.size())
 	ok(absf(s.economy.conservation_error()) < 0.01, "Geld bleibt erhalten")
 
 

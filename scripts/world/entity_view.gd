@@ -190,6 +190,8 @@ func _update_trains() -> void:
 func _update_fleet() -> void:
 	var seen := {}
 	for v in sim.fleet.vehicles:
+		if v.kind == "bautrupp" and str(v.phase) == "bereit":
+			continue   # wartet in der Bauhof-Garage; erst bei freier Ausfahrt als Fahrzeug sichtbar
 		var id := int(v.id)
 		seen[id] = true
 		var n: Node2D = fleet_nodes.get(id)

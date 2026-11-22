@@ -989,7 +989,8 @@ func urgency(b: Dictionary) -> Dictionary:
 					if not proposals.is_empty():
 						var order_ids: Array = proposals.map(func(o): return str(o.id))
 						return {"prioritaet": 2, "grund": "%d von %d Bauplätzen sind belegt. Prüfe die Beschaffungsvorschläge des Stadtlagers %s und entscheide selbst mit mayor_action {action: approve_procurement, params: {order_id: gewählte ID, reason: Grund}}; danach laufende Baustellen beobachten." % [int(board.offen), int(board.kapazitaet), ", ".join(order_ids)]}
-					return {"prioritaet": 1, "grund": "%d von %d Bauplätzen sind belegt. Weitere Netze erst nach Abschluss laufender Projekte beauftragen; beobachte Materiallieferungen und Bautrupps." % [int(board.offen), int(board.kapazitaet)]}
+					var underway: Array = depot_summary.get("laufende_bestellungen", [])
+					return {"prioritaet": 1, "grund": "%d von %d Bauplätzen sind belegt. Keine neue Beschaffung zur Genehmigung; laufende Bestellungen: %s. Warte mit wait {bis: projekt} auf Material, Bautrupp oder Baufortschritt und entscheide danach erneut." % [int(board.offen), int(board.kapazitaet), JSON.stringify(underway.slice(0, 4))]}
 				var gaps: Array = growth.get("fehlende_anschluesse", [])
 				var power_pending: bool = sim.grid.net.planned.values().any(func(p): return str(p.get("b", "")) == "U%d" % office_town)
 				var power_options: Array = sim.grid.net.option_brief(office_town)
@@ -3580,7 +3581,8 @@ func office_obs(b: Dictionary) -> Dictionary:
 		"bau_blockaden": _public_build_blockers(k), "bauprogramm": _public_build_board(k),
 		"stadtwachstum": city_growth_status(k), "blockierte_betriebe": blocked_businesses.slice(0, 8),
 		"stadtlager": {"vorschlaege": depot_info.get("vorschlaege", []), "blockaden": depot_info.get("blockaden", []),
-			"bestellungen_offen": depot_info.get("bestellungen_offen", 0), "rueckstau_wareneingang_einheiten": depot_info.get("rueckstau_wareneingang_einheiten", 0),
+			"bestellungen_offen": depot_info.get("bestellungen_offen", 0), "laufende_bestellungen": depot_info.get("laufende_bestellungen", []),
+			"rueckstau_wareneingang_einheiten": depot_info.get("rueckstau_wareneingang_einheiten", 0),
 			"personal_gesamt": depot_info.get("personal_gesamt", 0)},
 		"versorgungsleitungen": ind.get("versorgungsleitungen", []),
 		"versorgungswirkung": sim.water.main_effects.filter(func(r): return int(r.get("stadt_id", -1)) == k).slice(-4),

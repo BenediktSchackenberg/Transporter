@@ -135,12 +135,25 @@ func send_crew(site: Vector2i, until: float, label: String) -> void:
 	if vehicles.filter(func(v): return v.kind == "bautrupp").size() >= MAX_CREWS:
 		return
 	var home := depot_road()
-	var crew: Dictionary = _spawn("bautrupp", home, site, until, home, label)
-	if crew.is_empty():
-		return
-	crew["park_road"] = _free_neighbor(site)
-	crew["shoulder"] = _work_shoulder(Vector2i(crew.park_road))
+	var park_road := _free_neighbor(site)
+	var garage := _work_shoulder(home)
+	var m := Mover.new()
+	m.speed = SPEED
+	m.pos = sim.city.tile_center(garage if garage.x >= 0 else home)
+	vehicles.append({"id": _next, "kind": "bautrupp", "mover": m, "phase": "bereit", "site": site,
+		"until": until, "back": home, "label": label, "park_road": park_road,
+		"shoulder": _work_shoulder(park_road)})
+	_next += 1
 	stats.bautrupps += 1
+
+
+func _crew_departure_clear(home: Vector2i) -> bool:
+	var center: Vector2 = sim.city.tile_center(home)
+	for t in [home, home + Vector2i.UP, home + Vector2i.RIGHT, home + Vector2i.DOWN, home + Vector2i.LEFT]:
+		for other in sim._hash.get(t, []):
+			if (other as Mover).pos.distance_to(center) < 30.0:
+				return false
+	return true
 
 
 ## Kommunaler Lkw (Auftrag 19): bringt Ware eines Stadtlager-Auftrags vom Lieferort zum Stadtlager; meldet die Ankunft dem Stadtlager.
@@ -222,6 +235,19 @@ func update(dt: float) -> void:
 	var now: float = sim.game_min
 	for v in vehicles.duplicate():
 		var m: Mover = v.mover
+		if v.kind == "bautrupp" and str(v.phase) == "bereit":
+			if now >= float(v.until):
+				vehicles.erase(v)
+			elif _crew_departure_clear(Vector2i(v.back)):
+				m.pos = sim.city.tile_center(Vector2i(v.back))
+				if sim.route(m, Vector2i(v.park_road)):
+					v.phase = "anfahrt"
+					sim._hash_add(m)
+					sim._desc[m] = str(v.label)
+				else:
+					var garage := _work_shoulder(Vector2i(v.back))
+					m.pos = sim.city.tile_center(garage if garage.x >= 0 else Vector2i(v.back))
+			continue
 		if m.wreck_until > sim.sim_time:
 			continue   # Unfall: steht
 		if not m.arrived():
@@ -232,7 +258,9 @@ func update(dt: float) -> void:
 			elif sim._is_blocked(m):
 				pass   # Vordermann, Kreuzung: warten (18.11.: staedtische Fahrzeuge fuhren durch andere hindurch)
 			else:
+				var old_tile := m.tile()
 				m.advance(dt, 1.0)
+				sim._hash_relocate(m, old_tile, not m.arrived())
 			continue
 		if v.kind in ["kolonne", "dienstwagen"]:
 			continue   # Bautrupps (BuildCrews) und Dienstwagen der Buergermeister (CivicWorks) steuern Ziel und Zustand selbst

@@ -2,8 +2,9 @@
 
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
-from tools.eko.eko_ollama import Agent, changed_world, compact_obs, company_choices, estate_choices, growth_choices, mayor_action_key, mayor_choices, mayor_state_signature, mining_choices
+from tools.eko.eko_ollama import Agent, changed_world, compact_obs, company_choices, estate_choices, growth_choices, mayor_action_key, mayor_choices, mayor_project_signature, mayor_state_signature, mining_choices
 
 
 class FakeWorld:
@@ -238,12 +239,13 @@ class MayorToolTests(unittest.TestCase):
         class StateWorld:
             open = False
             def observe(self):
-                return {"ok": True, "mein_amt": {"bauprogramm": {"neues_bauprojekt_moeglich": self.open, "projekte": []}}}
+                return {"ok": True, "mein_amt": {"bauprogramm": {"neues_bauprojekt_moeglich": self.open,
+                        "projekte": [{"id": "P1", "status": "laufend", "wartet_auf": "Material"}]}}}
         world = StateWorld()
         agent = agent_with(world)
         agent._mayor_invalid_streak = 2
         agent._mayor_invalid_state = mayor_state_signature(world.observe()["mein_amt"])
-        self.assertEqual([t["name"] for t in agent.available_tools()], ["observe", "wait"])
+        self.assertEqual([t["name"] for t in agent.available_tools()], ["wait"])
         world.open = True
         self.assertIn("mayor_action", [t["name"] for t in agent.available_tools()])
         self.assertEqual(agent._mayor_invalid_streak, 0)
@@ -258,10 +260,27 @@ class MayorToolTests(unittest.TestCase):
         agent = agent_with(world)
         agent._mayor_invalid_streak = 2
         agent._mayor_invalid_state = mayor_state_signature(world.observe()["mein_amt"])
-        self.assertEqual([t["name"] for t in agent.available_tools()], ["observe", "wait"])
+        self.assertEqual([t["name"] for t in agent.available_tools()], ["mayor_action", "wait"])
         world.effect = [{"projekt": "P50", "wohnungen_mehr": 4, "betriebe_mehr": 1}]
         self.assertIn("mayor_action", [t["name"] for t in agent.available_tools()])
         self.assertEqual(agent._mayor_invalid_streak, 0)
+
+    def test_project_wait_ends_on_material_progress(self):
+        class ProjectWorld:
+            status = "bestellt"
+            def observe(self):
+                return {"ok": True, "mein_amt": {"bauprogramm": {"projekte": [{"id": "P1", "status": "laufend",
+                        "resttage": 3, "wartet_auf": "Material"}]}, "stadtlager": {
+                        "laufende_bestellungen": [{"id": "B1", "status": self.status}]}}}
+        world = ProjectWorld()
+        agent = agent_with(world)
+        agent._mayor_invalid_streak = 2
+        before = mayor_project_signature(world.observe()["mein_amt"])
+        with patch("tools.eko.eko_ollama.time.sleep", side_effect=lambda _s: setattr(world, "status", "angeliefert")):
+            result = agent.call_tool("wait", {})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "abgeschlossen")
+        self.assertNotEqual(before, mayor_project_signature(result["lage"]["mein_amt"]))
 
     def test_company_choice_rechecks_vehicle_offer_and_executes_investment(self):
         class CompanyWorld(FakeWorld):

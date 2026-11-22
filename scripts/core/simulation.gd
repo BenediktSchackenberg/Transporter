@@ -1257,7 +1257,9 @@ func _update_traffic_car(m: Mover, dt: float) -> void:
 		return
 	if _is_blocked(m):
 		return
+	var old_tile := m.tile()
 	m.advance(dt, wx.drive_factor() * (0.5 if nav.jams.has(m.tile()) else 1.0) * _flow_step(m, dt))
+	_hash_relocate(m, old_tile)
 
 
 ## Tempofaktor aus der Strassenkapazitaet der aktuellen Zelle; verbucht die dabei verlorene Zeit.
@@ -1339,6 +1341,17 @@ func _hash_add(m: Mover) -> void:
 	if not _hash.has(t):
 		_hash[t] = []
 	_hash[t].append(m)
+
+
+## Fahrzeuge fahren innerhalb eines Schritts nacheinander. Damit spätere Fahrer
+## den tatsächlich belegten Straßenabschnitt sehen, den Spatial-Hash sofort nachziehen.
+func _hash_relocate(m: Mover, old_tile: Vector2i, include: bool = true) -> void:
+	if _hash.has(old_tile):
+		_hash[old_tile].erase(m)
+		if _hash[old_tile].is_empty():
+			_hash.erase(old_tile)
+	if include:
+		_hash_add(m)
 
 
 ## Auffahrschutz und Ampeln. Nach 6 s Blockade wird nicht mehr gewartet (keine Dauerstaus).
@@ -1462,10 +1475,13 @@ func step(dt: float) -> void:
 	transit.update(dt)
 	recycling.update(dt)
 	council.update(dt)
+	_rebuild_hash()   # NPC- und Einsatzfahrzeuge sind inzwischen gefahren; Bautrupps sehen deren aktuelle Felder.
 	fleet.update(dt)
 	material_heli.update(dt)
 	for v in vehicles.values():
+		var old_tile: Vector2i = v.tile()
 		_update_vehicle(v, dt)
+		_hash_relocate(v, old_tile, v.state in ["to_pickup", "to_dropoff", "returning", "to_workshop", "loading", "unloading", "broken", "repairing", "to_dispatch", "erkunden"] or not v.arrived())
 	_rebuild_hash()
 	collisions.check_accidents(_hash, _desc)
 	for a in avatars.values():

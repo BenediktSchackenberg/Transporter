@@ -197,9 +197,8 @@ TOOLS = [
          "required": ["action", "params"]}},
     {"name": "mayor_choice", "description": "Nur fuer Buergermeister: waehle selbst eine gepruefte aktuelle Stadtoption aus mein_amt.entscheidungsoptionen per Nummer. Ist genau eine Option verfuegbar, darf candidate entfallen. Aktion und Kennung werden vor der Ausfuehrung erneut gelesen.",
      "parameters": {"type": "object", "properties": {"candidate": {"type": "integer", "minimum": 0, "maximum": 13}}}},
-    {"name": "wait", "description": "Warte einige Sekunden – mit bis: \"ankunft\", bis du am Ziel deines MoveTo bist, oder mit "
-     "bis: \"antwort\", bis dich jemand anspricht oder anruft (höchstens 90 s, ohne dass du dazwischen nachdenken musst). Danach bekommst du deine Lage.",
-     "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}, "bis": {"type": "string", "enum": ["ankunft", "antwort"]}}}},
+    {"name": "wait", "description": "Warte auf Ankunft, Antwort oder mit bis: \"projekt\" auf eine konkrete Aenderung bei Baustelle, Materialbestellung oder Bauplatz. Das Warten prueft die Welt selbst und gibt danach eine frische Lage zurueck.",
+     "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}, "bis": {"type": "string", "enum": ["ankunft", "antwort", "projekt"]}}}},
     {"name": "nachschlagen", "description": "Einen Begriff in der Wikipedia nachschlagen (z. B. Baustile wie Fachwerkhaus, Jugendstil, "
      "Burg, Bauhaus, oder Wissen über Handel, Rohstoffe, Verteidigung) und dir Ideen holen. Liefert den Anfang des Artikels als Text.",
      "parameters": {"type": "object", "properties": {"begriff": {"type": "string"}}, "required": ["begriff"]}},
@@ -505,7 +504,7 @@ def mayor_choices(office):
     if depot.get("rueckstau_wareneingang_einheiten", 0) and not depot.get("personal_gesamt", 0):
         result.append({"action": "expand_depot", "params": {"kind": "staff", "reason": "Angelieferte Projektware einlagern"},
                        "nutzen": "Wareneingang und blockierte Bauprojekte"})
-    for proposal in (depot.get("vorschlaege") or [])[:2]:
+    for proposal in (depot.get("vorschlaege") or [])[:6]:
         if isinstance(proposal, dict) and proposal.get("id") and (proposal.get("projekt") or
                 0 < float(proposal.get("geschaetzte_kosten", 0)) <= budget):
             result.append({"action": "approve_procurement", "params": {"order_id": proposal["id"], "reason": "Projektmaterial beschaffen"},
@@ -682,6 +681,21 @@ def mayor_state_signature(office):
         "power_options": [p.get("id") for p in (office.get("stromtrassen") or []) if isinstance(p, dict)],
         "effects": [(p.get("projekt"), p.get("wohnungen_mehr"), p.get("betriebe_mehr"))
                     for p in (office.get("versorgungswirkung") or []) if isinstance(p, dict)],
+    }
+    return json.dumps(state, sort_keys=True, ensure_ascii=False)
+
+
+def mayor_project_signature(office):
+    """Fortschritt, auf den ein Buergermeister ohne neue Modellabfrage warten kann."""
+    board = office.get("bauprogramm") or {}
+    depot = office.get("stadtlager") or {}
+    state = {
+        "projects": [(p.get("id"), p.get("status"), p.get("resttage"), p.get("wartet_auf"))
+                     for p in board.get("projekte", []) if isinstance(p, dict)],
+        "proposals": [p.get("id") for p in depot.get("vorschlaege", []) if isinstance(p, dict)],
+        "orders": [(p.get("id"), p.get("status")) for p in depot.get("laufende_bestellungen", [])
+                   if isinstance(p, dict)],
+        "effects": [p.get("projekt") for p in office.get("versorgungswirkung", []) if isinstance(p, dict)],
     }
     return json.dumps(state, sort_keys=True, ensure_ascii=False)
 
@@ -883,7 +897,8 @@ class Agent:
                          "Material- oder Bautrupp-Blocker und behebe ihn. Wasserleistung und Leitungsanschluss sind verschiedene Dinge: "
                          "infra_ausbau vergroessert nur eine vorhandene Anlage und hilft nur, wenn versorgungsanlagen_ausbau die Auslastung bestaetigt. "
                          "Wenn bauprogramm.offen die Kapazitaet erreicht, genehmige passende stadtlager.vorschlaege mit "
-                         "approve_procurement oder warte auf Material, Bautrupps und Abschluss; neue Baustellen werden abgelehnt. "
+                         "approve_procurement. Wenn keine neuen Vorschlaege offen sind, pruefe stadtlager.laufende_bestellungen "
+                         "und warte mit wait {bis: projekt} auf Material, Bautrupps oder Abschluss; neue Baustellen werden abgelehnt. "
                          "Bei verfuegbar 0 EUR waehle keine unbezahlbare Bestellung oder Leitung. Das optionale kreditangebot finanziert "
                          "dringende Anschluesse, verursacht aber Zinsen und wird aus spaeteren Ueberschuessen getilgt; entscheide "
                          "selbst ueber Betrag und Zweck. "
@@ -1178,6 +1193,30 @@ class Agent:
                     r["du"] = obs.get("du")
                 return r
             if name == "wait":
+                if getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_mayor_invalid_streak", 0) >= 2 and not a.get("bis"):
+                    a = {**a, "bis": "projekt"}
+                if a.get("bis") == "projekt":
+                    if getattr(self.args, "rolle", "") != "buergermeister":
+                        return {"ok": False, "msg": "Auf Stadtprojekte koennen nur Buergermeister warten."}
+                    t0 = time.monotonic()
+                    current = compact_obs(self.world.observe())
+                    office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
+                    start = mayor_project_signature(office)
+                    changed = False
+                    while time.monotonic() - t0 < 45.0:
+                        time.sleep(3.0)
+                        current = compact_obs(self.world.observe())
+                        office = current.get("mein_amt", {}) if isinstance(current, dict) else {}
+                        if mayor_project_signature(office) != start:
+                            changed = True
+                            break
+                    return {"ok": True, "status": "abgeschlossen" if changed else "laeuft",
+                            "gewartet_s": round(time.monotonic() - t0),
+                            "msg": "Projektlage geaendert – neu entscheiden" if changed else "Baustelle und Bestellungen noch unveraendert",
+                            "projekte": (office.get("bauprogramm") or {}).get("projekte", [])[:5],
+                            "bestellungen": (office.get("stadtlager") or {}).get("laufende_bestellungen", [])[:5],
+                            "vorschlaege": (office.get("stadtlager") or {}).get("vorschlaege", [])[:5],
+                            "lage": current}
                 if a.get("bis") == "ankunft":   # deterministisch warten, kein Modellaufruf je Schritt
                     def still_travelling(o):
                         if not isinstance(o, dict) or not o.get("ok"):
@@ -1336,9 +1375,12 @@ class Agent:
             elif mayor_choices(office):
                 return [tool for tool in available if tool["name"] == "mayor_choice"]
             else:
-                # Kein aktuelles Angebot: nach zwei abgelehnten Bauideen bis zu einer
-                # echten Lageaenderung warten, statt denselben Ausbau erneut zu senden.
-                return [tool for tool in available if tool["name"] in ("observe", "wait")]
+                # Bei belegten Bauplaetzen und ohne neue Beschaffungsvorschlaege
+                # fehlt gerade eine wirksame Bauaktion. Das Warten prueft den
+                # Projektfortschritt selbst, ohne das Modell erneut beobachten zu lassen.
+                board = office.get("bauprogramm") or {}
+                names = ("wait",) if board.get("neues_bauprojekt_moeglich") is False and board.get("projekte") else ("mayor_action", "wait")
+                return [tool for tool in available if tool["name"] in names]
         if getattr(self, "_nonworld_streak", 0) >= 5:
             if getattr(self.args, "rolle", "") == "unternehmer":
                 firm = current_firm

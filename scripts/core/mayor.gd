@@ -599,11 +599,15 @@ func stadtlager_indicators() -> Dictionary:
 	# Material laufender Projekte zuerst: der Buergermeister hat pro Runde nur wenige Aktionen, und jedes offene
 	# Projektmaterial muss genehmigt werden, bevor der Bauschritt laeuft (sonst stauen Routineeinkaeufe die Projekte aus).
 	props.sort_custom(func(a, b): return (str(a.projekt) != "" and str(b.projekt) == "") or (str(a.projekt) != "" and str(b.projekt) != "" and int(a.kritikalitaet) > int(b.kritikalitaet)))
+	var underway: Array = D.open_orders().filter(func(o): return str(o.status) != "vorschlag")
+	underway = underway.map(func(o): return {"id": str(o.id), "artikel": str(o.item), "menge": int(o.qty),
+		"status": str(o.status), "projekt": str(o.get("project", "")), "lieferung_bis_tag": int(o.get("due", -1))})
 	return {"rampen": D.ramps, "rampen_frei": D.ramps_free(), "lkw_wartezeiten_letzte_10_tage": D.recent_waits(), "rueckstau_wareneingang_einheiten": D.backlog_units(),
 		"personal_verfuegbar": D.available_staff(), "personal_gesamt": D.roster().size(), "kapazitaet_wareneingang_je_tag": D.dock_capacity(), "gabelstapler": D.forklifts(),
 		"laufende_kosten_monat": snappedf(float(D.running_costs().summe), 1.0), "blockaden": D.current_tasks().blockers.slice(0, 4),
 		"vorschlaege": props.slice(0, 8), "kritisch": D.critical_items().slice(0, 6).map(func(i): return {"artikel": i.name, "bestand": i.bestand, "mindestbestand": i.mindestbestand}),
-		"bestellungen_offen": D.open_orders().size() - props.size(), "einkauf_bisher": snappedf(float(D.stats.purchases), 1.0), "transportpool": D.pool_summary()}
+		"bestellungen_offen": underway.size(), "laufende_bestellungen": underway.slice(0, 8),
+		"einkauf_bisher": snappedf(float(D.stats.purchases), 1.0), "transportpool": D.pool_summary()}
 
 
 ## Gruppen staedtischer, freier Grundstuecke (je 32x32 Felder) als Vorschlaege fuer neue Quartiere.
