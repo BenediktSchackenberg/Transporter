@@ -977,6 +977,9 @@ func urgency(b: Dictionary) -> Dictionary:
 			if str(growth.get("stufe", "")) == "wohnraum" and int(growth.get("wohnungen", 0)) > 0:
 				if "rohrbruch" in growth.get("fehlende_anschluesse", []):
 					return {"prioritaet": 1, "grund": "Rohrbruch macht angeschlossene Wohnungen vorübergehend unbewohnbar. Der Wassertrupp ist zuständig; prüfe seinen Einsatz und laufende Projekte. Ein weiterer Kapazitätsausbau repariert keine Leitung."}
+				var regional: Dictionary = sim.waste.iv_project_obs(office_town)
+				if not regional.is_empty() and str(regional.status) != "pausiert" and sim.towns.mayor(office_town).available_budget() < 1000.0:
+					return {"prioritaet": 2, "grund": "Die regionale Müllverbrennungsanlage %s bindet %s deiner Stadtkasse. Fertige Wohnungen warten auf Anschlüsse, aber das freie Budget ist null. Prüfe mein_amt.regionalprojekt und entscheide selbst, ob du mit regionalprojekt_steuern {project_id: %s, modus: aussetzen, reason: Grund} die Reservierung vorübergehend freigibst. Baufortschritt und Material bleiben erhalten; später ist fortsetzen möglich." % [str(regional.id), Catalog.money(float(regional.eigener_anteil)), str(regional.id)]}
 				var credit: Dictionary = sim.towns.mayor(office_town).credit_offer()
 				if bool(credit.get("ok", false)):
 					return {"prioritaet": 2, "grund": "Wohnungen warten auf bezahlbare Anschlüsse, die Stadtkasse ist knapp. Prüfe mein_amt.kreditangebot und entscheide selbst über request_credit mit betrag. Der Kredit wird verzinst und aus späteren Überschüssen getilgt; danach gezielt wirksame Leitungen wählen."}
