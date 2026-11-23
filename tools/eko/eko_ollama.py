@@ -483,6 +483,19 @@ def mayor_choices(office):
         return []
     result = []
     budget = float((office.get("haushalt") or {}).get("verfuegbar", 0))
+    regional = office.get("regionalprojekt") or {}
+    growth = office.get("stadtwachstum") or {}
+    if regional.get("id") and regional.get("status") != "pausiert" and budget < 1000 and \
+            int(growth.get("wohnungen", 0)) > int(growth.get("bewohnbar", 0)):
+        result.append({"action": "regionalprojekt_steuern", "params": {"project_id": regional["id"],
+                       "modus": "aussetzen", "reason": "Zuerst fertige Wohnungen mit Wasser und Strom versorgen"},
+                       "nutzen": "Gibt %s EUR Stadtanteil fuer dringende Anschluesse frei; Baufortschritt bleibt erhalten" %
+                       regional.get("eigener_anteil", 0)})
+    if regional.get("id") and regional.get("status") == "pausiert" and regional.get("fortsetzbar"):
+        result.append({"action": "regionalprojekt_steuern", "params": {"project_id": regional["id"],
+                       "modus": "fortsetzen", "reason": "Versorgung gesichert und alle Stadtanteile wieder gedeckt"},
+                       "nutzen": "Müllverbrennung mit %s Resttagen und erhaltenem Baufortschritt fertigstellen" %
+                       regional.get("resttage", "?")})
     credit = office.get("kreditangebot") or {}
     if credit.get("ok") and float(credit.get("vorschlag", 0)) >= 20000:
         result.append({"action": "request_credit", "params": {"betrag": credit["vorschlag"],
@@ -501,7 +514,7 @@ def mayor_choices(office):
                            "nutzen": "Flughafen %s: %s EUR, Fehlbetrag %s EUR, Standort %s" %
                            (strategy, airport.get("kosten"), finance.get("fehlbetrag"), airport.get("standort"))})
     depot = office.get("stadtlager") or {}
-    if depot.get("rueckstau_wareneingang_einheiten", 0) and not depot.get("personal_gesamt", 0):
+    if depot.get("rueckstau_wareneingang_einheiten", 0) and not depot.get("personal_verfuegbar", depot.get("personal_gesamt", 0)):
         result.append({"action": "expand_depot", "params": {"kind": "staff", "reason": "Angelieferte Projektware einlagern"},
                        "nutzen": "Wareneingang und blockierte Bauprojekte"})
     for proposal in (depot.get("vorschlaege") or [])[:6]:
@@ -675,6 +688,8 @@ def mayor_state_signature(office):
     board = office.get("bauprogramm") or {}
     state = {
         "capacity": board.get("neues_bauprojekt_moeglich"),
+        "budget_band": int(float((office.get("haushalt") or {}).get("verfuegbar", 0)) // 1000),
+        "regional": (office.get("regionalprojekt") or {}).get("status"),
         "plants": {k: bool(v.get("ok")) for k, v in (office.get("versorgungsanlagen_ausbau") or {}).items() if isinstance(v, dict)},
         "projects": [(p.get("id"), p.get("status"), p.get("phase")) for p in (board.get("projekte") or []) if isinstance(p, dict)],
         "water_options": [p.get("id") for p in (office.get("versorgungsleitungen") or []) if isinstance(p, dict)],
@@ -1036,6 +1051,7 @@ class Agent:
                     "versorgungsleitung_bauen": ("option",), "approve_procurement": ("order_id",),
                     "reject_procurement": ("order_id",), "expand_depot": ("kind",),
                     "kommunal_bauen": ("typ",), "viertel_erschliessen": ("viertel",), "request_credit": ("betrag",),
+                    "regionalprojekt_steuern": ("project_id", "modus"),
                 }
                 missing = [key for key in required.get(action, ()) if not str(params.get(key, "")).strip()]
                 if action == "expand_depot" and params.get("kind") and params["kind"] not in ("staff", "ramp", "forklift"):

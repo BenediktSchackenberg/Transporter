@@ -1236,6 +1236,8 @@ func _build_office(cid: int, a: Dictionary, site: int, on_site: bool) -> Diction
 	var c: Company = sim.company(cid)
 	var b: Dictionary = sim.city.building(site)
 	if b.is_empty() or b.role != "office_site":
+		if sim.wildnis:
+			return {"ok": false, "msg": "Hier gibt es keinen Bürostandort mit ID %d. In der Wildnis baust du ein Unternehmerbüro auf dem eigenen Hof: place_building {plot_id, typ: buero, x, y, rot}; gültige Positionen stehen in mein_firma.hofbau.buero." % site}
 		return {"ok": false, "msg": "%d ist kein Bürostandort." % site}
 	if site in c.offices:
 		return {"ok": false, "msg": "Dort hast du bereits ein Büro."}

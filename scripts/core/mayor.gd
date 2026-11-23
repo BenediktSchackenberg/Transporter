@@ -61,6 +61,8 @@ const SCHEMA := {
 	"assess_financing": {"params": {"project_id": "string?"}, "desc": "Finanzierungsbedarf und Status eines Projekts bewerten (nur Auskunft); ohne project_id: Kasse und alle offenen Projekte."},
 	"request_credit": {"params": {"betrag": "number", "reason": "string"},
 		"desc": "Begrenzten Infrastrukturkredit bei fehlendem Budget fuer unbewohnbare Wohnhaeuser aufnehmen. Betrag und Schuldengrenze aus obs.kreditangebot; Zinsen und Tilgung werden monatlich aus Ueberschuessen bezahlt."},
+	"regionalprojekt_steuern": {"params": {"project_id": "string", "modus": "string", "reason": "string"},
+		"desc": "Gemeinsame Müllverbrennungsanlage aussetzen oder fortsetzen. Aussetzen gibt die reservierten Stadtanteile für dringende Versorgungsanschlüsse frei; Baustelle und Material bleiben erhalten. Fortsetzen verlangt wieder gedeckte Anteile plus Reserve aller beteiligten Städte. ID und Lage aus obs.regionalprojekt."},
 	"set_property_tax": {"params": {"satz_prozent": "number", "reason": "string"},
 		"desc": "Grundsteuersatz in Prozent des Immobilienwerts je Jahr festlegen (0,2–3,0; je Beschluss höchstens ±0,5 Punkte). Alle Bürger-Eigentümer zahlen ihn an die Stadtkasse; siehe obs.bevoelkerungsmodell."},
 	"hire_staff": {"params": {"abteilung": "string", "anzahl": "int", "reason": "string"},
@@ -918,12 +920,12 @@ func execute(action: Dictionary) -> Dictionary:
 	if err == "" and sim.wildnis and act in ["viertel_erschliessen", "plan_infrastructure", "kommunal_bauen", "infra_ausbau", "stromtrasse_bauen", "versorgungsleitung_bauen", "propose_project", "build_harbor", "build_airport", "build_station", "build_bridge", "build_tunnel", "expand_harbor", "expand_airport", "expand_power", "grosslager_anschluss_bauen"]:
 		var open_projects := 0
 		for project in projects.values():
-			if str(project.get("status", "")) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			if str(project.get("status", "")) not in ["fertig", "abgelehnt", "abgebrochen", "pausiert"]:
 				open_projects += 1
 		var capacity := maxi(3, int(ceil(float(sim.crews.crews.size()) * 0.6 / float(maxi(1, sim.towns.count())))))
 		if open_projects >= capacity:
 			err = "%d offene Bauprojekte bei einer Kapazität von %d. Erst Material, Bautrupps und Fertigstellung der laufenden Projekte klären; Verwaltungs- und Planungsentscheidungen bleiben möglich." % [open_projects, capacity]
-		elif sim.towns.depot(town).backlog_units() > 0 and sim.towns.depot(town).roster().is_empty():
+		elif sim.towns.depot(town).backlog_units() > 0 and sim.towns.depot(town).available_staff() == 0:
 			err = "Stadtlager: angelieferte Baustoffe koennen ohne Personal nicht eingelagert werden. Entscheide ueber expand_depot mit kind staff oder klaere die Lagerblockade; neue Bauauftraege wuerden nur mehr Material stauen."
 	var res: Dictionary
 	if err != "":
@@ -1001,6 +1003,8 @@ func execute(action: Dictionary) -> Dictionary:
 				res = _assess_financing(a)
 			"request_credit":
 				res = request_credit(float(a.betrag))
+			"regionalprojekt_steuern":
+				res = sim.waste.control_iv_project(town, str(a.project_id), str(a.modus))
 			"decide_application":
 				res = _decide_application(a)
 			"set_property_tax":

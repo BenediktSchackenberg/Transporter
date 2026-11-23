@@ -3058,6 +3058,10 @@ func firm_obs(b: Dictionary) -> Dictionary:
 			"regeln": "Harte Mittel (block_road, attempt_sabotage, attempt_vehicle_sabotage) können entdeckt werden: Bußgeld, Schadensersatz, Ruf; " +
 				"jede weitere Ermittlung kostet mehr (bis fünffach). Blockaden erst ab hoher Spannung. Schutz: guard_target, buy_security, set_insurance."},
 		"hofbau": (o.get("betriebshof", {}) as Dictionary).get("bauvorschlaege_xy_rot", {}),
+		"buero_ausbau": {"stufe": maxi(sim.company(cid).office_level, sim.company(cid).plot_office_level),
+			"internet": sim.company(cid).internet_level,
+			"freie_buerostandorte": sim.city.buildings.filter(func(site): return str(site.get("role", "")) == "office_site" and int(site.id) not in sim.company(cid).offices).map(func(site): return {"site_id": int(site.id), "name": str(site.name)}),
+			"hinweis": "In dieser Wildnis zuerst auf dem eigenen Hof place_building {plot_id, typ: buero, x, y, rot} mit einem geprüften hofbau.buero-Vorschlag; build_office {site_id} gilt nur an einem ausgewiesenen Bürostandort." if sim.wildnis else "build_office mit einer ID aus freie_buerostandorte."},
 		"betriebe": o.get("betriebe", []),
 		"wirtschaftsaufbau": homes.business_hint(cid),
 		"wirtschaftsoptionen": homes.business_options(cid, 3),
@@ -3294,7 +3298,7 @@ func _public_build_board(k: int) -> Dictionary:
 	var blocked := 0
 	var projects: Array = []
 	for prj in M.projects.values():
-		if str(prj.get("status", "")) in ["fertig", "abgelehnt", "abgebrochen"]:
+		if str(prj.get("status", "")) in ["fertig", "abgelehnt", "abgebrochen", "pausiert"]:
 			continue
 		active += 1
 		var work: Dictionary = sim.construction.public.get(str(prj.id), {})
@@ -3310,7 +3314,7 @@ func _public_build_board(k: int) -> Dictionary:
 			free_crews += 1
 	var limit := maxi(3, int(ceil(float(sim.crews.crews.size()) * 0.6 / float(maxi(1, sim.towns.count())))))
 	var depot: CityDepot = sim.towns.depot(k)
-	var intake_blocked: bool = depot.backlog_units() > 0 and depot.roster().is_empty()
+	var intake_blocked: bool = depot.backlog_units() > 0 and depot.available_staff() == 0
 	return {"offen": active, "blockiert": blocked, "kapazitaet": limit, "bautrupps_frei_region": free_crews,
 		"neues_bauprojekt_moeglich": active < limit and not intake_blocked,
 		"wareneingang_ohne_personal": intake_blocked, "projekte": projects.slice(0, 12)}
@@ -3575,6 +3579,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 		expansion_options[art] = sim.water.expansion_need(k, art)
 	var out := {"stadt": sim.towns.name_of(k), "stadtplan": sim.town_plan.brief(k), "verkehrsstandorte": ind.get("verkehrsstandorte", {}), "stromtrassen": ind.get("stromtrassen", []),
 		"haushalt": ind.get("haushalt", {}),
+		"regionalprojekt": sim.waste.iv_project_obs(k),
 		"kreditangebot": ind.get("kreditangebot", {}),
 		"versorgungsanlagen_ausbau": expansion_options,
 		"kraftwerk_notfall": sim.plant.summary().get("notfall", {}),
@@ -3583,7 +3588,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 		"stadtlager": {"vorschlaege": depot_info.get("vorschlaege", []), "blockaden": depot_info.get("blockaden", []),
 			"bestellungen_offen": depot_info.get("bestellungen_offen", 0), "laufende_bestellungen": depot_info.get("laufende_bestellungen", []),
 			"rueckstau_wareneingang_einheiten": depot_info.get("rueckstau_wareneingang_einheiten", 0),
-			"personal_gesamt": depot_info.get("personal_gesamt", 0)},
+			"personal_gesamt": depot_info.get("personal_gesamt", 0), "personal_verfuegbar": sim.towns.depot(k).available_staff()},
 		"versorgungsleitungen": ind.get("versorgungsleitungen", []),
 		"versorgungswirkung": sim.water.main_effects.filter(func(r): return int(r.get("stadt_id", -1)) == k).slice(-4),
 		"versorgungsanlagen_standorte": ind.get("versorgungsanlagen_standorte", []),
@@ -3628,6 +3633,7 @@ func office_obs(b: Dictionary) -> Dictionary:
 		"stromtrasse_bauen": Mayor.SCHEMA.stromtrasse_bauen.params, "versorgungsleitung_bauen": Mayor.SCHEMA.versorgungsleitung_bauen.params,
 		"infra_ausbau": Mayor.SCHEMA.infra_ausbau.params, "viertel_erschliessen": Mayor.SCHEMA.viertel_erschliessen.params,
 		"request_credit": Mayor.SCHEMA.request_credit.params}
+	out["aktionen_wichtig"]["regionalprojekt_steuern"] = Mayor.SCHEMA.regionalprojekt_steuern.params
 	out["vorfaelle"] = sim.rivalry.incidents.slice(-8).map(func(i): return {"tag": GameCalendar.day_of(float(i.t)) + 1, "was": str(i.get("text", i.get("art", ""))).left(120)})
 	out["schiedsrichter"] = "Bei Sabotage, Blockaden oder unfairem Wettbewerb kannst du einschreiten: warn_company, order_inspection, mediate_rivalry."
 	out["hinweis"] = "Routinefälle erledigt die Verwaltung. Wähle selbst zwischen Wohnen, Arbeit, Versorgung, Verkehr und Stadtbild. stadtplan_optionen sind Vorschläge; eigene Standorte und Straßentrassen sind möglich. Prüfe bauprogramm und bau_blockaden vor neuen Baustellen. Hafen nur am Meer. Amtsgehalt: %s je Minute." % Catalog.money(MAYOR_SALARY)

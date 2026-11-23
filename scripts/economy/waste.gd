@@ -537,7 +537,11 @@ func iv_available_kw() -> float:
 func _iv_daily(day: int) -> void:
 	if iv_building > 0 and iv_fertig == 0 and iv_project == "":   # beschlossen: Bauplatz neben der Deponie suchen und ausschreiben
 		if _iv_find_site():
-			_iv_tender(day)
+			if _iv_can_fund():
+				_iv_tender(day)
+			elif day >= iv_retry:
+				iv_retry = day + 7
+				sim.log_event("Müllverbrennung wartet auf tragfähige Finanzierung der beteiligten Städte; Versorgungsanschlüsse haben Vorrang.", "info")
 		elif day >= iv_retry:
 			iv_retry = day + 7
 			sim.log_event("Noch kein freies städtisches Grundstück neben der Deponie für die Müllverbrennungsanlage – die Suche wird in 7 Tagen wiederholt.", "warn")
@@ -556,6 +560,70 @@ func _iv_building(day: int) -> void:
 	iv_building = day
 	iv_retry = day
 	sim.log_event("Die Region beschließt eine gemeinsame Müllverbrennungsanlage neben der Deponie (%s; Kosten nach den Abfallmengen der Städte)." % Catalog.money(float(Municipal.TYPES["MV-01"].cost)), "info")
+
+
+## Eine regionale Großinvestition darf die Kasse keiner Stadt überziehen. Ein laufendes
+## Projekt kann vom Bürgermeister ausgesetzt und später mit derselben Baustelle fortgesetzt werden.
+func _iv_can_fund() -> bool:
+	var cost := float(Municipal.TYPES["MV-01"].cost)
+	var shares: Dictionary = _iv_site.get("costs", _iv_shares())
+	for key in shares:
+		if sim.towns.mayor(int(key)).available_budget() < cost * float(shares[key]) + 25000.0:
+			return false
+	return true
+
+
+func iv_project_obs(town: int) -> Dictionary:
+	if iv_project == "" or iv_fertig > 0:
+		return {}
+	var M: Mayor = sim.towns.mayor_of_project(iv_project)
+	var prj: Dictionary = M.projects.get(iv_project, {}) if M != null else {}
+	if prj.is_empty() or not prj.get("shares", {}).has(str(town)):
+		return {}
+	var e: Dictionary = sim.construction.public.get(iv_project, {})
+	var can_resume := true
+	for key in prj.shares:
+		if sim.towns.mayor(int(key)).available_budget() < float(prj.shares[key]) + 25000.0:
+			can_resume = false
+	return {"id": iv_project, "art": "Müllverbrennungsanlage", "status": str(prj.status),
+		"eigener_anteil": int(prj.shares[str(town)]), "freie_mittel": int(sim.towns.mayor(town).available_budget()),
+		"resttage": int(e.get("days_left", prj.get("days", 0))), "fortsetzbar": can_resume,
+		"steuerung": "regionalprojekt_steuern {project_id: %s, modus: aussetzen|fortsetzen, reason: Grund}" % iv_project}
+
+
+func control_iv_project(town: int, project_id: String, mode: String) -> Dictionary:
+	if project_id != iv_project or iv_fertig > 0 or iv_project == "":
+		return {"ok": false, "msg": "Keine laufende Müllverbrennungsanlage mit dieser Projekt-ID."}
+	var M: Mayor = sim.towns.mayor_of_project(iv_project)
+	var prj: Dictionary = M.projects.get(iv_project, {}) if M != null else {}
+	if prj.is_empty() or not prj.get("shares", {}).has(str(town)):
+		return {"ok": false, "msg": "Diese Stadt ist an dem Gemeinschaftsprojekt nicht beteiligt."}
+	var e: Dictionary = sim.construction.public.get(iv_project, {})
+	if mode == "aussetzen":
+		if str(prj.status) == "pausiert" or str(prj.status) in ["fertig", "abgebrochen"]:
+			return {"ok": false, "msg": "Das Projekt kann in diesem Zustand nicht ausgesetzt werden."}
+		prj["status_vor_pause"] = str(prj.status)
+		prj.status = "pausiert"
+		if not e.is_empty():
+			e.status = "pausiert"
+		for key in prj.shares:
+			var city: Mayor = sim.towns.mayor(int(key))
+			city.commitments = maxf(0.0, city.commitments - float(prj.shares[key]))
+		return {"ok": true, "msg": "Gemeinschaftsprojekt %s ausgesetzt. Baufortschritt und Material bleiben erhalten; die Anteilsreservierungen sind frei für dringende Stadtversorgung." % iv_project, "ref": iv_project}
+	if mode == "fortsetzen":
+		if str(prj.status) != "pausiert":
+			return {"ok": false, "msg": "Das Projekt ist nicht ausgesetzt."}
+		for key in prj.shares:
+			if sim.towns.mayor(int(key)).available_budget() < float(prj.shares[key]) + 25000.0:
+				return {"ok": false, "msg": "Mindestens eine beteiligte Stadt kann ihren Anteil noch nicht mit Versorgungsreserve decken."}
+		for key in prj.shares:
+			sim.towns.mayor(int(key)).commitments += float(prj.shares[key])
+		prj.status = str(prj.get("status_vor_pause", "beauftragt"))
+		prj.erase("status_vor_pause")
+		if not e.is_empty():
+			e.status = "laufend"
+		return {"ok": true, "msg": "Gemeinschaftsprojekt %s mit bisherigem Baufortschritt fortgesetzt." % iv_project, "ref": iv_project}
+	return {"ok": false, "msg": "modus muss aussetzen oder fortsetzen sein."}
 
 
 ## Bauplatz gefunden: Bauplatz reservieren, die Kosten nach den gewogenen Mengen reservieren und die Anlage
