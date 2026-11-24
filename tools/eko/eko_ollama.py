@@ -963,6 +963,16 @@ class Agent:
             self._rejected_choices = set()
         return self._rejected_choices
 
+    def rest_if_exhausted(self, res):
+        """Leerer Akku: einmal ausruhen wie ein Reflex. 24.11.: Greta schickte bei 0 % Akku in 2 Minuten ueber 50-mal
+        company_choice und ignorierte den Hinweis auf Rest."""
+        if not (isinstance(res, dict) and res.get("ok") is False and "Akku ist fast leer" in str(res.get("msg", ""))):
+            return res
+        rest = self.call_tool("act", {"type": "Rest", "data": {"warum": "Akku leer"}})
+        self.say("🔋 Akku leer – automatisch ausgeruht: %s" % str(rest.get("msg", "") if isinstance(rest, dict) else "")[:120])
+        return {**res, "automatisch_ausgeruht": rest.get("msg", "") if isinstance(rest, dict) else "",
+                "msg": str(res.get("msg", "")) + " Du hast dich deshalb gerade automatisch ausgeruht; versuche es danach erneut."}
+
     def wait_for_own_sites(self, max_s=45.0, step_s=3.0):
         """Unternehmer: bis "projekt" wartet auf die eigenen Baustellen und Materiallieferungen. 24.11.: Viktor bekam
         dafuer 4 Minuten lang "nur Buergermeister" und schickte denselben Aufruf ueber 30-mal (Werkzeugtext lud dazu ein)."""
@@ -1885,6 +1895,7 @@ class Agent:
                         a = {}
                 self.status("handelt", tool=fn["name"], waiting_on="")
                 res = self.call_tool(fn["name"], a)
+                res = self.rest_if_exhausted(res)
                 if fn["name"] == "observe" or (fn["name"] == "act" and str(a.get("type", "")).lower() in ("observe", "beobachten")):
                     self._observe_streak = min(3, getattr(self, "_observe_streak", 0) + 1)
                 else:

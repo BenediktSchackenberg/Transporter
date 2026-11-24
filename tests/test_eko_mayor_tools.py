@@ -120,6 +120,18 @@ class MayorToolTests(unittest.TestCase):
         agent.call_tool("act", {"type": "act", "data": {"arguments": {"type": "Bauen", "data": {"baustelle": "BS1"}}}})
         self.assertEqual(world.actions[0], ("Bauen", {"baustelle": "BS1"}))
 
+    def test_empty_battery_triggers_one_rest(self):
+        # Partie 24.11.: Greta schickte bei 0 % Akku ueber 50-mal company_choice
+        world = FakeWorld()
+        agent = agent_with(world, "unternehmer")
+        agent.say = lambda text: None
+        with patch.object(eko_ollama.time, "sleep", lambda s: None):
+            res = agent.rest_if_exhausted({"ok": False, "msg": "Dein Akku ist fast leer (0 %). Ruh dich erst aus (Rest)."})
+        self.assertEqual(world.actions[0][0], "Rest")
+        self.assertIn("automatisch_ausgeruht", res)
+        self.assertEqual(agent.rest_if_exhausted({"ok": False, "msg": "anderes"}), {"ok": False, "msg": "anderes"})
+        self.assertEqual(len(world.actions), 1)
+
     def test_direct_mayor_action_uses_the_same_fresh_id_check(self):
         world = FakeWorld()
         world.observe = lambda: {"ok": True, "mein_amt": {"stadtlager": {"vorschlaege":
