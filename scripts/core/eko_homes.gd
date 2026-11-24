@@ -26,6 +26,7 @@ const HELPER_MAX := 4
 const HELPER_HIRE := 300.0      # Anwerbung und Anfahrt je Kopf
 const HELPER_WAGE := 150.0      # Lohn je Kopf und Spieltag
 const HALL_HELPER_DELAY := 180.0 # Bürgeramt: nach drei Spielstunden Stillstand fährt ein sichtbarer Bautrupp los
+const HELPER_ARRIVAL_MAX := 720.0 # 24.11.: Transporter blieb unterwegs hängen, BS2 stand Stunden bei 0 % – nach 12 Spielstunden gelten sie als angekommen
 const PROCURE_DELAY := 45.0     # Bauleitung besorgt feste Stückliste, wenn die KI sie noch nicht bestellt hat
 const MAX_SITES := 3
 const MAX_CREW := 6
@@ -327,6 +328,9 @@ func tick(dt_min: float) -> void:
 	var sim = _sim()
 	for s in sites.values():
 		_pay_helpers(s, dt_min)
+		var hf: Dictionary = s.get("helfer", {})
+		if str(hf.get("status", "")) == "anreise" and sim.game_min - float(hf.get("seit", sim.game_min)) > HELPER_ARRIVAL_MAX:
+			helpers_arrived(str(s.id))
 		match str(s.status):
 			"genehmigung":
 				var app: Dictionary = sim.permits.apps.get(str(s.app), {})
@@ -540,7 +544,7 @@ func hire_helpers(cid: int, a: Dictionary) -> Dictionary:
 	if not sim.fleet.send_helpers(start, work_cell(s), str(s.id), "%d Tagelöhner → %s" % [n, s.id]):
 		return {"ok": false, "msg": "Vom Großlager führt kein Weg zur Baustelle %s." % s.id}
 	c.ledger.book("wages", -cost, true, "Tagelöhner anwerben (%d) für %s" % [n, s.id], sim.game_min, "Y0")
-	s["helfer"] = {"n": n, "status": "anreise", "acc": 0.0}
+	s["helfer"] = {"n": n, "status": "anreise", "acc": 0.0, "seit": sim.game_min}
 	return {"ok": true, "msg": "%d Tagelöhner kommen vom Großlager zur Baustelle %s (%s; danach %s je Kopf und Spieltag). Sie bauen, sobald das Material da ist – auch ohne dich." % [
 		n, s.id, Catalog.money(cost), Catalog.money(HELPER_WAGE)]}
 

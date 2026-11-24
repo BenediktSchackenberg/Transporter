@@ -979,7 +979,14 @@ class Agent:
         def firm_of(o):
             return (o.get("meine_firma") or {}) if isinstance(o, dict) else {}
         t0 = time.monotonic()
-        start = firm_site_signature(firm_of(self.world.observe()))
+        first = firm_of(self.world.observe())
+        open_sites = [s for s in (first.get("baustellen") or []) if isinstance(s, dict) and s.get("status") in ("genehmigung", "material", "bau")]
+        lager0 = first.get("grosslager") or {}
+        if not open_sites and not lager0.get("wartende_baustoffe") and not lager0.get("hubschrauber"):
+            # 24.11.: Greta wartete nach ihrem ersten fertigen Haus ueber 40 Minuten auf "projekt" ohne offene Baustelle
+            return {"ok": False, "msg": "Du hast keine offene Baustelle und keine wartende Lieferung – Warten bringt nichts. "
+                    "Lege ein neues Haus an (Firma {aktion: {action: \"haus_bauen\", typ: \"einfamilienhaus\"}}) oder tu etwas anderes."}
+        start = firm_site_signature(first)
         firm, changed = {}, False
         while time.monotonic() - t0 < max_s:
             time.sleep(step_s)

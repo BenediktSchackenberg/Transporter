@@ -114,6 +114,17 @@ class MayorToolTests(unittest.TestCase):
         self.assertEqual(result["status"], "abgeschlossen")
         self.assertEqual(result["baustellen"][0]["status"], "bau")
 
+    def test_company_wait_for_project_without_open_site_is_rejected(self):
+        # Partie 24.11. 15:16: Greta wartete ohne offene Baustelle ueber 40 Minuten auf "projekt"
+        world = FakeWorld()
+        world.observe = lambda: {"ok": True, "meine_firma": {"firma": "Test", "baustellen": [
+            {"id": "BS4", "status": "fertig"}], "grosslager": {"wartende_baustoffe": [], "hubschrauber": []}}}
+        agent = agent_with(world, "unternehmer")
+        with patch.object(eko_ollama.time, "sleep", lambda s: self.fail("darf nicht warten")):
+            result = agent.call_tool("wait", {"bis": "projekt"})
+        self.assertFalse(result["ok"])
+        self.assertIn("haus_bauen", result["msg"])
+
     def test_act_wrapped_in_act_is_unwrapped(self):
         world = FakeWorld()
         agent = agent_with(world, "unternehmer")

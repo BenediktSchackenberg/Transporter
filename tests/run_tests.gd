@@ -8869,6 +8869,12 @@ func test_wildnis_helpers() -> void:
 	var done := _run_until(s, func(): return site.status == "fertig", 20000)
 	ok(done, "Baustelle fertig, ohne dass der Inhaber gearbeitet hat (%s, %d %%)" % [site.status, int(100.0 * float(site.progress) / maxf(1.0, float(site.work)))])
 	ok(not site.has("helfer"), "Tagelöhner nach Bauende abgezogen")
+	# 24.11.: haengengebliebener Transporter – nach der Frist gelten die Tageloehner als angekommen
+	var r2: Dictionary = E.homes.add_road_site(cid, cells.slice(0, 1), {})
+	var site2: Dictionary = E.homes.sites[r2.baustelle]
+	site2["helfer"] = {"n": 2, "status": "anreise", "acc": 0.0, "seit": s.game_min - EkoHomes.HELPER_ARRIVAL_MAX - 1.0}
+	E.homes.tick(0.1)
+	ok(str(site2.helfer.get("status", "")) == "vor_ort", "Tagelöhner gelten nach %d Spielminuten Anreise als angekommen" % int(EkoHomes.HELPER_ARRIVAL_MAX))
 	# Kauflimit: hoechstens die Haelfte des Bestands je Kauf
 	var have: int = s.hub.stock_of("ziegel")
 	var big: Dictionary = E.input(ps[0], "Firma", {"aktion": {"action": "hub_buy", "item": "ziegel", "qty": have}})
