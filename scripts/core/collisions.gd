@@ -15,6 +15,7 @@ const NEAR := 26.0          # Weltpixel: so weit voraus wird geschaut
 const FOLLOW := 22.0        # Abstand zum Vordermann
 const LANE := 7.0           # seitlicher Abstand, ab dem ein Fahrzeug auf einer anderen Spur ist
 const CRASH := 9.0          # Beruehrung = Unfall
+const HIT_SIDE := 4.0       # seitlicher Versatz, unter dem das andere Fahrzeug in der eigenen Spur liegt (Spuren sind 14 px getrennt)
 const WRECK_S := 90.0       # so lange steht ein verunglueckter Wagen (Sim-Sekunden)
 const RAM_REACH := 22.0
 const STEP_LOOK := 12.0
@@ -106,7 +107,9 @@ func _step_hits(m: Mover, hash: Dictionary) -> bool:
 				continue
 			if (o.arrived() or _is_wreck(o)) and not _roadside_repair(o) and m.wait_time > OVERTAKE_S:
 				continue   # Ueberholen eines stehenden Fahrzeugs
-			var dn := np.distance_to(o.pos)
+			# naechster Punkt der ganzen Schrittstrecke, nicht nur ihr Ende (23.11.: an Kreuzungen streifte der Weg das andere
+			# Fahrzeug, obwohl Anfang und Ende weit genug weg lagen)
+			var dn: float = o.pos.distance_to(Geometry2D.get_closest_point_to_segment(o.pos, m.pos, np))
 			if dn < CRASH + 1.0 and dn < m.pos.distance_to(o.pos) and (o.arrived() or _is_wreck(o) or m.get_instance_id() > o.get_instance_id()):
 				last_blocker = o
 				return true
@@ -149,13 +152,28 @@ func check_accidents(hash: Dictionary, describe: Dictionary) -> void:
 				var key := "%d|%d" % [mini(a.get_instance_id(), b.get_instance_id()), maxi(a.get_instance_id(), b.get_instance_id())]
 				if sim.sim_time - float(_cool.get(key, -999.0)) < WRECK_S * 2.0:
 					continue
+				var a_rams: bool = a is FleetVehicle and not (a as FleetVehicle).ram.is_empty() and int(a.ram.get("vehicle", -1)) == _vid(b)
+				var b_rams: bool = b is FleetVehicle and not (b as FleetVehicle).ram.is_empty() and int(b.ram.get("vehicle", -1)) == _vid(a)
+				if not a_rams and not b_rams and not (_runs_into(a, b) or _runs_into(b, a)):
+					continue   # Vorbeifahren auf der eigenen Spur, Kurve, Wenden oder Anfahren: Streifen, kein Unfall
 				_cool[key] = sim.sim_time
-				if a is FleetVehicle and not (a as FleetVehicle).ram.is_empty() and int(a.ram.get("vehicle", -1)) == _vid(b):
+				if a_rams:
 					ram_hit(a)
-				elif b is FleetVehicle and not (b as FleetVehicle).ram.is_empty() and int(b.ram.get("vehicle", -1)) == _vid(a):
+				elif b_rams:
 					ram_hit(b)
 				else:
 					_accident(a, b, describe)
+
+
+## Echter Zusammenstoss: m faehrt (nicht im ersten Wegstueck, also kein Anfahren oder Wenden an Werkstatt/Hof) und
+## o liegt vor ihm in seiner Spur. Partie 23.11.: Lastenrad, Lieferwagen und Dienstwagen "verunfallten" alle paar
+## Spielstunden beim Wenden, in Kurven und beim Vorbeifahren auf der Gegenspur (Abstand unter CRASH, aber Spuren
+## getrennt) – Vitesse zahlte so 267.000 EUR Abschleppen und Reparatur in 33 Spieltagen.
+func _runs_into(m: Mover, o: Mover) -> bool:
+	if m.arrived() or m.path_i <= 1:
+		return false
+	var rel: Vector2 = o.pos - m.pos
+	return rel.dot(m.heading) > 0.0 and absf(rel.cross(m.heading)) < HIT_SIDE
 
 
 ## Abgeschleppt oder liegengeblieben (Partie 18.11.: Viktors Lkw wurde auf dem Weg zur Werkstatt immer wieder "verunfallt",

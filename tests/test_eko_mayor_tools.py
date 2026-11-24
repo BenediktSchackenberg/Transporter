@@ -72,6 +72,14 @@ class MayorToolTests(unittest.TestCase):
         self.assertNotIn("contract_choice", names)
         self.assertIn("act", names)
 
+    def test_founding_choice_disappears_after_founding(self):
+        world = FakeWorld()
+        world.observe = lambda: {"ok": True, "meine_firma": {"firma": "Test", "siedlung": {"betriebshof": False}}}
+        agent = agent_with(world, "unternehmer")
+        self.assertIn("founding_choice", {tool["name"] for tool in agent.available_tools()})
+        world.observe = lambda: {"ok": True, "meine_firma": {"firma": "Test", "siedlung": {"betriebshof": True}}}
+        self.assertNotIn("founding_choice", {tool["name"] for tool in agent.available_tools()})
+
     def test_direct_mayor_action_uses_the_same_fresh_id_check(self):
         world = FakeWorld()
         world.observe = lambda: {"ok": True, "mein_amt": {"stadtlager": {"vorschlaege":
@@ -314,6 +322,46 @@ class MayorToolTests(unittest.TestCase):
             result = agent.call_tool("wait", {})
         self.assertEqual(result["status"], "abgeschlossen")
         self.assertEqual(result["bestellungen"][0]["status"], "angeliefert")
+
+    def test_office_wait_and_repeated_status_really_wait(self):
+        # Partie 23.11.: mayor_action wait/status kam sofort mit "Keine Massnahme" zurueck, das Modell fragte alle 3-4 s erneut.
+        class ProjectWorld(FakeWorld):
+            status = "bestellt"
+            def observe(self):
+                return {"ok": True, "mein_amt": {"bauprogramm": {"projekte": [{"id": "P1", "status": "laufend"}]},
+                        "stadtlager": {"laufende_bestellungen": [{"id": "B1", "status": self.status}]}}}
+        world = ProjectWorld()
+        agent = agent_with(world)
+        with patch("tools.eko.eko_ollama.time.sleep", side_effect=lambda _s: setattr(world, "status", "angeliefert")):
+            result = agent.call_tool("mayor_action", {"action": "wait", "params": {"bis": "projekt"}})
+        self.assertEqual(result["status"], "abgeschlossen")
+        self.assertEqual(world.actions, [])
+        world.status = "bestellt"
+        with patch("tools.eko.eko_ollama.time.sleep", side_effect=lambda _s: setattr(world, "status", "angeliefert")):
+            agent.call_tool("mayor_action", {"action": "status", "params": {}})
+            agent.call_tool("mayor_action", {"action": "status", "params": {}})
+            third = agent.call_tool("mayor_action", {"action": "status", "params": {}})
+        self.assertEqual(len(world.actions), 2)
+        self.assertIn("hinweis", third)
+        agent.call_tool("mayor_action", {"action": "expand_depot", "params": {"kind": "staff"}})
+        self.assertEqual(agent._mayor_status_run, 0)
+
+    def test_rejected_mayor_choice_is_not_resent_in_same_situation(self):
+        # Partie 23.11.: Thomas Hahn waehlte 102-mal am Tag reihum dieselben abgelehnten Viertel-Optionen.
+        world = FakeWorld(ok=False)
+        office = world.observe()["mein_amt"]
+        office["stadtlager"]["personal_gesamt"] = 0
+        agent = agent_with(world)
+        self.assertTrue(mayor_choices(office))
+        first = agent.call_tool("mayor_choice", {"candidate": 0})
+        self.assertFalse(first["ok"])
+        sent = len(world.actions)
+        with patch("tools.eko.eko_ollama.time.sleep"), patch("tools.eko.eko_ollama.time.monotonic", side_effect=[0.0, 0.0, 99.0]):
+            second = agent.call_tool("mayor_choice", {"candidate": 0})
+        self.assertEqual(len(world.actions), sent)
+        self.assertIn("hinweis", second)
+        agent._mayor_invalid_streak = 2
+        self.assertEqual([t["name"] for t in agent.available_tools()], ["wait"])
 
     def test_company_choice_rechecks_vehicle_offer_and_executes_investment(self):
         class CompanyWorld(FakeWorld):

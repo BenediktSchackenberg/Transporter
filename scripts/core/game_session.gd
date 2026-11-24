@@ -677,7 +677,7 @@ func _process_timed(delta: float) -> void:
 			end_match("Zeit abgelaufen")
 		elif sim.companies.size() > 1 and sim.eko.conflict.defeated.size() == sim.companies.size() - 1 and sim.companies.filter(func(c): return Standings.solvent(c)).size() == 1:
 			end_match("Letzte Stadt erobert")
-		elif sim.companies.size() > 1 and sim.game_min > 1440.0 and sim.companies.filter(func(c): return Standings.solvent(c)).size() == 1:
+		elif not is_endless() and sim.companies.size() > 1 and sim.game_min > 1440.0 and sim.companies.filter(func(c): return Standings.solvent(c)).size() == 1:
 			end_match("Alle Konkurrenten sind bankrott")   # Hauptziel erreicht: der letzte zahlungsfaehige Spieler gewinnt
 	_camera_keys(delta)
 	_perf_timer += delta

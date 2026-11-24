@@ -942,6 +942,14 @@ class Agent:
         self._mayor_invalid_state = state
         return result
 
+    def rejected_mayor_choices(self, office):
+        """Schluessel der in dieser Amtslage bereits abgelehnten Optionen; neue Lage -> leere Menge."""
+        state = mayor_state_signature(office)
+        if getattr(self, "_rejected_choice_state", None) != state:
+            self._rejected_choice_state = state
+            self._rejected_choices = set()
+        return self._rejected_choices
+
     def call_tool(self, name, a):
         try:
             if name == "founding_choice":
@@ -1046,6 +1054,15 @@ class Agent:
                 params = a.get("params", {})
                 if not action or not isinstance(params, dict):
                     return {"ok": False, "msg": "action und params aus mein_amt.aktionen angeben."}
+                # 23.11.: Monika Winter rief stundenlang alle 3-4 s mayor_action wait/status auf ("Keine Massnahme" kam sofort zurueck)
+                # und belegte so das Modell. Amtswarten ist echtes Warten auf die Projektlage; ab dem dritten Status in Folge ebenso.
+                self._mayor_status_run = getattr(self, "_mayor_status_run", 0) + 1 if action in ("status", "overview") else 0
+                if action == "wait" or self._mayor_status_run >= 3:
+                    self._mayor_status_run = 0
+                    result = self.call_tool("wait", {"bis": "projekt"})
+                    if isinstance(result, dict) and action != "wait":
+                        result["hinweis"] = "Status mehrfach unveraendert abgefragt – stattdessen auf eine Aenderung der Projektlage gewartet."
+                    return result
                 required = {
                     "infra_ausbau": ("anlage",), "stromtrasse_bauen": ("option",),
                     "versorgungsleitung_bauen": ("option",), "approve_procurement": ("order_id",),
@@ -1144,8 +1161,18 @@ class Agent:
                     return {"ok": False, "msg": "Diese Stadtoption ist nicht mehr aktuell. Beobachte erneut und waehle eine Nummer aus mein_amt.entscheidungsoptionen.",
                             "entscheidungsoptionen": choices}
                 choice = choices[index]
+                # 23.11.: Thomas Hahn waehlte 102-mal am Tag reihum dieselben abgelehnten Viertel-Optionen (alle 2 s, Modell blockiert).
+                rejected = self.rejected_mayor_choices(office)
+                key = mayor_action_key(choice["action"], choice["params"])
+                if key in rejected:
+                    result = self.call_tool("wait", {"bis": "projekt"})
+                    if isinstance(result, dict):
+                        result["hinweis"] = "Diese Option wurde in unveraenderter Lage schon abgelehnt – stattdessen auf eine Aenderung der Projektlage gewartet."
+                    return result
                 result = self.call_tool("mayor_action", {"action": choice["action"], "params": choice["params"]})
                 if isinstance(result, dict):
+                    if result.get("ok") is False:
+                        rejected.add(key)
                     result["gewaehlt"] = choice
                 return result
             if name == "act" and getattr(self.args, "rolle", "") == "buergermeister" and getattr(self, "_passive_office", 0) >= 3:
@@ -1382,6 +1409,10 @@ class Agent:
                 available = [tool for tool in available if tool["name"] != "mining_choice"]
             if not growth_choices(current_firm, current_growth):
                 available = [tool for tool in available if tool["name"] != "growth_choice"]
+            settlement = current_firm.get("siedlung") if isinstance(current_firm, dict) else None
+            if isinstance(settlement, dict) and settlement.get("betriebshof") is True:
+                # 23.11.: Viktor waehlte Stunden nach der Gruendung immer wieder founding_choice (jedes Mal abgelehnt)
+                available = [tool for tool in available if tool["name"] != "founding_choice"]
         mayor_forced = (getattr(self, "_mayor_invalid_streak", 0) >= 2 or
                         getattr(self, "_observe_streak", 0) >= 2 or
                         getattr(self, "_passive_streak", 0) >= 3 or
@@ -1397,8 +1428,10 @@ class Agent:
                 self._mayor_invalid_state = ""
             elif office.get("bedrohung"):
                 return [tool for tool in available if tool["name"] == "mayor_action"]
-            elif mayor_choices(office):
+            elif any(mayor_action_key(c["action"], c["params"]) not in self.rejected_mayor_choices(office) for c in mayor_choices(office)):
                 return [tool for tool in available if tool["name"] == "mayor_choice"]
+            elif mayor_choices(office):
+                return [tool for tool in available if tool["name"] == "wait"]   # alle Optionen in dieser Lage schon abgelehnt
             else:
                 # Bei belegten Bauplaetzen und ohne neue Beschaffungsvorschlaege
                 # fehlt gerade eine wirksame Bauaktion. Das Warten prueft den
@@ -1502,6 +1535,9 @@ class Agent:
                 arguments = {key: source[key] for key in ("bis", "seconds") if key in source}
         if name not in names or not isinstance(arguments, dict):
             raise ModelGlitch("Ollama-JSON-Antwort ohne gueltiges Werkzeug: %s" % str(name)[:80])
+        if name == "act" and "type" not in arguments and "data" not in arguments and isinstance(arguments.get("aktion"), dict):
+            # 23.11.: Greta schickte {"aktion": {...}, "warum": ...} ohne type/data – neunmal verworfen und neu generiert
+            arguments = {"data": dict(arguments)}
         if name == "act" and "type" not in arguments:
             data = arguments.get("data")
             if isinstance(data, dict) and (isinstance(data.get("aktion"), dict) or data.get("action")):

@@ -8813,7 +8813,9 @@ func test_collisions() -> void:
 	var road: Vector2i = s.city.intersections[0]
 	for v in [va, vb]:
 		v.pos = s.city.tile_center(road)
-		v.set_path([road, road + Vector2i(1, 0), road + Vector2i(2, 0)] as Array[Vector2i])
+		v.set_path([road - Vector2i(2, 0), road - Vector2i(1, 0), road, road + Vector2i(1, 0), road + Vector2i(2, 0)] as Array[Vector2i])
+		v.path_i = 3   # mitten auf der Strecke (Anfahren/Wenden im ersten Wegstueck zaehlt seit 23.11. nicht als Unfall)
+		v.heading = Vector2.RIGHT
 		v.state = "to_pickup"
 	vb.pos += Vector2(3, 0)
 	s._rebuild_hash()

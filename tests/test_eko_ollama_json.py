@@ -133,6 +133,22 @@ class JsonToolFallbackTest(unittest.TestCase):
                          {"action": "versorgungsleitung_bauen",
                           "params": {"option": "wasser:4:5", "reason": "Wohnungen anschliessen"}})
 
+    def test_company_act_without_type_and_data_is_completed(self):
+        # Partie 23.11.: Greta schickte {"aktion": {...}, "warum": ...} ohne type/data und wurde neunmal verworfen.
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
+                                     ctx=16384, name="Greta")
+        agent._passive_streak = 0
+        agent.urgency = 2
+        agent.log = io.StringIO()
+        with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
+                {"message": {"content": '{"tool":"act","arguments":{"aktion":{"action":"collect_contracts"},'
+                                        '"warum":"Auftraege einsammeln"}}'}})):
+            result = agent.chat_json_tool([{"role": "user", "content": "Weiter"}])
+        args = result["tool_calls"][0]["function"]["arguments"]
+        self.assertEqual(args["type"], "Firma")
+        self.assertEqual(args["data"]["aktion"], {"action": "collect_contracts"})
+
     def test_mayor_can_approve_procurement_outside_old_shortlist(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="buergermeister", model="local-test", ollama="http://127.0.0.1:11435",

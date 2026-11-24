@@ -1240,8 +1240,8 @@ func _truck(b: Dictionary, data: Dictionary) -> Dictionary:
 	if cid < 0:
 		return {"ok": false, "msg": "Du hast keine Firma und keinen LKW."}
 	var v := own_truck(cid)
-	if v == null:
-		return {"ok": false, "msg": "Kein Fahrzeug, das du selbst fährst."}
+	if v == null:   # 23.11.: Viktor versuchte das 90-mal – sagen, was stattdessen geht
+		return {"ok": false, "msg": "Kein Fahrzeug, das du selbst fährst: Deine Lkw haben angestellte Fahrer. Fracht steuerst du über Firma-Aktionen (accept_contract, dispatch_policy); selbst kommst du zu Fuß (MoveTo) oder mit dem Fahrdienst (Fahrt, privat bezahlt) voran."}
 	if _truck_busy(v):
 		if v.state in ["broken", "to_workshop", "repairing"]:
 			return {"ok": false, "msg": "Dein LKW #%d ist %s. Er wird automatisch abgeschleppt und repariert; warte auf Einsatzbereitschaft, dann entscheide neu." % [v.id, v.status_text()]}
@@ -1683,7 +1683,7 @@ func _ride(b: Dictionary, data: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Dorthin kommt kein Fahrdienst."}
 	var cost: float = maxf(TAXI_MIN, float(p.size() - 1) * TAXI_EUR_PER_FIELD)
 	if float(b.get("geld", 0.0)) < cost:
-		return {"ok": false, "msg": "Die Fahrt (%d Felder) kostet %s, du hast %s." % [p.size() - 1, Catalog.money(cost), Catalog.money(float(b.get("geld", 0.0)))]}
+		return {"ok": false, "msg": "Die Fahrt (%d Felder) kostet %s, du hast %s privat. Geh zu Fuß (MoveTo); Firmengeld zahlt keine Privatfahrt." % [p.size() - 1, Catalog.money(cost), Catalog.money(float(b.get("geld", 0.0)))]}
 	var firm = null
 	for c in sim.companies:
 		if c.is_active() and not c.vehicle_ids.is_empty() and (firm == null or c.vehicle_ids.size() > firm.vehicle_ids.size()):
