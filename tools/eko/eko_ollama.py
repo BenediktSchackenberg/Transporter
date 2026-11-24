@@ -1579,6 +1579,13 @@ class Agent:
             # 24.11.: Qwen verschachtelt die Huelle doppelt: {"tool":"act","arguments":{"tool":"act","arguments":{...}}}
             name = arguments.get("tool") or name
             arguments = arguments["arguments"]
+        if name == "act" and "wait" not in names and isinstance(arguments, dict) and "type" not in arguments \
+                and set(arguments) <= {"bis", "seconds", "warum"} and (arguments.get("bis") or arguments.get("seconds")):
+            # 24.11.: wait war nach drei passiven Schritten gesperrt; Greta wollte auf die Reparatur ihres LKW warten und
+            # schickte act {bis: "einsatzbereit"} – sieben Mal verworfen, Pausen bis 60 s. Ein kurzes echtes Warten loest das.
+            bis = str(arguments.get("bis", ""))
+            wait_args = {"bis": bis} if bis in ("ankunft", "antwort", "projekt") else {"seconds": 20}
+            return {"content": "", "tool_calls": [{"function": {"name": "wait", "arguments": wait_args}}]}
         if name == "act" and "wait" in names and isinstance(arguments, dict):
             nested_wait = arguments.get("data") if isinstance(arguments.get("data"), dict) else {}
             if str(arguments.get("type", "")).lower() in ("wait", "warten"):

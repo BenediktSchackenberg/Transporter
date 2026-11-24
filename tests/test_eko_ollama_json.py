@@ -120,6 +120,22 @@ class JsonToolFallbackTest(unittest.TestCase):
         self.assertEqual(call["name"], "act")
         self.assertEqual(call["arguments"], {"type": "LKW", "data": {"ziel": [271, 275]}})
 
+    def test_act_with_only_wait_parameters_waits_even_when_wait_is_blocked(self):
+        # Partie 24.11.: Greta (wait gesperrt) schickte act {bis: "einsatzbereit"} siebenmal, jedes Mal verworfen
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
+                                     ctx=16384, name="Greta")
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
+        agent._passive_streak = 3
+        agent.urgency = 0
+        agent.log = io.StringIO()
+        with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
+                {"message": {"content": '{"tool":"act","arguments":{"bis":"einsatzbereit"}}'}})):
+            result = agent.chat_json_tool([{"role": "user", "content": "Mein LKW ist kaputt"}])
+        call = result["tool_calls"][0]["function"]
+        self.assertEqual(call["name"], "wait")
+        self.assertEqual(call["arguments"], {"seconds": 20})
+
     def test_mayor_action_accepts_flat_model_parameters(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="buergermeister", model="local-test", ollama="http://127.0.0.1:11435",
