@@ -701,6 +701,18 @@ def mayor_state_signature(office):
     return json.dumps(state, sort_keys=True, ensure_ascii=False)
 
 
+def firm_site_signature(firm):
+    """Stand der eigenen Baustellen und Materiallieferungen (ohne laufenden Baufortschritt, der sich staendig aendert)."""
+    lager = firm.get("grosslager") or {} if isinstance(firm, dict) else {}
+    state = {
+        "sites": [(s.get("id"), s.get("status"), json.dumps(s.get("fehlt_auf_dem_betriebshof"), sort_keys=True, ensure_ascii=False))
+                  for s in (firm.get("baustellen") or []) if isinstance(s, dict)] if isinstance(firm, dict) else [],
+        "goods": lager.get("wartende_baustoffe"),
+        "heli": lager.get("hubschrauber"),
+    }
+    return json.dumps(state, sort_keys=True, ensure_ascii=False, default=str)
+
+
 def mayor_project_signature(office):
     """Fortschritt, auf den ein Buergermeister ohne neue Modellabfrage warten kann."""
     board = office.get("bauprogramm") or {}
@@ -950,6 +962,26 @@ class Agent:
             self._rejected_choice_state = state
             self._rejected_choices = set()
         return self._rejected_choices
+
+    def wait_for_own_sites(self, max_s=45.0, step_s=3.0):
+        """Unternehmer: bis "projekt" wartet auf die eigenen Baustellen und Materiallieferungen. 24.11.: Viktor bekam
+        dafuer 4 Minuten lang "nur Buergermeister" und schickte denselben Aufruf ueber 30-mal (Werkzeugtext lud dazu ein)."""
+        def firm_of(o):
+            return (o.get("meine_firma") or {}) if isinstance(o, dict) else {}
+        t0 = time.monotonic()
+        start = firm_site_signature(firm_of(self.world.observe()))
+        firm, changed = {}, False
+        while time.monotonic() - t0 < max_s:
+            time.sleep(step_s)
+            firm = firm_of(self.world.observe())
+            if firm_site_signature(firm) != start:
+                changed = True
+                break
+        lager = firm.get("grosslager") or {}
+        return {"ok": True, "status": "abgeschlossen" if changed else "laeuft", "gewartet_s": round(time.monotonic() - t0),
+                "msg": "Baustelle oder Lieferung hat sich geaendert – neu entscheiden" if changed else
+                       "Baustellen und Lieferungen noch unveraendert – arbeite selbst mit (Bauen {baustelle}) oder tu etwas anderes",
+                "baustellen": firm.get("baustellen", []), "wartende_baustoffe": lager.get("wartende_baustoffe", [])}
 
     def call_tool(self, name, a):
         try:
@@ -1218,6 +1250,10 @@ class Agent:
                 data = a.get("data", {})
                 return self.call_tool(str(a["type"]), data if isinstance(data, dict) else {})
             if name == "act":
+                inner = a.get("data", {}).get("arguments") if isinstance(a.get("data"), dict) else None
+                if str(a.get("type", "")).lower() == "act" and isinstance(inner, dict) and inner.get("type"):
+                    # 24.11.: Greta/Viktor schickten act {type: "act", data: {arguments: {type: "Bauen", data: {...}}}}
+                    a = inner
                 data = a.get("data", {})
                 if isinstance(data, str):   # 19.11.: Viktor schickte '{"MoveTo":{"tile":[..]}},"warum":...' – erstes Objekt nehmen
                     try:
@@ -1251,7 +1287,7 @@ class Agent:
                         a = {**a, "bis": "projekt"}
                 if a.get("bis") == "projekt":
                     if getattr(self.args, "rolle", "") != "buergermeister":
-                        return {"ok": False, "msg": "Auf Stadtprojekte koennen nur Buergermeister warten."}
+                        return self.wait_for_own_sites()
                     t0 = time.monotonic()
                     current = compact_obs(self.world.observe())
                     office = current.get("mein_amt", {}) if isinstance(current, dict) else {}

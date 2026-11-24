@@ -2,6 +2,7 @@
 
 import unittest
 from types import SimpleNamespace
+import tools.eko.eko_ollama as eko_ollama
 from unittest.mock import patch
 
 from tools.eko.eko_ollama import Agent, changed_world, compact_obs, company_choices, estate_choices, growth_choices, mayor_action_key, mayor_choices, mayor_project_signature, mayor_state_signature, mining_choices
@@ -99,6 +100,25 @@ class MayorToolTests(unittest.TestCase):
         agent = agent_with(world, "unternehmer")
         agent.call_tool("founding_choice", {"candidate": 0})
         self.assertEqual(world.actions[0][0], "Siedlung")
+
+    def test_company_wait_for_project_watches_own_sites(self):
+        # Partie 24.11.: Viktor bekam auf wait {bis: projekt} 4 Minuten lang "nur Buergermeister"
+        states = iter(["material", "material", "bau"])
+        world = FakeWorld()
+        world.observe = lambda: {"ok": True, "meine_firma": {"firma": "Test", "baustellen": [
+            {"id": "BS2", "status": next(states, "bau")}]}}
+        agent = agent_with(world, "unternehmer")
+        with patch.object(eko_ollama.time, "sleep", lambda s: None):
+            result = agent.call_tool("wait", {"bis": "projekt"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "abgeschlossen")
+        self.assertEqual(result["baustellen"][0]["status"], "bau")
+
+    def test_act_wrapped_in_act_is_unwrapped(self):
+        world = FakeWorld()
+        agent = agent_with(world, "unternehmer")
+        agent.call_tool("act", {"type": "act", "data": {"arguments": {"type": "Bauen", "data": {"baustelle": "BS1"}}}})
+        self.assertEqual(world.actions[0], ("Bauen", {"baustelle": "BS1"}))
 
     def test_direct_mayor_action_uses_the_same_fresh_id_check(self):
         world = FakeWorld()
