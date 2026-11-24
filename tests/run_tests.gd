@@ -15121,6 +15121,14 @@ func test_eko_estates_vs_traffic() -> void:
 	E.estates.estates.Viktor.wall_tiles = [[wt.x, wt.y]]
 	E.estates.apply_walls("Viktor")
 	ok(s.nav.road.is_point_solid(wt) and s.nav.walk.is_point_solid(wt), "Mauer sperrt Fußgänger und Fahrzeuge")
+	# Partie 24.11.: Baeume direkt vor dem Tor schlossen Viktors Gelaende-LKW im Hof ein
+	var gate_c := Vector2i(R.get_center().x, R.end.y - 1)
+	var front := gate_c + Vector2i(0, 1)
+	s.city.trees.append([front, 0])
+	s.nav.walk.set_point_solid(front, true)
+	E.estates.estates.Viktor.gate = [[gate_c.x, gate_c.y]]
+	E.estates.apply_walls("Viktor")
+	ok(not s.nav.walk.is_point_solid(front) and not s.city.trees.any(func(t): return t[0] == front), "Baum vor dem Tor gefällt, Ausfahrt frei")
 	s.rail.ensure()
 	var rail_cell = s.rail.cells.keys()[0] if not s.rail.cells.is_empty() else null
 	if rail_cell != null:

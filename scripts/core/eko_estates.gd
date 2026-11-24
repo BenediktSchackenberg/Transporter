@@ -671,6 +671,31 @@ func apply_walls(name: String) -> void:
 		N.walk.set_point_solid(g, not bool(e.tor_offen))
 		if N.road.is_in_boundsv(g) and _sim().city.is_road(g):
 			N.road.set_point_solid(g, not bool(e.tor_offen))
+	_clear_gate_front(e)
+
+
+## Vor dem Tor (Suedseite) faellt der Bautrupp die Baeume. Partie 24.11.: Viktors Mauer schloss seinen Gelaende-LKW ein,
+## weil direkt vor dem Tor Baeume standen – 21 Auftraege scheiterten mit voller Ladung im Hof.
+func _clear_gate_front(e: Dictionary) -> void:
+	var felled := {}
+	for q in _sim().prod.felled:   # nach dem Laden sind diese Baeume schon aus city.trees entfernt, das Gitter aber noch gesperrt
+		felled[Vector2i(int(q[0]), int(q[1]))] = true
+	var cut := {}
+	for t in e.gate:
+		for dy in [1, 2]:
+			for dx in [-1, 0, 1]:
+				var c := Vector2i(int(t[0]) + dx, int(t[1]) + dy)
+				if felled.has(c):
+					_sim().nav.walk.set_point_solid(c, false)
+				elif _sim().city.trees.any(func(tr): return tr[0] == c):
+					cut[c] = true
+	if cut.is_empty():
+		return
+	for c in cut:
+		_sim().nav.walk.set_point_solid(c, false)
+		_sim().prod.felled.append([c.x, c.y])
+	_sim().city.trees = _sim().city.trees.filter(func(tr): return not cut.has(tr[0]))
+	_sim().prod.trees_felled.emit(cut.keys())
 
 
 func _has_wall(c: Vector2i) -> bool:
