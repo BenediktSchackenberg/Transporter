@@ -29,6 +29,7 @@ REFLECT = ("Nimm dir kurz Zeit: Wie fühlst du dich gerade (observe → gefuehle
            "(append_memory) und geprüftes Wissen in SEMANTIC_MEMORY.md fest. Danach mach weiter, womit du willst.")
 DEFAULT_MODEL = "hf.co/6block/Qwen3.8-27B-GGUF:IQ3_M"   # Benedikt 19.11.2026 abends: Qwen 27B mit 16k Kontext (qwen3.5:9b schaffte die Bau-Kette nicht)
 MAX_MESSAGES = 60         # Gespraechslaenge, danach werden die aeltesten Schritte verworfen (das Gedaechtnis liegt in Dateien)
+FOUNDING_ON_SITE = 15      # wie EkoSettle.ON_SITE: so nah muss das Wesen am Platz sein, um zu gruenden
 KEEP_MESSAGES = 36
 REREAD_S = 900            # dieselbe unveraenderte Datei so lange nur als Kurzfassung (Leseschleife 17.11.)
 AGENT_TOOLS = ("learn", "wait", "list_files", "read_file", "write_file", "append_memory", "nachschlagen")
@@ -959,11 +960,16 @@ class Agent:
                 choices = settlement.get("beste_plaetze_in_der_naehe") or [] if isinstance(settlement, dict) else []
                 index = int(a.get("candidate", -1))
                 if settlement.get("betriebshof") is not False:
-                    return {"ok": False, "msg": "Dieser Gründungsplatz ist nicht mehr verfügbar. Beobachte die aktuelle Lage und wähle einen neuen Kandidaten."}
+                    return {"ok": False, "msg": "Du hast schon einen Betriebshof – eine Gründung ist nicht mehr nötig."}
                 selected = getattr(self, "_founding_target", None)
                 if selected is None:
                     if index < 0 or index >= len(choices):
-                        return {"ok": False, "msg": "Dieser Gründungsplatz ist nicht mehr verfügbar. Beobachte die aktuelle Lage und wähle einen neuen Kandidaten."}
+                        # 24.11.: Greta zaehlte ab 1 ("Platz 1"), die Liste hatte nur einen Eintrag -> sechsmal abgelehnt
+                        felder = [c.get("feld") for c in choices if isinstance(c, dict)]
+                        if not felder:
+                            return {"ok": False, "msg": "Hier in der Nähe ist kein erreichbarer Gründungsplatz. Fahr mit dem LKW in eine andere Gegend und beobachte erneut."}
+                        return {"ok": False, "msg": "candidate %d gibt es nicht. Gezählt wird ab 0: %s." % (
+                            index, ", ".join("%d = %s" % (i, f) for i, f in enumerate(felder)))}
                     selected = choices[index]
                     self._founding_target = selected
                 target = selected.get("feld", []) if isinstance(selected, dict) else []
@@ -972,7 +978,9 @@ class Agent:
                     return {"ok": False, "msg": "Standortdaten fehlen; beobachte erneut."}
                 if o.get("du", {}).get("unterwegs"):
                     return {"ok": True, "status": "laeuft", "msg": "Du bist noch unterwegs. Warte bis zur Ankunft, dann wähle den Standort erneut."}
-                at_site = max(abs(int(target[0]) - int(here[0])), abs(int(target[1]) - int(here[1]))) <= 3
+                # wie EkoSettle.ON_SITE (15): mit <= 3 fuhr Viktor am 24.11. immer wieder zu [201,275], weil der LKW
+                # das Feld selbst nicht erreicht und am naechsten freien Feld haelt
+                at_site = max(abs(int(target[0]) - int(here[0])), abs(int(target[1]) - int(here[1]))) <= FOUNDING_ON_SITE
                 action = "Siedlung" if at_site else "LKW"
                 result = self.world.act(action, {"feld" if at_site else "ziel": target})
                 if isinstance(result, dict):
@@ -1521,6 +1529,10 @@ class Agent:
             raise ModelGlitch("Ollama-JSON-Antwort ungueltig: %s" % str(e)) from e
         name = chosen.get("tool") if isinstance(chosen, dict) else None
         arguments = chosen.get("arguments") if isinstance(chosen, dict) else None
+        while isinstance(arguments, dict) and set(arguments) == {"tool", "arguments"} and isinstance(arguments.get("arguments"), dict):
+            # 24.11.: Qwen verschachtelt die Huelle doppelt: {"tool":"act","arguments":{"tool":"act","arguments":{...}}}
+            name = arguments.get("tool") or name
+            arguments = arguments["arguments"]
         if name == "act" and "wait" in names and isinstance(arguments, dict):
             nested_wait = arguments.get("data") if isinstance(arguments.get("data"), dict) else {}
             if str(arguments.get("type", "")).lower() in ("wait", "warten"):

@@ -80,6 +80,26 @@ class MayorToolTests(unittest.TestCase):
         world.observe = lambda: {"ok": True, "meine_firma": {"firma": "Test", "siedlung": {"betriebshof": True}}}
         self.assertNotIn("founding_choice", {tool["name"] for tool in agent.available_tools()})
 
+    def test_founding_choice_out_of_range_lists_zero_based_options(self):
+        # Partie 24.11.: Greta waehlte candidate 1 bei nur einem Platz und bekam sechsmal "nicht mehr verfuegbar"
+        world = FakeWorld()
+        world.observe = lambda: {"ok": True, "du": {"feld": [0, 0]}, "meine_firma": {"firma": "Test", "siedlung": {
+            "betriebshof": False, "beste_plaetze_in_der_naehe": [{"feld": [50, 60], "punkte": 80}]}}}
+        agent = agent_with(world, "unternehmer")
+        result = agent.call_tool("founding_choice", {"candidate": 1})
+        self.assertFalse(result["ok"])
+        self.assertIn("0 = [50, 60]", result["msg"])
+        self.assertFalse(world.actions)
+
+    def test_founding_choice_founds_within_on_site_distance(self):
+        # Partie 24.11.: Viktor hielt 5 Felder vor dem Platz (Feld nicht befahrbar) und fuhr endlos wieder hin
+        world = FakeWorld()
+        world.observe = lambda: {"ok": True, "du": {"feld": [196, 275]}, "meine_firma": {"firma": "Test", "siedlung": {
+            "betriebshof": False, "beste_plaetze_in_der_naehe": [{"feld": [201, 275], "punkte": 80}]}}}
+        agent = agent_with(world, "unternehmer")
+        agent.call_tool("founding_choice", {"candidate": 0})
+        self.assertEqual(world.actions[0][0], "Siedlung")
+
     def test_direct_mayor_action_uses_the_same_fresh_id_check(self):
         world = FakeWorld()
         world.observe = lambda: {"ok": True, "mein_amt": {"stadtlager": {"vorschlaege":

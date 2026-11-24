@@ -103,6 +103,23 @@ class JsonToolFallbackTest(unittest.TestCase):
             result = agent.chat_json_tool([{"role": "user", "content": "Beobachte"}])
         self.assertEqual(result["tool_calls"][0]["function"]["arguments"], {})
 
+    def test_double_wrapped_tool_call_is_unwrapped(self):
+        # Partie 24.11.: {"tool":"act","arguments":{"tool":"act","arguments":{...}}} wurde als unvollstaendig verworfen
+        agent = object.__new__(eko_ollama.Agent)
+        agent.args = SimpleNamespace(rolle="unternehmer", model="local-test", ollama="http://127.0.0.1:11435",
+                                     ctx=16384, name="Viktor")
+        agent._opening_foundation = agent._opening_hall = agent._opening_home = agent._opening_freight = False
+        agent._passive_streak = 0
+        agent.urgency = 0
+        agent.log = io.StringIO()
+        with patch.object(eko_ollama.urllib.request, "urlopen", return_value=Response(
+                {"message": {"content": '{"tool":"act","arguments":{"tool":"act","arguments":'
+                                        '{"type":"LKW","data":{"ziel":[271,275]}}}}'}})):
+            result = agent.chat_json_tool([{"role": "user", "content": "Fahr los"}])
+        call = result["tool_calls"][0]["function"]
+        self.assertEqual(call["name"], "act")
+        self.assertEqual(call["arguments"], {"type": "LKW", "data": {"ziel": [271, 275]}})
+
     def test_mayor_action_accepts_flat_model_parameters(self):
         agent = object.__new__(eko_ollama.Agent)
         agent.args = SimpleNamespace(rolle="buergermeister", model="local-test", ollama="http://127.0.0.1:11435",
