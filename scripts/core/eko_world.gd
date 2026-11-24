@@ -3022,6 +3022,8 @@ func firm_obs(b: Dictionary) -> Dictionary:
 	var dispatch_view: Dictionary = sim.operations.dispatch_policy(cid)
 	dispatch_view["von_dir_gesetzt"] = sim.operations.dispatch_policies.has(cid)
 	dispatch_view["gruender_lkw_freigegeben"] = sim.operations.dispatch_policies.has(cid) and bool(dispatch_view.auto_accept)
+	if bool(dispatch_view.gruender_lkw_freigegeben) and not homes.open_sites(cid).is_empty():
+		dispatch_view["pausiert"] = "Solange du eine offene Baustelle hast, nimmt die Disposition keine Fracht für deinen eigenen LKW an – du würdest selbst fahren und nicht bauen. Erst bauen."
 	return {"firma": sim.company(cid).company_name, "bargeld": int(me.bargeld), "gewinn": int(me.gewinn), "lieferungen": sim.company(cid).stats.completed, "reputation": me.reputation,
 		"finanzlage": {"letzte_7_tage": sim.finance.company_period(cid, 7), "letzte_30_tage": sim.finance.company_period(cid, 30)},
 		"baustellen": homes.summary(cid), "siedlung": settle.obs(b, cid),

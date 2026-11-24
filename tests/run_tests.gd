@@ -9151,6 +9151,11 @@ func test_wildnis_found() -> void:
 		ok(manual_offer.status == "assigned" and maxi(absi(manual_city.eko.tile_of(manual_b).x - manual_v.tile().x), absi(manual_city.eko.tile_of(manual_b).y - manual_v.tile().y)) <= 3,
 			"nach Ankunft am LKW wird die vorgemerkte Fracht wirklich disponiert (%s, %s)" % [manual_offer.status, manual_city.eko.tile_of(manual_b)])
 	loaded_city.operations.run(cid, "set_dispatch_policy", {"auto_accept": true, "min_margin": 0, "max_distance": 0, "reserve": 0})
+	# 24.11.: bei offener Baustelle faehrt der Inhaber keine Fracht (Greta/Viktor sassen 20 min im LKW statt zu bauen)
+	loaded_city.eko.homes.sites["BS_TEST"] = {"id": "BS_TEST", "cid": cid, "status": "bau", "typ": "einfamilienhaus", "parcel": "", "need": {}, "progress": 0.0, "work": 4.0, "crew": []}
+	loaded_city.operations._auto_dispatch(cid)
+	ok(work_offer.status == "open" and loaded_city.eko.firm_obs(work_b).dispositionsvorgaben.has("pausiert"), "offene Baustelle: Disposition holt den Inhaber nicht in den LKW")
+	loaded_city.eko.homes.sites.erase("BS_TEST")
 	loaded_city.operations._auto_dispatch(cid)
 	ok(work_offer.status == "assigned" and work_v.stops.size() >= 2, "KI-Disposition teilt nach dem ersten Wohnhaus dem Inhaber einen echten Auftrag zu")
 	var goal_project := "P9876"

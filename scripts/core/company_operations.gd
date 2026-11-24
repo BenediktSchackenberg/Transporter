@@ -228,6 +228,8 @@ func _owner_ready_for_dispatch(cid: int, v: FleetVehicle) -> bool:
 	var b: Dictionary = sim.eko.beings.get(name, {})
 	if b.is_empty() or b.has("im_lkw") or b.has("baut") or b.has("lkw_auftrag"):
 		return false
+	if not sim.eko.homes.open_sites(cid).is_empty():
+		return false   # 24.11.: Inhaber fuhr bei offener Baustelle 20 min Fracht und baute nicht – Bauen geht vor
 	var mover: Mover = b.mover
 	if not mover.arrived():
 		return false
