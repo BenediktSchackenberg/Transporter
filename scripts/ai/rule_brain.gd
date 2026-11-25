@@ -590,12 +590,16 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 			return
 		if au.fehlt.size() == 1 and str(au.fehlt[0]).begins_with("zu wenig Personal"):
 			b["personal_soll"] = maxi(int(b.get("personal_soll", 1)), int(au.personal))
-	for b in own:
+	# 25.11.: alle eigenen Betriebe besetzen, nicht nur PROD_BRANCHES – die Kneipe in Liorklippe stand fertig ohne Personal, obwohl
+	# die Firma zwei freie Mitarbeiter hatte (kneipe/metzgerei fehlen in PROD_BRANCHES)
+	var staffed: Array = obs.get("betriebe", []).filter(func(b): return str(b.get("branche", "")) != "transport")
+	var staffed_ids: Array = staffed.map(func(b): return b.id)
+	for b in staffed:
 		if str(b.get("status", "")) not in Businesses.RUNNING:
 			continue   # im Bau/geschlossen: Personal erst, wenn der Betrieb laeuft (vorher bis zu 60 abgelehnte Zuweisungen je Partie)
-		if int(b.personal) >= int(b.get("personal_soll", b.get("personal_min", 1))):
+		if int(b.get("personal", 0)) >= int(b.get("personal_soll", b.get("personal_min", 1))):
 			continue
-		var pool: Array = free_staff.filter(func(w): return str(w.get("betrieb", "")) not in own_ids)
+		var pool: Array = free_staff.filter(func(w): return str(w.get("betrieb", "")) not in staffed_ids)
 		if not pool.is_empty():
 			actions.append({"action": "assign_staff", "worker_id": pool[0].id, "business_id": b.id})
 			free_staff.erase(pool[0])
