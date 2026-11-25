@@ -42,6 +42,8 @@ var refusals: Array = []             # {tag, stadt, branche, grund}
 var topups := {}                     # Firma -> Nachschuss des Kapitalgebers fuer das Gruendungsziel (hoechstens einmal)
 const START_FLOOR := 10000.0
 const START_TOPUP := 30000.0
+const START_EVERY_DAYS := 10       # Bergwerk blockiert (Kasse leer): Kapitalgeber helfen hoechstens alle 10 Tage erneut
+const WILD_DAILY_INFLOW := 4000.0
 const TOPUP_TARGET := 55000.0        # Bargeld fuer Bergwerksgruendung (Gebaeude 30.000) plus Betriebsreserve
 
 
@@ -51,6 +53,12 @@ func setup(simulation) -> void:
 
 
 func on_day(day: int) -> void:
+	if enabled and sim.wildnis:
+		# 25.11.: Aufbauphase – Kapitalgeber taeglich statt monatlich (25.000 EUR/Monat liessen I0 tagelang leer; Bergwerk und Laeden
+		# blieben ohne Anlaufkapital)
+		var room := maxf(0.0, Insolvency.WILD_INVESTOR_CAP - float(sim.economy.accounts.get("I0", 0.0)))
+		if room > 0.0:
+			sim.economy.transfer("X0", "I0", minf(WILD_DAILY_INFLOW, room))
 	if not enabled or not sim.towns.is_region() or day % CHECK_DAYS != 0:
 		return
 	_topup_focus(day)
@@ -79,12 +87,14 @@ func _topup_focus(day: int) -> void:
 			# 25.11.: Bergwerk steht, aber die Kasse ist leer (Engel Gruppe: 2.016 EUR, Strom und Personal nicht bezahlbar) –
 			# einmal Anlaufkapital bis zur ersten Foerderung
 			var key := "%d:anlauf" % c.id
-			if topups.has(key) or c.ledger.cash >= START_FLOOR or str(mine[0].status) not in ["blockiert", "betriebsbereit"]:
+			var last_day := int(topups.get("%d:anlauf_tag" % c.id, -1000))
+			if day - last_day < START_EVERY_DAYS or c.ledger.cash >= START_FLOOR or str(mine[0].status) not in ["blockiert", "betriebsbereit"]:
 				continue
 			var add := minf(START_TOPUP, float(sim.economy.accounts.get("I0", 0.0)))
 			if add > 1000.0:
 				c.ledger.inject(add)
-				topups[key] = add
+				topups[key] = float(topups.get(key, 0.0)) + add
+				topups["%d:anlauf_tag" % c.id] = day
 				sim.log_event("Kapitalgeber geben %s %s Anlaufkapital für das Bergwerk (Personal, Strom bis zur ersten Förderung)." % [c.company_name, Catalog.money(add)], "good", c.id)
 			continue
 		if topups.has(c.id):
