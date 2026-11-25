@@ -250,7 +250,7 @@ func local_roads(k: int) -> Dictionary:
 			i += 1
 			for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
 				var next: Vector2i = here + d
-				if not found.has(next) and C.is_road(next) and C.town_of(next) == k:
+				if not found.has(next) and C.is_road(next) and sim.serves_town(next, k):
 					found[next] = true
 					todo.append(next)
 	_local_cache[k] = found

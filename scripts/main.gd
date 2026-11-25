@@ -558,6 +558,12 @@ func _process_timed(_delta: float) -> void:
 			var e: Dictionary = session.sim.activity.items.back()
 			session.set_follow(false)
 			session.city_view.set_camera_world(Vector2(float(e.x) * 32.0 + 16.0, float(e.y) * 32.0 + 16.0))
+		if args.has("shot-cell"):   # Kamera auf ein Kartenfeld "x,y" (Sichtpruefung z. B. der Eko-Bloecke)
+			var xy: PackedStringArray = str(args["shot-cell"]).split(",")
+			session.set_follow(false)
+			session.city_view.set_camera_world(Vector2(float(xy[0]) * 32.0 + 16.0, float(xy[1]) * 32.0 + 16.0))
+			if session.hud and session.hud.control_center:
+				session.hud.control_center.set_expanded(false)
 		if args.has("shot-garbage"):   # Sichtpruefung Muellabfuhr: einem leerenden Muellwagen folgen, sonst der Deponie
 			var target := {}
 			for fv in session.sim.fleet.vehicles:

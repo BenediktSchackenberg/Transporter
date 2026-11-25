@@ -628,31 +628,62 @@ func road_link(k: int) -> Dictionary:
 		_link_cache[k] = out
 		return out
 	out.verbunden = false
-	# naechstes Strassenfeld, das ans Grosslager angebunden ist (ringweise, hoechstens 8 Pruefungen)
-	var checks := 0
-	for r in range(1, 160):
-		var found := Vector2i(-1, -1)
-		for dy in range(-r, r + 1):
-			for dx in [-r, r] if absi(dy) != r else range(-r, r + 1):
-				var q := tr + Vector2i(dx, dy)
-				if C.inside(q) and C.is_road(q) and C.town_of(q) != k:
-					checks += 1
-					if not sim.nav.road_path(q, hr).is_empty():
-						found = q
-						break
-					if checks >= 8:
-						break
-			if found.x >= 0 or checks >= 8:
-				break
-		if found.x >= 0:
-			out["von"] = [found.x, found.y]
-			out["felder"] = absi(found.x - tr.x) + absi(found.y - tr.y)
-			break
-		if checks >= 8:
-			break
 	out["bis"] = [tr.x, tr.y]
+	# 25.11.: Kernnetz des Rathauses erfassen und von ihm aus das naechste ans Grosslager angebundene Strassenfeld suchen.
+	# Vorher zaehlten nur Felder fremder Staedte: Lindenhaven fehlten 7 Felder zum eigenen Ostnetz (Wasserwerke), geplant
+	# wurden 98 Felder ab Morgenwiek – und ohne Anschluss kamen weder Wasser noch Strom in den Kern.
+	if not C.is_road(tr):
+		_link_cache[k] = out
+		return out
+	var core := _road_component(tr, {})
+	var dead := {}       # Strassennetze ohne Verbindung zum Grosslager (je Netz nur eine Pruefung)
+	var origin := {}     # Feld -> naechstes Kernfeld (Ausbreitung ueber das Gelaende)
+	var queue: Array[Vector2i] = []
+	for c in core:
+		origin[c] = c
+		queue.append(c)
+	var checks := 0
+	var i := 0
+	while i < queue.size() and i < 120000 and checks < 8:
+		var here: Vector2i = queue[i]
+		i += 1
+		for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+			var q: Vector2i = here + d
+			if origin.has(q) or not C.inside(q):
+				continue
+			origin[q] = origin[here]
+			if C.is_road(q) and not dead.has(q):
+				checks += 1
+				if not sim.nav.road_path(q, hr).is_empty():
+					var to: Vector2i = origin[q]
+					out["von"] = [q.x, q.y]
+					out["bis"] = [to.x, to.y]
+					out["felder"] = absi(q.x - to.x) + absi(q.y - to.y)
+					_link_cache[k] = out
+					return out
+				dead.merge(_road_component(q, {}))
+				continue
+			if not C.is_road(q):
+				queue.append(q)
 	_link_cache[k] = out
 	return out
+
+
+## Zusammenhaengendes Strassennetz (4er-Nachbarschaft) ab einem Strassenfeld, hoechstens 20 000 Felder.
+func _road_component(start: Vector2i, into: Dictionary) -> Dictionary:
+	var C: CityData = _sim().city
+	into[start] = true
+	var todo: Array[Vector2i] = [start]
+	var i := 0
+	while i < todo.size() and i < 20000:
+		var here: Vector2i = todo[i]
+		i += 1
+		for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+			var n: Vector2i = here + d
+			if not into.has(n) and C.inside(n) and C.is_road(n):
+				into[n] = true
+				todo.append(n)
+	return into
 
 
 func _near_road(c: Vector2i, r: int) -> bool:

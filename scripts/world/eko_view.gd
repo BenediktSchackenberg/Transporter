@@ -207,7 +207,36 @@ static func color_of(mat: String) -> Color:
 
 
 ## Iso-Wuerfel eines Blocks; occ: belegte Nachbarn (verdeckte Flaechen weglassen), origin: Knotenposition.
-static func draw_block(n: CanvasItem, p: Vector3i, mat: String, occ: Dictionary, origin: Vector2, cut_top := false, night := false, lift := 0.0) -> void:
+## Sammelpuffer: Flaechen vieler Bloecke als EIN Zeichenaufruf (25.11.: 6000 Bloecke = 11 000 Draw-Calls, 57 -> 18 fps).
+class BlockBatch:
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+
+	func quad(q: PackedVector2Array, c: Color) -> void:
+		var i0 := pts.size()
+		pts.append_array(q)
+		for k in 4:
+			cols.append(c)
+		idx.append_array(PackedInt32Array([i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3]))
+
+	## Gesammeltes zeichnen und Puffer leeren
+	func flush(n: CanvasItem) -> void:
+		if not idx.is_empty():
+			RenderingServer.canvas_item_add_triangle_array(n.get_canvas_item(), idx, pts, cols)
+		pts = PackedVector2Array()
+		cols = PackedColorArray()
+		idx = PackedInt32Array()
+
+
+static func _quad(n: CanvasItem, batch: BlockBatch, q: PackedVector2Array, c: Color) -> void:
+	if batch == null:
+		n.draw_colored_polygon(q, c)
+	else:
+		batch.quad(q, c)
+
+
+static func draw_block(n: CanvasItem, p: Vector3i, mat: String, occ: Dictionary, origin: Vector2, cut_top := false, night := false, lift := 0.0, batch: BlockBatch = null) -> void:
 	var col := color_of(mat)
 	if mat == "glas":
 		col = WINDOW_NIGHT if night else col
@@ -220,14 +249,22 @@ static func draw_block(n: CanvasItem, p: Vector3i, mat: String, occ: Dictionary,
 	var p11 := Iso.to_screen(w0 + Vector2(BLOCK, BLOCK)) - origin
 	var p01 := Iso.to_screen(w0 + Vector2(0, BLOCK)) - origin
 	if not occ.has(p + Vector3i(0, 1, 0)):   # Suedseite
-		n.draw_colored_polygon(PackedVector2Array([p01 + up, p11 + up, p11 + top, p01 + top]), col.darkened(0.15))
+		_quad(n, batch, PackedVector2Array([p01 + up, p11 + up, p11 + top, p01 + top]), col.darkened(0.15))
 	if not occ.has(p + Vector3i(1, 0, 0)):   # Ostseite
-		n.draw_colored_polygon(PackedVector2Array([p10 + up, p11 + up, p11 + top, p10 + top]), col.darkened(0.32))
+		_quad(n, batch, PackedVector2Array([p10 + up, p11 + up, p11 + top, p10 + top]), col.darkened(0.32))
 	if not occ.has(p + Vector3i(0, 0, 1)):   # Oberseite (an einer Schnittkante als helle Mauerkrone)
 		var tc := CUT if cut_top else col.lightened(0.08)
-		n.draw_colored_polygon(PackedVector2Array([p00 + top, p10 + top, p11 + top, p01 + top]), tc)
-		n.draw_polyline(PackedVector2Array([p00 + top, p10 + top, p11 + top, p01 + top, p00 + top]), tc.darkened(0.25), 0.6)
+		_quad(n, batch, PackedVector2Array([p00 + top, p10 + top, p11 + top, p01 + top]), tc)
+		var ring := PackedVector2Array([p00 + top, p10 + top, p11 + top, p01 + top, p00 + top])
+		if batch == null:
+			n.draw_polyline(ring, tc.darkened(0.25), 0.6)
+		else:   # Kanten als schmale Flaechen im selben Puffer – Zeichenreihenfolge bleibt wie bei einzelnen Aufrufen
+			for k in 4:
+				var off: Vector2 = (ring[k + 1] - ring[k]).orthogonal().normalized() * 0.3
+				_quad(n, batch, PackedVector2Array([ring[k] - off, ring[k + 1] - off, ring[k + 1] + off, ring[k] + off]), tc.darkened(0.25))
 	if mat in ["lampe", "ladestation"]:   # Leuchten (nachts mit Lichtkegel auf dem Boden)
+		if batch != null:   # bisher Gesammeltes zuerst zeichnen, damit der Lichtschein darueber liegt
+			batch.flush(n)
 		var glow := Color(col.r, col.g, col.b, 0.25 + 0.1 * sin(Time.get_ticks_msec() / 300.0))
 		n.draw_circle((p00 + p11) * 0.5 + top, 9.0, glow)
 		if night and mat == "lampe":
@@ -334,11 +371,13 @@ class TileNode:
 			order = order.filter(func(p): return bl.has(p) and not (p.z == int(cut.mz) and p.z >= 3) and not ((p.x == int(cut.mx) or p.y == int(cut.my)) and p.z >= 2))
 			for p in order:
 				occ[p] = true
+		var batch := EkoView.BlockBatch.new()
 		for p in order:
 			if bl.has(p):
 				var up: Vector3i = p + Vector3i(0, 0, 1)
 				var t := Vector2i(floori(float(p.x) / EkoWorld.PER_TILE), floori(float(p.y) / EkoWorld.PER_TILE))
-				EkoView.draw_block(self, p, str(bl[p]), occ, position, bl.has(up) and not occ.has(up), night, sim.eko.height_at(t) * MountainView.STEP)
+				EkoView.draw_block(self, p, str(bl[p]), occ, position, bl.has(up) and not occ.has(up), night, sim.eko.height_at(t) * MountainView.STEP, batch)
+		batch.flush(self)
 
 
 ## Haus eines Wesens als Schnitt: Dach weg, Vorderwaende (Sueden, Osten) nur bis zur ersten Schicht, damit man hineinsieht.
@@ -369,9 +408,10 @@ class HouseNode:
 			occ[p] = true
 		shown.sort_custom(func(a, b): return a[0].x + a[0].y < b[0].x + b[0].y or (a[0].x + a[0].y == b[0].x + b[0].y and a[0].z < b[0].z))
 		var night: bool = EkoView.is_night(sim) and h.status == "fertig"
+		var batch := EkoView.BlockBatch.new()
 		for s in shown:
-			var up: Vector3i = s[0] + Vector3i(0, 0, 1)
-			EkoView.draw_block(self, s[0], s[1], occ, position, (s[0].z == 1 and (s[0].x - o.x == last or s[0].y - o.y == last)) or s[0].z == EkoWorld.HOUSE_WALL, night)
+			EkoView.draw_block(self, s[0], s[1], occ, position, (s[0].z == 1 and (s[0].x - o.x == last or s[0].y - o.y == last)) or s[0].z == EkoWorld.HOUSE_WALL, night, 0.0, batch)
+		batch.flush(self)
 		var font := ThemeDB.fallback_font
 		var label := "Zuhause von %s" % owner_name if h.status == "fertig" else "%s baut: %d %%" % [h.builder, int(100.0 * float(h.placed) / float(h.blocks.size()))]
 		var top := Iso.to_screen(Vector2(o.x + EkoWorld.HOUSE_SIDE / 2, o.y + EkoWorld.HOUSE_SIDE / 2) * EkoView.BLOCK) - position + Vector2(0, -EkoView.BLOCK_H * (EkoWorld.HOUSE_WALL + 2))

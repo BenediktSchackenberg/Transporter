@@ -416,6 +416,22 @@ func town_ready(k: int) -> bool:
 	return not wildnis or (k >= 0 and k < city.towns.size() and bool(city.towns[k].get("gegruendet", false)))
 
 
+## Darf Stadt k das Strassenfeld q mit Leitungen versorgen? Sonst gilt die naechstgelegene Stadtmitte. In der Wildnis
+## duerfen Staedte auch Landstrassen ausserhalb jeder fremden Siedlung versorgen (25.11.: Gretas Baeckerei B3 lag 40 Felder
+## oestlich von Lindenhaven, ihr Strassenfeld galt als Morgenwiek – weder Wasser noch Kanal noch Strom kamen je an).
+const SERVE_MARGIN := 8
+func serves_town(q: Vector2i, k: int) -> bool:
+	if city.town_of(q) == k:
+		return true
+	if not wildnis:
+		return false
+	for key in settlements:
+		var a: Array = settlements[key].get("rect", [])
+		if int(key) != k and a.size() >= 4 and Rect2i(int(a[0]), int(a[1]), int(a[2]), int(a[3])).grow(SERVE_MARGIN).has_point(q):
+			return false
+	return true
+
+
 func nearest_building_of(role: String, from: Vector2i) -> Dictionary:
 	var best := {}
 	var best_d := INF

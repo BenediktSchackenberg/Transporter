@@ -786,6 +786,10 @@ func on_day(_day: int) -> void:
 	if sim.wildnis:
 		if not sim.town_ready(town):
 			return   # Erst der Unternehmer gruendet die Stadt und baut ihr Buergeramt.
+		# 25.11.: Das Bauamt beschliesst den Strassenanschluss selbst (so stand es seit 19.11. in der Begruendung, ausgeloest
+		# hat ihn aber nur die KI-Aktion). Lindenhaven blieb 96 Tage abgeschnitten – ohne Strasse auch kein Wasser und kein Strom.
+		if sim.eko != null and not bool(sim.eko.settle.road_link(town).get("verbunden", true)):
+			hub_connection()
 	_refresh_airport_reservation()
 	if _region():
 		_arrivals_town()

@@ -286,7 +286,7 @@ func main_options(k: int, art: String) -> Array:
 		var q := Vector2i(int(xy[0]), int(xy[1]))
 		for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
 			var next: Vector2i = q + d
-			if C.is_road(next) and C.town_of(next) == k and not built.has(_cell_key(next)):
+			if C.is_road(next) and sim.serves_town(next, k) and not built.has(_cell_key(next)):
 				starts.append(next)
 	var seen := {}
 	var options: Array = []
@@ -301,7 +301,7 @@ func main_options(k: int, art: String) -> Array:
 			i += 1
 			for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
 				var next: Vector2i = here + d
-				if not seen.has(next) and C.is_road(next) and C.town_of(next) == k and not built.has(_cell_key(next)):
+				if not seen.has(next) and C.is_road(next) and sim.serves_town(next, k) and not built.has(_cell_key(next)):
 					seen[next] = true
 					todo.append(next)
 		var cells: Array = todo.slice(0, 32)
@@ -356,7 +356,7 @@ func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Dict
 	for key in sources:
 		var xy := str(key).split(":")
 		var source := Vector2i(int(xy[0]), int(xy[1]))
-		if C.is_road(source) and C.town_of(source) == k and not parent.has(source):
+		if C.is_road(source) and sim.serves_town(source, k) and not parent.has(source):
 			parent[source] = source
 			queue.append(source)
 	var index := 0
@@ -365,7 +365,7 @@ func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Dict
 		index += 1
 		for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
 			var next: Vector2i = here + d
-			if not parent.has(next) and C.is_road(next) and C.town_of(next) == k:
+			if not parent.has(next) and C.is_road(next) and sim.serves_town(next, k):
 				parent[next] = here
 				queue.append(next)
 	var options: Array = []
@@ -559,7 +559,7 @@ func compute_net(k: int, ignore_break: bool = false) -> Dictionary:
 			continue
 		for dv in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			var n: Vector2i = c + dv
-			if net.has(n) or shut.has(n) or not sim.city.inside(n) or not sim.city.is_road(n) or sim.city.town_of(n) != k or not built.has(_cell_key(n)):
+			if net.has(n) or shut.has(n) or not sim.city.inside(n) or not sim.city.is_road(n) or not sim.serves_town(n, k) or not built.has(_cell_key(n)):
 				continue
 			net[n] = d + 1
 			q.append(n)
