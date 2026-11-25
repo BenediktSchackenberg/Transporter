@@ -1070,7 +1070,14 @@ func freight(from_loc: int, to_loc: int, item: String, qty: int) -> float:
 		return freight_dist(dist, item, qty)
 	# Einheitlicher Stadtliefertarif wie beim Grosshandel (Retail._freight): kurze Stadtfahrten uebernehmen Transportfirmen kaum
 	# (Messung probe_bottlenecks: 0-2 von ueber 100), sonst der Lieferdienst; Erzeuger und Grosshandel liefern zu gleichen Bedingungen.
-	return snappedf(Retail.FREIGHT_BASE + float(dist) * (1.0 + float(units(item, qty)) / 8.0), 1.0)
+	return snappedf(Retail.FREIGHT_BASE + _tariff_dist(dist) * (1.0 + float(units(item, qty)) / 8.0), 1.0)
+
+
+## 25.11.: Ueber Land faehrt der Lieferdienst gebuendelt – jenseits von CITY_DIST Feldern zaehlt jedes Feld nur zu 30 %.
+## Die Kneipe in Liorklippe zahlte fuer 18 Fassgetraenke (18 EUR) 150 EUR Fracht vom fernen Importpunkt.
+const CITY_DIST := 40
+static func _tariff_dist(dist: int) -> float:
+	return float(mini(dist, CITY_DIST)) + float(maxi(0, dist - CITY_DIST)) * 0.3
 
 
 ## Massengut (Rohstoffe der Schwerindustrie): Kipper/Ganzzug statt Stadtlieferdienst - je Ladeeinheit und Feld deutlich guenstiger,
@@ -1079,7 +1086,7 @@ const BULK := ["eisenerz", "kohle", "kalkstein", "rohmaterial", "naturstein", "k
 func freight_dist(dist: int, item: String, qty: int) -> float:
 	if item in BULK:
 		return snappedf(Retail.FREIGHT_BASE + float(dist) * (0.3 + float(units(item, qty)) / 30.0), 1.0)
-	return snappedf(Retail.FREIGHT_BASE + float(dist) * (1.0 + float(units(item, qty)) / 8.0), 1.0)
+	return snappedf(Retail.FREIGHT_BASE + _tariff_dist(dist) * (1.0 + float(units(item, qty)) / 8.0), 1.0)
 
 
 ## Fracht fuer eine Lieferung (alle Quellen zu gleichen Bedingungen, siehe freight).
