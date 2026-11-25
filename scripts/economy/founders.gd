@@ -42,7 +42,7 @@ var refusals: Array = []             # {tag, stadt, branche, grund}
 var topups := {}                     # Firma -> Nachschuss des Kapitalgebers fuer das Gruendungsziel (hoechstens einmal)
 const START_FLOOR := 10000.0
 const START_TOPUP := 30000.0
-const START_EVERY_DAYS := 10       # Bergwerk blockiert (Kasse leer): Kapitalgeber helfen hoechstens alle 10 Tage erneut
+const START_EVERY_DAYS := 5        # Bergwerk blockiert (Kasse leer): Kapitalgeber helfen bei jeder Gruenderpruefung (zuerst, vor neuen Laeden)
 const WILD_DAILY_INFLOW := 4000.0
 const TOPUP_TARGET := 55000.0        # Bargeld fuer Bergwerksgruendung (Gebaeude 30.000) plus Betriebsreserve
 
