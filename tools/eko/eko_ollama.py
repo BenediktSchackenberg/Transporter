@@ -982,7 +982,10 @@ class Agent:
         first = firm_of(self.world.observe())
         open_sites = [s for s in (first.get("baustellen") or []) if isinstance(s, dict) and s.get("status") in ("genehmigung", "material", "bau")]
         lager0 = first.get("grosslager") or {}
-        if not open_sites and not lager0.get("wartende_baustoffe") and not lager0.get("hubschrauber"):
+        heli0 = lager0.get("hubschrauber") or {}
+        # 25.11.: jede Firma hat einen Hubschrauber – nur ein beladener oder gebuchter zaehlt als Lieferung (Greta wartete 2 h vergeblich)
+        heli_busy = isinstance(heli0, dict) and bool(heli0.get("ladung") or heli0.get("wartende_fluege"))
+        if not open_sites and not lager0.get("wartende_baustoffe") and not heli_busy:
             # 24.11.: Greta wartete nach ihrem ersten fertigen Haus ueber 40 Minuten auf "projekt" ohne offene Baustelle
             return {"ok": False, "msg": "Du hast keine offene Baustelle und keine wartende Lieferung – Warten bringt nichts. "
                     "Lege ein neues Haus an (Firma {aktion: {action: \"haus_bauen\", typ: \"einfamilienhaus\"}}) oder tu etwas anderes."}

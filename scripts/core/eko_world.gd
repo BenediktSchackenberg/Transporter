@@ -2594,6 +2594,7 @@ const FIRM_ACTIONS := [
 	"schedule_rest", "offer_training", "request_replacement_worker",
 	# Hof und Bauen
 	"rent_depot", "place_building", "build_office", "upgrade_office", "install_internet", "free_build", "create_stone_work", "hub_buy", "call_material_heli",
+	"buy_supplies",   # 25.11.: Meldungen bei leerem Tank nennen buy_supplies (Diesel an der Tankstelle) – war fuer Wesen gesperrt
 	# Betriebe: gruenden, ausbauen, Personal zuordnen, Preise, Bergbau, Grundstuecke, Handel mit Grosslager und Bauhof
 	"found_business", "upgrade_business", "close_business", "set_business_price", "set_hotel_price", "set_venue_price", "buy_it_service",
 	"assign_staff", "explore_deposit", "request_mining",

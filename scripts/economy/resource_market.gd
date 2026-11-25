@@ -12,6 +12,7 @@ const PUMP_LITERS_PER_MIN := 30.0       # Zapfgeschwindigkeit je Saeule
 const TANKER_ORDER_BELOW := 0.35        # Bestellung unter diesem Fuellstand
 const WHOLESALE_FACTOR := 0.86          # Einkaufspreis des Betreibers (Anteil Referenzpreis)
 const BACKGROUND_L_PER_DAY := 5000.0    # Verkauf an Haushalte (Privatfahrzeuge) in der ganzen Stadt je Spieltag, verteilt auf alle Tankstellen
+const BACKGROUND_REF_RESIDENTS := 1000.0  # ab so vielen Einwohnern voller Haushaltsabsatz, darunter anteilig
 const STATION_WAGE_PER_MONTH := 400.0   # Personal je Tankstelle
 const OPERATOR_RESERVE := 80000.0       # darueber hinaus gehende Gewinne werden zur Haelfte ausgeschuettet
 
@@ -227,12 +228,14 @@ func _daily_stations() -> void:
 	var now: float = sim.game_min
 	var gas := 0
 	var stations := supplies.values().filter(func(x): return x.kind == "fuel").size()
+	# 25.11.: Haushaltsabsatz nach Einwohnern – in der Wildnis (27 Einwohner) leerten 5000 l/Tag die einzige Tankstelle 96 Tage lang
+	var households := clampf(float(sim.citizens.population()) / BACKGROUND_REF_RESIDENTS, 0.0, 1.0) if sim.citizens != null else 1.0
 	for sid in supplies:
 		var s: Dictionary = supplies[sid]
 		if s.kind != "fuel":
 			continue
 		gas += 1
-		var sold := minf(BACKGROUND_L_PER_DAY / maxf(float(stations), 1.0), float(s.stock))
+		var sold := minf(BACKGROUND_L_PER_DAY * households / maxf(float(stations), 1.0), float(s.stock))
 		if sold > 0.0:
 			var pay := sold * fuel_price(s)
 			s.stock = float(s.stock) - sold

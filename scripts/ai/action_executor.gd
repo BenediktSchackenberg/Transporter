@@ -215,6 +215,12 @@ static func normalize(action: Dictionary) -> Dictionary:
 				name = part.strip_edges()
 				a["action"] = name
 				break
+	# 25.11.: Viktor schrieb buy_supplies {item: diesel, qty: 100} (Form von hub_buy); die Bezugsquelle waehlt dann _alias
+	if name == "buy_supplies":
+		if a.get("resource_id") == null and a.get("item") != null:
+			a["resource_id"] = str(a.item)
+		if a.get("amount") == null and a.get("qty") != null:
+			a["amount"] = a.qty
 	# Weitere Schluesselformen kleiner Modelle (Listen unter anderem Namen, Auftrags-/Fahrzeug-/Angebotsnummer unter einem Fantasienamen)
 	var ctx_keys: Dictionary = {
 		"vehicle_id": ["vehicles", "vehicle_ids", "truck_id", "trucks", "target_vehicles", "fahrzeug"],
