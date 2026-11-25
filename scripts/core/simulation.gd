@@ -831,6 +831,8 @@ func _update_vehicle_inner(v: FleetVehicle, dt: float) -> void:
 func _drive(v: FleetVehicle, dt: float) -> void:
 	if driver_of(v) == null and v.state != "to_workshop":
 		v.state = "idle"
+		v.path.clear()   # 25.11.: sonst bleibt ein unsichtbar "fahrendes" Hindernis mit Restweg auf der Strasse (Collisions._standing)
+		v.path_i = 0
 		_trip_why = "ohne_fahrer"
 		return
 	if not v.arrived() and nav.barriers.has(v.next_tile()):
@@ -843,6 +845,10 @@ func _drive(v: FleetVehicle, dt: float) -> void:
 			return   # vorerst kein Weg: warten
 	if _is_blocked(v):
 		_trip_why = "blockiert"
+		if v.wait_time >= 300.0 and v.wait_time < 300.15 and collisions.last_blocker != null:   # einmalig: wer blockiert so lange?
+			var bl: Mover = collisions.last_blocker
+			log_event("%s steht lange blockiert bei %s: Hindernis %s bei %s (%s, angekommen %s)." % [v.display_name(), str(v.tile()), str(_desc.get(bl, "?")),
+				str(bl.tile()), str(bl.get("state")) if bl is FleetVehicle else "-", bl.arrived()], "warn", v.owner)
 		if v.lane == 0.0 and v.wait_time > 3.0 and collisions.last_blocker != null:   # Gelaende-Lkw faehrt aussen herum
 			_evade(v, collisions.last_blocker)
 		return

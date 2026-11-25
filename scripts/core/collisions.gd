@@ -62,7 +62,7 @@ func _blocked(m: Mover, hash: Dictionary) -> bool:
 				continue
 			var side := absf(rel.cross(m.heading))
 			var d := m.heading.dot(o.heading)
-			var standing: bool = o.arrived() or _is_wreck(o)
+			var standing: bool = _standing(o)
 			if standing and not _is_wreck(o) and not _roadside_repair(o) and (o.tile() == m.goal or nt == m.goal):
 				continue   # Stellplatz/Rampe am eigenen Ziel: dort duerfen mehrere stehen
 			if standing and not _roadside_repair(o) and m.wait_time > OVERTAKE_S:
@@ -105,12 +105,12 @@ func _step_hits(m: Mover, hash: Dictionary) -> bool:
 			seen[o] = true
 			if o.arrived() and not _is_wreck(o) and not _roadside_repair(o) and (o.tile() == m.goal or npt == m.goal):
 				continue
-			if (o.arrived() or _is_wreck(o)) and not _roadside_repair(o) and m.wait_time > OVERTAKE_S:
+			if _standing(o) and not _roadside_repair(o) and m.wait_time > OVERTAKE_S:
 				continue   # Ueberholen eines stehenden Fahrzeugs
 			# naechster Punkt der ganzen Schrittstrecke, nicht nur ihr Ende (23.11.: an Kreuzungen streifte der Weg das andere
 			# Fahrzeug, obwohl Anfang und Ende weit genug weg lagen)
 			var dn: float = o.pos.distance_to(Geometry2D.get_closest_point_to_segment(o.pos, m.pos, np))
-			if dn < CRASH + 1.0 and dn < m.pos.distance_to(o.pos) and (o.arrived() or _is_wreck(o) or m.get_instance_id() > o.get_instance_id()):
+			if dn < CRASH + 1.0 and dn < m.pos.distance_to(o.pos) and (_standing(o) or m.get_instance_id() > o.get_instance_id()):
 				last_blocker = o
 				return true
 	return false
@@ -127,6 +127,14 @@ func _around(a: Vector2i, b: Vector2i) -> Array:
 
 func _is_wreck(o) -> bool:
 	return o.wreck_until > sim.sim_time
+
+
+## Faehrt dieses Hindernis nicht? Angekommen, Unfallwagen oder Lkw ausserhalb eines Fahrzustands (idle ohne Fahrer, Panne ...).
+## 25.11.: Ein Lkw, der unterwegs ohne Fahrer "idle" wurde, behielt seinen Restweg, galt als fahrend und war nie zu ueberholen –
+## Gretas Gelaende-Lkw stand 70 Spieltage "blockiert" (42 gescheiterte Auftraege); nach dem Neuladen war das Hindernis weg.
+const DRIVING := ["to_pickup", "to_dropoff", "returning", "to_workshop", "to_dispatch", "erkunden"]
+func _standing(o) -> bool:
+	return o.arrived() or _is_wreck(o) or (o is FleetVehicle and str(o.state) not in DRIVING)
 
 
 func _roadside_repair(o: Mover) -> bool:
