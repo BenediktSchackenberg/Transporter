@@ -21,6 +21,7 @@ const RAM_REACH := 22.0
 const STEP_LOOK := 12.0
 const STUCK_S := 50.0       # einseitig blockiert (Hindernis zaehlt keine Wartezeit): danach vorbeifahren
 const JAM_S := 20.0         # gegenseitige Blockade: nach so vielen Sekunden wird aufgeloest
+const PASS_S := 3.0         # so lange darf das freigegebene Fahrzeug eines Blockadekreises an wartenden Fahrzeugen vorbei (2,5 Felder/s)
 const OVERTAKE_S := 5.0     # so lange hinter einem stehenden Fahrzeug, dann wird ueberholt     # so weit (Weltpixel) wird der naechste Schritt vorausberechnet
 
 var sim
@@ -28,6 +29,9 @@ var last_blocker: Mover = null
 var stats := {"unfaelle": 0, "rammstoesse": 0}
 var log: Array = []         # letzte Unfaelle {t, text}
 var _cool := {}             # Paar-Schluessel -> sim_time (kein Doppelunfall)
+var _waits_for := {}        # Mover -> [Blocker, sim_time] aus der letzten Pruefung (Erkennung von Blockadekreisen)
+var _inside := {}           # Paar-Schluessel -> sim_time: standen schon ineinander (kein neuer Unfall, solange das anhaelt)
+var _ghost := {}            # Mover -> bis sim_time: darf zur Aufloesung eines Blockadekreises an wartenden Fahrzeugen vorbei
 
 
 func setup(simulation) -> void:
@@ -39,7 +43,61 @@ func blocked(m: Mover, hash: Dictionary) -> bool:
 	last_blocker = null
 	if m.arrived():
 		return false
-	return _blocked(m, hash)
+	if not _blocked(m, hash):
+		_waits_for.erase(m)
+		return false
+	if last_blocker != null:
+		if _waits_for.size() > 400:
+			_purge()
+		_waits_for[m] = [last_blocker, sim.sim_time]
+		if m.wait_time > JAM_S and _breaks_cycle(m):
+			_ghost[m] = sim.sim_time + PASS_S
+			last_blocker = null
+			if not _blocked(m, hash):   # an stehenden Fahrzeugen vorbei, fahrende zaehlen weiter
+				_waits_for.erase(m)
+				return false
+			if last_blocker != null:
+				_waits_for[m] = [last_blocker, sim.sim_time]
+	return true
+
+
+## Aufloesung eines Blockadekreises: m darf kurz an Fahrzeugen vorbei, die selbst gerade warten (die fahren nicht in es hinein).
+func _ignored(m: Mover, o) -> bool:
+	return float(_ghost.get(m, -1.0)) > sim.sim_time and o.wait_time > 0.0
+
+
+## Kein Unfall waehrend und kurz nach einer Aufloesung: die Fahrzeuge stehen dabei ineinander.
+func _passing(a: Mover, b: Mover) -> bool:
+	return float(_ghost.get(a, -1.0)) > sim.sim_time - 5.0 or float(_ghost.get(b, -1.0)) > sim.sim_time - 5.0
+
+
+## Partie 25.11.: Dienstwagen des Buergermeisters und ein Auto standen beide in einer Kreuzung – das Auto liess den Wagen
+## vor ("schon in der Kreuzung"), der Wagen wartete auf das Auto (Schrittpruefung, hoehere Kennung wartet). Dahinter stauten
+## sich alle Lkw und Autos auf Dauer. Warten Fahrzeuge im Kreis aufeinander, faehrt das mit der kleinsten Kennung zuerst.
+func _breaks_cycle(m: Mover) -> bool:
+	var low := m.get_instance_id()
+	var o = _waits_for[m][0]
+	for i in 8:
+		if o == m:
+			return m.get_instance_id() == low
+		var e: Array = _waits_for.get(o, [])
+		if e.is_empty() or sim.sim_time - float(e[1]) > 1.0 or not is_instance_valid(o):
+			return false
+		low = mini(low, o.get_instance_id())
+		o = e[0]
+	return false
+
+
+func _purge() -> void:
+	for k in _waits_for.keys():
+		if not is_instance_valid(k) or sim.sim_time - float(_waits_for[k][1]) > 5.0:
+			_waits_for.erase(k)
+	for k in _inside.keys():
+		if sim.sim_time - float(_inside[k]) > 1.0:
+			_inside.erase(k)
+	for k in _ghost.keys():
+		if not is_instance_valid(k) or float(_ghost[k]) < sim.sim_time - 5.0:
+			_ghost.erase(k)
 
 
 func _blocked(m: Mover, hash: Dictionary) -> bool:
@@ -50,7 +108,7 @@ func _blocked(m: Mover, hash: Dictionary) -> bool:
 	var seen := {}
 	for t in _around(cur, nt):   # Nachbarfelder mit: das Verzeichnis ist vom Schrittbeginn, andere sind inzwischen weitergefahren
 		for o in hash.get(t, []):
-			if o == m or seen.has(o):
+			if o == m or seen.has(o) or _ignored(m, o):
 				continue
 			seen[o] = true
 			var rel: Vector2 = o.pos - m.pos
@@ -100,7 +158,7 @@ func _step_hits(m: Mover, hash: Dictionary) -> bool:
 	var seen := {}
 	for t in _around(m.tile(), npt):
 		for o in hash.get(t, []):
-			if o == m or seen.has(o):
+			if o == m or seen.has(o) or _ignored(m, o):
 				continue
 			seen[o] = true
 			if o.arrived() and not _is_wreck(o) and not _roadside_repair(o) and (o.tile() == m.goal or npt == m.goal):
@@ -110,7 +168,8 @@ func _step_hits(m: Mover, hash: Dictionary) -> bool:
 			# naechster Punkt der ganzen Schrittstrecke, nicht nur ihr Ende (23.11.: an Kreuzungen streifte der Weg das andere
 			# Fahrzeug, obwohl Anfang und Ende weit genug weg lagen)
 			var dn: float = o.pos.distance_to(Geometry2D.get_closest_point_to_segment(o.pos, m.pos, np))
-			if dn < CRASH + 1.0 and dn < m.pos.distance_to(o.pos) and (_standing(o) or m.get_instance_id() > o.get_instance_id()):
+			# Wer selbst gerade wartet, faehrt nicht weg: dann wartet auch die kleinere Kennung (25.11.: sie fuhr in den Wartenden hinein)
+			if dn < CRASH + 1.0 and dn < m.pos.distance_to(o.pos) and (_standing(o) or o.wait_time > 0.0 or m.get_instance_id() > o.get_instance_id()):
 				last_blocker = o
 				return true
 	return false
@@ -143,6 +202,8 @@ func _roadside_repair(o: Mover) -> bool:
 
 ## Nach der Bewegung: Beruehrungen sind Unfaelle (oder ein gewolltes Rammen).
 func check_accidents(hash: Dictionary, describe: Dictionary) -> void:
+	if _inside.size() > 200:
+		_purge()
 	for t in hash:
 		var list: Array = hash[t]
 		if list.size() < 2:
@@ -155,9 +216,13 @@ func check_accidents(hash: Dictionary, describe: Dictionary) -> void:
 					continue
 				if a.heading.dot(b.heading) <= -0.5 and absf((b.pos - a.pos).cross(a.heading)) >= 4.0:
 					continue   # Gegenverkehr nebeneinander (Spurwechsel beim Abbiegen) – kein Zusammenstoss
-				if a.arrived() or b.arrived() or a.tile() == a.goal or b.tile() == b.goal or _is_wreck(a) or _is_wreck(b) 						or a.pass_until > sim.sim_time or b.pass_until > sim.sim_time or _towed(a) or _towed(b):
-					continue   # Stellplatz, Rampe, Ziel: dort stehen Fahrzeuge dicht beieinander
 				var key := "%d|%d" % [mini(a.get_instance_id(), b.get_instance_id()), maxi(a.get_instance_id(), b.get_instance_id())]
+				var was_inside: bool = sim.sim_time - float(_inside.get(key, -999.0)) < 1.0
+				_inside[key] = sim.sim_time
+				if was_inside:
+					continue   # 25.11.: standen schon ineinander (Wrack, Aufloesung) – sonst Kettenunfaelle alle 100 s in derselben Kreuzung
+				if a.arrived() or b.arrived() or a.tile() == a.goal or b.tile() == b.goal or _is_wreck(a) or _is_wreck(b) 						or a.pass_until > sim.sim_time or b.pass_until > sim.sim_time or _towed(a) or _towed(b) or _passing(a, b):
+					continue   # Stellplatz, Rampe, Ziel: dort stehen Fahrzeuge dicht beieinander
 				if sim.sim_time - float(_cool.get(key, -999.0)) < WRECK_S * 2.0:
 					continue
 				var a_rams: bool = a is FleetVehicle and not (a as FleetVehicle).ram.is_empty() and int(a.ram.get("vehicle", -1)) == _vid(b)

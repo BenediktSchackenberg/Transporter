@@ -46,6 +46,7 @@ func _initialize() -> void:
 	test_names.append("test_wildnis_log_fixes")
 	test_names.append("test_wildnis_hub_supply")
 	test_names.append("test_collisions")
+	test_names.append("test_junction_gridlock")
 	test_names.append("test_workshop_stall_recovery")
 	test_names.append("test_wildnis_helpers")
 	test_names.append("test_town_plan")
@@ -8839,6 +8840,43 @@ func test_collisions() -> void:
 	var hit := _run_until(w, func(): return int(w.collisions.stats.rammstoesse) > 0, 3000)
 	ok(hit and t1.condition < 100.0 and t0.condition < 100.0, "Rammstoß: Ziel %d %%, eigener Lkw %d %%" % [int(t1.condition), int(t0.condition)])
 	ok(w.rivalry.get_tension(cid0, cid1) > 0.0, "Spannung zur gerammten Firma steigt")
+
+
+## Partie 25.11.: Dienstwagen und Auto standen beide in einer Kreuzung und warteten aufeinander; dahinter stand aller Verkehr.
+func test_junction_gridlock() -> void:
+	var s := new_sim(2)
+	s.traffic.clear()
+	var x: Vector2i = Vector2i(-1, -1)
+	for q in s.city.intersections:
+		if s.city.road_mask(q) == 15 and s.city.road_mask(q + Vector2i(0, -2)) != 0 and s.city.road_mask(q + Vector2i(-2, 0)) != 0 				and s.city.is_road(q + Vector2i(0, -2)) and s.city.is_road(q + Vector2i(-2, 0)) and s.city.is_road(q + Vector2i(0, 1)) and s.city.is_road(q + Vector2i(1, 0)):
+			x = q
+			break
+	ok(x != Vector2i(-1, -1), "Kreuzung mit vier Armen gefunden")
+	var a := Mover.new()
+	a.set_path([x + Vector2i(0, 1), x, x + Vector2i(0, -1), x + Vector2i(0, -2)] as Array[Vector2i])
+	a.path_i = 1
+	a.pos = s.city.tile_center(x) + Vector2(1, 0)
+	a.heading = Vector2(0.18, -0.98).normalized()
+	var b := Mover.new()
+	b.set_path([x + Vector2i(1, 0), x, x + Vector2i(-1, 0), x + Vector2i(-2, 0)] as Array[Vector2i])
+	b.path_i = 1
+	b.pos = s.city.tile_center(x) + Vector2(11, -4)
+	b.heading = Vector2(-0.96, -0.27).normalized()
+	s.traffic.append(a)
+	s.traffic.append(b)
+	s._rebuild_hash()
+	ok(s._is_blocked(a) and s._is_blocked(b), "Ausgangslage: beide warten aufeinander")
+	var a0 := a.pos
+	var b0 := b.pos
+	for i in 600:
+		s._rebuild_hash()
+		for m in [a, b]:
+			if not m.arrived() and not s._is_blocked(m):
+				m.advance(0.1, 1.0)
+		s.collisions.check_accidents(s._hash, s._desc)
+		s.sim_time += 0.1
+	ok(a.pos.distance_to(a0) > 40.0 and b.pos.distance_to(b0) > 40.0, "Blockade aufgelöst: beide fahren weiter (%.0f / %.0f px)" % [a.pos.distance_to(a0), b.pos.distance_to(b0)])
+	ok(int(s.collisions.stats.unfaelle) == 0, "Auflösung ohne Unfall (%d)" % int(s.collisions.stats.unfaelle))
 
 
 ## Benedikt 18.11.: Tageloehner bauen auch ohne den Inhaber; Kauflimit im Grosslager; kuerzere Bauzeiten.
