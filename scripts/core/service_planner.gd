@@ -10,7 +10,8 @@ extends RefCounted
 ##    handeln zusaetzlich ueber ihre Aktionen kommunal_bauen, kommunal_fahrzeug, kommunal_schliessen und regionalrat_antrag. Jede Entscheidung steht mit Begruendung im Protokoll.
 
 const EVERY := 5
-const BUILD_DAYS := {"FW-01": 20, "RW-01": 14, "KH-01": 40, "BH-01": 14, "VB-01": 16, "SC-01": 30, "KI-01": 16, "RC-01": 14,
+# WT-01 (25.11.): kleiner Hochbehaelter 2x2 – mit 20 Tagen stand Sonnenbucht wochenlang ohne Wasserdruck
+const BUILD_DAYS := {"WT-01": 8, "FW-01": 20, "RW-01": 14, "KH-01": 40, "BH-01": 14, "VB-01": 16, "SC-01": 30, "KI-01": 16, "RC-01": 14,
 	"FW-02": 30, "FW-03": 45, "FW-04": 60, "FW-05": 30, "FW-06": 40,
 	"RD-02": 20, "KH-02": 60, "KH-03": 90, "KH-04": 20, "PO-02": 30, "PO-03": 45}
 const IDLE_CLOSE_DAYS := 30
