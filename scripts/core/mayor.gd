@@ -793,6 +793,7 @@ func on_day(_day: int) -> void:
 		elif sim.eko != null:
 			if facility_access().is_empty():
 				pressure_tank()
+			auto_district()
 	_refresh_airport_reservation()
 	if _region():
 		_arrivals_town()
@@ -1531,6 +1532,31 @@ func _hub_road_project(cells: Array, ref := "anschluss", reason := "", what := "
 ## 25.11.: Der Hochbehaelter Nordost von Morgenwiek stand ohne Strasse da (Zufahrtsfeld keine Strasse, im Umkreis von 3 Feldern
 ## keine) – er speiste nie ins Netz, und keine KI-Aktion konnte das beheben. Das Bauamt legt die Zufahrt zu stadteigenen
 ## Wasseranlagen selbst an: kuerzeste Strasse vom Netz des Rathauses zum Zufahrtsfeld der Anlage.
+## 25.11.: Wildnis – haben Wohnungssuchende keinen Bauplatz (Bautraeger findet kein Grundstueck) und ist kein Wohnviertel in
+## Planung oder Erschliessung, plant das Bauamt selbst ein neues Wohnviertel am besten Erweiterungsstandort und erschliesst es.
+## Liorklippe stand bei 23 Einwohnern: alle Viertel erschlossen, nur Restflaechen fuer Doppelhaeuser.
+func auto_district() -> Dictionary:
+	if waiting <= 0 or sim.town_plan == null or not sim.town_plan.has(town):
+		return {}
+	var P = sim.town_plan
+	for v in P.of(town).get("viertel", []):
+		if str(v.zone) in ["wohnen", "mischgebiet"] and str(v.status) in ["entwurf", "in_erschliessung"]:
+			if str(v.status) == "entwurf":
+				return _develop_district({"viertel": v.id, "reason": "Bauamt: Wohnungssuchende ohne Bauplatz"})
+			return {}
+	var dd: Dictionary = Planning.DEFS["mehrfamilienhaus"]
+	if not (sim.sites.rank(town, {"w": int(dd.w), "h": int(dd.h), "art": "wohnen", "zones": ["wohnen", "mischgebiet"]}).list as Array).is_empty():
+		return {}
+	var spots: Array = P.expansion_sites(town)
+	if spots.is_empty():
+		return {}
+	var r: Dictionary = P.plan_district(town, {"mitte": spots[0].feld, "zone": "wohnen", "name": "Neues Wohnviertel", "reason": "%d Haushalte suchen eine Wohnung, kein Bauplatz für Mehrfamilienhäuser" % waiting})
+	if not bool(r.get("ok", false)):
+		return r
+	sim.log_event("%s: Bauamt plant %s als neues Wohnviertel bei %s." % [town_label(), str(r.viertel), str(spots[0].feld)], "info")
+	return _develop_district({"viertel": r.viertel, "reason": "Bauamt: Wohnungssuchende ohne Bauplatz"})
+
+
 ## 25.11.: Wohnungen und Betriebe ohne Leitungsdruck (zu weit von Wasserwerk und Hochbehaelter) – das Bauamt beschliesst selbst
 ## einen Hochbehaelter beim trockenen Stadtteil. Bisher bot die Standortliste WT-01 nur an, solange die Stadt gar keinen hatte.
 func pressure_tank() -> Dictionary:
