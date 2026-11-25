@@ -16,6 +16,8 @@ const CHECK_DAYS := 5
 const STREAK := 3
 const MAX_PER_TOWN := 5              # ursprunglicher Unternehmer + bis zu vier Gruender (konfigurierbar ueber max_per_town)
 const COOLDOWN_DAYS := 12
+const WILD_COOLDOWN_DAYS := 2        # Wildnis: Laeden einer jungen Stadt nacheinander, nicht im 12-Tage-Takt
+const WILD_MAX_PER_TOWN := 8
 const CAPITAL := 60000.0
 const CAPITAL_BY_BRANCH := {"bergwerk": 120000.0, "stahlwerk": 150000.0, "kokerei": 110000.0}
 const POP_PER_FIRM := 40.0           # Standard fuer pop_per_firm: neue Gruender erst ab so vielen Einwohnern je bestehendem Unternehmen (Messung 14.11.: 10 Firmen
@@ -177,14 +179,20 @@ func _refuse(town: int, branch: String, why: String) -> Dictionary:
 ## Gruendungsversuch. Prueft Quote, Abklingzeit, Standort, Personal, Finanzierung; legt dann die Company an und gruendet den Betrieb.
 func try_found(town: int, branch: String, reason: String) -> Dictionary:
 	var day := GameCalendar.day_of(sim.game_min)
-	if active_home(town) >= max_per_town:
+	# 25.11. (Wildnis, Ziel "Leben und Gewerbe"): jede Stadt ist ein eigener Markt – mehr Gruender je Stadt, kurze Abklingzeit, und
+	# die regionale Marktsaettigung zaehlt nicht (die Baeckerei in Sonnenbucht sperrte die erste Baeckerei in Liorklippe).
+	var quota := maxi(max_per_town, WILD_MAX_PER_TOWN) if sim.wildnis else max_per_town
+	var cooldown := WILD_COOLDOWN_DAYS if sim.wildnis else COOLDOWN_DAYS
+	if active_home(town) >= quota:
 		return _refuse(town, branch, "Gründerquote erreicht (%d aktive Unternehmen mit Heimat %s)" % [active_home(town), sim.towns.name_of(town)])
-	if branch not in INDUSTRY and last_found.has(town) and day - int(last_found[town]) < COOLDOWN_DAYS:
-		return _refuse(town, branch, "Abklingzeit nach der letzten Gründung (bis Tag %d)" % (int(last_found[town]) + COOLDOWN_DAYS))
+	if branch not in INDUSTRY and last_found.has(town) and day - int(last_found[town]) < cooldown:
+		return _refuse(town, branch, "Abklingzeit nach der letzten Gründung (bis Tag %d)" % (int(last_found[town]) + cooldown))
 	var spec: Dictionary = Businesses.branches().get(branch, {})
 	if spec.is_empty():
 		return _refuse(town, branch, "unbekannte Branche")
 	var via: Dictionary = sim.retail.counter_viable(branch)
+	if not bool(via.ok) and sim.wildnis and str(via.msg).begins_with("Markt gesättigt"):
+		via = {"ok": true}
 	if not bool(via.ok):
 		return _refuse(town, branch, str(via.msg).left(120))
 	# 25.11.: Marktgroesse je Stadt (Einwohner der Stadt gegen ihre Betriebe) statt Region gegen alle Firmen – mit zwei KI-Unternehmern
