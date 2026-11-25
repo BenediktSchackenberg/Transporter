@@ -9090,6 +9090,14 @@ func test_wildnis_found() -> void:
 	B.akku = 100.0
 	E.homes.tick(60.0 * 30.0)
 	ok(hs.status == "fertig" and s.town_ready(k) and int(s.city.towns[k].town_hall) >= 0, "Bürgeramt fertig – die Stadt ist gegründet (%s)" % str(hs.get("blockiert", hs.status)))
+	# 25.11.: spaeter gebaute Leitung ausserhalb des Siedlungsrechtecks (Zuleitung vom Wasserwerk) uebersteht das Laden
+	var st_rect: Array = s.settlements[str(k)].rect
+	var outside := Vector2i(int(st_rect[0]) - 20, int(st_rect[1]) - 20)
+	s.water.main_cells(k, "wasser")["%d:%d" % [outside.x, outside.y]] = true
+	var sl2 := Simulation.from_dict(JSON.parse_string(JSON.stringify(s.to_dict())))
+	ok(sl2.water.main_cells(k, "wasser").has("%d:%d" % [outside.x, outside.y]), "gebaute Wasserleitung außerhalb der Siedlung bleibt nach dem Laden erhalten")
+	var sl3 := Simulation.from_dict(JSON.parse_string(JSON.stringify(sl2.to_dict())))
+	ok(sl3.water.main_cells(k, "wasser").has("%d:%d" % [outside.x, outside.y]), "… auch nach dem zweiten Laden")
 	var essential: Array = s.municipal.facilities.values().filter(func(f): return int(f.town) == k and str(f.code) in ["WW-01", "WT-01", "KA-01"])
 	ok(essential.size() >= 2, "Gruendungsstadt erhaelt sofort Bauplaetze fuer die Grundversorgung (%s)" % str(essential.map(func(f): return f.code)))
 	ok(s.towns.mayor(k).hub_blocked() == "", "Materialhubschrauber oeffnet die Bauvergabe vor der Landstrasse")

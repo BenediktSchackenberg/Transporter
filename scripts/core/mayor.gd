@@ -790,6 +790,8 @@ func on_day(_day: int) -> void:
 		# hat ihn aber nur die KI-Aktion). Lindenhaven blieb 96 Tage abgeschnitten – ohne Strasse auch kein Wasser und kein Strom.
 		if sim.eko != null and not bool(sim.eko.settle.road_link(town).get("verbunden", true)):
 			hub_connection()
+		elif sim.eko != null:
+			facility_access()
 	_refresh_airport_reservation()
 	if _region():
 		_arrivals_town()
@@ -1509,20 +1511,66 @@ func _hub_tunnel(linked: Vector2i) -> Dictionary:
 	return {"ref": "tunnel", "tunnel": r}
 
 
-func _hub_road_project(cells: Array) -> Dictionary:
+func _hub_road_project(cells: Array, ref := "anschluss", reason := "", what := "den Straßenanschluss ans Großlager") -> Dictionary:
 	var cost := snappedf(float(cells.size()) * STREET_CELL_COST, 10.0)
 	if cost > available_budget():
 		return {}
 	commitments += cost
-	var prj := {"id": Towns.prefixed(town, "P", _next_project), "kind": "erschliessung", "ref": "anschluss", "parcels": [], "parts": ["strasse"],
+	var prj := {"id": Towns.prefixed(town, "P", _next_project), "kind": "erschliessung", "ref": ref, "parcels": [], "parts": ["strasse"],
 		"cost": cost, "days": maxi(3, int(ceil(cells.size() / 12.0))), "status": "ausgeschrieben", "day": _today(), "tender": {"opened_day": _today(), "bids": [], "by": "Bauamt"},
 		"material": {}, "viertel": "Anschluss", "road_plan": cells.map(func(q): return [q.x, q.y]),
-		"reason": "Straßenanschluss ans Großlager: ohne ihn liefert niemand Baumaterial ins Stadtlager (%d Felder)." % cells.size()}
+		"reason": reason if reason != "" else "Straßenanschluss ans Großlager: ohne ihn liefert niemand Baumaterial ins Stadtlager (%d Felder)." % cells.size()}
 	_next_project += 1
 	projects[prj.id] = prj
 	sim.access.invalidate_city_reservations()
-	sim.log_event("%s: Bauamt beschließt den Straßenanschluss ans Großlager – %s, %d Felder, %s (Baufirma bringt das Material mit)." % [town_label(), prj.id, cells.size(), Catalog.money(cost)], "info")
+	sim.log_event("%s: Bauamt beschließt %s – %s, %d Felder, %s (Baufirma bringt das Material mit)." % [town_label(), what, prj.id, cells.size(), Catalog.money(cost)], "info")
 	return prj
+
+
+## 25.11.: Der Hochbehaelter Nordost von Morgenwiek stand ohne Strasse da (Zufahrtsfeld keine Strasse, im Umkreis von 3 Feldern
+## keine) – er speiste nie ins Netz, und keine KI-Aktion konnte das beheben. Das Bauamt legt die Zufahrt zu stadteigenen
+## Wasseranlagen selbst an: kuerzeste Strasse vom Netz des Rathauses zum Zufahrtsfeld der Anlage.
+func facility_access() -> Dictionary:
+	for prj in projects.values():
+		if str(prj.get("ref", "")) == "zufahrt_anlage" and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
+			return {}
+	var C: CityData = sim.city
+	var hall: Dictionary = C.building(int(C.towns[town].get("town_hall", -1))) if town < C.towns.size() else {}
+	if hall.is_empty():
+		return {}
+	var tr: Vector2i = hall.road
+	if not C.is_road(tr):
+		for r in range(1, 7):
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					if not C.is_road(tr) and C.is_road(hall.road + Vector2i(dx, dy)):
+						tr = hall.road + Vector2i(dx, dy)
+	if not C.is_road(tr):
+		return {}
+	var core: Dictionary = sim.eko.settle._road_component(tr, {})
+	var plants: Array = sim.municipal.of_town(town).filter(func(f): return str(f.code) in ["WW-01", "WT-01", "KA-01"])
+	for f in plants:
+		var b: Dictionary = C.building(int(f.building))
+		if b.is_empty():
+			continue
+		var goal: Vector2i = b.road
+		if core.has(goal):
+			continue
+		var best := Vector2i(-1, -1)
+		var best_d := 1 << 30
+		for c in core:
+			var d: int = absi(c.x - goal.x) + absi(c.y - goal.y)
+			if d < best_d:
+				best_d = d
+				best = c
+		if best.x < 0 or best_d > 60:
+			continue
+		var cells: Array = sim.eko.settle._road_between(best, goal).filter(func(q): return not C.is_road(q))
+		if cells.is_empty():
+			continue
+		return _hub_road_project(cells, "zufahrt_anlage", "Zufahrt zu %s: ohne Straße speist die Anlage nicht ins Netz und ist für Wartung unerreichbar (%d Felder)." % [str(f.get("name", f.code)), cells.size()],
+			"die Zufahrt zu %s" % str(f.get("name", f.code)))
+	return {}
 
 
 func _plan_infrastructure(a: Dictionary) -> Dictionary:

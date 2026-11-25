@@ -67,6 +67,8 @@ var tight := {}        # Einrichtungs-ID -> Tage in Folge ueber EXPAND_RATIO
 var expansions := {}   # Projekt-ID -> Einrichtungs-ID
 var mains := {"wasser": {}, "abwasser": {}}  # Ort -> verlegte Leitungsfelder; bestehende Startstrassen sind grundversorgt
 var main_projects := {}  # Bauprojekt -> {town, art, cells}
+var anchored := {}       # Stadt (str) -> true: Netz nach der Gruendung schon einmal an den Ort angepasst
+var _legacy_anchor := false   # Spielstand ohne "anchored": gegruendete Staedte gelten als angepasst
 var pending_main_effects: Array = []
 var main_effects: Array = []
 var stats := {"rohrbrueche": 0, "reparaturen": 0, "ausbauten": 0}
@@ -224,8 +226,14 @@ func ensure_mains(k: int) -> void:
 
 ## Die Grundversorgung folgt den Strassen der tatsaechlich gegruendeten Stadt. Vor der
 ## Gruendung angelegte Leitungen um den generierten Ankunftsort gehoeren nicht zu ihr.
+## Nur EINMAL je Stadt: Partie 25.11. – beim Laden lief das jedes Mal und loeschte alle spaeter gebauten Leitungen ausserhalb
+## des Siedlungsrechtecks, darunter die Zuleitung vom Wasserwerk Nordwest. Morgenwiek bezahlte sie mehrfach (T1P45, T1P54),
+## Viktors Betrieb blieb "ausserhalb der Druckzone".
 func reanchor_town(k: int) -> bool:
-	if not sim.wildnis or not sim.town_ready(k):
+	if not sim.wildnis or not sim.town_ready(k) or anchored.has(str(k)):
+		return false
+	anchored[str(k)] = true
+	if _legacy_anchor:
 		return false
 	var settlement: Dictionary = sim.settlements.get(str(k), {})
 	if settlement.is_empty():
@@ -1018,7 +1026,7 @@ func mayor_view(k: int) -> Dictionary:
 func to_dict() -> Dictionary:
 	return {"tariff": tariff, "by_town": by_town, "month": month, "last": last, "storage": storage, "breaks": breaks, "sewage_tariff": sewage_tariff,
 		"sewage": sewage, "sewage_month": sewage_month, "plant_month": plant_month, "plant_last": plant_last, "tight": tight, "expansions": expansions,
-		"stats": stats, "mains": mains, "main_projects": main_projects,
+		"stats": stats, "mains": mains, "main_projects": main_projects, "anchored": anchored,
 		"pending_main_effects": pending_main_effects, "main_effects": main_effects}
 
 
@@ -1042,6 +1050,8 @@ func from_dict(d: Dictionary) -> void:
 	if not mains.has("abwasser"):
 		mains["abwasser"] = {}
 	main_projects = d.get("main_projects", {})
+	anchored = d.get("anchored", {})
+	_legacy_anchor = not d.has("anchored") and not d.is_empty()
 	pending_main_effects = d.get("pending_main_effects", [])
 	main_effects = d.get("main_effects", [])
 	var st0: Dictionary = stats.duplicate()

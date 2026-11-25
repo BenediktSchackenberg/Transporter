@@ -2039,6 +2039,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 			var water_moved := s.water.reanchor_town(k)
 			if power_moved or water_moved:
 				s.log_event("Ladepruefung: Versorgungsnetze an den gegruendeten Ort %s angepasst." % s.towns.name_of(k), "info")
+	s.water._legacy_anchor = false   # alter Spielstand: nur die schon gegruendeten Staedte gelten als angepasst
 	var migrated := s.biz.migrate() if int(d.get("save_version", 1)) < 2 else 0   # Spielstand vor Version 2: Speditionen werden Transportbetriebe
 	if migrated > 0:
 		s.log_event("Spielstand übernommen: %d Speditionen sind jetzt Transportbetriebe ihrer Unternehmer." % migrated, "system")
