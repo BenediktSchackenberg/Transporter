@@ -613,7 +613,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 			reasons.append("setze %s im Betrieb %s ein, der sonst ruht" % [pool[0].name, b.id])
 		elif "recruit_worker" not in planned:
 			var cand := _best_candidate(obs.ressourcen.arbeitskraefte, "verladen")
-			if cand.is_empty():   # Kueche, Theke, Feld brauchen kein Verladen (Messung 14.11.: Restaurants blieben ohne Servicekraft, nie Umsatz)
+			if cand.is_empty() or float(cand.get("anwerbung", 0.0)) > 1500.0:   # Kueche, Theke, Feld brauchen kein Verladen (Messung 14.11.: Restaurants blieben ohne Servicekraft, nie Umsatz); 25.11.: Engel Gruppe zahlte 5.520 EUR Anwerbung
 				cand = _cheapest_worker(obs.ressourcen.arbeitskraefte)
 			if not cand.is_empty() and cash > float(cand.anwerbung) + 1000.0:   # ohne Personal verdient der Betrieb nie (Kneipe Sonnenbucht, 3.013 EUR Kasse)
 				actions.append({"action": "recruit_worker", "worker_id": cand.id})

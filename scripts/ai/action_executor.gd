@@ -346,6 +346,16 @@ static func _unwrap_call(a: Dictionary) -> void:
 var last_act := {}
 
 
+## 25.11. (Wildnis): Gruenderfirmen (Laden, Feld, Bergwerk) betreiben nur ihre Betriebe – fuer alle Wege (Regel-KI, Disposition,
+## Disponent). Sie nahmen sonst Transportauftraege an (Notbetankungen, Abschleppen, Vertragsstrafen), warben, bohrten ohne Bergbauziel
+## und gerieten alle in Zahlungsverzug; Bergwerk und Laeden standen ohne Strom und Personal.
+const FOUNDER_ACTIONS := ["assign_staff", "recruit_worker", "dismiss_worker", "set_business_price", "upgrade_business", "found_business",
+	"explore_deposit", "request_mining", "build_access", "close_business", "repay_loan", "wait", "send_message"]
+const MINING_STEPS := ["explore_deposit", "request_mining", "build_access"]
+func founder_only(cid: int) -> bool:
+	return sim.wildnis and sim.eko != null and sim.eko.firm_being(cid) == "" and sim.founders.history.any(func(h): return int(h.get("firma", -1)) == cid)
+
+
 func execute(cid: int, action: Dictionary, key: String = "", origin: String = "api", ctx: Dictionary = {}) -> Dictionary:
 	action = assist.complete(cid, normalize(action))
 	if key != "" and executed.has(key):
@@ -354,6 +364,10 @@ func execute(cid: int, action: Dictionary, key: String = "", origin: String = "a
 	var check := validate_schema(name, action)
 	if check == "" and not sim.company(cid).is_active() and name != "wait":
 		check = "Das Unternehmen steht unter Insolvenzverwaltung (%s): Aktionen sind gesperrt." % sim.company(cid).status
+	if check == "" and founder_only(cid) and name not in FOUNDER_ACTIONS:
+		check = "Gründerfirma: nur Aktionen für die eigenen Betriebe (%s ist gesperrt)." % name
+	if check == "" and founder_only(cid) and name in MINING_STEPS and sim.company(cid).focus != "bergwerk":
+		check = "Gründerfirma ohne Bergbau-Schwerpunkt: keine Probebohrung oder Abbaurechte."
 	if check != "":
 		var rej := _done(cid, key, name, {"ok": false, "msg": check})
 		sim.decisions.record(cid, origin, action, rej, key)
