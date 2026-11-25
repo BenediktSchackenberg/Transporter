@@ -229,7 +229,7 @@ func accept(project_id: String, builder_id: String) -> Dictionary:
 	var need := float(offer.price) + float(pr.dev_cost) + Planning.TEMP_ACCESS_COST * (1.0 if not pr.missing.is_empty() else 0.0)
 	if pr.client == DEVELOPER and sim.towns.is_region() and not pr.has("advance"):
 		# Anleger zahlen bei Vertragsschluss die Haelfte an (Rest bei Uebergabe): der Bautraeger kann mehrere Haeuser zugleich bauen
-		pr["advance"] = snappedf(need * ADVANCE_SHARE, 1.0)
+		pr["advance"] = snappedf(need * advance_share(), 1.0)
 		sim.economy.transfer("X0", DEVELOPER, float(pr.advance))
 		_log(pr, "Anleger zahlen %s an" % Catalog.money(float(pr.advance)))
 	if available_funds(pr.client) + 0.5 < need and str(pr.client).begins_with("C"):
@@ -267,7 +267,7 @@ func accept_best(project_id: String) -> Dictionary:
 		return {"ok": false, "msg": "Bauvorhaben %s gibt es nicht." % project_id}
 	# Region: die Anleger zahlen beim Vertrag die Hälfte an (accept) – das zählt mit. Sonst passten Mehrfamilienhäuser (~130.000 EUR)
 	# nie in die freie Kasse des Bauträgers und blieben bei "angebote" stehen (Partie 25.11.: nur Doppelhäuser entstanden).
-	var own := (1.0 - ADVANCE_SHARE) if pr.client == DEVELOPER and sim.towns.is_region() and not pr.has("advance") else 1.0
+	var own := (1.0 - advance_share()) if pr.client == DEVELOPER and sim.towns.is_region() and not pr.has("advance") else 1.0
 	var affordable: Array = pr.offers.filter(func(o): return (float(o.price) + float(pr.dev_cost) + (Planning.TEMP_ACCESS_COST if not pr.missing.is_empty() else 0.0)) * own <= available_funds(pr.client) + 0.5)
 	var o := best_offer(affordable, float(pr.base))
 	if o.is_empty():
@@ -808,6 +808,9 @@ const FOUNDING_BUILD_FACTOR := 0.35   # erste bewohnbare Haeuser schneller, dana
 const RESALE_MARGIN := 1.10           # Region: Anleger kaufen fertige Bautraeger-Haeuser (Preis + 10 %), D0 baut damit weiter
 const REGION_MATERIAL_FACTOR := 0.4   # Region: Hausbau braucht weniger Material je Phase (kleinere Lieferungen, Bauhof reicht laenger)
 const ADVANCE_SHARE := 0.5            # Region: davon zahlen sie die Haelfte schon bei Vertragsschluss an
+const WILD_ADVANCE_SHARE := 0.75      # Wildnis (25.11.): Aufbauphase – das Kapital des Bautraegers reichte fuer 4 Haeuser, Liorklippe bekam keins
+func advance_share() -> float:
+	return WILD_ADVANCE_SHARE if sim.wildnis else ADVANCE_SHARE
 const SHOP_PER_RESIDENTS := 15        # Region: ein Laden je 15 Einwohner
 const WILD_SHOP_PER_RESIDENTS := 10   # Wildnis (Benedikt 25.11.: Leben und Gewerbe): ein Laden je 10 Einwohner
 const WORKSHOP_PER_RESIDENTS := 20    # Auch kleine Gründungsstädte brauchen mindestens einen Gewerbebetrieb.
@@ -960,7 +963,7 @@ func _developer_try(cands: Array, def_id: String) -> bool:
 	var probe := {"def": def_id, "design": str(choice.get("id", "")), "floors": floors, "parking": int(Planning.DEFS[def_id].parking), "financing": {"eigenmittel": 1.0e9}}
 	for p in cands:
 		var chk := Planning.assess(p, probe)
-		var own_share := (1.0 - ADVANCE_SHARE) if sim.towns.is_region() else 1.0   # Region: die Anzahlung der Anleger kommt bei Vertragsschluss
+		var own_share := (1.0 - advance_share()) if sim.towns.is_region() else 1.0   # Region: die Anzahlung der Anleger kommt bei Vertragsschluss
 		if not chk.ok or not chk.questions.is_empty() or float(chk.costs.gesamt) * own_share > available_funds(DEVELOPER):
 			continue
 		var res: Dictionary = sim.parcels.reserve(p.id, DEVELOPER)
