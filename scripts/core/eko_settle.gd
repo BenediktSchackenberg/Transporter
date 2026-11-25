@@ -10,8 +10,10 @@ signal airfield_built(cells: Array)
 ## Gruendung (found): Betriebshof und Basis (Stammsitz) am gewaehlten Platz, Land ringsum wird Bauland der kuenftigen Stadt.
 ## Alles Weitere baut die KI selbst (EkoHomes): Buergeramt (danach gibt es die Stadt und den Buergermeister), Haeuser, Strassen.
 
-const MIN_TOWN_DIST := 60       # Abstand zu anderen Siedlungen (Mitte zu Mitte)
-const HUB_DIST := 40            # Abstand zum Grosslager-Gelaende (Benedikt 18.11.: keine Stadt am zentralen Marktplatz)
+const MIN_TOWN_DIST := 160      # Abstand zu anderen Siedlungen (Mitte zu Mitte). Benedikt 25.11.: "die KIs sollen zu Start sehr weit
+                                # auseinander liegen" – mit 60 und Abzug fuer Entfernung zum Grosslager lagen beide Staedte ~100 Felder auseinander
+const HUB_DIST := 80            # Abstand zum Grosslager-Gelaende (Benedikt 18.11.: keine Stadt am zentralen Marktplatz)
+const REGION_R := 90            # Plaetze werden in der eigenen Heimatregion (Ecke der Karte) gesucht
 const HALL_R := 30              # Buergeramt hoechstens so weit vom eigenen Betriebshof (Mitte des 24x24-Stammsitzes; dort entsteht die Stadt)
 const HARBOR_R := 6
 const DEPOSIT_R := 30
@@ -135,7 +137,6 @@ func score_at(cell: Vector2i, verify_base: bool = true) -> Dictionary:
 		out.gruende.append("Lagerstätte %s %d Felder entfernt (Bergwerk)" % [dep_art, dep_d])
 	if hub.x >= 0:
 		var hd := absi(hub.x - cell.x) + absi(hub.y - cell.y)
-		pts -= float(hd) / 40.0
 		out.gruende.append("%d Felder bis zum Großlager" % hd)
 	out.ok = true
 	out.punkte = int(round(pts))
@@ -151,7 +152,7 @@ func best_near(cell: Vector2i, radius: int = 70, n: int = 3) -> Array:
 	var busy: PackedByteArray = w.estates._busy_mask(true)
 	var map_key: String = w.estates._wild_busy_key
 	var hit: Dictionary = _best_cache.get(key, {})
-	if not hit.is_empty() and str(hit.get("map", "")) == map_key and float(_sim().game_min) - float(hit.t) < 120.0:
+	if not hit.is_empty() and str(hit.get("map", "")) == map_key and float(_sim().game_min) - float(hit.t) < 600.0:   # 25.11.: Regionssuche kostet bis 1,4 s
 		return (hit.r as Array).slice(0, n)
 	if _best_cache.size() > 64:
 		_best_cache.clear()
@@ -222,17 +223,17 @@ func found(b: Dictionary, cid: int, cell: Vector2i) -> Dictionary:
 	if maxi(absi(here.x - cell.x), absi(here.y - cell.y)) > ON_SITE:   # 17.11.: Sonnenklippe wurde vom Grosslager aus "eroeffnet"
 		var pre := score_at(cell)   # erst pruefen, ob der Platz ueberhaupt geht – sonst faehrt das Wesen umsonst hin
 		if not pre.ok:
-			return {"ok": false, "msg": "Dieser Platz geht nicht: %s. %s" % [str(pre.get("grund", "")), _suggest(here)], "bewertung": pre}
+			return {"ok": false, "msg": "Dieser Platz geht nicht: %s. %s" % [str(pre.get("grund", "")), _suggest(here, cid)], "bewertung": pre}
 		return {"ok": false, "msg": "Du bist nicht dort (%d Felder entfernt). Fahr erst selbst hin: LKW {ziel: [%d, %d]} – dann Siedlung {feld: [%d, %d]}." % [
 			maxi(absi(here.x - cell.x), absi(here.y - cell.y)), cell.x, cell.y, cell.x, cell.y]}
 	var sc := score_at(cell)
 	if not sc.ok:
-		return {"ok": false, "msg": "Hier geht es nicht: %s. %s" % [str(sc.get("grund", "")), _suggest(here)], "bewertung": sc}
+		return {"ok": false, "msg": "Hier geht es nicht: %s. %s" % [str(sc.get("grund", "")), _suggest(here, cid)], "bewertung": sc}
 	var c = sim.company(cid)
 	if c.ledger.cash < FOUND_COST:
 		return {"ok": false, "msg": "Vermessung und Platz kosten %s, die Firma hat %s." % [Catalog.money(FOUND_COST), Catalog.money(c.ledger.cash)]}
 	if not w.estates.assign_near(str(b.name), cell):
-		return {"ok": false, "msg": "Für deine Basis (24 × 24 Felder) ist hier kein freier Platz – %s" % _suggest(here)}
+		return {"ok": false, "msg": "Für deine Basis (24 × 24 Felder) ist hier kein freier Platz – %s" % _suggest(here, cid)}
 	var ctr: Vector2i = w.estates.center_of(str(b.name))
 	var yard := -1
 	var yard_field := Rect2i()
@@ -665,6 +666,20 @@ func road_link(k: int) -> Dictionary:
 				continue
 			if not C.is_road(q):
 				queue.append(q)
+	# 25.11.: Staedte liegen jetzt weit auseinander (MIN_TOWN_DIST 160) – die Suche ueber das Gelaende reicht dann nicht bis zum
+	# Grosslager. Rueckfall: die naechste Ausfahrt des Grosslagers (gehoert immer zu dessen Strassennetz).
+	var best_d := 1 << 30
+	for ex in (C.hub.get("exits", {}) as Dictionary).values():
+		var e := Vector2i(int(ex[0]), int(ex[1]))
+		if not C.is_road(e):
+			continue
+		for c in core:
+			var dd: int = absi(c.x - e.x) + absi(c.y - e.y)
+			if dd < best_d:
+				best_d = dd
+				out["von"] = [e.x, e.y]
+				out["bis"] = [c.x, c.y]
+				out["felder"] = dd
 	_link_cache[k] = out
 	return out
 
@@ -821,7 +836,7 @@ func _road_between(from: Vector2i, to: Vector2i, planned := {}, forbidden := {})
 	var dirs := [Vector2i(sx, 0), Vector2i(0, sy), Vector2i(-sx, 0), Vector2i(0, -sy)]
 	var bounds := Rect2i(Vector2i(mini(from.x, to.x) - 40, mini(from.y, to.y) - 40),
 		Vector2i(absi(from.x - to.x) + 81, absi(from.y - to.y) + 81))
-	while cursor < todo.size() and cursor < 50000:
+	while cursor < todo.size() and cursor < 250000:   # 25.11.: weit entfernte Staedte (Anschluss ueber 300 Felder)
 		var here: Vector2i = todo[cursor]
 		cursor += 1
 		if here == to:
@@ -847,7 +862,9 @@ func _road_cell_ok(q: Vector2i) -> bool:
 	if C.is_road(q):
 		return true
 	var i := C.idx(q)
-	if C.building_at[i] >= 0 or C.ground[i] in [CityData.G.WATER, CityData.G.RAIL, CityData.G.RUNWAY, CityData.G.QUAY]:
+	# 25.11.: Parkplatz und Vorfeld wandelt der Strassenbau nicht um – die Zufahrt zum Hochbehaelter Nordost (T1P57) hatte dort
+	# 8 Felder Luecke und blieb vom Netz getrennt.
+	if C.building_at[i] >= 0 or C.ground[i] in [CityData.G.WATER, CityData.G.RAIL, CityData.G.RUNWAY, CityData.G.QUAY, CityData.G.PARKING, CityData.G.APRON]:
 		return false
 	if not C.height.is_empty() and C.height[i] > 0:
 		return false
@@ -1156,8 +1173,32 @@ func _apply_airfield_geometry(a: Dictionary) -> void:
 
 
 ## Vorschlag nach einer Ablehnung: der beste erreichbare Platz in der Naehe (mit Weg dorthin), sonst die Richtung zum Weitersuchen.
-func _suggest(here: Vector2i) -> String:
-	var best := reachable_best(here, 70)
+## Heimatregion einer Firma vor der Gruendung: Mitte des generierten Ortes in ihrer Kartenecke (weit weg vom Grosslager und den
+## anderen). Benedikt 25.11.: die Staedte lagen sonst immer dicht beisammen am Grosslager.
+func home_anchor(cid: int) -> Vector2i:
+	var sim = _sim()
+	if cid < 0 or cid >= sim.companies.size():
+		return Vector2i(-1, -1)
+	var k: int = sim.companies[cid].home_town
+	if k < 0 or k >= sim.city.towns.size():
+		return Vector2i(-1, -1)
+	var c: Array = sim.city.towns[k].center
+	return Vector2i(int(c[0]), int(c[1]))
+
+
+func _region_best(cid: int, here: Vector2i) -> Dictionary:
+	var anchor := home_anchor(cid)
+	if anchor.x >= 0:
+		var best := reachable_best(anchor, REGION_R)
+		if not best.is_empty():
+			best["entfernung"] = maxi(absi(int(best.feld[0]) - here.x), absi(int(best.feld[1]) - here.y))
+			best["region"] = [anchor.x, anchor.y]
+			return best
+	return reachable_best(here, 70)
+
+
+func _suggest(here: Vector2i, cid: int = -1) -> String:
+	var best := _region_best(cid, here) if cid >= 0 else reachable_best(here, 70)
 	if best.is_empty():
 		best = reachable_best(here, 130)
 	if best.is_empty():
@@ -1179,20 +1220,20 @@ func obs(b: Dictionary, cid: int) -> Dictionary:
 			"fertige_wohnhaeuser": sim.housing.units.values().filter(func(u): return sim.towns.of_building(int(u.building)) == k).size()}
 	var here: Vector2i = w.tile_of(b)
 	return {"betriebshof": false, "hinweis": "Noch kein Betriebshof. Erkunde das Land (mit deinem Gelände-LKW: LKW {ziel: [x, y]}, oder MoveTo) und eröffne am besten Platz: Siedlung {feld: [x, y]}.",
-		"hier": score_at(here), "beste_plaetze_in_der_naehe": reachable_near(here)}
+		"hier": score_at(here), "heimatregion": home_anchor(cid), "beste_plaetze_in_der_naehe": reachable_near(home_anchor(cid), REGION_R) if home_anchor(cid).x >= 0 else reachable_near(here)}
 
 
 func next_step(b: Dictionary, cid: int) -> String:
 	var sim = _sim()
 	if not sim.wildnis or cid < 0 or founded(sim.companies[cid].home_town):
 		return ""
-	var rb := reachable_best(w.tile_of(b), 70)
+	var rb := _region_best(cid, w.tile_of(b))
 	if rb.is_empty():
 		return "Platz suchen – hier in der Nähe passt nichts, was dein LKW erreicht. Fahr mit dem LKW weiter (LKW {ziel: [x, y]}) und prüfe siedlung.hier."
 	var best: Array = [rb]
 	var f: Array = best[0].feld
 	var here: Vector2i = w.tile_of(b)
 	if maxi(absi(here.x - int(f[0])), absi(here.y - int(f[1]))) > ON_SITE:
-		return "Bester Platz in deiner Nähe: %s (%d Punkte: %s) – hinfahren mit LKW {ziel: %s}, dort Siedlung {feld: %s}." % [
-			str(f), int(best[0].punkte), "; ".join(best[0].gruende), str(f), str(f)]
+		return "Bester Platz in deiner Heimatregion: %s (%d Punkte: %s; %d Felder von hier) – hinfahren mit LKW {ziel: %s}, dort Siedlung {feld: %s}." % [
+			str(f), int(best[0].punkte), "; ".join(best[0].gruende), int(best[0].get("entfernung", 0)), str(f), str(f)]
 	return "Du bist am Platz %s (%d Punkte: %s) – Betriebshof und Basis eröffnen: Siedlung {feld: %s}." % [str(f), int(best[0].punkte), "; ".join(best[0].gruende), str(f)]

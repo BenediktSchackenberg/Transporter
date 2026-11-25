@@ -284,6 +284,16 @@ func main_options(k: int, art: String) -> Array:
 	var built: Dictionary = main_cells(k, art)
 	var target_result: Dictionary = _main_to_unserved_buildings(k, art, built)
 	var needed: Array = target_result.options
+	if needed.is_empty() and art == "wasser" and int(target_result.targets) > 0:
+		# 25.11.: Der kuerzeste Weg vom Netz zu Viktors Betrieb lief ueber verlegte Rohre ohne Druck (Wasserwerk 91 Felder entfernt,
+		# Druckzone 80) – es gab nie eine Option ab dem naeheren Hochbehaelter. Daher je Anlage einzeln von ihrer Zufahrt aus suchen.
+		var seen := {}
+		for src in sources_of(k):
+			for o in _main_to_unserved_buildings(k, art, built, [src]).options:
+				if not seen.has(str(o.id)):
+					seen[str(o.id)] = true
+					needed.append(o)
+		needed = needed.slice(0, 3)
 	if not needed.is_empty():
 		return needed
 	if int(target_result.targets) > 0:
@@ -329,7 +339,7 @@ func main_options(k: int, art: String) -> Array:
 
 ## Bevor weitere freie Straßen versorgt werden, bietet das Bauamt konkrete Wege zu unversorgten
 ## Wohnungen und Betrieben an. Die KI wählt weiterhin selbst zwischen den geprüften Trassen.
-func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Dictionary:
+func _main_to_unserved_buildings(k: int, art: String, built: Dictionary, seeds: Array = []) -> Dictionary:
 	var C: CityData = sim.city
 	var sources: Dictionary = built.duplicate()
 	var pressure: Dictionary = {}
@@ -361,7 +371,7 @@ func _main_to_unserved_buildings(k: int, art: String, built: Dictionary) -> Dict
 		return {"options": [], "targets": 0}
 	var queue: Array[Vector2i] = []
 	var parent := {}
-	for key in sources:
+	for key in (sources.keys() if seeds.is_empty() else seeds.map(func(q): return _cell_key(q))):
 		var xy := str(key).split(":")
 		var source := Vector2i(int(xy[0]), int(xy[1]))
 		if C.is_road(source) and sim.serves_town(source, k) and not parent.has(source):
