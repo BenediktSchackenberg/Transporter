@@ -604,7 +604,10 @@ func _eko_adopt() -> void:
 			var ctl: AgentController = controllers[cid]
 			ctl.config["provider"] = "eko"
 			ctl.fallback_active = false
-	sim.founders.enabled = false   # neue Firmen entstehen nur noch, wenn ein Wesen gruendet
+	# Benedikt 25.11. ("dicht bebaute Staedte, Leben, Gewerbe", "Bergwerk"): in der Wildnis gruenden weiter Regel-Unternehmer
+	# Laeden und Bergbau; sonst entstanden neben den beiden Wesen nie weitere Betriebe.
+	if not sim.wildnis:
+		sim.founders.enabled = false   # neue Firmen entstehen nur noch, wenn ein Wesen gruendet
 	for ag in mayor_agents:
 		ag.eko_managed = true
 		ag.config["interval"] = 120.0

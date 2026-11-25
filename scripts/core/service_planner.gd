@@ -174,6 +174,7 @@ func _planned(k: int, code: String) -> bool:
 
 # ------------------------------------------------------------------ Massnahmen
 ## Gepruefte Standorte fuer neue Versorgungsanlagen, damit die KI Lage und Stadtbild steuert.
+const GAP_TANK := 4   # Wildnis: so viele Gebaeude ohne Leitungsdruck rechtfertigen einen weiteren Hochbehaelter
 func utility_sites(k: int) -> Array:
 	if not sim.municipal.enabled() or not sim.town_plan.has(k):
 		return []
@@ -181,7 +182,8 @@ func utility_sites(k: int) -> Array:
 	if sim.water.works_of(k).is_empty():
 		codes.append("WW-01")
 	var today: Dictionary = sim.water.last.get(str(k), {})
-	if sim.water.tanks_of(k).is_empty() or (not today.is_empty() and float(today.get("bedarf", 0.0)) > sim.water.tank_capacity(k) * 0.9):
+	var gap: Array = sim.water.pressure_gap(k) if sim.wildnis else []
+	if sim.water.tanks_of(k).is_empty() or (not today.is_empty() and float(today.get("bedarf", 0.0)) > sim.water.tank_capacity(k) * 0.9) or gap.size() >= GAP_TANK:
 		codes.append("WT-01")
 	if sim.water.plant().is_empty():
 		codes.append("KA-01")
@@ -191,7 +193,17 @@ func utility_sites(k: int) -> Array:
 		var art := "laerm" if code == "KA-01" else "oeffentlich"
 		var req := {"w": int(info[1]), "h": int(info[2]), "art": art,
 			"zones": ["gewerbe", "industrie", "mischgebiet"] if art == "laerm" else ["oeffentlich", "mischgebiet", "gewerbe", "wohnen"]}
-		for site in (sim.sites.rank(k, req).list as Array).slice(0, 3):
+		var ranked: Array = sim.sites.rank(k, req).list
+		if code == "WT-01" and gap.size() >= GAP_TANK:
+			# Neue Druckzone dort, wo die meisten trockenen Gebaeude stehen (nicht am alten Kern; einzelne Ausreisser wie
+			# eine Muehle weit draussen verschieben den Standort nicht)
+			var dry: Array = gap.map(func(id): return Vector2(sim.city.building(int(id)).road))
+			var near := func(site) -> int:
+				var c := Vector2(Rect2i(int(site.rect[0]), int(site.rect[1]), int(site.rect[2]), int(site.rect[3])).get_center())
+				return dry.filter(func(p): return c.distance_to(p) <= 30.0).size()
+			ranked = ranked.duplicate()
+			ranked.sort_custom(func(a, b): return near.call(a) > near.call(b))
+		for site in ranked.slice(0, 3):
 			out.append({"typ": code, "grundstueck": site.parcel, "feld": site.rect, "punkte": snappedf(float(site.score), 0.1),
 				"viertel": site.viertel_text})
 	return out

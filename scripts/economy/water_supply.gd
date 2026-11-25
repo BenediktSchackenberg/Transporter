@@ -200,10 +200,27 @@ const OWN_WELL_BRANCHES := ["bergwerk", "forst"]   # Aussenbereich (Lagerstaette
 func on_net(b: Dictionary) -> bool:
 	if str(sim.city.building(int(b.site)).get("type", "")) in OWN_WELL or str(b.get("branch", "")) in OWN_WELL_BRANCHES:
 		return false
+	if sim.wildnis and _outskirts(int(b.site)):
+		return false
 	var p: Dictionary = sim.parcels.of_building(int(b.site))
 	if p.is_empty():
 		return true
 	return "wasser" in Planning.ZONE_RULES.get(str(p.get("zone", "")), {}).get("needs", [])
+
+
+## Wildnis: Betrieb weit draussen (ueber OUTSKIRT_R Felder vom Rathaus seiner Stadt) – Aussenbereich mit eigenem Brunnen und
+## Sammelgrube. 25.11.: Gretas Muehle stand ~200 Felder von Sonnenbucht entfernt seit Tag 5 "ausserhalb der Druckzone".
+const OUTSKIRT_R := 60
+func _outskirts(building_id: int) -> bool:
+	var k: int = sim.towns.of_building(building_id)
+	if k < 0 or k >= sim.city.towns.size():
+		return false
+	var hall: Dictionary = sim.city.building(int(sim.city.towns[k].get("town_hall", -1)))
+	var b: Dictionary = sim.city.building(building_id)
+	if hall.is_empty() or b.is_empty():
+		return false
+	var d: Vector2i = Vector2i(b.road) - Vector2i(hall.road)
+	return maxi(absi(d.x), absi(d.y)) > OUTSKIRT_R
 
 
 ## Wasseranschluss des Betriebsgrundstuecks (ohne Parzelle: Bestand gilt als angeschlossen).
@@ -623,6 +640,21 @@ func building_on_net(k: int, building_id: int) -> bool:
 		return true
 	var b: Dictionary = sim.city.building(building_id)
 	return not b.is_empty() and _net[k].has(Vector2i(b.road))
+
+
+## Gebaeude der Stadt (Wohnungen, Betriebe mit Netzbedarf) ohne Leitungsdruck: Gebaeude-IDs.
+## 25.11.: In Sonnenbucht lagen Wasserwerk und Hochbehaelter ueber 80 Strassenfelder vom Ortskern – 14 von 15 Wohnungen trocken.
+func pressure_gap(k: int) -> Array:
+	if sources_of(k).is_empty():
+		return []
+	var ids := {}
+	for u in sim.housing.units.values():
+		if sim.towns.of_building(int(u.building)) == k:
+			ids[int(u.building)] = true
+	for b in sim.biz.items.values():
+		if sim.towns.of_building(int(b.site)) == k and on_net(b):
+			ids[int(b.site)] = true
+	return ids.keys().filter(func(id): return not building_on_net(k, int(id)))
 
 
 func building_on_sewer(k: int, building_id: int) -> bool:

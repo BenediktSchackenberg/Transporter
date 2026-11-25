@@ -791,7 +791,8 @@ func on_day(_day: int) -> void:
 		if sim.eko != null and not bool(sim.eko.settle.road_link(town).get("verbunden", true)):
 			hub_connection()
 		elif sim.eko != null:
-			facility_access()
+			if facility_access().is_empty():
+				pressure_tank()
 	_refresh_airport_reservation()
 	if _region():
 		_arrivals_town()
@@ -1530,6 +1531,20 @@ func _hub_road_project(cells: Array, ref := "anschluss", reason := "", what := "
 ## 25.11.: Der Hochbehaelter Nordost von Morgenwiek stand ohne Strasse da (Zufahrtsfeld keine Strasse, im Umkreis von 3 Feldern
 ## keine) – er speiste nie ins Netz, und keine KI-Aktion konnte das beheben. Das Bauamt legt die Zufahrt zu stadteigenen
 ## Wasseranlagen selbst an: kuerzeste Strasse vom Netz des Rathauses zum Zufahrtsfeld der Anlage.
+## 25.11.: Wohnungen und Betriebe ohne Leitungsdruck (zu weit von Wasserwerk und Hochbehaelter) – das Bauamt beschliesst selbst
+## einen Hochbehaelter beim trockenen Stadtteil. Bisher bot die Standortliste WT-01 nur an, solange die Stadt gar keinen hatte.
+func pressure_tank() -> Dictionary:
+	if sim.services._planned(town, "WT-01") or sim.water.pressure_gap(town).size() < ServicePlanner.GAP_TANK:
+		return {}
+	for site in sim.services.utility_sites(town):
+		if str(site.typ) == "WT-01":
+			var r: Dictionary = sim.services.build(town, "WT-01", "Stadtteile ohne Wasserdruck (%d Gebäude)" % sim.water.pressure_gap(town).size(), "Bauamt", str(site.grundstueck))
+			if not bool(r.get("ok", false)):
+				sim.log_event("%s: Hochbehälter für trockene Stadtteile nicht möglich – %s" % [town_label(), str(r.msg).left(120)], "warn")
+			return r
+	return {}
+
+
 func facility_access() -> Dictionary:
 	for prj in projects.values():
 		if str(prj.get("ref", "")) == "zufahrt_anlage" and str(prj.status) not in ["fertig", "abgelehnt", "abgebrochen"]:
