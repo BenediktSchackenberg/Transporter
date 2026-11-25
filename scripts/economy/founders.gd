@@ -202,7 +202,7 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 		return _refuse(town, branch, "Markt zu klein: %d Einwohner für %d Unternehmen (eine Gründung je %d Einwohner)" % [sim.citizens.population(), firms + 1, int(pop_per_firm)])
 	if sim.wildnis and branch not in INDUSTRY and pop_per_firm > 0.0:
 		var town_pop: int = sim.citizens.population_of(town)
-		var shops: int = sim.biz.items.values().filter(func(b): return str(b.branch) != "transport" and str(b.status) != "geschlossen" and sim.towns.of_building(int(b.site)) == town).size()
+		var shops: int = sim.biz.items.values().filter(func(b): return SHOPS.has(str(b.branch)) and str(b.status) != "geschlossen" and sim.towns.of_building(int(b.site)) == town).size()   # nur Laeden: Felder und Muehle leben nicht von der Laufkundschaft der Stadt
 		var per: float = minf(pop_per_firm, POP_PER_SHOP)
 		if float(town_pop) < per * float(shops + 1):
 			return _refuse(town, branch, "Markt zu klein: %d Einwohner in %s für %d Betriebe (einer je %d Einwohner)" % [town_pop, sim.towns.name_of(town), shops + 1, int(per)])
@@ -217,6 +217,10 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 	if not (sim.wildnis and branch in INDUSTRY) and sim.citizens.unemployed_total() + sim.citizens.applicants() < staff_need:
 		return _refuse(town, branch, "kein Personal am Arbeitsmarkt")   # Industrie: Fachkraefte ziehen fuer die Stelle zu (Zuzug)
 	var need := float(CAPITAL_BY_BRANCH.get(branch, CAPITAL))
+	if sim.wildnis and SHOPS.has(branch):
+		# 25.11.: kleine Laeden brauchen keine 60.000 EUR (Kaya/Engel hatten nach dem Aufbau noch 23.000-30.000 EUR) – der Pool I0 reichte
+		# sonst fuer keine zweite Gruendung
+		need = maxf(2.5 * float(spec.get("ausstattung", 0.0)), 35000.0)
 	if float(sim.economy.accounts.get("I0", 0.0)) < need:
 		return _refuse(town, branch, "Kapitalgeber ohne Mittel (I0 %s, nötig %s)" % [Catalog.money(float(sim.economy.accounts.get("I0", 0.0))), Catalog.money(need)])
 	var c := _create(town, reason, need)

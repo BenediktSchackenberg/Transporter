@@ -15,6 +15,8 @@ const FOUNDING_WAIT_DAYS := 10.0
 const FOUNDING_CAPITAL := 40000.0
 const INVESTOR_INFLOW := 3000.0   # je Monat von X0 nach I0
 const INVESTOR_CAP := 120000.0
+const WILD_INVESTOR_INFLOW := 25000.0
+const WILD_INVESTOR_CAP := 200000.0
 const DEALER_BID := 0.55          # Fahrzeughaendler bietet diesen Anteil des Buchwerts
 const COST_SHARE := 0.10          # Verwertungskosten (max. Anteil am Erloes)
 const COST_MIN := 200.0
@@ -242,8 +244,9 @@ func on_day(_day: int) -> void:
 
 func on_month(_month: int) -> void:
 	# Investorenpool: kleiner, gedeckelter Zufluss aus dem Ausland
-	var room := maxf(0.0, INVESTOR_CAP - sim.economy.accounts.I0)
-	sim.economy.transfer("X0", "I0", minf(INVESTOR_INFLOW, room))
+	# Wildnis (25.11.): Aufbauphase mit staerkerem Zufluss, sonst reichte der Pool fuer keinen zweiten Laden je Stadt
+	var room := maxf(0.0, (WILD_INVESTOR_CAP if sim.wildnis else INVESTOR_CAP) - sim.economy.accounts.I0)
+	sim.economy.transfer("X0", "I0", minf(WILD_INVESTOR_INFLOW if sim.wildnis else INVESTOR_INFLOW, room))
 	CompanyForms.monthly(sim, _month)
 
 
