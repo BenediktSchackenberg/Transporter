@@ -426,8 +426,17 @@ const BUILD_IDLE_DAYS := 3.0
 var _build_help_min := -1.0e9
 
 
+## 25.11. (Wildnis): Gruenderfirmen (Laden, Feld, Bergwerk) betreiben nur ihre Betriebe. Ihre Regel-KI nahm sonst Transportauftraege
+## an (Kaya Gruppe: Vertragsstrafen je ~1.500 EUR, Notbetankungen), warb bei Flughaefen, kaufte Sicherheitstechnik und Baumaterial –
+## alle vier Gruenderfirmen gerieten in Zahlungsverzug, Bergwerk und Laeden standen ohne Strom und Personal still.
+const FOUNDER_ACTIONS := ["assign_staff", "recruit_worker", "dismiss_worker", "set_business_price", "upgrade_business", "found_business",
+	"explore_deposit", "request_mining", "build_access", "close_business", "repay_loan", "wait", "send_message"]
+func _founder_restricted() -> bool:
+	return sim.wildnis and sim.eko.firm_being(cid) == "" and sim.founders.history.any(func(h): return int(h.get("firma", -1)) == cid)
+
+
 func _run_build_help() -> void:
-	if sim.game_min - _build_help_min < BUILD_HELP_MIN or sim.stone == null or sim.freebuild == null:
+	if sim.game_min - _build_help_min < BUILD_HELP_MIN or sim.stone == null or sim.freebuild == null or _founder_restricted():
 		return
 	_build_help_min = sim.game_min
 	var c := sim.company(cid)
@@ -474,6 +483,8 @@ func _apply(parsed: Dictionary, key_prefix: String, source: String) -> void:
 			parsed[key] = ""
 	if not parsed.get("actions") is Array:
 		parsed["actions"] = []
+	if _founder_restricted():
+		parsed["actions"] = (parsed.actions as Array).filter(func(a): return a is Dictionary and str(a.get("action", "")) in FOUNDER_ACTIONS)
 	var summary: String = parsed.summary
 	if summary != "":
 		summaries.append({"t": sim.game_min, "text": summary, "source": source})
