@@ -364,8 +364,10 @@ func tick(dt_min: float) -> void:
 				if crew <= 0:
 					# Nach Standortwahl, Genehmigung und Materialbeschaffung darf das erste Wohnhaus nicht wieder
 					# stillstehen: die Firma organisiert dann wie beim Bürgeramt einen sichtbaren Bautrupp.
-					var first_home := str(s.typ) in HOMES and not sites.values().any(func(other): return int(other.cid) == int(s.cid) and str(other.typ) in HOMES and str(other.status) == "fertig")
-					if sim.wildnis and ((s.typ == "buergeramt" and not sim.town_ready(sim.company(int(s.cid)).home_town)) or first_home) \
+					# 25.11.: auch spätere Häuser und Läden – Viktors BS6 stand mit vollem Material 15 Spielstunden bei 0 %, weil das Wesen
+					# nur wartete. Nur Straßen bleiben Handarbeit des Wesens.
+					var auto_crew := str(s.typ) in HOMES or str(s.typ) in COMMERCIAL
+					if sim.wildnis and ((s.typ == "buergeramt" and not sim.town_ready(sim.company(int(s.cid)).home_town)) or auto_crew) \
 							and not s.has("helfer") and sim.game_min - float(s.get("ready_min", sim.game_min)) >= HALL_HELPER_DELAY \
 							and sim.game_min >= float(s.get("helper_retry_min", 0.0)):
 						s["helper_retry_min"] = sim.game_min + HALL_HELPER_DELAY

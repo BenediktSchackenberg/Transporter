@@ -265,7 +265,10 @@ func accept_best(project_id: String) -> Dictionary:
 	var pr: Dictionary = projects.get(project_id, {})
 	if pr.is_empty():
 		return {"ok": false, "msg": "Bauvorhaben %s gibt es nicht." % project_id}
-	var affordable: Array = pr.offers.filter(func(o): return float(o.price) + float(pr.dev_cost) + (Planning.TEMP_ACCESS_COST if not pr.missing.is_empty() else 0.0) <= available_funds(pr.client) + 0.5)
+	# Region: die Anleger zahlen beim Vertrag die Hälfte an (accept) – das zählt mit. Sonst passten Mehrfamilienhäuser (~130.000 EUR)
+	# nie in die freie Kasse des Bauträgers und blieben bei "angebote" stehen (Partie 25.11.: nur Doppelhäuser entstanden).
+	var own := (1.0 - ADVANCE_SHARE) if pr.client == DEVELOPER and sim.towns.is_region() and not pr.has("advance") else 1.0
+	var affordable: Array = pr.offers.filter(func(o): return (float(o.price) + float(pr.dev_cost) + (Planning.TEMP_ACCESS_COST if not pr.missing.is_empty() else 0.0)) * own <= available_funds(pr.client) + 0.5)
 	var o := best_offer(affordable, float(pr.base))
 	if o.is_empty():
 		return {"ok": false, "msg": "Kein bezahlbares Angebot für %s." % project_id}
@@ -456,6 +459,8 @@ func on_day(day: int) -> void:
 			"angebote":
 				if not pr.offers.is_empty() and int(pr.offers[0].valid_until) < day:
 					pr.offers = make_offers(float(pr.base), int(pr.build_days), pr.id)   # abgelaufene Angebote erneuern
+				if pr.client == DEVELOPER:
+					accept_best(str(pr.id))   # 25.11.: sonst blieb ein anfangs unbezahlbares Vorhaben für immer bei "angebote"
 			"erschliessung", "wartet_anschluss":
 				_day_site(pr, day)
 			"im_bau":
