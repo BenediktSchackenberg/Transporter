@@ -83,6 +83,10 @@ func _topup_focus(day: int) -> void:
 		if c.focus != "bergwerk" or c.status in ["geschlossen", "verwertung"]:
 			continue
 		var mine: Array = sim.biz.items.values().filter(func(b): return int(b.owner) == c.id and b.branch == c.focus)
+		if not mine.is_empty() and str(mine[0].status) == "geschlossen" and c.is_active():
+			# 25.11.: die Rueckzugsregel hatte das Bergwerk der Engel Gruppe geschlossen (stossweiser Absatz) – wieder in Betrieb nehmen
+			sim.biz.set_status(str(mine[0].id), "blockiert", "Kapitalgeber: Bergwerk wieder in Betrieb genommen")
+			sim.log_event("%s nimmt das Bergwerk %s wieder in Betrieb." % [c.company_name, str(mine[0].get("name", mine[0].id))], "good", c.id)
 		if not mine.is_empty():
 			# 25.11.: Bergwerk steht, aber die Kasse ist leer (Engel Gruppe: 2.016 EUR, Strom und Personal nicht bezahlbar) –
 			# einmal Anlaufkapital bis zur ersten Foerderung

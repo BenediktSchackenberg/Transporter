@@ -571,6 +571,8 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	# Vorlauf wie Mast oder Wachstum bekommen ihre Chance), spaetestens nach 50 Tagen, wenn nie etwas hergestellt wurde.
 	for b in own:
 		var tried: bool = int(b.get("produziert_seit_tagen", -1)) >= 20 or int(b.get("alter_tage", 0)) >= 50
+		if b.branche == str(me.get("fokus", "")):
+			continue   # 25.11.: Schwerpunkt (Bergwerk) nie aufgeben – es verkauft stossweise an den Import, absatz_tag war meist 0
 		if b.branche not in ["restaurant", "baufirma", "kohlekraftwerk", "uranbergwerk", "brennelementwerk"] and tried and int(b.get("absatz_tag", 0)) == 0 and int(b.ergebnis) < -4000:
 			actions.append({"action": "close_business", "business_id": b.id, "reason": "seit %d Tagen ohne Absatz, Ergebnis %d EUR" % [int(b.alter_tage), int(b.ergebnis)]})
 			reasons.append("schließe %s, weil er seit Wochen nichts verkauft und Verlust macht" % b.id)

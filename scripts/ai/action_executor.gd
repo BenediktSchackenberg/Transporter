@@ -366,6 +366,8 @@ func execute(cid: int, action: Dictionary, key: String = "", origin: String = "a
 		check = "Das Unternehmen steht unter Insolvenzverwaltung (%s): Aktionen sind gesperrt." % sim.company(cid).status
 	if check == "" and founder_only(cid) and name not in FOUNDER_ACTIONS:
 		check = "Gründerfirma: nur Aktionen für die eigenen Betriebe (%s ist gesperrt)." % name
+	if check == "" and founder_only(cid) and name == "close_business" and str(sim.biz.get_b(str(action.get("business_id", ""))).get("branch", "")) == sim.company(cid).focus:
+		check = "Den Schwerpunkt-Betrieb (%s) schließt die Gründerfirma nicht." % sim.company(cid).focus
 	if check == "" and founder_only(cid) and name in MINING_STEPS and sim.company(cid).focus != "bergwerk":
 		check = "Gründerfirma ohne Bergbau-Schwerpunkt: keine Probebohrung oder Abbaurechte."
 	if check != "":
