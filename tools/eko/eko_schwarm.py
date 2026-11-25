@@ -96,13 +96,25 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8")
     # Nur ein Schwarm je Welt: das Spiel startet ihn selbst (Startmenue "Freie Wesen"), der Welt-Waechter oder man von Hand.
     # Ein zweiter wuerde jedes Wesen doppelt steuern; die Sperre ist ein lokaler Port, den das Betriebssystem beim Ende freigibt.
-    lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        lock.bind(("127.0.0.1", args.port + 1000))
-    except OSError:
-        print("Eko-Schwarm läuft schon für diese Welt – dieser Start wird beendet.", flush=True)
-        time.sleep(3)
-        return
+    # 25.11.: Windows reserviert nach Neustarts Portbereiche (Hyper-V/Docker, z. B. 9700-9799) – bind scheitert dann mit
+    # "Zugriff verweigert" (WinError 10013), nicht mit "belegt". Solche Ports ueberspringen; alle Starts pruefen dieselbe Liste.
+    lock = None
+    for lock_port in (args.port + 1000, args.port + 21000, args.port + 31000):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(("127.0.0.1", lock_port))
+            lock = sock
+            break
+        except PermissionError:
+            sock.close()
+            continue
+        except OSError:
+            sock.close()
+            print("Eko-Schwarm läuft schon für diese Welt (Sperrport %d belegt) – dieser Start wird beendet." % lock_port, flush=True)
+            time.sleep(3)
+            return
+    if lock is None:
+        print("⚠ Kein Sperrport frei (alle vom System reserviert) – Schwarm startet ohne Doppelstart-Schutz.", flush=True)
     base = "http://127.0.0.1:%d" % args.port
     skip = {x.strip() for x in args.ohne.split(",") if x.strip()}
     running = {}
