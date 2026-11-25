@@ -546,7 +546,8 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 	if mk.is_empty():
 		return
 	var own: Array = obs.get("betriebe", []).filter(func(b): return b.branche in PROD_BRANCHES)
-	var own_core: Array = own.filter(func(b): return b.branche not in ENERGY_BRANCHES and b.branche != "bergwerk")
+	# 25.11.: auch Laeden (kneipe, metzgerei) zaehlen – Lorenz Handel gruendete neben der Kneipe noch ein Feld und hatte danach kein Geld fuer Personal
+	var own_core: Array = obs.get("betriebe", []).filter(func(b): return str(b.get("branche", "")) != "transport" and b.branche not in ENERGY_BRANCHES and b.branche != "bergwerk")
 	var own_ids: Array = own.map(func(b): return b.id)
 	# Preisregel (hoechstens alle 3 Tage): liegt Ware ohne Absatz, Preis senken (nicht unter 75 % des Basispreises, darunter deckt er
 	# Zutaten und Fracht nicht); verkauft sich taeglich mindestens der halbe Bestand, vorsichtig erhoehen (bis 150 %).
@@ -608,7 +609,7 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 			var cand := _best_candidate(obs.ressourcen.arbeitskraefte, "verladen")
 			if cand.is_empty():   # Kueche, Theke, Feld brauchen kein Verladen (Messung 14.11.: Restaurants blieben ohne Servicekraft, nie Umsatz)
 				cand = _cheapest_worker(obs.ressourcen.arbeitskraefte)
-			if not cand.is_empty() and cash > float(cand.anwerbung) + 3000.0:
+			if not cand.is_empty() and cash > float(cand.anwerbung) + 1000.0:   # ohne Personal verdient der Betrieb nie (Kneipe Sonnenbucht, 3.013 EUR Kasse)
 				actions.append({"action": "recruit_worker", "worker_id": cand.id})
 				planned.append("recruit_worker")
 				reasons.append("werbe %s für den Betrieb %s an" % [cand.name, b.id])
