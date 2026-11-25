@@ -129,8 +129,11 @@ func rank(k: int, req: Dictionary) -> Dictionary:
 					v = district
 					nearest = distance
 					fringe = true
-		if sim.town_plan != null and sim.town_plan.has(k) and art != "laerm" and v.is_empty():
+		if sim.town_plan != null and sim.town_plan.has(k) and art != "laerm" and v.is_empty() and not sim.wildnis:
 			continue
+		# 25.11. (Benedikt: "er nutzt die Bauflaechen gar nicht aus"): in der Wildnis waren die Viertel voll (Radius 6-10), freie
+		# 8x6-Grundstuecke mit Strasse 28-41 Felder vom Kern galten als "ausserhalb" – der Bautraeger baute 10 Tage nichts bei 39
+		# Wartenden. Dort waechst die Stadt jetzt im Suchradius weiter (Strassenanschluss prueft _fit).
 		if not v.is_empty() and str(v.zone) not in ART_DISTRICT.get(art, []):
 			continue
 		if wanted_district.begins_with("V") and wanted_district.substr(1).is_valid_int() and (v.is_empty() or str(v.id) != wanted_district):

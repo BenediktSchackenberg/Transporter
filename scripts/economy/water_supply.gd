@@ -85,6 +85,36 @@ func setup(simulation) -> void:
 	rng.seed = hash([int(sim.city.seed_value), "wasser"])
 	sim.day_changed.connect(on_day)
 	sim.month_changed.connect(func(_m): _month())
+	if sim.access != null and sim.access.has_signal("roads_built"):
+		sim.access.roads_built.connect(on_roads_built)
+
+
+const STREET_MAINS_MARGIN := 16   # so weit ueber das Siedlungsgebiet hinaus bekommen neue Strassen Leitungen mit
+
+
+## Benedikt 25.11.: "ich moechte dicht bebaute Staedte". Bisher musste die KI jedes Rohr einzeln beauftragen; fertige Wohnungen
+## standen ohne Wasser leer (Lindenhaven: 5 von 14 bewohnbar). Neue Strassen im Stadtgebiet einer gegruendeten Wildnisstadt werden
+## jetzt wie bei einer echten Erschliessung mit Frischwasser- und Kanalleitung gebaut. Die Druckzone (ZONE_RANGE) gilt weiter:
+## weit entfernte Viertel brauchen trotzdem einen Hochbehaelter.
+func on_roads_built(cells: Array) -> void:
+	if not sim.wildnis or cells.is_empty():
+		return
+	for key in sim.settlements:
+		var k := int(key)
+		if not sim.town_ready(k):
+			continue
+		var a: Array = sim.settlements[key].get("rect", [])
+		if a.size() < 4:
+			continue
+		var area := Rect2i(int(a[0]), int(a[1]), int(a[2]), int(a[3])).grow(STREET_MAINS_MARGIN)
+		var added := 0
+		for q in cells:
+			if area.has_point(q) and sim.city.is_road(q) and sim.serves_town(q, k):
+				for art in ["wasser", "abwasser"]:
+					main_cells(k, art)[_cell_key(q)] = true
+				added += 1
+		if added > 0:
+			_net.erase(k)
 
 
 func enabled() -> bool:

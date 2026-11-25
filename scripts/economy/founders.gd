@@ -20,6 +20,8 @@ const CAPITAL := 60000.0
 const CAPITAL_BY_BRANCH := {"bergwerk": 120000.0, "stahlwerk": 150000.0, "kokerei": 110000.0}
 const POP_PER_FIRM := 40.0           # Standard fuer pop_per_firm: neue Gruender erst ab so vielen Einwohnern je bestehendem Unternehmen (Messung 14.11.: 10 Firmen
                                       # auf ~200 Einwohner, alle im Minus)
+const POP_PER_SHOP := 15.0         # Benedikt 25.11. ("Leben und Gewerbe"): je Stadt ein Laden/Betrieb je so vielen Einwohnern
+const SHOPS := {"baeckerei": 15, "kneipe": 20, "restaurant": 25, "metzgerei": 30}   # Mindesteinwohner der Stadt je Ladenbranche
 const MINING_FROM_DAY := 5           # Bergbau frueh: die Kette Bohrung -> Abbaurecht -> Zufahrt -> Bergwerk -> Stahl braucht Wochen
 const INDUSTRY := ["bergwerk", "stahlwerk", "elektrostahlwerk", "kokerei"]   # regionale Aufgaben: ohne Abklingzeit der Stadt, sofort statt nach STREAK Pruefungen
 const FOCUS_BRANCHES := ["bergwerk"] # mehrstufige Gruendung (Probebohrung, Abbaurecht, Zufahrt): die Regel-KI geht die Schritte selbst
@@ -104,8 +106,11 @@ func opportunities() -> Array:
 	for k in T.count():
 		var pop: int = sim.citizens.population_of(k)
 		var in_town := running.filter(func(b): return T.of_building(int(b.site)) == k)
-		for br in ["baeckerei", "restaurant", "metzgerei"]:
-			if pop >= (80 if br == "metzgerei" else 40) and not in_town.any(func(b): return b.branch == br):
+		if sim.wildnis and not sim.town_ready(k):
+			continue
+		for br in SHOPS:
+			var min_pop: int = int(SHOPS[br]) if sim.wildnis else (80 if br == "metzgerei" else 40)
+			if (sim.wildnis or br != "kneipe") and pop >= min_pop and not in_town.any(func(b): return b.branch == br):
 				out.append({"stadt": k, "branche": br, "anlass": "Keine %s in %s bei %d Einwohnern" % [Businesses.branches()[br].label, T.name_of(k), pop]})
 		# Vorstufe fehlt: Betriebe dieser Stadt warten auf eine Ware, die niemand in der Region herstellt
 		for b in in_town:
@@ -138,7 +143,7 @@ func opportunities() -> Array:
 func _mining_town() -> int:
 	var best := -1
 	for k in sim.towns.count():
-		if active_home(k) >= max_per_town:
+		if active_home(k) >= max_per_town or (sim.wildnis and not sim.town_ready(k)):
 			continue
 		if best < 0 or sim.citizens.population_of(k) > sim.citizens.population_of(best):
 			best = k
@@ -182,9 +187,17 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 	var via: Dictionary = sim.retail.counter_viable(branch)
 	if not bool(via.ok):
 		return _refuse(town, branch, str(via.msg).left(120))
+	# 25.11.: Marktgroesse je Stadt (Einwohner der Stadt gegen ihre Betriebe) statt Region gegen alle Firmen – mit zwei KI-Unternehmern
+	# und 50 Einwohnern entstand sonst nie ein Laden. Bergbau und Industrie sind regionale Aufgaben ohne Marktpruefung.
 	var firms: int = sim.companies.filter(func(x): return x.status not in ["geschlossen", "verwertung"]).size()
-	if (branch not in INDUSTRY or sim.neubeginn) and float(sim.citizens.population()) < pop_per_firm * float(firms + 1):
+	if not sim.wildnis and (branch not in INDUSTRY or sim.neubeginn) and float(sim.citizens.population()) < pop_per_firm * float(firms + 1):
 		return _refuse(town, branch, "Markt zu klein: %d Einwohner für %d Unternehmen (eine Gründung je %d Einwohner)" % [sim.citizens.population(), firms + 1, int(pop_per_firm)])
+	if sim.wildnis and branch not in INDUSTRY and pop_per_firm > 0.0:
+		var town_pop: int = sim.citizens.population_of(town)
+		var shops: int = sim.biz.items.values().filter(func(b): return str(b.branch) != "transport" and str(b.status) != "geschlossen" and sim.towns.of_building(int(b.site)) == town).size()
+		var per: float = minf(pop_per_firm, POP_PER_SHOP)
+		if float(town_pop) < per * float(shops + 1):
+			return _refuse(town, branch, "Markt zu klein: %d Einwohner in %s für %d Betriebe (einer je %d Einwohner)" % [town_pop, sim.towns.name_of(town), shops + 1, int(per)])
 	var bsize: Array = CityGenerator.TYPES[str(spec.get("gebaeude", "farm"))]
 	var min_area: int = int(spec.feld.min_flaeche) if spec.has("feld") else int(bsize[1]) * int(bsize[2]) + 4
 	var site_ok: bool = branch in FOCUS_BRANCHES or sim.parcels.search({"min_area": min_area, "town": town, "limit": 400}).any(func(p): return bool(sim.parcels.utilities_of(p).strasse))
@@ -192,8 +205,9 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 		return _refuse(town, branch, "keine freie Lagerstätte")
 	if not site_ok:
 		return _refuse(town, branch, "kein freies erschlossenes Grundstück (mind. %d Felder)" % min_area)
-	if sim.citizens.unemployed_total() + sim.citizens.applicants() < int(spec.get("personal_min", 1)) + 1:
-		return _refuse(town, branch, "kein Personal am Arbeitsmarkt")
+	var staff_need: int = int(spec.get("personal_min", 1)) + (0 if sim.wildnis else 1)
+	if not (sim.wildnis and branch in INDUSTRY) and sim.citizens.unemployed_total() + sim.citizens.applicants() < staff_need:
+		return _refuse(town, branch, "kein Personal am Arbeitsmarkt")   # Industrie: Fachkraefte ziehen fuer die Stelle zu (Zuzug)
 	var need := float(CAPITAL_BY_BRANCH.get(branch, CAPITAL))
 	if float(sim.economy.accounts.get("I0", 0.0)) < need:
 		return _refuse(town, branch, "Kapitalgeber ohne Mittel (I0 %s, nötig %s)" % [Catalog.money(float(sim.economy.accounts.get("I0", 0.0))), Catalog.money(need)])

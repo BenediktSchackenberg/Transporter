@@ -804,6 +804,7 @@ const RESALE_MARGIN := 1.10           # Region: Anleger kaufen fertige Bautraege
 const REGION_MATERIAL_FACTOR := 0.4   # Region: Hausbau braucht weniger Material je Phase (kleinere Lieferungen, Bauhof reicht laenger)
 const ADVANCE_SHARE := 0.5            # Region: davon zahlen sie die Haelfte schon bei Vertragsschluss an
 const SHOP_PER_RESIDENTS := 15        # Region: ein Laden je 15 Einwohner
+const WILD_SHOP_PER_RESIDENTS := 10   # Wildnis (Benedikt 25.11.: Leben und Gewerbe): ein Laden je 10 Einwohner
 const WORKSHOP_PER_RESIDENTS := 20    # Auch kleine Gründungsstädte brauchen mindestens einen Gewerbebetrieb.
 const SHOP_DEFS := ["baeckerei_laden", "getraenkemarkt", "drogerie_laden", "supermarkt"]
 func _developer_town(town: int) -> void:
@@ -865,7 +866,14 @@ func _developer_once(town: int) -> bool:
 			crit["zone"] = z
 			crit["utilities"] = u
 			free += sim.parcels.search(crit)
-	if region and (_next % 3) != 0:   # Region: mehr Haeuser je Euro - meist Einfamilien-/Doppelhaeuser (abwechselnd zuerst)
+	if sim.wildnis:
+		# Benedikt 25.11.: "ich moechte dicht bebaute Staedte und Leben haben, Gewerbe usw." – Wildnisstaedte bauen zuerst
+		# Mehrfamilienhaeuser und Wohn-/Geschaeftshaeuser (Laden im Erdgeschoss), kleine Haeuser nur, wenn nichts Groesseres passt.
+		var dense: Array = ["mehrfamilienhaus", "wohn_gewerbehaus"] if _next % 2 == 0 else ["wohn_gewerbehaus", "mehrfamilienhaus"]
+		for big in dense:
+			if _developer_try(free.filter(func(p): return int(p.area) >= 30), big):
+				return true
+	elif region and (_next % 3) != 0:   # Region: mehr Haeuser je Euro - meist Einfamilien-/Doppelhaeuser (abwechselnd zuerst)
 		for small in (["einfamilienhaus", "doppelhaus"] if _next % 2 == 0 else ["doppelhaus", "einfamilienhaus"]):
 			if _developer_try(free, small):
 				return true
@@ -901,7 +909,7 @@ func _commerce_project(town: int) -> bool:
 					workshops += 1
 				else:
 					shops += 1
-	if shops < pop / SHOP_PER_RESIDENTS:
+	if shops < pop / (WILD_SHOP_PER_RESIDENTS if sim.wildnis else SHOP_PER_RESIDENTS):
 		var def_id: String = SHOP_DEFS[shops % SHOP_DEFS.size()]
 		var d: Dictionary = Planning.DEFS[def_id]
 		for zone in ["mischgebiet", "gewerbe", "wohnen"]:
