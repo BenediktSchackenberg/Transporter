@@ -97,6 +97,8 @@ func _search(p: Dictionary, allow_water: bool) -> Dictionary:
 				var q := Vector2i(x, y)
 				if r.has_point(q) or not city.inside(q):
 					continue
+				if (x < r.position.x or x >= r.end.x) and (y < r.position.y or y >= r.end.y):
+					continue   # 25.11.: Eckfeld beruehrt den Hof nur diagonal – die Zufahrt zum Bergwerk G705 endete dort, ohne Anschluss
 				if city.is_road(q):
 					return {"ok": true, "cells": []}   # schon angeschlossen
 				if not _passable(q, allow_water, true) or toward[city.idx(q)] == -2:
@@ -455,6 +457,7 @@ func road_progress(j: Dictionary) -> float:
 
 ## Tagesfortschritt: Antraege nach Frist entscheiden; Weg waechst mit dem Fortschritt der Baufirma; fertig, wenn Weg und Bruecken stehen.
 func on_day(day: int) -> void:
+	yard_links()
 	for j in jobs.values():
 		if j.status == "antrag" and day - int(j.day) >= ANTRAG_FRIST:
 			var ok: bool = _mayor_of(j).available_budget() >= float(j.stadtanteil)
@@ -465,6 +468,68 @@ func on_day(day: int) -> void:
 		var target := int(floor(float(order.size()) * road_progress(j)))
 		_build_to(j, order, target)
 		_maybe_finish(j)
+
+
+## 25.11.: Betriebsgebaeude, deren Zufahrtsfeld keine Strasse ist (Bergwerk G705: Zufahrt endete diagonal am Hof, Gebaeude
+## rechnete mit (331,71)), bekommen ein kurzes Hofstueck zur naechsten Strasse – ohne Strasse kein Strom, kein Personal, keine Abholung.
+const YARD_MAX := 12
+func yard_links() -> void:
+	var city: CityData = sim.city
+	for bz in sim.biz.items.values():
+		var b: Dictionary = city.building(int(bz.site))
+		if b.is_empty() or city.is_road(Vector2i(b.road)):
+			continue
+		var r := Rect2i(int(b.x), int(b.y), int(b.w), int(b.h))
+		var link := _yard_path(r)
+		if link.is_empty() or link.size() > YARD_MAX + 1:
+			continue
+		var cells: Array = link.slice(0, link.size() - 1)   # letzte Zelle ist die vorhandene Strasse
+		if not cells.is_empty():
+			_apply_cells(cells)
+		b.road = cells[0] if not cells.is_empty() else link[0]
+		var p: Dictionary = sim.parcels.of_building(int(bz.site))
+		if not p.is_empty():
+			p.erschliessung["strasse"] = true
+			sim.parcels.touch(str(p.id))
+		_cache.clear()
+		_fields.clear()
+		sim.log_event("%s: Hofzufahrt angelegt (%d Felder) – Betrieb %s ist jetzt an die Straße angeschlossen." % [sim.company(int(bz.owner)).company_name, cells.size(), str(bz.get("name", bz.id))], "info", int(bz.owner))
+
+
+## Kuerzester Weg vom seitlichen Rand des Gebaeudes zur naechsten Strasse ueber freies Land (ohne Ecken); letzte Zelle = Strasse.
+func _yard_path(r: Rect2i) -> Array:
+	var city: CityData = sim.city
+	var prev := {}
+	var q: Array = []
+	for y in range(r.position.y - 1, r.end.y + 1):
+		for x in range(r.position.x - 1, r.end.x + 1):
+			var c := Vector2i(x, y)
+			if r.has_point(c) or not city.inside(c) or ((x < r.position.x or x >= r.end.x) and (y < r.position.y or y >= r.end.y)):
+				continue
+			if city.is_road(c):
+				return [c]
+			if _passable(c, false, true):
+				prev[c] = Vector2i(-1, -1)
+				q.append(c)
+	var i := 0
+	while i < q.size() and i < 4000:
+		var c: Vector2i = q[i]
+		i += 1
+		for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+			var n: Vector2i = c + d
+			if prev.has(n) or not city.inside(n) or r.has_point(n):
+				continue
+			if city.is_road(n):
+				var path: Array = [n]
+				var k: Vector2i = c
+				while k.x >= 0:
+					path.push_front(k)
+					k = prev[k]
+				return path
+			if _passable(n, false, false):
+				prev[n] = c
+				q.append(n)
+	return []
 
 
 func _build_to(j: Dictionary, order: Array, target: int) -> void:

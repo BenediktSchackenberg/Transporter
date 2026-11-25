@@ -601,6 +601,12 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		if int(b.get("personal", 0)) >= int(b.get("personal_soll", b.get("personal_min", 1))):
 			continue
 		var pool: Array = free_staff.filter(func(w): return str(w.get("betrieb", "")) not in staffed_ids)
+		if pool.is_empty():
+			# 25.11.: blockierte Betriebe geben Leute ab – ueber ihr Minimum hinaus, fuer den Firmenschwerpunkt (Bergwerk) auch darunter.
+			# Die Engel Gruppe hatte beide Leute am Feld, das auf Saatgut wartete, das Bergwerk stand leer.
+			var is_focus: bool = str(b.get("branche", "")) == str(me.get("fokus", ""))
+			var stuck: Array = staffed.filter(func(o): return o.id != b.id and str(o.get("status", "")) == "blockiert" and str(o.get("branche", "")) != str(b.get("branche", "")) 				and (int(o.get("personal", 0)) > int(o.get("personal_min", 1)) or (is_focus and int(o.get("personal", 0)) > 0))).map(func(o): return o.id)
+			pool = free_staff.filter(func(w): return str(w.get("betrieb", "")) in stuck)
 		if not pool.is_empty():
 			actions.append({"action": "assign_staff", "worker_id": pool[0].id, "business_id": b.id})
 			free_staff.erase(pool[0])

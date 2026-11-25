@@ -40,6 +40,8 @@ var last_found := {}                 # Stadt -> Tag der letzten Gruendung
 var history: Array = []              # {tag, stadt, firma, branche, anlass, kapital}
 var refusals: Array = []             # {tag, stadt, branche, grund}
 var topups := {}                     # Firma -> Nachschuss des Kapitalgebers fuer das Gruendungsziel (hoechstens einmal)
+const START_FLOOR := 10000.0
+const START_TOPUP := 30000.0
 const TOPUP_TARGET := 55000.0        # Bargeld fuer Bergwerksgruendung (Gebaeude 30.000) plus Betriebsreserve
 
 
@@ -70,9 +72,22 @@ func on_day(day: int) -> void:
 ## Fahrzeug als Pfand, das eine Bergbaufirma nicht hat). Geld kommt aus I0, entsteht also nicht neu.
 func _topup_focus(day: int) -> void:
 	for c in sim.companies:
-		if c.focus != "bergwerk" or topups.has(c.id) or c.status in ["geschlossen", "verwertung"]:
+		if c.focus != "bergwerk" or c.status in ["geschlossen", "verwertung"]:
 			continue
-		if sim.biz.items.values().any(func(b): return int(b.owner) == c.id and b.branch == c.focus):
+		var mine: Array = sim.biz.items.values().filter(func(b): return int(b.owner) == c.id and b.branch == c.focus)
+		if not mine.is_empty():
+			# 25.11.: Bergwerk steht, aber die Kasse ist leer (Engel Gruppe: 2.016 EUR, Strom und Personal nicht bezahlbar) –
+			# einmal Anlaufkapital bis zur ersten Foerderung
+			var key := "%d:anlauf" % c.id
+			if topups.has(key) or c.ledger.cash >= START_FLOOR or str(mine[0].status) not in ["blockiert", "betriebsbereit"]:
+				continue
+			var add := minf(START_TOPUP, float(sim.economy.accounts.get("I0", 0.0)))
+			if add > 1000.0:
+				c.ledger.inject(add)
+				topups[key] = add
+				sim.log_event("Kapitalgeber geben %s %s Anlaufkapital für das Bergwerk (Personal, Strom bis zur ersten Förderung)." % [c.company_name, Catalog.money(add)], "good", c.id)
+			continue
+		if topups.has(c.id):
 			continue
 		var ready := false
 		for art in ["eisenerz", "kohle", "kalkstein", "rohmaterial", "naturstein"]:
