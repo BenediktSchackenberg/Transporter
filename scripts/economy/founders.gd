@@ -44,6 +44,9 @@ const START_FLOOR := 10000.0
 const START_TOPUP := 30000.0
 const START_EVERY_DAYS := 5        # Bergwerk blockiert (Kasse leer): Kapitalgeber helfen bei jeder Gruenderpruefung (zuerst, vor neuen Laeden)
 const WILD_DAILY_INFLOW := 4000.0
+## 26.11.: viermal wurde eine Kneipe gegruendet (zweimal je Stadt), keine trug sich (Voss Werke: 756 EUR Umsatz gegen 26.700 EUR Lohn
+## und Miete); jede kostete den Kapitalgeberpool 35.000 EUR. Nach dem Scheitern eines Ladens dieser Branche in der Stadt so lange keine Neugruendung.
+const FAILED_RETRY_DAYS := 60
 const TOPUP_TARGET := 55000.0        # Bargeld fuer Bergwerksgruendung (Gebaeude 30.000) plus Betriebsreserve
 
 
@@ -230,6 +233,11 @@ func try_found(town: int, branch: String, reason: String) -> Dictionary:
 		via = {"ok": true}
 	if not bool(via.ok):
 		return _refuse(town, branch, str(via.msg).left(120))
+	if SHOPS.has(branch):
+		for b in sim.biz.items.values():
+			var closed_day := GameCalendar.day_of(float(b.since))
+			if str(b.branch) == branch and str(b.status) == "geschlossen" and sim.towns.of_building(int(b.site)) == town and day - closed_day < FAILED_RETRY_DAYS:
+				return _refuse(town, branch, "%s in %s erst an Tag %d gescheitert – neuer Versuch frühestens ab Tag %d" % [Businesses.branches()[branch].label, sim.towns.name_of(town), closed_day, closed_day + FAILED_RETRY_DAYS])
 	# 25.11.: Marktgroesse je Stadt (Einwohner der Stadt gegen ihre Betriebe) statt Region gegen alle Firmen – mit zwei KI-Unternehmern
 	# und 50 Einwohnern entstand sonst nie ein Laden. Bergbau und Industrie sind regionale Aufgaben ohne Marktpruefung.
 	var firms: int = sim.companies.filter(func(x): return x.status not in ["geschlossen", "verwertung"]).size()

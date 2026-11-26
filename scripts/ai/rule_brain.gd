@@ -702,6 +702,10 @@ static func _production(obs: Dictionary, me: Dictionary, cash: float, buffer: fl
 		branch = "feld"
 	elif personality == "wachstum" and int(mk.brot_import) > 0:
 		branch = "baeckerei"
+	# 26.11.: Gruenderfirmen duerfen keinen Zweitbetrieb gruenden (ActionExecutor) – die Engel Gruppe schlug trotzdem jeden Takt
+	# ein Feld vor (252 abgelehnte Aktionen in drei Stunden)
+	if bool(me.get("gruenderfirma", false)) and ((focus != "" and branch != focus) or (focus == "" and not own_core.is_empty())):
+		return
 	# Ein Erzbergwerk darf die Gruendung eines Kohlebergwerks nicht verhindern.
 	if branch == "" or own.any(func(b): return b.branche == branch and (branch != "bergwerk" or rohstoff == "" or str(b.get("rohstoff", "")) == rohstoff)):
 		return

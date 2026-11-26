@@ -827,8 +827,9 @@ func _developer_once(town: int) -> bool:
 	var region: bool = sim.towns.is_region()
 	var M: Mayor = sim.towns.mayor(town)
 	var mine := func(pid: String) -> bool: return not region or sim.towns.of_parcel(pid) == town
-	# Region: je Stadt 4 Vorhaben, bei Wohnungssuchenden mehr (4 + je 2 Wartende, hoechstens 8); Einzelstadt wie bisher 1
-	var allowed := 1 if not region else clampi(4 + M.waiting / 2, 4, 8)
+	# Region: je Stadt 4 Vorhaben, bei Wohnungssuchenden mehr (4 + je 2 Wartende, hoechstens 12); Einzelstadt wie bisher 1
+	# 26.11.: bei 8 blieben 11 von 21 Bautrupps frei, waehrend 112 Haushalte in Sonnenbucht warteten
+	var allowed := 1 if not region else clampi(4 + M.waiting / 2, 4, 12)
 	var running := 0
 	for pr in projects.values():
 		if pr.client == DEVELOPER and pr.status in ["angebote", "erschliessung", "im_bau", "pruefung", "wartet_anschluss"] and mine.call(str(pr.parcel)):
