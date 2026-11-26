@@ -462,8 +462,14 @@ static func decide(obs: Dictionary, personality: String, rng: RandomNumberGenera
 	elif debt > 0.0 and cash > buffer * 2.0 + debt and not actions.any(func(a): return a.action == "take_loan"):
 		actions.insert(0, {"action": "repay_loan", "amount": debt})
 		reasons.append("tilge %d EUR Schulden aus Überschuss" % int(debt))
-	var overstaffed: bool = workers_n > obs.fahrzeuge.size() + 2 and cash < buffer * 1.5
-	if (cash < buffer * 0.3 or overstaffed) and float(me.gewinn) < 0.0 and workers_n > obs.fahrzeuge.size() + 1 and "recruit_worker" not in planned:
+	# 26.11.: Personal der eigenen Betriebe zaehlt mit – sonst entliess die Regel-KI einer Gruenderfirma ohne Fahrzeuge die eben fuer
+	# ihren Laden angeworbene Kraft im naechsten Takt wieder (Jonas Krause 13x angeworben, ~24.000 EUR Vermittlungsgebuehren)
+	var needed: int = obs.fahrzeuge.size()
+	for b in obs.get("betriebe", []):
+		if str(b.get("branche", "")) != "transport" and str(b.get("status", "")) != "geschlossen":
+			needed += int(b.get("personal_soll", b.get("personal_min", 1)))
+	var overstaffed: bool = workers_n > needed + 2 and cash < buffer * 1.5
+	if (cash < buffer * 0.3 or overstaffed) and float(me.gewinn) < 0.0 and workers_n > needed + 1 and "recruit_worker" not in planned:
 		var idle := free_staff.filter(func(w): return int(w.faehigkeiten.get("fahren", 0)) < 2)
 		if not idle.is_empty():
 			var w: Dictionary = idle[0]

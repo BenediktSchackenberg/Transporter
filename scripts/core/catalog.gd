@@ -15,7 +15,7 @@ const DEPOT_STORAGE := 60           # Lagerplaetze (Einheiten) je Depot fuer Zwi
 const MAX_EXTRA_DEPOTS := 3
 
 ## Abschreibung: linear 2 % des Kaufpreises pro Spieltag, bis auf 20 % Restwert.
-const DEPRECIATION_PER_DAY := 0.02
+const DEPRECIATION_PER_DAY := 0.005   # 26.11.: 0.02 schrieb den Start-LKW (95.000) in ~48 Tagen auf den Restwert ab
 const RESIDUAL_SHARE := 0.2
 ## Haendler kauft zu 85 % des Buchwerts zurueck.
 const DEALER_BUYBACK := 0.85

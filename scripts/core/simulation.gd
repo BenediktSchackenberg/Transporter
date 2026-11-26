@@ -914,7 +914,8 @@ func break_vehicle(v: FleetVehicle, reason: String) -> void:
 
 ## Notbetankung am Straßenrand nach 90 Minuten: teuer (Notpreis plus Pauschale), aber das Fahrzeug faehrt weiter.
 func _emergency_refuel(v: FleetVehicle, payer: Company) -> void:
-	var liters := 60.0
+	# 26.11.: 60 l trugen einen Gelände-LKW nur ~45 Felder weit – die Pauschale fiel fast bei jeder Fahrt erneut an
+	var liters := 250.0
 	var cost := liters * resources.emergency_fuel_price() + 80.0
 	var hub := _service_company("tankhof", payer.id)
 	if hub != null:

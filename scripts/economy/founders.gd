@@ -53,6 +53,12 @@ func setup(simulation) -> void:
 
 
 func on_day(day: int) -> void:
+	# 26.11.: Versicherung und Sicherheitsdienst (je 750 EUR/Tag) aus der Zeit vor der Gruendersperre liefen weiter, kuendigen
+	# konnten Gruenderfirmen sie nicht (nicht in FOUNDER_ACTIONS) – rund die Haelfte der laufenden Kosten der Engel-Firmen
+	for c in sim.companies:
+		if c.is_active() and sim.executor.founder_only(c.id):
+			c.insurance = false
+			c.security_level = 0
 	if enabled and sim.wildnis:
 		# 25.11.: Aufbauphase – Kapitalgeber taeglich statt monatlich (25.000 EUR/Monat liessen I0 tagelang leer; Bergwerk und Laeden
 		# blieben ohne Anlaufkapital)

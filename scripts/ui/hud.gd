@@ -1210,7 +1210,7 @@ func _update_vehicles() -> void:
 func _update_finance() -> void:
 	chart.queue_redraw()
 	var txt := "[color=#f2c14e]Gewinnwertung[/color] = Erlöse − laufende Kosten − Abschreibungen − Zinsen − Vertragsstrafen − sonstige Aufwendungen.\n"
-	txt += "[color=#999]Startkapital und Kredite sind kein Gewinn, Tilgung ist kein Aufwand. Fahrzeugkäufe sind Investitionen (Abschreibung linear 3 %/Spieltag bis 20 % Restwert); Verkäufe buchen Erlös − Buchwert. Prüfsumme: Bargeld + Buchwert (Fahrzeuge + Büros) − Schulden = Startkapital + Gewinn.[/color]\n\n"
+	txt += "[color=#999]Startkapital und Kredite sind kein Gewinn, Tilgung ist kein Aufwand. Fahrzeugkäufe sind Investitionen (Abschreibung linear %s %%/Spieltag bis 20 %% Restwert); Verkäufe buchen Erlös − Buchwert. Prüfsumme: Bargeld + Buchwert (Fahrzeuge + Büros) − Schulden = Startkapital + Gewinn.[/color]\n\n" % String.num(Catalog.DEPRECIATION_PER_DAY * 100.0, 1)
 	for c in sim.ranking():
 		var L: Ledger = c.ledger
 		txt += "[color=#%s]%s[/color]: Gewinn [b]%s[/b] · Umsatz %s · Kosten %s · Bargeld %s · Schulden %s · Buchwert Fahrzeuge %s, Büros %s\n" % [

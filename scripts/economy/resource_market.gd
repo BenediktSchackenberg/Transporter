@@ -15,6 +15,9 @@ const BACKGROUND_L_PER_DAY := 5000.0    # Verkauf an Haushalte (Privatfahrzeuge)
 const BACKGROUND_REF_RESIDENTS := 1000.0  # ab so vielen Einwohnern voller Haushaltsabsatz, darunter anteilig
 const STATION_WAGE_PER_MONTH := 400.0   # Personal je Tankstelle
 const OPERATOR_RESERVE := 80000.0       # darueber hinaus gehende Gewinne werden zur Haelfte ausgeschuettet
+# 26.11.: 3000 l reichten in der Wildnis keinen Tag (Haushalte ~1100 l + eine Spedition ~1000 l je Tag, Tankwagen braucht einen Tag)
+# – die einzige Tankstelle war 64 von 96 Tagen leer und die LKW blieben mit leerem Tank liegen.
+const STATION_MAX_L := 12000.0
 
 var sim
 var offers := {}       # "F<n>" -> {id, dealer, model, price, condition, status}
@@ -37,7 +40,7 @@ func setup(simulation) -> void:
 			for k in OFFERS_PER_DEALER:
 				_new_offer(b.id)
 		elif b.type == "gas_station":
-			supplies["S%d" % n] = {"id": "S%d" % n, "kind": "fuel", "building": b.id, "stock": 3000.0, "max": 3000.0,
+			supplies["S%d" % n] = {"id": "S%d" % n, "kind": "fuel", "building": b.id, "stock": STATION_MAX_L, "max": STATION_MAX_L,
 				"price": 0.0, "markup": snappedf(sim.rng.randf_range(-0.04, 0.06), 0.001), "regen": 0.0,
 				"pumps": 2 + n % 3, "busy": [], "sales_l": 0.0, "revenue": 0.0, "wait_min": 0.0, "customers": 0, "deliveries": 0, "dry_days": 0}
 			n += 1
@@ -351,6 +354,8 @@ func from_dict(d: Dictionary) -> void:
 	supplies = d.supplies
 	for s in supplies.values():
 		s.building = int(s.building)
+		if s.kind == "fuel":
+			s.max = maxf(float(s.max), STATION_MAX_L)   # alte Spielstaende: Tank vergroessern, der Tankwagen fuellt auf
 	next_offer = int(d.next_offer)
 	fuel_price_factor = float(d.get("fuel_price_factor", 1.0))
 	tanker_orders = d.get("tanker_orders", [])

@@ -110,7 +110,7 @@ func freight(from_b: int, to_b: int, qty: int) -> float:
 	var a: Dictionary = sim.city.building(from_b)
 	var b: Dictionary = sim.city.building(to_b)
 	var dist := absi(int(a.road.x) - int(b.road.x)) + absi(int(a.road.y) - int(b.road.y))
-	return snappedf(FREIGHT_BASE + float(dist) * 1.6 * (1.0 + float(_loads(qty)) / 8.0), 1.0)
+	return snappedf(FREIGHT_BASE + float(dist) * 3.2 * (1.0 + float(_loads(qty)) / 8.0), 1.0)
 
 
 static func _loads(qty: int) -> int:

@@ -3889,8 +3889,11 @@ func test_households_wages() -> void:
 	var cash_before := c.ledger.cash
 	c.ledger.inject(-cash_before)   # Kasse leer
 	var paid_before: float = s.households.total_balance()
+	var repairs_before := float(c.ledger.totals.get("repairs", 0.0))
 	run(s, 60.0 * 2.0)
-	ok(c.ledger.payables > 0.0 and c.ledger.cash >= 0.0, "Lohn läuft als Rückstand auf (%.0f)" % c.ledger.payables)
+	# 26.11.: eine Reparatur im Fenster darf ins Minus buchen (Fahrzeuge fahren jetzt mit vollem Tank) – der Lohn nicht
+	var repairs := float(c.ledger.totals.get("repairs", 0.0)) - repairs_before
+	ok(c.ledger.payables > 0.0 and c.ledger.cash - repairs >= -0.01, "Lohn läuft als Rückstand auf (%.0f)" % c.ledger.payables)
 	ok(s.households.summary_of(0).lohnrueckstand > 0, "Beobachtung zeigt Lohnrückstand")
 	ok(identity_ok(s), "Bilanz mit Lohnverbindlichkeit stimmt")
 	var arrears := c.ledger.payables

@@ -368,6 +368,12 @@ func execute(cid: int, action: Dictionary, key: String = "", origin: String = "a
 		check = "Gründerfirma: nur Aktionen für die eigenen Betriebe (%s ist gesperrt)." % name
 	if check == "" and founder_only(cid) and name == "close_business" and str(sim.biz.get_b(str(action.get("business_id", ""))).get("branch", "")) == sim.company(cid).focus:
 		check = "Den Schwerpunkt-Betrieb (%s) schließt die Gründerfirma nicht." % sim.company(cid).focus
+	if check == "" and founder_only(cid) and name == "found_business":
+		# 26.11.: jede Gruenderfirma legte zusaetzlich ein Feld an (8.000 EUR), das ewig auf Saatgut wartete und dem Laden das Personal nahm
+		var focus: String = sim.company(cid).focus
+		var others: Array = sim.biz.of(cid).filter(func(b): return str(b.branch) != "transport")
+		if (focus != "" and str(action.get("branche", "")) != focus) or (focus == "" and not others.is_empty()):
+			check = "Gründerfirma: kein Zweitbetrieb neben %s." % (focus if focus != "" else str(others[0].branch))
 	if check == "" and founder_only(cid) and name in MINING_STEPS and sim.company(cid).focus != "bergwerk":
 		check = "Gründerfirma ohne Bergbau-Schwerpunkt: keine Probebohrung oder Abbaurechte."
 	if check != "":

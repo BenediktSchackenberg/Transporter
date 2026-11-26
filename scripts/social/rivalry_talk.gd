@@ -365,6 +365,10 @@ func _measure(now: float) -> void:
 ## Tat zur Zeile ausfuehren; Worte allein (Stichelei, Beschwichtigung) verschieben nur die Spannung.
 func execute(cid: int, other: int, cand: Dictionary) -> Dictionary:
 	var R: Rivalry = sim.rivalry
+	# 26.11.: Gruenderfirmen betreiben nur ihre Betriebe (ActionExecutor.FOUNDER_ACTIONS) – Kundenwerbung und Anzeigen liefen hier
+	# am Executor vorbei und kosteten die Engel Gruppe an Tag 86–94 rund 4.000 EUR
+	if sim.executor.founder_only(cid) and str(cand.art) not in ["deeskalieren", "sticheln"]:
+		return {"ok": false, "msg": "Gründerfirma: keine Konfliktaktionen."}
 	match str(cand.art):
 		"deeskalieren":
 			R.add_tension(cid, other, "beschwichtigt", "")
