@@ -89,6 +89,7 @@ func rank(k: int, req: Dictionary) -> Dictionary:
 	var out := {"list": [], "ohne_strasse": [], "gruen": 0, "zu_klein": 0}
 	if kern.x < 0:
 		return out
+	var radius := _radius(k, kern)
 	# Vorauswahl: freie, bebaubare Grundstuecke der Stadt (oder des Antragstellers) im Umkreis, naechste zuerst
 	var pre: Array = []
 	for p in sim.parcels.items.values():
@@ -99,14 +100,14 @@ func rank(k: int, req: Dictionary) -> Dictionary:
 			continue
 		var pr := Rect2i(int(p.rect[0]), int(p.rect[1]), int(p.rect[2]), int(p.rect[3]))
 		var d := Vector2(pr.get_center()).distance_to(Vector2(kern))
-		if d > MAX_DIST:
+		if d > radius:
 			continue
 		if pr.size.x < w or pr.size.y < h:
 			out.zu_klein += 1
 			continue
 		pre.append([d, p, pr])
 	pre.sort_custom(func(a, b): return a[0] < b[0])
-	var ctx := _context(k, kern)
+	var ctx := _context(k, kern, radius)
 	var maxprice := 1.0
 	var valid: Array = []
 	for e in pre:
@@ -229,13 +230,13 @@ func reserve(choice: Dictionary, holder: String) -> bool:
 
 
 # ------------------------------------------------------------------ Bewertung
-func _context(k: int, kern: Vector2i) -> Dictionary:
+func _context(k: int, kern: Vector2i, radius: float = MAX_DIST) -> Dictionary:
 	var homes: Array = []
 	var loud: Array = []
 	var built: Array = []
 	for b in sim.city.buildings:
 		var c := Vector2i(int(b.x) + int(b.w) / 2, int(b.y) + int(b.h) / 2)
-		if Vector2(c).distance_to(Vector2(kern)) > MAX_DIST + 15.0:
+		if Vector2(c).distance_to(Vector2(kern)) > radius + 15.0:
 			continue
 		built.append(c)
 		if str(b.type) in HOME_TYPES:
@@ -385,6 +386,18 @@ func _none(k: int, req: Dictionary, ranked: Dictionary) -> Dictionary:
 
 
 # ------------------------------------------------------------------ Hilfen
+## Suchradius einer Stadt: mindestens MAX_DIST, sonst bis 15 Felder ueber ihr aeusserstes Wohnhaus hinaus.
+## 26.11.: Sonnenbucht und Liorklippe waren ueber 60 Felder hinausgewachsen, ihr neues Bauland lag 61-69 Felder vom Kern –
+## der Bautraeger fand innen nur Restflaechen und stellte bei 99 Wohnungssuchenden keinen Bauantrag mehr.
+func _radius(k: int, kern: Vector2i) -> float:
+	var r := MAX_DIST
+	for b in sim.city.buildings:
+		if str(b.type) in HOME_TYPES and sim.towns.of_building(int(b.id)) == k:
+			var c := Vector2(int(b.x) + int(b.w) / 2, int(b.y) + int(b.h) / 2)
+			r = maxf(r, c.distance_to(Vector2(kern)) + 15.0)
+	return r
+
+
 func _kern(k: int) -> Vector2i:
 	if sim.town_plan != null and sim.town_plan.has(k):
 		var kp: Array = sim.town_plan.of(k).kern
