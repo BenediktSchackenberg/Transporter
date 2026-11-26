@@ -215,6 +215,9 @@ func setup(seed_value: int, players: Array, map_size: int = Catalog.MAP_SIZE, tr
 	construction.setup(self)
 	city_depot.setup(self)
 	_setup_towns()
+	if wildnis:
+		for k in towns.count():
+			economy.transfer("X0", Construction.DEVELOPER, Towns.WILD_DEVELOPER_EXTRA)
 	air.setup(self)
 	sea.setup(self)
 	founders.setup(self)

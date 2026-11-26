@@ -9,6 +9,9 @@ extends RefCounted
 const START_BUDGET := 200000.0     # Startbudget weiterer Orte (Landeszuweisung X0 -> P<k>, wie der Seed von P0)
 const INVESTOR_CAPITAL := 150000.0    # Kapitalgeberpool I0 je weiterem Ort (von aussen X0 -> I0, wie dessen Seed fuer Ort 0)
 const DEVELOPER_CAPITAL := 140000.0   # Kapital des Bautraegers je weiterem Ort (Investoren von aussen X0 -> D0, wie dessen Seed fuer Ort 0)
+## Benedikt 26.11.: Wildnis – zusaetzliches Kapital des Bautraegers je Ort. In der Partie vom 26.11. waren 757.000 von 778.000 EUR fuer
+## laufende Bauten zurueckgelegt, bei 112 Wartenden in Sonnenbucht entstand kaum noch ein neues Haus.
+const WILD_DEVELOPER_EXTRA := 300000.0
 
 var sim
 var list: Array = []               # [{id, name, center: Vector2i, rect: Rect2i, town_hall, bauhof, harbor, start_plot}]
